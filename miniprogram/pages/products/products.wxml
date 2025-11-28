@@ -1,0 +1,35 @@
+<view class="page products-page">
+  <view class="card header-card">
+    <view class="section-title">最新产品动态</view>
+    <text class="subtitle">运营可在后台上传图文素材，这里实时展示。</text>
+    <button class="cta-btn secondary-btn" bindtap="refreshList" loading="{{loading}}">
+      刷新列表
+    </button>
+  </view>
+
+  <block wx:for="{{products}}" wx:key="id">
+    <view class="card product-card">
+      <image class="product-cover" src="{{item.cover}}" mode="aspectFill" />
+      <view class="product-body">
+        <view class="title-row">
+          <text class="product-title">{{item.title}}</text>
+          <text class="product-subtitle">{{item.subtitle}}</text>
+        </view>
+        <view class="tag-row">
+          <block wx:for="{{item.tags}}" wx:key="tag">
+            <text class="tag">{{item}}</text>
+          </block>
+        </view>
+        <text class="description">{{item.description}}</text>
+        <button class="cta-btn primary-btn" size="mini" bindtap="handleAction" data-item="{{item}}">
+          {{item.cta}}
+        </button>
+      </view>
+    </view>
+  </block>
+
+  <view wx:if="{{!products.length && !loading}}" class="empty-state">
+    暂无产品，稍后再来。
+  </view>
+</view>
+

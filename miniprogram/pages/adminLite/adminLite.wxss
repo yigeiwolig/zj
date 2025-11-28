@@ -1,0 +1,27 @@
+.form-group {
+  margin-bottom: 28rpx;
+}
+
+.label {
+  display: block;
+  margin-bottom: 12rpx;
+  color: #516079;
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 20rpx;
+  background: #f7f9fc;
+  border-radius: 16rpx;
+}
+
+textarea {
+  min-height: 160rpx;
+}
+
+.summary {
+  display: block;
+  margin-bottom: 8rpx;
+}
+

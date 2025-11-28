@@ -1,0 +1,56 @@
+.index-page .hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #081633, #0b5fff);
+  color: #fff;
+}
+
+.hero-left {
+  flex: 1;
+  padding-right: 24rpx;
+}
+
+.hero-badge {
+  font-size: 24rpx;
+  opacity: 0.8;
+}
+
+.hero-title {
+  font-size: 52rpx;
+  font-weight: 700;
+  margin: 16rpx 0;
+  display: block;
+}
+
+.hero-desc {
+  font-size: 28rpx;
+  line-height: 1.4;
+  opacity: 0.9;
+}
+
+.hero-illustration {
+  width: 180rpx;
+  height: 180rpx;
+}
+
+.block-msg {
+  font-size: 26rpx;
+  color: #ff5656;
+  text-align: center;
+  margin-top: 32rpx;
+}
+
+.main-access {
+  width: 100%;
+  margin-top: 32rpx;
+}
+
+.loading-msg,
+.retry-msg {
+  text-align: center;
+  color: #6b768d;
+  margin-top: 32rpx;
+  font-size: 26rpx;
+}
+

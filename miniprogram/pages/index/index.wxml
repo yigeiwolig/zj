@@ -1,0 +1,25 @@
+<view class="page index-page">
+  <view class="hero card minimal">
+    <view class="hero-left">
+      <text class="hero-badge">新品体验 · Beta</text>
+      <text class="hero-title">最新发布</text>
+      <text class="hero-desc">点击下方按钮即可查看当前上新产品。</text>
+    </view>
+    <image class="hero-illustration" src="https://dummyimage.com/180x180/0b3b71/ffffff&text=NX" mode="aspectFit" />
+  </view>
+
+  <button class="cta-btn primary-btn main-access" bindtap="handleAccess" loading="{{running}}" disabled="{{running}}">
+    查看全新发布产品
+  </button>
+
+  <view class="loading-msg" wx:if="{{running}}">
+    正在准备内容，请稍候...
+  </view>
+  <view class="block-msg" wx:if="{{blocked}}">
+    当前访问受限，请稍后再试或联系管理员。
+  </view>
+  <view class="retry-msg" wx:if="{{stalled && !running && !blocked}}">
+    网络波动，请再次点击重试。
+  </view>
+</view>
+

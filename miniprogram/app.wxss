@@ -1,0 +1,45 @@
+page {
+  background: #f5f7fb;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  color: #0f1b2d;
+}
+
+.page {
+  min-height: 100vh;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: 0 12rpx 24rpx rgba(4, 18, 45, 0.08);
+  margin-bottom: 32rpx;
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+  color: #04122d;
+}
+
+.primary-btn {
+  background: linear-gradient(135deg, #1c4cfe, #0d8bff);
+  color: #fff;
+  border: none;
+}
+
+.secondary-btn {
+  background: #fff;
+  color: #1c4cfe;
+  border: 2rpx solid rgba(28, 76, 254, 0.4);
+}
+
+.cta-btn {
+  border-radius: 999rpx;
+  padding: 0 24rpx;
+  line-height: 80rpx;
+}
+

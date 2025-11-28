@@ -1,0 +1,44 @@
+<view class="page admin-page">
+  <view class="card">
+    <view class="section-title">快速上新</view>
+    <form bindsubmit="handleSubmit">
+      <view class="form-group">
+        <text class="label">标题</text>
+        <input name="title" placeholder="输入产品标题" value="{{form.title}}" />
+      </view>
+      <view class="form-group">
+        <text class="label">副标题</text>
+        <input name="subtitle" placeholder="一句话描述" value="{{form.subtitle}}" />
+      </view>
+      <view class="form-group">
+        <text class="label">封面链接</text>
+        <input name="cover" placeholder="https://..." value="{{form.cover}}" />
+      </view>
+      <view class="form-group">
+        <text class="label">标签（逗号分隔）</text>
+        <input name="tags" placeholder="新品,SDK" value="{{form.tags}}" />
+      </view>
+      <view class="form-group">
+        <text class="label">描述</text>
+        <textarea name="description" placeholder="输入产品亮点" value="{{form.description}}" />
+      </view>
+      <view class="form-group">
+        <text class="label">按钮文案</text>
+        <input name="cta" placeholder="预约体验" value="{{form.cta}}" />
+      </view>
+      <button class="cta-btn primary-btn" formType="submit" loading="{{submitting}}">
+        提交上新
+      </button>
+    </form>
+  </view>
+
+  <view class="card">
+    <view class="section-title">最近一次提交</view>
+    <view wx:if="{{lastSubmission}}">
+      <text class="summary">标题：{{lastSubmission.title}}</text>
+      <text class="summary">更新时间：{{lastSubmission.time}}</text>
+    </view>
+    <view wx:else class="empty-state">暂无提交记录</view>
+  </view>
+</view>
+
