@@ -1,35 +1,44 @@
-<view class="page products-page">
-  <view class="card header-card">
-    <view class="section-title">最新产品动态</view>
-    <text class="subtitle">运营可在后台上传图文素材，这里实时展示。</text>
-    <button class="cta-btn secondary-btn" bindtap="refreshList" loading="{{loading}}">
-      刷新列表
-    </button>
-  </view>
+<!-- 顶部自定义导航栏模拟 -->
+<view class="header">
+  <view class="back-icon"></view>
+  <text class="header-title">mm</text>
+  <view style="width: 24rpx;"></view> <!-- 占位 -->
+</view>
 
-  <block wx:for="{{products}}" wx:key="id">
-    <view class="card product-card">
-      <image class="product-cover" src="{{item.cover}}" mode="aspectFill" />
-      <view class="product-body">
-        <view class="title-row">
-          <text class="product-title">{{item.title}}</text>
-          <text class="product-subtitle">{{item.subtitle}}</text>
+<!-- 核心区域：垂直轮播 -->
+<swiper 
+  class="card-swiper" 
+  vertical="true" 
+  previous-margin="20rpx" 
+  next-margin="20rpx" 
+  bindchange="onSwiperChange"
+  circular="false"
+>
+  <block wx:for="{{list}}" wx:key="id">
+    <swiper-item class="card-wrapper">
+      <!-- 卡片本体：如果当前索引(currentIndex)等于这个卡片的索引，就添加 active 类 -->
+      <view class="card {{currentIndex === index ? 'active' : ''}}">
+        
+        <!-- 左侧文字 -->
+        <view class="card-text">
+          <view class="title">{{item.title}}</view>
+          <view class="subtitle">{{item.desc}}</view>
         </view>
-        <view class="tag-row">
-          <block wx:for="{{item.tags}}" wx:key="tag">
-            <text class="tag">{{item}}</text>
+
+        <!-- 右侧图标/图形 -->
+        <view class="icon-box" style="background: {{currentIndex === index ? item.activeColor : item.bgColor}}">
+          <!-- 特殊处理：如果是第一个，显示黑球 -->
+          <block wx:if="{{index === 0}}">
+            <view class="black-ball"></view>
+          </block>
+          <!-- 其他显示 Emoji 或 图标图片 -->
+          <block wx:else>
+            <text style="color: {{currentIndex === index ? '#fff' : item.iconColor}}; font-size: 40rpx;">{{item.icon}}</text>
           </block>
         </view>
-        <text class="description">{{item.description}}</text>
-        <button class="cta-btn primary-btn" size="mini" bindtap="handleAction" data-item="{{item}}">
-          {{item.cta}}
-        </button>
-      </view>
-    </view>
-  </block>
 
-  <view wx:if="{{!products.length && !loading}}" class="empty-state">
-    暂无产品，稍后再来。
-  </view>
-</view>
+      </view>
+    </swiper-item>
+  </block>
+</swiper>
 

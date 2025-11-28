@@ -1,25 +1,92 @@
 <view class="page index-page">
-  <view class="hero card minimal">
-    <view class="hero-left">
-      <text class="hero-badge">新品体验 · Beta</text>
-      <text class="hero-title">最新发布</text>
-      <text class="hero-desc">点击下方按钮即可查看当前上新产品。</text>
+  <!-- 主要内容区域 -->
+  <view class="content-container">
+    <!-- 品牌展示区 -->
+    <view class="hero-section">
+      <view class="hero-content">
+        <view class="hero-title">
+          <text class="title-main">新品体验</text>
+          <text class="title-sub">探索创新产品</text>
+        </view>
+      </view>
     </view>
-    <image class="hero-illustration" src="https://dummyimage.com/180x180/0b3b71/ffffff&text=NX" mode="aspectFit" />
-  </view>
 
-  <button class="cta-btn primary-btn main-access" bindtap="handleAccess" loading="{{running}}" disabled="{{running}}">
-    查看全新发布产品
-  </button>
+    <!-- 操作区域 -->
+    <view class="action-section">
+      <!-- 真正的3D球体按钮 -->
+      <view class="main-action-btn {{isAnimating ? 'animate' : ''}}" bindtap="handleAccess" disabled="{{running || isAnimating}}">
+        <view class="sphere-3d-wrapper">
+          <view class="sphere-3d">
+          <!-- 球体横截面 -->
+          <view class="sphere-ring ring-1"></view>
+          <view class="sphere-ring ring-2"></view>
+          <view class="sphere-ring ring-3"></view>
+          <view class="sphere-ring ring-4"></view>
+          <view class="sphere-ring ring-5"></view>
+          <view class="sphere-ring ring-6"></view>
+          <view class="sphere-ring ring-7"></view>
+          <view class="sphere-ring ring-8"></view>
+          </view>
+        </view>
+        <view class="btn-content">
+          <!-- 按钮文字 -->
+          <text class="btn-text {{isAnimating ? 'animate' : ''}}">创新永无止境</text>
+        </view>
+      </view>
 
-  <view class="loading-msg" wx:if="{{running}}">
-    正在准备内容，请稍候...
-  </view>
-  <view class="block-msg" wx:if="{{blocked}}">
-    当前访问受限，请稍后再试或联系管理员。
-  </view>
-  <view class="retry-msg" wx:if="{{stalled && !running && !blocked}}">
-    网络波动，请再次点击重试。
+      <!-- 状态提示 -->
+      <view class="status-messages">
+        <view class="error-card" wx:if="{{blocked}}">
+          <text class="error-text">小程序出现差错，请联系管理员修复</text>
+        </view>
+
+        <view class="retry-card" wx:if="{{stalled && !running && !blocked}}">
+          <text class="retry-text">定位失败，请检查定位权限</text>
+          <button class="retry-btn" bindtap="handleAccess">重新定位</button>
+        </view>
+        
+
+      </view>
+    </view>
+
+    <!-- 位置模拟器 -->
+    <view class="location-simulator">
+      <view class="simulator-header">
+        <text class="simulator-title">📍 位置模拟器</text>
+        <text class="simulator-subtitle">用于测试不同地区访问</text>
+      </view>
+      
+      <view class="location-options">
+        <button class="location-btn" bindtap="setMockLocation" data-location="shenzhen">
+          <text class="location-name">深圳</text>
+          <text class="location-status">允许访问</text>
+        </button>
+        
+        <button class="location-btn" bindtap="setMockLocation" data-location="guangzhou">
+          <text class="location-name">广州</text>
+          <text class="location-status">允许访问</text>
+        </button>
+        
+        <button class="location-btn blocked" bindtap="setMockLocation" data-location="hangzhou">
+          <text class="location-name">杭州</text>
+          <text class="location-status">阻止访问</text>
+        </button>
+        
+        <button class="location-btn blocked" bindtap="setMockLocation" data-location="ningbo">
+          <text class="location-name">宁波</text>
+          <text class="location-status">阻止访问</text>
+        </button>
+      </view>
+      
+      <view class="current-location" wx:if="{{mockLocation}}">
+        <text class="current-label">当前模拟位置：</text>
+        <text class="current-value">{{mockLocation.name}} ({{mockLocation.lat}}, {{mockLocation.lng}})</text>
+      </view>
+    </view>
   </view>
 </view>
+
+
+
+
 
