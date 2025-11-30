@@ -1,9 +1,6 @@
 {
   "navigationBarTitleText": "分类",
-  "navigationStyle": "custom" 
+  "navigationStyle": "custom",
+  "backgroundColor": "#F9F9F9",
+  "backgroundTextStyle": "dark"
 }
-
-
-
-
-

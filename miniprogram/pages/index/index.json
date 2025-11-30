@@ -1,10 +1,6 @@
 {
-  "navigationBarTitleText": "mm-摩改社"
+  "navigationBarTitleText": "MT",
+  "navigationStyle": "custom",
+  "backgroundColor": "#F9F9F9",
+  "backgroundTextStyle": "dark"
 }
-
-
-
-
-
-
-

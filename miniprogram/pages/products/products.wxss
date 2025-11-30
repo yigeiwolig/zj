@@ -8,108 +8,154 @@ page {
 
 /* 顶部导航 */
 .header {
-  position: absolute;
-  top: 0;
-  width: 100%;
-  height: 180rpx; /* 包含状态栏高度 */
-  padding-top: 80rpx;
-  padding-left: 40rpx;
-  padding-right: 40rpx;
-  box-sizing: border-box;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  z-index: 100;
-  pointer-events: none; /* 让点击穿透 */
+  position: absolute; top: 0; width: 100%; height: 180rpx;
+  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
+  box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
+  z-index: 100; pointer-events: none;
 }
 
 .back-icon {
-  width: 24rpx;
-  height: 24rpx;
-  border-left: 4rpx solid #333;
-  border-bottom: 4rpx solid #333;
-  transform: rotate(45deg);
+  width: 48rpx; height: 48rpx; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10rpx);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1); position: relative;
+  cursor: pointer; pointer-events: auto;
 }
 
-.header-title {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #999;
-  letter-spacing: 2rpx;
+.back-icon::before {
+  content: ''; width: 16rpx; height: 16rpx;
+  border-left: 2.5rpx solid #333; border-bottom: 2.5rpx solid #333;
+  transform: rotate(45deg); margin-left: 4rpx;
 }
+
+.header-title { font-size: 28rpx; font-weight: 600; color: #999; letter-spacing: 2rpx; }
 
 /* Swiper 容器 */
-.card-swiper {
-  width: 100%;
-  height: 100vh; /* 占满全屏 */
+.card-swiper { 
+  width: 100%; height: 100vh; position: relative; z-index: 1; 
+  /* 让背景变化柔和 */
+  transition: opacity 0.5s ease;
 }
 
-.card-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.card-wrapper { 
+  display: flex; justify-content: center; align-items: center; 
+  overflow: visible !important;
+  /* 确保点击事件可以正常触发 */
+  pointer-events: auto;
 }
 
-/* 卡片基础样式 */
+/* ================= 卡片核心动画 ================= */
 .card {
-  width: 600rpx;
-  height: 260rpx;
-  background: #FFFFFF;
-  border-radius: 40rpx; /* 大圆角 */
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 50rpx;
-  box-sizing: border-box;
+  width: 620rpx; height: 280rpx;
+  background: #FFFFFF; border-radius: 48rpx;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 50rpx; box-sizing: border-box;
+  position: relative;
   
-  /* 默认状态：缩小、半透明 */
-  transform: scale(0.7);
-  opacity: 0.7;
-  box-shadow: 0 20rpx 40rpx rgba(0, 0, 0, 0.08);
+  /* 
+     关键配置：
+     1. transform: 负责缩放位移
+     2. opacity: 负责淡入
+     3. cubic-bezier(0.175, 0.885, 0.32, 1.275): 这是一个经典的"回弹"曲线 (Back-Out)
+        它会让卡片变大时稍微超过一点，再缩回来，产生"抛出来"的惯性敢
+  */
+  transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+              opacity 0.6s ease-out,
+              box-shadow 0.6s ease;
   
-  /* 极其丝滑的过渡动画 */
-  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transform-origin: center center;
+  cursor: pointer;
+  /* 确保卡片可以接收点击事件 */
+  pointer-events: auto;
+  /* 防止点击穿透 */
+  position: relative;
+  z-index: 5;
 }
 
-/* --- 激活状态 (屏幕中间) --- */
-.card.active {
-  transform: scale(1.05); /* 稍微放大，凸显 */
+/* 卡片点击效果 */
+.card:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+/* === 状态1：堆叠初始态 (Overlap) === */
+/* 
+   刚进入页面时：
+   所有非当前卡片都缩成一个小点，藏在当前卡片后面
+*/
+
+/* 1.1 当前卡片：正常偏大，加重阴影，制造"厚度感" */
+.card.overlap.active {
+  transform: scale(1.05); 
   opacity: 1;
-  /* 浮起的高级投影 */
-  box-shadow: 0 40rpx 80rpx -20rpx rgba(0, 0, 0, 0.2);
+  /* 这个阴影模拟了下面叠着一堆卡片 */
+  box-shadow: 0 40rpx 60rpx rgba(0,0,0,0.2), 0 10rpx 20rpx rgba(0,0,0,0.1); 
   z-index: 10;
 }
 
-/* 文字排版 */
-.card-text .title {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #1d1d1f;
-  margin-bottom: 10rpx;
+/* 1.2 其他卡片：极小 + 透明 */
+.card.overlap:not(.active) {
+  /* 关键：缩放到 0.2，仿佛它们都在中心点 */
+  transform: scale(0.2); 
+  opacity: 0; /* 完全看不见 */
+  z-index: 1;
 }
 
-.card-text .subtitle {
-  font-size: 24rpx;
-  color: #86868b;
+/* === 状态2：发牌分布态 (Spread) === */
+/* 
+   动画触发后：
+   Swiper 撑开了间距，CSS 负责把卡片从小变大
+*/
+
+/* 2.1 当前卡片 */
+.card.spread.active {
+  transform: scale(1.1);
+  opacity: 1;
+  box-shadow: 0 40rpx 80rpx -20rpx rgba(0,0,0,0.15);
+  z-index: 10;
 }
 
-/* 图标容器 */
-.icon-box {
-  width: 100rpx;
-  height: 100rpx;
-  border-radius: 30rpx;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  transition: all 0.3s ease;
+/* 2.2 其他卡片：飞到指定位置并变大 */
+.card.spread:not(.active) {
+  transform: scale(0.75); /* 恢复到正常的预览大小 */
+  opacity: 0.3; /* 变淡 */
+  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.03);
+  z-index: 1;
 }
 
-/* 黑球样式 (CSS绘制) */
-.black-ball {
-  width: 50rpx;
-  height: 50rpx;
-  background: radial-gradient(circle at 30% 30%, #555, #000);
-  border-radius: 50%;
-  box-shadow: 0 10rpx 20rpx rgba(0,0,0,0.3);
+/* 
+   2.3 错峰动画 (Stagger)
+   给非当前卡片加一点点延迟，让它们看起来是被"挤"出来的，而不是同时出现
+   这能增加"发牌"的连贯感
+*/
+.card.spread:not(.active) {
+  transition-delay: 0.1s; /* 稍微等 Swiper 撑开一点再出来 */
 }
 
+.card-info { flex: 1; }
+.card-title { font-size: 44rpx; font-weight: 800; color: #1c1c1e; margin-bottom: 12rpx; }
+.card-sub { font-size: 24rpx; font-weight: 600; color: #8E8E93; letter-spacing: 2rpx; text-transform: uppercase; }
+
+/* 图标容器也跟随父级平滑过渡 */
+.icon-container {
+  width: 120rpx; height: 120rpx; border-radius: 32rpx;
+  display: flex; justify-content: center; align-items: center;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.15);
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.active .icon-container { transform: scale(1.1); }
+
+/* SVG 图标 */
+.svg-icon {
+  width: 64rpx; height: 64rpx;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  filter: drop-shadow(0 4rpx 4rpx rgba(0,0,0,0.1));
+  transition: all 0.4s ease;
+}
+
+.active .svg-icon {
+  filter: drop-shadow(0 6rpx 6rpx rgba(0,0,0,0.15));
+  transform: scale(1.05);
+}

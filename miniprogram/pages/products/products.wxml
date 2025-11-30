@@ -1,44 +1,50 @@
-<!-- 顶部自定义导航栏模拟 -->
+<!-- 顶部自定义导航栏 -->
 <view class="header">
-  <view class="back-icon"></view>
-  <text class="header-title">mm</text>
-  <view style="width: 24rpx;"></view> <!-- 占位 -->
+  <view class="back-icon" bindtap="goBack"></view>
+  <text class="header-title">MT</text>
+  <view style="width: 24rpx;"></view>
 </view>
 
-<!-- 核心区域：垂直轮播 -->
+<!-- 
+   easing-function="easeInOutCubic": 让 Swiper 间距撑开的过程本身也带缓冲
+   duration="800": 配合 CSS 的 0.8s 动画时长 
+-->
 <swiper 
   class="card-swiper" 
   vertical="true" 
-  previous-margin="20rpx" 
-  next-margin="20rpx" 
+  previous-margin="{{isLoaded ? finalMargin : 0}}px" 
+  next-margin="{{isLoaded ? finalMargin : 0}}px" 
   bindchange="onSwiperChange"
-  circular="false"
+  circular="{{true}}"
+  duration="800"
+  easing-function="easeInOutCubic"
 >
   <block wx:for="{{list}}" wx:key="id">
     <swiper-item class="card-wrapper">
-      <!-- 卡片本体：如果当前索引(currentIndex)等于这个卡片的索引，就添加 active 类 -->
-      <view class="card {{currentIndex === index ? 'active' : ''}}">
+      <!-- 
+         样式逻辑：
+         1. isLoaded ? 'spread' : 'overlap' -> 决定是堆叠还是炸开
+         2. currentIndex === index ? 'active' : '' -> 决定谁是主角
+      -->
+      <view 
+        class="card {{isLoaded ? 'spread' : 'overlap'}} {{currentIndex === index ? 'active' : ''}}"
+        catchtap="onCardTap"
+        data-id="{{item.id}}"
+        data-title="{{item.title}}"
+      >
         
         <!-- 左侧文字 -->
-        <view class="card-text">
-          <view class="title">{{item.title}}</view>
-          <view class="subtitle">{{item.desc}}</view>
+        <view class="card-info">
+          <view class="card-title">{{item.title}}</view>
+          <view class="card-sub">{{item.en}}</view>
         </view>
-
-        <!-- 右侧图标/图形 -->
-        <view class="icon-box" style="background: {{currentIndex === index ? item.activeColor : item.bgColor}}">
-          <!-- 特殊处理：如果是第一个，显示黑球 -->
-          <block wx:if="{{index === 0}}">
-            <view class="black-ball"></view>
-          </block>
-          <!-- 其他显示 Emoji 或 图标图片 -->
-          <block wx:else>
-            <text style="color: {{currentIndex === index ? '#fff' : item.iconColor}}; font-size: 40rpx;">{{item.icon}}</text>
-          </block>
+        
+        <!-- 右侧图标容器 -->
+        <view class="icon-container" style="background: {{item.gradient}}">
+          <image class="svg-icon" src="{{item.iconSvg}}" mode="aspectFit"></image>
         </view>
 
       </view>
     </swiper-item>
   </block>
 </swiper>
-

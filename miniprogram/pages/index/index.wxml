@@ -1,92 +1,42 @@
-<view class="page index-page">
-  <!-- 主要内容区域 -->
-  <view class="content-container">
-    <!-- 品牌展示区 -->
-    <view class="hero-section">
-      <view class="hero-content">
-        <view class="hero-title">
-          <text class="title-main">新品体验</text>
-          <text class="title-sub">探索创新产品</text>
-        </view>
-      </view>
+<view class="page index-page {{step > 0 ? 'animating' : ''}}">
+  <!-- 顶部标题 (动画开始时隐藏) -->
+  <view class="header-section {{step > 0 ? 'fade-out' : ''}}">
+    <text class="main-title">新品体验</text>
+    <text class="sub-title">INNOVATION LAB</text>
+  </view>
+
+  <!-- 中部：动画舞台 -->
+  <view class="hero-section">
+    <!-- 文字轨道 (绝对定位) -->
+    <view class="text-track" wx:if="{{step >= 3}}">
+      <text class="char char-1">M</text>
+      <text class="char char-2">T</text>
+      <text class="char char-3">引</text>
+      <text class="char char-4">领</text>
+      <text class="char char-5">创</text>
+      <text class="char char-6">新</text>
     </view>
 
-    <!-- 操作区域 -->
-    <view class="action-section">
-      <!-- 真正的3D球体按钮 -->
-      <view class="main-action-btn {{isAnimating ? 'animate' : ''}}" bindtap="handleAccess" disabled="{{running || isAnimating}}">
-        <view class="sphere-3d-wrapper">
-          <view class="sphere-3d">
-          <!-- 球体横截面 -->
-          <view class="sphere-ring ring-1"></view>
-          <view class="sphere-ring ring-2"></view>
-          <view class="sphere-ring ring-3"></view>
-          <view class="sphere-ring ring-4"></view>
-          <view class="sphere-ring ring-5"></view>
-          <view class="sphere-ring ring-6"></view>
-          <view class="sphere-ring ring-7"></view>
-          <view class="sphere-ring ring-8"></view>
-          </view>
-        </view>
-        <view class="btn-content">
-          <!-- 按钮文字 -->
-          <text class="btn-text {{isAnimating ? 'animate' : ''}}">创新永无止境</text>
-        </view>
+    <!-- 核心元素：从液态按钮变成齿轮 -->
+    <view class="liquid-btn step-{{step}}" bindtap="handleAccess">
+      <view class="gear-shape">
+        <view class="teeth"></view>
+        <view class="hub"></view>
       </view>
-
-      <!-- 状态提示 -->
-      <view class="status-messages">
-        <view class="error-card" wx:if="{{blocked}}">
-          <text class="error-text">小程序出现差错，请联系管理员修复</text>
-        </view>
-
-        <view class="retry-card" wx:if="{{stalled && !running && !blocked}}">
-          <text class="retry-text">定位失败，请检查定位权限</text>
-          <button class="retry-btn" bindtap="handleAccess">重新定位</button>
-        </view>
-        
-
-      </view>
-    </view>
-
-    <!-- 位置模拟器 -->
-    <view class="location-simulator">
-      <view class="simulator-header">
-        <text class="simulator-title">📍 位置模拟器</text>
-        <text class="simulator-subtitle">用于测试不同地区访问</text>
-      </view>
-      
-      <view class="location-options">
-        <button class="location-btn" bindtap="setMockLocation" data-location="shenzhen">
-          <text class="location-name">深圳</text>
-          <text class="location-status">允许访问</text>
-        </button>
-        
-        <button class="location-btn" bindtap="setMockLocation" data-location="guangzhou">
-          <text class="location-name">广州</text>
-          <text class="location-status">允许访问</text>
-        </button>
-        
-        <button class="location-btn blocked" bindtap="setMockLocation" data-location="hangzhou">
-          <text class="location-name">杭州</text>
-          <text class="location-status">阻止访问</text>
-        </button>
-        
-        <button class="location-btn blocked" bindtap="setMockLocation" data-location="ningbo">
-          <text class="location-name">宁波</text>
-          <text class="location-status">阻止访问</text>
-        </button>
-      </view>
-      
-      <view class="current-location" wx:if="{{mockLocation}}">
-        <text class="current-label">当前模拟位置：</text>
-        <text class="current-value">{{mockLocation.name}} ({{mockLocation.lat}}, {{mockLocation.lng}})</text>
-      </view>
+      <view class="highlight-dot"></view>
+      <text class="btn-text" wx:if="{{step === 0}}">EXPLORE</text>
     </view>
   </view>
+
+  <!-- 底部：位置工具 (动画开始时隐藏) -->
+  <view class="footer-section {{step > 0 ? 'fade-out' : ''}}">
+    <view class="tool-label">LOCATION SIMULATOR</view>
+    <view class="loc-grid">
+      <view class="chip active"><text>Shenzhen</text><view class="status green"></view></view>
+      <view class="chip"><text>Guangzhou</text><view class="status green"></view></view>
+    </view>
+  </view>
+
+  <!-- 遮罩层：模拟布的效果，在文字水平线下方 -->
+  <view class="curtain-mask {{step >= 5 ? 'active' : ''}}"></view>
 </view>
-
-
-
-
-

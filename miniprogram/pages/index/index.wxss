@@ -1,792 +1,230 @@
-/* 页面整体布局 */
-.index-page {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #ffffff 0%, #fafafa 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 60rpx 40rpx;
-  box-sizing: border-box;
-  position: relative;
-  overflow: hidden;
-}
+/* ================= 全局 & 基础 ================= */
+page { background-color: #F9F9F9; height: 100%; overflow: hidden; }
+.index-page { height: 100%; display: flex; flex-direction: column; padding: 120rpx 60rpx 80rpx; box-sizing: border-box; position: relative; }
 
-.index-page::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  right: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(0,0,0,0.02) 0%, transparent 70%);
-  animation: rotate 30s linear infinite;
-}
+/* 消失动画 */
+.fade-out { opacity: 0; transition: opacity 0.4s ease; }
 
-@keyframes rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+/* 头部底部样式保持不变 */
+.header-section { text-align: center; transition: 0.4s; }
+.main-title { font-size: 64rpx; font-weight: 800; color: #1d1d1f; }
+.sub-title { font-size: 24rpx; font-weight: 600; color: #86868b; letter-spacing: 6rpx; }
+.footer-section { transition: 0.4s; }
+.loc-grid { display: flex; gap: 20rpx; justify-content: center; }
+.chip { background: #fff; padding: 20rpx 30rpx; border-radius: 20rpx; display: flex; align-items: center; gap: 10rpx; font-size: 26rpx; font-weight: 600; box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.05); }
+.status.green { width: 12rpx; height: 12rpx; background: #34c759; border-radius: 50%; }
 
-/* 真正的3D球体旋转动画 */
-@keyframes rotateSphere {
-  0% {
-    transform: rotateX(-20deg) rotateY(0deg);
-  }
-  25% {
-    transform: rotateX(-20deg) rotateY(90deg);
-  }
-  50% {
-    transform: rotateX(-20deg) rotateY(180deg);
-  }
-  75% {
-    transform: rotateX(-20deg) rotateY(270deg);
-  }
-  100% {
-    transform: rotateX(-20deg) rotateY(360deg);
-  }
-}
+.tool-label { font-size: 20rpx; color: #ccc; text-align: center; margin-bottom: 30rpx; letter-spacing: 2rpx; font-weight: 600; }
 
-/* 内容容器 */
-.content-container {
-  width: 100%;
-  max-width: 680rpx;
-  position: relative;
-  z-index: 1;
-}
-
-/* 品牌展示区 */
+/* ================= 舞台区域 ================= */
 .hero-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  margin-bottom: 120rpx;
+  flex: 1; display: flex; justify-content: center; align-items: center;
+  position: relative; width: 100%;
 }
 
-.hero-content {
-  position: relative;
-}
-
-.hero-title {
-  margin-bottom: 16rpx;
-}
-
-.title-main {
-  display: block;
-  font-size: 56rpx;
-  font-weight: 200;
-  color: #000000;
-  margin-bottom: 12rpx;
-  line-height: 1.2;
-  letter-spacing: 4rpx;
-  position: relative;
-}
-
-.title-main::after {
-  content: '';
+/* --- 文字轨道 --- */
+.text-track {
   position: absolute;
-  bottom: -8rpx;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 60rpx;
-  height: 3rpx;
-  background: linear-gradient(90deg, transparent, #000000, transparent);
-  border-radius: 2rpx;
+  top: 50%; left: 0; width: 100%;
+  transform: translateY(-50%);
+  display: flex; 
+  justify-content: center; 
+  gap: 16rpx; /* 字间距稍微拉开一点点，配合滚动距离 */
+  z-index: 120; /* 文字在最上层，在遮罩层上方 */
+  padding-left: 10rpx;
 }
 
-.title-sub {
-  display: block;
-  font-size: 28rpx;
-  color: #888888;
-  line-height: 1.4;
-  font-weight: 300;
-  letter-spacing: 1rpx;
-  margin-top: 16rpx;
+.char {
+  font-size: 40rpx; font-weight: 900; color: #1d1d1f;
+  opacity: 0; 
+  transform: scale(0) translateY(20rpx); /* 初始状态：压缩在地下 */
+  transform-origin: bottom center;
 }
 
-
-
-/* 操作区域 */
-.action-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 60rpx;
-  margin-top: 40rpx;
+/* 文字弹出动画：更Q弹的效果 */
+@keyframes popChar {
+  0% { opacity: 0; transform: scale(0) translateY(20rpx); }
+  50% { opacity: 1; transform: scale(1.4) translateY(-10rpx); } /* 冲出来 */
+  80% { transform: scale(0.9) translateY(0); } /* 回弹一下 */
+  100% { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-/* 主按钮 - 真正的3D球体 */
-.main-action-btn {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 60rpx;
-  background: none;
-  border: none;
-  font-weight: 300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 
-    0 8rpx 32rpx rgba(0, 0, 0, 0.3),
-    0 4rpx 16rpx rgba(0, 0, 0, 0.2);
-  cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  overflow: visible;
-  position: relative;
-  padding: 0;
-  transform-style: preserve-3d;
-  perspective: 1000rpx;
-  flex-shrink: 0;
-  /* 禁用小程序默认点击效果 */
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-  outline: none;
+/* 
+   关键调整：时间配合
+   齿轮向右滚总时长设定为 1.6s
+   文字必须在齿轮滚过对应位置后才出现
+   延迟时间要足够长，确保齿轮先经过
+*/
+.index-page .char-1 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s forwards; } /* M - 齿轮滚过M后 */
+.index-page .char-2 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.7s forwards; } /* T - 齿轮滚过T后 */
+.index-page .char-3 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.9s forwards; } /* 引 - 齿轮滚过引后 */
+.index-page .char-4 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.1s forwards; } /* 领 - 齿轮滚过领后 */
+.index-page .char-5 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.3s forwards; } /* 创 - 齿轮滚过创后 */
+.index-page .char-6 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.5s forwards; } /* 新 - 齿轮滚过新后 */
+
+/* --- 主角：从水滴到齿轮 --- */
+.liquid-btn {
+  width: 360rpx; height: 360rpx;
+  background: #F9F9F9;
+  border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  box-shadow: 24rpx 24rpx 60rpx rgba(174, 174, 192, 0.4), -24rpx -24rpx 60rpx rgba(255, 255, 255, 1);
+  display: flex; justify-content: center; align-items: center;
+  position: absolute; z-index: 100;
+  animation: morph 3.5s ease-in-out infinite;
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-/* 3D球体容器 */
-.sphere-3d-wrapper {
-  width: 120rpx;
-  height: 120rpx;
-  position: absolute;
-  transform-style: preserve-3d;
-  animation: rotateSphere 8s linear infinite;
+.btn-text { font-size: 32rpx; font-weight: 600; letter-spacing: 6rpx; color: #666; mix-blend-mode: multiply; }
+.highlight-dot { width: 40rpx; height: 20rpx; background: rgba(255,255,255,0.8); border-radius: 50%; position: absolute; top: 60rpx; left: 80rpx; transform: rotate(-45deg); filter: blur(2rpx); transition: opacity 0.2s; }
+
+/* 齿轮内部结构 (默认透明) */
+.gear-shape {
+  width: 100%; height: 100%; position: absolute; opacity: 0; transition: opacity 0.3s;
+  display: flex; justify-content: center; align-items: center;
+}
+.gear-shape .teeth {
+  width: 100%; height: 100%; border-radius: 50%;
+  border: 10rpx dashed #555; /* 深色虚线做齿牙 */
+  box-sizing: border-box;
+}
+.gear-shape .hub {
+  position: absolute; width: 40%; height: 40%; background: #555; border-radius: 50%;
 }
 
-/* 3D球体 */
-.sphere-3d {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  transform-style: preserve-3d;
-  transform: rotateX(-20deg) rotateY(0deg);
-}
-
-/* 球体横截面 - 形成球形 */
-.sphere-ring {
-  position: absolute;
-  width: 120rpx;
-  height: 120rpx;
+/* === Step 1: 变成小齿轮 (中间) === */
+.liquid-btn.step-1 {
+  width: 70rpx; height: 70rpx; /* 尺寸缩小 */
   border-radius: 50%;
-  border: 2rpx solid rgba(0, 0, 0, 0.8);
-  background: radial-gradient(circle at center, rgba(0, 0, 0, 0.1), transparent);
+  box-shadow: 4rpx 4rpx 12rpx rgba(0,0,0,0.1);
+  animation: none; /* 停止蠕动 */
 }
+.liquid-btn.step-1 .btn-text, .liquid-btn.step-1 .highlight-dot { opacity: 0; }
+.liquid-btn.step-1 .gear-shape { opacity: 1; }
 
-.sphere-ring.ring-1 {
-  transform: rotateY(0deg);
-  background: radial-gradient(circle at 30% 30%, #444444, transparent 70%);
-  border-color: #222222;
-}
-
-.sphere-ring.ring-2 {
-  transform: rotateY(30deg);
-  background: radial-gradient(circle at 25% 35%, #333333, transparent 75%);
-  border-color: #333333;
-}
-
-.sphere-ring.ring-3 {
-  transform: rotateY(60deg);
-  background: radial-gradient(circle at 20% 40%, #555555, transparent 65%);
-  border-color: #111111;
-}
-
-.sphere-ring.ring-4 {
-  transform: rotateY(90deg);
-  background: radial-gradient(circle at 15% 45%, #222222, transparent 80%);
-  border-color: #444444;
-}
-
-.sphere-ring.ring-5 {
-  transform: rotateY(120deg);
-  background: radial-gradient(circle at 20% 40%, #666666, transparent 60%);
-  border-color: #333333;
-}
-
-.sphere-ring.ring-6 {
-  transform: rotateY(150deg);
-  background: radial-gradient(circle at 25% 35%, #333333, transparent 70%);
-  border-color: #222222;
-}
-
-.sphere-ring.ring-7 {
-  transform: rotateY(180deg);
-  background: radial-gradient(circle at 30% 30%, #111111, transparent 75%);
-  border-color: #555555;
-}
-
-.sphere-ring.ring-8 {
-  transform: rotateY(210deg);
-  background: radial-gradient(circle at 35% 25%, #444444, transparent 65%);
-  border-color: #111111;
-}
-
-/* 球体中心核心 */
-.sphere-core {
-  position: absolute;
-  width: 40rpx;
-  height: 40rpx;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #666666, #000000 70%);
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  box-shadow: 
-    0 0 20rpx rgba(0, 0, 0, 0.5),
-    inset -2rpx -2rpx 4rpx rgba(255, 255, 255, 0.1),
-    inset 2rpx 2rpx 4rpx rgba(0, 0, 0, 0.3);
-}
-
-/* 点击动画效果 - 黑色变白色，显示文字 */
-.main-action-btn.animate {
-  animation: buttonClickTransform 6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  overflow: hidden;
-}
-
-
-
-/* 确保初始状态是3D圆形 */
-.main-action-btn:not(.animate):not(.animation-complete) {
-  perspective: 1000rpx;
-}
-
-.main-action-btn:not(.animate):not(.animation-complete) .sphere-3d-wrapper {
-  animation: rotateSphere 8s linear infinite;
-}
-
-.main-action-btn.animate .sphere-3d-wrapper {
+/* === Step 2: 向左滚 (蓄力) === */
+.liquid-btn.step-2 {
+  width: 70rpx; height: 70rpx; border-radius: 50%;
   animation: none;
-  opacity: 0;
-  transform: scale(0);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 移动动画 */
+  animation: rollToLeft 0.8s cubic-bezier(0.5, 0, 0.5, 1) forwards;
+}
+.liquid-btn.step-2 .gear-shape { opacity: 1; animation: spinLeft 0.8s cubic-bezier(0.5, 0, 0.5, 1) forwards; }
+.liquid-btn.step-2 .btn-text, .liquid-btn.step-2 .highlight-dot { display: none; }
+
+/* === Step 3: 向右滚 (冲刺) - 调整时长 === */
+.liquid-btn.step-3 {
+  width: 70rpx; height: 70rpx; border-radius: 50%;
+  /* 
+     时长调整为 1.6s
+     timing-function 改为 ease-in-out 让启动和停止更自然，
+     或者 linear 保持匀速，配合文字弹出节奏。
+     这里推荐 cubic-bezier 让它有个加速过程
+  */
+  animation: rollToRight 1.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards; 
+}
+.liquid-btn.step-3 .gear-shape { opacity: 1; animation: spinRight 1.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards; }
+.liquid-btn.step-3 .btn-text, .liquid-btn.step-3 .highlight-dot { display: none; }
+
+/* === Step 4: 停留展示 (等待状态) === */
+/* 这个状态下，齿轮保持在最右边，不做任何动作，给用户看文字的时间 */
+.liquid-btn.step-4 {
+  width: 70rpx; height: 70rpx; border-radius: 50%;
+  animation: none;
+  /* 必须手动固定在动画结束的位置，否则 animation remove 后会跳回原位 */
+  /* rollToRight 的终点是 translateX(280rpx) */
+  transform: translateX(280rpx); 
+}
+.liquid-btn.step-4 .gear-shape { 
+  opacity: 1; 
+  transform: rotate(720deg); /* 保持旋转结束的角度 */
+}
+.liquid-btn.step-4 .btn-text, .liquid-btn.step-4 .highlight-dot { display: none; }
+
+/* === Step 5: 掉落 (优化版) === */
+.liquid-btn.step-5 {
+  width: 70rpx; height: 70rpx; border-radius: 50%;
+  transform: translateX(280rpx); /* 保持水平位置不变 */
+  /* 
+     时长 0.8s 足够了
+     cubic-bezier(0.6, -0.28, 0.735, 0.045) 是一个类似"先往上弹一下再掉下去"的物理曲线
+     或者拆分 keyframes 来做更精准控制，下面 keyframes 我们手动写物理逻辑，这里用 ease-in 加速下落
+  */
+  animation: fallDown 0.8s cubic-bezier(0.55, 0.055, 0.675, 0.19) forwards;
 }
 
-@keyframes buttonClickTransform {
-  0% {
-    width: 120rpx;
-    height: 120rpx;
-    border-radius: 60rpx;
-    background: none;
-    transform: scale(1);
-    box-shadow: 
-      0 8rpx 32rpx rgba(0, 0, 0, 0.3),
-      0 4rpx 16rpx rgba(0, 0, 0, 0.2);
-    perspective: 1000rpx;
-  }
-  10% {
-    transform: scale(1.1);
-    box-shadow: 
-      0 12rpx 48rpx rgba(0, 0, 0, 0.4),
-      0 6rpx 24rpx rgba(0, 0, 0, 0.3);
-  }
-  20% {
-    transform: scale(1);
-    box-shadow: 
-      0 6rpx 24rpx rgba(0, 0, 0, 0.25),
-      0 3rpx 12rpx rgba(0, 0, 0, 0.15);
-  }
-  40% {
-    width: 120rpx;
-    height: 120rpx;
-    border-radius: 60rpx;
-    background: none;
-    transform: scale(1);
-    box-shadow: 
-      0 6rpx 24rpx rgba(0, 0, 0, 0.25),
-      0 3rpx 12rpx rgba(0, 0, 0, 0.15);
-    perspective: 1000rpx;
-  }
-  35% {
-    width: 120rpx;
-    height: 120rpx;
-    border-radius: 60rpx;
-    background-color: #ffffff;
-    border: none;
-    transform: scale(1);
-    box-shadow: 0 8rpx 28rpx rgba(0, 0, 0, 0.12);
-    perspective: 1000rpx;
-  }
-  55% {
-    width: 560rpx;
-    height: 85rpx;
-    border-radius: 42rpx;
-    background-color: #ffffff;
-    border: 4rpx solid #000000;
-    transform: scale(1);
-    box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.1);
-    perspective: 1000rpx;
-  }
-  83.3% {
-    width: 560rpx;
-    height: 85rpx;
-    border-radius: 42rpx;
-    background-color: #ffffff;
-    border: 4rpx solid #000000;
-    transform: scale(1);
-    box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.1);
-    perspective: 1000rpx;
-  }
-  88% {
-    width: 560rpx;
-    height: 85rpx;
-    border-radius: 42rpx;
-    background-color: #ffffff;
-    border: 4rpx solid #000000;
-    transform: scale(1);
-    box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.1);
-    perspective: 1000rpx;
-  }
-  94% {
-    width: 560rpx;
-    height: 85rpx;
-    border-radius: 42rpx;
-    background-color: #ffffff;
-    border: 4rpx solid #000000;
-    transform: scale(1);
-    box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.1);
-    perspective: 1000rpx;
-  }
-  100% {
-    width: 560rpx;
-    height: 85rpx;
-    border-radius: 42rpx;
-    background-color: #ffffff;
-    border: 4rpx solid #000000;
-    transform: scale(1);
-    box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.1);
-    perspective: 1000rpx;
-  }
+/* 保持内部形状可见 */
+.liquid-btn.step-5 .gear-shape { opacity: 1; }
+
+/* 隐藏不需要的元素 */
+.liquid-btn.step-5 .btn-text, .liquid-btn.step-5 .highlight-dot { display: none; }
+
+/* --- 动画关键帧 --- */
+@keyframes morph {
+  0% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  50% { border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
 }
 
-/* 动画状态下的按钮内容 */
-.main-action-btn.animate .btn-content {
-  justify-content: center;
-  padding: 0;
-  position: relative;
+/* 向左滚：从中间(0) 到 左侧边缘(-300rpx) */
+@keyframes rollToLeft {
+  from { transform: translateX(0); }
+  to { transform: translateX(-300rpx); }
 }
+@keyframes spinLeft { from { transform: rotate(0); } to { transform: rotate(-360deg); } }
 
-/* 滑动遮罩效果 - 第一阶段 */
-.main-action-btn.animate::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.8), transparent);
-  animation: slideShinePhase1 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  animation-delay: 3s;
-  pointer-events: none;
+/* rollToRight 终点位置确认 */
+@keyframes rollToRight {
+  from { transform: translateX(-300rpx); }
+  to { transform: translateX(280rpx); } 
 }
+@keyframes spinRight { from { transform: rotate(-360deg); } to { transform: rotate(720deg); } }
 
-
-
-
-
-@keyframes slideShinePhase1 {
-  0% {
-    left: -100%;
-    opacity: 0;
-  }
-  10% {
-    opacity: 0;
-  }
-  50% {
+/* 优化后的掉落关键帧：腾空 -> 加速坠落 */
+@keyframes fallDown {
+  0% { 
+    /* 初始状态：接上一步的结尾 */
+    transform: translateX(280rpx) translateY(0) rotate(720deg) scale(1); 
     opacity: 1;
   }
-  100% {
-    left: 100%;
-    opacity: 0;
-  }
-}
-
-
-
-
-
-.main-action-btn.animate .btn-icon {
-  opacity: 0;
-  transition: opacity 0.6s ease 0.5s;
-}
-
-
-
-
-
-
-
-
-
-/* 动画状态下的文字颜色 */
-.main-action-btn.animate .btn-icon,
-.main-action-btn.animate .btn-text {
-  color: #000000;
-}
-
-/* 简化文字动画 */
-.main-action-btn.animate .btn-icon {
-  opacity: 0;
-  transition: opacity 0.6s ease 0.5s;
-}
-
-.main-action-btn.animate .btn-text {
-  opacity: 1;
-  font-size: 30rpx;
-  padding: 0 30rpx;
-  width: auto;
-  max-width: 460rpx;
-  font-weight: 500;
-  letter-spacing: 3rpx;
-  text-align: center;
-  transform: translate(-50%, -50%) scale(1);
-  transition: all 0.6s ease 1.2s;
-}
-
-.main-action-btn::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.1);
-  transform: translate(-50%, -50%);
-  transition: all 0.6s ease;
-  pointer-events: none;
-}
-
-.main-action-btn:active::before {
-  width: 300rpx;
-  height: 300rpx;
-}
-
-.main-action-btn:active {
-  box-shadow: 
-    0 4rpx 8rpx rgba(0, 0, 0, 0.3),
-    0 8rpx 16rpx rgba(0, 0, 0, 0.2);
-}
-
-.main-action-btn:active .sphere-3d-wrapper {
-  animation-play-state: paused;
-}
-
-.main-action-btn[disabled] {
-  opacity: 0.7;
-  cursor: not-allowed;
-  perspective: 1000rpx;
-}
-
-.main-action-btn[disabled] .sphere-3d-wrapper {
-  animation: none;
-}
-
-.main-action-btn[disabled]:active {
-  transform: scale(1);
-  box-shadow: 
-    0 4rpx 8rpx rgba(0, 0, 0, 0.3),
-    0 8rpx 16rpx rgba(0, 0, 0, 0.2);
-}
-
-.btn-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden; /* 防止内容溢出影响定位 */
-}
-
-.btn-icon {
-  font-size: 32rpx;
-  color: #ffffff;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.btn-text {
-  font-size: 26rpx;
-  color: #ffffff;
-  font-weight: 300;
-  white-space: nowrap;
-  opacity: 0;
-
-  letter-spacing: 1rpx;
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: auto;
-  box-sizing: border-box; /* 使用box-sizing */
-  text-align: center;
-  pointer-events: none; /* 防止文字影响点击 */
-  z-index: 10; /* 确保文字在最上层 */
-}
-
-/* 动画状态下的文字定位 */
-.btn-text.animate {
-  position: absolute; /* 使用absolute定位 */
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 30rpx;
-  font-weight: 500;
-  letter-spacing: 3rpx;
-  color: #000000; /* 黑色文字 */
-  padding: 0 30rpx;
-  opacity: 1;
-  animation: textFadeInFixed 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  z-index: 20; /* 确保文字在最上层 */
-}
-
-/* 状态消息 */
-.status-messages {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 24rpx;
-  opacity: 0;
-  animation: fadeInUp 0.5s ease forwards;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20rpx);
-  }
-  to {
+  
+  /* 30%的时间点：向上腾空，做一个"起跳"的动作 */
+  30% { 
+    /* 往上跳得更高，同时稍微反向旋转一点(蓄力感)，或者减速旋转 */
+    transform: translateX(280rpx) translateY(-120rpx) rotate(700deg) scale(1.1); 
     opacity: 1;
-    transform: translateY(0);
+    /* 此时 animation-timing-function 应该是减速 (ease-out) */
+  }
+  /* 100%的时间点：掉出屏幕 */
+  100% { 
+    /* 
+       translateY 设为 600rpx 或更大，确保完全掉出视线
+       rotate 设为 1000deg+，下落时旋转加速
+    */
+    transform: translateX(280rpx) translateY(800rpx) rotate(1080deg) scale(0.6); 
+    opacity: 0; /* 最后完全消失 */
   }
 }
 
-.error-card,
-.retry-card {
-  background: rgba(250, 250, 250, 0.95);
-  backdrop-filter: blur(10rpx);
-  border-radius: 24rpx;
-  padding: 36rpx;
-  border: 1rpx solid rgba(229, 229, 229, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20rpx;
-  min-height: 100rpx;
-  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.06);
-  transition: all 0.3s ease;
+/* ================= 遮罩层（布的效果） ================= */
+.curtain-mask {
+  position: fixed;
+  top: 50%; /* 文字水平线位置 */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, 
+    rgba(249, 249, 249, 0) 0%,
+    rgba(249, 249, 249, 0.4) 5%,
+    rgba(249, 249, 249, 0.9) 15%,
+    rgba(249, 249, 249, 1) 25%
+  );
+  z-index: 110; /* 在齿轮(100)上方，文字(120)下方，能遮挡齿轮 */
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.4s ease;
 }
 
-.error-card:hover,
-.retry-card:hover {
-  transform: translateY(-2rpx);
-  box-shadow: 0 8rpx 30rpx rgba(0, 0, 0, 0.1);
+.curtain-mask.active {
+  opacity: 1; /* 激活时显示遮罩，齿轮跳到布后面 */
 }
-
-.error-text,
-.retry-text {
-  flex: 1;
-  font-size: 26rpx;
-  color: #333333;
-  line-height: 1.4;
-  font-weight: 300;
-  text-align: center;
-}
-
-.retry-btn {
-  background: #000000;
-  color: #ffffff;
-  border-radius: 20rpx;
-  padding: 20rpx 32rpx;
-  font-size: 24rpx;
-  border: none;
-  font-weight: 300;
-  transition: all 0.3s ease;
-  min-width: 120rpx;
-}
-
-.retry-btn:active {
-  transform: scale(0.95);
-  background: #333333;
-}
-
-/* 位置模拟器 */
-.location-simulator {
-  margin-top: 60rpx;
-  padding: 40rpx;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(20rpx);
-  border-radius: 28rpx;
-  border: 1rpx solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 8rpx 40rpx rgba(0, 0, 0, 0.1);
-  animation: fadeInUp 0.6s ease forwards;
-}
-
-.simulator-header {
-  text-align: center;
-  margin-bottom: 32rpx;
-}
-
-.simulator-title {
-  display: block;
-  font-size: 32rpx;
-  font-weight: 500;
-  color: #000000;
-  margin-bottom: 8rpx;
-}
-
-.simulator-subtitle {
-  display: block;
-  font-size: 24rpx;
-  color: #888888;
-  font-weight: 300;
-}
-
-.location-options {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20rpx;
-  margin-bottom: 32rpx;
-}
-
-.location-btn {
-  background: #ffffff;
-  border: 2rpx solid #e5e5e5;
-  border-radius: 20rpx;
-  padding: 24rpx 20rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8rpx;
-  transition: all 0.3s ease;
-  position: relative;
-  overflow: hidden;
-}
-
-.location-btn::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.05), transparent);
-  transition: left 0.6s ease;
-}
-
-.location-btn:hover::before {
-  left: 100%;
-}
-
-.location-btn:active {
-  transform: scale(0.96);
-}
-
-.location-btn.blocked {
-  border-color: #ff6b6b;
-  background: #fff5f5;
-}
-
-.location-btn.blocked:active {
-  background: #ffebeb;
-}
-
-.location-name {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #333333;
-  transition: color 0.3s ease;
-}
-
-.location-btn.blocked .location-name {
-  color: #ff6b6b;
-}
-
-.location-status {
-  font-size: 22rpx;
-  color: #52c41a;
-  font-weight: 300;
-}
-
-.location-btn.blocked .location-status {
-  color: #ff6b6b;
-}
-
-.current-location {
-  text-align: center;
-  padding: 20rpx;
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 16rpx;
-  border: 1rpx dashed rgba(0, 0, 0, 0.1);
-}
-
-.current-label {
-  display: block;
-  font-size: 24rpx;
-  color: #666666;
-  margin-bottom: 8rpx;
-}
-
-.current-value {
-  display: block;
-  font-size: 26rpx;
-  color: #000000;
-  font-weight: 500;
-  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
-}
-
-/* 平板适配 */
-@media (min-width: 768px) {
-  .index-page {
-    padding: 60rpx 40rpx;
-  }
-  
-  .content-container {
-    max-width: 800rpx;
-  }
-  
-  .title-main {
-    font-size: 56rpx;
-  }
-  
-  .title-sub {
-    font-size: 28rpx;
-  }
-  
-  .main-action-btn {
-    width: 140rpx;
-    height: 140rpx;
-    border-radius: 70rpx;
-    min-width: 140rpx;
-    max-width: 140rpx;
-    min-height: 140rpx;
-    max-height: 140rpx;
-  }
-  
-  .main-action-btn:hover {
-    width: 480rpx;
-  }
-  
-  .main-action-btn[disabled]:hover {
-    width: 140rpx;
-  }
-  
-  .btn-icon {
-    font-size: 36rpx;
-  }
-  
-  .btn-text {
-    font-size: 32rpx;
-  }
-  
-  .location-options {
-    gap: 24rpx;
-  }
-}
-
-
-
-
 

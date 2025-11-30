@@ -2,13 +2,15 @@
   "pages": [
     "pages/index/index",
     "pages/products/products",
+    "pages/pagenew/pagenew",
     "pages/adminLite/adminLite"
   ],
   "window": {
     "backgroundTextStyle": "dark",
-    "navigationBarBackgroundColor": "#ffffff",
-    "navigationBarTitleText": "mm-摩改社",
-    "navigationBarTextStyle": "black"
+    "navigationBarBackgroundColor": "#F9F9F9",
+    "navigationBarTitleText": "MT-摩改社",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F9F9F9"
   },
   "permission": {
     "scope.userLocation": {

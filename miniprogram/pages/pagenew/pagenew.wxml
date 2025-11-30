@@ -1,0 +1,92 @@
+<!-- pages/launch/launch.wxml -->
+<view class="container">
+
+<!-- 全局提示 (Toast) -->
+<view class="toast {{toast.show ? 'show' : ''}}">{{toast.msg}}</view>
+
+<!-- 管理员标记 -->
+<view class="admin-badge {{isAdmin ? 'show' : ''}}">ADMIN MODE</view>
+
+<!-- ================= 1. 首页层 (Landing Layer) ================= -->
+<!-- 加上 'scatter' 类名时触发消散动画 -->
+<view class="landing-layer {{isScatter ? 'scatter' : ''}}">
+  
+  <!-- 返回按钮 -->
+  <view class="back-icon" bindtap="goBack">
+    <view class="back-icon-inner"></view>
+  </view>
+  
+  <!-- 顶部标题 (点击触发管理员验证) -->
+  <view class="header" bindtap="handleTitleClick">
+    <text class="header-title">产品上新</text>
+    <text class="header-subtitle">NEW ARRIVALS</text>
+  </view>
+
+  <!-- 卡片区域 -->
+  <view class="card-area">
+    <!-- 封面图 -->
+    <view class="cover-box anim-item">
+      <image class="cover-img" src="{{product.cover || defaultCover}}" mode="aspectFill"></image>
+      
+      <!-- 管理员控件：换封面 -->
+      <view class="admin-edit-btn cover-pos" wx:if="{{isAdmin}}" catchtap="handleUploadCover">
+        <text>📷 换封面</text>
+      </view>
+    </view>
+
+    <!-- 文字信息 -->
+    <view class="text-box">
+      <text class="p-title anim-item">{{product.title || 'Coming Soon'}}</text>
+      <text class="p-desc anim-item">{{product.desc || 'Stay tuned for the next revolution.'}}</text>
+    </view>
+
+    <!-- 立即查看按钮 -->
+    <view class="btn-box anim-item">
+      <view class="main-btn" bindtap="handleViewDetail">
+        <text>立即查看</text>
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 2. 详情页层 (Detail Layer) ================= -->
+<scroll-view scroll-y class="detail-layer {{showDetail ? 'active' : ''}}">
+  <!-- 返回按钮 -->
+  <view class="back-btn" bindtap="handleBack">
+    <view class="icon-back"></view>
+  </view>
+
+  <view class="detail-content">
+    <!-- 详情图列表 (循环渲染) -->
+    <block wx:for="{{product.details}}" wx:key="*this">
+      <image class="detail-img" src="{{item}}" mode="widthFix" style="animation-delay: {{index * 0.1}}s"></image>
+    </block>
+    
+    <!-- 底部占位/结束语 -->
+    <view class="footer-end">- THE END -</view>
+
+    <!-- 管理员控件：上传详情图 -->
+    <view class="admin-upload-bar" wx:if="{{isAdmin}}">
+      <view class="upload-pill" bindtap="handleUploadDetails">
+        <text>➕ 上传/追加详情长图 (支持多选)</text>
+      </view>
+      <view class="clear-pill" bindtap="handleClearDetails">
+        <text>🗑️ 清空详情</text>
+      </view>
+    </view>
+  </view>
+</scroll-view>
+
+<!-- ================= 3. 密码弹窗 ================= -->
+<view class="modal-mask {{showPasswordModal ? 'active' : ''}}" catchtouchmove="true">
+  <view class="modal-box">
+    <view class="modal-title">SECURITY ACCESS</view>
+    <input class="pwd-input" type="number" password placeholder="Passcode" maxlength="10" bindinput="onPwdInput" value="{{pwdInput}}"/>
+    <view class="modal-actions">
+      <view class="btn cancel" bindtap="closeModal">取消</view>
+      <view class="btn confirm" bindtap="checkPassword">解锁</view>
+    </view>
+  </view>
+</view>
+
+</view>
