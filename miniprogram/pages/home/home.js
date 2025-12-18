@@ -959,19 +959,30 @@ Page({
       '08:00 - 20:00', '09:00 - 18:00', '10:00 - 22:00', '07:00 - 19:00', '09:30 - 21:30'
     ];
     
-    // 随机生成5个测试点位
+    // 随机生成5个测试点位（距离在40-60km之间）
     const testShops = [];
     for (let i = 0; i < 5; i++) {
-      // 在当前位置附近随机生成经纬度（约5公里范围内）
-      const randomLat = userLocation.latitude + (Math.random() - 0.5) * 0.05; // 约±2.5度
-      const randomLon = userLocation.longitude + (Math.random() - 0.5) * 0.05;
+      // 生成随机距离（40-60km）
+      const targetDistance = 40 + Math.random() * 20; // 40-60km
+      
+      // 生成随机方向角度（0-360度）
+      const angle = Math.random() * 2 * Math.PI;
+      
+      // 计算经纬度偏移量
+      // 1度纬度 ≈ 111km
+      // 1度经度 ≈ 111km * cos(纬度)
+      const latOffset = (targetDistance * Math.cos(angle)) / 111.0;
+      const lonOffset = (targetDistance * Math.sin(angle)) / (111.0 * Math.cos(userLocation.latitude * Math.PI / 180));
+      
+      const randomLat = userLocation.latitude + latOffset;
+      const randomLon = userLocation.longitude + lonOffset;
       
       // 随机选择服务（1-3个）
       const serviceCount = Math.floor(Math.random() * 3) + 1;
       const shuffledServices = [...allServices].sort(() => Math.random() - 0.5);
       const selectedServices = shuffledServices.slice(0, serviceCount).map(s => s.name);
       
-      // 计算距离
+      // 计算实际距离（用于显示）
       const dist = this.calculateDistance(
         userLocation.latitude, 
         userLocation.longitude,
