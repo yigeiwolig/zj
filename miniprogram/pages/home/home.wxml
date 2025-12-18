@@ -6,13 +6,18 @@
 
 <view class="container" bindtap="onBgTap">
   
-  <view class="bg-deco">MT GARAGE</view>
+  <!-- 品牌轴心 -->
+  <view class="brand-axis">
+    <view class="axis-line"></view>
+    <view class="brand-letter">M</view>
+    <view class="brand-letter">T</view>
+  </view>
 
   <!-- 1. 轮盘列表层 -->
   <view class="wheel-stage {{isDetailOpen ? 'hidden' : ''}}" 
     bindtouchstart="onTouchStart" bindtouchmove="onTouchMove" bindtouchend="onTouchEnd">
     <block wx:for="{{shops}}" wx:key="id">
-      <view class="card {{currentIndex === index ? 'active' : ''}}"
+      <view class="card {{currentIndex === index ? 'active' : ''}} {{item.isOpen ? 'open' : 'closed'}}"
         style="{{cardStyles[index]}}" id="card-{{index}}"
         catchtap="onCardTap" data-index="{{index}}" mark:type="card">
         <view class="c-left">
@@ -34,7 +39,7 @@
   <view class="fab-add" wx:if="{{isAdmin && !isDetailOpen}}" catchtap="onAddShop">+</view>
 
   <!-- 2. 替身层 -->
-  <view class="phantom {{isExpanded ? 'expanded' : ''}}" style="{{phantomStyle}}" wx:if="{{showPhantom}}" catchtap="return">
+  <view class="phantom {{isExpanded ? 'expanded' : ''}}" style="{{phantomStyle}}" wx:if="{{showPhantom}}">
     
     <!-- 列表态内容 -->
     <view class="p-list-content">
@@ -51,20 +56,47 @@
       </view>
     </view>
 
-    <!-- 图片区域 (编辑模式下点击可换图) -->
-    <view class="p-image-box" bindtap="{{isEditing ? 'chooseImage' : ''}}">
-      <image src="{{isEditing ? editData.img : activeItem.img}}" mode="aspectFill" class="p-img"></image>
-      <!-- 编辑模式下的换图提示 -->
-      <view class="img-edit-hint" wx:if="{{isEditing}}">点击更换图片</view>
+    <!-- 图片区域 (管理员模式下点击可换图，编辑模式下也可换图) -->
+    <view class="p-image-box" catchtap="{{(isAdmin || isEditing) ? 'chooseImage' : ''}}">
+      <!-- 编辑模式：优先显示 editData.img，如果没有则显示 activeItem.img -->
+      <image 
+        wx:if="{{isEditing && (editData.img || activeItem.img)}}" 
+        src="{{editData.img || activeItem.img}}" 
+        mode="aspectFill" 
+        class="p-img"
+      ></image>
+      <!-- 编辑模式但没有图片：显示占位图 -->
+      <view wx:elif="{{isEditing}}" class="p-img img-placeholder">
+        <text class="placeholder-text">点击添加图片</text>
+      </view>
+      <!-- 浏览模式：显示 activeItem.img -->
+      <image 
+        wx:else 
+        src="{{activeItem.img || ''}}" 
+        mode="aspectFill" 
+        class="p-img"
+      ></image>
+      <!-- 管理员模式或编辑模式下的换图提示 -->
+      <view class="img-edit-hint" wx:if="{{isAdmin || isEditing}}">点击更换图片</view>
     </view>
     
-    <!-- 按钮组 -->
+    <!-- 按钮组（右上角） -->
     <view class="p-btn-group">
-      <view class="circle-btn edit-btn" wx:if="{{isAdmin && !isEditing}}" catchtap="toggleEdit">✎</view>
-      <view class="circle-btn save-btn-small" wx:if="{{isEditing}}" catchtap="saveEdit">✓</view>
-      <view class="circle-btn" catchtap="closeDetail">✕</view>
+      <!-- 浏览模式：管理员显示编辑按钮，普通用户显示关闭按钮 -->
+      <view class="circle-btn edit-btn" wx:if="{{isAdmin && !isEditing && !isAdding}}" catchtap="toggleEdit">✎</view>
+      <!-- 添加新卡片时：显示取消按钮 -->
+      <view class="circle-btn cancel-btn" wx:if="{{isAdding}}" catchtap="cancelAddShop">✕</view>
+      <!-- 编辑已有卡片时：显示保存按钮 -->
+      <view class="circle-btn save-btn-small" wx:if="{{isEditing && !isAdding}}" catchtap="saveEdit">✓</view>
+      <!-- 浏览模式（非管理员）：显示关闭按钮 -->
+      <view class="circle-btn" wx:if="{{!isEditing && !isAdmin && !isAdding}}" catchtap="closeDetail">✕</view>
     </view>
-
+    
+    <!-- 详情页面左上角完成按钮（管理员模式下，浏览模式时） -->
+    <view class="complete-btn" wx:if="{{isAdmin && !isEditing && !isAdding}}" catchtap="closeDetail">
+      <text>完成</text>
+    </view>
+    
     <!-- 详情内容滚动区 -->
     <view class="p-content">
       
@@ -76,8 +108,8 @@
         </view>
 
         <view class="d-sub-row">
-          <view class="status-pill" style="background:{{activeItem.statusColor}}20; color:{{activeItem.statusColor}}">
-            <view class="status-dot" style="background:{{activeItem.statusColor}}"></view>{{activeItem.status}}
+          <view class="status-pill" style="background:{{activeItem.isOpen ? '#00C853' : '#FF3B30'}}20; color:{{activeItem.isOpen ? '#00C853' : '#FF3B30'}}">
+            <view class="status-dot" style="background:{{activeItem.isOpen ? '#00C853' : '#FF3B30'}}"></view>{{activeItem.isOpen ? '营业中' : '未营业'}}
           </view>
           <view class="sub-text">{{activeItem.sub}}</view>
         </view>
@@ -138,6 +170,12 @@
       <view class="edit-form" wx:else>
         <view class="edit-title">编辑信息</view>
         
+        <!-- 上传照片按钮（只在新建卡片时显示） -->
+        <view class="upload-img-btn edit-upload-btn" wx:if="{{isAdding}}" catchtap="chooseImage">
+          <text>📷</text>
+          <text>上传照片</text>
+        </view>
+        
         <view class="inp-group">
            <view class="inp-label">店铺名称</view>
            <input class="inp-field" value="{{editData.name}}" data-field="name" bindinput="onEditInput"/>
@@ -156,12 +194,6 @@
         <view class="inp-group">
            <view class="inp-label">副标题</view>
            <input class="inp-field" value="{{editData.sub}}" data-field="sub" bindinput="onEditInput"/>
-        </view>
-        
-        <!-- 距离目前依然手动输入，实际开发中可以根据经纬度自动计算 -->
-        <view class="inp-group">
-           <view class="inp-label">距离 (KM)</view>
-           <input class="inp-field" value="{{editData.dist}}" data-field="dist" bindinput="onEditInput"/>
         </view>
         
         <view class="inp-group">
@@ -204,7 +236,10 @@
            </view>
         </view>
         
-        <view class="btn-nav save-btn" bindtap="saveEdit">保存更改</view>
+        <!-- 添加新卡片时显示"新建"，编辑已有卡片时显示"保存更改" -->
+        <view class="btn-nav save-btn" bindtap="saveEdit">
+          {{isAdding ? '新建' : '保存更改'}}
+        </view>
       </view>
 
     </view> <!-- 结束 view -->

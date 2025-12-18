@@ -11,19 +11,46 @@ page {
   position: relative;
 }
 
-/* 左侧装饰文字 */
-.bg-deco {
+/* --- 1. 品牌轴心：回归极简（两字黑，轴线淡） --- */
+.brand-axis {
   position: absolute;
-  left: 40rpx;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 100rpx;
-  font-weight: 900;
-  color: rgba(0,0,0,0.06);
-  writing-mode: vertical-rl;
-  text-orientation: upright;
-  letter-spacing: 10rpx;
+  left: 60rpx; 
+  top: 0; 
+  bottom: 0;
+  width: 2rpx;
+  background: rgba(0,0,0,0.03); /* 极细线 */
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  justify-content: center;
+  z-index: 5;
   pointer-events: none; /* 关键：让点击穿透，背景点击才能生效 */
+}
+
+/* 轴线 */
+.axis-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2rpx;
+  background: rgba(0,0,0,0.03);
+}
+
+.brand-letter {
+  background: #F2F2F7; 
+  padding: 20rpx 0;
+  font-size: 44rpx; 
+  font-weight: 900; 
+  color: #000;
+  line-height: 1; 
+  letter-spacing: -2rpx;
+  position: relative;
+  z-index: 1;
+}
+
+/* 隐藏原本的 brand-word (REPAIR那个字) */
+.brand-word {
+  display: none; 
 }
 
 /* 轮盘容器 */
@@ -37,34 +64,210 @@ page {
 }
 .wheel-stage.hidden { opacity: 0; pointer-events: none; }
 
-/* 列表卡片 */
+/* --- 2. 核心卡片：精致红色包边设计 --- */
 .card {
-  position: absolute; right: -80rpx; top: 50%;
-  width: 640rpx; height: 260rpx; margin-top: -130rpx;
-  background: #FFFFFF; border-radius: 48rpx;
-  box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.05);
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 56rpx;
+  position: absolute; 
+  right: -80rpx; 
+  top: 50%;
+  width: 600rpx; 
+  height: 300rpx; 
+  margin-top: -150rpx;
+  background: #FFFFFF; 
+  border-radius: 64rpx; /* 大圆角 */
+  box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.03);
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between;
+  padding: 0 56rpx; 
   box-sizing: border-box;
-  transform-origin: 1400rpx 50%; /* 旋转轴心 */
-  will-change: transform;
-  overflow: hidden;
-  transition: box-shadow 0.3s;
+  transform-origin: 1400rpx 50%;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden; /* 必须，为了让包边切齐圆角 */
+}
+
+/* 所有卡片的状态包边（未激活时也显示） */
+.card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 12rpx;
+  
+  /* 默认红色（未营业） */
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    #FF3B30 20%, 
+    #FF3B30 80%, 
+    transparent 100%
+  );
+  
+  /* 默认红色阴影（未激活时较淡） */
+  box-shadow: inset -2rpx 0 6rpx rgba(0,0,0,0.05),
+              2rpx 0 10rpx rgba(255, 59, 48, 0.2);
+              
+  border-radius: 64rpx 0 0 64rpx;
+  z-index: 1;
+}
+
+/* 营业中：绿色包边（未激活状态）- 提高优先级确保覆盖默认样式 */
+.card.open::before {
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    #00C853 20%, 
+    #00C853 80%, 
+    transparent 100%
+  ) !important;
+  
+  box-shadow: inset -2rpx 0 6rpx rgba(0,0,0,0.05),
+              2rpx 0 10rpx rgba(0, 200, 83, 0.2) !important;
+}
+
+/* 未营业：红色包边（未激活状态，默认样式） */
+.card.closed::before {
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    #FF3B30 20%, 
+    #FF3B30 80%, 
+    transparent 100%
+  );
+  
+  box-shadow: inset -2rpx 0 6rpx rgba(0,0,0,0.05),
+              2rpx 0 10rpx rgba(255, 59, 48, 0.2);
 }
 
 .c-left { display: flex; flex-direction: column; gap: 12rpx; width: 60%; }
-.c-name { font-size: 38rpx; font-weight: 800; color: #999; transition: 0.3s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-.c-services-row { display: flex; gap: 12rpx; height: 40rpx; align-items: center;}
-.cs-icon { font-size: 28rpx; opacity: 0.5; filter: grayscale(1); }
-.cs-icon.has { opacity: 1; filter: grayscale(0); }
+.c-name {
+  font-size: 40rpx; 
+  font-weight: 800; 
+  color: #D2D2D7;
+  transition: color 0.3s;
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis;
+}
 
-.c-right { text-align: right; width: 35%; }
-.c-dist { font-size: 52rpx; font-weight: 800; font-family: monospace; color: #ccc; transition: color 0.3s;}
-.c-unit { font-size: 24rpx; font-weight: 600; color: #ccc; margin-left: 4rpx; }
+/* 图标行微调 */
+.c-services-row { 
+  display: flex; 
+  gap: 16rpx; /* 间距拉开点 */
+  height: 60rpx; 
+  align-items: center;
+  margin-top: 10rpx;
+}
 
-/* 选中态 */
-.card.active { background: #fff; z-index: 100; box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.08); }
-.card.active .c-name, .card.active .c-dist, .card.active .c-unit { color: #000; }
+/* 图标包装 */
+.cs-icon { 
+  font-size: 32rpx; 
+  width: 60rpx;
+  height: 60rpx;
+  background: #F5F5F7; /* 给图标一个淡淡的灰底 */
+  border-radius: 16rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.3; 
+  filter: grayscale(1); 
+  transition: 0.3s;
+}
+
+/* 图标优化：激活时图标底色极淡红 */
+.card.active .cs-icon.has {
+  background: rgba(255, 59, 48, 0.04);
+  filter: grayscale(0); 
+  opacity: 1;
+}
+
+/* 距离部分：将 KM 模块"胶囊化"，引入红色 */
+.c-right {
+  display: flex; 
+  flex-direction: column; 
+  align-items: flex-end;
+  width: 35%;
+}
+
+.c-dist {
+  font-size: 64rpx; 
+  font-weight: 900; 
+  color: #E5E5EA;
+  font-family: "SF Pro Rounded", system-ui; 
+  transition: color 0.3s;
+}
+
+.c-unit {
+  font-size: 18rpx; 
+  font-weight: 800;
+  color: #AEAEB2; 
+  padding: 4rpx 12rpx;
+  background: #F5F5F7; 
+  border-radius: 10rpx;
+  margin-top: 4rpx; 
+  transition: all 0.3s;
+}
+
+/* 激活态：让红色边框"长"在圆角上 */
+.card.active {
+  z-index: 100;
+  transform: scale(1.03) translateX(-10rpx);
+  box-shadow: 0 40rpx 100rpx rgba(0,0,0,0.08);
+  border: 1rpx solid rgba(0,0,0,0.02); /* 加一层极细的边，增加实体感 */
+}
+
+/* 激活态：包边发光更强（默认红色） */
+.card.active::before {
+  /* 激活时阴影更强，更有存在感 */
+  box-shadow: inset -2rpx 0 6rpx rgba(0,0,0,0.05),
+              2rpx 0 15rpx rgba(255, 59, 48, 0.3);
+}
+
+/* 激活态 + 营业中：绿色包边发光更强 */
+.card.active.open::before {
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    #00C853 20%, 
+    #00C853 80%, 
+    transparent 100%
+  ) !important;
+  box-shadow: inset -2rpx 0 6rpx rgba(0,0,0,0.05),
+              2rpx 0 15rpx rgba(0, 200, 83, 0.3) !important;
+}
+
+/* 激活态 + 未营业：红色包边发光更强 */
+.card.active.closed::before {
+  background: linear-gradient(to bottom, 
+    transparent 0%, 
+    #FF3B30 20%, 
+    #FF3B30 80%, 
+    transparent 100%
+  );
+  box-shadow: inset -2rpx 0 6rpx rgba(0,0,0,0.05),
+              2rpx 0 15rpx rgba(255, 59, 48, 0.3);
+}
+
+/* 店名排版：激活时店名变黑 */
+.card.active .c-name {
+  color: #000;
+  font-weight: 900;
+}
+
+/* 图标细节：激活时图标底座带一丁点红 */
+.card.active .cs-icon.has {
+  background: rgba(255, 59, 48, 0.05);
+  opacity: 1; 
+  filter: grayscale(0);
+}
+
+/* 距离部分：KM 变红点缀 */
+.card.active .c-dist {
+  color: #000;
+  font-weight: 900;
+}
+
+.card.active .c-unit {
+  color: #FF3B30;
+  font-weight: 800;
+  opacity: 0.8;
+}
 
 /* --- 替身层 --- */
 .phantom {
@@ -96,10 +299,17 @@ page {
 
 /* 2. 详情图 */
 .p-image-box {
-  width: 100%; height: 0; overflow: hidden; position: relative;
+  width: 100%; 
+  height: 0; 
+  overflow: hidden; 
+  position: relative;
   transition: height 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+  /* 确保编辑模式下可以点击 */
+  z-index: 1;
 }
-.phantom.expanded .p-image-box { height: 32%; }
+.phantom.expanded .p-image-box { 
+  height: 380rpx; /* 使用固定高度，确保编辑模式下可见 */
+}
 .p-img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.1); opacity: 0; transition: 0.4s; }
 .phantom.expanded .p-img { transform: scale(1); opacity: 1; transition-delay: 0.1s; }
 
@@ -172,23 +382,13 @@ page {
 /* 基础保持不变... */
 page { background-color: #F2F2F7; height: 100%; overflow: hidden; font-family: -apple-system, "SF Pro Rounded", sans-serif; }
 .container { width: 100%; height: 100%; position: relative; }
-.bg-deco { position: absolute; left: 40rpx; top: 50%; transform: translateY(-50%); font-size: 100rpx; font-weight: 900; color: rgba(0,0,0,0.06); writing-mode: vertical-rl; text-orientation: upright; letter-spacing: 10rpx; pointer-events: none; }
+/* 品牌轴心 - 重复定义已移除，使用上方统一定义 */
 .wheel-stage { position: absolute; right: 0; top: 0; bottom: 0; width: 100%; z-index: 10; mask-image: linear-gradient(to bottom, transparent 5%, black 25%, black 75%, transparent 95%); -webkit-mask-image: linear-gradient(to bottom, transparent 5%, black 25%, black 75%, transparent 95%); transition: opacity 0.2s; }
 .wheel-stage.hidden { opacity: 0; pointer-events: none; }
 
-/* 卡片样式 */
-.card { position: absolute; right: -80rpx; top: 50%; width: 640rpx; height: 260rpx; margin-top: -130rpx; background: #FFFFFF; border-radius: 48rpx; box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: space-between; padding: 0 56rpx; box-sizing: border-box; transform-origin: 1400rpx 50%; will-change: transform; overflow: hidden; transition: box-shadow 0.3s; }
+/* 卡片样式 - 重复定义已移除，使用上方统一定义 */
 .card.invisible { opacity: 0 !important; }
-.c-left { display: flex; flex-direction: column; gap: 12rpx; width: 60%; }
-.c-name { font-size: 38rpx; font-weight: 800; color: #999; transition: 0.3s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;}
-.c-services-row { display: flex; gap: 12rpx; height: 40rpx; align-items: center;}
-.cs-icon { font-size: 28rpx; opacity: 0.5; filter: grayscale(1); }
-.cs-icon.has { opacity: 1; filter: grayscale(0); }
-.c-right { text-align: right; width: 35%; }
-.c-dist { font-size: 52rpx; font-weight: 800; font-family: monospace; color: #ccc; transition: color 0.3s;}
-.c-unit { font-size: 24rpx; font-weight: 600; color: #ccc; margin-left: 4rpx; }
-.card.active { background: #fff; z-index: 100; box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.08); }
-.card.active .c-name, .card.active .c-dist, .card.active .c-unit { color: #000; }
+/* 距离和单位样式 - 重复定义已移除，使用上方统一定义 */
 
 /* 新增：管理员添加悬浮按钮 */
 .fab-add {
@@ -201,6 +401,33 @@ page { background-color: #F2F2F7; height: 100%; overflow: hidden; font-family: -
   transition: transform 0.1s;
 }
 .fab-add:active { transform: scale(0.9); }
+
+/* 测试按钮 */
+.test-btn {
+  position: absolute;
+  bottom: 80rpx;
+  left: 60rpx;
+  padding: 20rpx 40rpx;
+  background: rgba(255, 59, 48, 0.9);
+  color: #fff;
+  border-radius: 50rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  z-index: 500;
+  box-shadow: 0 8rpx 24rpx rgba(255, 59, 48, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s, background 0.2s;
+}
+
+.test-btn:active {
+  transform: scale(0.95);
+}
+
+.test-btn text {
+  line-height: 1;
+}
 
 /* 1. 修改替身容器：放宽高度限制 */
 .phantom {
@@ -240,24 +467,156 @@ page { background-color: #F2F2F7; height: 100%; overflow: hidden; font-family: -
 
 /* 展开时，图片固定高度 380rpx (约占屏幕 1/4)，不再依赖父容器高度 */
 .phantom.expanded .p-image-box { 
-  height: 380rpx; 
+  height: 380rpx;
+  /* 确保编辑模式下可以点击 */
+  cursor: pointer;
 }
 .p-img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.1); opacity: 0; transition: 0.4s; }
 .phantom.expanded .p-img { transform: scale(1); opacity: 1; transition-delay: 0.1s; }
 
 /* 换图提示 */
 .img-edit-hint {
-  position: absolute; inset: 0; background: rgba(0,0,0,0.4);
-  color: #fff; display: flex; align-items: center; justify-content: center;
-  font-weight: bold; font-size: 32rpx; z-index: 2;
+  position: absolute; 
+  inset: 0; 
+  background: rgba(0,0,0,0.3);
+  color: #fff; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  font-weight: bold; 
+  font-size: 32rpx; 
+  z-index: 2;
+  pointer-events: none; /* 让点击穿透到父容器 */
 }
 
-/* 按钮组 */
+/* 图片占位符（编辑模式下没有图片时显示） */
+.img-placeholder {
+  background: #F5F5F7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 380rpx;
+}
+
+.placeholder-text {
+  color: #999;
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+/* 按钮组（右上角） */
 .p-btn-group { position: absolute; top: 40rpx; right: 40rpx; display: flex; gap: 20rpx; z-index: 20; opacity: 0; transition: 0.2s; pointer-events: none; }
 .phantom.expanded .p-btn-group { opacity: 1; pointer-events: auto; transition-delay: 0.2s; }
 .circle-btn { width: 72rpx; height: 72rpx; background: rgba(255,255,255,0.3); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.4); border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 28rpx; }
 .edit-btn { background: #000; border: none; }
 .save-btn-small { background: #007AFF; border: none; }
+.cancel-btn { background: #FF3B30; border: none; }
+
+/* 编辑模式左上角完成按钮（管理员模式下） */
+.complete-btn {
+  position: absolute;
+  top: 40rpx;
+  left: 40rpx;
+  z-index: 25;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  padding: 16rpx 32rpx;
+  background: rgba(0, 122, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 40rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 122, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.phantom.expanded .complete-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0.2s;
+}
+
+.complete-btn text {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+  line-height: 1;
+}
+
+/* 上传照片按钮（管理员模式下，浏览模式时显示） */
+.upload-img-btn {
+  position: absolute;
+  top: 40rpx;
+  left: 40rpx;
+  z-index: 25;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  padding: 16rpx 24rpx;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 32rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.15);
+  min-width: 120rpx;
+}
+
+.phantom.expanded .upload-img-btn {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0.2s;
+}
+
+/* 编辑模式下的上传按钮（放在店铺名称上方） */
+.edit-upload-btn {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  margin: 0 auto 32rpx !important;
+  width: fit-content;
+  min-width: 160rpx;
+  background: rgba(0, 122, 255, 0.15) !important;
+  border: 2rpx solid rgba(0, 122, 255, 0.4) !important;
+  border-radius: 40rpx;
+  transition: none !important;
+  z-index: 10 !important;
+  display: flex !important;
+  visibility: visible !important;
+  box-shadow: 0 4rpx 12rpx rgba(0, 122, 255, 0.2);
+}
+
+.edit-upload-btn text:first-child {
+  font-size: 36rpx;
+  line-height: 1;
+}
+
+.edit-upload-btn text:last-child {
+  font-size: 24rpx;
+  color: #007AFF;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.upload-img-btn text:first-child {
+  font-size: 36rpx;
+  line-height: 1;
+}
+
+.upload-img-btn text:last-child {
+  font-size: 24rpx;
+  color: #666;
+  font-weight: 500;
+  line-height: 1;
+}
 
 /* 2. 确保内容区域是流式布局，能撑开高度 */
 .p-content {

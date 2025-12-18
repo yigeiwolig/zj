@@ -1,4 +1,5 @@
 const app = getApp();
+const db = wx.cloud.database();
 
 Page({
   data: {
@@ -8,10 +9,8 @@ Page({
       { name: '车辆精修', icon: '🛠️' }, { name: '洗车服务', icon: '🚿' },
       { name: '机油更换', icon: '🛢️' }
     ],
-    shops: [
-      { id: 1, name: "杜卡迪浦东", sub: "官方旗舰店", dist: "0.8", status: "营业中", statusColor: "#00C853", img: "https://picsum.photos/600/400?1", address: "上海市浦东新区世博大道1200号", latitude: 0, longitude: 0, phone: "021-8888 8888", time: "10:00 - 22:00", services: ['车辆销售', '车辆保养', '机车咖啡'] },
-      { id: 2, name: "铁骑工坊", sub: "复古改装", dist: "2.4", status: "繁忙", statusColor: "#FF9500", img: "https://picsum.photos/600/400?2", address: "上海市静安区汶水路创意园", latitude: 0, longitude: 0, phone: "138 0000 0000", time: "09:00 - 18:00", services: ['车辆精修', '机油更换'] },
-    ],
+    shops: [], // 从云数据库读取，不再使用硬编码数据
+    userLocation: null, // 用户位置 { latitude, longitude }
 
     cardStyles: [],
     scroll: 0,
@@ -31,7 +30,10 @@ Page({
     
     // 新增：弹窗控制变量
     showAuthModal: false,
-    inputPwd: ''
+    inputPwd: '',
+    
+    // 测试模式
+    isTestMode: false
   },
 
   onLoad() {
@@ -39,39 +41,391 @@ Page({
     this.startScroll = 0;
     this.isDragging = false;
     
-    // 1. 先初始化数据
-    this.preprocessData(); 
-    
-    // 2. 初始位置定在最顶端（最远的店）
-    this.setData({
-      scroll: 0,
-      target: 0
+    // 1. 获取用户位置
+    this.getUserLocation().then(() => {
+      // 2. 从云数据库加载店铺数据
+      this.loadShopsFromCloud().then(() => {
+        // 3. 处理数据（计算距离、营业状态等）
+        this.preprocessData();
+        
+        // 4. 初始位置定在最顶端（最远的店）
+        this.setData({
+          scroll: 0,
+          target: 0
+        });
+        
+        // 5. 渲染轮盘
+        this.updateWheel();
+      });
     });
     
-    // 3. 渲染轮盘
+    // 6. 定时更新营业状态（每分钟检查一次）
+    this.statusTimer = setInterval(() => {
+      this.updateShopStatus();
+    }, 60000); // 60秒 = 1分钟
+  },
+  
+  onUnload() {
+    // 清理定时器
+    if (this.statusTimer) {
+      clearInterval(this.statusTimer);
+    }
+  },
+  
+  // 更新所有店铺的营业状态
+  updateShopStatus() {
+    const { shops, activeItem, isDetailOpen } = this.data;
+    const updatedShops = shops.map(item => {
+      const serviceSet = {};
+      (item.services || []).forEach(s => serviceSet[s] = true);
+      const isOpen = this.isShopOpen(item.time);
+      const status = isOpen ? '营业中' : '未营业';
+      const statusColor = isOpen ? '#00C853' : '#FF3B30';
+      console.log(`更新状态 - 店铺 ${item.name}: ${isOpen ? '营业中(绿色)' : '未营业(红色)'}`);
+      return { ...item, serviceSet, isOpen, status, statusColor };
+    });
+    
+    // 如果详情页已打开，同时更新 activeItem 的状态
+    if (isDetailOpen && activeItem && (activeItem.id || activeItem._id)) {
+      const currentItem = updatedShops.find(item => 
+        (item.id && activeItem.id && item.id === activeItem.id) || 
+        (item._id && activeItem._id && item._id === activeItem._id)
+      );
+      if (currentItem) {
+        const updatedActiveItem = {
+          ...activeItem,
+          isOpen: currentItem.isOpen,
+          status: currentItem.status,
+          statusColor: currentItem.statusColor
+        };
+        this.setData({ 
+          shops: updatedShops,
+          activeItem: updatedActiveItem
+        });
+      } else {
+        this.setData({ shops: updatedShops });
+      }
+    } else {
+      this.setData({ shops: updatedShops });
+    }
+    
+    // 更新后重新渲染轮盘
     this.updateWheel();
   },
 
+  // 获取用户位置（从云数据库或本地存储）
+  async getUserLocation() {
+    return new Promise((resolve, reject) => {
+      // 方法1：尝试从云数据库获取（user_list 集合）
+      db.collection('user_list').limit(1).get({
+        success: (res) => {
+          if (res.data.length > 0 && res.data[0].latitude && res.data[0].longitude) {
+            const userLoc = {
+              latitude: res.data[0].latitude,
+              longitude: res.data[0].longitude
+            };
+            this.setData({ userLocation: userLoc });
+            console.log('从云数据库获取用户位置:', userLoc);
+            resolve(userLoc);
+            return;
+          }
+          
+          // 方法2：尝试从本地存储获取
+          const cachedLoc = wx.getStorageSync('user_location');
+          if (cachedLoc && cachedLoc.latitude && cachedLoc.longitude) {
+            this.setData({ userLocation: cachedLoc });
+            console.log('从本地存储获取用户位置:', cachedLoc);
+            resolve(cachedLoc);
+            return;
+          }
+          
+          // 方法3：实时获取位置
+          wx.getLocation({
+            type: 'gcj02',
+            isHighAccuracy: true,
+            success: (res) => {
+              const userLoc = {
+                latitude: res.latitude,
+                longitude: res.longitude
+              };
+              this.setData({ userLocation: userLoc });
+              wx.setStorageSync('user_location', userLoc);
+              console.log('实时获取用户位置:', userLoc);
+              resolve(userLoc);
+            },
+            fail: (err) => {
+              console.error('获取用户位置失败:', err);
+              // 使用默认位置（可选）
+              const defaultLoc = { latitude: 31.2304, longitude: 121.4737 }; // 上海
+              this.setData({ userLocation: defaultLoc });
+              resolve(defaultLoc);
+            }
+          });
+        },
+        fail: (err) => {
+          console.error('从云数据库获取位置失败:', err);
+          // 尝试其他方法
+          wx.getLocation({
+            type: 'gcj02',
+            isHighAccuracy: true,
+            success: (res) => {
+              const userLoc = {
+                latitude: res.latitude,
+                longitude: res.longitude
+              };
+              this.setData({ userLocation: userLoc });
+              wx.setStorageSync('user_location', userLoc);
+              resolve(userLoc);
+            },
+            fail: () => {
+              const defaultLoc = { latitude: 31.2304, longitude: 121.4737 };
+              this.setData({ userLocation: defaultLoc });
+              resolve(defaultLoc);
+            }
+          });
+        }
+      });
+    });
+  },
+
+  // 计算两点间距离（Haversine 公式，返回公里数）
+  calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // 地球半径（公里）
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const distance = R * c;
+    return distance;
+  },
+
+  // 从云数据库 home 集合读取测试模式开关
+  async loadTestModeConfig() {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const res = await db.collection('home').doc('testModeSwitch').get();
+        const isTestMode = res.data && res.data.enabled === true;
+        this.setData({ isTestMode });
+        console.log('✅ 测试模式开关读取成功:', res.data);
+        console.log('✅ 测试模式状态:', isTestMode);
+        resolve(isTestMode);
+      } catch (err) {
+        // 如果开关不存在，尝试创建默认开关（关闭状态）
+        console.log('⚠️ 测试模式开关不存在，尝试创建默认开关...');
+        console.log('错误信息:', err);
+        
+        try {
+          // 在 home 集合中创建默认开关（关闭状态）
+          await db.collection('home').doc('testModeSwitch').set({
+            data: {
+              enabled: false,
+              createTime: new Date(),
+              updateTime: new Date()
+            }
+          });
+          console.log('✅ 默认测试模式开关已创建（enabled: false）');
+          this.setData({ isTestMode: false });
+          resolve(false);
+        } catch (createErr) {
+          console.error('❌ 创建测试模式开关失败:', createErr);
+          // 如果创建失败，默认为关闭
+          this.setData({ isTestMode: false });
+          resolve(false);
+        }
+      }
+    });
+  },
+
+  // 从云数据库加载店铺数据
+  async loadShopsFromCloud() {
+    return new Promise((resolve, reject) => {
+      db.collection('home').get({
+        success: async (res) => {
+          console.log('从云数据库加载店铺数据:', res.data);
+          
+          // 先加载测试模式开关
+          const isTestMode = await this.loadTestModeConfig();
+          
+          // 过滤掉开关文档本身，只保留店铺数据
+          let shops = res.data
+            .filter(item => item._id !== 'testModeSwitch') // 排除开关文档
+            .map(item => ({
+              _id: item._id, // 保留云数据库的 _id
+              id: item.id || item._id, // 兼容 id 字段
+              name: item.name || '',
+              sub: item.sub || '',
+              dist: item.dist || '0',
+              status: item.status || '营业中',
+              statusColor: item.statusColor || '#00C853',
+              img: item.img || '',
+              address: item.address || '',
+              latitude: item.latitude || 0,
+              longitude: item.longitude || 0,
+              phone: item.phone || '',
+              time: item.time || '09:00 - 18:00',
+              services: item.services || [],
+              isTest: item.isTest || false, // 标记是否为测试数据
+              testLocation: item.testLocation || null // 保存生成时的用户位置
+            }));
+          
+          // 如果测试模式开关为开，检查是否需要生成测试数据
+          if (isTestMode) {
+            const oldTestShops = shops.filter(item => item.isTest);
+            const nonTestShops = shops.filter(item => !item.isTest);
+            
+            // 检查是否需要重新生成测试数据
+            const needRegenerate = await this.shouldRegenerateTestData(oldTestShops);
+            
+            if (oldTestShops.length !== 5 || needRegenerate) {
+              console.log(`✅ 测试模式已开启，当前测试数据数量: ${oldTestShops.length}，需要重新生成`);
+              
+              // 先删除旧的测试数据（如果有）
+              if (oldTestShops.length > 0) {
+                try {
+                  for (const shop of oldTestShops) {
+                    if (shop._id) {
+                      await db.collection('home').doc(shop._id).remove();
+                    }
+                  }
+                  console.log('✅ 已删除旧的测试数据');
+                } catch (err) {
+                  console.error('删除旧测试数据失败:', err);
+                }
+              }
+              
+              // 生成新的测试数据
+              try {
+                await this.generateTestData();
+                // 重新加载数据
+                return this.loadShopsFromCloud().then(resolve).catch(reject);
+              } catch (err) {
+                console.error('生成测试数据失败:', err);
+              }
+            } else {
+              console.log('✅ 测试模式已开启，测试数据已存在（5个）且位置未变化，沿用旧数据');
+            }
+            
+            // 测试模式开启时，只显示测试数据，隐藏真实店铺
+            shops = shops.filter(item => item.isTest);
+            console.log('✅ 测试模式已开启，已隐藏真实店铺，只显示测试数据');
+          } else {
+            // 如果测试模式关闭，删除所有测试数据并过滤
+            const oldTestShops = shops.filter(item => item.isTest);
+            if (oldTestShops.length > 0) {
+              try {
+                for (const shop of oldTestShops) {
+                  if (shop._id) {
+                    await db.collection('home').doc(shop._id).remove();
+                  }
+                }
+                console.log('✅ 测试模式已关闭，已删除所有测试数据');
+              } catch (err) {
+                console.error('删除测试数据失败:', err);
+              }
+            }
+            shops = shops.filter(item => !item.isTest);
+            console.log('✅ 测试模式已关闭，已过滤测试数据，只显示真实店铺');
+          }
+          
+          this.setData({ shops });
+          resolve(shops);
+        },
+        fail: (err) => {
+          console.error('从云数据库加载数据失败:', err);
+          // 如果加载失败，使用空数组
+          this.setData({ shops: [] });
+          resolve([]);
+        }
+      });
+    });
+  },
+
+  // 判断店铺是否在营业时间内
+  isShopOpen(timeStr) {
+    if (!timeStr) return false;
+    
+    try {
+      // 解析时间字符串，格式： "10:00 - 22:00"
+      const parts = timeStr.split('-');
+      if (parts.length !== 2) return false;
+      
+      const startTime = parts[0].trim();
+      const endTime = parts[1].trim();
+      
+      // 获取当前时间
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      const currentTime = currentHour * 60 + currentMinute; // 转换为分钟数
+      
+      // 解析开始和结束时间
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+      
+      const startTimeMinutes = startHour * 60 + startMin;
+      const endTimeMinutes = endHour * 60 + endMin;
+      
+      // 判断是否在营业时间内
+      if (startTimeMinutes <= endTimeMinutes) {
+        // 正常情况：09:00 - 18:00
+        return currentTime >= startTimeMinutes && currentTime <= endTimeMinutes;
+      } else {
+        // 跨天情况：22:00 - 02:00
+        return currentTime >= startTimeMinutes || currentTime <= endTimeMinutes;
+      }
+    } catch (e) {
+      console.error('解析营业时间失败:', e);
+      return false;
+    }
+  },
+
   preprocessData() {
-    // 复制数组并添加 serviceSet
-    let list = this.data.shops.map(item => {
+    const { shops, userLocation } = this.data;
+    if (!userLocation) {
+      console.warn('用户位置未获取，无法计算距离');
+      return;
+    }
+
+    // 复制数组并添加 serviceSet、isOpen 状态和计算真实距离
+    let list = shops.map(item => {
       const serviceSet = {};
       (item.services || []).forEach(s => serviceSet[s] = true);
-      return { ...item, serviceSet };
+      
+      // 计算营业状态
+      const isOpen = this.isShopOpen(item.time);
+      
+      // 计算真实距离（如果店铺有位置信息）
+      let dist = parseFloat(item.dist) || 0;
+      if (item.latitude && item.longitude && userLocation.latitude && userLocation.longitude) {
+        dist = this.calculateDistance(
+          userLocation.latitude,
+          userLocation.longitude,
+          item.latitude,
+          item.longitude
+        );
+        // 保留一位小数
+        dist = Math.round(dist * 10) / 10;
+      }
+      
+      console.log(`店铺 ${item.name} - 距离: ${dist}KM, 营业状态: ${isOpen ? '营业中' : '未营业'}`);
+      
+      return { 
+        ...item, 
+        serviceSet, 
+        isOpen,
+        dist: dist.toString() // 转换为字符串，保持格式一致
+      };
     });
 
     // --- 核心排序：远(大) -> 近(小) ---
     // 目标：远的在上面（Index 0），近的在下面（Index N）
-    // 降序排列：大的在前（远的在上面）
     list.sort((a, b) => {
-      // 强制转为浮点数，如果为空则默认为 0
       const valA = parseFloat(a.dist) || 0;
       const valB = parseFloat(b.dist) || 0;
-      
-      // 升序排列：小的在前
-      // valA - valB: 如果 A < B，返回负数，A 排在 B 前面
-      // 根据轮盘显示逻辑，Index 0 显示在上面，所以升序让远的在上面
-      return valA - valB; 
+      return valA - valB; // 升序：小的在前（近的在上面）
     });
 
     // 强制更新数据
@@ -125,7 +479,7 @@ Page({
       });
       wx.showToast({ title: '管理员模式: ON', icon: 'success' });
     } else {
-      wx.showToast({ title: '密码错误', icon: 'error' });
+              wx.showToast({ title: '密码错误', icon: 'error' });
       // 可以选择是否清空输入框
       // this.setData({ inputPwd: '' }); 
     }
@@ -134,18 +488,23 @@ Page({
   // --- 1. 新增卡片 (修复：新增时绝对不排序，确保打开的是新卡片) ---
   onAddShop() {
     const newShop = {
-      id: 'new_' + Date.now(), // 加个前缀确保ID独特
+      id: 'new_' + Date.now(), // 临时ID，保存到云数据库后会生成真实 _id
       name: "新店铺",
       sub: "店铺描述",
       dist: "0.0",
       status: "营业中",
       statusColor: "#00C853",
       img: "https://picsum.photos/600/400?new",
-      address: "", 
-      phone: "", 
+      address: "",
+      phone: "",
       time: "09:00 - 18:00",
-      services: []
+      services: [],
+      latitude: 0,
+      longitude: 0
     };
+
+    // 计算营业状态
+    newShop.isOpen = this.isShopOpen(newShop.time);
 
     const list = this.data.shops;
     list.unshift(newShop); // 强行插队到第一个
@@ -231,27 +590,149 @@ Page({
     }
   },
 
-  onTouchStart(e) { if (this.data.isDetailOpen) return; this.isDragging = true; this.startY = e.touches[0].clientY; this.startScroll = this.data.scroll; if(this.animationFrame) clearTimeout(this.animationFrame); },
-  onTouchMove(e) { if (this.data.isDetailOpen) return; const delta = this.startY - e.touches[0].clientY; this.setData({ scroll: this.startScroll + (delta / 80) }); this.updateWheel(); },
-  onTouchEnd() { this.isDragging = false; let target = Math.round(this.data.scroll); target = Math.max(0, Math.min(this.data.shops.length - 1, target)); this.setData({ target }); this.loop(); },
+  onTouchStart(e) { 
+    if (this.data.isDetailOpen) return; 
+    this.isDragging = true; 
+    this.startY = e.touches[0].clientY; 
+    this.startScroll = this.data.scroll; 
+    if(this.animationFrame) clearTimeout(this.animationFrame); 
+  },
+  onTouchMove(e) { 
+    if (this.data.isDetailOpen) return; 
+    // 修复方向：向上滑动（startY > currentY）应该增加scroll，向下滑动应该减少scroll
+    // 修复灵敏度：增大除数，从150改为250，使滑动更平滑、更不敏感
+    const delta = this.startY - e.touches[0].clientY;
+    this.setData({ scroll: this.startScroll - (delta / 250) }); 
+    this.updateWheel(); 
+  },
+  onTouchEnd() { 
+    this.isDragging = false; 
+    let target = Math.round(this.data.scroll); 
+    target = Math.max(0, Math.min(this.data.shops.length - 1, target)); 
+    this.setData({ target }); 
+    this.loop(); 
+  },
   
   onCardTap(e) { const index = e.currentTarget.dataset.index; if (this.data.currentIndex !== index) { this.setData({ target: index }); this.loop(); return; } this.openDetail(index); },
 
   // --- 详情与编辑 ---
   
-  // 选择图片
+  // 选择图片并上传到云存储（管理员模式下可直接调用，编辑模式下也可调用）
   chooseImage() {
-    if(!this.data.isEditing) return;
+    // 管理员模式或编辑模式下都可以选择图片
+    if(!this.data.isAdmin && !this.data.isEditing) return;
+    
+    const that = this;
+    const { activeItem } = this.data;
+    
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
       sourceType: ['album', 'camera'],
       success: (res) => {
         const tempFilePath = res.tempFiles[0].tempFilePath;
-        this.setData({
-          'editData.img': tempFilePath // 预览
+        console.log('选择的图片临时路径:', tempFilePath);
+        
+        // 如果是编辑模式，先更新 editData
+        if (that.data.isEditing) {
+          that.setData({
+            'editData.img': tempFilePath
+          });
+        }
+        
+        // 如果是浏览模式（管理员模式），直接更新 activeItem 显示
+        if (!that.data.isEditing && that.data.isAdmin) {
+          that.setData({
+            'activeItem.img': tempFilePath
+          });
+        }
+        
+        // 上传到云存储
+        wx.showLoading({ title: '上传图片中...', mask: true });
+        const cloudPath = `home/images/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
+        
+        wx.cloud.uploadFile({
+          cloudPath: cloudPath,
+          filePath: tempFilePath,
+          success: async (uploadRes) => {
+            console.log('图片上传成功，云存储文件ID:', uploadRes.fileID);
+            const cloudFileID = uploadRes.fileID;
+            
+            try {
+              // 更新显示
+              if (that.data.isEditing) {
+                // 编辑模式下，更新 editData
+                that.setData({
+                  'editData.img': cloudFileID
+                });
+                wx.hideLoading();
+                wx.showToast({ title: '图片已更新', icon: 'success', duration: 1500 });
+              } else if (that.data.isAdmin) {
+                // 管理员浏览模式下，直接更新并保存到云数据库
+                const shopId = activeItem._id || activeItem.id;
+                if (shopId && !shopId.toString().startsWith('new_')) {
+                  // 更新云数据库
+                  await that.updateShopImageInCloud(shopId, cloudFileID);
+                  // 更新本地显示
+                  that.setData({
+                    'activeItem.img': cloudFileID
+                  });
+                  // 更新 shops 数组中的图片
+                  const shops = that.data.shops.map(shop => {
+                    if ((shop._id && shop._id === shopId) || (shop.id === shopId)) {
+                      shop.img = cloudFileID;
+                    }
+                    return shop;
+                  });
+                  that.setData({ shops });
+                  
+                  wx.hideLoading();
+                  wx.showToast({ title: '图片已更新', icon: 'success', duration: 1500 });
+                } else {
+                  wx.hideLoading();
+                  wx.showToast({ title: '图片上传成功', icon: 'success', duration: 1500 });
+                }
+              } else {
+                // 其他情况，确保隐藏 loading
+                wx.hideLoading();
+              }
+            } catch (err) {
+              console.error('处理图片更新失败:', err);
+              wx.hideLoading();
+              wx.showToast({ title: '保存失败，请重试', icon: 'none' });
+            }
+          },
+          fail: (err) => {
+            console.error('图片上传失败:', err);
+            wx.hideLoading();
+            wx.showToast({ title: '图片上传失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 2000 });
+          }
         });
+      },
+      fail: (err) => {
+        console.error('选择图片失败:', err);
+        wx.showToast({ title: '选择图片失败', icon: 'none' });
       }
+    });
+  },
+
+  // 更新店铺图片到云数据库
+  async updateShopImageInCloud(shopId, imageUrl) {
+    return new Promise((resolve, reject) => {
+      db.collection('home').doc(shopId).update({
+        data: {
+          img: imageUrl,
+          updateTime: new Date()
+        },
+        success: () => {
+          console.log('图片更新到云数据库成功，ID:', shopId);
+          resolve();
+        },
+        fail: (err) => {
+          console.error('图片更新到云数据库失败:', err);
+          reject(err);
+        }
+      });
     });
   },
 
@@ -289,15 +770,33 @@ Page({
       let parts = timeStr.split('-');
       let startT = parts[0] ? parts[0].trim() : "09:00";
       let endT = parts[1] ? parts[1].trim() : "18:00";
-
+      
+      // 确保图片路径正确
+      const imgPath = item.img || '';
+      console.log('打开详情，图片路径:', imgPath);
+      
+      // 根据营业时间计算当前状态
+      const isOpen = this.isShopOpen(item.time);
+      const status = isOpen ? '营业中' : '未营业';
+      const statusColor = isOpen ? '#00C853' : '#FF3B30';
+      
+      // 更新 activeItem，包含最新的营业状态
+      const updatedActiveItem = {
+        ...item,
+        isOpen,
+        status,
+        statusColor
+      };
+      
       this.setData({
         isDetailOpen: true,
         showPhantom: true,
-        activeItem: item,
+        activeItem: updatedActiveItem,
         phantomStyle: `top: ${rect.top}px; left: ${rect.left}px; width: ${rect.width}px; height: ${rect.height}px; transform: none;`,
         
         editData: {
           id: item.id, // 绑定ID
+          _id: item._id, // 绑定云数据库ID
           name: item.name, sub: item.sub, dist: item.dist, 
           servicesStr: item.services.join(','),
           address: item.address, phone: item.phone, 
@@ -307,7 +806,7 @@ Page({
           startTime: startT, 
           endTime: endT,
           
-          img: item.img, 
+          img: imgPath, // 确保图片路径被正确设置
           latitude: item.latitude, longitude: item.longitude,
           selectedServices: [...item.services]
         }
@@ -325,20 +824,43 @@ Page({
   },
 
   // --- 5. 关闭详情 (处理取消新增的情况) ---
+  // 取消添加新卡片（专门用于添加模式下的取消）
+  cancelAddShop() {
+    const list = this.data.shops;
+    // 删除临时的新卡片
+    const cleanList = list.filter(item => {
+      const itemId = item.id || item._id;
+      const activeId = this.data.activeItem.id || this.data.activeItem._id;
+      return itemId !== activeId;
+    });
+    
+    // 先关闭详情页面，避免卡死
+    this.setData({ 
+      isExpanded: false,
+      isEditing: false,
+      isAdding: false
+    });
+    
+    // 延迟关闭 phantom，确保动画完成
+    setTimeout(() => {
+      this.setData({
+        showPhantom: false,
+        isDetailOpen: false,
+        shops: cleanList
+      });
+      
+      // 刷新列表
+      this.preprocessData();
+      this.updateWheel();
+    }, 300);
+  },
+
   closeDetail() {
     // 如果是新增状态下点击了关闭，说明用户取消了创建
     // 必须把那个临时的卡片删掉
     if (this.data.isAdding) {
-      const list = this.data.shops;
-      // 新增的卡片通常在第一个，或者通过 ID 删
-      const cleanList = list.filter(item => item.id !== this.data.activeItem.id);
-      this.setData({ 
-        shops: cleanList, 
-        isAdding: false 
-      });
-      // 刷新一下列表
-      this.preprocessData();
-      this.updateWheel();
+      this.cancelAddShop();
+      return;
     }
 
     const query = this.createSelectorQuery().in(this);
@@ -365,6 +887,157 @@ Page({
   },
 
   toggleEdit() { this.setData({ isEditing: !this.data.isEditing }); },
+  
+  // 检查是否需要重新生成测试数据（位置变化超过5km才重新生成）
+  async shouldRegenerateTestData(oldTestShops) {
+    const { userLocation } = this.data;
+    if (!userLocation || !userLocation.latitude || !userLocation.longitude) {
+      return true; // 没有位置信息，需要生成
+    }
+    
+    if (oldTestShops.length === 0) {
+      return true; // 没有旧数据，需要生成
+    }
+    
+    // 从旧测试数据中获取生成时的位置（保存在第一个测试店铺的 testLocation 字段，或从店铺位置推算）
+    // 如果没有保存位置，检查第一个测试店铺的位置
+    const firstTestShop = oldTestShops[0];
+    if (!firstTestShop.testLocation && (!firstTestShop.latitude || !firstTestShop.longitude)) {
+      return true; // 没有位置信息，需要重新生成
+    }
+    
+    // 获取旧位置（优先使用 testLocation，否则使用第一个店铺的位置）
+    const oldLocation = firstTestShop.testLocation || {
+      latitude: firstTestShop.latitude,
+      longitude: firstTestShop.longitude
+    };
+    
+    // 计算当前位置和旧位置的距离
+    const distance = this.calculateDistance(
+      userLocation.latitude,
+      userLocation.longitude,
+      oldLocation.latitude,
+      oldLocation.longitude
+    );
+    
+    console.log(`当前位置与测试数据生成位置距离: ${distance.toFixed(2)}km`);
+    
+    // 如果距离超过5km，需要重新生成
+    return distance > 5;
+  },
+
+  // 生成测试数据
+  async generateTestData() {
+    const { userLocation, allServices } = this.data;
+    if (!userLocation || !userLocation.latitude || !userLocation.longitude) {
+      wx.showToast({ title: '请先获取位置信息', icon: 'none' });
+      return;
+    }
+    
+    // 随机昵称列表
+    const randomNames = [
+      '小张', '老王', '李师傅', '陈师傅', '刘师傅', '张师傅', '王师傅', '李师傅',
+      '老李', '老陈', '老刘', '老张', '老赵', '老孙', '老周', '老吴',
+      '阿强', '阿明', '阿华', '阿伟', '阿军', '阿斌', '阿杰', '阿勇',
+      '大伟', '小强', '小明', '小华', '小军', '小斌', '小杰', '小勇'
+    ];
+    
+    // 随机选择5个不同的昵称
+    const shuffledNames = [...randomNames].sort(() => Math.random() - 0.5);
+    const selectedNames = shuffledNames.slice(0, 5);
+    
+    const testSubs = [
+      '专业维修服务', '快速保养中心', '精品改装店', '咖啡机车馆', '洗车美容店'
+    ];
+    const testAddresses = [
+      '测试地址A', '测试地址B', '测试地址C', '测试地址D', '测试地址E'
+    ];
+    const testPhones = [
+      '13800000001', '13800000002', '13800000003', '13800000004', '13800000005'
+    ];
+    const testTimes = [
+      '08:00 - 20:00', '09:00 - 18:00', '10:00 - 22:00', '07:00 - 19:00', '09:30 - 21:30'
+    ];
+    
+    // 随机生成5个测试点位
+    const testShops = [];
+    for (let i = 0; i < 5; i++) {
+      // 在当前位置附近随机生成经纬度（约5公里范围内）
+      const randomLat = userLocation.latitude + (Math.random() - 0.5) * 0.05; // 约±2.5度
+      const randomLon = userLocation.longitude + (Math.random() - 0.5) * 0.05;
+      
+      // 随机选择服务（1-3个）
+      const serviceCount = Math.floor(Math.random() * 3) + 1;
+      const shuffledServices = [...allServices].sort(() => Math.random() - 0.5);
+      const selectedServices = shuffledServices.slice(0, serviceCount).map(s => s.name);
+      
+      // 计算距离
+      const dist = this.calculateDistance(
+        userLocation.latitude, 
+        userLocation.longitude,
+        randomLat,
+        randomLon
+      );
+      
+      const testShop = {
+        id: 'test_' + Date.now() + '_' + i,
+        name: selectedNames[i] + '维修店', // 统一命名为"xx维修店"
+        sub: testSubs[i],
+        dist: dist.toFixed(1),
+        status: Math.random() > 0.5 ? '营业中' : '休息中',
+        statusColor: Math.random() > 0.5 ? '#00C853' : '#FF3B30',
+        img: `https://picsum.photos/600/400?random=${Date.now()}_${i}`, // 随机图片
+        address: testAddresses[i],
+        latitude: randomLat,
+        longitude: randomLon,
+        phone: testPhones[i],
+        time: testTimes[i],
+        services: selectedServices,
+        isTest: true, // 标记为测试数据
+        createTime: new Date(),
+        updateTime: new Date()
+      };
+      
+      testShops.push(testShop);
+    }
+    
+    // 逐个保存到云数据库（小程序端不支持 batch）
+    try {
+      for (const shop of testShops) {
+        await db.collection('home').add({
+          data: {
+            name: shop.name,
+            sub: shop.sub,
+            dist: shop.dist,
+            status: shop.status,
+            statusColor: shop.statusColor,
+            img: shop.img,
+            address: shop.address,
+            latitude: shop.latitude,
+            longitude: shop.longitude,
+            phone: shop.phone,
+            time: shop.time,
+            services: shop.services,
+            isTest: true,
+            id: shop.id,
+            // 保存生成时的用户位置，用于判断是否需要重新生成
+            testLocation: {
+              latitude: userLocation.latitude,
+              longitude: userLocation.longitude
+            },
+            createTime: shop.createTime,
+            updateTime: shop.updateTime
+          }
+        });
+      }
+      
+      // 注意：不在这里重新加载，避免循环
+      // 由调用方（loadShopsFromCloud）决定是否重新加载
+    } catch (err) {
+      console.error('生成测试数据失败:', err);
+    }
+  },
+  
   onEditInput(e) { const field = e.currentTarget.dataset.field; this.setData({ [`editData.${field}`]: e.detail.value }); },
   
   // 2. 新增：点击标签切换选中状态
@@ -399,16 +1072,104 @@ Page({
     });
   },
   
-  // --- 4. 保存编辑 (保存后重新定位) ---
-  saveEdit() {
+  // 保存店铺到云数据库
+  async saveShopToCloud(shopData, isNew = false) {
+    return new Promise((resolve, reject) => {
+      const dataToSave = {
+        name: shopData.name,
+        sub: shopData.sub,
+        dist: shopData.dist,
+        status: shopData.status || '营业中',
+        statusColor: shopData.statusColor || '#00C853',
+        img: shopData.img,
+        address: shopData.address,
+        latitude: shopData.latitude,
+        longitude: shopData.longitude,
+        phone: shopData.phone,
+        time: shopData.time,
+        services: shopData.services || [],
+        updateTime: new Date()
+      };
+
+      if (isNew) {
+        // 新建
+        dataToSave.id = shopData.id;
+        dataToSave.createTime = new Date();
+        db.collection('home').add({
+          data: dataToSave,
+          success: (res) => {
+            console.log('新建店铺成功，云数据库ID:', res._id);
+            resolve(res._id);
+          },
+          fail: (err) => {
+            console.error('新建店铺失败:', err);
+            reject(err);
+          }
+        });
+      } else {
+        // 更新
+        const docId = shopData._id || shopData.id;
+        db.collection('home').doc(docId).update({
+          data: dataToSave,
+          success: () => {
+            console.log('更新店铺成功，ID:', docId);
+            resolve(docId);
+          },
+          fail: (err) => {
+            console.error('更新店铺失败:', err);
+            reject(err);
+          }
+        });
+      }
+    });
+  },
+
+  // --- 4. 保存编辑 (保存后重新定位并同步到云数据库) ---
+  async saveEdit() {
     const { editData, shops } = this.data;
-    const foundIndex = shops.findIndex(s => s.id === editData.id);
-    if (foundIndex === -1) return;
     
-    const item = shops[foundIndex];
+    // 判断是新店铺还是编辑已有店铺
+    // 关键：通过 _id 判断，如果有 _id 且不是临时ID就是编辑，否则是新建
+    const hasRealId = editData._id && typeof editData._id === 'string' && !editData._id.toString().startsWith('new_');
+    const isTempId = editData.id && editData.id.toString().startsWith('new_');
+    const isNewShop = !hasRealId && (isTempId || !editData._id);
+    
+    console.log('保存判断:', { 
+      hasRealId, 
+      isTempId, 
+      isNewShop, 
+      editDataId: editData.id, 
+      editData_id: editData._id 
+    });
+    
+    let item;
+    let foundIndex = -1;
+    
+    if (isNewShop) {
+      // 新店铺：从 shops 数组中找到临时创建的店铺
+      foundIndex = shops.findIndex(s => s.id === editData.id);
+      if (foundIndex === -1) {
+        wx.showToast({ title: '店铺不存在', icon: 'none' });
+        return;
+      }
+      item = shops[foundIndex];
+    } else {
+      // 编辑已有店铺：优先通过 _id 查找，其次通过 id 查找
+      foundIndex = shops.findIndex(s => {
+        if (s._id && editData._id && s._id === editData._id) return true;
+        if (s.id && editData.id && s.id === editData.id && !editData.id.toString().startsWith('new_')) return true;
+        return false;
+      });
+      if (foundIndex === -1) {
+        wx.showToast({ title: '店铺不存在', icon: 'none' });
+        return;
+      }
+      item = shops[foundIndex];
+    }
+    
+    // 更新本地数据
     item.name = editData.name;
     item.sub = editData.sub;
-    item.dist = editData.dist; // 这里的 dist 会被 preprocessData 转成数字排序
     item.address = editData.address;
     item.phone = editData.phone;
     item.time = `${editData.startTime} - ${editData.endTime}`;
@@ -416,69 +1177,130 @@ Page({
     item.latitude = editData.latitude;
     item.longitude = editData.longitude;
     item.services = editData.selectedServices;
+    // 确保 _id 被保留
+    if (editData._id) {
+      item._id = editData._id;
+    }
 
-    // 1. 先更新本地数据（不调用 setData，避免异步问题）
-    // 2. 直接对 shops 数组进行排序处理
-    const sortedList = shops.map(item => {
-      const serviceSet = {};
-      (item.services || []).forEach(s => serviceSet[s] = true);
-      return { ...item, serviceSet };
+    // 重新计算距离（如果位置变化了）
+    if (this.data.userLocation && item.latitude && item.longitude) {
+      const dist = this.calculateDistance(
+        this.data.userLocation.latitude,
+        this.data.userLocation.longitude,
+        item.latitude,
+        item.longitude
+      );
+      item.dist = (Math.round(dist * 10) / 10).toString();
+    }
+
+    // 同步到云数据库
+    try {
+      const savedId = await this.saveShopToCloud(item, isNewShop);
+      
+      // 如果是新店铺，更新 _id
+      if (isNewShop) {
+        // 重新从云数据库加载以获取真实的 _id
+        await this.loadShopsFromCloud();
+        // 重新处理数据
+        this.preprocessData();
+      } else {
+        // 编辑已有店铺：更新本地数据中的 _id（如果返回了新的ID）
+        if (savedId && !item._id) {
+          item._id = savedId;
+        }
+        // 重新处理数据（计算距离、营业状态、排序）
+        this.preprocessData();
+      }
+      
+      // 找到这个店排序后的位置
+      const sortedList = this.data.shops;
+      const newIndex = sortedList.findIndex(i => {
+        // 优先使用 _id 匹配
+        if (i._id && item._id && i._id === item._id) return true;
+        // 其次使用 id 匹配（排除临时ID）
+        if (i.id === item.id && item.id && !item.id.toString().startsWith('new_')) return true;
+        return false;
+      });
+
+      // 更新界面
+      this.setData({ 
+        activeItem: sortedList[newIndex] || item,
+        scroll: newIndex >= 0 ? newIndex : 0,
+        target: newIndex >= 0 ? newIndex : 0,
+        isEditing: false, 
+        isAdding: false 
+      });
+
+      this.updateWheel();
+      wx.showToast({ title: '保存成功', icon: 'success' });
+    } catch (err) {
+      console.error('保存到云数据库失败:', err);
+      wx.showToast({ title: '保存失败，请重试', icon: 'none' });
+    }
+  },
+
+  // 从云数据库删除店铺
+  async deleteShopFromCloud(shopId) {
+    return new Promise((resolve, reject) => {
+      db.collection('home').doc(shopId).remove({
+        success: () => {
+          console.log('从云数据库删除店铺成功，ID:', shopId);
+          resolve();
+        },
+        fail: (err) => {
+          console.error('从云数据库删除店铺失败:', err);
+          reject(err);
+        }
+      });
     });
-
-    // 升序排序：小的在前，根据轮盘显示逻辑，远的在上面
-    sortedList.sort((a, b) => {
-      const valA = parseFloat(a.dist) || 0;
-      const valB = parseFloat(b.dist) || 0;
-      return valA - valB; // 升序：小的在前
-    });
-
-    // 3. 找到这个店排序后的"新家"在哪
-    const newIndex = sortedList.findIndex(i => i.id === item.id);
-
-    // 4. 一次性更新所有数据
-    this.setData({ 
-      shops: sortedList,
-      activeItem: sortedList[newIndex],
-      scroll: newIndex,
-      target: newIndex,
-      isEditing: false, 
-      isAdding: false 
-    });
-
-    this.updateWheel();
-    wx.showToast({ title: '已排序更新', icon: 'success' });
   },
 
   deleteShop() {
     wx.showModal({
-      title: '确认删除', content: '删除后无法恢复，确定吗？',
-      success: (res) => {
+      title: '确认删除', 
+      content: '删除后无法恢复，确定吗？',
+      success: async (res) => {
         if(res.confirm) {
-          const list = [...this.data.shops]; // 复制数组
-          list.splice(this.data.currentIndex, 1);
+          const { activeItem, shops } = this.data;
+          const shopId = activeItem._id || activeItem.id;
           
-          // 先排序再更新
-          const sortedList = list.map(item => {
-            const serviceSet = {};
-            (item.services || []).forEach(s => serviceSet[s] = true);
-            return { ...item, serviceSet };
-          });
-
-          sortedList.sort((a, b) => {
-            const valA = parseFloat(a.dist) || 0;
-            const valB = parseFloat(b.dist) || 0;
-            return valA - valB; // 升序：小的在前，远的在上面
-          });
+          // 如果是新店铺（还未保存到云数据库），直接删除本地数据
+          if (shopId && shopId.toString().startsWith('new_')) {
+            const list = shops.filter(item => item.id !== shopId);
+            this.closeDetail();
+            setTimeout(() => {
+              this.setData({ shops: list, scroll: 0, target: 0 });
+              this.preprocessData();
+              this.updateWheel();
+            }, 500);
+            return;
+          }
           
-          this.closeDetail();
-          // 稍微延迟等动画做完再刷新列表
-          setTimeout(() => {
-            this.setData({ shops: sortedList, scroll: 0, target: 0 });
-            this.updateWheel();
-          }, 500);
+          // 从云数据库删除
+          try {
+            await this.deleteShopFromCloud(shopId);
+            
+            // 从本地数据中删除
+            const list = shops.filter(item => 
+              (item._id && item._id !== shopId) && 
+              (item.id && item.id !== shopId)
+            );
+            
+            this.closeDetail();
+            // 稍微延迟等动画做完再刷新列表
+            setTimeout(() => {
+              this.setData({ shops: list, scroll: 0, target: 0 });
+              this.preprocessData();
+              this.updateWheel();
+              wx.showToast({ title: '删除成功', icon: 'success' });
+            }, 500);
+          } catch (err) {
+            console.error('删除失败:', err);
+            wx.showToast({ title: '删除失败，请重试', icon: 'none' });
+          }
         }
       }
-    })
+    });
   },
 
   openLocation() {
