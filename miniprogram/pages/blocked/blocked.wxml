@@ -1,0 +1,33 @@
+<!-- miniprogram/pages/blocked/blocked.wxml -->
+<view class="container">
+  
+  <!-- 图标区域 -->
+  <view class="icon-box">
+    <view class="icon-wrapper">
+      <!-- 黑色盾牌底图 -->
+      <image class="blocked-icon" src="https://img.icons8.com/ios-filled/100/1a1a1a/shield.png" mode="aspectFit"></image>
+      <!-- 中间的白色感叹号 -->
+      <text class="symbol">!</text>
+    </view>
+  </view>
+  
+  <view class="title">访问受限</view>
+  
+  <view class="desc">
+    <view>为了防止恶意攻击服务器</view>
+    <view>请联系管理员录入信息</view>
+  </view>
+
+  <view class="btn-area">
+    <button class="copy-btn" hover-class="btn-hover" bindtap="handleCopyWechat">
+      联系管理员开通
+    </button>
+    <view class="tips">点击按钮复制微信号，进行人工核验</view>
+  </view>
+
+  <!-- 底部状态栏 -->
+  <view class="loading-area">
+    <view class="status-dot"></view>
+    <text>正在云端校验权限...</text>
+  </view>
+</view>

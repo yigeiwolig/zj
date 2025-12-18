@@ -4,6 +4,11 @@ page {
   color: #0f1b2d;
 }
 
+/* 全局输入框居中（后续页面可单独覆盖） */
+input, textarea {
+  text-align: center;
+}
+
 .page {
   min-height: 100vh;
   padding: 32rpx;
@@ -42,6 +47,13 @@ page {
   padding: 0 24rpx;
   line-height: 80rpx;
 }
+
+
+
+
+
+
+
 
 
 

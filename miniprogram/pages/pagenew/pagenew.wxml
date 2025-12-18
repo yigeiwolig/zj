@@ -1,90 +1,110 @@
-<!-- pages/launch/launch.wxml -->
+<!-- pages/pagenew/pagenew.wxml -->
 <view class="container">
 
-<!-- 全局提示 (Toast) -->
-<view class="toast {{toast.show ? 'show' : ''}}">{{toast.msg}}</view>
+<!-- ================= 1. 顶部导航 ================= -->
+<view class="nav-header">
+  <view class="nav-back" bindtap="goBack">
+    <text class="icon-back">‹</text>
+  </view>
 
-<!-- 管理员标记 -->
-<view class="admin-badge {{isAdmin ? 'show' : ''}}">ADMIN MODE</view>
-
-<!-- ================= 1. 首页层 (Landing Layer) ================= -->
-<!-- 加上 'scatter' 类名时触发消散动画 -->
-<view class="landing-layer {{isScatter ? 'scatter' : ''}}">
-  
-  <!-- 返回按钮 -->
-  <view class="back-icon" bindtap="goBack">
-    <view class="back-icon-inner"></view>
+  <view class="brand-box" bindtap="handleTitleClick">
+    <text class="brand-main">MT</text>
+    <text class="brand-sub">COLLECTION</text>
   </view>
   
-  <!-- 顶部标题 (点击触发管理员验证) -->
-  <view class="header" bindtap="handleTitleClick">
-    <text class="header-title">产品上新</text>
-    <text class="header-subtitle">NEW ARRIVALS</text>
-  </view>
-
-  <!-- 卡片区域 -->
-  <view class="card-area">
-    <!-- 封面图 -->
-    <view class="cover-box anim-item">
-      <image class="cover-img" src="{{product.cover || defaultCover}}" mode="aspectFill"></image>
-      
-      <!-- 管理员控件：换封面 -->
-      <view class="admin-edit-btn cover-pos" wx:if="{{isAdmin}}" catchtap="handleUploadCover">
-        <text>📷 换封面</text>
-      </view>
-    </view>
-
-    <!-- 文字信息 -->
-    <view class="text-box">
-      <text class="p-title anim-item">{{product.title || 'Coming Soon'}}</text>
-      <text class="p-desc anim-item">{{product.desc || 'Stay tuned for the next revolution.'}}</text>
-    </view>
-
-    <!-- 立即查看按钮 -->
-    <view class="btn-box anim-item">
-      <view class="main-btn" bindtap="handleViewDetail">
-        <text>立即查看</text>
-      </view>
-    </view>
-  </view>
+  <view class="nav-placeholder"></view>
 </view>
 
-<!-- ================= 2. 详情页层 (Detail Layer) ================= -->
-<scroll-view scroll-y class="detail-layer {{showDetail ? 'active' : ''}}">
-  <!-- 返回按钮 -->
-  <view class="back-btn" bindtap="handleBack">
-    <view class="icon-back"></view>
-  </view>
+<!-- 管理员状态条 -->
+<view class="admin-bar" wx:if="{{isAdmin}}">
+  <text>ADMIN MODE</text>
+  <view class="btn-exit" bindtap="exitAdmin">完成/退出</view>
+</view>
 
-  <view class="detail-content">
-    <!-- 详情图列表 (循环渲染) -->
-    <block wx:for="{{product.details}}" wx:key="*this">
-      <image class="detail-img" src="{{item}}" mode="widthFix" style="animation-delay: {{index * 0.1}}s"></image>
+<!-- ================= 2. 核心滑动区 ================= -->
+<view class="swiper-container">
+  <swiper 
+    class="card-swiper" 
+    current="{{currentIndex}}" 
+    previous-margin="50rpx" 
+    next-margin="50rpx" 
+    bindchange="onSwiperChange"
+    circular="{{false}}"
+  >
+    <block wx:for="{{products}}" wx:key="_id">
+      <swiper-item class="card-wrapper">
+        
+        <!-- ⚠️ 关键修改：非管理员模式下点击卡片可跳转，管理员模式下不跳转 -->
+        <view class="apple-card {{currentIndex === index ? 'active' : ''}}" bindtap="{{!isAdmin ? 'handleCardClick' : ''}}" data-index="{{index}}">
+          
+          <!-- A. 图片区域 -->
+          <view class="card-cover">
+            <view class="product-cover-wrapper">
+              <image class="cover-img" src="{{item.cover || defaultCover}}" mode="aspectFill" lazy-load/>
+              <!-- 跳转号码标识（管理员模式下可编辑） -->
+              <view wx:if="{{isAdmin}}" class="jump-number-badge" catchtap="handleEditJumpNumber" data-index="{{index}}">
+                <text wx:if="{{item.jumpNumber}}">#{{item.jumpNumber}}</text>
+                <text wx:else>#</text>
+              </view>
+            </view>
+            
+            <!-- [管理员] 功能区 (只有管理员能点) -->
+            <block wx:if="{{isAdmin}}">
+              <!-- 左上角：删除 -->
+              <view class="admin-btn btn-del" catchtap="handleDeleteProduct">✕</view>
+              <!-- 右上角：换封面 -->
+              <view class="admin-btn btn-cam" catchtap="handleUploadCover">📷</view>
+            </block>
+          </view>
+
+          <!-- B. 信息区域 -->
+          <view class="card-content">
+            <view class="info-text">
+              <!-- 标题 (管理员点击可修) -->
+              <text 
+                class="p-title {{isAdmin ? 'editable' : ''}}" 
+                catchtap="{{isAdmin ? 'handleEditTitle' : ''}}"
+              >{{item.title || 'New Product'}}</text>
+
+              <!-- 价格 (管理员点击可修) -->
+              <text 
+                class="p-price {{isAdmin ? 'editable' : ''}}" 
+                catchtap="{{isAdmin ? 'handleEditPrice' : ''}}"
+              >¥ {{item.price || '0'}}</text>
+            </view>
+
+            <!-- 装饰用的箭头按钮 (纯装饰，无点击事件) -->
+            <view class="btn-go" wx:if="{{!isAdmin}}">
+              <view class="icon-arrow"></view>
+            </view>
+            
+            <!-- 管理员可见的设置图标 (装饰) -->
+            <view class="btn-go admin-icon" wx:if="{{isAdmin}}">⚙️</view>
+          </view>
+
+        </view>
+      </swiper-item>
     </block>
-    
-    <!-- 底部占位/结束语 -->
-    <view class="footer-end">- THE END -</view>
 
-    <!-- 管理员控件：上传详情图 -->
-    <view class="admin-upload-bar" wx:if="{{isAdmin}}">
-      <view class="upload-pill" bindtap="handleUploadDetails">
-        <text>➕ 上传/追加详情长图 (支持多选)</text>
+    <!-- [管理员] 新建卡片 -->
+    <swiper-item class="card-wrapper" wx:if="{{isAdmin}}">
+      <view class="apple-card add-card {{currentIndex === products.length ? 'active' : ''}}" bindtap="handleAddNew">
+        <view class="add-icon">+</view>
+        <text class="add-text">NEW ARRIVAL</text>
       </view>
-      <view class="clear-pill" bindtap="handleClearDetails">
-        <text>🗑️ 清空详情</text>
-      </view>
-    </view>
-  </view>
-</scroll-view>
+    </swiper-item>
+
+  </swiper>
+</view>
 
 <!-- ================= 3. 密码弹窗 ================= -->
 <view class="modal-mask {{showPasswordModal ? 'active' : ''}}" catchtouchmove="true">
   <view class="modal-box">
-    <view class="modal-title">SECURITY ACCESS</view>
-    <input class="pwd-input" type="number" password placeholder="Passcode" maxlength="10" bindinput="onPwdInput" value="{{pwdInput}}"/>
+    <view class="modal-title">管理员登录</view>
+    <input class="pwd-input" type="number" password maxlength="10" bindinput="onPwdInput" value="{{pwdInput}}"/>
     <view class="modal-actions">
       <view class="btn cancel" bindtap="closeModal">取消</view>
-      <view class="btn confirm" bindtap="checkPassword">解锁</view>
+      <view class="btn confirm" bindtap="checkPassword">确定</view>
     </view>
   </view>
 </view>

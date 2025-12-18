@@ -1,50 +1,113 @@
-<!-- 顶部自定义导航栏 -->
+<!-- 
+  核心修复：
+  内嵌 WXS 渲染脚本，实现物理跟手动画。
+  根据 dragOffset 实时计算 scale 和 opacity。
+-->
+<wxs module="renderer">
+// 配置参数：卡片间距 (单位px，对应 520rpx 大约是 260px)
+var CARD_SPACING = 260; 
+
+// 计算每个卡片的最终样式
+var getStyle = function(index, currentIndex, listLength, dragOffset, isDragging, hasEntered) {
+  if (!hasEntered) {
+    return 'transform: translate3d(0, 120vh, 0) scale(0.8); opacity: 0;';
+  }
+
+  // 1. 计算滑动进度 (progress)
+  // dragOffset：手指上滑为负，下滑为正；保持与手指同向
+  var progress = 0;
+  if (isDragging) {
+    progress = dragOffset / CARD_SPACING; 
+  }
+
+  // 2. 计算当前卡片的相对位置 (relativePos)
+  // 0 表示正中间，1 表示下面一个，-1 表示上面一个
+  // 加上 progress 后，这个值会变成小数，比如 0.5 (正处于中间和下面之间)
+  var realIndex = index - currentIndex; 
+  // 🔄 环形修正：选最近的方向，避免头尾跳变
+  if (realIndex > listLength / 2) {
+    realIndex -= listLength;
+  } else if (realIndex < -listLength / 2) {
+    realIndex += listLength;
+  }
+  var relativePos = realIndex + progress;
+
+  // 3. 计算物理属性
+  
+  // A. Y轴位移：直接根据相对位置乘以间距
+  // 这里的 constant 130rpx (65px) 是为了居中修正，根据你原来的 calc(50vh - 130rpx)
+  var translateY = 'calc(50vh - 130rpx + ' + (relativePos * 520) + 'rpx)';
+
+  // B. 缩放 (Scale)：
+  // 中心更大 (1.1)，离中心越远越小
+  var absPos = Math.abs(relativePos);
+  var scale = 1.1 - (absPos * 0.2); // 加大中心对比
+  if (scale < 0.75) scale = 0.75;    // 最小缩放，防止过小
+
+  // C. 透明度 (Opacity)：
+  // 离中心越近越不透明
+  var opacity = 1 - (absPos * 0.6);
+  if (opacity < 0) opacity = 0;
+  if (relativePos > 2 || relativePos < -2) opacity = 0; // 太远的直接隐藏
+  
+  // D. 层级 (Z-index)：
+  // 越靠近中心层级越高
+  var zIndex = 100 - Math.floor(absPos * 10);
+
+  // E. 动画过渡
+  // 拖拽时(isDragging=true) 必须设为 0ms，否则会迟滞！
+  // 松手后(isDragging=false) 设为 500ms，让它弹如正确位置
+  var transition = isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s';
+
+  return 'transform: translate3d(0, ' + translateY + ', 0) scale(' + scale + '); opacity: ' + opacity + '; z-index: ' + zIndex + '; transition: ' + transition + ';';
+}
+
+module.exports = {
+  getStyle: getStyle
+};
+</wxs>
+
+<!-- 顶部导航 -->
 <view class="header">
-  <view class="back-icon" bindtap="goBack"></view>
-  <text class="header-title">MT</text>
-  <view style="width: 24rpx;"></view>
+  <view class="back-icon" catchtap="goBack"></view>
 </view>
 
-<!-- 
-   easing-function="easeInOutCubic": 让 Swiper 间距撑开的过程本身也带缓冲
-   duration="800": 配合 CSS 的 0.8s 动画时长 
--->
-<swiper 
-  class="card-swiper" 
-  vertical="true" 
-  previous-margin="{{isLoaded ? finalMargin : 0}}px" 
-  next-margin="{{isLoaded ? finalMargin : 0}}px" 
-  bindchange="onSwiperChange"
-  circular="{{true}}"
-  duration="800"
-  easing-function="easeInOutCubic"
+<view 
+  class="container"
+  bindtouchstart="onTouchStart"
+  bindtouchmove="onTouchMove"
+  bindtouchend="onTouchEnd"
 >
   <block wx:for="{{list}}" wx:key="id">
-    <swiper-item class="card-wrapper">
-      <!-- 
-         样式逻辑：
-         1. isLoaded ? 'spread' : 'overlap' -> 决定是堆叠还是炸开
-         2. currentIndex === index ? 'active' : '' -> 决定谁是主角
-      -->
-      <view 
-        class="card {{isLoaded ? 'spread' : 'overlap'}} {{currentIndex === index ? 'active' : ''}}"
-        catchtap="onCardTap"
-        data-id="{{item.id}}"
-        data-title="{{item.title}}"
-      >
-        
-        <!-- 左侧文字 -->
+    <view 
+      class="card {{index === currentIndex ? 'curr' : ''}}"
+      catchtap="onCardTap"
+      data-id="{{item.id}}"
+      data-title="{{item.title}}"
+      data-index="{{index}}"
+      
+      style="{{ renderer.getStyle(index, currentIndex, list.length, dragOffset, isDragging, hasEntered) }}"
+    >
+      
+      <!-- 卡片内部 -->
+      <view class="card-inner">
+        <!-- 左侧文字信息 -->
         <view class="card-info">
           <view class="card-title">{{item.title}}</view>
           <view class="card-sub">{{item.en}}</view>
         </view>
         
         <!-- 右侧图标容器 -->
-        <view class="icon-container" style="background: {{item.gradient}}">
-          <image class="svg-icon" src="{{item.iconSvg}}" mode="aspectFit"></image>
+        <view class="icon-container">
+          <image 
+            class="svg-icon" 
+            src="{{item.iconSvg}}" 
+            mode="aspectFit"
+            style="width: {{item.iconSize}}; height: {{item.iconSize}};"
+          ></image>
         </view>
-
       </view>
-    </swiper-item>
+
+    </view>
   </block>
-</swiper>
+</view>

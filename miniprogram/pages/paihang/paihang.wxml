@@ -1,0 +1,321 @@
+<view class="container theme-{{pageTheme}}">
+  <view class="spotlight-bg"></view>
+
+  <!-- 顶部导航 -->
+  <view class="custom-nav-container" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-bar-row" style="height: {{navBarHeight}}px; line-height: {{navBarHeight}}px;">
+      <view class="brand-title">
+        <text class="brand-sub">{{isAdminMode ? 'ADMIN MODE' : 'LIVE STANDINGS'}}</text>
+        <view class="brand-main" bindtap="handleTitleClick">
+          MOTO<text class="text-accent">GP</text>
+          <text wx:if="{{isAdminMode}}" class="admin-tag">已解锁</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 只有榜单页显示顶部开关 -->
+    <block wx:if="{{currentTab === 'rank'}}">
+      <view class="filter-row">
+        <view class="switch-capsule">
+          <view class="switch-item {{rankType === 'gas' ? 'active' : ''}}" bindtap="switchRankType" data-type="gas" hover-class="btn-hover">油摩</view>
+          <view class="switch-item {{rankType === 'ev' ? 'active' : ''}}" bindtap="switchRankType" data-type="ev" hover-class="btn-hover">电摩</view>
+        </view>
+      </view>
+      <view class="sort-row">
+        <view class="sort-item {{sortType === 'comp' ? 'active' : ''}}" bindtap="switchSort" data-type="comp" hover-class="btn-hover">综合</view>
+        <view class="sort-item {{sortType === 'angle' ? 'active' : ''}}" bindtap="switchSort" data-type="angle" hover-class="btn-hover">角度</view>
+        <view class="sort-item {{sortType === 'dist' ? 'active' : ''}}" bindtap="switchSort" data-type="dist" hover-class="btn-hover">里程</view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 内容区域 -->
+  <view class="content-area top-spacing">
+    
+    <!-- PAGE 1: 榜单 -->
+    <scroll-view scroll-y class="scroll-view" wx:if="{{currentTab === 'rank'}}">
+      
+      <!-- 普通视图 -->
+      <block wx:if="{{!isAdminMode}}">
+        <view class="podium-area" style="padding-top: 60rpx;" wx:if="{{top3.length > 0}}">
+          
+          <!-- NO.2 -->
+          <view class="podium-item side" wx:if="{{top3[1]}}">
+            <image src="{{icons.crown_silver}}" class="crown-img side-crown"></image>
+            <text class="rank-num text-silver">02</text>
+            <view class="podium-card silver-border">
+              <image src="{{top3[1].avatar || 'https://api.dicebear.com/9.x/adventurer/svg?seed=default'}}" binderror="onImageError" data-index="1" mode="aspectFill" class="podium-img"></image>
+              <view class="podium-info">
+                <text class="p-name">{{top3[1].name}}</text>
+                <text class="p-score text-silver">{{top3[1].angle}}°</text>
+                <text class="p-dist text-silver">{{top3[1].dist}} km</text>
+              </view>
+            </view>
+            <view class="podium-base base-silver"></view>
+          </view>
+
+          <!-- NO.1 -->
+          <view class="podium-item center" wx:if="{{top3[0]}}">
+            <image src="{{icons.crown_gold}}" class="crown-img center-crown"></image>
+            <text class="rank-num text-gold">01</text>
+            <view class="podium-card gold-border">
+              <image src="{{top3[0].avatar || 'https://api.dicebear.com/9.x/adventurer/svg?seed=default'}}" binderror="onImageError" data-index="0" mode="aspectFill" class="podium-img"></image>
+              <view class="podium-info center-info">
+                <text class="p-name big">{{top3[0].name}}</text>
+                <text class="p-score big text-gold">{{top3[0].angle}}<text class="unit">°</text></text>
+                <text class="p-dist text-gold">{{top3[0].dist}} km</text>
+                <text class="p-bike">{{top3[0].bike}}</text>
+              </view>
+            </view>
+            <view class="podium-base base-gold"></view>
+          </view>
+
+          <!-- NO.3 -->
+          <view class="podium-item side" wx:if="{{top3[2]}}">
+            <image src="{{icons.crown_bronze}}" class="crown-img side-crown"></image>
+            <text class="rank-num text-bronze">03</text>
+            <view class="podium-card bronze-border">
+              <image src="{{top3[2].avatar || 'https://api.dicebear.com/9.x/adventurer/svg?seed=default'}}" binderror="onImageError" data-index="2" mode="aspectFill" class="podium-img"></image>
+              <view class="podium-info">
+                <text class="p-name">{{top3[2].name}}</text>
+                <text class="p-score text-bronze">{{top3[2].angle}}°</text>
+                <text class="p-dist text-bronze">{{top3[2].dist}} km</text>
+              </view>
+            </view>
+            <view class="podium-base base-bronze"></view>
+          </view>
+        </view>
+
+        <view class="list-area">
+          <view class="list-header">
+            <text class="lh-pos">排名</text>
+            <text class="lh-rider">车手</text>
+            <text class="lh-data">角度 / 里程</text>
+          </view>
+          <block wx:for="{{userRankList}}" wx:key="id">
+            <view class="list-item">
+              <text class="li-rank">{{item.rank}}</text>
+              <image src="{{item.avatar}}" class="li-avatar"></image>
+              <view class="li-info">
+                <text class="li-name">{{item.name}}</text>
+                <text class="li-bike">{{item.bike}}</text>
+              </view>
+              <view class="li-data">
+                <text class="li-angle">{{item.angle}}°</text>
+                <text class="li-dist">{{item.dist}}km</text>
+              </view>
+            </view>
+          </block>
+        </view>
+      </block>
+
+      <!-- 管理员视图 -->
+      <block wx:else>
+        <view class="list-area" style="padding-top: 20rpx;">
+          <view class="admin-bar">
+            <view class="admin-title">管理列表 ({{rankType==='gas'?'油摩':'电摩'}})</view>
+            <view class="add-btn" bindtap="openAddModal" hover-class="btn-hover">+ 新增</view>
+          </view>
+          <view class="list-header"><text class="lh-pos">排名</text><text class="lh-rider">信息</text><text class="lh-data">操作</text></view>
+          <block wx:for="{{rankList}}" wx:key="id">
+            <view class="list-item admin-item">
+              <text class="li-rank {{item.rank<=3?'highlight':''}}">{{item.rank}}</text>
+              <image src="{{item.avatar}}" class="li-avatar"></image>
+              <view class="li-info">
+                <text class="li-name">{{item.name}} <text class="score-tag">综:{{item.score}}</text></text>
+                <text class="li-bike">{{item.bike}} | {{item.angle}}°</text>
+              </view>
+              <view class="action-btns">
+                <view class="btn-edit" bindtap="openEditModal" data-item="{{item}}" hover-class="btn-hover">编辑</view>
+                <view class="btn-del" bindtap="deleteRecord" data-id="{{item.id}}" hover-class="btn-hover">删除</view>
+              </view>
+            </view>
+          </block>
+        </view>
+      </block>
+      <view style="height: 180rpx;"></view>
+    </scroll-view>
+
+    <!-- PAGE 2: 我的车库 -->
+    <scroll-view scroll-y class="scroll-view" wx:if="{{currentTab === 'mine'}}">
+      <view class="mine-header">
+        <view class="page-title">MY <text class="text-sub">GARAGE</text></view>
+        <view class="identity-switch {{myInfo.type}}" bindtap="toggleUserType" hover-class="btn-hover">
+          <view class="dot"></view>
+          <text>{{myInfo.type === 'gas' ? '油摩车主' : '电摩车主'}}</text>
+        </view>
+      </view>
+
+      <view class="profile-card-v2">
+        <view class="avatar-box" bindtap="changeMyAvatar" hover-class="btn-hover">
+          <image src="{{myInfo.avatar}}" mode="aspectFill" class="my-avatar"></image>
+          <view class="edit-icon">📷</view>
+        </view>
+        <view class="info-inputs">
+          <input class="name-input" value="{{myInfo.name}}" data-field="name" bindinput="handleMyInfoInput" />
+          <view class="device-row">
+            <text class="label">绑定设备:</text>
+            <text class="value">{{myInfo.deviceId}}</text>
+            <view class="status-dot online"></view>
+          </view>
+        </view>
+      </view>
+
+      <view class="stats-grid">
+        <view class="stat-item">
+          <text class="stat-val">{{myInfo.avgAngle}}°</text>
+          <text class="stat-label">平均角度</text>
+        </view>
+        <view class="stat-item highlight">
+          <text class="stat-val">{{myInfo.maxAngle}}°</text>
+          <text class="stat-label">最大角度</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-val">{{myInfo.totalDist}}</text>
+          <text class="stat-label">总公里 (KM)</text>
+        </view>
+      </view>
+
+      <view class="bike-setting">
+        <text class="label">当前座驾</text>
+        <input class="bike-input" value="{{myInfo.bike}}" data-field="bike" bindinput="handleMyInfoInput" />
+        <view class="edit-hint">✎</view>
+      </view>
+
+      <view class="history-section-v2">
+        <text class="section-title">上传记录 ({{myInfo.history.length}})</text>
+        <view class="history-list-v2">
+          <block wx:for="{{myInfo.history}}" wx:key="id">
+            <view class="history-card" hover-class="btn-hover">
+              <view class="h-left">
+                <text class="h-angle">{{item.angle}}<text class="unit">°</text></text>
+                <text class="h-date">{{item.date}}</text>
+              </view>
+              <view class="h-center">
+                <text class="h-bike">{{item.bike}}</text>
+                <view class="h-line"></view>
+                <text class="h-dist">{{item.dist}} KM</text>
+              </view>
+              <view class="h-right">
+                <image wx:if="{{item.img}}" src="{{item.img}}" mode="aspectFill" class="h-thumb"></image>
+                <view wx:else class="h-icon">🏍️</view>
+              </view>
+            </view>
+          </block>
+          <view wx:if="{{myInfo.history.length === 0}}" class="empty-tip">暂无记录，快去上传吧！</view>
+        </view>
+      </view>
+      <view style="height: 180rpx;"></view>
+    </scroll-view>
+  </view>
+
+  <!-- 底部 Tab Bar -->
+  <view class="tab-bar glass-panel">
+    <view class="tab-item {{currentTab === 'rank' ? 'active' : ''}}" bindtap="switchTab" data-tab="rank" hover-class="btn-hover">
+      <image src="{{currentTab === 'rank' ? icons.rank_on : icons.rank_off}}" class="tab-icon-img"></image>
+      <text class="tab-text">RANK</text>
+    </view>
+    <view class="upload-btn-wrapper" bindtap="onUpload" hover-class="btn-hover">
+      <view class="upload-btn"><text class="plus-icon">+</text></view>
+    </view>
+    <view class="tab-item {{currentTab === 'mine' ? 'active' : ''}}" bindtap="switchTab" data-tab="mine" hover-class="btn-hover">
+      <image src="{{currentTab === 'mine' ? icons.garage_on : icons.garage_off}}" class="tab-icon-img"></image>
+      <text class="tab-text">GARAGE</text>
+    </view>
+  </view>
+
+  <!-- 用户上传弹窗 -->
+  <view class="modal-mask" wx:if="{{showUserUpload}}">
+    <view class="admin-modal user-upload-modal">
+      <view class="modal-title">上传成绩</view>
+      <view class="modal-close" bindtap="closeUserUpload" hover-class="btn-hover">×</view>
+
+      <scroll-view scroll-y style="max-height: 70vh;">
+        <view class="media-row">
+          <view class="upload-box" bindtap="chooseDataImg" hover-class="btn-hover">
+            <image wx:if="{{userForm.dataImg}}" src="{{userForm.dataImg}}" mode="aspectFill" class="uploaded-img"></image>
+            <view wx:else class="upload-placeholder"><view class="plus-symbol">+</view><text>数据照片</text></view>
+          </view>
+          <view class="upload-box" bindtap="chooseVideo" hover-class="btn-hover">
+            <video wx:if="{{userForm.video}}" src="{{userForm.video}}" class="uploaded-img" :controls="false" :show-center-play-btn="false"></video>
+            <view wx:else class="upload-placeholder"><view class="plus-symbol">+</view><text>检测视频</text></view>
+          </view>
+        </view>
+
+        <view class="input-group-user">
+          <input class="modal-input" placeholder="输入昵称" value="{{userForm.nickname}}" data-field="nickname" bindinput="handleUserFormInput" />
+          <input class="modal-input" placeholder="输入车型 (如: Ducati V4)" value="{{userForm.bikeModel}}" data-field="bikeModel" bindinput="handleUserFormInput" />
+        </view>
+
+        <view class="bluetooth-section">
+          <button class="bt-read-btn {{isReading ? 'reading' : ''}} {{isBluetoothConnected ? 'connected' : ''}}" bindtap="readBluetooth" hover-class="btn-hover">
+            <view class="bt-icon-wrap"><image src="{{icons.bluetooth}}" class="bt-svg"></image></view>
+            <view class="bt-text-wrap">
+              <text class="bt-main-text">{{isBluetoothConnected ? '设备已连接' : '连接蓝牙设备'}}</text>
+              <text class="bt-sub-text">{{isReading ? '正在读取数据...' : (isBluetoothConnected ? '点击重新读取' : '点击搜索附近的设备')}}</text>
+            </view>
+            <view class="status-light {{isBluetoothConnected ? 'on' : ''}}"></view>
+          </button>
+          
+          <view class="data-display-screen">
+            <view class="data-row">
+              <view class="data-cell"><text class="label">距离</text><text class="value">{{userForm.dist}} <text class="unit">KM</text></text></view>
+              <view class="data-cell"><text class="label">最大角度</text><text class="value">{{userForm.maxAngle}} <text class="unit">°</text></text></view>
+            </view>
+            <view class="data-row border-top">
+              <view class="data-cell"><text class="label">平均角度</text><text class="value">{{userForm.avgAngle}} <text class="unit">°</text></text></view>
+              <view class="data-cell"><text class="label">设备ID</text><text class="value sm">{{userForm.deviceId}}</text></view>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <button class="modal-btn save-btn big-submit" bindtap="saveRecord" hover-class="btn-hover">
+        <view class="save-btn-text">提交成绩审核</view>
+      </button>
+    </view>
+  </view>
+
+  <!-- 密码弹窗 -->
+  <view class="modal-mask" wx:if="{{showPwdModal}}">
+    <view class="admin-modal">
+      <view class="modal-title">管理员验证</view>
+      <input class="modal-input" password type="number" placeholder="输入密码" value="{{pwdInput}}" bindinput="handlePwdInput" />
+      <view class="modal-footer">
+        <button class="modal-btn cancel" bindtap="closePwdModal" hover-class="btn-hover">取消</button>
+        <button class="modal-btn" bindtap="checkPassword" hover-class="btn-hover">进入</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 管理员编辑弹窗 -->
+  <view class="modal-mask" wx:if="{{showEditModal}}">
+    <view class="admin-modal edit-modal">
+      <view class="modal-title">{{isEdit ? '编辑记录' : '添加新记录'}}</view>
+      <view class="modal-close" bindtap="closeEditModal" hover-class="btn-hover">×</view>
+      <scroll-view scroll-y style="max-height: 60vh;">
+        <view class="admin-avatar-box" bindtap="chooseAvatar" hover-class="btn-hover">
+          <image wx:if="{{form.avatar}}" src="{{form.avatar}}" mode="aspectFill" class="uploaded-img"></image>
+          <view wx:else class="upload-placeholder-admin"><view class="plus-symbol-admin">+</view><text>头像</text></view>
+        </view>
+        <view class="input-group">
+          <view class="label">动力类型</view>
+          <view class="radio-row">
+            <view class="radio-btn {{form.type=='gas'?'active':''}}" data-val="gas" bindtap="setFormType" hover-class="btn-hover">油摩</view>
+            <view class="radio-btn {{form.type=='ev'?'active':''}}" data-val="ev" bindtap="setFormType" hover-class="btn-hover">电摩</view>
+          </view>
+        </view>
+        <view class="label">基本信息</view>
+        <input class="modal-input" placeholder="昵称" value="{{form.name}}" data-field="name" bindinput="handleFormInput" />
+        <input class="modal-input" placeholder="车型" value="{{form.bike}}" data-field="bike" bindinput="handleFormInput" />
+        <view class="row-inputs">
+          <input class="modal-input half" type="digit" placeholder="角度" value="{{form.angle}}" data-field="angle" bindinput="handleFormInput" />
+          <input class="modal-input half" type="digit" placeholder="里程" value="{{form.dist}}" data-field="dist" bindinput="handleFormInput" />
+        </view>
+        <view class="label">综合分</view>
+        <input class="modal-input" type="digit" placeholder="留空自动计算" value="{{form.score}}" data-field="score" bindinput="handleFormInput" />
+      </scroll-view>
+      <button class="modal-btn save-btn" bindtap="saveRecord" hover-class="btn-hover">保存发布</button>
+    </view>
+  </view>
+</view>

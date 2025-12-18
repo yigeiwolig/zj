@@ -1,0 +1,421 @@
+<!-- pages/shop/shop.wxml -->
+<view class="container">
+
+  <!-- ================= 0. 新增：顶部自定义错误提示 ================= -->
+  <view class="top-error-toast {{errorMsg ? 'show' : ''}}">
+    {{errorMsg}}
+  </view>
+
+<!-- ================= 1. 顶部导航 ================= -->
+<view class="nav-header">
+  <!-- 左侧：返回按钮 -->
+  <view class="nav-left">
+    <view class="nav-back-btn" bindtap="goBack">
+      <text class="icon-back">‹</text>
+    </view>
+  </view>
+  
+  <!-- 中间区域：普通模式显示标题（可编辑），管理员模式显示退出按钮 -->
+  <view class="brand-title" bindtap="handleTitleClick">
+    <!-- 普通模式：展示可配置的店铺标题 -->
+    <text wx:if="{{!isAdmin}}">{{shopTitle || 'MT STORE'}}</text>
+    <!-- 管理员模式：中间显示“退出管理员模式”按钮 -->
+    <view wx:else class="btn-exit-center" catchtap="exitAdmin">退出管理员模式</view>
+  </view>
+  
+  <view class="nav-right"></view>
+</view>
+
+<!-- ================= 2. 主页面 ================= -->
+<scroll-view scroll-y class="main-scroll">
+  
+  <!-- 顶部轮播 (Hero) -->
+  <view class="hero-swiper-box">
+    <swiper class="hero-swiper" indicator-dots="{{true}}" circular="{{true}}" autoplay="{{!isAdmin}}">
+      <block wx:for="{{topMediaList}}" wx:key="url">
+        <swiper-item>
+          <video wx:if="{{item.type === 'video'}}" src="{{item.url}}" class="hero-media" autoplay muted loop show-play-btn="{{false}}" controls="{{false}}"></video>
+          <image wx:else src="{{item.url}}" class="hero-media" mode="aspectFill" />
+          
+          <view wx:if="{{isAdmin}}" class="admin-del-media" catchtap="adminDelTopMedia" data-index="{{index}}">✕</view>
+        </swiper-item>
+      </block>
+    </swiper>
+    
+    <!-- Admin: 左右分开的上传按钮 -->
+    <view class="admin-upload-row" wx:if="{{isAdmin}}">
+       <view class="up-btn" bindtap="adminAddImage">📷 上传图片</view>
+       <view class="up-btn" bindtap="adminAddVideo">🎥 上传视频</view>
+    </view>
+  </view>
+
+  <!-- 产品列表 (单列大卡片) -->
+  <view class="product-list">
+    <block wx:for="{{seriesList}}" wx:key="id">
+      <view class="prod-card" bindtap="handleProductClick" data-index="{{index}}">
+        <view class="product-cover-wrapper">
+          <image class="p-img" src="{{item.cover}}" mode="aspectFill" />
+          <!-- 跳转号码标识（管理员模式下可编辑） -->
+          <view wx:if="{{isAdmin}}" class="jump-number-badge" catchtap="adminEditJumpNumber" data-index="{{index}}">
+            <text wx:if="{{item.jumpNumber}}">#{{item.jumpNumber}}</text>
+            <text wx:else>#</text>
+          </view>
+        </view>
+        <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadCover" data-index="{{index}}">📷</view>
+        
+        <view class="p-info">
+           <view class="p-row">
+             <text class="p-title {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSeriesName':''}}" data-index="{{index}}">{{item.name}}</text>
+             <text class="p-price">¥{{item.models[0].price}} 起</text>
+           </view>
+        </view>
+      </view>
+    </block>
+    <!-- Admin 添加产品 -->
+    <view class="add-series-btn" wx:if="{{isAdmin}}" bindtap="adminAddSeries">+ 添加新产品系列</view>
+  </view>
+
+  <view style="height: 100rpx;"></view>
+</scroll-view>
+
+<!-- ================= 3. 产品详情弹窗 (Detail) ================= -->
+<view class="full-modal {{showDetail ? 'active' : ''}}">
+  <!-- 弹窗头 -->
+  <view class="modal-nav">
+    <view class="nav-close" bindtap="closeDetail">✕</view>
+    <!-- 管理员模式下：标题可点击编辑，并同步到云端 -->
+    <view 
+      class="modal-title {{isAdmin ? 'editable' : ''}}" 
+      catchtap="{{isAdmin ? 'adminEditSeriesNameInDetail' : ''}}">
+      {{currentSeries.name}}
+    </view>
+    <view style="width:60rpx"></view>
+  </view>
+
+  <!-- 弹窗内容区 -->
+  <!-- 1. 修改：绑定滚动事件 bindscroll -->
+  <scroll-view scroll-y class="modal-scroll" bindscroll="onDetailScroll">
+    <view class="scroll-inner">
+      
+      <!-- (A) 详情长图 -->
+      <!-- 修改 2：详情页长图区域支持视频 (Detail Images) -->
+<view class="detail-images">
+         <block wx:for="{{currentSeries.detailImages}}" wx:key="url">
+           <view class="dimg-box">
+              <!-- 判断类型：如果是视频显示video，否则显示image -->
+              <video wx:if="{{item.type === 'video'}}" src="{{item.url}}" class="dimg" style="height:400rpx; width:100%;" autoplay muted loop show-play-btn="{{false}}" controls="{{false}}"></video>
+              <image wx:else src="{{item.url}}" mode="widthFix" class="dimg" />
+              
+              <view wx:if="{{isAdmin}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
+           </view>
+         </block>
+         <!-- 按钮文案改成添加媒体 -->
+         <view class="add-txt-btn" wx:if="{{isAdmin}}" bindtap="adminAddDetailMedia">+ 添加详情图片/视频</view>
+      </view>
+
+      <!-- 2. 修改：选购配置区 (支持标题修改 + 对比选择逻辑) -->
+      <view class="config-sec">
+        
+        <!-- 标题行：对比按钮只在型号大于1时显示 -->
+        <view class="sec-header-row">
+            <view class="sec-title {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="configTitle">
+              {{currentSeries.labels.configTitle || '选购配置'}}
+            </view>
+            <!-- 对比按钮 -->
+            <view class="btn-compare" 
+                  wx:if="{{currentSeries.models.length > 1}}" 
+                  bindtap="toggleModelCompareMode">
+              {{isModelCompareMode ? '取消选择' : '参数对比'}}
+            </view>
+        </view>
+
+        <!-- 对比确认条 (浮动显示) -->
+        <view wx:if="{{isModelCompareMode}}" style="text-align:center; margin-bottom:20rpx;">
+          <view class="btn-black" style="display:inline-block; font-size:24rpx; padding:10rpx 40rpx;" bindtap="startCompare">
+            开始对比 (已选{{compareSelectedModels.length}})
+          </view>
+        </view>
+
+        <!-- A. 选择型号 -->
+        <view class="cfg-group">
+          <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="modelTitle">
+            {{currentSeries.labels.modelTitle || '选择型号'}}
+          </view>
+          
+          <block wx:for="{{currentSeries.models}}" wx:key="name">
+            <view 
+              class="model-card-normal {{ (!isModelCompareMode && selectedModelIdx === index) || (isModelCompareMode && item.isCompareChecked) ? 'selected' : ''}}" 
+              bindtap="selectModel" 
+              data-index="{{index}}">
+              
+              <!-- 对比勾选圈 -->
+              <view wx:if="{{isModelCompareMode}}" class="circle {{item.isCompareChecked ? 'checked' : ''}}" style="margin-right:20rpx;"></view>
+
+              <view style="flex:1">
+                  <text class="m-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelName':''}}" data-midx="{{index}}">{{item.name}}</text>
+                  <text class="m-desc {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelDesc':''}}" data-midx="{{index}}">{{item.desc || (isAdmin ? '点击添加描述' : '')}}</text>
+              </view>
+              
+              <text class="m-price {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelPrice':''}}" data-midx="{{index}}">¥{{item.price}}</text>
+              
+              <view wx:if="{{isAdmin}}" class="admin-del-mini" catchtap="adminDelModel" data-midx="{{index}}">✕</view>
+            </view>
+          </block>
+          <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddModel">+ 添加型号</view>
+        </view>
+
+        <!-- B. 配置方案 (标题动态化) -->
+        <view class="cfg-group">
+          <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="optionTitle">
+            {{currentSeries.labels.optionTitle || '配置方案'}}
+          </view>
+          <view class="opt-grid">
+             <block wx:for="{{currentSeries.options}}" wx:key="name">
+                <view class="opt-card {{selectedOptionIdx === index ? 'selected' : ''}}" bindtap="selectOption" data-index="{{index}}">
+                   <image wx:if="{{item.img}}" src="{{item.img}}" class="opt-img" mode="aspectFill" />
+                   <view wx:if="{{isAdmin && !item.img}}" class="admin-add-icon" catchtap="adminUploadOptionImg" data-oidx="{{index}}">📷</view>
+                   
+                   <view class="opt-info">
+                      <text class="opt-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditOptName':''}}" data-oidx="{{index}}">{{item.name}}</text>
+                      <text class="opt-sub {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditOptPrice':''}}" data-oidx="{{index}}">{{item.price > 0 ? '+¥'+item.price : '标配'}}</text>
+                   </view>
+                   <view wx:if="{{isAdmin}}" class="admin-del-corner" catchtap="adminDelOption" data-oidx="{{index}}">✕</view>
+                </view>
+             </block>
+             <view class="opt-card add-btn" wx:if="{{isAdmin}}" bindtap="adminAddOption">+</view>
+          </view>
+        </view>
+
+        <!-- C. 配件加购 (标题动态化) -->
+        <view class="cfg-group" wx:if="{{accessoryList.length > 0 || isAdmin}}">
+          <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="accTitle">
+            {{currentSeries.labels.accTitle || '配件加购'}}
+          </view>
+          <view class="acc-list-v">
+            <block wx:for="{{accessoryList}}" wx:key="id">
+               <view class="acc-row-card {{item.selected ? 'selected' : ''}}" 
+                     bindtap="openAccessoryDetail" data-index="{{index}}">
+            
+            <image class="acc-thumb" src="{{item.img}}" mode="aspectFill" />
+            <!-- Admin 改图 -->
+            <view wx:if="{{isAdmin}}" class="admin-float-thumb" catchtap="adminUploadAccThumb" data-index="{{index}}">📷</view>
+
+            <view class="acc-info">
+                <text class="acc-n">{{item.name}}</text>
+                <text class="acc-p">¥{{item.price}}</text>
+            </view>
+
+            <!-- 原来的代码类似于： {{item.selected ? '✓' : '+'}} -->
+
+<!-- 替换为下面的代码： -->
+<view class="acc-add-btn {{item.selected ? 'checked' : ''}}" 
+      catchtap="toggleAccessorySelection" 
+      data-index="{{index}}">
+   {{item.selected ? '已选' : '添加'}}
+</view>
+            
+            <!-- 修改：删除按钮严格在右上角 -->
+            <view wx:if="{{isAdmin}}" class="admin-del-corner-top" catchtap="adminDelAcc" data-index="{{index}}">✕</view>
+          </view>
+            </block>
+      <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddAcc">+ 添加配件</view>
+    </view>
+  </view>
+
+      </view>
+      <!-- 这里是为了让滚动到底部时，内容不被底部栏挡住 -->
+      <view style="height:200rpx;"></view> 
+    </view>
+  </scroll-view>
+
+  <!-- 2. 修改：底部结算栏 (增加显隐控制类) -->
+  <!-- 只有当 showFooterBar 为 true 时，添加 .visible 类 -->
+  <view class="modal-footer {{showFooterBar ? 'visible' : ''}}">
+    <view class="footer-btn-group">
+      <view class="btn-cart" id="cart-target" bindtap="addToCart">加入购物车</view>
+      <view class="btn-buy" bindtap="openCartOrder">立即购买</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 4. 对比表格弹窗 (动态列) ================= -->
+<view class="overlay {{showSpecsModal ? 'active' : ''}}" style="z-index: 600;">
+  <view class="overlay-head"><view bindtap="closeSpecsModal">✕</view><view>参数对比</view><view></view></view>
+  <scroll-view scroll-y class="modal-scroll" style="max-height: 80vh;">
+    <view class="specs-table">
+       
+       <!-- 表头：动态渲染 headers -->
+       <view class="sp-row header">
+          <view class="sp-cell label">参数项</view>
+          <block wx:for="{{compareData.headers}}" wx:key="*this">
+             <view class="sp-cell">{{item}}</view>
+          </block>
+          <view wx:if="{{isAdmin}}" class="sp-cell admin-w"></view>
+       </view>
+       
+       <!-- 内容：动态渲染 rows 和 vals -->
+       <block wx:for="{{compareData.rows}}" wx:key="label" wx:for-index="rowIdx">
+         <view class="sp-row">
+            <view class="sp-cell label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSpecCell':''}}" data-row="{{rowIdx}}" data-key="label">{{item.label}}</view>
+            <!-- 里面的值也循环 -->
+            <block wx:for="{{item.vals}}" wx:for-item="val" wx:key="*this" wx:for-index="valIdx">
+               <view class="sp-cell {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSpecCell':''}}" data-row="{{rowIdx}}" data-key="v{{valIdx+1}}">{{val}}</view>
+            </block>
+            <view wx:if="{{isAdmin}}" class="sp-cell admin-w" catchtap="adminDelSpecRow" data-index="{{rowIdx}}">✕</view>
+         </view>
+       </block>
+       <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddSpecRow">+ 添加参数行</view>
+    </view>
+  </scroll-view>
+</view>
+
+<!-- ================= 5. 配件详情弹窗 (Accessory Detail) ================= -->
+<view class="full-modal {{showAccDetail ? 'active' : ''}}" style="z-index: 300;">
+  <view class="modal-nav">
+     <view class="nav-close" bindtap="closeAccessoryDetail">✕</view>
+     <view class="modal-title">配件详情</view>
+     <view style="width:60rpx"></view>
+  </view>
+  <scroll-view scroll-y class="modal-scroll">
+     <!-- 配件大图 -->
+     <view class="acc-detail-hero">
+        <image wx:if="{{accessoryList[currentAccIdx].detailImages.length>0}}" 
+               src="{{accessoryList[currentAccIdx].detailImages[0]}}" mode="widthFix" class="dimg"/>
+        <view wx:else style="padding:100rpx; text-align:center; color:#ccc;">点击下方添加详情图</view>
+        
+        <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddAccDetailImg">+ 添加/更换图片</view>
+     </view>
+     
+     <!-- 配件信息 -->
+     <view class="acc-detail-info">
+        <view class="acc-d-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccName':''}}">{{accessoryList[currentAccIdx].name}}</view>
+        <view class="acc-d-price {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccPrice':''}}">¥{{accessoryList[currentAccIdx].price}}</view>
+        <view class="acc-d-desc {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccDesc':''}}">{{accessoryList[currentAccIdx].desc || '暂无描述'}}</view>
+     </view>
+  </scroll-view>
+  
+  <view class="modal-footer">
+     <view></view>
+     <view class="btn-black full" bindtap="addAccToCartFromDetail">加入购物袋</view>
+  </view>
+</view>
+
+<!-- ============================================================== -->
+<!-- 1. 新增：加入购物车成功弹窗 (UI美化) -->
+<!-- ============================================================== -->
+<view class="success-mask" wx:if="{{showCartSuccess}}">
+  <view class="success-box">
+    <view class="s-icon">✔</view>
+    <view class="s-title">已加入购物车</view>
+    <view class="s-desc">商品已保存，您可以继续选购或去结算</view>
+    
+    <view class="s-btn-row">
+      <view class="s-btn outline" bindtap="onContinueShopping">继续选购</view>
+      <view class="s-btn fill" bindtap="onGoToCheckout">立即结算</view>
+    </view>
+  </view>
+</view>
+
+<!-- ============================================================== -->
+<!-- 2. 重做：订单确认/结算弹窗 (解决"丑"的问题) -->
+<!-- ============================================================== -->
+<view class="overlay full-screen-overlay {{showOrderModal ? 'active' : ''}}" style="z-index: 500;">
+  <!-- 顶部 -->
+  <view class="checkout-header">
+    <view class="nav-close" bindtap="closeOrderModal">✕</view>
+    <view class="co-title">确认订单</view>
+    <view style="width:40rpx"></view>
+  </view>
+
+  <scroll-view scroll-y class="checkout-scroll">
+    <view class="checkout-body">
+      
+      <!-- 商品清单 (卡片式) -->
+      <view class="group-card">
+        <block wx:for="{{cart}}" wx:key="id">
+          <view class="cart-row">
+            <!-- 左侧信息 -->
+            <view class="cr-info">
+              <view class="cr-name">{{item.name}}</view>
+              <view class="cr-spec">{{item.spec}}</view>
+            </view>
+            
+            <!-- 右侧价格与数量 -->
+            <view class="cr-action">
+              <view class="cr-price">¥{{item.total}}</view>
+              <!-- 小巧的加减器 -->
+              <view class="mini-stepper">
+                <view class="ms-btn" catchtap="handleCartQty" data-index="{{index}}" data-type="minus">-</view>
+                <view class="ms-num">{{item.quantity}}</view>
+                <view class="ms-btn" catchtap="handleCartQty" data-index="{{index}}" data-type="plus">+</view>
+              </view>
+            </view>
+          </view>
+        </block>
+        
+          <view wx:if="{{cart.length === 0}}" class="empty-cart">购物车暂无商品</view>
+        
+        <!-- 总价行 -->
+        <view class="total-row">
+          <text>总计</text>
+          <text class="big-price">¥{{cartTotalPrice}}</text>
+        </view>
+      </view>
+
+      <!-- 收货信息 (列表式) -->
+      <view class="group-title">收货信息</view>
+      <view class="group-card form-group">
+        <view class="form-item">
+          <view class="form-label">收货人</view>
+          <input class="form-input" placeholder="请填写姓名" placeholder-class="ph-style" bindinput="onInput" data-key="name" value="{{orderInfo.name}}"/>
+        </view>
+        <view class="form-item">
+          <view class="form-label">手机号</view>
+          <input class="form-input" type="number" placeholder="请填写手机号码" placeholder-class="ph-style" bindinput="onInput" data-key="phone" value="{{orderInfo.phone}}"/>
+        </view>
+        <view class="form-item">
+          <view class="form-label">地址</view>
+          <input class="form-input" placeholder="省/市/区/街道门牌" placeholder-class="ph-style" bindinput="onInput" data-key="address" value="{{orderInfo.address}}"/>
+        </view>
+      </view>
+
+    </view>
+  </scroll-view>
+
+  <!-- 底部提交按钮 -->
+  <view class="checkout-footer">
+    <view class="btn-black full" bindtap="submitOrder">提交订单并联系客服</view>
+  </view>
+</view>
+
+<!-- ================= 7. 管理员密码弹窗 (Oval Input) ================= -->
+<!-- 1. 在 <view class="container"> 的 最下方 添加 自定义编辑弹窗 -->
+<view class="custom-modal-mask" wx:if="{{showCustomEditModal}}">
+  <view class="custom-modal-box">
+    <view class="custom-modal-title">{{customEditTitle}}</view>
+    <input class="custom-modal-input" value="{{customEditVal}}" bindinput="onCustomEditInput" focus="{{showCustomEditModal}}" cursor-spacing="100"/>
+    <view class="custom-modal-btn-row">
+      <view class="custom-btn c-btn-cancel" bindtap="closeCustomEditModal">取消</view>
+      <view class="custom-btn c-btn-confirm" bindtap="confirmCustomEdit">确定</view>
+    </view>
+  </view>
+</view>
+
+<view class="pwd-mask {{showPasswordModal ? 'active' : ''}}">
+  <view class="pwd-box">
+    <view class="pwd-tit">Admin Access</view>
+    <input class="pwd-input" password type="number" bindinput="onPwdInput" focus="{{showPasswordModal}}"/>
+    <view class="btn-black full" bindtap="checkPassword">Unlock</view>
+    <view class="pwd-cancel" bindtap="closePwdModal">取消</view>
+  </view>
+</view>
+
+<!-- ================= 8. 新增：屏幕中间提示气泡 ================= -->
+<view class="center-toast-mask" wx:if="{{centerToast.show}}">
+  <view class="center-toast-box">
+    <view class="ct-icon">!</view> <!-- 简单叹号图标 -->
+    <view class="ct-text">{{centerToast.text}}</view>
+  </view>
+</view>
+
+</view>

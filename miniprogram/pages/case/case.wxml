@@ -1,0 +1,245 @@
+<!-- 背景大水印 -->
+<view class="brand-bg-watermark">MT-摩改社</view>
+
+<!-- 顶部导航 -->
+<view class="custom-header" style="padding-top: {{statusBarHeight}}px;">
+  <view class="header-content">
+    <view class="back-icon" catchtap="goBack"></view>
+    <text class="header-title" bindtap="handleTitleTap">MT 案例库</text>
+  </view>
+</view>
+
+<!-- 🆕 导航区域容器 -->
+<view class="nav-container" style="top: {{statusBarHeight + 44}}px;">
+  
+  <!-- 1. 可滚动的 Tab 栏 -->
+  <scroll-view 
+    class="scroll-wrapper" 
+    scroll-x="{{true}}" 
+    show-scrollbar="{{false}}" 
+    enhanced="{{false}}"
+    scroll-left="{{scrollLeft}}" 
+    scroll-with-animation="{{true}}"
+  >
+    <view class="tab-list">
+      <!-- 🆕 黑色滑块 (绝对定位，负责动画) -->
+      <!-- sliderLeft 和 sliderWidth 由 JS 实时计算 -->
+      <view class="tab-slider" style="left: {{sliderLeft}}px; width: {{sliderWidth}}px;"></view>
+
+      <!-- 文字按钮 (背景透明，只负责触发事件) -->
+      <view class="tab-item {{currentTab === 'all' ? 'active' : ''}}" bindtap="switchTab" data-type="all">全部</view>
+      <view class="tab-item {{currentTab === 'street' ? 'active' : ''}}" bindtap="switchTab" data-type="street">街车</view>
+      <view class="tab-item {{currentTab === 'sport' ? 'active' : ''}}" bindtap="switchTab" data-type="sport">仿赛</view>
+      <view class="tab-item {{currentTab === 'scooter' ? 'active' : ''}}" bindtap="switchTab" data-type="scooter">踏板</view>
+      <view class="tab-item {{currentTab === 'cruise' ? 'active' : ''}}" bindtap="switchTab" data-type="cruise">巡航</view>
+      <view class="tab-item {{currentTab === 'ebike' ? 'active' : ''}}" bindtap="switchTab" data-type="ebike">电摩</view>
+      <view class="tab-item {{currentTab === 'bicycle' ? 'active' : ''}}" bindtap="switchTab" data-type="bicycle">电动自行车</view>
+    </view>
+  </scroll-view>
+
+  <!-- 🆕 刘海搜索栏 (通过 CSS 负边距与上面连接) -->
+  <view class="search-notch {{showSearchBar ? 'open' : ''}}">
+    <view class="search-inner">
+      <input 
+        class="search-input" 
+        placeholder="点这里搜索车型" 
+        placeholder-style="color:#666" 
+        bindinput="onSearchInput" 
+        value="{{searchText}}"
+      />
+      <view class="search-tip" wx:if="{{searchTip}}">{{searchTip}}</view>
+    </view>
+  </view>
+</view>
+
+<!-- 🔴 核心修改：使用 scroll-view 包裹视频列表 -->
+<!-- 高度计算：100vh - (状态栏 + 标题栏44px + 导航栏高度约120rpx) -->
+<scroll-view 
+  class="main-scroll-view"
+  scroll-y="{{true}}"
+  bindscroll="handleScrollViewScroll" 
+  enhanced="{{true}}"
+  show-scrollbar="{{false}}"
+  style="height: calc(100vh - {{statusBarHeight + 44 + 60}}px); top: {{statusBarHeight + 44 + 60}}px;"
+>
+  <!-- 视频列表 (🔴 增加 pushed-down 类，实现下移动画) -->
+  <view class="video-list {{showSearchBar ? 'pushed-down' : ''}}">
+    <view wx:if="{{displayList.length === 0}}" style="width:100%; text-align:center; padding:100rpx 0; color:#999;">
+      暂无案例视频
+    </view>
+
+    <block wx:for="{{displayList}}" wx:key="_id">
+      <!-- 🆕 move-animation: 实现列表重排时的过渡效果 -->
+      <view class="ios-card move-animation" bindtap="onCardTap" data-id="{{item._id}}">
+        <view class="thumb-box" style="background-color: {{item.color}};">
+          <image wx:if="{{item.coverUrl}}" src="{{item.coverUrl}}" mode="aspectFill" class="card-cover-img"></image>
+          <view class="card-watermark-overlay">MT</view>
+          
+          <!-- 🔴 修改：删除了 class="play-icon-overlay" 那个播放按钮 -->
+          <!-- 只保留编辑图标（管理员用） -->
+          <view class="edit-icon-overlay" wx:if="{{isAdminUnlocked}}">🔧</view>
+
+          <view wx:if="{{isAdminUnlocked}}" class="delete-btn" catchtap="deleteCase" data-id="{{item._id}}">
+            <view class="delete-x">×</view>
+          </view>
+        </view>
+        <view class="card-content">
+          <!-- 🔴 修改：这里加了 "车型：" 前缀 -->
+          <text class="card-title">车型：{{item.title}}</text>
+          <view class="card-meta">产品型号：{{item.model}}</view>
+        </view>
+      </view>
+    </block>
+    
+    <!-- 底部占位，防止被悬浮按钮挡住 -->
+    <view style="height: 200rpx;"></view>
+  </view>
+</scroll-view>
+
+<!-- 底部发布按钮 (通用：录制或上传) -->
+<view class="fab-center">
+  <button class="publish-btn" bindtap="handleFabTap">
+    <!-- 纯 CSS 绘制的加号图标 -->
+    <view class="icon-plus"></view>
+  </button>
+</view>
+
+<!-- ================= 弹窗区域 ================= -->
+
+<!-- 5. 初始福利弹窗 -->
+<view class="modal-overlay active" wx:if="{{showIntro}}">
+  <view class="ios-dialog">
+    <view class="emoji-icon">🎁</view>
+    <view class="dialog-title">上传视频赢延保</view>
+    <view class="dialog-desc">上传案例视频，审核通过后即可获得 <text class="highlight">1个月延保服务</text>。</view>
+    <button class="dialog-btn" bindtap="closeIntro">我知道了</button>
+  </view>
+</view>
+
+<!-- 6. 用户表单 -->
+<view class="modal-overlay active" wx:if="{{showForm}}">
+  <view class="ios-dialog left-align">
+    
+    <!-- 🆕 新增：左上角关闭按钮 -->
+    <view class="dialog-close-x" bindtap="closeForm">×</view>
+
+    <view class="dialog-title center">完善案例信息</view>
+    <view class="form-group">
+      <text class="form-label">车型信息</text>
+      <input class="ios-input" placeholder="例如：雅马哈 XMAX 300" bindinput="onInputVehicle" value="{{vehicleName}}" />
+    </view>
+    <view class="form-group">
+      <text class="form-label">车型分类</text>
+      <picker bindchange="bindCategoryChange" value="{{categoryIndex}}" range="{{categoryArray}}"><view class="ios-select">{{categoryIndex!==null?categoryArray[categoryIndex]:'请选择'}}</view></picker>
+    </view>
+    <view class="form-group">
+      <text class="form-label">产品型号</text>
+      <picker bindchange="bindPickerChange" value="{{modelIndex}}" range="{{modelArray}}"><view class="ios-select">{{modelIndex!==null?modelArray[modelIndex]:'请选择'}}</view></picker>
+    </view>
+    <button class="dialog-btn" bindtap="submitForm">{{isSubmitting ? '提交中...' : '提交'}}</button>
+  </view>
+</view>
+
+<!-- 7. 成功提示 -->
+<view class="modal-overlay active" wx:if="{{showSuccess}}">
+  <view class="ios-dialog">
+    <view class="success-content">
+      <view class="emoji-icon">🎉</view>
+      <view class="user-name">提交成功</view>
+      <view class="status-badge">等待审核</view>
+      <button class="dialog-btn" bindtap="closeSuccess">好的</button>
+    </view>
+  </view>
+</view>
+
+<!-- 8. 管理员密码框 -->
+<view class="modal-overlay active" wx:if="{{showPasswordModal}}">
+  <view class="ios-dialog">
+    <view class="dialog-title">管理员验证</view>
+    <input class="ios-input" password type="number" placeholder="输入密码" bindinput="onInputPassword" value="{{inputPassword}}" style="text-align:center;" />
+    <view style="display: flex; gap: 20rpx; margin-top:30rpx;">
+      <button class="dialog-btn" style="background:#ccc; color:#000" bindtap="closePasswordModal">取消</button>
+      <button class="dialog-btn" bindtap="confirmPassword">确认</button>
+    </view>
+  </view>
+</view>
+
+<!-- 9. 管理员上传表单 -->
+<view class="modal-overlay active" wx:if="{{showAdminForm}}">
+  <view class="ios-dialog left-align">
+    <view class="dialog-title center">{{isEditing ? '修改案例' : '发布官方案例'}}</view>
+    <view style="display: flex; gap: 20rpx; margin-bottom: 30rpx;">
+      <view class="upload-box" bindtap="chooseAdminVideo">
+        <block wx:if="{{!adminVideoPath}}"><view class="upload-icon">📹</view><text class="upload-text">选视频</text></block>
+        <video wx:else src="{{adminVideoPath}}" class="preview-media" show-play-btn="{{false}}"></video>
+      </view>
+      <view class="upload-box" bindtap="chooseAdminCover">
+        <block wx:if="{{!adminThumbPath}}"><view class="upload-icon">🖼️</view><text class="upload-text">选封面</text></block>
+        <image wx:else src="{{adminThumbPath}}" class="preview-media" mode="aspectFill"></image>
+      </view>
+    </view>
+    <view wx:if="{{adminVideoPath}}" class="re-upload-text" style="margin-bottom:20rpx">
+       <text bindtap="chooseAdminVideo" style="margin-right:30rpx">重选视频</text><text bindtap="chooseAdminCover">重选封面</text>
+    </view>
+
+    <view class="form-group"><text class="form-label">车型名称</text><input class="ios-input" placeholder="例如：杜卡迪 V4" bindinput="onInputVehicle" value="{{vehicleName}}" /></view>
+    <view class="form-group"><text class="form-label">车型分类</text><picker bindchange="bindCategoryChange" value="{{categoryIndex}}" range="{{categoryArray}}"><view class="ios-select">{{categoryIndex!==null?categoryArray[categoryIndex]:'分类'}}</view></picker></view>
+    <view class="form-group"><text class="form-label">产品型号</text><picker bindchange="bindPickerChange" value="{{modelIndex}}" range="{{modelArray}}"><view class="ios-select">{{modelIndex!==null?modelArray[modelIndex]:'型号'}}</view></picker></view>
+    
+    <view style="display: flex; gap: 20rpx;">
+      <button class="dialog-btn" style="background:#eee; color:#000" bindtap="closeAdminForm">取消</button>
+      <button class="dialog-btn" bindtap="submitAdminForm">{{isSubmitting ? '保存中...' : (isEditing ? '保存修改' : '发布')}}</button>
+    </view>
+  </view>
+</view>
+
+<!-- 10. 全屏播放器 -->
+<view class="fullscreen-player-container" wx:if="{{showVideoPlayer}}">
+  <video 
+    src="{{currentVideo.videoUrl}}" 
+    class="fullscreen-video" 
+    autoplay="{{true}}" 
+    controls="{{true}}"
+    show-fullscreen-btn="{{false}}"
+    object-fit="contain" 
+    bindended="closeVideoPlayer"
+  >
+    <cover-view class="auto-watermark"><cover-view class="wm-text">MT-摩改社</cover-view></cover-view>
+    <cover-view class="close-video-btn" bindtap="closeVideoPlayer">×</cover-view>
+    <cover-view class="video-bottom-info">
+      <cover-view class="v-title">{{currentVideo.title}}</cover-view>
+      <cover-view class="v-tags">
+        <cover-view class="v-tag blue">{{currentVideo.categoryName}}</cover-view>
+        <cover-view class="v-tag gray">型号：{{currentVideo.model}}</cover-view>
+      </cover-view>
+    </cover-view>
+  </video>
+</view>
+
+<!-- 11. 录制全屏页 -->
+<view class="camera-full-screen {{cameraAnimating ? 'animating' : 'animated'}}" wx:if="{{showCamera}}" catchtouchmove="preventScroll">
+  <camera device-position="back" flash="off" style="width: 100%; height: 100%;">
+    <cover-view class="cam-overlay">
+      <!-- 1. 顶部布局：红点 + 白色时间 -->
+      <cover-view class="rec-header-layout">
+        <!-- 红点：isRecording为true时显示并闪烁 -->
+        <cover-view class="rec-dot {{isRecording ? 'active' : ''}}"></cover-view>
+        <cover-view class="rec-time-text">{{recTimeStr}}</cover-view>
+      </cover-view>
+      
+      <!-- 2. 隐私提示：只有文字，胶囊风格 -->
+      <cover-view class="privacy-tip {{showPrivacyTip ? 'show' : ''}}">
+        <cover-view class="privacy-text">MT团队将人工打码保障您的隐私信息</cover-view>
+      </cover-view>
+    </cover-view>
+  </camera>
+
+  <!-- 底部控制保持不变 -->
+  <cover-view class="cam-controls">
+    <cover-view class="cam-btn text-btn" bindtap="closeCamera">取消</cover-view>
+    <cover-view class="shutter-outer" catchtap="toggleRecord">
+      <cover-view class="shutter-inner {{isRecording ? 'recording breathing' : ''}}"></cover-view>
+    </cover-view>
+    <cover-view class="cam-btn" style="width: 40px;"></cover-view>
+  </cover-view>
+</view>

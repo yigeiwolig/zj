@@ -1,13 +1,76 @@
-<view class="page index-page {{step > 0 ? 'animating' : ''}}">
-  <!-- 顶部标题 (动画开始时隐藏) -->
+<!-- 强制授权弹窗 (蓝牙/定位失败时显示) - 黑白风格 -->
+<view class="custom-modal-mask" wx:if="{{showAuthForceModal}}">
+  <view class="custom-modal-box">
+    <!-- 图标：定位图标 -->
+    <image class="modal-icon-new" src="https://img.icons8.com/ios-filled/120/000000/marker.png" mode="aspectFit"></image>
+    
+    <!-- 标题 -->
+    <view class="modal-title-new">需要必要权限</view>
+    
+    <!-- 内容 -->
+    <view class="modal-content-new">
+      <block wx:if="{{authMissingType === 'bluetooth'}}">
+        <view class="content-main">请开启手机蓝牙功能以连接设备</view>
+      </block>
+      <block wx:if="{{authMissingType === 'location'}}">
+        <view class="content-main">需要获取您的位置信息以提供服务</view>
+      </block>
+    </view>
+
+    <!-- 按钮 -->
+    <block wx:if="{{authMissingType === 'bluetooth'}}">
+      <button class="modal-btn-new" bindtap="retryBluetooth">已开启，重试</button>
+    </block>
+    <block wx:if="{{authMissingType === 'location'}}">
+      <button class="modal-btn-new" open-type="openSetting" bindopensetting="onOpenSettingResult">去设置开启</button>
+    </block>
+  </view>
+</view>
+
+<!-- 昵称授权窗口 (只有当未授权时显示) -->
+<view class="auth-mask" wx:if="{{!isAuthorized && isShowNicknameUI}}">
+  <view class="auth-panel">
+    <view class="auth-header">
+      <view class="app-icon"></view> 
+      <text class="app-name">MT Innovation Lab</text>
+      <text class="auth-apply">申请获取以下权限</text>
+    </view>
+    <view class="auth-desc">
+      <view class="desc-dot"></view>
+      <text>获得你的公开信息（昵称、头像等）</text>
+    </view>
+    <view class="info-form">
+      <view class="form-item avatar-item">
+        <text class="label">头像</text>
+        <view class="avatar-wrapper"><view class="default-avatar"></view></view>
+      </view>
+      <view class="form-item">
+        <text class="label">昵称</text>
+        <input type="nickname" class="wechat-input" placeholder="请输入或一键填写" bindinput="onNickNameInput" bindchange="onNickNameChange" value="{{inputNickName}}"/>
+      </view>
+    </view>
+    <view class="auth-btns">
+      <button class="btn-reject" bindtap="handleDeny">拒绝</button>
+      <button class="btn-allow" bindtap="handleLogin">允许</button>
+    </view>
+  </view>
+</view>
+
+<!-- 主程序 (气泡按钮等) -->
+<view class="page index-page {{step > 0 ? 'animating' : ''}}" wx:if="{{isAuthorized}}">
+  <!-- 顶部标题 -->
   <view class="header-section {{step > 0 ? 'fade-out' : ''}}">
     <text class="main-title">新品体验</text>
-    <text class="sub-title">INNOVATION LAB</text>
   </view>
 
-  <!-- 中部：动画舞台 -->
+  <!-- 舞台区域 -->
   <view class="hero-section">
-    <!-- 文字轨道 (绝对定位) -->
+    <!-- 中间标题 -->
+    <view class="center-title {{step > 0 ? 'fade-out' : ''}}">
+      <text class="sub-title">MT-摩改社</text>
+    </view>
+    
+    <!-- 文字 -->
     <view class="text-track" wx:if="{{step >= 3}}">
       <text class="char char-1">M</text>
       <text class="char char-2">T</text>
@@ -16,27 +79,83 @@
       <text class="char char-5">创</text>
       <text class="char char-6">新</text>
     </view>
-
-    <!-- 核心元素：从液态按钮变成齿轮 -->
+    <!-- 按钮 -->
     <view class="liquid-btn step-{{step}}" bindtap="handleAccess">
-      <view class="gear-shape">
-        <view class="teeth"></view>
-        <view class="hub"></view>
-      </view>
+      <view class="gear-shape"><view class="teeth"></view><view class="hub"></view></view>
       <view class="highlight-dot"></view>
-      <text class="btn-text" wx:if="{{step === 0}}">EXPLORE</text>
+      <text class="btn-text" wx:if="{{step === 0}}">MT  RIDE</text>
     </view>
   </view>
-
-  <!-- 底部：位置工具 (动画开始时隐藏) -->
-  <view class="footer-section {{step > 0 ? 'fade-out' : ''}}">
+  
+  <!-- 底部模拟器 -->
+  <view class="footer-section">
     <view class="tool-label">LOCATION SIMULATOR</view>
     <view class="loc-grid">
-      <view class="chip active"><text>Shenzhen</text><view class="status green"></view></view>
-      <view class="chip"><text>Guangzhou</text><view class="status green"></view></view>
+      <view class="chip" bindtap="setMockLocation" data-city="shenzhen"><text>Shenzhen</text></view>
+      <view class="chip" bindtap="setMockLocation" data-city="hangzhou"><text>Hangzhou</text></view>
     </view>
   </view>
-
-  <!-- 遮罩层：模拟布的效果，在文字水平线下方 -->
+  
   <view class="curtain-mask {{step >= 5 ? 'active' : ''}}"></view>
+</view>
+
+<!-- 【新增】强制授权弹窗 - 黑白风格 -->
+<view class="custom-modal-mask" wx:if="{{showAuthModal}}">
+  <view class="custom-modal-box">
+    <!-- 图标 -->
+    <image class="modal-icon-new" src="https://img.icons8.com/ios-filled/120/000000/location--v1.png" mode="aspectFit"></image>
+    
+    <!-- 标题 -->
+    <view class="modal-title-new">需要位置权限</view>
+    
+    <!-- 内容 -->
+    <view class="modal-content-new">
+      <view class="content-main">为了检测当前区域服务可用性及展示附近门店，请允许获取您的位置信息。</view>
+    </view>
+
+    <!-- 按钮 -->
+    <button class="modal-btn-new" open-type="openSetting" bindopensetting="onOpenSetting">
+      去设置开启
+    </button>
+  </view>
+</view>
+
+<!-- 【全局通用】自定义黑白极简弹窗 - 错误类型 -->
+<view class="custom-modal-mask" wx:if="{{showCustomErrorModal}}">
+  <view class="custom-modal-box">
+    
+    <!-- 1. 图标：黑色实心感叹号盾牌 -->
+    <image class="modal-icon-new" src="https://img.icons8.com/ios-filled/120/000000/box-important--v1.png" mode="aspectFit"></image>
+    
+    <!-- 2. 标题 -->
+    <view class="modal-title-new">验证未通过</view>
+    
+    <!-- 3. 内容 -->
+    <view class="modal-content-new">
+      <view class="content-main">该昵称暂未获得授权</view>
+      <view class="content-sub">建议点击一键填写确保准确</view>
+    </view>
+
+    <!-- 4. 按钮：纯黑风格 -->
+    <button class="modal-btn-new" bindtap="handleCopyFromModal">
+      复制管理员微信号
+    </button>
+  </view>
+</view>
+
+<!-- 【全局通用】自定义黑白极简弹窗 - 成功类型 -->
+<view class="custom-modal-mask" wx:if="{{showCustomSuccessModal}}">
+  <view class="custom-modal-box success-modal">
+    
+    <!-- 1. 图标：黑色勾选图标 -->
+    <image class="modal-icon-new success-icon" src="https://img.icons8.com/ios-filled/120/000000/checkmark.png" mode="aspectFit"></image>
+    
+    <!-- 2. 标题 -->
+    <view class="modal-title-new">{{successModalTitle}}</view>
+    
+    <!-- 3. 内容（如果有） -->
+    <view class="modal-content-new" wx:if="{{successModalContent}}">
+      <view class="content-main">{{successModalContent}}</view>
+    </view>
+  </view>
 </view>

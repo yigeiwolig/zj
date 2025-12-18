@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "openapi": []
+  },
+  "triggers": [],
+  "envVariables": {
+    "BACKEND_API_URL": "https://your-backend-api.com/api/blocked-users",
+    "BACKEND_API_KEY": "your-secret-api-key"
+  }
+}
+
+

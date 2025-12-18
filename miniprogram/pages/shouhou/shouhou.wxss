@@ -1,0 +1,979 @@
+page {
+  background-color: #F2F2F7;
+  font-family: -apple-system, Helvetica, sans-serif;
+}
+
+.container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+}
+
+/* === 首页视图 === */
+.home-view {
+  width: 100%;
+  height: 100%;
+  padding-bottom: 50px;
+  overflow-y: auto;
+  transition: transform 0.4s ease, opacity 0.4s ease;
+  background-color: #F2F2F7;
+}
+
+.home-view.shrink {
+  transform: scale(0.92);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nav-header {
+  padding-top: calc(env(safe-area-inset-top) + 88rpx);
+  padding-left: 40rpx;
+  padding-right: 40rpx;
+  padding-bottom: 20rpx;
+  background-color: #F2F2F7;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 返回按钮 - 统一样式 */
+.nav-back-btn {
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.04);
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.nav-back-btn:active {
+  background: rgba(0, 0, 0, 0.08);
+  transform: scale(0.96);
+}
+
+/* 返回箭头图标 - 向左 */
+.nav-back-btn .back-icon {
+  width: 32rpx;
+  height: 32rpx;
+  position: relative;
+}
+
+.nav-back-btn .back-icon::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  width: 16rpx;
+  height: 16rpx;
+  border-left: 3rpx solid #1D1D1F;
+  border-bottom: 3rpx solid #1D1D1F;
+  border-radius: 2rpx;
+}
+
+.header-title-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+.large-title {
+  font-size: 60rpx;
+  font-weight: 800;
+  color: #1D1D1F;
+  text-align: center;
+}
+
+.subtitle {
+  font-size: 26rpx;
+  color: #86868B;
+  margin-top: 10rpx;
+  text-align: center;
+}
+
+.nav-right-placeholder {
+  width: 64rpx;
+  flex-shrink: 0;
+}
+
+/* 管理员功能区域（独立容器） */
+.admin-actions-container {
+  padding: 0 40rpx 20rpx 40rpx;
+  background-color: #F2F2F7;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+/* 退出管理员按钮 */
+.exit-admin-btn {
+  padding: 16rpx 32rpx;
+  background: rgba(255, 59, 48, 0.1);
+  border-radius: 50rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  border: 1rpx solid rgba(255, 59, 48, 0.3);
+}
+
+.exit-admin-btn:active {
+  background: rgba(255, 59, 48, 0.2);
+  transform: scale(0.98);
+}
+
+.exit-icon {
+  font-size: 28rpx;
+  color: #FF3B30;
+  font-weight: 600;
+}
+
+.admin-badge {
+  font-size: 20rpx;
+  background: #FF3B30;
+  color: #fff;
+  padding: 4rpx 10rpx;
+  border-radius: 8rpx;
+  vertical-align: middle;
+}
+
+/* 管理员同步按钮 */
+.sync-parts-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 16rpx 32rpx;
+  background: #007AFF;
+  color: #fff;
+  border-radius: 50rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.sync-parts-btn:active {
+  background: #0051D5;
+  transform: scale(0.98);
+}
+
+.sync-icon {
+  font-size: 28rpx;
+}
+
+.sync-text {
+  font-size: 26rpx;
+}
+
+.section-title {
+  padding: 40rpx 40rpx 20rpx 40rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #86868B;
+  letter-spacing: 2rpx;
+}
+
+.card-grid {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 40rpx;
+  margin-bottom: 20rpx;
+}
+
+/* === 卡片核心样式修复 === */
+.i-card {
+  width: 48%;
+  height: 320rpx;
+  border-radius: 36rpx;
+  position: relative; /* 关键：作为定位基准 */
+  overflow: hidden;   /* 关键：切掉溢出的圆圈 */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 30rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.04);
+}
+
+/* 确保文字在圆圈上面 */
+.card-top,
+.card-btm {
+  position: relative;
+  z-index: 2; /* 文字层级高 */
+}
+
+/* 圆形装饰 */
+.circle-decor {
+  position: absolute;
+  bottom: -40rpx;
+  right: -40rpx;
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 50%;
+  z-index: 1; /* 在文字下面 */
+}
+
+/* 白色卡片 (PRO) 配色 */
+.style-white {
+  background: #FFFFFF;
+  color: #000;
+}
+.style-white .badge {
+  background: #F2F2F7;
+  color: #666;
+}
+.style-white .circle-decor {
+  background: #F2F2F7;
+}
+
+/* 黑色卡片 (MAX) 配色 */
+.style-black {
+  background: #1C1C1E;
+  color: #FFF;
+}
+.style-black .badge {
+  background: #333;
+  color: #D1D1D6;
+}
+.style-black .p-desc {
+  color: #888;
+}
+.style-black .circle-decor {
+  background: #2C2C2E;
+}
+
+.badge {
+  font-size: 20rpx;
+  font-weight: 700;
+  padding: 8rpx 16rpx;
+  border-radius: 12rpx;
+}
+.p-name {
+  font-size: 36rpx;
+  font-weight: 700;
+}
+.p-desc {
+  font-size: 24rpx;
+  margin-top: 6rpx;
+  color: #86868B;
+}
+
+/* === 二级页面视图 === */
+.detail-view {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  background: #FFFFFF;
+  transform: translateX(100%);
+  transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 防止整体滚动 */
+  box-sizing: border-box;
+  /* padding-top 通过内联样式动态设置，使用 statusBarHeight */
+  /* 高度会自动减去 padding-top，因为 box-sizing: border-box */
+}
+
+.detail-view.slide-in {
+  transform: translateX(0);
+}
+
+.detail-nav {
+  min-height: 88rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 30rpx 10rpx 30rpx; /* 增加顶部间距 */
+  border-bottom: 1rpx solid #F2F2F7;
+  background: rgba(255,255,255,0.95);
+  position: relative;
+  z-index: 999; /* 确保层级最高 */
+  flex-shrink: 0; /* 防止被压缩 */
+}
+/* 返回按钮 - 仅图标 */
+.nav-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.04);
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.nav-back-btn:active {
+  background: rgba(0, 0, 0, 0.08);
+  transform: scale(0.96);
+}
+
+/* 返回箭头图标 - 向左 */
+.back-icon {
+  width: 32rpx;
+  height: 32rpx;
+  position: relative;
+}
+
+.back-icon::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  width: 16rpx;
+  height: 16rpx;
+  border-left: 3rpx solid #1D1D1F;
+  border-bottom: 3rpx solid #1D1D1F;
+  border-radius: 2rpx;
+}
+
+.nav-title { 
+  font-size: 32rpx; 
+  font-weight: 700; 
+  color: #1D1D1F;
+}
+
+.content-scroll {
+  flex: 1;
+  overflow-y: scroll;
+  padding: 30rpx;
+  padding-bottom: 200rpx; /* 为底部提交栏留出空间 */
+  -webkit-overflow-scrolling: touch; /* iOS 平滑滚动 */
+  height: 0; /* 关键：配合 flex: 1 使用，确保正确计算高度 */
+  min-height: 0; /* 防止 flex 子元素溢出 */
+}
+
+/* Tabs */
+.tab-group {
+  display: flex;
+  background: #F2F2F7;
+  padding: 8rpx;
+  border-radius: 24rpx;
+  margin-bottom: 40rpx;
+}
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #86868B;
+  border-radius: 20rpx;
+}
+.tab-item.active {
+  background: #FFFFFF;
+  color: #000;
+  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.05);
+}
+
+/* 服务切换 */
+.svc-switch {
+  display: flex;
+  gap: 20rpx;
+  margin-bottom: 40rpx;
+}
+.svc-item {
+  flex: 1;
+  text-align: center;
+  padding: 30rpx;
+  background: #F9F9F9;
+  border-radius: 24rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  border: 4rpx solid transparent;
+}
+.svc-item.selected {
+  background: #F0F8FF;
+  border-color: #007AFF;
+  color: #007AFF;
+}
+
+/* 配件网格 */
+.section-label {
+  font-size: 24rpx;
+  color: #86868B;
+  font-weight: 700;
+  margin-bottom: 20rpx;
+}
+.parts-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+}
+.part-tag {
+  padding: 20rpx 30rpx;
+  background: #F5F5F7;
+  border-radius: 40rpx;
+  font-size: 26rpx;
+  font-weight: 500;
+  position: relative;
+}
+.part-tag.active {
+  background: #111;
+  color: #fff;
+}
+.del-btn {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 32rpx;
+  height: 32rpx;
+  background: #FF3B30;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.add-btn-dashed {
+  padding: 20rpx 30rpx;
+  border: 2rpx dashed #999;
+  border-radius: 40rpx;
+  color: #666;
+  font-size: 24rpx;
+}
+
+/* 表单输入 */
+.input-area {
+  width: 100%;
+  background: #F5F5F7;
+  border-radius: 20rpx;
+  padding: 30rpx;
+  font-size: 30rpx;
+  margin-bottom: 20rpx;
+  box-sizing: border-box;
+}
+
+/* === 联系信息板块 === */
+.contact-section {
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  margin-top: 30rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.03);
+}
+
+/* 头部点击区 */
+.contact-header {
+  padding: 30rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.section-label {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+}
+
+/* 箭头图标 */
+.arrow {
+  width: 16rpx;
+  height: 16rpx;
+  border-right: 4rpx solid #C7C7CC;
+  border-bottom: 4rpx solid #C7C7CC;
+  transform: rotate(45deg);
+  margin-left: 16rpx;
+  margin-top: -6rpx;
+  transition: transform 0.3s ease;
+}
+
+.arrow.up {
+  transform: rotate(-135deg);
+  margin-top: 6rpx;
+}
+
+.smart-paste {
+  font-size: 26rpx;
+  color: #007AFF;
+  font-weight: 600;
+  padding: 10rpx 20rpx;
+  background: #F0F8FF;
+  border-radius: 30rpx;
+}
+
+/* 折叠动画容器 */
+.contact-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  background: #fff;
+}
+
+.contact-body.expanded {
+  max-height: 600rpx;
+}
+
+.input-wrapper {
+  padding: 0 30rpx 40rpx 30rpx;
+}
+
+/* 修复输入框显示异常 */
+.input-field {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background: #F5F5F7;
+  border-radius: 16rpx;
+  padding: 0 24rpx;
+  font-size: 30rpx;
+  color: #000;
+  margin-bottom: 20rpx;
+  box-sizing: border-box;
+}
+
+.input-field:last-child {
+  margin-bottom: 0;
+}
+
+.ph-style {
+  color: #AEAEB2;
+}
+.upload-box {
+  border: 4rpx dashed #C7C7CC;
+  border-radius: 24rpx;
+  padding: 60rpx;
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+/* 旧的 section-row / smart-paste 已被新的 contact-section 替代 */
+
+/* 底部栏 */
+.bottom-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #fff;
+  padding: 30rpx 40rpx calc(60rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 200;
+  box-shadow: 0 -4rpx 20rpx rgba(0,0,0,0.05);
+}
+.submit-btn {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  border-radius: 40rpx;
+  font-size: 30rpx;
+  padding: 20rpx 60rpx;
+}
+
+/* ================== 教程锁（修复版） ================== */
+.lock-screen {
+  text-align: center;
+  padding: 60rpx 0;
+  margin-top: 100rpx;
+  position: relative;
+  background: #fff;
+  z-index: 10;
+}
+.dots-row {
+  display: flex;
+  justify-content: center;
+  gap: 30rpx;
+  margin: 60rpx 0;
+}
+.dot {
+  width: 24rpx;
+  height: 24rpx;
+  background: #E5E5EA;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.dot.filled {
+  background: #000;
+  transform: scale(1.2);
+}
+.hidden-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  z-index: 20;
+  color: transparent;
+}
+
+/* === 视频教程列表 (大卡片风格) === */
+.video-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 40rpx;
+  padding-bottom: 60rpx;
+}
+
+.video-card {
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  overflow: hidden;
+  box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: box-shadow 0.2s, opacity 0.2s;
+  /* 性能优化：启用硬件加速 */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+/* 拖拽中的卡片：移除 transition，让 translateY 立即响应 */
+.video-card.dragging {
+  transition: none !important;
+  transform: translateZ(0) scale(1.02);
+  box-shadow: 0 12rpx 32rpx rgba(0,0,0,0.15);
+  z-index: 100;
+  opacity: 0.95;
+  border: 2rpx solid #007AFF;
+  /* 性能优化：提示浏览器优化此元素的动画 */
+  will-change: transform;
+}
+
+/* 拖拽结束后，卡片回到原位的动画 */
+.video-card:not(.dragging) {
+  transition: transform 0.3s ease-out, box-shadow 0.2s, opacity 0.2s;
+}
+
+/* 管理员模式下，视频卡片添加拖拽提示 */
+.video-list-container .video-card {
+  cursor: grab;
+}
+
+.video-list-container .video-card:active {
+  cursor: grabbing;
+}
+
+.video-cover {
+  width: 100%;
+  height: 380rpx;
+  position: relative;
+}
+
+.video-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.play-btn-overlay {
+  width: 100rpx;
+  height: 100rpx;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(10rpx);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 40rpx;
+  border: 2rpx solid rgba(255,255,255,0.6);
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.2);
+}
+
+.video-info {
+  padding: 30rpx;
+}
+
+.video-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin-bottom: 16rpx;
+  line-height: 1.4;
+}
+
+.video-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.time-badge {
+  background: #F2F2F7;
+  color: #666;
+  font-size: 24rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 8rpx;
+  font-weight: 600;
+}
+
+.status-text {
+  font-size: 24rpx;
+  color: #86868B;
+}
+
+/* 管理员视频操作区 */
+.video-admin-ops {
+  margin-left: 20rpx;
+}
+
+.video-del {
+  font-size: 24rpx;
+  color: #FF3B30;
+}
+
+.admin-add-area {
+  background: #F0F8FF;
+  border: 2rpx dashed #007AFF;
+  border-radius: 20rpx;
+  padding: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  margin-bottom: 40rpx;
+  color: #007AFF;
+  font-weight: 600;
+  font-size: 30rpx;
+}
+
+.plus-icon {
+  font-size: 40rpx;
+  line-height: 1;
+}
+
+/* === 视频播放器相关 === */
+.video-player-box {
+  width: 100%;
+  height: 380rpx;
+  background: #000;
+}
+
+.real-video {
+  width: 100%;
+  height: 100%;
+}
+
+/* 封面图片 */
+.cover-img {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+}
+
+.play-btn-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100rpx;
+  height: 100rpx;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(10rpx);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 40rpx;
+  border: 2rpx solid rgba(255,255,255,0.6);
+  z-index: 2;
+}
+
+/* 弹窗 */
+.modal-mask {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+/* 管理员密码弹窗 */
+.admin-password-modal {
+  width: 620rpx;
+  background: #fff;
+  border-radius: 32rpx;
+  padding: 50rpx 40rpx;
+}
+
+.password-input-wrapper {
+  margin-bottom: 40rpx;
+}
+
+.password-input {
+  width: 100%;
+  height: 80rpx;
+  border-radius: 16rpx;
+  background: #F5F5F7;
+  padding: 0 24rpx;
+  box-sizing: border-box;
+  font-size: 32rpx;
+  text-align: center;
+}
+
+.modal-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.modal-btn {
+  flex: 1;
+  height: 80rpx;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cancel-btn {
+  background: #F5F5F7;
+  color: #666;
+}
+
+.confirm-btn {
+  background: #000;
+  color: #fff;
+}
+
+.close-btn {
+  position: absolute;
+  top: 20rpx;
+  right: 20rpx;
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36rpx;
+  color: #999;
+}
+
+.modal-box {
+  width: 620rpx;
+  background: #fff;
+  border-radius: 32rpx;
+  padding: 50rpx 40rpx;
+}
+.modal-header {
+  margin-bottom: 40rpx;
+  text-align: center;
+  position: relative;
+}
+.modal-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #000;
+}
+.input-label {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 16rpx;
+  font-weight: 600;
+}
+.modal-input {
+  width: 100%;
+  height: 80rpx;
+  border-radius: 16rpx;
+  background: #F5F5F7;
+  padding: 0 24rpx;
+  box-sizing: border-box;
+  margin-bottom: 30rpx;
+}
+.file-upload-btn {
+  background: #F5F5F7;
+  padding: 30rpx;
+  border-radius: 16rpx;
+  text-align: center;
+  color: #999;
+  font-size: 28rpx;
+  margin-bottom: 40rpx;
+  border: 1rpx solid #E5E5EA;
+}
+.file-upload-btn.uploaded {
+  background: #EBF9F1;
+  color: #00C74E;
+  border-color: #00C74E;
+  font-weight: 600;
+}
+.modal-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 20rpx;
+}
+.modal-btn {
+  padding: 16rpx 32rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+}
+.modal-btn.cancel {
+  background: #E5E5EA;
+}
+.modal-btn.confirm {
+  background: #000;
+  color: #fff;
+}
+
+/* === 管理员弹窗预览图 === */
+.upload-preview {
+  width: 100%;
+  height: 300rpx;
+  background: #000;
+  border-radius: 16rpx;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 40rpx;
+}
+
+.preview-img {
+  width: 100%;
+  height: 100%;
+  opacity: 0.8;
+}
+
+.preview-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 28rpx;
+}
+
+.re-upload-tip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 24rpx;
+  text-align: center;
+  padding: 10rpx 0;
+}

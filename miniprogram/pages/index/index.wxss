@@ -2,14 +2,34 @@
 page { background-color: #F9F9F9; height: 100%; overflow: hidden; }
 .index-page { height: 100%; display: flex; flex-direction: column; padding: 120rpx 60rpx 80rpx; box-sizing: border-box; position: relative; }
 
+/* 保持首页输入左对齐 */
+input, textarea { text-align: left; }
+
 /* 消失动画 */
 .fade-out { opacity: 0; transition: opacity 0.4s ease; }
 
 /* 头部底部样式保持不变 */
 .header-section { text-align: center; transition: 0.4s; }
 .main-title { font-size: 64rpx; font-weight: 800; color: #1d1d1f; }
-.sub-title { font-size: 24rpx; font-weight: 600; color: #86868b; letter-spacing: 6rpx; }
-.footer-section { transition: 0.4s; }
+.sub-title { font-size: 24rpx; font-weight: 600; color: #86868b; letter-spacing: 2rpx; }
+
+/* 中间标题样式 */
+.center-title {
+  text-align: center;
+  transition: 0.4s;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+}
+.footer-section { 
+  transition: 0.4s; 
+  position: relative;
+  z-index: 50;
+  opacity: 1;
+  margin-top: auto;
+}
 .loc-grid { display: flex; gap: 20rpx; justify-content: center; }
 .chip { background: #fff; padding: 20rpx 30rpx; border-radius: 20rpx; display: flex; align-items: center; gap: 10rpx; font-size: 26rpx; font-weight: 600; box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.05); }
 .status.green { width: 12rpx; height: 12rpx; background: #34c759; border-radius: 50%; }
@@ -27,8 +47,8 @@ page { background-color: #F9F9F9; height: 100%; overflow: hidden; }
   position: absolute;
   top: 50%; left: 0; width: 100%;
   transform: translateY(-50%);
-  display: flex; 
-  justify-content: center; 
+  display: flex;
+  justify-content: center;
   gap: 16rpx; /* 字间距稍微拉开一点点，配合滚动距离 */
   z-index: 120; /* 文字在最上层，在遮罩层上方 */
   padding-left: 10rpx;
@@ -195,7 +215,7 @@ page { background-color: #F9F9F9; height: 100%; overflow: hidden; }
     /* 此时 animation-timing-function 应该是减速 (ease-out) */
   }
   /* 100%的时间点：掉出屏幕 */
-  100% { 
+  100% {
     /* 
        translateY 设为 600rpx 或更大，确保完全掉出视线
        rotate 设为 1000deg+，下落时旋转加速
@@ -228,3 +248,300 @@ page { background-color: #F9F9F9; height: 100%; overflow: hidden; }
   opacity: 1; /* 激活时显示遮罩，齿轮跳到布后面 */
 }
 
+/* ================= 高仿微信底部授权弹窗样式 ================= */
+
+/* 黑色半透明遮罩 */
+.auth-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 9999;
+  display: flex; flex-direction: column; justify-content: flex-end; /* 底部对齐 */
+  opacity: 1; transition: opacity 0.3s;
+}
+
+/* 底部面板 */
+.auth-panel {
+  background: #fff;
+  width: 100%;
+  border-radius: 24rpx 24rpx 0 0; /* 上方圆角 */
+  padding: 40rpx 40rpx 80rpx; /* 底部留够安全距离 */
+  box-sizing: border-box;
+  transform: translateY(100%); /* 初始在屏幕外 */
+  animation: slideUp 0.35s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* 头部信息 */
+.auth-header {
+  display: flex; flex-direction: column; align-items: flex-start;
+  margin-bottom: 30rpx;
+}
+.app-icon {
+  width: 64rpx; height: 64rpx; background: #333; border-radius: 50%; margin-bottom: 20rpx;
+}
+.app-name {
+  font-size: 30rpx; font-weight: 600; color: #000; margin-bottom: 10rpx;
+}
+.auth-apply {
+  font-size: 34rpx; font-weight: 700; color: #000;
+}
+
+/* 权限描述 */
+.auth-desc {
+  display: flex; align-items: center; gap: 10rpx;
+  padding-bottom: 40rpx; border-bottom: 1rpx solid #f1f1f1;
+  margin-bottom: 30rpx;
+}
+.desc-dot {
+  width: 8rpx; height: 8rpx; background: #888; border-radius: 50%;
+}
+.auth-desc text {
+  font-size: 26rpx; color: #888;
+}
+
+/* 资料填写表单 (伪装成列表) */
+.info-form {
+  margin-bottom: 60rpx;
+}
+.form-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 30rpx 0;
+  border-bottom: 1rpx solid #f1f1f1;
+}
+.avatar-item {
+  padding-top: 0;
+}
+
+.label {
+  font-size: 30rpx; font-weight: 600; color: #333; width: 120rpx;
+}
+
+/* 伪装头像 */
+.avatar-wrapper {
+  display: flex; align-items: center; gap: 10rpx;
+}
+.default-avatar {
+  width: 64rpx; height: 64rpx; background: #eee; border-radius: 8rpx;
+}
+.arrow {
+  width: 16rpx; height: 16rpx;
+  border-top: 4rpx solid #ccc; border-right: 4rpx solid #ccc;
+  transform: rotate(45deg);
+}
+
+/* 输入框 */
+.wechat-input {
+  flex: 1; text-align: left;
+  font-size: 30rpx; color: #000; height: 80rpx;
+}
+
+/* 按钮组 */
+.auth-btns {
+  display: flex; gap: 30rpx;
+}
+.auth-btns button {
+  margin: 0; 
+  padding: 0;
+  border: none;
+  border-radius: 12rpx; 
+  font-size: 32rpx;
+  font-weight: 600;
+  height: 90rpx; 
+  line-height: 90rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.auth-btns button::after { border: none; }
+
+.btn-reject {
+  flex: 1; 
+  background: #f2f2f2; 
+  color: #07C160;
+}
+
+.btn-allow {
+  flex: 1; 
+  background: #07C160; /* 官方微信绿 */
+  color: #fff;
+}
+.btn-allow:active {
+  background: #06ad56;
+  }
+
+/* ================= 授权引导弹窗样式 ================= */
+.setting-modal-mask {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  z-index: 9990;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.modal-box {
+  width: 600rpx; background: #fff; border-radius: 20rpx;
+  padding: 50rpx 40rpx; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.3);
+  animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.modal-title {
+  font-size: 34rpx; font-weight: 700; color: #1d1d1f; margin-bottom: 20rpx;
+}
+
+.modal-desc {
+  font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5;
+}
+
+.modal-desc-minor {
+  font-size: 22rpx; color: #aaa; margin-top: 30rpx;
+}
+
+.modal-btn-confirm {
+  width: 100%; height: 90rpx; background: #007AFF; color: #fff;
+  border-radius: 45rpx; display: flex; align-items: center; justify-content: center;
+  font-size: 30rpx; font-weight: 600;
+}
+.modal-btn-confirm::after { border: none; }
+
+@keyframes popIn {
+  from { transform: scale(0.8); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* ================= 强制授权弹窗样式 ================= */
+/* 强制全屏遮罩，禁止点击底部 */
+.auth-modal-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.auth-box {
+  width: 600rpx; background: #fff; border-radius: 24rpx;
+  padding: 60rpx 40rpx; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.4);
+}
+
+.auth-icon { font-size: 80rpx; margin-bottom: 30rpx; }
+.auth-title { font-size: 36rpx; font-weight: 800; color: #1d1d1f; margin-bottom: 20rpx; }
+.auth-desc { font-size: 28rpx; color: #666; line-height: 1.6; margin-bottom: 50rpx; }
+
+.auth-btn {
+  background: #007AFF; color: #fff; border-radius: 50rpx;
+  font-size: 30rpx; font-weight: 600; width: 100%;
+}
+.auth-btn::after { border: none; }
+
+/* ================= 【新版】现代极简弹窗样式 ================= */
+
+/* 1. 遮罩层：加深一点背景，突出主体 */
+.custom-modal-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.7); /* 深色遮罩 */
+  backdrop-filter: blur(10px); /* 强力毛玻璃 */
+  z-index: 12000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 2. 弹窗卡片：更圆润，更宽 */
+.custom-modal-box {
+  width: 620rpx; /* 稍微宽一点 */
+  background: #ffffff;
+  border-radius: 48rpx; /* 超大圆角 */
+  padding: 70rpx 50rpx; /* 增加内边距，留白更多 */
+  display: flex; flex-direction: column; align-items: center;
+  box-shadow: 0 40rpx 80rpx rgba(0, 0, 0, 0.2); /* 悬浮感投影 */
+  
+  /* 弹性弹出动画 */
+  transform: scale(0.8); opacity: 0;
+  animation: springPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes springPop {
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* 3. 图标：大而黑，无背景 */
+.modal-icon-new {
+  width: 110rpx; height: 110rpx;
+  margin-bottom: 40rpx;
+  /* 纯黑图标，不需要透明度，强调警示 */
+}
+
+/* 4. 标题：特粗黑体 */
+.modal-title-new {
+  font-size: 40rpx;
+  font-weight: 900; /* 最粗 */
+  color: #000000;
+  margin-bottom: 24rpx;
+  letter-spacing: 2rpx;
+}
+
+/* 5. 文字内容区域 */
+.modal-content-new {
+  text-align: center;
+  margin-bottom: 60rpx;
+}
+
+.content-main {
+  font-size: 30rpx;
+  color: #333333;
+  font-weight: 600;
+  margin-bottom: 12rpx;
+}
+
+.content-sub {
+  font-size: 26rpx;
+  color: #999999; /* 浅灰色辅助说明 */
+}
+
+/* 6. 按钮：纯黑、扁平、全宽 */
+.modal-btn-new {
+  width: 100% !important;
+  height: 100rpx;
+  line-height: 100rpx;
+  background-color: #000000;
+  color: #ffffff;
+  font-size: 32rpx;
+  font-weight: 600;
+  border-radius: 36rpx; /* 稍微方一点的圆角，更显科技感 */
+  padding: 0;
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.3); /* 强烈的黑色投影 */
+  transition: transform 0.1s ease;
+}
+
+.modal-btn-new::after { border: none; }
+
+.modal-btn-new:active {
+  transform: scale(0.96); /* 点击时的微缩反馈 */
+}
+
+/* ================= 成功提示弹窗样式 ================= */
+.success-modal {
+  width: 320rpx !important; /* 小尺寸，类似 toast */
+  padding: 40rpx 30rpx !important;
+  min-height: auto;
+}
+
+.success-modal .modal-icon-new {
+  width: 60rpx !important;
+  height: 60rpx !important;
+  margin-bottom: 20rpx !important;
+}
+
+.success-modal .modal-title-new {
+  font-size: 28rpx !important;
+  margin-bottom: 0 !important;
+  letter-spacing: 0 !important;
+}
+
+.success-modal .modal-content-new {
+  margin-bottom: 0 !important;
+  display: none; /* 成功提示不需要内容区域 */
+}

@@ -1,0 +1,126 @@
+/* miniprogram/pages/blocked/blocked.wxss */
+page {
+  background-color: #ffffff;
+  height: 100%;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 60rpx;
+  /* 保持之前的下移调整 */
+  padding-top: 300rpx; 
+  box-sizing: border-box;
+  height: 100vh;
+  position: relative;
+}
+
+/* 浅灰色圆形底托 */
+.icon-box {
+  width: 160rpx;
+  height: 160rpx;
+  background-color: #f5f5f5;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 40rpx;
+}
+
+/* 图标包裹层，用于定位感叹号 */
+.icon-wrapper {
+  position: relative;
+  width: 80rpx;
+  height: 80rpx;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.blocked-icon {
+  width: 100%;
+  height: 100%;
+  opacity: 0.9; /* 稍微深一点 */
+}
+
+/* 中间的小感叹号 */
+.symbol {
+  position: absolute;
+  color: #ffffff; /* 白色，形成镂空效果 */
+  font-size: 44rpx; /* 大小可以微调 */
+  font-weight: 900; /* 特粗 */
+  z-index: 10;
+  top: 45%; /* 微调垂直位置，确保视觉居中 */
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: Arial, sans-serif; /* 确保感叹号形状好看 */
+}
+
+.title {
+  font-size: 44rpx;
+  font-weight: bold;
+  color: #000000;
+  margin-bottom: 20rpx;
+}
+
+.desc {
+  color: #666666;
+  font-size: 28rpx;
+  line-height: 1.6;
+  text-align: center;
+  margin-bottom: 80rpx;
+}
+
+.btn-area {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.copy-btn {
+  background-color: #07C160 !important; /* 微信官方绿色 */
+  color: #ffffff !important;
+  width: 100% !important;
+  border-radius: 100rpx;
+  font-size: 30rpx;
+  font-weight: 500;
+  padding: 24rpx 0;
+  box-shadow: 0 8rpx 20rpx rgba(7, 193, 96, 0.3); /* 微信绿色阴影 */
+}
+
+.btn-hover {
+  background-color: #06ad56 !important; /* 微信绿色按下状态 */
+  transform: scale(0.98);
+}
+
+.tips {
+  margin-top: 30rpx;
+  font-size: 24rpx;
+  color: #999999;
+}
+
+.loading-area {
+  position: absolute;
+  bottom: 80rpx;
+  display: flex;
+  align-items: center;
+  font-size: 24rpx;
+  color: #cccccc;
+  gap: 10rpx;
+}
+
+.status-dot {
+  width: 10rpx;
+  height: 10rpx;
+  background-color: #cccccc;
+  border-radius: 50%;
+  animation: breathe 2s infinite ease-in-out;
+}
+
+@keyframes breathe {
+  0% { opacity: 0.3; }
+  50% { opacity: 1; }
+  100% { opacity: 0.3; }
+}

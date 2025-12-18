@@ -1,185 +1,131 @@
-/* pages/launch/launch.wxss */
-
-/* 全局基础 */
+/* pages/pagenew/pagenew.wxss */
 page {
-  background-color: #F5F6F8;
-  height: 100%;
+  background-color: #F2F2F7;
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, sans-serif;
-  overflow: hidden; /* 防止页面整体滚动 */
+  height: 100%; overflow: hidden;
 }
+.container { height: 100%; display: flex; flex-direction: column; }
 
-.container {
-  width: 100%; height: 100%;
-  position: relative;
-}
-
-/* 返回图标 */
-.back-icon {
-  position: absolute;
-  top: 80rpx;
-  left: 40rpx;
-  width: 48rpx;
-  height: 48rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(10rpx);
+/* === 1. 顶部导航 === */
+.nav-header {
+  padding-top: 100rpx;
+  padding-bottom: 20rpx;
+  padding-left: 30rpx;
+  padding-right: 30rpx;
   display: flex;
   align-items: center;
-  justify-content: center;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
-  z-index: 100;
-  transition: all 0.3s ease;
+  justify-content: space-between;
+  position: relative; z-index: 50;
 }
 
-.back-icon:active {
-  transform: scale(0.95);
-  background: rgba(255, 255, 255, 0.8);
+.nav-back {
+  width: 80rpx; height: 80rpx;
+  display: flex; align-items: center; justify-content: flex-start;
+}
+.icon-back { font-size: 60rpx; font-weight: 300; color: #000; padding-bottom: 10rpx; }
+.nav-placeholder { width: 80rpx; }
+
+/* Logo */
+.brand-box { text-align: center; }
+.brand-main {
+  font-family: 'Didot', 'Times New Roman', serif;
+  font-size: 80rpx; font-weight: 900; color: #111;
+  letter-spacing: -2rpx; line-height: 1; font-style: normal;
+}
+.brand-sub {
+  font-size: 16rpx; letter-spacing: 8rpx; color: #666;
+  text-transform: uppercase; margin-top: 8rpx; display: block;
 }
 
-.back-icon-inner {
-  width: 16rpx;
-  height: 16rpx;
-  border-left: 2.5rpx solid #333;
-  border-bottom: 2.5rpx solid #333;
-  transform: rotate(45deg);
-  margin-left: 4rpx;
+/* 管理员条 */
+.admin-bar {
+  text-align: center; font-size: 24rpx; font-weight: bold; color: #FF3B30;
+  margin-bottom: 10rpx; display: flex; justify-content: center; align-items: center; gap: 20rpx;
+}
+.btn-exit {
+  background: #000; color: #fff; padding: 4rpx 16rpx; border-radius: 8rpx; font-size: 20rpx;
 }
 
-/* 顶部 Header */
-.header {
-  height: 200rpx; padding-top: 100rpx;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  transition: 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-  z-index: 50; position: relative;
+/* === 2. 卡片区域 === */
+.swiper-container { flex: 1; padding-top: 10rpx; padding-bottom: 80rpx; }
+.card-swiper { width: 100%; height: 100%; }
+.card-wrapper { display: flex; align-items: center; justify-content: center; }
+
+.apple-card {
+  width: 620rpx; height: 920rpx;
+  background: #fff; border-radius: 40rpx;
+  box-shadow: 0 40rpx 90rpx rgba(0,0,0,0.1);
+  display: flex; flex-direction: column; overflow: hidden;
+  transition: 0.5s; transform: scale(0.92); opacity: 0.7; position: relative;
 }
-.header-title { font-size: 40rpx; font-weight: 800; color: #1d1d1f; letter-spacing: 2rpx; }
-.header-subtitle { font-size: 20rpx; font-weight: 700; color: #999; letter-spacing: 4rpx; margin-top: 8rpx; }
+.apple-card.active { transform: scale(1); opacity: 1; z-index: 10; }
 
-/* 管理员标记 */
-.admin-badge {
-  position: absolute; top: 110rpx; right: 40rpx;
-  background: #000; color: #fff; font-size: 20rpx; font-weight: bold;
-  padding: 6rpx 12rpx; border-radius: 8rpx; opacity: 0; transition: 0.3s;
-  z-index: 60;
+/* 图片层 */
+.card-cover {
+  width: 100%; height: 75%; background: #eee; position: relative;
 }
-.admin-badge.show { opacity: 1; }
-
-/* === 1. 首页层 (Landing) === */
-.landing-layer {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  display: flex; flex-direction: column;
-  padding: 0 40rpx 80rpx; box-sizing: border-box;
-  transition: 0.5s; z-index: 10;
+.product-cover-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.cover-img { width: 100%; height: 100%; object-fit: cover; }
+/* 跳转号码标识 */
+.jump-number-badge {
+  position: absolute;
+  top: 20rpx;
+  left: 20rpx;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+  padding: 8rpx 16rpx;
+  border-radius: 20rpx;
+  z-index: 25;
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.3);
 }
 
-.card-area {
-  flex: 1; display: flex; flex-direction: column; justify-content: center;
-}
-
-/* 动画单元基础类 */
-.anim-item { transition: 0.8s cubic-bezier(0.6, -0.28, 0.735, 0.045); }
-
-/* 封面图容器 */
-.cover-box {
-  width: 100%; aspect-ratio: 1/1;
-  background: #fff; border-radius: 60rpx;
-  box-shadow: 0 40rpx 80rpx rgba(0,0,0,0.06);
-  position: relative; overflow: hidden; margin-bottom: 40rpx;
-}
-.cover-img { width: 100%; height: 100%; }
-
-/* 文本 */
-.text-box { margin-bottom: 40rpx; padding: 0 20rpx; }
-.p-title { font-size: 56rpx; font-weight: 800; color: #1d1d1f; display: block; margin-bottom: 16rpx; }
-.p-desc { font-size: 28rpx; color: #86868b; line-height: 1.5; display: block; }
-
-/* 按钮 */
-.main-btn {
-  height: 110rpx; width: 100%;
-  background: linear-gradient(135deg, #fbaeb1 0%, #FF6B95 100%);
-  border-radius: 40rpx; color: #fff; font-weight: 700; font-size: 32rpx; letter-spacing: 2rpx;
+/* 管理员按钮 */
+.admin-btn {
+  position: absolute; top: 20rpx; 
+  width: 80rpx; height: 80rpx;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.95);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 30rpx 60rpx rgba(255, 107, 149, 0.35);
+  z-index: 50; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.2);
 }
-.main-btn:active { transform: scale(0.96); }
+.btn-del { left: 20rpx; color: #FF3B30; font-weight: 900; font-size: 32rpx; }
+.btn-cam { right: 20rpx; font-size: 40rpx; color: #333; }
 
-/* === 💥 消散动画 (Scatter Effect) === */
-.landing-layer.scatter { pointer-events: none; }
-
-/* Header 飞走 */
-.landing-layer.scatter .header { transform: translateY(-200rpx); opacity: 0; }
-/* 封面图 左上飞 */
-.landing-layer.scatter .cover-box { transform: translate(-80rpx, -150rpx) scale(1.1) rotate(-5deg); opacity: 0; }
-/* 标题 左飞 */
-.landing-layer.scatter .p-title { transform: translateX(-150rpx); opacity: 0; transition-delay: 0.05s; }
-/* 描述 右飞 */
-.landing-layer.scatter .p-desc { transform: translateX(150rpx); opacity: 0; transition-delay: 0.1s; }
-/* 按钮 下沉 */
-.landing-layer.scatter .btn-box { transform: translateY(200rpx); opacity: 0; transition-delay: 0.15s; }
-
-
-/* === 2. 详情页层 (Detail) === */
-.detail-layer {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  background: #fff; z-index: 20;
-  opacity: 0; pointer-events: none;
-  transform: scale(0.95); transition: all 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+/* 信息层 */
+.card-content {
+  flex: 1; padding: 0 40rpx; display: flex; align-items: center; justify-content: space-between;
 }
-.detail-layer.active { opacity: 1; pointer-events: auto; transform: scale(1); }
+.info-text { display: flex; flex-direction: column; gap: 8rpx; flex: 1; }
+.p-title { font-size: 48rpx; font-weight: 700; color: #111; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.p-price { font-size: 36rpx; color: #666; }
 
-/* 返回按钮 */
-.back-btn {
-  position: fixed; top: 100rpx; left: 40rpx; width: 80rpx; height: 80rpx;
-  background: rgba(0,0,0,0.05); border-radius: 50%; backdrop-filter: blur(10px);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
-}
-.icon-back { width: 24rpx; height: 24rpx; border-left: 4rpx solid #333; border-bottom: 4rpx solid #333; transform: rotate(45deg); margin-left: 6rpx; }
+.p-title.editable, .p-price.editable { border-bottom: 2rpx dashed #ccc; width: fit-content; }
 
-/* 详情内容 */
-.detail-content { padding-top: 0; min-height: 100vh; padding-bottom: 200rpx; }
-.detail-img { width: 100%; display: block; animation: fadeInUp 0.8s ease forwards; opacity: 0; transform: translateY(60rpx); }
+/* 装饰性空按钮 */
+.btn-go { width: 80rpx; height: 80rpx; background: #F2F2F7; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.icon-arrow { width: 16rpx; height: 16rpx; border-top: 4rpx solid #333; border-right: 4rpx solid #333; transform: rotate(45deg); margin-left: -4rpx; }
+.admin-icon { font-size: 32rpx; background: #fff; }
 
-@keyframes fadeInUp { to { opacity: 1; transform: translateY(0); } }
+/* 新建卡片 */
+.add-card { border: 4rpx dashed #ccc; box-shadow: none; background: #f9f9f9; align-items: center; justify-content: center; gap: 20rpx; }
+.add-icon { font-size: 80rpx; color: #ccc; }
+.add-text { font-size: 24rpx; font-weight: 700; color: #999; letter-spacing: 2rpx; }
 
-.footer-end { text-align: center; color: #ccc; font-size: 24rpx; padding: 60rpx 0; letter-spacing: 4rpx; }
-
-/* === 管理员控件样式 === */
-.admin-edit-btn {
-  position: absolute; background: rgba(0,0,0,0.7); color: #fff; font-size: 24rpx; font-weight: bold;
-  padding: 12rpx 24rpx; border-radius: 30rpx; z-index: 20; backdrop-filter: blur(4px);
-}
-.cover-pos { top: 30rpx; right: 30rpx; }
-
-.admin-upload-bar {
-  position: fixed; bottom: 60rpx; left: 0; width: 100%;
-  display: flex; justify-content: center; gap: 20rpx; z-index: 100;
-}
-.upload-pill, .clear-pill {
-  background: #1d1d1f; color: #fff; padding: 20rpx 40rpx; border-radius: 50rpx;
-  font-size: 24rpx; font-weight: bold; box-shadow: 0 20rpx 40rpx rgba(0,0,0,0.2);
-}
-.clear-pill { background: #ff3b30; }
-
-/* === 密码弹窗 === */
-.modal-mask {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.4); backdrop-filter: blur(8px);
-  display: flex; justify-content: center; align-items: center;
-  opacity: 0; pointer-events: none; transition: 0.3s; z-index: 200;
-}
+/* 弹窗 */
+.modal-mask { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 200; opacity: 0; pointer-events: none; transition: 0.3s; }
 .modal-mask.active { opacity: 1; pointer-events: auto; }
-.modal-box { width: 560rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx; text-align: center; }
-.modal-title { font-size: 28rpx; font-weight: 800; color: #333; letter-spacing: 2rpx; margin-bottom: 40rpx; }
-.pwd-input { background: #F5F6F8; height: 100rpx; border-radius: 20rpx; text-align: center; font-size: 40rpx; margin-bottom: 40rpx; }
+.modal-box { background: #fff; width: 520rpx; padding: 50rpx; border-radius: 30rpx; text-align: center; }
+.modal-title { font-weight: 800; margin-bottom: 30rpx; }
+.pwd-input { background: #f5f5f5; height: 90rpx; margin: 30rpx 0; border-radius: 16rpx; text-align: center; font-size: 36rpx; }
 .modal-actions { display: flex; gap: 20rpx; }
-.btn { flex: 1; height: 80rpx; display: flex; align-items: center; justify-content: center; border-radius: 20rpx; font-size: 28rpx; font-weight: bold; }
-.btn.cancel { background: #f0f0f0; color: #999; }
-.btn.confirm { background: #1d1d1f; color: #fff; }
-
-/* Toast */
-.toast {
-  position: fixed; top: 180rpx; left: 50%; transform: translateX(-50%);
-  background: rgba(0,0,0,0.8); color: #fff; padding: 16rpx 32rpx; border-radius: 40rpx;
-  font-size: 24rpx; opacity: 0; transition: 0.3s; pointer-events: none; z-index: 300;
-}
-.toast.show { opacity: 1; top: 200rpx; }
+.btn { flex: 1; padding: 20rpx; border-radius: 16rpx; font-weight: bold; font-size: 28rpx; }
+.btn.cancel { background: #f0f0f0; color: #666; }
+.btn.confirm { background: #000; color: #fff; }

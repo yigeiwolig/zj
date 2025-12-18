@@ -1,22 +1,36 @@
 {
   "pages": [
-    "pages/index/index",
+    "pages/home/home",
+   "pages/index/index",
+    "pages/shop/shop",
+    "pages/ota/ota",
     "pages/products/products",
+    "pages/case/case",
     "pages/pagenew/pagenew",
-    "pages/adminLite/adminLite"
+    "pages/scan/scan",
+    "pages/blocked/blocked",
+    "pages/adminLite/adminLite",
+    "pages/paihang/paihang",
+    "pages/shouhou/shouhou"
   ],
   "window": {
+    "navigationStyle": "custom",
     "backgroundTextStyle": "dark",
     "navigationBarBackgroundColor": "#F9F9F9",
     "navigationBarTitleText": "MT-摩改社",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#F9F9F9"
   },
+  "renderer": "webview",
   "permission": {
     "scope.userLocation": {
-      "desc": "您的位置信息将用于提供精准的服务体验"
+      "desc": "我们需要您的位置来获取店铺的真实定位"
     }
   },
+  "requiredPrivateInfos": [
+    "getLocation",
+    "chooseLocation"
+  ],
   "style": "v2",
   "sitemapLocation": "sitemap.json",
   "lazyCodeLoading": "requiredComponents"

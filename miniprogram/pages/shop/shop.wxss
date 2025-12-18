@@ -1,0 +1,842 @@
+/* pages/shop/shop.wxss */
+page {
+  background-color: #F5F5F7;
+  color: #1D1D1F;
+  font-family: -apple-system, "SF Pro Display", sans-serif;
+  height: 100%;
+  overflow: hidden; 
+}
+
+/* ============ 通用组件 ============ */
+.btn-black {
+  background: #000; color: #fff; font-weight: 600; padding: 24rpx 40rpx;
+  border-radius: 60rpx; font-size: 30rpx; text-align: center;
+}
+.btn-black.full { width: 100%; box-sizing: border-box; }
+.editable { border-bottom: 2rpx dashed #999; display: inline-block; min-width: 40rpx; }
+
+/* ============ 1. 顶部导航 ============ */
+.nav-header {
+  position: absolute; top: 0; left: 0; width: 100%; height: 180rpx;
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding: 0 40rpx 20rpx; box-sizing: border-box;
+  background: rgba(245,245,247,0.9); backdrop-filter: blur(20px); z-index: 100;
+}
+.nav-left {
+  width: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+.nav-back-btn {
+  width: 80rpx;
+  height: 80rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.icon-back {
+  font-size: 60rpx;
+  font-weight: 300;
+  color: #000;
+  padding-bottom: 10rpx;
+}
+.brand-title { 
+  font-size: 38rpx; 
+  font-weight: 800; 
+  flex: 1;
+  text-align: center;
+}
+.admin-badge { background: #000; color: #fff; font-size: 18rpx; padding: 6rpx 10rpx; border-radius: 8rpx; }
+
+/* ============ 2. 主页面 ============ */
+.main-scroll { height: 100vh; padding-top: 180rpx; box-sizing: border-box; }
+
+/* Hero 轮播 */
+.hero-swiper-box { height: 500rpx; width: 100%; background: #000; position: relative; margin-bottom: 40rpx; }
+.hero-swiper, .hero-media { width: 100%; height: 100%; object-fit: cover; }
+.admin-del-media { position: absolute; top: 20rpx; right: 20rpx; background: red; color: #fff; width: 50rpx; height: 50rpx; border-radius: 50%; text-align: center; line-height: 50rpx; }
+
+/* Admin: 左右分开的上传按钮 */
+.admin-upload-row {
+  position: absolute; bottom: 30rpx; right: 30rpx;
+  display: flex; gap: 20rpx; z-index: 20;
+}
+.up-btn {
+  background: rgba(255,255,255,0.95); color: #000;
+  padding: 12rpx 24rpx; border-radius: 40rpx;
+  font-size: 24rpx; font-weight: 600;
+  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.2);
+}
+
+/* 产品列表 (单列大卡片) */
+.product-list { padding: 0 30rpx; display: flex; flex-direction: column; gap: 40rpx; }
+.prod-card {
+  background: #fff; border-radius: 30rpx; overflow: hidden;
+  box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.05); position: relative;
+  transition: 0.2s;
+}
+.prod-card:active { transform: scale(0.98); }
+.product-cover-wrapper {
+  position: relative;
+  width: 100%;
+  height: 400rpx;
+}
+.p-img { width: 100%; height: 400rpx; object-fit: cover; }
+.p-info { padding: 40rpx; }
+.p-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 34rpx; }
+.add-series-btn { text-align: center; padding: 60rpx; border: 4rpx dashed #ccc; border-radius: 30rpx; color: #999; font-weight: 600; }
+.admin-float { position: absolute; top: 20rpx; right: 20rpx; width: 60rpx; height: 60rpx; background: rgba(0,0,0,0.5); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24rpx; z-index: 15; }
+/* 跳转号码标识 */
+.jump-number-badge {
+  position: absolute;
+  top: 20rpx;
+  left: 20rpx;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+  padding: 8rpx 16rpx;
+  border-radius: 20rpx;
+  z-index: 20;
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.3);
+}
+
+/* ============ 3. 产品详情全屏弹窗 ============ */
+.full-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; z-index: 200; display: flex; flex-direction: column; transform: translateY(100%); transition: 0.4s cubic-bezier(0.19, 1, 0.22, 1); }
+.full-modal.active { transform: translateY(0); }
+.modal-nav { height: 180rpx; padding: 0 30rpx 20rpx; display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 1rpx solid #eee; flex-shrink: 0; }
+.nav-close { font-size: 44rpx; padding: 10rpx; color: #888; }
+.modal-title { font-weight: 700; font-size: 32rpx; }
+
+.modal-scroll { flex: 1; overflow-y: scroll; background: #fff; position: relative; z-index: 1; }
+.scroll-inner { padding-bottom: 50rpx; }
+/* 确保 scroll-view 不会覆盖底部按钮 */
+.modal-scroll {
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+.detail-images { margin-bottom: 40rpx; }
+.dimg-box { position: relative; }
+.dimg { width: 100%; display: block; }
+.admin-del-abs { position: absolute; top: 20rpx; right: 20rpx; background: red; color: #fff; width: 50rpx; height: 50rpx; border-radius: 50%; text-align: center; line-height: 50rpx; }
+.add-txt-btn { text-align: center; padding: 40rpx; color: #0071E3; font-weight: 600; font-size: 26rpx; }
+
+/* 选购配置 Header */
+.config-sec { padding: 0 40rpx; }
+.sec-header-row { display: flex; justify-content: space-between; align-items: center; margin: 60rpx 0 30rpx; }
+.sec-title { font-size: 34rpx; font-weight: 800; margin: 0; }
+/* 修改 2：参数对比按钮改成纯黑色，简约风格 */
+.btn-compare {
+  background: #000000;  /* 纯黑背景 */
+  color: #ffffff;       /* 白色文字 */
+  font-size: 26rpx;
+  padding: 12rpx 30rpx;
+  border-radius: 40rpx;
+  font-weight: 600;
+  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.2);
+}
+.cfg-group { margin-bottom: 60rpx; }
+.cfg-label { font-size: 24rpx; color: #86868b; font-weight: 600; margin-bottom: 20rpx; }
+
+/* 型号列表 */
+.model-item { padding: 30rpx; border: 2rpx solid #eee; border-radius: 16rpx; margin-bottom: 20rpx; display: flex; justify-content: space-between; align-items: center; position: relative; }
+.model-item.selected { border-color: #0071E3; background: rgba(0,113,227,0.03); }
+.m-name { font-weight: 600; font-size: 30rpx; }
+.m-desc { font-size: 24rpx; color: #888; display: block; margin-top: 6rpx; }
+.m-price { font-weight: 600; }
+/* 修改 1：加大管理员删除按钮的间距，防止点错 */
+.admin-del-mini {
+  position: absolute;
+  top: 0;           /* 贴顶 */
+  right: 0;         /* 贴右 */
+  padding: 20rpx;   /* 增加点击范围（关键）*/
+  color: red;
+  font-size: 28rpx;
+  z-index: 10;      /* 确保在最上层 */
+  font-weight: bold;
+}
+
+/* 选项 Grid (图上字下) */
+.opt-grid { display: flex; flex-wrap: wrap; gap: 20rpx; }
+.opt-card { width: 30%; flex-grow: 1; border: 2rpx solid #eee; border-radius: 16rpx; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.opt-card.selected { border-color: #0071E3; background: rgba(0,113,227,0.03); }
+.opt-img { width: 100%; height: 160rpx; background: #f0f0f0; object-fit: cover; }
+.opt-info { padding: 20rpx 10rpx; width: 100%; box-sizing: border-box; }
+.opt-name { font-size: 26rpx; font-weight: 600; display: block; }
+.opt-sub { font-size: 22rpx; color: #666; }
+.admin-add-icon { position: absolute; top: 10rpx; right: 10rpx; font-size: 20rpx; background: #eee; padding: 6rpx; border-radius: 6rpx; }
+.admin-del-corner { position: absolute; bottom: 0; right: 0; background: red; color: #fff; font-size: 18rpx; padding: 4rpx 10rpx; border-top-left-radius: 10rpx; }
+.opt-card.add-btn { height: 160rpx; justify-content: center; font-size: 50rpx; color: #ccc; border: 2rpx dashed #ccc; }
+
+/* 配件列表 (垂直列表) */
+.acc-list-v { display: flex; flex-direction: column; gap: 20rpx; }
+.acc-row-card {
+  position: relative; /* 确保删除按钮相对于卡片定位 */
+  display: flex; align-items: center; padding: 20rpx; 
+  background: #fff; border: 2rpx solid #eee; border-radius: 20rpx; transition: 0.2s;
+  overflow: hidden; /* 防止溢出 */
+}
+.acc-row-card.selected { border-color: #0071E3; background: rgba(0,113,227,0.02); }
+.acc-thumb { width: 100rpx; height: 100rpx; border-radius: 12rpx; background: #eee; margin-right: 20rpx; }
+.acc-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+.acc-n { font-size: 28rpx; font-weight: 600; }
+.acc-p { font-size: 26rpx; color: #666; margin-top: 6rpx; }
+
+/* ======================================================== */
+/* 优化后的配件按钮：胶囊样式，更大，更好点 */
+/* ======================================================== */
+.acc-add-btn {
+  /* 1. 大小与形状 */
+  min-width: 100rpx;        /* 保证最小宽度 */
+  height: 56rpx;            /* 高度增加，手指好点 */
+  border-radius: 28rpx;     /* 胶囊圆角 */
+  padding: 0 24rpx;         /* 左右留白 */
+  
+  /* 2. 默认状态 (未选中)：模仿 Apple "获取" 按钮 */
+  background: #F2F2F7;      /* 浅灰背景 */
+  color: #0071E3;           /* 蓝色文字 */
+  font-size: 26rpx;
+  font-weight: 700;
+  
+  /* 3. 布局 */
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
+  
+  /* 4. 位置修正 */
+  margin-left: 20rpx;  
+  margin-right: 20rpx;      /* 稍微离边缘远一点点 */
+  transition: all 0.2s;     /* 颜色变化过渡动画 */
+}
+
+/* 选中状态 (变蓝) */
+.acc-add-btn.checked { 
+  background: #0071E3;      /* 蓝色背景 */
+  color: #fff;              /* 白色文字 */
+  box-shadow: 0 4rpx 10rpx rgba(0, 113, 227, 0.3); /* 增加一点阴影 */
+}
+
+/* 点击时的反馈 - 已移到统一的动画样式区域 */
+
+
+.admin-float-thumb { position: absolute; top: 10rpx; left: 10rpx; background: rgba(0,0,0,0.5); color: #fff; font-size: 18rpx; padding: 4rpx; border-radius: 4rpx; }
+
+/* 底部结算 */
+.modal-footer { height: 160rpx; border-top: 1rpx solid #eee; background: rgba(255,255,255,0.9); backdrop-filter: blur(20px); padding: 0 40rpx; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.f-price { font-size: 44rpx; font-weight: 800; }
+
+/* ============ 4. 对比表格 ============ */
+.overlay { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; border-radius: 40rpx 40rpx 0 0; transform: translateY(110%); transition: 0.3s; padding-bottom: 60rpx; box-shadow: 0 -10rpx 40rpx rgba(0,0,0,0.1); }
+.overlay.active { transform: translateY(0); }
+.overlay-head { display: flex; justify-content: space-between; padding: 30rpx; border-bottom: 1rpx solid #eee; font-weight: 700; }
+.specs-table { padding: 30rpx; }
+.sp-row { display: flex; border-bottom: 1rpx solid #eee; }
+.sp-row.header { background: #F9F9F9; font-weight: 700; border-radius: 10rpx; border: none; }
+/* ========================================= */
+/* 3. 对比表格样式微调 (适配动态列) */
+/* ========================================= */
+.sp-cell { 
+  flex: 1; 
+  padding: 20rpx 10rpx; 
+  text-align: center; 
+  font-size: 26rpx; 
+  /* 允许文字换行，防止列太多挤爆 */
+  word-wrap: break-word; 
+  word-break: break-all; 
+}
+.sp-cell.label { width: 120rpx; flex: none; text-align: left; font-weight: 600; color: #333; }
+.sp-cell.admin-w { width: 50rpx; flex: none; color: red; }
+
+/* ============ 5. 配件详情 ============ */
+.acc-detail-hero { width: 100%; min-height: 400rpx; background: #fff; display: flex; flex-direction: column; align-items: center; }
+.acc-detail-info { padding: 40rpx; }
+.acc-d-name { font-size: 40rpx; font-weight: 800; margin-bottom: 10rpx; }
+.acc-d-price { font-size: 32rpx; color: #333; font-weight: 600; margin-bottom: 30rpx; }
+.acc-d-desc { font-size: 28rpx; color: #666; line-height: 1.6; }
+
+/* ============================================================== */
+/* 1. 新增：自定义顶部错误提示 (替代 ugly toast) */
+/* ============================================================== */
+.top-error-toast {
+  position: fixed; top: -100rpx; left: 0; width: 100%;
+  height: 80rpx; line-height: 80rpx;
+  background: #FF3B30; color: #fff;
+  text-align: center; font-size: 28rpx; font-weight: 600;
+  z-index: 9999;
+  transition: top 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  box-shadow: 0 4rpx 10rpx rgba(255, 59, 48, 0.3);
+}
+.top-error-toast.show { top: 0; }
+
+/* ============================================================== */
+/* 2. 加入成功弹窗 (Success Modal) - 优化层级和美观 */
+/* ============================================================== */
+.success-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(5px);
+  z-index: 900; display: flex; align-items: center; justify-content: center; /* 确保比 detail modal (200) 高 */
+}
+.success-box {
+  background: #fff; width: 600rpx; border-radius: 50rpx; padding: 70rpx 50rpx; /* 更圆润 */
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.15);
+}
+.s-icon {
+  width: 120rpx; height: 120rpx; background: #E1F8E8; color: #00C853;
+  border-radius: 50%; font-size: 60rpx; line-height: 120rpx; font-weight: bold;
+  margin-bottom: 40rpx;
+}
+.s-title { font-size: 36rpx; font-weight: 800; color: #1D1D1F; margin-bottom: 16rpx; }
+.s-desc { font-size: 26rpx; color: #86868b; margin-bottom: 50rpx; }
+
+.s-btn-row { width: 100%; display: flex; gap: 20rpx; }
+.s-btn {
+  flex: 1; height: 90rpx; line-height: 90rpx; text-align: center; /* 更高 */
+  border-radius: 45rpx; font-size: 30rpx; font-weight: 600;
+}
+.s-btn.outline { border: 2rpx solid #E5E5EA; color: #1D1D1F; background: #fff; }
+.s-btn.fill { background: #000; color: #fff; }
+.s-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ============================================================== */
+/* 2. 结算页美化 (Checkout Modal) */
+/* ============================================================== */
+/* 覆盖全屏，从下往上 */
+.full-screen-overlay {
+  height: 90% !important; /* 留出一点顶部 */
+  background: #F5F5F7 !important; /* 整体灰底 */
+  display: flex; flex-direction: column;
+  z-index: 500; /* 确保层级正确 */
+}
+
+.checkout-header {
+  padding: 30rpx 40rpx; background: #fff;
+  display: flex; justify-content: space-between; align-items: center;
+  border-radius: 40rpx 40rpx 0 0;
+  border-bottom: 1rpx solid #f5f5f7;
+}
+.co-title { font-size: 32rpx; font-weight: 700; }
+
+.checkout-scroll { flex: 1; overflow-y: auto; }
+/* ============================================================== */
+/* 2. 优化：订单确认页 (宽松布局) */
+/* ============================================================== */
+.checkout-body {
+  padding: 40rpx; /* 加大内边距 */
+  padding-bottom: 200rpx;
+}
+
+/* 分组标题 */
+.group-title {
+  font-size: 24rpx; color: #86868b; margin: 30rpx 0 16rpx 20rpx; font-weight: 600;
+}
+
+/* 白色卡片容器 - 优化间距 */
+.group-card {
+  background: #fff; border-radius: 30rpx; padding: 10rpx 40rpx; /* 内部也宽松点 */
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.03); 
+  margin-bottom: 50rpx; /* 卡片之间拉开距离 */
+}
+
+/* --- 商品列表项 --- */
+.cart-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 30rpx 0; border-bottom: 1rpx solid #f5f5f7;
+}
+.cart-row:last-child { border-bottom: none; }
+
+.cr-info { flex: 1; padding-right: 20rpx; }
+.cr-name { font-size: 28rpx; font-weight: 600; color: #1D1D1F; margin-bottom: 6rpx; }
+.cr-spec { font-size: 22rpx; color: #86868b; }
+
+.cr-action { text-align: right; display: flex; flex-direction: column; align-items: flex-end; }
+.cr-price { font-size: 28rpx; font-weight: 700; color: #1D1D1F; margin-bottom: 10rpx; }
+
+/* 迷你加减器 */
+.mini-stepper {
+  display: flex; align-items: center; background: #F5F5F7; border-radius: 10rpx;
+}
+.ms-btn { width: 44rpx; height: 44rpx; line-height: 40rpx; text-align: center; color: #666; font-size: 28rpx; }
+.ms-btn:active { background: #e0e0e0; }
+.ms-num { font-size: 24rpx; font-weight: 600; width: 40rpx; text-align: center; }
+
+.empty-cart { padding: 60rpx; text-align: center; color: #ccc; font-size: 26rpx; }
+
+/* 总价行 */
+.total-row {
+  padding: 30rpx 0; border-top: 1rpx solid #f5f5f7;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.big-price { font-size: 40rpx; font-weight: 800; color: #0071E3; }
+
+/* --- 表单样式 (iOS List Style) - 优化 --- */
+.form-group { padding: 0 0 0 30rpx; /* 左边距留给分割线 */ }
+.form-item {
+  display: flex; align-items: center; height: 110rpx; /* 更高，手指好点 */
+  border-bottom: 1rpx solid #f5f5f5; padding-right: 30rpx;
+}
+.form-item:last-child { border-bottom: none; }
+
+.form-label { width: 140rpx; font-size: 28rpx; font-weight: 600; color: #1D1D1F; }
+.form-input { flex: 1; height: 100%; font-size: 28rpx; text-align: right; color: #333; }
+.ph-style { color: #ccc; }
+
+/* 底部按钮区 - 优化留白 */
+.checkout-footer {
+  padding: 30rpx 50rpx 80rpx; /* 左右边距加大 */
+  background: #fff; border-top: 1rpx solid #eee;
+}
+
+/* ============ 6. 订单 & 密码 (保留旧样式作为兼容) ============ */
+.order-sum { background: #f9f9f9; padding: 30rpx; border-radius: 20rpx; margin-bottom: 30rpx; font-size: 26rpx; font-weight: 600; }
+.oval-input { background: #F5F5F7; height: 90rpx; border-radius: 45rpx; margin-bottom: 20rpx; padding: 0 40rpx; font-size: 28rpx; }
+
+.pwd-mask { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 999; visibility: hidden; opacity: 0; transition: 0.3s; }
+.pwd-mask.active { visibility: visible; opacity: 1; }
+.pwd-box { background: #fff; padding: 60rpx; border-radius: 40rpx; width: 600rpx; text-align: center; }
+.pwd-tit { font-weight: 800; font-size: 36rpx; margin-bottom: 40rpx; }
+.pwd-input { border: 2rpx solid #e5e5ea; height: 90rpx; border-radius: 45rpx; margin-bottom: 40rpx; text-align: center; font-size: 40rpx; letter-spacing: 5rpx; }
+.pwd-cancel { margin-top: 30rpx; color: #888; font-size: 26rpx; }
+
+/* 1. 顶部退出按钮样式 (替代标题) */
+.btn-exit-center {
+  background: #000;      /* 黑色背景 */
+  color: #fff;           /* 白色文字 */
+  font-size: 28rpx;
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.2);
+}
+
+/* ============================================== */
+/* 1. 新增：自定义编辑弹窗样式 (美化版) */
+/* ============================================== */
+.custom-modal-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+}
+.custom-modal-box {
+  background: #fff; width: 600rpx; border-radius: 40rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center;
+}
+.custom-modal-title {
+  font-size: 34rpx; font-weight: 800; margin-bottom: 40rpx; color: #1D1D1F;
+}
+.custom-modal-input {
+  background: #F5F5F7; width: 100%; height: 100rpx;
+  border-radius: 50rpx; text-align: center; font-size: 32rpx;
+  margin-bottom: 40rpx;
+}
+.custom-modal-btn-row {
+  display: flex; gap: 30rpx; width: 100%;
+}
+.custom-btn {
+  flex: 1; height: 90rpx; line-height: 90rpx; text-align: center;
+  border-radius: 45rpx; font-weight: 600; font-size: 30rpx;
+}
+.c-btn-cancel { background: #F5F5F7; color: #888; }
+.c-btn-confirm { background: #000; color: #fff; }
+
+/* ======================================================== */
+/* 1. 修复删除按钮：去掉红色块，只要X，且保持右上角定位 */
+/* 覆盖之前所有的 admin-del 相关样式 */
+/* ======================================================== */
+.admin-del-corner, 
+.admin-del-corner-top, 
+.admin-del-mini {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  
+  /* 关键修改：背景变透明，去掉那个难看的红块 */
+  background: transparent !important; 
+  
+  /* 文字颜色保持红色，字体加大一点 */
+  color: #FF3B30 !important;
+  font-size: 36rpx !important; 
+  font-weight: 900;
+  
+  /* 保证点击区域够大，但看不见背景 */
+  width: 80rpx !important;
+  height: 80rpx !important;
+  
+  /* 让 X 处于右上角稍微偏内一点的位置，看起来舒服 */
+  display: flex;
+  align-items: flex-start; /* 靠上 */
+  justify-content: flex-end; /* 靠右 */
+  padding-top: 10rpx;
+  padding-right: 15rpx;
+  
+  z-index: 20;
+}
+
+/* ============================================== */
+/* 3. 修改：底部栏 (左右双按钮) */
+/* ============================================== */
+/* ========================================= */
+/* 1. 底部栏滑入滑出动画 */
+/* ========================================= */
+.modal-footer {
+  position: absolute; 
+  bottom: 0; 
+  left: 0; 
+  width: 100%;
+  height: 180rpx; 
+  padding: 20rpx 40rpx 60rpx; 
+  border-top: 1rpx solid #eee; 
+  background: rgba(255,255,255,0.95); 
+  backdrop-filter: blur(20px);
+  display: flex; 
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  z-index: 100;
+  
+  /* 核心：默认移出屏幕 */
+  transform: translateY(100%);
+  opacity: 0;
+  /* 动画参数：0.4秒，带一点点回弹 */
+  transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* 显示状态 */
+.modal-footer.visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.footer-btn-group {
+  width: 100%;
+  display: flex; 
+  gap: 20rpx;
+  align-items: center;
+  box-sizing: border-box;
+}
+.btn-cart {
+  flex: 1; background: #F5F5F7; color: #000;
+  height: 90rpx; line-height: 90rpx; text-align: center;
+  border-radius: 45rpx; font-weight: 700; font-size: 28rpx;
+  transition: all 0.1s ease;
+  position: relative;
+  z-index: 11;
+  pointer-events: auto;
+}
+.btn-buy {
+  flex: 1; background: #000; color: #fff;
+  height: 90rpx; line-height: 90rpx; text-align: center;
+  border-radius: 45rpx; font-weight: 700; font-size: 28rpx;
+  transition: all 0.1s ease;
+  position: relative;
+  z-index: 11;
+  pointer-events: auto;
+}
+
+/* 专门为购物车按钮添加点击效果 */
+.btn-cart:active {
+  transform: scale(0.96) !important;
+  opacity: 0.9 !important;
+  background: #E5E5E7 !important; /* 点击时背景变深 */
+}
+
+.btn-buy:active {
+  transform: scale(0.96) !important;
+  opacity: 0.9 !important;
+  background: #333 !important; /* 点击时背景变浅 */
+}
+
+/* ============================================== */
+/* 4. 修改：订单确认页 (地址上移，列表优化) */
+/* ============================================== */
+/* ======================================================== */
+/* 购物车列表样式优化 */
+/* ======================================================== */
+.cart-item {
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  padding: 24rpx 0; 
+  border-bottom: 1rpx solid #eee;
+}
+
+.cart-info-col {
+  flex: 1;
+  padding-right: 20rpx;
+}
+
+.cart-action-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10rpx;
+}
+
+.cart-price {
+  font-weight: bold;
+  font-size: 28rpx;
+}
+
+/* ======================================================== */
+/* 步进器样式 (加减数量) */
+/* ======================================================== */
+.stepper {
+  display: flex;
+  align-items: center;
+  background: #F5F5F7;
+  border-radius: 30rpx;
+  padding: 4rpx;
+}
+
+.step-btn {
+  width: 50rpx;
+  height: 50rpx;
+  line-height: 46rpx; /* 微调垂直居中 */
+  text-align: center;
+  font-weight: bold;
+  font-size: 32rpx;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2rpx 6rpx rgba(0,0,0,0.1);
+  color: #1D1D1F;
+}
+.step-btn:active {
+  background: #e5e5e5;
+}
+
+.step-num {
+  width: 60rpx;
+  text-align: center;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+/* ======================================================== */
+/* 1. 新增：全局点击反馈动画 (按压效果) */
+/* ======================================================== */
+/* 这个规则被下面的更具体的规则替代了，避免冲突 */
+
+/* ======================================================== */
+/* 2. 修复：配置方案 (Option) 按钮冲突 */
+/* 上传按钮放左上角，删除按钮放右上角 */
+/* ======================================================== */
+.admin-add-icon {
+  position: absolute;
+  top: 10rpx;
+  left: 10rpx; /* 改到左边 */
+  font-size: 24rpx;
+  background: rgba(0,0,0,0.1);
+  padding: 10rpx;
+  border-radius: 10rpx;
+  z-index: 15;
+}
+
+/* 确保删除按钮在右上角 (之前已经改过，这里确保一下) */
+.admin-del-corner {
+  z-index: 20; /* 确保层级最高 */
+}
+
+/* ======================================================== */
+/* 3. 修改：配件上传按钮加大 */
+/* ======================================================== */
+.admin-float-thumb {
+  position: absolute;
+  top: 10rpx;
+  left: 10rpx;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 24rpx; /* 字体加大 */
+  padding: 12rpx 16rpx; /* 内边距加大 */
+  border-radius: 12rpx;
+  z-index: 15;
+}
+
+/* ======================================================== */
+/* 4. 修改：对比模式下的特殊样式 (去蓝框) */
+/* ================================================================= */
+/* 核心动画补丁：强制所有可交互元素拥有点击缩放效果 */
+/* ================================================================= */
+
+/* 1. 主页产品卡片 & 顶部媒体 */
+.prod-card:active, 
+.hero-swiper-box:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+  transition: all 0.1s ease;
+}
+
+/* 2. 选购弹窗内的所有选项 (型号、配置、配件) */
+.model-card-normal:active,  /* 选择型号的卡片 */
+.model-item:active,        /* 兼容旧样式 */
+.opt-card:active,          /* 配置方案的方块 */
+.acc-row-card:active {     /* 配件的整行 */
+  transform: scale(0.97);
+  background-color: #f0f0f0; /* 点击时背景微微变灰，增加反馈感 */
+  transition: all 0.1s ease;
+}
+
+/* 3. 所有功能按钮 (胶囊按钮、黑按钮、加减号) */
+.btn-black:active,        /* 通用黑色按钮 */
+.btn-compare:active,      /* 参数对比 */
+.up-btn:active,           /* 上传图片/视频按钮 */
+.acc-add-btn:active,      /* 配件的"添加"胶囊 */
+.step-btn:active,         /* 购物车的 + - 号 */
+.custom-btn:active,       /* 弹窗的取消/确定 */
+.add-series-btn:active,   /* 主页添加大按钮 */
+.add-txt-btn:active       /* 文字式添加按钮 */
+{
+  transform: scale(0.92); /* 按钮缩小幅度大一点，手感更明显 */
+  opacity: 0.8;
+  transition: all 0.1s ease;
+}
+
+/* 注意：.btn-cart:active 和 .btn-buy:active 的样式在上面单独定义，不在这里覆盖 */
+
+/* 4. 功能图标 (关闭、删除、编辑) */
+.nav-close:active,           /* 弹窗关闭 X */
+.admin-del-mini:active,      /* 所有删除 X */
+.admin-del-corner:active,
+.admin-del-corner-top:active,
+.admin-float:active,         /* 主页相机图标 */
+.admin-float-thumb:active,   /* 配件相机图标 */
+.admin-add-icon:active 
+{
+  transform: scale(0.8);     /* 小图标缩小更明显 */
+  opacity: 0.6;
+}
+
+/* 5. 购物车列表项 (点击整行也有反馈) */
+.cart-item:active {
+  background-color: #f9f9f9;
+}
+
+
+/* ======================================================== */
+/* 7. 卷边撕纸 + 原位变身加减器 */
+/* ======================================================== */
+
+/* ========================================= */
+/*  型号选择卡片 (简化版) */
+/* ========================================= */
+/* ========================================= */
+/* 2. 选择产品的动画 (Color Transition) */
+/* ========================================= */
+.model-card-normal {
+  position: relative;
+  height: 220rpx;
+  margin-bottom: 50rpx;
+  background: #fff;
+  border-radius: 32rpx;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 50rpx; box-sizing: border-box;
+  box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.08);
+  border: 4rpx solid transparent;
+  
+  /* 核心：添加过渡动画 */
+  transition: all 0.3s ease;
+}
+
+/* 选中状态 */
+.model-card-normal.selected {
+  border-color: #0071E3;
+  background: #F2F7FF;
+  /* 选中时稍微放大一点点，增加确认感 */
+  transform: scale(1.02);
+  box-shadow: 0 8rpx 20rpx rgba(0, 113, 227, 0.15);
+}
+
+/* 按压状态 */
+.model-card-normal:active {
+  transform: scale(0.98);
+  background-color: #f5f5f5;
+  transition: all 0.1s ease;
+}
+
+.model-card-normal.selected:active {
+  background-color: #E0EDFF;
+  transform: scale(1.0);
+}
+
+.m-info .name { font-size: 36rpx; font-weight: 700; color: #000; }
+.m-info .desc { font-size: 24rpx; color: #888; margin-top: 8rpx; }
+.m-price { font-size: 36rpx; font-weight: 700; color: #0071E3; }
+
+/* 兼容旧样式 */
+.model-item {
+  position: relative;
+}
+
+.count-badge {
+  position: absolute;
+  top: -16rpx;  /* 稍微突出去一点 */
+  right: -16rpx;
+  
+  min-width: 40rpx;
+  height: 40rpx;
+  padding: 0 8rpx; /* 适应多位数 */
+  border-radius: 20rpx; /* 圆角矩形 */
+  
+  background: #FF3B30; /* 苹果红 */
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: bold;
+  line-height: 40rpx;
+  text-align: center;
+  
+  box-shadow: 0 2rpx 6rpx rgba(0,0,0,0.2);
+  z-index: 10;
+  
+  /* 出现动画 */
+  animation: badgePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes badgePop {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+
+/* 修正：如果管理员删按钮也在右上角，要把徽标往左挪一点，或者管理员模式下调整位置 */
+/* 这里做一个简单的层级处理，删除按钮层级更高 */
+.admin-del-mini {
+  z-index: 20;
+}
+
+/* ============================================================== */
+/* 中间提示气泡 (Center Toast) */
+/* ============================================================== */
+.center-toast-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  z-index: 2000; /* 最高层级 */
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none; /* 让点击穿透背景，但不穿透气泡(气泡太小无所谓) */
+}
+
+.center-toast-box {
+  background: rgba(0,0,0,0.8); 
+  padding: 30rpx 50rpx;
+  border-radius: 20rpx;
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 200rpx;
+  backdrop-filter: blur(10px);
+  animation: fadeInOut 0.2s ease-out;
+}
+
+.ct-icon {
+  font-size: 40rpx; font-weight: 800; color: #fff;
+  border: 4rpx solid #fff; width: 50rpx; height: 50rpx; border-radius: 50%;
+  text-align: center; line-height: 44rpx;
+  margin-bottom: 16rpx;
+}
+
+.ct-text {
+  color: #fff; font-size: 28rpx; font-weight: 600; letter-spacing: 2rpx;
+}
+
+@keyframes fadeInOut {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}

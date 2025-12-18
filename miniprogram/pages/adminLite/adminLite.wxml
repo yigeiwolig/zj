@@ -1,4 +1,38 @@
 <view class="page admin-page">
+  <!-- 顶部标题（可点击进入管理员） -->
+  <view class="page-header" bindtap="handleTitleClick">
+    <text class="page-title">产品上新</text>
+    <view wx:if="{{isAdmin}}" class="admin-exit-btn" catchtap="exitAdmin">退出</view>
+  </view>
+
+  <!-- 产品列表（卡片形式） -->
+  <scroll-view scroll-y class="product-scroll">
+    <view class="product-list">
+      <block wx:for="{{productList}}" wx:key="id" wx:for-item="item" wx:for-index="idx">
+        <view class="product-card" bindtap="{{isAdmin ? '' : 'handleProductClick'}}" data-index="{{idx}}">
+          <view class="product-cover-wrapper">
+            <image class="product-cover" src="{{item.cover || ''}}" mode="aspectFill" />
+            
+            <!-- 号码显示（管理员模式，图片中间） -->
+            <view wx:if="{{isAdmin}}" class="jump-number-badge" catchtap="adminEditJumpNumber" data-index="{{idx}}" hover-class="jump-number-badge-hover" style="z-index: 9999;">
+              {{item.jumpNumber || '点击设置'}}
+            </view>
+          </view>
+          
+          <view class="product-info">
+            <text class="product-title">{{item.name || '未命名产品'}}</text>
+            <text class="product-price">¥{{item.models && item.models.length > 0 && item.models[0].price ? item.models[0].price : 0}} 起</text>
+          </view>
+        </view>
+      </block>
+      
+      <view wx:if="{{!productList || productList.length === 0}}" class="empty-state">
+        暂无产品，请在shop页面添加产品
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 快速上新表单（保留） -->
   <view class="card">
     <view class="section-title">快速上新</view>
     <form bindsubmit="handleSubmit">
@@ -40,7 +74,36 @@
     </view>
     <view wx:else class="empty-state">暂无提交记录</view>
   </view>
+
+  <!-- 管理员密码弹窗 -->
+  <view class="pwd-mask {{showPasswordModal ? 'active' : ''}}">
+    <view class="pwd-box">
+      <view class="pwd-tit">管理员密码</view>
+      <input class="pwd-input" type="password" bindinput="onPwdInput" placeholder="请输入密码" />
+      <view class="pwd-cancel" bindtap="closePasswordModal">取消</view>
+      <view class="pwd-confirm" bindtap="checkPassword">确认</view>
+    </view>
+  </view>
+
+  <!-- 自定义编辑弹窗 -->
+  <view class="custom-modal-mask" wx:if="{{showCustomEditModal}}">
+    <view class="custom-modal-box">
+      <view class="custom-modal-title">{{customEditTitle}}</view>
+      <input class="custom-modal-input" value="{{customEditVal}}" bindinput="onCustomEditInput" focus="{{showCustomEditModal}}" cursor-spacing="100"/>
+      <view class="custom-modal-btn-row">
+        <view class="custom-btn c-btn-cancel" bindtap="closeCustomEditModal">取消</view>
+        <view class="custom-btn c-btn-confirm" bindtap="confirmCustomEdit">确定</view>
+      </view>
+    </view>
+  </view>
 </view>
+
+
+
+
+
+
+
 
 
 

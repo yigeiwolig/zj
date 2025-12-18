@@ -1,0 +1,54 @@
+// logic.wxs
+
+// 1. 计算相对偏移量 offset (保持不变)
+var getOffset = function(index, current, total) {
+  var diff = index - current;
+  if (diff > total / 2) {
+    diff -= total; 
+  } else if (diff < -total / 2) {
+    diff += total; 
+  }
+  return diff;
+}
+
+// 2. 计算透明度 (保持不变)
+var getOpacity = function(index, current, total) {
+  var offset = getOffset(index, current, total);
+  if (offset < 0) offset = -offset; // 取绝对值
+  
+  // 超过 1.8 格距离就隐藏
+  if (offset > 1.8) return 0; 
+  return 1 - (offset * 0.5);
+}
+
+// 3. 计算入场延迟 (保持不变)
+var getEnterDelay = function(index, current, total) {
+  var offset = getOffset(index, current, total);
+  var delayOrder = offset + 1; 
+  if (delayOrder < 0) delayOrder = 0;
+  return delayOrder * 150;
+}
+
+// === 4. 新增：计算缩放比例 (让没选中的变小) ===
+var getScale = function(index, current, total) {
+  var offset = getOffset(index, current, total);
+  if (offset < 0) offset = -offset; // 取绝对值
+  
+  // 逻辑：
+  // 距离 0 (中间): 1.1 倍 (放大)
+  // 距离 1 (上下): 1.1 - 0.25 = 0.85 倍 (明显变小)
+  // 距离 2 (更远): 0.6 倍
+  var scale = 1.1 - (offset * 0.25);
+  
+  // 限制最小缩放，防止变成负数或太小
+  if (scale < 0.6) scale = 0.6;
+  
+  return scale;
+}
+
+module.exports = {
+  getOffset: getOffset,
+  getOpacity: getOpacity,
+  getEnterDelay: getEnterDelay,
+  getScale: getScale // 记得导出这个新函数
+};

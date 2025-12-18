@@ -1,3 +1,140 @@
+.page {
+  min-height: 100vh;
+  background: #f5f5f7;
+  padding-bottom: 40rpx;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 40rpx 30rpx 20rpx;
+  background: #fff;
+  border-bottom: 1rpx solid #eee;
+}
+
+.page-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #1D1D1F;
+}
+
+.admin-exit-btn {
+  padding: 10rpx 20rpx;
+  background: #0071E3;
+  color: #fff;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+}
+
+.product-scroll {
+  height: calc(100vh - 200rpx);
+  padding: 30rpx;
+}
+
+.product-list {
+  display: flex;
+  flex-direction: column;
+  gap: 30rpx;
+}
+
+.product-card {
+  background: #fff;
+  border-radius: 30rpx;
+  overflow: hidden;
+  box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.05);
+  position: relative;
+  transition: 0.2s;
+}
+
+.product-card:active {
+  transform: scale(0.98);
+}
+
+.product-cover-wrapper {
+  position: relative;
+  width: 100%;
+  height: 400rpx;
+  overflow: hidden;
+}
+
+.product-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.product-info {
+  padding: 30rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.product-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+}
+
+.product-price {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #0071E3;
+}
+
+/* 跳转号码标识（图片中间） */
+.jump-number-badge {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  background: rgba(0, 113, 227, 0.95) !important;
+  color: #fff !important;
+  padding: 24rpx 48rpx !important;
+  border-radius: 50rpx !important;
+  font-size: 52rpx !important;
+  font-weight: 800 !important;
+  z-index: 9999 !important;
+  box-shadow: 0 8rpx 24rpx rgba(0, 113, 227, 0.5) !important;
+  min-width: 140rpx !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  pointer-events: auto !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.jump-number-badge:active,
+.jump-number-badge-hover {
+  opacity: 0.85 !important;
+  transform: translate(-50%, -50%) scale(0.95) !important;
+  background: rgba(0, 113, 227, 1) !important;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60rpx;
+  color: #999;
+  font-size: 28rpx;
+}
+
+.card {
+  background: #fff;
+  border-radius: 30rpx;
+  padding: 40rpx;
+  margin: 30rpx;
+  box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.05);
+}
+
+.section-title {
+  font-size: 32rpx;
+  font-weight: 800;
+  margin-bottom: 30rpx;
+  color: #1D1D1F;
+}
+
 .form-group {
   margin-bottom: 28rpx;
 }
@@ -14,6 +151,7 @@ textarea {
   padding: 20rpx;
   background: #f7f9fc;
   border-radius: 16rpx;
+  box-sizing: border-box;
 }
 
 textarea {
@@ -23,7 +161,154 @@ textarea {
 .summary {
   display: block;
   margin-bottom: 8rpx;
+  color: #666;
+  font-size: 26rpx;
 }
+
+.cta-btn {
+  width: 100%;
+  padding: 24rpx;
+  background: #0071E3;
+  color: #fff;
+  border-radius: 20rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  margin-top: 20rpx;
+}
+
+/* 密码弹窗 */
+.pwd-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  visibility: hidden;
+  opacity: 0;
+  transition: 0.3s;
+}
+
+.pwd-mask.active {
+  visibility: visible;
+  opacity: 1;
+}
+
+.pwd-box {
+  background: #fff;
+  padding: 60rpx;
+  border-radius: 40rpx;
+  width: 600rpx;
+  text-align: center;
+}
+
+.pwd-tit {
+  font-weight: 800;
+  font-size: 36rpx;
+  margin-bottom: 40rpx;
+}
+
+.pwd-input {
+  border: 2rpx solid #e5e5ea;
+  height: 90rpx;
+  border-radius: 45rpx;
+  margin-bottom: 40rpx;
+  text-align: center;
+  font-size: 40rpx;
+  letter-spacing: 5rpx;
+}
+
+.pwd-cancel,
+.pwd-confirm {
+  margin-top: 30rpx;
+  color: #888;
+  font-size: 26rpx;
+  display: inline-block;
+  padding: 20rpx 40rpx;
+  margin: 0 10rpx;
+  border-radius: 20rpx;
+  background: #f5f5f7;
+}
+
+.pwd-confirm {
+  background: #0071E3;
+  color: #fff;
+}
+
+/* 自定义编辑弹窗 */
+.custom-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.custom-modal-box {
+  background: #fff;
+  padding: 60rpx;
+  border-radius: 40rpx;
+  width: 600rpx;
+}
+
+.custom-modal-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  margin-bottom: 40rpx;
+  text-align: center;
+}
+
+.custom-modal-input {
+  width: 100%;
+  height: 90rpx;
+  border: 2rpx solid #e5e5ea;
+  border-radius: 20rpx;
+  padding: 0 30rpx;
+  font-size: 32rpx;
+  margin-bottom: 40rpx;
+  box-sizing: border-box;
+}
+
+.custom-modal-btn-row {
+  display: flex;
+  gap: 20rpx;
+}
+
+.custom-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  text-align: center;
+  border-radius: 20rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.c-btn-cancel {
+  background: #f5f5f7;
+  color: #666;
+}
+
+.c-btn-confirm {
+  background: #0071E3;
+  color: #fff;
+}
+
+
+
+
+
+
+
 
 
 

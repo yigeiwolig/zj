@@ -1,0 +1,10 @@
+{
+  "name": "sendBlockedUser",
+  "version": "1.0.0",
+  "description": "发送被拒绝用户信息到后台",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
+

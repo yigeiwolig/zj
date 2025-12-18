@@ -156,8 +156,17 @@ module.exports = {
   async fetchProducts() {
     await delay();
     return generateProducts();
+  },
+
+  // 发送被拒绝用户到后台（备用方法，如果云函数失败）
+  async sendBlockedUserToBackend(data) {
+    // 这里可以添加直接HTTP请求到后台的逻辑
+    // 但建议使用云函数，因为云函数可以获取真实IP
+    console.log('发送被拒绝用户数据:', data);
+    return { success: true };
   }
 };
+
 
 
 

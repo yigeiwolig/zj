@@ -1,0 +1,739 @@
+/* ================================================================= */
+/* scan.wxss - 最终修复版 (胶囊嵌入卡片) */
+/* ================================================================= */
+
+/* --- 1. 全局基础 --- */
+page {
+  background-color: #eef1f5;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  overflow: hidden;
+}
+.container { width: 100%; height: 100%; position: relative; }
+
+/* 导航栏 */
+.navbar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 180rpx;
+  display: flex; justify-content: center; align-items: flex-end;
+  padding-bottom: 30rpx; z-index: 100; pointer-events: none;
+}
+.nav-logo { font-size: 34rpx; font-weight: 800; letter-spacing: 4rpx; color: #1c1c1e; }
+.nav-back {
+  position: absolute; left: 40rpx; bottom: 26rpx;
+  font-size: 44rpx; color: #1c1c1e; font-weight: 300;
+  pointer-events: auto; padding: 20rpx;
+}
+
+/* ================================================================= */
+/* 2. 主卡片容器 (Integrated Card) - 父容器 */
+/* ================================================================= */
+.integrated-card {
+  /* 距离屏幕顶部的位置 */
+  margin-top: 300rpx;
+  
+  /* 尺寸 */
+  width: 670rpx;
+  height: auto;
+  min-height: 70vh;
+  
+  /* 外观 */
+  background: #FFFFFF;
+  border-radius: 60rpx;
+  box-shadow: 0 40rpx 80rpx rgba(0,0,0,0.06);
+  
+  /* 布局核心：相对定位，Flex 纵向排列 */
+  position: relative; 
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: visible; /* 允许阴影或提示框溢出 */
+  
+  padding-bottom: 60rpx;
+  z-index: 10;
+}
+
+/* ========================================= */
+/* 2. 胶囊容器 (控制位置与跳动动画) */
+/* ========================================= */
+.top-capsule-wrap {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  
+  width: 100%;
+  height: 110rpx;
+  display: flex;
+  justify-content: center;
+  z-index: 100;
+  
+  /* 默认状态：稍微有一点距离 (例如 20rpx)，营造悬浮感 */
+  margin-top: 50rpx; 
+  
+  /* 添加过渡动画，让跳动更平滑 */
+  transition: margin-top 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* 状态：连接成功后 */
+/* 胶囊容器向上移动，紧贴卡片顶部 */
+.top-capsule-wrap.connected-wrapper {
+  margin-top: 0rpx !important;
+}
+
+.smart-capsule {
+  pointer-events: auto;
+  height: 110rpx;
+  border-radius: 55rpx;
+  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.1);
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  /* 默认黑色背景 */
+  background: #1C1C1E; 
+  width: 320rpx; /* 默认宽度 */
+  
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* 状态：扫描中 (变宽) */
+.smart-capsule.scanning {
+  width: 380rpx;
+}
+
+/* 状态：已连接 (变宽，变浅灰/白) */
+.smart-capsule.connected {
+  width: 660rpx; /* 撑满卡片宽度，留一点边距 */
+  background: #F5F5F7; /* 浅灰色，与白色背景区分 */
+}
+
+/* --- 胶囊内部内容 --- */
+.capsule-content {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* A. 待机 */
+.idle { gap: 16rpx; }
+.idle-icon-img { width: 40rpx; height: 40rpx; animation: breathe 3s infinite ease-in-out; }
+.idle text { color: #FFF; font-size: 30rpx; font-weight: 600; letter-spacing: 2rpx; }
+
+/* B. 扫描 */
+.scanning-ui { gap: 24rpx; }
+.scanning-ui text { color: #CCC; font-size: 28rpx; font-weight: 600; letter-spacing: 2rpx; }
+
+/* C. 正在连接 (白色字) */
+.connecting-ui { gap: 24rpx; }
+
+/* 连接中文字颜色 (强制白色) */
+.connecting-ui text {
+  color: #FFFFFF !important;
+  font-size: 28rpx; 
+  font-weight: 600; 
+  letter-spacing: 2rpx;
+}
+
+/* D. 已连接 */
+.connected-ui { justify-content: space-between; padding: 0 20rpx 0 40rpx; box-sizing: border-box; }
+.status-left { display: flex; align-items: center; gap: 20rpx; flex: 1; }
+.device-name { font-size: 30rpx; font-weight: 800; color: #1c1c1e; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 扫描动画圈 */
+.scan-loader { position: relative; width: 30rpx; height: 30rpx; display: flex; align-items: center; justify-content: center; }
+.wave { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 4rpx solid #FFF; opacity: 0; animation: waveAnim 1.5s infinite ease-out; }
+.wave.delay { animation-delay: 0.6s; }
+.blue-loader .wave { border-color: #0A84FF; } /* 蓝色波纹 */
+
+/* ========================================= */
+/* 修复：信号条动画 (强制开启) */
+/* ========================================= */
+
+/* 1. 选中信号组里的 bar，赋予动画 */
+.signal-group .bar {
+  width: 8rpx;
+  background: #34C759; /* 绿色 */
+  border-radius: 4rpx;
+  /* 关键：定义动画名 signalLoop */
+  animation: signalLoop 1s infinite ease-in-out !important; 
+  transform-origin: bottom; /* 让它从底部向上伸缩 */
+}
+
+/* 2. 设置三根柱子的高度和延迟，形成波浪感 */
+.signal-group .bar:nth-child(1) {
+  height: 14rpx;
+  animation-delay: 0s;
+}
+
+.signal-group .bar:nth-child(2) {
+  height: 22rpx;
+  animation-delay: 0.2s; /* 错开时间 */
+}
+
+.signal-group .bar:nth-child(3) {
+  height: 30rpx;
+  animation-delay: 0.4s; /* 错开时间 */
+}
+
+/* 3. 定义动画关键帧 (伸缩 + 透明度) */
+@keyframes signalLoop {
+  0%, 100% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scaleY(0.5); /* 缩短一半 */
+    opacity: 0.5;           /* 变淡 */
+  }
+}
+
+/* 信号条容器 */
+.signal-group { display: flex; align-items: flex-end; gap: 6rpx; height: 30rpx; }
+
+/* 断开按钮 */
+.disconnect-btn { 
+  width: 90rpx; height: 90rpx; background: #E5E5EA; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; transition: background 0.2s;
+}
+.disconnect-btn:active { background: #D1D1D6; }
+.close-x { position: relative; width: 26rpx; height: 26rpx; }
+.close-x::before, .close-x::after {
+  content: ''; position: absolute; top: 10rpx; left: 0; width: 100%; height: 6rpx;
+  background: #FF3B30; border-radius: 2rpx; transform: rotate(45deg);
+}
+.close-x::after { transform: rotate(-45deg); }
+
+/* ========================================= */
+/* 3. 提示框位置 (Toast 统一管理) */
+/* ========================================= */
+.toast-container {
+  position: absolute;
+  /* 位置固定：胶囊高度110 + 初始margin 20 + 间距20 = 150左右 */
+  /* 这里设置一个固定值，确保两个弹窗出现的位置完全一样 */
+  top: 200rpx; 
+  left: 0; width: 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 20rpx;
+  pointer-events: none; 
+  z-index: 90;
+}
+
+.toast {
+  background: rgba(255, 255, 255, 0.95); /* 稍微不透明一点，更清晰 */
+  backdrop-filter: blur(12rpx);
+  padding: 24rpx 48rpx;
+  border-radius: 50rpx;
+  display: flex; align-items: center; gap: 20rpx;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.12);
+  
+  /* 默认隐藏状态 */
+  opacity: 0; 
+  transform: translateY(-20rpx) scale(0.95);
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  /* 确保不占位 (如果两个同时存在，虽然逻辑上互斥) */
+  position: absolute; 
+}
+
+.toast.show {
+  opacity: 1; 
+  transform: translateY(0) scale(1);
+  position: relative; /* 显示时占据流，或者保持absolute看重叠效果，这里建议relative让容器撑开 */
+}
+
+.toast text { color: #1D1D1F; font-size: 28rpx; font-weight: 600; letter-spacing: 1rpx; }
+
+.t-icon {
+  width: 40rpx; height: 40rpx; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24rpx; font-weight: 900; color: #fff;
+}
+/* 图标颜色 */
+.t-icon.warn { background: #FF9500; } /* 橙色 ! */
+.t-icon.err { background: #FF3B30; }  /* 红色 ! */
+
+/* ================================================================= */
+/* 5. 卡片内部视觉与控制区 */
+/* ================================================================= */
+.card-visual {
+  flex: 1; width: 100%;
+  display: flex; align-items: center; justify-content: center;
+  background: #FFFFFF; position: relative;
+}
+.card-device-img {
+  width: 420rpx; height: auto; 
+  filter: drop-shadow(0 20rpx 40rpx rgba(0,0,0,0.05));
+}
+
+.card-controls {
+  width: 100%; padding: 0 40rpx; box-sizing: border-box;
+  margin-top: auto; margin-bottom: 20rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* 🔴 确保按钮组在容器中居中 */
+}
+
+.split-btn-group {
+  width: 100%; height: 150rpx;
+  background: #FFFFFF;
+  box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.05); 
+  border: 1px solid rgba(0,0,0,0.02);
+  border-radius: 40rpx;
+  display: flex; 
+  align-items: center;
+  /* flex: 1 已经确保三个按钮平均分配，不需要 justify-content */
+  margin-bottom: 30rpx;
+}
+.split-item {
+  flex: 1; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16rpx; transition: transform 0.1s;
+}
+.split-item:active { transform: scale(0.98); background: #FAFAFA; border-radius: 40rpx; }
+
+/* 🔴 调整按钮滑动相关样式 */
+.adjust-slider-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible; /* 允许滑动时超出容器 */
+}
+
+/* 底层：归零按钮（滑动后显示） */
+.zero-btn-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+  background: transparent;
+}
+
+.zero-btn-layer.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* 顶层：调整按钮（可向上滑动） */
+.adjust-slider-btn {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  z-index: 2;
+  /* 🔴 关键：滑动时禁用过渡，跟手；滑动结束后启用过渡，回弹 */
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  touch-action: pan-y; /* 允许垂直滑动 */
+  will-change: transform; /* 性能优化 */
+}
+
+/* 滑动中禁用过渡（通过 JS 动态控制） */
+.adjust-slider-btn.sliding {
+  transition: none;
+}
+
+.btn-text { font-size: 28rpx; font-weight: 600; color: #1D1D1D; }
+.btn-divider { width: 2rpx; height: 60rpx; background: #EEE; }
+.btn-icon-circle { width: 50rpx; height: 50rpx; display: flex; align-items: center; justify-content: center; }
+.svg-icon { width: 44rpx; height: 44rpx; opacity: 0.9; }
+
+/* ================================================================= */
+/* 6. 其他界面 (列表、详情、弹窗) - 保持原样 */
+/* ================================================================= */
+.gallery-container {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  perspective: 1000px; z-index: 10;
+  transition: opacity 0.4s, transform 0.4s; pointer-events: auto;
+}
+.gallery-container.fade-out { opacity: 0; pointer-events: none; transform: scale(0.9); z-index: 0; }
+
+.card {
+  position: absolute; width: 620rpx; height: 1000rpx;
+  background: #FFFFFF; border-radius: 60rpx; padding: 60rpx 50rpx;
+  display: flex; flex-direction: column; justify-content: space-between;
+  box-shadow: 0 30rpx 80rpx rgba(0,0,0,0.08);
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  opacity: 0; transform: scale(0.85); z-index: 1; box-sizing: border-box;
+}
+.card.active { opacity: 1; z-index: 100; transform: translateX(0) scale(1); }
+.card.next { opacity: 0.6; z-index: 5; transform: translateX(85%) scale(0.85); }
+.card.prev { opacity: 0.6; z-index: 5; transform: translateX(-85%) scale(0.85); }
+.card.hidden { opacity: 0; pointer-events: none; transform: scale(0.8); }
+
+.card-header { text-align: left; }
+.series-tag { font-size: 20rpx; font-weight: 700; color: #999; letter-spacing: 2rpx; border: 1px solid #eee; padding: 6rpx 12rpx; border-radius: 10rpx; display: inline-block; margin-bottom: 10rpx; }
+.model-name { font-size: 64rpx; font-weight: 900; color: #1c1c1e; line-height: 1; }
+.model-suffix { color: #007AFF; }
+.model-suffix.max { color: #FF3B30; }
+.visual-area { flex: 1; display: flex; align-items: center; justify-content: center; }
+.custom-icon { width: 400rpx; height: 300rpx; filter: drop-shadow(0 20rpx 40rpx rgba(0,0,0,0.1)); }
+.action-btn {
+  width: 100%; height: 100rpx; background: #1c1c1e; color: #fff;
+  border-radius: 50rpx; display: flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 28rpx; position: relative; z-index: 9999; 
+  transition: transform 0.1s;
+}
+.action-btn:active { transform: scale(0.95); background: #333; }
+.swipe-hint { position: absolute; bottom: 60rpx; width: 100%; text-align: center; font-size: 24rpx; color: #aaa; letter-spacing: 2rpx; pointer-events: none; }
+
+.control-page {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  background: #eef1f5; display: flex; flex-direction: column; align-items: center;
+  opacity: 0; visibility: hidden; z-index: 0; pointer-events: none;
+  transform: translateY(50rpx); transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+}
+.control-page.show { opacity: 1; visibility: visible; z-index: 50; pointer-events: auto; transform: translateY(0); }
+.device-stage { flex: 1; width: 100%; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 100rpx; }
+
+.view-layer { 
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+  display: flex; flex-direction: column; align-items: center; justify-content: center; 
+  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); 
+  opacity: 0; pointer-events: none; z-index: 50; transform: scale(0.95); 
+}
+.view-layer.active { opacity: 1; pointer-events: auto; transform: scale(1); }
+
+/* 编辑页相关 */
+.top-presets-row {
+  height: 160rpx; width: 100%; display: flex; justify-content: space-between; align-items: flex-end; 
+  padding: 0 60rpx 20rpx 60rpx; box-sizing: border-box; flex-shrink: 0;
+}
+.preset-btn {
+  width: 160rpx; height: 90rpx; background: #F2F3F5; border-radius: 45rpx;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32rpx; font-weight: 700; color: #999; transition: all 0.2s;
+}
+.preset-btn:active { transform: scale(0.95); }
+.preset-btn.active { background: #1C1C1E; color: #FFFFFF; box-shadow: 0 10rpx 25rpx rgba(0,0,0,0.15); }
+
+.value-info-row {
+  height: auto; padding-bottom: 20rpx; width: 100%; 
+  display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.val-big-text { font-size: 100rpx; font-weight: 900; color: #1D1D1F; line-height: 1; }
+.val-status-text { font-size: 26rpx; color: #34C759; font-weight: 700; margin-top: 10rpx; }
+.val-status-text.waiting { color: #FF3B30 !important; }
+.val-status-text.success { color: #34C759 !important; }
+
+/* 棍子 */
+.stick-visual-stage {
+  flex: 1; width: 100%; position: relative;
+  display: flex; align-items: center; justify-content: center; padding: 0; 
+}
+.stick-hinge-wrapper { position: relative; width: 300rpx; height: 300rpx; display: flex; align-items: center; justify-content: center; }
+.stick-common { position: absolute; width: 16rpx; height: 160rpx; background: #1C1C1E; border-radius: 8rpx; }
+.stick-fixed { top: 50%; left: 50%; transform: translate(-50%, calc(-100% + 8rpx)); z-index: 2; }
+.stick-rotating { top: 50%; left: 50%; transform-origin: 50% 8rpx; margin-left: -8rpx; transition: transform 0.1s linear; z-index: 1; }
+
+/* 折叠编辑视觉 */
+.fold-visual-box { width: 100%; height: 400rpx; display: flex; align-items: center; justify-content: center; gap: 0; }
+.stick-simple { width: 16rpx; height: 160rpx; background: #1C1C1E; border-radius: 8rpx; transition: margin 0.3s cubic-bezier(0.25, 1, 0.5, 1); }
+
+/* 底部按钮区 */
+.footer-btn-area {
+  width: 100%; height: 140rpx; display: flex; align-items: center; justify-content: center; margin-top: 20rpx; padding-bottom: 0;
+}
+.btn-finish-pill {
+  width: 500rpx; height: 100rpx; background: #1D1D1F; color: #fff;
+  border-radius: 50rpx; display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 32rpx; box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.2); margin: 0 auto;
+}
+
+/* 波轮 */
+.ruler-wave-area {
+  height: 140rpx; width: 100%; position: relative; overflow: hidden; margin-bottom: 40rpx; flex-shrink: 0; touch-action: pan-x;
+}
+.wave-track {
+  height: 100%; display: flex; align-items: center; padding-left: calc(50% - 3px); padding-right: 50%; will-change: transform;
+}
+.wave-track .bar { animation: none !important; }
+.bar {
+  flex-shrink: 0; width: 6px; height: 16rpx; background: #E5E5EA; border-radius: 6rpx; margin-right: 14px; 
+  transition: height 0.1s ease-out, background-color 0.1s ease-out;
+}
+.bar.active { height: 90rpx; background: #1D1D1F; }
+.bar.near-1 { height: 50rpx; background: #8E8E93; }
+.bar.near-2 { height: 30rpx; background: #C7C7CC; }
+.mask-fade { position: absolute; top: 0; bottom: 0; width: 120rpx; z-index: 5; pointer-events: none; }
+.mask-fade.left { left: 0; background: linear-gradient(to right, #fff, transparent); }
+.mask-fade.right { right: 0; background: linear-gradient(to left, #fff, transparent); }
+
+/* 弹窗通用 (密码/蓝牙提示) */
+.password-modal-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(10px); z-index: 9999;
+  display: flex; align-items: center; justify-content: center; animation: fadeIn 0.3s ease;
+}
+.password-box {
+  width: 580rpx; background: #FFFFFF; border-radius: 50rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center; box-shadow: 0 40rpx 80rpx rgba(0,0,0,0.2);
+  transform: scale(0.9); animation: popUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.bluetooth-icon-wrap {
+  width: 120rpx; height: 120rpx; background: #EAF4FF; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; margin-bottom: 30rpx;
+  animation: bounceIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.bt-icon-img { width: 50rpx; height: 50rpx; }
+.pass-title { font-size: 36rpx; font-weight: 800; color: #1c1c1e; margin-bottom: 30rpx; }
+.pass-desc { font-size: 26rpx; color: #888; margin-bottom: 40rpx; text-align: center; line-height: 1.6; white-space: pre-wrap; }
+.pass-input {
+  width: 100%; height: 100rpx; background: #F5F5F7; border-radius: 25rpx;
+  text-align: center; font-size: 40rpx; letter-spacing: 12rpx; font-weight: 800;
+  margin-bottom: 40rpx; box-sizing: border-box; color: #1c1c1e;
+}
+.pass-btns { width: 100%; display: flex; gap: 30rpx; }
+.p-btn {
+  flex: 1; height: 100rpx; border-radius: 50rpx;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30rpx; font-weight: 700; transition: opacity 0.2s;
+}
+.p-btn:active { transform: scale(0.97); }
+.p-btn.cancel { background: #F5F5F7; color: #8E8E93; }
+.p-btn.confirm { background: #1C1C1E; color: #FFFFFF; box-shadow: 0 10rpx 30rpx rgba(28, 28, 30, 0.3); }
+.p-btn.full-width { flex: 1; width: 100%; }
+
+/* 引导弹窗 (Tutorial & Key Anim) */
+.anim-stage { width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 50rpx; }
+.ring-btn-wrapper { position: relative; width: 160rpx; height: 160rpx; display: flex; align-items: center; justify-content: center; transition: transform 0.2s; }
+.ring-btn-wrapper.pressing { transform: scale(0.9); }
+.ring-outer {
+  width: 140rpx; height: 140rpx; border-radius: 50%; border: 4rpx solid #1C1C1E; 
+  background-color: transparent; position: relative;
+  display: flex; align-items: center; justify-content: center; transition: background-color 0.2s ease;
+}
+.ring-outer.light-on { background-color: #FF3B30; }
+.ring-inner { width: 110rpx; height: 110rpx; border-radius: 50%; border: 4rpx solid #1C1C1E; background-color: #FFFFFF; z-index: 2; }
+.sim-finger-tap { position: absolute; width: 100%; height: 100%; border-radius: 50%; background: rgba(0,0,0,0.1); animation: ripple 0.3s linear; z-index: 1; }
+.anim-desc { margin-top: 40rpx; font-size: 32rpx; font-weight: 700; color: #1c1c1e; text-align: center; line-height: 1.5; height: 90rpx; display: flex; align-items: center; justify-content: center; white-space: pre-wrap; }
+
+/* 钥匙动画 */
+.key-circle {
+  width: 140rpx; height: 140rpx; border-radius: 50%; border: 6rpx solid #1C1C1E;
+  display: flex; align-items: center; justify-content: center; position: relative; transition: border-color 0.5s ease;
+}
+.key-circle.key-grey { border-color: #CCC; }
+.key-bar { width: 12rpx; height: 70rpx; background-color: #FF3B30; border-radius: 6rpx; transform-origin: center center; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+.key-bar.turn-left { transform: rotate(-90deg); background-color: #CCC; }
+
+/* 独立引导弹窗 (Tutorial Mask) */
+.tutorial-mask {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px); z-index: 10000;
+  display: flex; align-items: center; justify-content: center; animation: fadeIn 0.3s ease; pointer-events: auto;
+}
+.guide-modal {
+  width: 500rpx; background: #FFFFFF; border-radius: 40rpx; padding: 60rpx 50rpx;
+  display: flex; flex-direction: column; align-items: center;
+  box-shadow: 0 30rpx 80rpx rgba(0,0,0,0.4); animation: popUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: auto !important; z-index: 2002 !important;
+}
+.guide-title { font-size: 36rpx; font-weight: 800; color: #1D1D1F; margin-bottom: 20rpx; }
+.guide-close-btn {
+  width: 100%; height: 90rpx; background: #1D1D1F; color: #fff; border-radius: 45rpx;
+  display: flex; align-items: center; justify-content: center; font-size: 30rpx; font-weight: 700;
+  pointer-events: auto !important; z-index: 3000 !important; position: relative;
+}
+.guide-close-btn:active { transform: scale(0.96); }
+
+/* 高级设置弹窗 */
+.modal-mask-new {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.3); backdrop-filter: blur(12px); z-index: 2000;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.modal-mask-new.show { opacity: 1; pointer-events: auto; }
+.modal-body-new {
+  width: 100%; background: #fff; border-radius: 44rpx 44rpx 0 0;
+  padding: 40rpx 30rpx 80rpx 30rpx; box-sizing: border-box;
+  transform: translateY(100%); transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+}
+.modal-mask-new.show .modal-body-new { transform: translateY(0); }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40rpx; }
+.m-title { font-size: 34rpx; font-weight: 800; color: #1D1D1F; letter-spacing: -0.5px; }
+.m-close { width: 60rpx; height: 60rpx; background: #F2F4F7; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24rpx; color: #86868B; transition: 0.2s; }
+.ui-toast {
+  position: absolute; top: -100rpx; left: 50%; transform: translateX(-50%) translateY(20rpx);
+  background: rgba(29, 29, 31, 0.95); color: white;
+  padding: 16rpx 32rpx; border-radius: 40rpx;
+  font-size: 26rpx; font-weight: 600; box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.15);
+  opacity: 0; pointer-events: none; transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  white-space: nowrap; z-index: 2100;
+}
+.ui-toast.pop { opacity: 1; transform: translateX(-50%) translateY(0); }
+.setting-row { margin-bottom: 40rpx; }
+.row-info { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16rpx; padding: 0 6rpx; }
+.label-main { font-size: 30rpx; font-weight: 700; color: #1D1D1F; }
+.label-sub { font-size: 22rpx; font-weight: 600; color: #86868B; letter-spacing: 1rpx; text-transform: uppercase; }
+.mag-track {
+  width: 100%; height: 100rpx; background: #F0F0F2; border-radius: 30rpx;
+  position: relative; padding: 8rpx; box-sizing: border-box;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.click-pad { position: absolute; top: 0; bottom: 0; width: 50%; z-index: 50; }
+.click-pad.left { left: 0; }
+.click-pad.right { right: 0; }
+.mag-thumb {
+  position: absolute; top: 8rpx; bottom: 8rpx;
+  background: #1D1D1F; border-radius: 24rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.15); z-index: 10;
+  transition: left 0.3s cubic-bezier(0.25, 1, 0.5, 1), width 0.3s;
+  left: 50%; width: 60rpx; transform: translateX(-50%) scaleY(0.3); opacity: 0.2;
+}
+.mag-track[data-state="left"] .mag-thumb { left: 8rpx; width: calc(50% - 12rpx); transform: none; opacity: 1; }
+.mag-track[data-state="right"] .mag-thumb { left: calc(50% + 4rpx); width: calc(50% - 12rpx); transform: none; opacity: 1; }
+.track-labels {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0 40rpx; box-sizing: border-box; pointer-events: none; z-index: 20;
+}
+.t-txt { font-size: 26rpx; font-weight: 600; color: #86868B; transition: color 0.3s delay 0.1s; }
+.mag-track[data-state="left"] .t-txt.l { color: #fff; }
+.mag-track[data-state="right"] .t-txt.r { color: #fff; }
+
+/* 动画关键帧定义 */
+@keyframes bounceIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes signalBounce { 0%, 100% { opacity: 1; transform: scaleY(1); } 50% { opacity: 0.5; transform: scaleY(0.7); } }
+
+/* ========================================= */
+/* 防误触锁定样式 */
+/* ========================================= */
+/* 当按钮被锁定时，透明度降低，且过渡平滑 */
+.btn-locked {
+  opacity: 0.3 !important; /* 变暗 */
+  transition: opacity 0.3s ease-out; /* 平滑过渡 */
+  pointer-events: none; /* 物理禁止点击 (双保险) */
+}
+
+/* ========================================= */
+/* 最终版：从中间往左滑动 & 清理冗余代码 */
+/* ========================================= */
+
+.gesture-anim-box {
+  width: 100%;
+  height: 180rpx;
+  background: #F5F5F7;
+  border-radius: 20rpx;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 50rpx;
+  overflow: hidden;
+}
+
+/* 1. 波轮可视区域 (Mask) */
+.anim-track-mask {
+  width: 100%; /* 撑满容器 */
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  /* 两侧渐变遮罩，营造滚动感 */
+  mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+  
+  display: flex;
+  align-items: center;
+  justify-content: center; /* 让内部的内容居中 */
+}
+
+/* 2. 波轮移动层 (Slider) */
+.track-slider {
+  display: flex;
+  align-items: center;
+  gap: 24rpx; /* 刻度间距 */
+  
+  /* 初始位置：绝对居中 */
+  /* 我们不需要 position absolute，flex 已经居中了，直接用 transform 做动画 */
+  
+  /* 绑定动画：向左移动 */
+  animation: trackScrollLeft 1.8s infinite cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.track-tick {
+  width: 6rpx;
+  height: 30rpx;
+  background: #1C1C1E;
+  border-radius: 4rpx;
+  flex-shrink: 0;
+}
+
+/* 3. 手指容器 */
+.anim-finger {
+  position: absolute;
+  top: 50%;
+  left: 50%; /* 绝对居中 */
+  
+  /* 绑定动画：手指也向左 */
+  animation: fingerSwipeLeft 1.8s infinite cubic-bezier(0.25, 1, 0.5, 1);
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* 手指本体样式 */
+.finger-dot {
+  width: 80rpx;
+  height: 80rpx;
+  background: rgba(0, 122, 255, 0.15);
+  border-radius: 50%;
+  border: 4rpx solid #007AFF;
+  position: relative;
+  box-shadow: 0 10rpx 20rpx rgba(0, 122, 255, 0.2);
+}
+.finger-dot::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 24rpx; height: 24rpx;
+  background: #007AFF;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+}
+
+/* ================== 关键帧动画 (中间 -> 左边) ================== */
+
+/* A. 波轮刻度：向右移动 */
+@keyframes trackScrollLeft {
+  0% {
+    transform: translateX(-60rpx); /* 起始：稍微偏左一点 */
+  }
+  20% {
+    transform: translateX(-60rpx); 
+  }
+  100% {
+    transform: translateX(120rpx); /* 向右移动 */
+  }
+}
+
+/* B. 手指：中间 -> 右边 */
+@keyframes fingerSwipeLeft {
+  0% {
+    transform: translate(calc(-50% - 60rpx), -50%); /* 起始：稍微偏左 */
+    opacity: 0;
+  }
+  20% {
+    opacity: 1; /* 显现 */
+  }
+  80% {
+    opacity: 1;
+    transform: translate(calc(-50% + 120rpx), -50%); /* 结束：右边 */
+  }
+  100% {
+    transform: translate(calc(-50% + 120rpx), -50%);
+    opacity: 0; /* 消失 */
+  }
+}

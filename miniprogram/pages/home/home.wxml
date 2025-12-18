@@ -1,0 +1,236 @@
+<wxs module="tools">
+  module.exports.includes = function(arr, target) {
+    return arr && arr.indexOf(target) > -1;
+  }
+</wxs>
+
+<view class="container" bindtap="onBgTap">
+  
+  <view class="bg-deco">MT GARAGE</view>
+
+  <!-- 1. 轮盘列表层 -->
+  <view class="wheel-stage {{isDetailOpen ? 'hidden' : ''}}" 
+    bindtouchstart="onTouchStart" bindtouchmove="onTouchMove" bindtouchend="onTouchEnd">
+    <block wx:for="{{shops}}" wx:key="id">
+      <view class="card {{currentIndex === index ? 'active' : ''}}"
+        style="{{cardStyles[index]}}" id="card-{{index}}"
+        catchtap="onCardTap" data-index="{{index}}" mark:type="card">
+        <view class="c-left">
+          <view class="c-name">{{item.name}}</view>
+          <view class="c-services-row">
+            <block wx:for="{{allServices}}" wx:for-item="srv" wx:key="name">
+              <view class="cs-icon has" wx:if="{{item.serviceSet[srv.name]}}">{{srv.icon}}</view>
+            </block>
+          </view>
+        </view>
+        <view class="c-right">
+          <text class="c-dist">{{item.dist}}</text><text class="c-unit">KM</text>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 新增：管理员添加按钮 (仅管理员且详情未打开时显示) -->
+  <view class="fab-add" wx:if="{{isAdmin && !isDetailOpen}}" catchtap="onAddShop">+</view>
+
+  <!-- 2. 替身层 -->
+  <view class="phantom {{isExpanded ? 'expanded' : ''}}" style="{{phantomStyle}}" wx:if="{{showPhantom}}" catchtap="return">
+    
+    <!-- 列表态内容 -->
+    <view class="p-list-content">
+      <view class="c-left">
+        <view class="c-name" style="color:#000;">{{activeItem.name}}</view>
+        <view class="c-services-row">
+           <block wx:for="{{allServices}}" wx:for-item="srv" wx:key="name">
+              <view class="cs-icon has" wx:if="{{activeItem.serviceSet[srv.name]}}">{{srv.icon}}</view>
+            </block>
+        </view>
+      </view>
+      <view class="c-right">
+        <text class="c-dist" style="color:#000;">{{activeItem.dist}}</text><text class="c-unit" style="color:#000;">KM</text>
+      </view>
+    </view>
+
+    <!-- 图片区域 (编辑模式下点击可换图) -->
+    <view class="p-image-box" bindtap="{{isEditing ? 'chooseImage' : ''}}">
+      <image src="{{isEditing ? editData.img : activeItem.img}}" mode="aspectFill" class="p-img"></image>
+      <!-- 编辑模式下的换图提示 -->
+      <view class="img-edit-hint" wx:if="{{isEditing}}">点击更换图片</view>
+    </view>
+    
+    <!-- 按钮组 -->
+    <view class="p-btn-group">
+      <view class="circle-btn edit-btn" wx:if="{{isAdmin && !isEditing}}" catchtap="toggleEdit">✎</view>
+      <view class="circle-btn save-btn-small" wx:if="{{isEditing}}" catchtap="saveEdit">✓</view>
+      <view class="circle-btn" catchtap="closeDetail">✕</view>
+    </view>
+
+    <!-- 详情内容滚动区 -->
+    <view class="p-content">
+      
+      <!-- A. 浏览模式 -->
+      <view class="view-mode" wx:if="{{!isEditing}}">
+        <view class="title-row">
+          <view class="d-title">{{activeItem.name}}</view>
+          <view class="d-dist-badge">{{activeItem.dist}} KM</view>
+        </view>
+
+        <view class="d-sub-row">
+          <view class="status-pill" style="background:{{activeItem.statusColor}}20; color:{{activeItem.statusColor}}">
+            <view class="status-dot" style="background:{{activeItem.statusColor}}"></view>{{activeItem.status}}
+          </view>
+          <view class="sub-text">{{activeItem.sub}}</view>
+        </view>
+
+        <!-- 服务标签 -->
+        <view class="tag-cloud">
+          <block wx:for="{{activeItem.services}}" wx:key="*this">
+             <view class="srv-tag">
+               <text class="srv-tag-icon" wx:if="{{item === '车辆快修'}}">🔧</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '车辆保养'}}">⚙️</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '车辆销售'}}">🏍️</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '机车咖啡'}}">☕</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '车辆精修'}}">🛠️</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '洗车服务'}}">🚿</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '机油更换'}}">🛢️</text>
+               <text class="srv-tag-icon" wx:else>•</text>
+               {{item}}
+             </view>
+          </block>
+          <view wx:if="{{!activeItem.services.length}}" style="color:#ccc; font-size:24rpx;">暂无服务标签</view>
+        </view>
+
+        <!-- 信息块 -->
+        <view class="info-block">
+          <view class="ib-row" bindtap="openLocation">
+            <view class="ib-icon">📍</view>
+            <view class="ib-content">
+              <text class="ib-label">ADDRESS</text>
+              <view class="ib-val">{{activeItem.address}}</view>
+            </view>
+          </view>
+          <view class="ib-row">
+            <view class="ib-icon">⏰</view>
+            <view class="ib-content">
+              <text class="ib-label">HOURS</text>
+              <view class="ib-val">{{activeItem.time}}</view>
+            </view>
+          </view>
+          <view class="ib-row" bindtap="makeCall">
+            <view class="ib-icon">📞</view>
+            <view class="ib-content">
+              <text class="ib-label">PHONE</text>
+              <view class="ib-val">{{activeItem.phone}}</view>
+            </view>
+          </view>
+        </view>
+
+        <view class="d-footer">
+          <view class="btn-nav" bindtap="openLocation"><span>➤</span> 导航前往</view>
+          <view class="btn-call" bindtap="makeCall">📞</view>
+        </view>
+        
+        <!-- 管理员删除按钮 -->
+        <view class="del-btn" wx:if="{{isAdmin}}" bindtap="deleteShop">删除此卡片</view>
+      </view>
+
+      <!-- B. 编辑模式 -->
+      <view class="edit-form" wx:else>
+        <view class="edit-title">编辑信息</view>
+        
+        <view class="inp-group">
+           <view class="inp-label">店铺名称</view>
+           <input class="inp-field" value="{{editData.name}}" data-field="name" bindinput="onEditInput"/>
+        </view>
+        
+        <!-- 地址选择器 (修改为居中布局) -->
+        <view class="inp-group" bindtap="chooseLocation">
+           <view class="inp-label">店铺地址</view>
+           <!-- 注意这里去掉了 justify-content: space-between 的样式，改为 CSS 控制居中 -->
+           <view class="inp-field pick-field {{editData.address?'':'placeholder'}}">
+             <text>📍</text> <!-- 图标放前面或中间 -->
+             <text>{{editData.address || '点击选择地图位置'}}</text>
+           </view>
+        </view>
+
+        <view class="inp-group">
+           <view class="inp-label">副标题</view>
+           <input class="inp-field" value="{{editData.sub}}" data-field="sub" bindinput="onEditInput"/>
+        </view>
+        
+        <!-- 距离目前依然手动输入，实际开发中可以根据经纬度自动计算 -->
+        <view class="inp-group">
+           <view class="inp-label">距离 (KM)</view>
+           <input class="inp-field" value="{{editData.dist}}" data-field="dist" bindinput="onEditInput"/>
+        </view>
+        
+        <view class="inp-group">
+           <view class="inp-label">营业时间</view>
+           <view class="time-picker-row">
+             <!-- 开始时间 picker -->
+             <picker mode="time" value="{{editData.startTime}}" bindchange="onStartTimeChange">
+               <!-- 这里的显示必须绑定 editData.startTime -->
+               <view class="time-box">{{editData.startTime || '09:00'}}</view>
+             </picker>
+             
+             <text class="time-split">-</text>
+             
+             <!-- 结束时间 picker -->
+             <picker mode="time" value="{{editData.endTime}}" bindchange="onEndTimeChange">
+               <!-- 这里的显示必须绑定 editData.endTime -->
+               <view class="time-box">{{editData.endTime || '18:00'}}</view>
+             </picker>
+           </view>
+        </view>
+        
+        <view class="inp-group">
+           <view class="inp-label">联系电话</view>
+           <input class="inp-field" value="{{editData.phone}}" data-field="phone" bindinput="onEditInput"/>
+        </view>
+
+        <!-- 原来的输入框删掉，换成这个点选区域 -->
+        <view class="inp-group">
+           <view class="inp-label">服务内容 (点击选择)</view>
+           <view class="select-tag-grid">
+             <block wx:for="{{allServices}}" wx:key="name">
+               <!-- 判断当前服务是否在编辑数据的选中列表中 -->
+               <view 
+                 class="select-tag {{tools.includes(editData.selectedServices, item.name) ? 'active' : ''}}" 
+                 catchtap="toggleService" 
+                 data-name="{{item.name}}">
+                 <text>{{item.icon}}</text> {{item.name}}
+               </view>
+             </block>
+           </view>
+        </view>
+        
+        <view class="btn-nav save-btn" bindtap="saveEdit">保存更改</view>
+      </view>
+
+    </view> <!-- 结束 view -->
+  </view>
+
+  <!-- 自定义管理员认证弹窗 -->
+  <view class="auth-mask" wx:if="{{showAuthModal}}" catchtouchmove="true">
+    <view class="auth-box">
+      <view class="auth-title">ADMIN ACCESS</view>
+      <view class="auth-sub">请输入管理员密码</view>
+      
+      <!-- 长椭圆输入框 + 文字居中 -->
+      <input 
+        class="auth-input" 
+        password="{{true}}" 
+        type="number" 
+        placeholder="PASSWORD" 
+        placeholder-class="input-ph"
+        bindinput="onAuthInput"
+      />
+      
+      <view class="auth-btns">
+        <view class="auth-btn cancel" bindtap="closeAuthModal">取消</view>
+        <view class="auth-btn confirm" bindtap="checkAuth">确认</view>
+      </view>
+    </view>
+  </view>
+
+</view> <!-- 容器结束 -->
