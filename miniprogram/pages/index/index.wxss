@@ -6,12 +6,51 @@ page { background-color: #F9F9F9; height: 100%; overflow: hidden; }
 input, textarea { text-align: left; }
 
 /* 消失动画 */
-.fade-out { opacity: 0; transition: opacity 0.4s ease; }
+.fade-out { 
+  opacity: 0; 
+  transition: opacity 0.4s ease;
+  /* 不设置 pointer-events: none，让子元素可以单独控制 */
+}
 
 /* 头部底部样式保持不变 */
-.header-section { text-align: center; transition: 0.4s; }
+.header-section { 
+  text-align: center; 
+  transition: 0.4s;
+  position: relative;
+  z-index: 2000; /* 确保在最上层 */
+}
 .main-title { font-size: 64rpx; font-weight: 800; color: #1d1d1f; }
 .sub-title { font-size: 24rpx; font-weight: 600; color: #86868b; letter-spacing: 2rpx; }
+
+/* 标题包装器 */
+.title-wrap {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12rpx;
+  cursor: pointer;
+  position: relative;
+  z-index: 2001 !important; /* 确保在最上层 */
+  pointer-events: auto !important;
+  padding: 30rpx 40rpx; /* 增加点击区域 */
+  margin: -30rpx -40rpx; /* 抵消 padding，保持视觉位置 */
+  /* 确保即使父元素有 fade-out，这个元素仍然可点击 */
+  background: transparent; /* 确保背景透明，不影响视觉效果 */
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1); /* 点击反馈 */
+}
+
+.brand {
+  font-size: 64rpx;
+  font-weight: 800;
+  color: #1d1d1f;
+}
+
+.brand-sub {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #86868b;
+  letter-spacing: 2rpx;
+}
 
 /* 中间标题样式 */
 .center-title {

@@ -6,7 +6,7 @@
     <view class="nav-header">
       <!-- 左上角返回键 -->
       <view class="nav-back-btn" bindtap="goBack">
-        <view class="back-icon"></view>
+        <text class="back-icon">‹</text>
       </view>
       <!-- 中间标题区域 -->
       <view class="header-title-row">
@@ -104,7 +104,7 @@
     <!-- 导航栏 -->
     <view class="detail-nav">
       <view class="nav-back-btn" bindtap="exitModel">
-        <view class="back-icon"></view>
+        <text class="back-icon">‹</text>
       </view>
       <view class="nav-title">{{currentModelName}}</view>
       <view style="width: 40px;"></view>

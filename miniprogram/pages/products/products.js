@@ -188,12 +188,30 @@ Page({
       this.setData({ currentIndex: idx });
     } else {
       // 如果点的是中间的，就跳转
-      this.executeNavigation(id, title);
+      wx.vibrateShort({ type: 'light' });
+      this.executeNavigation(id);
     }
   },
 
   // 跳转逻辑
   executeNavigation(id) {
+    console.log('点击的ID:', id);
+    
+    // 联系方式直接跳转
+    if (id === 8) {
+      wx.navigateTo({ 
+        url: '/pages/call/call',
+        success: function() {
+          console.log('联系方式跳转成功');
+        },
+        fail: function(err) {
+          console.log('联系方式跳转失败:', err);
+          wx.showToast({ title: '跳转失败: ' + JSON.stringify(err), icon: 'none' });
+        }
+      });
+      return;
+    }
+
     let target = '';
     // 根据 ID 匹配跳转路径
     switch (id) {
@@ -204,11 +222,12 @@ Page({
       case 1: target = '/pages/scan/scan'; break;       // 控制中心
       case 9: target = '/pages/ota/ota'; break;         // OTA升级
       case 6: target = '/pages/shouhou/shouhou'; break; // 维修中心
+      case 7: target = '/pages/azjc/azjc'; break;       // 安装教程
       case 12: target = '/pages/home/home'; break;       // 附近门店
       // 其他待开发...
       default: target = ''; break;
     }
-
+    
     if (target) {
       wx.navigateTo({ url: target });
     } else {

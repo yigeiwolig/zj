@@ -92,7 +92,7 @@
       <view class="circle-btn" wx:if="{{!isEditing && !isAdmin && !isAdding}}" catchtap="closeDetail">✕</view>
     </view>
     
-    <!-- 详情页面左上角完成按钮（管理员模式下，浏览模式时） -->
+    <!-- 详情页面左上角完成按钮（仅管理员模式下显示） -->
     <view class="complete-btn" wx:if="{{isAdmin && !isEditing && !isAdding}}" catchtap="closeDetail">
       <text>完成</text>
     </view>

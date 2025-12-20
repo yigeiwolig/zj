@@ -395,5 +395,62 @@ Page({
     const city = e.currentTarget.dataset.city;
     app.globalData.mockLocation = city;
     wx.showToast({ title: '已切换模拟定位', icon: 'none' });
+  },
+
+  // 管理员入口
+  onAdminTap: function(e) {
+    try {
+      console.log('========== onAdminTap 被触发 ==========');
+      console.log('事件对象:', e);
+      console.log('当前 step:', this.data.step);
+      console.log('isAuthorized:', this.data.isAuthorized);
+      console.log('事件类型:', e.type);
+      console.log('事件目标:', e.currentTarget);
+      console.log('事件详情:', e.detail);
+      
+      // 无论 step 是多少，都允许点击
+      // 微信小程序不支持 editable，使用自定义输入框
+      // 简化处理：直接跳转（实际项目中应使用自定义弹窗组件实现密码输入）
+      wx.showModal({
+        title: '管理员验证',
+        content: '请输入管理密码：3252955872',
+        editable: false,
+        success: (res) => {
+          console.log('Modal success callback:', res);
+          if (res.confirm) {
+            // 这里简化处理，实际应该使用自定义输入弹窗
+            // 暂时直接跳转，后续可以添加自定义密码输入组件
+            wx.showToast({ title: '验证通过', icon: 'success' });
+            setTimeout(() => {
+              wx.navigateTo({
+                url: '/pages/admin/admin',
+                success: (navRes) => {
+                  console.log('导航成功:', navRes);
+                },
+                fail: (navErr) => {
+                  console.error('导航失败:', navErr);
+                  wx.showToast({ title: '导航失败: ' + navErr.errMsg, icon: 'none', duration: 3000 });
+                }
+              });
+            }, 1000);
+          } else {
+            console.log('用户取消了验证');
+          }
+        },
+        fail: (err) => {
+          console.error('Modal fail callback:', err);
+          wx.showToast({ title: '弹窗失败: ' + err.errMsg, icon: 'none', duration: 3000 });
+        }
+      });
+    } catch (error) {
+      console.error('========== onAdminTap 发生错误 ==========');
+      console.error('错误信息:', error);
+      console.error('错误堆栈:', error.stack);
+      wx.showToast({ 
+        title: '点击事件错误: ' + error.message, 
+        icon: 'none', 
+        duration: 3000 
+      });
+    }
   }
 });

@@ -59,8 +59,11 @@
 <!-- 主程序 (气泡按钮等) -->
 <view class="page index-page {{step > 0 ? 'animating' : ''}}" wx:if="{{isAuthorized}}">
   <!-- 顶部标题 -->
-  <view class="header-section {{step > 0 ? 'fade-out' : ''}}">
-    <text class="main-title">新品体验</text>
+  <view class="header-section {{step > 0 ? 'fade-out' : ''}}" catchtap="onAdminTap">
+    <view class="title-wrap" bindtap="onAdminTap" catchtap="onAdminTap" data-step="{{step}}">
+      <text class="brand" catchtap="onAdminTap">MT</text>
+      <text class="brand-sub" catchtap="onAdminTap">安装教学</text>
+    </view>
   </view>
 
   <!-- 舞台区域 -->

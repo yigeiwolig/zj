@@ -1,7 +1,7 @@
 {
   "pages": [
-    "pages/home/home",
-   "pages/index/index",
+    "pages/azjc/azjc",
+    "pages/index/index",
     "pages/shop/shop",
     "pages/ota/ota",
     "pages/products/products",
@@ -10,8 +10,11 @@
     "pages/scan/scan",
     "pages/blocked/blocked",
     "pages/adminLite/adminLite",
+    "pages/admin/admin",
     "pages/paihang/paihang",
-    "pages/shouhou/shouhou"
+    "pages/shouhou/shouhou",
+    "pages/call/call",
+    "pages/home/home"
   ],
   "window": {
     "navigationStyle": "custom",

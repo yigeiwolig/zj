@@ -1,0 +1,227 @@
+<view class="app-container">
+  <!-- 顶部标题保持固定 -->
+  <view class="fixed-nav">
+    <view class="back-btn" bindtap="handleBack">
+      <text class="back-icon">‹</text>
+    </view>
+    <text class="brand" bindtap="onAdminTap" catchtap="onAdminTap">MT安装教学</text>
+  </view>
+
+  <!-- 核心：舞台容器，通过 translate 控制位移 -->
+  <view 
+    class="stage-wrapper" 
+    style="transform: translateY(-{{stepIndex * 100}}vh);"
+    bindtouchstart="touchStart"
+    bindtouchend="touchEnd">
+    
+    <!-- STEP 01: 产品选择 (100vh) -->
+    <view class="step-view">
+      <view class="view-content">
+        <view class="header-group">
+          <text class="main-title">选择产品型号</text>
+        </view>
+        <view class="card-stack">
+          <view wx:for="{{products}}" wx:key="index" 
+                class="p-card {{pIndex === index ? 'active' : ''}}" 
+                bindtap="selectProduct" data-index="{{index}}">
+            <view class="p-info">
+              <text class="p-name">{{item.name}}</text>
+            </view>
+            <text class="mt-logo">MT</text>
+            <view class="admin-del" wx:if="{{isAdmin}}" catchtap="deleteItem" data-type="products" data-index="{{index}}">×</view>
+            <view class="admin-number" wx:if="{{isAdmin}}" catchtap="setNumber" data-type="products" data-index="{{index}}">
+              <text class="number-text">{{item.number || (index + 1)}}</text>
+            </view>
+          </view>
+          <!-- 管理员添加块 -->
+          <view class="add-card-btn" wx:if="{{isAdmin}}" bindtap="addItem" data-type="products">+ 添加型号</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- STEP 02: 车型选择 (100vh) -->
+    <view class="step-view">
+      <view class="view-content">
+        <view class="header-group">
+          <text class="main-title">确认安装车型</text>
+        </view>
+        <view class="type-stack">
+          <view 
+            wx:for="{{types}}" wx:key="index"
+            class="t-card {{tIndex === index ? 'active' : ''}}"
+            bindtap="selectType" data-index="{{index}}">
+            
+            <!-- 只有标题，不放任何副标题或编号 -->
+            <text class="t-name">{{item.name || item}}</text>
+
+            <!-- 纯粹的品牌水印 -->
+            <text class="mt-logo">MT</text>
+            <view class="admin-del" wx:if="{{isAdmin}}" catchtap="deleteItem" data-type="types" data-index="{{index}}">×</view>
+            <view class="admin-number" wx:if="{{isAdmin}}" catchtap="setNumber" data-type="types" data-index="{{index}}">
+              <text class="number-text">{{item.number || (index + 1)}}</text>
+            </view>
+          </view>
+          <view class="add-card-btn" wx:if="{{isAdmin}}" bindtap="addItem" data-type="types">+ 添加车型分类</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- STEP 03: 教程详情 (100vh，内部可局部滚动) -->
+    <view class="step-view" id="step3">
+      <view class="view-content" style="padding-bottom: 0;">
+        <view class="mode-switch">
+          <view class="m-btn {{mode === 'v' ? 'active' : ''}}" bindtap="switchMode" data-mode="v">分段视频</view>
+          <view class="m-btn {{mode === 'g' ? 'active' : ''}}" bindtap="switchMode" data-mode="g">图文详情</view>
+        </view>
+        <!-- 管理员模式：显示全部 -->
+        <view class="show-all-switch" wx:if="{{isAdmin}}" bindtap="toggleShowAll">
+          <text class="show-all-text">{{showAll ? '✓ 显示全部' : '显示全部'}}</text>
+        </view>
+        
+        <!-- 第三级页面内部滚动，防止教程太长 -->
+        <scroll-view scroll-y class="tutorial-scroll">
+          <!-- 视频模式 -->
+          <view class="tutorial-body" wx:if="{{mode === 'v'}}">
+            <view 
+              class="v-card {{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'dragging' : ''}}"
+              wx:for="{{filteredChapters}}" 
+              wx:key="index"
+              style="{{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
+              bindtouchstart="{{isAdmin ? 'onDragStart' : ''}}"
+              catchtouchmove="{{isAdmin ? 'onDragMove' : ''}}"
+              bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
+              data-index="{{index}}"
+              data-type="chapters">
+              <video 
+                class="v-player-real" 
+                src="{{item.url}}" 
+                wx:if="{{item.url}}" 
+                controls
+                binderror="onVideoError"
+                data-index="{{index}}"
+                data-fileid="{{item.fileID}}"></video>
+              <view class="v-player" wx:else>
+                <text style="color:#666">视频待上传</text>
+              </view>
+              <view class="v-info">
+                <text class="v-title">{{item.title || '安装阶段说明及注意事项'}}</text>
+                <view class="admin-actions" wx:if="{{isAdmin}}">
+                  <view class="admin-edit-btn" bindtap="editItem" data-type="chapters" data-index="{{index}}">编辑</view>
+                  <view class="admin-del-btn" bindtap="deleteItem" data-type="chapters" data-index="{{index}}">删除</view>
+                  <view class="admin-match-code">
+                    <text class="match-code-text">{{item.matchCode || '未设置'}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+            
+            <!-- 视频模式下添加按钮 -->
+            <view class="add-card-btn" wx:if="{{isAdmin && mode === 'v'}}" bindtap="uploadMedia" data-type="video">+ 添加视频章节</view>
+          </view>
+          <!-- 图文模式 -->
+          <view class="tutorial-body" wx:else>
+            <view 
+              class="g-article {{isAdmin && isDragging && dragIndex === index && dragType === 'graphics' ? 'dragging' : ''}}"
+              wx:for="{{filteredGraphics}}" 
+              wx:key="index"
+              style="{{isAdmin && isDragging && dragIndex === index && dragType === 'graphics' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
+              bindtouchstart="{{isAdmin ? 'onDragStart' : ''}}"
+              catchtouchmove="{{isAdmin ? 'onDragMove' : ''}}"
+              bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
+              data-index="{{index}}"
+              data-type="graphics">
+              <image class="g-media-real" src="{{item.img}}" mode="aspectFill" wx:if="{{item.img}}"></image>
+              <view class="g-media" wx:else></view>
+              <view class="g-info">
+                <text class="g-title">{{item.title || '安装流程图解 0' + (index+1)}}</text>
+                <text class="g-desc" wx:if="{{item.desc && item.desc !== '点击编辑详细描述'}}">{{item.desc}}</text>
+                <view class="admin-actions" wx:if="{{isAdmin}}">
+                  <view class="admin-edit-btn" bindtap="editItem" data-type="graphics" data-index="{{index}}">编辑</view>
+                  <view class="admin-del-btn" bindtap="deleteItem" data-type="graphics" data-index="{{index}}">删除</view>
+                  <view class="admin-match-code">
+                    <text class="match-code-text">{{item.matchCode || '未设置'}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+            
+            <!-- 图文模式下添加按钮 -->
+            <view class="add-card-btn" wx:if="{{isAdmin && mode === 'g'}}" bindtap="uploadMedia" data-type="image">+ 添加图文步骤</view>
+          </view>
+          <view style="height: 100rpx;"></view>
+        </scroll-view>
+      </view>
+    </view>
+
+  </view>
+
+  <!-- 椭圆形密码弹窗 -->
+  <view class="pwd-modal" wx:if="{{showPwd}}">
+    <view class="pwd-box">
+      <text class="pwd-title">权限验证</text>
+      <input class="pwd-input" password placeholder="请输入管理密码" bindinput="onPwdInput" value="{{tempPwd}}"/>
+      <view class="pwd-btns">
+        <text class="p-btn cancel" bindtap="hidePwdModal">取消</text>
+        <text class="p-btn confirm" bindtap="verifyPwd">确定</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 匹配码选择弹窗 -->
+  <view class="match-code-modal" wx:if="{{showMatchCodePicker}}">
+    <view class="match-code-overlay" catchtap="hideMatchCodePicker"></view>
+    <view class="match-code-content">
+      <view class="match-code-header">
+        <text class="match-code-title">选择匹配码</text>
+        <text class="match-code-close" catchtap="hideMatchCodePicker">×</text>
+      </view>
+      <view class="match-code-body">
+        <view class="picker-group">
+          <text class="picker-label">产品号码：</text>
+          <picker mode="selector" range="{{availableProducts}}" range-key="name" value="{{matchCodeProductIndex}}" bindchange="onProductNumChange">
+            <view class="picker-display">{{currentProductName}} ({{matchCodeProductNum}})</view>
+          </picker>
+        </view>
+        <view class="picker-group">
+          <text class="picker-label">车型号码：</text>
+          <picker mode="selector" range="{{availableTypes}}" range-key="name" value="{{matchCodeTypeIndex}}" bindchange="onTypeNumChange">
+            <view class="picker-display">{{currentTypeName}} ({{matchCodeTypeNum}})</view>
+          </picker>
+        </view>
+        <view class="match-code-preview">
+          <text>匹配码：{{matchCodeProductNum}}+{{matchCodeTypeNum}}</text>
+        </view>
+      </view>
+      <view class="match-code-footer">
+        <view class="match-code-btn cancel" catchtap="hideMatchCodePicker">取消</view>
+        <view class="match-code-btn confirm" catchtap="confirmMatchCode">确认</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 编辑弹窗 -->
+  <view class="edit-modal" wx:if="{{showEditModal}}">
+    <view class="edit-overlay" catchtap="hideEditModal"></view>
+    <view class="edit-content">
+      <view class="edit-header">
+        <text class="edit-title">编辑内容</text>
+        <text class="edit-close" catchtap="hideEditModal">×</text>
+      </view>
+      <view class="edit-body">
+        <view class="edit-item">
+          <text class="edit-label">标题：</text>
+          <text class="edit-value">{{editItemData.title || ''}}</text>
+        </view>
+        <view class="edit-item">
+          <text class="edit-label">匹配码：</text>
+          <text class="edit-value">{{editItemData.matchCode || '未设置'}}</text>
+        </view>
+      </view>
+      <view class="edit-footer">
+        <view class="edit-btn" bindtap="saveEdit">编辑标题</view>
+        <view class="edit-btn" bindtap="editMatchCode">编辑匹配码</view>
+        <view class="edit-btn cancel" catchtap="hideEditModal">取消</view>
+      </view>
+    </view>
+  </view>
+</view>

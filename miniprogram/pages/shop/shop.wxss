@@ -28,19 +28,27 @@ page {
   align-items: center;
   justify-content: flex-start;
 }
+/* 统一返回按钮样式 - 与 azjc 页面一致 */
 .nav-back-btn {
-  width: 80rpx;
-  height: 80rpx;
+  width: 60rpx;
+  height: 60rpx;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: all 0.2s;
 }
+
+.nav-back-btn:active {
+  transform: scale(0.95);
+  opacity: 0.7;
+}
+
 .icon-back {
-  font-size: 60rpx;
+  font-size: 48rpx;
   font-weight: 300;
   color: #000;
-  padding-bottom: 10rpx;
+  line-height: 1;
 }
 .brand-title { 
   font-size: 38rpx; 

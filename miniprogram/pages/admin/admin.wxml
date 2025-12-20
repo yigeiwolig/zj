@@ -1,0 +1,52 @@
+<!-- pages/admin/admin.wxml -->
+<view class="admin-container">
+  <view class="admin-header">
+    <text class="h1">数据管理</text>
+    <text class="p">ADMIN PANEL</text>
+  </view>
+
+  <!-- 1. 产品管理 -->
+  <view class="admin-card">
+    <view class="card-head">
+      <text class="label">产品型号 (Step 01)</text>
+      <view class="add-btn" bindtap="addItem" data-type="product">+</view>
+    </view>
+    <view class="item-list">
+      <view class="item" wx:for="{{products}}" wx:key="index">
+        <text>{{item.name}}</text>
+        <text class="del" bindtap="deleteItem" data-type="product" data-index="{{index}}">删除</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 2. 车型管理 -->
+  <view class="admin-card">
+    <view class="card-head">
+      <text class="label">车辆分类 (Step 02)</text>
+      <view class="add-btn" bindtap="addItem" data-type="type">+</view>
+    </view>
+    <view class="item-list">
+      <view class="item" wx:for="{{types}}" wx:key="index">
+        <text>{{item}}</text>
+        <text class="del" bindtap="deleteItem" data-type="type" data-index="{{index}}">删除</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 3. 视频/图文数据管理 -->
+  <view class="admin-card">
+    <view class="card-head">
+      <text class="label">教程章节内容</text>
+      <view class="add-btn">+</view>
+    </view>
+    <view class="item-list">
+      <view class="item" wx:for="{{chapters}}" wx:key="index">
+        <text>{{item}}</text>
+        <text class="del">删除</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="footer-tip">修改后将实时同步至前端展示</view>
+</view>
+

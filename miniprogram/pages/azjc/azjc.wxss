@@ -1,0 +1,757 @@
+page { height: 100%; background: #fff; overflow: hidden; }
+
+/* 舞台容器：这是控制跳转速度的关键 */
+.stage-wrapper {
+  width: 100%;
+  height: 100%;
+  transition: transform 1.2s cubic-bezier(0.645, 0.045, 0.355, 1); /* 高级感转场曲线 */
+  will-change: transform;
+}
+
+.step-view {
+  width: 100%;
+  height: 100vh; /* 每一页必须占满 */
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* 第三页需要额外的顶部间距，避开固定导航栏 */
+#step3.step-view {
+  padding-top: 180rpx; /* 给固定导航栏（160rpx）留出空间，只留一点点间距 */
+}
+
+.view-content {
+  height: 100%;       /* 确保继承全屏高度 */
+  padding: 180rpx 48rpx 60rpx;
+  display: flex;
+  flex-direction: column; /* 垂直排列：标题在顶，卡片组占满剩余部分 */
+  box-sizing: border-box;
+}
+
+/* 修改第三页专用内容包裹层 */
+#step3 .view-content {
+  /* 将原来的 180rpx 减少到 20rpx，因为 step-view 已经添加了 padding-top */
+  padding-top: 20rpx !important; 
+}
+
+/* 局部滚动区 */
+.tutorial-scroll {
+  flex: 1;
+  height: 0; /* 必须设为0，由flex撑开 */
+}
+
+/* 顶部导航 */
+.fixed-nav {
+  position: fixed; top: 0; width: 100%; height: 160rpx;
+  display: flex; justify-content: center; align-items: flex-end;
+  padding: 0 48rpx 30rpx; z-index: 1000; background: rgba(255,255,255,0.8); backdrop-filter: blur(20px);
+  box-sizing: border-box;
+}
+
+/* 返回键 - 统一样式 */
+.back-btn {
+  position: absolute;
+  left: 48rpx;
+  bottom: 30rpx;
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1001;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.back-btn:active {
+  transform: scale(0.95);
+  opacity: 0.7;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  font-weight: 300;
+  color: #000;
+  line-height: 1;
+}
+
+.brand {
+  cursor: pointer;
+  position: relative;
+  z-index: 1001;
+  pointer-events: auto !important;
+  padding: 10rpx 20rpx;
+  margin: -10rpx -20rpx;
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  font-size: 32rpx;
+  font-weight: 900;
+  letter-spacing: 2rpx;
+  color: #000;
+  text-align: center;
+}
+
+.step-indicator { 
+  position: absolute;
+  right: 48rpx;
+  bottom: 30rpx;
+  font-size: 18rpx; 
+  font-weight: 700; 
+  color: #999; 
+}
+
+/* 卡片样式（继承之前的圆角与质感） */
+.p-card {
+  position: relative; /* 必须！否则绝对定位的 Logo 会跳出卡片 */
+  overflow: hidden;   /* 裁剪溢出的水印部分，形成水印切边效果 */
+  flex: 1;            /* 关键：三个型号卡片自动平分第一屏高度 */
+  background: #f5f5f7; 
+  border-radius: 50rpx; 
+  padding-left: 30rpx !important; /* 文字再稍微往左一点 */
+  padding-right: 60rpx !important;
+  display: flex; 
+  flex-direction: column !important; /* 确保使用列方向 */
+  justify-content: center !important; /* 垂直方向：居中 */
+  align-items: flex-start !important; /* 水平方向：靠左 */
+  border: 1rpx solid #efefef; 
+  transition: all 0.4s; 
+  margin-bottom: 24rpx;
+  height: auto; /* 确保文字不会因为系列名去掉后留下空隙 */
+}
+/* 第一步（产品卡片）选中态 —— 纯黑沉浸 */
+.p-card.active {
+  background: #000000 !important;
+  color: #ffffff !important;
+  transform: scale(1.02);
+  box-shadow: 0 30rpx 60rpx rgba(0,0,0,0.1);
+}
+
+/* MT Logo：极致淡化 */
+.mt-logo {
+  position: absolute !important;
+  right: 40rpx !important; /* 完美的垂直居中公式 */
+  top: 50% !important;
+  transform: translateY(-50%) !important; /* 完美的垂直居中公式 */
+  font-size: 140rpx !important; /* 保持之前的尺寸 */
+  font-weight: 900 !important;
+  font-style: italic !important;
+  line-height: 1 !important;
+  pointer-events: none;
+  z-index: 1;
+  /* 初始颜色：极淡 */
+  color: rgba(0, 0, 0, 0.02) !important;
+  transition: all 0.4s ease;
+}
+
+/* 第二步选中时，Logo 颜色微调，与第一页的白水印区分开 */
+.t-card.active .mt-logo {
+  color: rgba(0, 0, 0, 0.04) !important; /* 从 0.02 调到 0.04，让 Logo 也稍微明显一点 */
+}
+
+/* --- 第一页：产品型号卡片颜色 --- */
+/* 未选中：浅灰卡片 + 极淡黑水印 */
+.p-card .mt-logo { color: rgba(0, 0, 0, 0.03); }
+/* 选中：黑卡 + 明显可见的白水印 */
+.p-card.active .mt-logo {
+  color: rgba(255, 255, 255, 0.15) !important; /* 透明度从 0.05 提升到 0.15，确保能看清但又不扎眼 */
+  font-style: italic !important; /* 保持倾斜和位置 */
+}
+
+
+/* 第二步卡片：默认状态（极简、浅淡） */
+.t-card {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #F8F8F8 !important; /* 非常浅的灰色 */
+  border-radius: 40rpx;
+  display: flex;
+  flex-direction: column !important; /* 确保使用列方向 */
+  justify-content: center !important; /* 垂直方向：居中 */
+  align-items: flex-start !important; /* 水平方向：靠左 */
+  padding-left: 30rpx !important; /* 文字再稍微往左一点 */
+  padding-right: 60rpx !important;
+  /* 初始边框设为透明，但保留宽度，防止选中时闪烁 */
+  border: 6rpx solid transparent; 
+  transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.2); 
+}
+
+/* 第二步卡片：选中状态（极致黑框白底，制造视觉差） */
+.t-card.active {
+  background: #FFFFFF !important;  /* 变纯白 */
+  border-color: #000000 !important; /* 极粗的黑色边框 */
+  transform: scale(1.04);           /* 明显的放大回弹 */
+  box-shadow: 0 30rpx 60rpx rgba(0,0,0,0.08); /* 增加柔和阴影 */
+}
+
+/* 车型文字：选中后变粗 */
+.t-name {
+  text-align: left !important;
+  font-size: 44rpx;
+  font-weight: 800;
+  color: #1a1a1a;
+  transition: all 0.3s ease;
+  line-height: 1.2;
+  display: block;
+  z-index: 2;
+}
+
+.t-card.active .t-name {
+  font-weight: 900; /* 选中后文字更有分量 */
+  transform: translateX(10rpx); /* 轻微右移，产生交互感 */
+}
+
+/* 头部样式 */
+.header-group {
+  margin-bottom: 60rpx;
+  padding-top: 20rpx;
+}
+
+.main-title {
+  font-size: 48rpx;
+  font-weight: 800;
+  color: #000;
+  letter-spacing: -2rpx;
+}
+
+/* 产品卡片信息 */
+.p-info {
+  position: relative;
+  margin: 0 !important; /* 确保没有任何外边距 */
+  padding: 0 !important;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start !important; /* 强制内部文字靠左 */
+  text-align: left !important;
+}
+
+.p-name {
+  text-align: left !important;
+  font-size: 44rpx;
+  font-weight: 800;
+  letter-spacing: -1rpx;
+  line-height: 1.2;
+  display: block;
+}
+
+/* 隐藏不再需要的样式类 */
+.tag,
+.p-series,
+.p-suffix,
+.v-num,
+.step-indicator {
+  display: none !important;
+}
+
+/* 卡片堆叠 */
+.card-stack { flex: 1; display: flex; flex-direction: column; gap: 20rpx; }
+
+/* 车型选择容器 */
+.type-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx; /* 增加间距，让卡片呼吸感更强 */
+}
+
+
+/* 优化切换器的样式 (Mode Switch) */
+.mode-switch {
+  display: flex;
+  background: #f0f0f2;
+  padding: 8rpx;
+  border-radius: 20rpx; /* 圆角稍微收小一点，显精致 */
+  margin-bottom: 60rpx; /* 增加下方与内容的间距 */
+  
+  /* 限制最大宽度并居中，不要撑满全屏，这样更高级 */
+  width: 85%;
+  margin-left: auto;
+  margin-right: auto;
+  position: relative;
+  z-index: 10; /* 确保切换器在固定导航栏之上 */
+}
+
+/* 切换器紧贴标题栏下方，只留一点点间距 */
+#step3 .mode-switch {
+  margin-top: 0 !important; /* 移除额外间距，让它紧贴标题栏 */
+}
+
+.m-btn {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0; /* 缩小上下内边距，让按钮变扁一点，更像胶囊 */
+  font-size: 24rpx; /* 字体稍微调小 2rpx */
+  font-weight: 700;
+  color: #999;
+  border-radius: 16rpx;
+  transition: all 0.3s ease;
+}
+
+.m-btn.active {
+  background: #fff;
+  color: #000;
+  box-shadow: 0 4rpx 20rpx rgba(0,0,0,0.06);
+}
+
+/* 显示全部开关 */
+.show-all-switch {
+  margin-top: 20rpx;
+  margin-bottom: 20rpx;
+  padding: 16rpx 24rpx;
+  background: #f0f0f2;
+  border-radius: 12rpx;
+  text-align: center;
+}
+
+.show-all-text {
+  font-size: 26rpx;
+  color: #1890ff;
+  font-weight: 600;
+}
+
+/* 教程展示块 (V-Card) */
+.v-card { background: #fff; border-radius: 50rpx; overflow: hidden; margin-bottom: 40rpx; box-shadow: 0 20rpx 40rpx rgba(0,0,0,0.05); }
+.v-player { width: 100%; height: 360rpx; background: #000; display: flex; justify-content: center; align-items: center; }
+.play-btn { width: 80rpx; height: 80rpx; background: rgba(255,255,255,0.2); border-radius: 50%; color: #fff; display: flex; justify-content: center; align-items: center; font-size: 40rpx; }
+.v-info { padding: 40rpx; }
+.v-title { font-size: 32rpx; font-weight: 700; display: block; }
+
+/* 图文块 */
+.g-article { margin-bottom: 60rpx; }
+.g-media { width: 100%; height: 600rpx; background: #f5f5f7; border-radius: 40rpx; margin-bottom: 30rpx; }
+.g-info { padding: 0 10rpx; }
+.g-title { font-size: 40rpx; font-weight: 800; display: block; margin-bottom: 15rpx; }
+.g-desc { font-size: 28rpx; color: #666; line-height: 1.6; }
+
+/* ================= 椭圆密码弹窗样式 ================= */
+.pwd-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(15px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pwd-box {
+  background: #fff;
+  width: 80%;
+  padding: 60rpx;
+  border-radius: 50rpx;
+}
+
+.pwd-title {
+  display: block;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 800;
+  margin-bottom: 40rpx;
+  color: #000;
+}
+
+.pwd-input {
+  background: #f5f5f7;
+  height: 100rpx;
+  border-radius: 50rpx; /* 椭圆形状 */
+  padding: 0 40rpx;
+  font-size: 28rpx;
+  margin-bottom: 50rpx;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+  border: none;
+}
+
+.pwd-btns {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 40rpx;
+}
+
+.p-btn {
+  font-size: 28rpx;
+  font-weight: 700;
+  padding: 20rpx 40rpx;
+}
+
+.p-btn.cancel {
+  color: #999;
+}
+
+.p-btn.confirm {
+  color: #000;
+}
+
+/* ================= 管理员UI样式 ================= */
+/* 管理员删除按钮 */
+.admin-del {
+  position: absolute;
+  top: 20rpx;
+  right: 20rpx;
+  width: 44rpx;
+  height: 44rpx;
+  background: #ff4d4f;
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  font-size: 30rpx;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* 管理员号码显示 */
+.admin-number {
+  position: absolute;
+  top: 20rpx;
+  left: 20rpx;
+  min-width: 50rpx;
+  height: 50rpx;
+  background: #4CAF50;
+  border-radius: 25rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20rpx;
+  z-index: 10;
+  box-shadow: 0 4rpx 12rpx rgba(76, 175, 80, 0.3);
+}
+
+.number-text {
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: bold;
+}
+
+/* 匹配码显示 */
+.admin-match-code {
+  margin-top: 16rpx;
+  padding: 8rpx 16rpx;
+  background: #f5f5f5;
+  border-radius: 8rpx;
+  display: inline-block;
+}
+
+.match-code-text {
+  color: #666;
+  font-size: 24rpx;
+}
+
+/* 添加按钮卡片 */
+.add-card-btn {
+  width: 100%;
+  height: 120rpx;
+  border: 2rpx dashed #ccc;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 28rpx;
+  font-weight: 600;
+  margin-top: 20rpx;
+  background: #fafafa;
+}
+
+/* 确保图文和视频卡片也有相对定位，以便删除按钮正确显示 */
+.v-card,
+.g-article {
+  position: relative;
+}
+
+/* ================= 上传功能样式 ================= */
+/* 上传卡片样式 */
+.upload-box {
+  width: 100%;
+  height: 240rpx;
+  background: #f5f5f7;
+  border: 2rpx dashed #d2d2d7;
+  border-radius: 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin-top: 30rpx;
+}
+
+.upload-icon {
+  font-size: 60rpx;
+  color: #999;
+  margin-bottom: 10rpx;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.upload-box text {
+  font-size: 24rpx;
+  color: #999;
+  font-weight: 600;
+}
+
+/* 渲染出的真实媒体样式 */
+.v-player-real {
+  width: 100%;
+  height: 380rpx;
+  border-radius: 40rpx 40rpx 0 0;
+  background: #000;
+}
+
+.g-media-real {
+  width: 100%;
+  height: 600rpx;
+  background: #eee;
+  border-radius: 40rpx;
+  margin-bottom: 30rpx;
+}
+
+.admin-actions {
+  margin-top: 20rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  align-items: center;
+}
+
+.admin-del-btn {
+  font-size: 22rpx;
+  color: #ff4d4f;
+  font-weight: 600;
+  text-decoration: underline;
+  display: inline-block;
+}
+
+.admin-edit-btn {
+  font-size: 22rpx;
+  color: #1890ff;
+  font-weight: 600;
+  text-decoration: underline;
+  display: inline-block;
+}
+
+/* 拖拽样式 */
+.v-card.dragging,
+.g-article.dragging {
+  transition: none !important;
+  transform: translateZ(0) scale(1.02);
+  box-shadow: 0 12rpx 32rpx rgba(0,0,0,0.15);
+  z-index: 100;
+  opacity: 0.95;
+  border: 2rpx solid #007AFF;
+  will-change: transform;
+}
+
+.v-card:not(.dragging),
+.g-article:not(.dragging) {
+  transition: transform 0.3s ease-out, box-shadow 0.2s, opacity 0.2s;
+}
+
+/* 编辑弹窗 */
+.edit-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.edit-content {
+  position: relative;
+  width: 80%;
+  max-width: 600rpx;
+  background: #fff;
+  border-radius: 30rpx;
+  overflow: hidden;
+  z-index: 10001;
+}
+
+.edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 40rpx;
+  border-bottom: 1rpx solid #eee;
+}
+
+.edit-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #000;
+}
+
+.edit-close {
+  font-size: 48rpx;
+  color: #999;
+  line-height: 1;
+}
+
+.edit-body {
+  padding: 40rpx;
+}
+
+.edit-item {
+  margin-bottom: 30rpx;
+}
+
+.edit-label {
+  display: block;
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 10rpx;
+}
+
+.edit-value {
+  display: block;
+  font-size: 32rpx;
+  color: #000;
+  font-weight: 600;
+}
+
+.edit-footer {
+  display: flex;
+  flex-direction: column;
+  padding: 0 40rpx 40rpx;
+  gap: 20rpx;
+}
+
+.edit-btn {
+  padding: 24rpx;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 600;
+  background: #1890ff;
+  color: #fff;
+  border-radius: 12rpx;
+}
+
+.edit-btn.cancel {
+  background: #f5f5f5;
+  color: #666;
+}
+
+/* 匹配码选择弹窗 */
+.match-code-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.match-code-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.match-code-content {
+  position: relative;
+  width: 80%;
+  max-width: 600rpx;
+  background: #fff;
+  border-radius: 30rpx;
+  overflow: hidden;
+  z-index: 10001;
+}
+
+.match-code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 40rpx;
+  border-bottom: 1rpx solid #eee;
+}
+
+.match-code-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #000;
+}
+
+.match-code-close {
+  font-size: 48rpx;
+  color: #999;
+  line-height: 1;
+}
+
+.match-code-body {
+  padding: 40rpx;
+}
+
+.picker-group {
+  margin-bottom: 40rpx;
+}
+
+.picker-label {
+  display: block;
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 20rpx;
+}
+
+.picker-display {
+  padding: 24rpx;
+  background: #f5f5f5;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #000;
+}
+
+.match-code-preview {
+  margin-top: 40rpx;
+  padding: 24rpx;
+  background: #e6f7ff;
+  border-radius: 12rpx;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1890ff;
+}
+
+.match-code-footer {
+  display: flex;
+  border-top: 1rpx solid #eee;
+}
+
+.match-code-btn {
+  flex: 1;
+  padding: 32rpx;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.match-code-btn.cancel {
+  color: #999;
+  border-right: 1rpx solid #eee;
+}
+
+.match-code-btn.confirm {
+  color: #1890ff;
+}

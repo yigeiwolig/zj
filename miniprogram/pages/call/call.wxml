@@ -1,0 +1,106 @@
+<view class="container">
+  
+  <!-- 左上角返回按钮 -->
+  <view class="back-btn" catchtap="handleBack">
+    <text class="back-icon">‹</text>
+  </view>
+  
+  <!-- 自定义高级 Toast (顶部提示条) -->
+  <view class="custom-toast {{toastVisible ? 'show' : ''}}">
+    <view class="toast-icon-box" wx:if="{{toastIcon === 'success'}}">
+      <icon type="success" size="18" color="#07C160"/>
+    </view>
+    <view class="toast-text">{{toastMsg}}</view>
+  </view>
+  
+  <!-- 标题区 -->
+  <view class="header">
+    <view class="h1-wrapper">
+      <view class="h1-main">MT</view>
+      <view class="h1-dash">-</view>
+      <view class="h1-sub">摩改社</view>
+    </view>
+    <view class="p-wrapper">
+      <view class="p-line"></view>
+      <view class="p">联系与支持中心</view>
+      <view class="p-line"></view>
+    </view>
+  </view>
+
+  <!-- 卡片堆叠区 -->
+  <view class="card-stack">
+
+    <!-- 1. 微信卡片 -->
+    <view class="bento-card" bindtap="handleWechatTap" hover-class="card-hover" hover-stay-time="100">
+      <view class="visual-area">
+        <image class="icon-layer {{showQr ? 'hidden' : ''}}" src="{{iconTop}}" mode="aspectFit" />
+        <view class="icon-text {{showQr ? 'hidden' : ''}}">点击查看二维码</view>
+        <image class="qr-layer {{showQr ? 'show' : ''}}" src="{{qrCodeUrl}}" mode="aspectFit" />
+      </view>
+      <view class="text-area">
+        <view class="card-title">官方微信</view>
+        <view class="card-desc">工作日 9:00 - 18:00 即时回复</view>
+        <view class="action-hint {{showQr ? 'show' : ''}}">再次点击复制: MT-mogaishe</view>
+      </view>
+    </view>
+
+    <!-- 2. 邮箱卡片 -->
+    <view class="bento-card" bindtap="openModal" hover-class="card-hover" hover-stay-time="100">
+      <view class="visual-area">
+        <image class="icon-layer" src="{{iconBottom}}" mode="aspectFit" />
+      </view>
+      <view class="text-area">
+        <view class="card-title">投诉建议</view>
+        <view class="card-desc">直达管理层，24 小时内处理</view>
+      </view>
+    </view>
+
+  </view>
+
+  <!-- 底部版权 -->
+  <view class="footer">© 2025 MT-MOGAISHE. All Rights Reserved.</view>
+
+  <!-- 高级多步弹窗 -->
+  <view class="modal-overlay {{showModal ? 'active' : ''}}" catchtouchmove="preventMove">
+    <view class="ios-modal">
+      
+      <!-- 步骤 1: 输入内容 -->
+      <view wx:if="{{step === 1}}">
+        <view class="modal-title">发送投诉建议</view>
+        <view class="modal-desc">内容将发送至 3252955872@qq.com</view>
+        
+        <textarea 
+          class="modal-input" 
+          placeholder="请输入您的反馈内容..." 
+          bindinput="handleInput"
+          value="{{emailContent}}"
+          disable-default-padding
+          confirm-type="send"
+        ></textarea>
+        
+        <view class="btn-group">
+          <button class="modal-btn btn-cancel" bindtap="closeModal">取消</button>
+          <button class="modal-btn btn-send" bindtap="handleSendEmail">下一步</button>
+        </view>
+      </view>
+
+      <!-- 步骤 2: 成功引导 (修复了 br 报错) -->
+      <view wx:else class="success-step">
+        <!-- 成功图标 -->
+        <image class="success-icon" src="{{iconCheck}}" mode="aspectFit" />
+        
+        <view class="modal-title">正文已自动复制</view>
+        <!-- 修复报错点：使用 text 标签配合 \n 换行 -->
+        <text class="modal-desc" decode>请点击下方按钮复制邮箱，\n然后前往邮件 App 粘贴发送。</text>
+        
+        <view class="email-display">3252955872@qq.com</view>
+
+        <view class="btn-group vertical">
+          <button class="modal-btn btn-send full-width" bindtap="handleCopyEmail">复制邮箱并关闭</button>
+        </view>
+      </view>
+
+    </view>
+  </view>
+
+</view>

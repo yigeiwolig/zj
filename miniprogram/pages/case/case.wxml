@@ -4,7 +4,9 @@
 <!-- 顶部导航 -->
 <view class="custom-header" style="padding-top: {{statusBarHeight}}px;">
   <view class="header-content">
-    <view class="back-icon" catchtap="goBack"></view>
+    <view class="back-icon" catchtap="goBack">
+      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+    </view>
     <text class="header-title" bindtap="handleTitleTap">MT 案例库</text>
   </view>
 </view>

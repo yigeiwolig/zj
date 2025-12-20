@@ -273,9 +273,10 @@ page {
 .phantom {
   position: fixed; background: #fff; border-radius: 48rpx;
   box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.05); z-index: 999;
-  transform-origin: top left; overflow: hidden;
+  transform-origin: center center; overflow: hidden;
   display: flex; flex-direction: column;
-  transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+  transition: all 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: transform, width, height, top, left;
 }
 .phantom.expanded { 
   box-shadow: 0 80rpx 200rpx rgba(0,0,0,0.25); 

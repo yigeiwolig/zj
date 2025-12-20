@@ -1,0 +1,305 @@
+page {
+  background-color: #F5F5F7;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  height: 100%;
+}
+
+/* 左上角返回按钮 - 统一样式 */
+.back-btn {
+  position: fixed;
+  top: 80rpx;
+  left: 48rpx;
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.back-btn:active {
+  transform: scale(0.95);
+  opacity: 0.7;
+}
+
+.back-icon {
+  font-size: 48rpx;
+  font-weight: 300;
+  color: #000;
+  line-height: 1;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 80rpx 40rpx;
+  box-sizing: border-box;
+  min-height: 100%;
+}
+
+/* --- 自定义高级 Toast 样式 (居中版) --- */
+.custom-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9); /* 居中定位 + 初始微缩 */
+  
+  background: rgba(40, 40, 40, 0.9); /* 深空灰背景，显高级 */
+  backdrop-filter: blur(10px);
+  
+  padding: 30rpx 50rpx;
+  border-radius: 20rpx;
+  box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.2);
+  
+  display: flex;
+  flex-direction: column; /* 图标文字垂直排列 */
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+  
+  z-index: 3000; /* 保证在所有弹窗最上面 */
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.custom-toast.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1); /* 出现时回弹正常大小 */
+}
+
+.toast-text {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #FFFFFF; /* 白字 */
+  letter-spacing: 1rpx;
+}
+
+.toast-icon-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.header { 
+  text-align: center; 
+  margin-bottom: 60rpx; 
+  flex-shrink: 0; 
+  position: relative;
+  padding-top: 20rpx;
+}
+
+/* --- 方案2：赛博故障艺术字设计 --- */
+.h1-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  margin-bottom: 32rpx;
+  position: relative;
+  /* 整体稍微倾斜，增加速度感 */
+  transform: skewX(-5deg); 
+}
+
+.h1-main, .h1-sub {
+  font-size: 64rpx; /* 进一步改小字体 */
+  font-weight: 900;  /* 极粗 */
+  color: #000;
+  position: relative;
+  letter-spacing: 3rpx;
+  line-height: 1;
+  font-family: "Impact", "Arial Black", sans-serif; /* 尽量使用厚重的字体 */
+  
+  /* 核心：赛博故障色偏效果 (青色与玫红的错位) */
+  text-shadow: 
+    2rpx 0 #00FFF0,  /* 左侧青色 */
+    -2rpx 0 #FF00C1; /* 右侧玫红 */
+    
+  /* 这里的动画是可选的，如果你不需要它动，可以删掉下面这一行 */
+  animation: glitch-anim 3s infinite linear alternate-reverse;
+}
+
+.h1-dash {
+  font-size: 48rpx; /* 进一步改小字体 */
+  font-weight: 900;
+  color: #000;
+  margin: 0 10rpx;
+  /* 连字符也加上同样的色偏 */
+  text-shadow: 1rpx 0 #00FFF0, -1rpx 0 #FF00C1;
+}
+
+/* 故障抖动动画 (每隔几秒轻微跳动一次) */
+@keyframes glitch-anim {
+  0% { text-shadow: 4rpx 0 #00FFF0, -4rpx 0 #FF00C1; transform: translate(0); }
+  92% { text-shadow: 4rpx 0 #00FFF0, -4rpx 0 #FF00C1; transform: translate(0); }
+  94% { text-shadow: -6rpx 0 #00FFF0, 6rpx 0 #FF00C1; transform: translate(2rpx, -2rpx); }
+  96% { text-shadow: 8rpx 0 #00FFF0, -8rpx 0 #FF00C1; transform: translate(-2rpx, 2rpx); }
+  98% { text-shadow: -4rpx 0 #00FFF0, 4rpx 0 #FF00C1; transform: translate(0); }
+  100% { text-shadow: 4rpx 0 #00FFF0, -4rpx 0 #FF00C1; transform: translate(0); }
+}
+
+/* 下方的副标题调整，配合艺术字 */
+.p-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+  margin-top: 10rpx;
+}
+
+.p-line {
+  width: 60rpx;
+  height: 1rpx;
+  background: linear-gradient(to right, transparent, rgba(209, 209, 214, 0.6), transparent);
+  position: relative;
+}
+
+.p-line::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 4rpx;
+  height: 4rpx;
+  background: #D1D1D6;
+  border-radius: 50%;
+}
+
+.p {
+  font-size: 20rpx;
+  color: #333; /* 稍微加深一点颜色 */
+  letter-spacing: 12rpx;
+  font-weight: 700;
+  background: #EEE; /* 给副标题加一个浅色底，增加设计感 */
+  padding: 4rpx 20rpx;
+  border-radius: 4rpx;
+  text-transform: uppercase;
+  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
+}
+
+.card-stack {
+  width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 30rpx;
+  justify-content: flex-start;
+}
+
+.bento-card {
+  background: #FFFFFF;
+  border-radius: 56rpx;
+  padding: 40rpx;
+  flex: 1;
+  max-height: 45%;
+  min-height: 360rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.04);
+  position: relative;
+  transition: transform 0.2s;
+}
+
+.card-hover { transform: scale(0.98); background-color: #FAFAFA; }
+
+.visual-area {
+  flex: 1; width: 100%;
+  display: flex; align-items: center; justify-content: center; position: relative;
+}
+
+/* 图标居中放大 */
+.icon-layer {
+  width: 180rpx; height: 180rpx;
+  position: absolute;
+  top: 42%; left: 50%;
+  margin-left: -90rpx; margin-top: -90rpx;
+  transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  opacity: 1; transform: scale(1);
+}
+
+.icon-text {
+  position: absolute; top: 72%; width: 100%; text-align: center;
+  font-size: 24rpx; color: #CCCCCC;
+  transition: all 0.4s; opacity: 1;
+}
+
+.qr-layer {
+  width: 320rpx; height: 320rpx; border-radius: 16rpx;
+  position: absolute; transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+  opacity: 0; transform: scale(0.9) translateY(20rpx); pointer-events: none;
+}
+
+.icon-layer.hidden, .icon-text.hidden { opacity: 0; transform: scale(0.8); }
+.qr-layer.show { opacity: 1; transform: scale(1) translateY(0); }
+
+.text-area { text-align: center; z-index: 2; margin-top: 20rpx; }
+.card-title { font-size: 40rpx; font-weight: 600; color: #1D1D1F; margin-bottom: 8rpx; }
+.card-desc { font-size: 26rpx; color: #86868B; }
+.action-hint {
+  font-size: 24rpx; color: #07C160; font-weight: 500;
+  margin-top: 8rpx; opacity: 0; height: 0; transition: 0.3s;
+}
+.action-hint.show { opacity: 1; height: auto; }
+
+.footer { margin-top: 40rpx; margin-bottom: 20rpx; font-size: 22rpx; color: #D1D1D6; flex-shrink: 0; }
+
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4); z-index: 999;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+}
+.modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+.ios-modal {
+  width: 600rpx; background: rgba(255,255,255,0.96);
+  border-radius: 40rpx; padding: 48rpx; text-align: center;
+  box-shadow: 0 40rpx 80rpx rgba(0,0,0,0.2);
+  transform: scale(0.9); transition: transform 0.3s;
+}
+.modal-overlay.active .ios-modal { transform: scale(1); }
+
+.modal-title { font-size: 36rpx; font-weight: 600; margin-bottom: 16rpx; color: #000; }
+.modal-desc { 
+  font-size: 26rpx; color: #888; margin-bottom: 40rpx; 
+  line-height: 1.5; /* 增加行高，多行更好看 */
+}
+.modal-input {
+  width: 100%; height: 200rpx; background: #F2F2F2;
+  border-radius: 24rpx; padding: 24rpx; font-size: 30rpx;
+  text-align: left; box-sizing: border-box; margin-bottom: 40rpx;
+}
+.btn-group { display: flex; gap: 24rpx; }
+.modal-btn {
+  flex: 1; padding: 0; height: 88rpx; line-height: 88rpx;
+  border-radius: 24rpx; font-size: 32rpx; font-weight: 600;
+}
+.modal-btn::after { border: none; }
+.btn-cancel { background: #F2F2F2; color: #888; }
+.btn-send { background: #007AFF; color: #fff; }
+
+/* 成功页样式 */
+.success-step {
+  display: flex; flex-direction: column; align-items: center;
+  animation: fadeIn 0.3s ease;
+}
+.success-icon { width: 100rpx; height: 100rpx; margin-bottom: 24rpx; }
+.email-display {
+  background: #F0F5FF; color: #007AFF;
+  padding: 16rpx 32rpx; border-radius: 12rpx;
+  font-size: 28rpx; font-weight: 600;
+  margin-bottom: 40rpx; letter-spacing: 1rpx;
+}
+.btn-group.vertical { flex-direction: column; width: 100%; }
+.full-width { width: 100%; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}

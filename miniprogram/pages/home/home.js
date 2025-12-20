@@ -788,11 +788,17 @@ Page({
         statusColor
       };
       
+      // 计算初始位置（卡片当前位置）
+      const initialTop = rect.top;
+      const initialLeft = rect.left;
+      const initialWidth = rect.width;
+      const initialHeight = rect.height;
+      
       this.setData({
         isDetailOpen: true,
         showPhantom: true,
         activeItem: updatedActiveItem,
-        phantomStyle: `top: ${rect.top}px; left: ${rect.left}px; width: ${rect.width}px; height: ${rect.height}px; transform: none;`,
+        phantomStyle: `top: ${initialTop}px; left: ${initialLeft}px; width: ${initialWidth}px; height: ${initialHeight}px; transform: none;`,
         
         editData: {
           id: item.id, // 绑定ID
@@ -812,14 +818,18 @@ Page({
         }
       });
 
+      // 延迟执行展开动画，确保初始位置已设置
       setTimeout(() => {
          const targetW = sys.windowWidth * 0.88; 
          const targetLeft = (sys.windowWidth - targetW) / 2;
+         const targetTop = sys.windowHeight / 2; // 屏幕中心位置（像素值）
+         const maxHeight = sys.windowHeight * 0.85; // 最大高度为屏幕的85%
+         
          this.setData({
            isExpanded: true,
-           phantomStyle: `top: 58%; left: ${targetLeft}px; width: ${targetW}px; height: auto; transform: translateY(-50%);`
+           phantomStyle: `top: ${targetTop}px; left: ${targetLeft}px; width: ${targetW}px; max-height: ${maxHeight}px; transform: translateY(-50%);`
          });
-      }, 50);
+      }, 100); // 稍微增加延迟，确保初始样式已应用
     }).exec();
   },
 
