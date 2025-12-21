@@ -1,0 +1,313 @@
+<view class="container">
+
+  <!-- 1. 顶部个人信息：杂志化排版，无框设计 -->
+
+  <view class="profile-header">
+
+    <view class="header-main">
+
+      <view class="user-identity">
+
+        <text class="rank-tag">PLATINUM MEMBER</text>
+
+        <text class="user-name">Alexander</text>
+
+      </view>
+
+      <view class="add-btn" bindtap="openBindModal">+</view>
+
+    </view>
+    
+
+    <view class="header-stats">
+
+      <view class="stat-item">
+
+        <text class="label">拥有产品数量</text>
+
+        <text class="value">{{deviceList.length}} 件</text>
+
+      </view>
+
+      <view class="divider-v"></view>
+
+      <view class="stat-item">
+
+        <text class="label">会员等级</text>
+
+        <text class="value platinum">铂金尊享会员</text>
+
+      </view>
+
+    </view>
+
+  </view>
+
+
+
+  <!-- 2. 动态订单区：支持多订单左右滑动 -->
+
+  <view class="section-label">LIVE ORDERS / 实时订单 {{orders.length > 1 ? (currentOrderIndex + 1) + '/' + orders.length : ''}}</view>
+
+  <swiper class="order-swiper" bindchange="onOrderChange" previous-margin="40rpx" next-margin="40rpx">
+
+    <swiper-item wx:for="{{orders}}" wx:key="id">
+
+      <view class="order-card">
+
+        <view class="order-index">{{index + 1 < 10 ? '0' + (index + 1) : index + 1}}</view>
+
+        <view class="order-status {{item.state == 1 ? 'blue' : (item.state == 2 ? 'green' : '')}}">
+
+          {{item.state == 0 ? '待发货' : (item.state == 1 ? '运输中' : '已签收')}}
+
+        </view>
+        
+
+        <view class="order-title">{{item.productName}}</view>
+        
+
+        <!-- 待发货或已签收展示订单信息 -->
+
+        <block wx:if="{{item.state == 0 || item.state == 2}}">
+
+          <view class="info-line">
+
+            <text>订单编号</text>
+
+            <text class="bold">{{item.orderId}}</text>
+
+          </view>
+
+          <view class="info-line" wx:if="{{item.state == 2}}">
+
+            <text>快递单号</text>
+
+            <view class="copy-box" bindtap="copyData" data-text="{{item.shippingId}}">
+
+              <text class="bold">{{item.shippingId}}</text>
+
+              <text class="copy-tag">复制</text>
+
+            </view>
+
+          </view>
+
+          <view class="info-line">
+
+            <text>{{item.state == 0 ? '下单时间' : '签收时间'}}</text>
+
+            <text class="bold">{{item.time}}</text>
+
+          </view>
+
+          <view class="refund-btn" wx:if="{{item.state == 0}}" bindtap="requestRefund">申请取消订单并退款</view>
+
+          <view class="logistics-detail-link" wx:if="{{item.state == 2}}" bindtap="viewLogistics">
+
+            <text>查看详细物流追踪记录</text>
+
+            <text class="arrow">➔</text>
+
+          </view>
+
+        </block>
+
+
+
+        <!-- 运输中展示物流动态 -->
+
+        <block wx:if="{{item.state == 1}}">
+
+          <view class="info-line">
+
+            <text>快递单号</text>
+
+            <view class="copy-box" bindtap="copyData" data-text="{{item.shippingId}}">
+
+              <text class="bold">{{item.shippingId}}</text>
+
+              <text class="copy-tag">复制</text>
+
+            </view>
+
+          </view>
+
+          <view class="shipping-content">
+
+            <view class="truck-icon">🚚</view>
+
+            <view class="ship-text">
+
+              <text class="eta">预计明天 14:00 前送达</text>
+
+              <text class="desc">{{item.lastLogistics}}</text>
+
+            </view>
+
+          </view>
+
+        </block>
+
+      </view>
+
+    </swiper-item>
+
+  </swiper>
+
+
+
+  <!-- 3. 产品设备列表 -->
+
+  <view class="section-label">MY DEVICES / 产品设备</view>
+
+  <view class="device-card" wx:for="{{deviceList}}" wx:key="sn">
+
+    <view class="remove-icon" bindtap="removeDevice" data-index="{{index}}">✕</view>
+
+    <view class="device-name">{{item.name}}</view>
+    
+
+    <view class="spec-list">
+
+      <view class="spec-row">
+
+        <text class="label">S/N 序列号</text>
+
+        <text class="value mono">{{item.sn}}</text>
+
+      </view>
+
+      <view class="spec-row">
+
+        <text class="label">总剩余质保</text>
+
+        <view class="warranty-val">
+
+          <text class="days-num {{item.days < 30 ? 'warning' : ''}}">{{item.days}} Days</text>
+
+          <text class="ext-tag" wx:if="{{item.hasExtra}}">含延保</text>
+
+        </view>
+
+      </view>
+
+      <view class="spec-row">
+
+        <text class="label">质保到期日期</text>
+
+        <text class="value">{{item.expiryDate}}</text>
+
+      </view>
+
+      <view class="spec-row">
+
+        <text class="label">激活次数</text>
+
+        <text class="value">{{item.activations}} 次</text>
+
+      </view>
+
+      <view class="spec-row">
+
+        <text class="label">固件版本</text>
+
+        <text class="value">{{item.firmware}}</text>
+
+      </view>
+
+    </view>
+
+  </view>
+
+
+
+  <!-- 4. 底部服务 -->
+
+  <view class="footer-bar">
+
+    <view class="f-btn">预约维修服务</view>
+
+    <view class="f-btn dark">联系在线客服</view>
+
+  </view>
+
+
+
+  <!-- 5. 绑定模态框 -->
+
+  <view class="modal {{showModal ? 'show' : ''}}">
+
+    <view class="modal-content">
+
+      <view class="modal-header">
+
+        <text>绑定新资产</text>
+
+        <view class="close-modal" bindtap="closeBindModal">✕</view>
+
+      </view>
+
+
+
+      <view class="bt-btn {{bluetoothReady ? 'ready' : ''}}" bindtap="startConnect">
+
+        <text>{{bluetoothReady ? '✅ 蓝牙设备已连接' : '📡 点击连接蓝牙设备'}}</text>
+
+      </view>
+
+
+
+      <view class="form-item">
+
+        <text class="form-label">选择产品型号</text>
+
+        <picker bindchange="onModelChange" range="{{modelOptions}}">
+
+          <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
+
+        </picker>
+
+      </view>
+
+
+
+      <view class="form-item">
+
+        <text class="form-label">上传凭证 (人工审核)</text>
+
+        <view class="upload-group">
+
+          <view class="upload-box"><text>+</text><text>购买截图</text></view>
+
+          <view class="upload-box"><text>+</text><text>聊天记录</text></view>
+
+        </view>
+
+      </view>
+
+
+
+      <view class="form-item">
+
+        <text class="form-label">购买日期</text>
+
+        <picker mode="date" bindchange="onDateChange">
+
+          <view class="picker-val">{{buyDate || '请选择日期'}}</view>
+
+        </picker>
+
+      </view>
+
+
+
+      <button class="submit-btn">提交上传审核</button>
+
+    </view>
+
+  </view>
+
+</view>
+
+

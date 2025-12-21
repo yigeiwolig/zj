@@ -1,0 +1,83 @@
+page { background: #F7F7F7; color: #1D1D1F; }
+.container { padding-bottom: 180rpx; }
+
+
+/* 头部 */
+.profile-header { background: #fff; padding: 120rpx 40rpx 60rpx; }
+.header-main { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 60rpx; }
+.rank-tag { font-size: 20rpx; color: #AF9567; letter-spacing: 4rpx; font-weight: 700; display: block; margin-bottom: 12rpx; }
+.user-name { font-size: 64rpx; font-weight: 600; letter-spacing: -2rpx; }
+.add-btn { font-size: 60rpx; font-weight: 200; line-height: 1; }
+
+
+.header-stats { display: flex; align-items: center; }
+.stat-item { display: flex; flex-direction: column; }
+.stat-item .label { font-size: 22rpx; color: #8E8E93; margin-bottom: 8rpx; }
+.stat-item .value { font-size: 32rpx; font-weight: 600; }
+.stat-item .platinum { color: #AF9567; }
+.divider-v { width: 1px; height: 40rpx; background: #E5E5E5; margin: 0 60rpx; }
+
+
+/* 标签 */
+.section-label { padding: 40rpx 40rpx 20rpx; font-size: 22rpx; font-weight: 700; color: #BBB; letter-spacing: 2rpx; }
+
+
+/* 订单卡片 */
+.order-swiper { height: 420rpx; }
+.order-card { background: #fff; margin: 0 12rpx; height: 100%; border-radius: 40rpx; padding: 40rpx; position: relative; border: 1px solid #E5E5E5; box-sizing: border-box; }
+.order-index { position: absolute; left: 40rpx; top: 40rpx; font-size: 20rpx; color: #CCC; font-weight: 700; }
+.order-status { text-align: right; font-size: 22rpx; font-weight: 700; color: #007AFF; }
+.order-status.green { color: #34C759; }
+.order-title { font-size: 32rpx; font-weight: 600; margin: 30rpx 0 20rpx; }
+
+
+.info-line { display: flex; justify-content: space-between; font-size: 24rpx; margin-bottom: 12rpx; color: #8E8E93; }
+.bold { color: #1D1D1F; font-weight: 500; }
+.copy-box { display: flex; align-items: center; }
+.copy-tag { font-size: 18rpx; padding: 4rpx 10rpx; background: #EEE; border-radius: 6rpx; margin-left: 10rpx; color: #666; }
+
+
+.refund-btn { margin-top: 20rpx; padding: 20rpx; border: 1px solid #FF3B30; color: #FF3B30; border-radius: 100rpx; text-align: center; font-size: 24rpx; font-weight: 600; }
+.shipping-content { display: flex; align-items: center; padding-top: 20rpx; border-top: 1px solid #F2F2F2; margin-top: 20rpx; }
+.truck-icon { font-size: 48rpx; margin-right: 20rpx; }
+.ship-text { flex: 1; }
+.eta { font-size: 26rpx; font-weight: 600; display: block; }
+.desc { font-size: 22rpx; color: #8E8E93; margin-top: 4rpx; display: block; }
+.logistics-detail-link { margin-top: 20rpx; padding-top: 20rpx; border-top: 1px solid #F2F2F2; display: flex; justify-content: space-between; font-size: 24rpx; color: #007AFF; font-weight: 600; }
+
+
+/* 设备卡片 */
+.device-card { background: #fff; margin: 0 40rpx 20rpx; padding: 40rpx; border-radius: 40rpx; border: 1px solid #E5E5E5; position: relative; }
+.remove-icon { position: absolute; right: 40rpx; top: 40rpx; font-size: 32rpx; color: #CCC; font-weight: 200; }
+.device-name { font-size: 36rpx; font-weight: 600; margin-bottom: 40rpx; }
+.spec-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16rpx; }
+.spec-row .label { font-size: 22rpx; color: #8E8E93; }
+.spec-row .value { font-size: 26rpx; font-weight: 500; }
+.mono { font-family: monospace; color: #555; }
+.warranty-val { display: flex; align-items: center; }
+.days-num { font-size: 36rpx; font-weight: 700; color: #34C759; margin-right: 10rpx; }
+.days-num.warning { color: #FF9500; }
+.ext-tag { font-size: 18rpx; padding: 4rpx 10rpx; background: #FFF9E6; color: #AF9567; border: 1px solid #F0E6CC; border-radius: 6rpx; }
+
+
+/* 底部 */
+.footer-bar { position: fixed; bottom: 40rpx; left: 40rpx; right: 40rpx; display: flex; gap: 20rpx; }
+.f-btn { flex: 1; height: 100rpx; background: #fff; border: 1px solid #E5E5E5; border-radius: 100rpx; display: flex; align-items: center; justify-content: center; font-size: 28rpx; font-weight: 600; }
+.f-btn.dark { background: #000; color: #fff; border: none; }
+
+
+/* 弹窗 */
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); visibility: hidden; opacity: 0; transition: 0.3s; z-index: 1000; }
+.modal.show { visibility: visible; opacity: 1; }
+.modal-content { position: absolute; bottom: 0; width: 100%; background: #F7F7F7; border-radius: 60rpx 60rpx 0 0; padding: 60rpx 40rpx 100rpx; transform: translateY(100%); transition: 0.3s; }
+.modal.show .modal-content { transform: translateY(0); }
+.modal-header { display: flex; justify-content: space-between; font-size: 32rpx; font-weight: 600; margin-bottom: 40rpx; }
+.bt-btn { width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; background: #fff; }
+.bt-btn.ready { background: #34C759; border-color: #34C759; color: #fff; }
+.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; margin-bottom: 30rpx; font-size: 28rpx; }
+.upload-group { display: flex; gap: 20rpx; margin-bottom: 30rpx; }
+.upload-box { flex: 1; height: 160rpx; background: #fff; border: 1px dashed #CCC; border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 20rpx; color: #999; }
+.submit-btn { width: 100%; padding: 30rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+

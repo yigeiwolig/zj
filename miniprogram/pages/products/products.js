@@ -224,6 +224,7 @@ Page({
       case 6: target = '/pages/shouhou/shouhou'; break; // 维修中心
       case 7: target = '/pages/azjc/azjc'; break;       // 安装教程
       case 12: target = '/pages/home/home'; break;       // 附近门店
+      case 2: target = '/pages/my/my'; break;           // 我的信息 -> my 页面
       // 其他待开发...
       default: target = ''; break;
     }
