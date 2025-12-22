@@ -10,9 +10,15 @@
       </view>
       <!-- 中间标题区域 -->
       <view class="header-title-row">
-        <view class="large-title" bindtap="triggerAdmin">
+        <view class="large-title">
           MT
-          <text wx:if="{{isAdmin}}" class="admin-badge">ADMIN</text>
+          <!-- 只有白名单用户能看到的切换开关 -->
+          <view 
+            wx:if="{{isAuthorized}}" 
+            class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
+            catchtap="toggleAdminMode">
+            {{isAdmin ? 'EXIT' : 'EDIT'}}
+          </view>
         </view>
         <view class="subtitle">请选择你的设备</view>
       </view>
@@ -22,10 +28,6 @@
     
     <!-- 管理员功能区域（独立区域） -->
     <view wx:if="{{isAdmin}}" class="admin-actions-container">
-      <!-- 退出管理员按钮 -->
-      <view class="exit-admin-btn" bindtap="exitAdmin">
-        <text class="exit-icon">退出管理员</text>
-      </view>
       <!-- 同步配件按钮 -->
       <view class="sync-parts-btn" bindtap="syncAllPartsToCloud">
         <text class="sync-icon">🔄</text>
@@ -169,7 +171,7 @@
               <view class="arrow {{isContactExpanded ? 'up' : ''}}"></view>
             </view>
             <!-- 智能粘贴按钮 (阻止冒泡，避免触发折叠) -->
-            <view class="smart-paste" catchtap="smartPaste">智能粘贴识别</view>
+            <view class="smart-paste" catchtap="openSmartPasteModal">✨ 智能粘贴</view>
           </view>
 
           <!-- 内容区域：带有展开动画 -->
@@ -319,30 +321,6 @@
     </view>
   </view>
 
-  <!-- 管理员密码弹窗 -->
-  <view class="modal-mask" wx:if="{{showAdminModal}}">
-    <view class="admin-password-modal">
-      <view class="modal-header">
-        <text class="modal-title">管理员验证</text>
-        <view class="close-btn" bindtap="cancelAdminPassword">✕</view>
-      </view>
-      <view class="password-input-wrapper">
-        <input 
-          class="password-input" 
-          type="number" 
-          placeholder="请输入管理员密码" 
-          value="{{adminPasswordInput}}"
-          bindinput="onAdminPasswordInput"
-          maxlength="10"
-          focus="{{showAdminModal}}"
-        />
-      </view>
-      <view class="modal-buttons">
-        <button class="modal-btn cancel-btn" bindtap="cancelAdminPassword">取消</button>
-        <button class="modal-btn confirm-btn" bindtap="confirmAdminPassword">确认</button>
-      </view>
-    </view>
-  </view>
 
   <!-- 管理员弹窗 (增加预览) -->
   <view class="modal-mask" wx:if="{{showModal}}">
@@ -392,5 +370,28 @@
     bindloadedmetadata="onVideoMetadataLoaded"
     bindtimeupdate="onVideoTimeUpdate"
   ></video>
+
+  <!-- ================= 智能粘贴输入弹窗 ================= -->
+  <view class="smart-paste-mask" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;">
+    <view class="smart-paste-box">
+      <view class="sp-title">智能粘贴</view>
+      <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
+      
+      <!-- 输入区域 -->
+      <textarea 
+        class="sp-textarea" 
+        placeholder="例如：张三 13800138000 广东省深圳市南山区..." 
+        value="{{smartPasteVal}}" 
+        bindinput="onSmartPasteInput"
+        adjust-position="{{true}}"
+        fixed="{{true}}"
+      ></textarea>
+      
+      <view class="sp-btn-row">
+        <view class="sp-btn cancel" bindtap="closeSmartPasteModal">取消</view>
+        <view class="sp-btn confirm" bindtap="confirmSmartPaste">智能分析</view>
+      </view>
+    </view>
+  </view>
 
 </view>

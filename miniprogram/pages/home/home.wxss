@@ -13,6 +13,7 @@ page {
 
 /* --- 1. 品牌轴心：回归极简（两字黑，轴线淡） --- */
 .brand-axis {
+  position: relative;
   position: absolute;
   left: 60rpx; 
   top: 0; 

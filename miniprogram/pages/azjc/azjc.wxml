@@ -4,7 +4,16 @@
     <view class="back-btn" bindtap="handleBack">
       <text class="back-icon">‹</text>
     </view>
-    <text class="brand" bindtap="onAdminTap" catchtap="onAdminTap">MT安装教学</text>
+    <view class="brand">
+      <text>MT安装教学</text>
+      <!-- 只有白名单用户能看到的切换开关 -->
+      <view 
+        wx:if="{{isAuthorized}}" 
+        class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
+        catchtap="toggleAdminMode">
+        {{isAdmin ? 'EXIT' : 'EDIT'}}
+      </view>
+    </view>
   </view>
 
   <!-- 核心：舞台容器，通过 translate 控制位移 -->
@@ -155,17 +164,6 @@
 
   </view>
 
-  <!-- 椭圆形密码弹窗 -->
-  <view class="pwd-modal" wx:if="{{showPwd}}">
-    <view class="pwd-box">
-      <text class="pwd-title">权限验证</text>
-      <input class="pwd-input" password placeholder="请输入管理密码" bindinput="onPwdInput" value="{{tempPwd}}"/>
-      <view class="pwd-btns">
-        <text class="p-btn cancel" bindtap="hidePwdModal">取消</text>
-        <text class="p-btn confirm" bindtap="verifyPwd">确定</text>
-      </view>
-    </view>
-  </view>
 
   <!-- 匹配码选择弹窗 -->
   <view class="match-code-modal" wx:if="{{showMatchCodePicker}}">

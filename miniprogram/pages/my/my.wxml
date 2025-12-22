@@ -1,313 +1,235 @@
+<!-- pages/my/my.wxml -->
+
 <view class="container">
 
-  <!-- 1. 顶部个人信息：杂志化排版，无框设计 -->
-
-  <view class="profile-header">
-
-    <view class="header-main">
-
-      <view class="user-identity">
-
-        <text class="rank-tag">PLATINUM MEMBER</text>
-
-        <text class="user-name">Alexander</text>
-
-      </view>
-
-      <view class="add-btn" bindtap="openBindModal">+</view>
-
-    </view>
-    
-
-    <view class="header-stats">
-
-      <view class="stat-item">
-
-        <text class="label">拥有产品数量</text>
-
-        <text class="value">{{deviceList.length}} 件</text>
-
-      </view>
-
-      <view class="divider-v"></view>
-
-      <view class="stat-item">
-
-        <text class="label">会员等级</text>
-
-        <text class="value platinum">铂金尊享会员</text>
-
-      </view>
-
-    </view>
-
+  <!-- 1. 顶部返回按钮 (一直存在) -->
+  <view class="nav-back-fixed" bindtap="goBack">
+    <text class="back-arrow">←</text>
   </view>
 
+  <!-- 2. 用户个人信息 - 【管理员模式下隐藏】 -->
+  <view class="profile-header" wx:if="{{!isAdmin}}">
+    <view class="header-content">
+      <view class="user-identity">
+        <text class="rank-tag">PLATINUM MEMBER</text>
+        <text class="user-name">Alexander</text>
+      </view>
+      <view class="header-stats">
+        <view class="stat-item">
+          <text class="label">拥有产品数量</text>
+          <text class="value">{{deviceList.length}} 件</text>
+        </view>
+        <view class="divider-v"></view>
+        <view class="stat-item">
+          <text class="label">会员等级</text>
+          <text class="value platinum">铂金尊享会员</text>
+        </view>
+      </view>
+    </view>
+  </view>
 
+  <!-- 3. 管理员专属标题 -->
+  <view class="admin-page-title" wx:if="{{isAdmin}}">订单管理后台</view>
 
-  <!-- 2. 动态订单区：支持多订单左右滑动 -->
+  <!-- 4. 订单区域 -->
+  <view class="section-label">
+    {{isAdmin ? 'ALL ORDERS / 全部订单' : 'LIVE ORDERS / 实时订单'}}
+  </view>
 
-  <view class="section-label">LIVE ORDERS / 实时订单 {{orders.length > 1 ? (currentOrderIndex + 1) + '/' + orders.length : ''}}</view>
-
-  <swiper class="order-swiper" bindchange="onOrderChange" previous-margin="40rpx" next-margin="40rpx">
-
+  <swiper class="order-swiper" bindchange="onOrderChange" circular style="height: 900rpx;">
     <swiper-item wx:for="{{orders}}" wx:key="id">
+      <view class="order-card detail-mode">
+        
+        <!-- 1. 头部：修复位置不对的问题 -->
+        <!-- 使用 flex 布局，让单号在左，状态在右 -->
+        <view class="card-header">
+          <view class="order-id-group">
+            <text class="order-label">订单号</text>
+            <text class="order-val">{{item.orderId}}</text>
+          </view>
+          <!-- 状态标签 -->
+          <text class="status-tag {{item.realStatus}}">
+            {{item.statusText}}
+          </text>
+        </view>
 
-      <view class="order-card">
+        <!-- 【关键】买家信息栏：显示昵称、电话、地址 -->
+        <view class="buyer-info-box">
+          <view class="b-row">
+            <text class="b-name">{{item.userName || '匿名用户'}}</text>
+            <text class="b-phone">{{item.userPhone}}</text>
+          </view>
+          <view class="b-addr">{{item.userAddr}}</view>
+        </view>
 
-        <view class="order-index">{{index + 1 < 10 ? '0' + (index + 1) : index + 1}}</view>
+        <!-- 2. 中间商品列表 (保持不变) -->
+        <view class="goods-detail-list">
+          <view class="mini-tag">购物清单</view>
+          <block wx:for="{{item.goodsList}}" wx:for-item="g" wx:key="index">
+            <view class="g-item">
+              <view class="g-info">
+                <text class="g-n">{{g.name}}</text>
+                <text class="g-s">{{g.spec}}</text>
+              </view>
+              <view class="g-count">x{{g.quantity}}</view>
+              <view class="g-p">¥{{g.total}}</view>
+            </view>
+          </block>
+        </view>
 
-        <view class="order-status {{item.state == 1 ? 'blue' : (item.state == 2 ? 'green' : '')}}">
+        <!-- 3. 底部：合计 + 操作按钮 -->
+        <view class="card-footer-new">
+          <!-- 合计行 -->
+          <view class="total-row">
+            <text class="time-text">{{item.createTime}}</text>
+            <view class="price-box">
+              <text>实付</text> 
+              <text class="price-num">¥{{item.amount}}</text>
+            </view>
+          </view>
 
-          {{item.state == 0 ? '待发货' : (item.state == 1 ? '运输中' : '已签收')}}
+          <!-- 1. 待付款：显示模拟支付 -->
+          <view wx:if="{{item.realStatus === 'UNPAID'}}" class="action-row-right">
+            <view class="btn-mini gray" catchtap="debugSimulatePay" data-id="{{item.id}}">
+              ⚡️ 模拟支付
+            </view>
+          </view>
+
+          <!-- 2. 待发货：只有管理员能看到录入按钮 -->
+          <!-- 逻辑：必须是管理员 AND 状态是PAID -->
+          <view 
+            wx:if="{{isAdmin && item.realStatus === 'PAID'}}" 
+            class="admin-ship-btn" 
+            catchtap="adminShipOrder" 
+            data-id="{{item.id}}">
+            录入单号并发货
+          </view>
+
+          <!-- 3. 运输中：所有人都能看物流 -->
+          <view 
+            wx:if="{{item.realStatus === 'SHIPPED'}}" 
+            class="logistics-btn" 
+            catchtap="viewLogisticsDetail" 
+            data-sn="{{item.trackingId}}">
+            查看物流 ({{item.trackingId}})
+          </view>
 
         </view>
-        
-
-        <view class="order-title">{{item.productName}}</view>
-        
-
-        <!-- 待发货或已签收展示订单信息 -->
-
-        <block wx:if="{{item.state == 0 || item.state == 2}}">
-
-          <view class="info-line">
-
-            <text>订单编号</text>
-
-            <text class="bold">{{item.orderId}}</text>
-
-          </view>
-
-          <view class="info-line" wx:if="{{item.state == 2}}">
-
-            <text>快递单号</text>
-
-            <view class="copy-box" bindtap="copyData" data-text="{{item.shippingId}}">
-
-              <text class="bold">{{item.shippingId}}</text>
-
-              <text class="copy-tag">复制</text>
-
-            </view>
-
-          </view>
-
-          <view class="info-line">
-
-            <text>{{item.state == 0 ? '下单时间' : '签收时间'}}</text>
-
-            <text class="bold">{{item.time}}</text>
-
-          </view>
-
-          <view class="refund-btn" wx:if="{{item.state == 0}}" bindtap="requestRefund">申请取消订单并退款</view>
-
-          <view class="logistics-detail-link" wx:if="{{item.state == 2}}" bindtap="viewLogistics">
-
-            <text>查看详细物流追踪记录</text>
-
-            <text class="arrow">➔</text>
-
-          </view>
-
-        </block>
-
-
-
-        <!-- 运输中展示物流动态 -->
-
-        <block wx:if="{{item.state == 1}}">
-
-          <view class="info-line">
-
-            <text>快递单号</text>
-
-            <view class="copy-box" bindtap="copyData" data-text="{{item.shippingId}}">
-
-              <text class="bold">{{item.shippingId}}</text>
-
-              <text class="copy-tag">复制</text>
-
-            </view>
-
-          </view>
-
-          <view class="shipping-content">
-
-            <view class="truck-icon">🚚</view>
-
-            <view class="ship-text">
-
-              <text class="eta">预计明天 14:00 前送达</text>
-
-              <text class="desc">{{item.lastLogistics}}</text>
-
-            </view>
-
-          </view>
-
-        </block>
-
       </view>
-
     </swiper-item>
-
   </swiper>
 
-
-
-  <!-- 3. 产品设备列表 -->
-
-  <view class="section-label">MY DEVICES / 产品设备</view>
-
-  <view class="device-card" wx:for="{{deviceList}}" wx:key="sn">
-
-    <view class="remove-icon" bindtap="removeDevice" data-index="{{index}}">✕</view>
-
-    <view class="device-name">{{item.name}}</view>
-    
-
-    <view class="spec-list">
-
-      <view class="spec-row">
-
-        <text class="label">S/N 序列号</text>
-
-        <text class="value mono">{{item.sn}}</text>
-
-      </view>
-
-      <view class="spec-row">
-
-        <text class="label">总剩余质保</text>
-
-        <view class="warranty-val">
-
-          <text class="days-num {{item.days < 30 ? 'warning' : ''}}">{{item.days}} Days</text>
-
-          <text class="ext-tag" wx:if="{{item.hasExtra}}">含延保</text>
-
+  <!-- 5. 设备列表 - 【管理员模式下隐藏】 -->
+  <block wx:if="{{!isAdmin}}">
+    <view class="section-label">MY DEVICES / 产品设备</view>
+    <view class="device-card" wx:for="{{deviceList}}" wx:key="sn">
+      <view class="remove-icon" bindtap="removeDevice" data-index="{{index}}">✕</view>
+      <view class="device-name">{{item.name}}</view>
+      <view class="spec-list">
+        <view class="spec-row">
+          <text class="label">S/N 序列号</text>
+          <text class="value mono">{{item.sn}}</text>
         </view>
-
+        <view class="spec-row">
+          <text class="label">总剩余质保</text>
+          <view class="warranty-val">
+            <text class="days-num {{item.days < 30 ? 'warning' : ''}}">{{item.days}} Days</text>
+            <text class="ext-tag" wx:if="{{item.hasExtra}}">含延保</text>
+          </view>
+        </view>
+        <view class="spec-row">
+          <text class="label">质保到期日期</text>
+          <text class="value">{{item.expiryDate}}</text>
+        </view>
+        <view class="spec-row">
+          <text class="label">激活次数</text>
+          <text class="value">{{item.activations}} 次</text>
+        </view>
+        <view class="spec-row">
+          <text class="label">固件版本</text>
+          <text class="value">{{item.firmware}}</text>
+        </view>
       </view>
-
-      <view class="spec-row">
-
-        <text class="label">质保到期日期</text>
-
-        <text class="value">{{item.expiryDate}}</text>
-
-      </view>
-
-      <view class="spec-row">
-
-        <text class="label">激活次数</text>
-
-        <text class="value">{{item.activations}} 次</text>
-
-      </view>
-
-      <view class="spec-row">
-
-        <text class="label">固件版本</text>
-
-        <text class="value">{{item.firmware}}</text>
-
-      </view>
-
     </view>
 
-  </view>
+    <!-- 底部添加设备大按钮 -->
+    <view class="device-card add-mode" bindtap="openBindModal">
+      <view class="add-content">
+        <text class="big-plus">+</text>
+        <text class="add-tips">绑定新产品</text>
+      </view>
+    </view>
 
-
-
-  <!-- 4. 底部服务 -->
-
-  <view class="footer-bar">
-
-    <view class="f-btn">预约维修服务</view>
-
-    <view class="f-btn dark">联系在线客服</view>
-
-  </view>
-
-
+    <!-- 4. 底部服务按钮 -->
+    <view class="footer-bar">
+      <view class="f-btn">预约维修服务</view>
+      <view class="f-btn dark">联系在线客服</view>
+    </view>
+  </block>
 
   <!-- 5. 绑定模态框 -->
-
   <view class="modal {{showModal ? 'show' : ''}}">
-
     <view class="modal-content">
-
+      
       <view class="modal-header">
-
-        <text>绑定新资产</text>
-
+        <text>绑定资产</text>
         <view class="close-modal" bindtap="closeBindModal">✕</view>
-
       </view>
 
-
-
-      <view class="bt-btn {{bluetoothReady ? 'ready' : ''}}" bindtap="startConnect">
-
-        <text>{{bluetoothReady ? '✅ 蓝牙设备已连接' : '📡 点击连接蓝牙设备'}}</text>
-
-      </view>
-
-
-
-      <view class="form-item">
-
-        <text class="form-label">选择产品型号</text>
-
-        <picker bindchange="onModelChange" range="{{modelOptions}}">
-
-          <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
-
-        </picker>
-
-      </view>
-
-
-
-      <view class="form-item">
-
-        <text class="form-label">上传凭证 (人工审核)</text>
-
-        <view class="upload-group">
-
-          <view class="upload-box"><text>+</text><text>购买截图</text></view>
-
-          <view class="upload-box"><text>+</text><text>聊天记录</text></view>
-
+      <scroll-view scroll-y="true" class="modal-scroll-area">
+        
+        <!-- Tab 切换 -->
+        <view class="type-tabs">
+          <view class="tab-item {{bindType == 'new' ? 'active' : ''}}" bindtap="changeBindType" data-type="new">全新设备</view>
+          <view class="tab-item {{bindType == 'used' ? 'active' : ''}}" bindtap="changeBindType" data-type="used">二手/旧设备</view>
         </view>
 
+        <view class="bt-btn {{bluetoothReady ? 'ready' : ''}}" bindtap="startConnect">
+          <text>{{bluetoothReady ? '✅ 蓝牙设备已连接' : '📡 点击连接蓝牙设备'}}</text>
+        </view>
+
+        <view class="form-item">
+          <text class="form-label">选择产品型号</text>
+          <picker bindchange="onModelChange" range="{{modelOptions}}">
+            <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
+          </picker>
+        </view>
+
+        <!-- 动态上传区域：根据 bindType 变化 -->
+        <view class="form-item">
+          <!-- 标题也会跟着变 -->
+          <text class="form-label">{{bindType == 'new' ? '上传凭证 (购买截图)' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
+          
+          <view class="upload-group">
+            <!-- 框1：购买截图 (始终显示) -->
+            <view class="upload-box">
+              <text class="plus-icon">+</text>
+              <text>购买截图</text>
+            </view>
+
+            <!-- 框2：聊天记录 (只有 'used' 才显示) -->
+            <view class="upload-box" wx:if="{{bindType == 'used'}}">
+              <text class="plus-icon">+</text>
+              <text>聊天记录</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="form-item">
+          <text class="form-label">购买日期</text>
+          <picker mode="date" bindchange="onDateChange">
+            <view class="picker-val">{{buyDate || '请选择日期'}}</view>
+          </picker>
+        </view>
+        
+        <view style="height: 40rpx;"></view>
+      </scroll-view>
+
+      <view class="modal-footer">
+        <button class="submit-btn">提交上传审核</button>
       </view>
-
-
-
-      <view class="form-item">
-
-        <text class="form-label">购买日期</text>
-
-        <picker mode="date" bindchange="onDateChange">
-
-          <view class="picker-val">{{buyDate || '请选择日期'}}</view>
-
-        </picker>
-
-      </view>
-
-
-
-      <button class="submit-btn">提交上传审核</button>
 
     </view>
-
   </view>
 
 </view>
-
-

@@ -1,336 +1,354 @@
-// miniprogram/pages/index/index.js
-const app = getApp();
-var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
-var qqmapsdk = new QQMapWX({
-    key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
+const cloud = require('wx-server-sdk');
+
+// 初始化云环境（使用当前小程序所选环境）
+cloud.init({
+  env: cloud.DYNAMIC_CURRENT_ENV,
 });
-const db = wx.cloud.database();
 
-Page({
-  data: {
-    isShowNicknameUI: false,
-    isAuthorized: false,
-    inputNickName: '', 
-    isLoading: false,
-    step: 0, 
-    locationResult: null
-  },
+const db = cloud.database();
 
-  onLoad(options) {
-    // 1. 【最高优先级】全局黑名单检测
-    if (wx.getStorageSync('is_user_banned')) {
-      wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-      return;
-    }
-    this.checkGlobalBanStatus();
+/**
+ * 昵称验证云函数（方案二：带白名单 + 错误计数 + 自动封号）
+ *
+ * 前端预期调用方式：
+ * wx.cloud.callFunction({
+ *   name: 'verifyNickname',
+ *   data: { nickname }
+ * })
+ *
+ * 返回约定：
+ * - 成功通过：{ success: true,  isBlocked: false }
+ * - 未通过但未到封号：{ success: false, isBlocked: false, type: 'invalid_nickname', failCount }
+ * - 已被封号：{ success: false, isBlocked: true,  type: 'banned' }
+ *
+ * 注意：本函数内部捕获所有异常，**不抛出到外层**，这样前端不会出现“网络错误”，
+ * 而是统一当作 { success: false } 处理，走你在页面里自定义的弹窗逻辑。
+ */
+exports.main = async (event, context) => {
+  const wxContext = cloud.getWXContext();
+  const openid = wxContext.OPENID;
+  const nickname = (event && event.nickname ? String(event.nickname) : '').trim();
 
-    // 2. 检查缓存
-    const hasAuth = wx.getStorageSync('has_permanent_auth');
-    if (hasAuth) {
-      this.setData({ isAuthorized: true, isShowNicknameUI: false });
-    } else {
-      this.setData({ isShowNicknameUI: true });
-    }
-  },
+  if (!nickname) {
+    return {
+      success: false,
+      isBlocked: false,
+      error: 'EMPTY_NICKNAME',
+    };
+  }
 
-  // === 全局封号检查 ===
-  checkGlobalBanStatus() {
-    wx.cloud.callFunction({ name: 'login' }).then(res => {
-      const openid = res.result.openid;
-      
-      const p1 = db.collection('user_list').where({ _openid: openid }).orderBy('createTime', 'desc').limit(1).get();
-      const p2 = db.collection('blocked_logs').where({ _openid: openid }).orderBy('createTime', 'desc').limit(1).get();
-      const p3 = db.collection('login_logs').where({ _openid: openid }).get(); // 也要查 login_logs
-
-      Promise.all([p1, p2, p3]).then(results => {
-        let isBanned = false;
-
-        // 检查 user_list
-        if (results[0].data.length > 0 && results[0].data[0].isBanned === true) isBanned = true;
-        // 检查 blocked_logs
-        if (results[1].data.length > 0 && results[1].data[0].isBanned === true) isBanned = true;
-        // 检查 login_logs (昵称输错导致的封号)
-        if (results[2].data.length > 0 && results[2].data[0].isBanned === true) isBanned = true;
-
-        if (isBanned) {
-           wx.setStorageSync('is_user_banned', true);
-           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-        }
-      });
-    });
-  },
-
-  // =================================================================
-  // 昵称验证 (已恢复 3次封号 处理逻辑)
-  // =================================================================
-  onNickNameInput(e) { this.setData({ inputNickName: e.detail.value }); },
-
-  handleLogin() {
-    if (this.data.isLoading) return;
-    const name = this.data.inputNickName.trim();
-    if (!name) return wx.showToast({ title: '请输入昵称', icon: 'none' });
-
-    this.setData({ isLoading: true });
-    wx.showLoading({ title: '验证身份...' });
-
-    wx.cloud.callFunction({
-      name: 'verifyNickname',
-      data: { nickname: name }
-    }).then(res => {
-      this.setData({ isLoading: false });
-      wx.hideLoading();
-      
-      const result = res.result || {};
-
-      if (result.success) {
-        // --- 成功 ---
-        wx.setStorageSync('has_permanent_auth', true);
-        wx.setStorageSync('user_nickname', name);
-        wx.removeStorageSync('is_user_banned'); // 确保清除封号标记
-        this.setData({ isAuthorized: true, isShowNicknameUI: false });
-        wx.showToast({ title: '验证通过', icon: 'success' });
-      } else {
-        // --- 失败 ---
-        // 1. 如果是封号 (次数>=3)，直接踢
-        if (result.isBlocked || result.type === 'banned') {
-           console.log('⛔ 错误次数过多，触发防攻击拦截');
-          wx.setStorageSync('is_user_banned', true);
-          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-        } else {
-           // 2. 普通错误：按照你的要求修改弹窗样式
-           wx.showModal({
-             title: '该昵称未验证',
-             content: '请联系管理员进行验证\n点击键盘上方昵称一键填写确保昵称准确',
-             showCancel: true,     // 保留取消按钮，方便用户关闭弹窗重输
-             cancelText: '再试一次',
-             confirmText: '复制微信号', // 替换“确定”为“复制微信号”
-             confirmColor: '#576B95',  // 确定的蓝色
-             success: (res) => {
-               if (res.confirm) {
-                 // 点击蓝色按钮，执行复制
-                 wx.setClipboardData({
-                   data: 'MT-mogaishe', // 这里填你的微信号
-                   success: () => {
-                     wx.showToast({ title: '已复制微信号', icon: 'none' });
-                   }
-                 });
-               }
-             }
-           });
-        }
-      }
-    }).catch(err => {
-      this.setData({ isLoading: false });
-      wx.hideLoading();
-      wx.showToast({ title: '网络错误', icon: 'none' });
-    });
-  },
-
-  // =================================================================
-  // 点击进入 -> 收集超详细数据 -> 分流记录 (保持你要求的最新逻辑)
-  // =================================================================
-  handleAccess() {
-    if (this.data.step > 0) return; 
-    if (!this.data.isAuthorized) return; 
-
-    // 1. 获取手机机型
-    const sysInfo = wx.getSystemInfoSync();
-    const phoneModel = sysInfo.model || '未知机型';
-
-    // 2. 获取真实定位
-    wx.getLocation({
-      type: 'gcj02',
-      isHighAccuracy: true,
-      success: (res) => {
-          this.runAnimation();
-        this.analyzeRegion(res.latitude, res.longitude, phoneModel);
-            },
-            fail: () => { 
-        wx.showModal({
-          title: '提示',
-          content: '需要获取地理位置才能进入',
-          success: (res) => { if (res.confirm) wx.openSetting(); }
-        });
-      }
-    });
-  },
-
-  runAnimation() {
-    this.setData({ step: 1 });
-    setTimeout(() => { this.setData({ step: 2 });
-      setTimeout(() => { this.setData({ step: 3 });
-        setTimeout(() => { this.setData({ step: 4 }); 
-          this.doFallAndSwitch();
-        }, 1900); 
-      }, 800); 
-    }, 500);
-  },
-
-  doFallAndSwitch() {
-    this.setData({ step: 5 });
-  },
-
-  // === 加载拦截配置 ===
-  async loadBlockingConfig() {
+  try {
+    // 1. 读取昵称验证配置，判断是否开启自动录入（auto）
+    // 建议在 app_config 集合中创建一条文档：
+    // { _id: 'nickname_settings', auto: true/false, createTime, updateTime }
+    let autoMode = false;
     try {
-      const configRes = await db.collection('app_config').doc('blocking_rules').get();
-      if (configRes.data) {
-        return {
-          is_active: configRes.data.is_active !== undefined ? configRes.data.is_active : false,
-          blocked_provinces: Array.isArray(configRes.data.blocked_provinces) ? configRes.data.blocked_provinces : [],
-          blocked_cities: Array.isArray(configRes.data.blocked_cities) ? configRes.data.blocked_cities : []
-        };
+      const cfgDoc = await db.collection('app_config').doc('nickname_settings').get();
+      if (cfgDoc && cfgDoc.data && cfgDoc.data.auto === true) {
+        autoMode = true;
       }
     } catch (e) {
-      // 如果 doc 方式失败，尝试 where 查询
-      try {
-        const queryRes = await db.collection('app_config').where({ _id: 'blocking_rules' }).get();
-        if (queryRes.data && queryRes.data.length > 0) {
-          const config = queryRes.data[0];
-          return {
-            is_active: config.is_active !== undefined ? config.is_active : false,
-            blocked_provinces: Array.isArray(config.blocked_provinces) ? config.blocked_provinces : [],
-            blocked_cities: Array.isArray(config.blocked_cities) ? config.blocked_cities : []
-          };
-        }
-      } catch (e2) {}
-    }
-    // 默认配置
-    return { is_active: false, blocked_provinces: [], blocked_cities: [] };
-  },
-
-  // === 检查地址是否匹配拦截配置 ===
-  checkIsBlockedRegion(province, city, config) {
-    if (!config || !config.is_active) {
-      return false; // 拦截未开启，不拦截
+      // 配置不存在或查询失败，视为未开启自动模式
+      console.error('[verifyNickname] load nickname_settings config error:', e);
     }
 
-    const blockedProvinces = config.blocked_provinces || [];
-    const blockedCities = config.blocked_cities || [];
-
-    // 检查城市
-    if (blockedCities.length > 0) {
-      const isCityBlocked = blockedCities.some(c => 
-        city.indexOf(c) !== -1 || c.indexOf(city) !== -1
-      );
-      if (isCityBlocked) return true;
-    }
-
-    // 检查省份
-    if (blockedProvinces.length > 0) {
-      const isProvinceBlocked = blockedProvinces.some(p => 
-        province.indexOf(p) !== -1 || p.indexOf(province) !== -1
-      );
-      if (isProvinceBlocked) return true;
-    }
-
-    return false;
-  },
-
-  // === 解析详细地址 ===
-  analyzeRegion(lat, lng, phoneModel) {
-    qqmapsdk.reverseGeocoder({
-      location: { latitude: lat, longitude: lng },
-      get_poi: 1, 
-      poi_options: 'policy=2', // 优先返回大厦/小区
-      success: (mapRes) => {
-        const result = mapRes.result;
-        
-        // 拼接最详细地址：街道 + (建筑名)
-        let detailedAddress = result.address;
-        if (result.formatted_addresses && result.formatted_addresses.recommend) {
-          detailedAddress = `${result.address} (${result.formatted_addresses.recommend})`;
-        }
-        
-        const locData = {
-          province: result.address_component.province,
-          city: result.address_component.city,
-          district: result.address_component.district,
-          full_address: detailedAddress, // 详细到楼栋/小区
-          latitude: lat,
-          longitude: lng,
-          phoneModel: phoneModel
-        };
-
-        // 【地域拦截分流逻辑】根据 app_config 配置判断
-        this.loadBlockingConfig().then(config => {
-          const isBlocked = this.checkIsBlockedRegion(locData.province, locData.city, config);
-
-          if (isBlocked) {
-            // 匹配拦截配置 -> blocked_logs -> 跳主页 (pagenew)
-            this.appendDataAndJump('blocked_logs', locData, '/pages/pagenew/pagenew'); 
-          } else {
-            // 不匹配 -> user_list -> 跳产品页 (products)
-            this.appendDataAndJump('user_list', locData, '/pages/products/products');
-          }
-        }).catch(err => {
-          console.error('加载拦截配置失败', err);
-          // 配置加载失败，默认放到 user_list
-          this.appendDataAndJump('user_list', locData, '/pages/products/products');
-        });
-      }
-    });
-  },
-
-  // === 统一追加记录与跳转 (Append Only) ===
-  appendDataAndJump(collectionName, locData, targetPage) {
-    const nickName = wx.getStorageSync('user_nickname') || '未知用户';
-    
-    wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
-      const openid = loginRes.result.openid;
-
-      // 1. 先查上一条记录 (为了叠加访问次数 & 检查封号)
-      db.collection(collectionName)
+    // 2. 读取该用户最近一条 login_logs 记录，用于获取上一次失败次数 / 封号状态
+    let lastLog = null;
+    try {
+      const lastRes = await db
+        .collection('login_logs')
         .where({ _openid: openid })
         .orderBy('createTime', 'desc')
         .limit(1)
-        .get()
-        .then(res => {
-          
-          let lastCount = 0;
-          let isBanned = false;
+        .get();
 
-          if (res.data.length > 0) {
-            const lastRecord = res.data[0];
-            lastCount = lastRecord.visitCount || 0;
-            if (lastRecord.isBanned === true) isBanned = true;
-          }
+      if (lastRes && Array.isArray(lastRes.data) && lastRes.data.length > 0) {
+        lastLog = lastRes.data[0];
+      }
+    } catch (e) {
+      console.error('[verifyNickname] query login_logs error:', e);
+      // 查询失败不影响后续逻辑，只是视为没有历史记录
+    }
 
-          // 2. 如果被封号了，去拦截页，不记新数据
-          if (isBanned) {
-            wx.setStorageSync('is_user_banned', true);
-            setTimeout(() => {
-           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-            }, 2000);
-           return;
+    let lastFailCount = 0;
+    let alreadyBanned = false;
+
+    if (lastLog) {
+      lastFailCount = Number(lastLog.failCount || 0) || 0;
+      if (lastLog.isBanned === true) {
+        alreadyBanned = true;
+      }
+    }
+
+    // 如果之前已经被标记为封号，则直接返回封号状态
+    if (alreadyBanned) {
+      return {
+        success: false,
+        isBlocked: true,
+        type: 'banned',
+      };
+    }
+
+    // 2. 如果开启了自动录入模式：写入白名单(valid_users)并取消封禁放行
+    if (autoMode) {
+      try {
+        // 🔴 关键：写入白名单（valid_users）
+        const validCheck = await db
+          .collection('valid_users')
+          .where({ nickname })
+          .limit(1)
+          .get();
+
+        if (!validCheck.data || validCheck.data.length === 0) {
+          await db.collection('valid_users').add({
+            data: {
+              nickname,
+              _openid: openid,
+              desc: 'auto 模式自动录入',
+              createTime: db.serverDate(),
+              updateTime: db.serverDate(),
+            },
+          });
         }
 
-          // 3. 准备新数据 (追加模式)
-          const newData = {
-          nickName: nickName,
-            province: locData.province,
-            city: locData.city,
-            district: locData.district,
-            address: locData.full_address,
-            phoneModel: locData.phoneModel, 
-            
-            visitCount: lastCount + 1,
-            isBanned: false, 
-
-            createTime: db.serverDate(),
-          updateTime: db.serverDate()
-        };
-
-          // 4. 执行追加写入
-          db.collection(collectionName).add({
-            data: newData
+        // 🔴 关键：更新 login_logs（同一 openid 只保留一条记录）
+        if (lastLog && lastLog._id) {
+          // 如果已存在记录，则更新而不是新增
+          await db.collection('login_logs').doc(lastLog._id).update({
+            data: {
+              nickname,
+              success: true,
+              isBanned: false,
+              failCount: 0,
+              auto: true,
+              updateTime: db.serverDate(),
+            },
           });
+        } else {
+          // 如果不存在，才新增
+          await db.collection('login_logs').add({
+            data: {
+              _openid: openid,
+              nickname,
+              success: true,
+              isBanned: false,
+              failCount: 0,
+              auto: true,
+              createTime: db.serverDate(),
+              updateTime: db.serverDate(),
+            },
+          });
+        }
 
-          // 5. 放行跳转
-          setTimeout(() => {
-            wx.reLaunch({ url: targetPage });
-          }, 2200); 
-      });
-    });
+        // 把 user_list 中该用户的封禁状态解除（如果存在）
+        try {
+          await db
+            .collection('user_list')
+            .where({ _openid: openid })
+            .update({
+              data: {
+                isBanned: false,
+                updateTime: db.serverDate(),
+              },
+            });
+        } catch (e) {
+          console.error('[verifyNickname] autoMode update user_list unban error:', e);
+        }
+
+        // 🔴 关键：同步更新 blocked_logs 中的封禁记录（如果存在）
+        try {
+          await db
+            .collection('blocked_logs')
+            .where({ _openid: openid })
+            .update({
+              data: {
+                isBanned: false,
+                updateTime: db.serverDate(),
+              },
+            });
+        } catch (e) {
+          console.error('[verifyNickname] autoMode update blocked_logs unban error:', e);
+        }
+
+        return {
+          success: true,
+          isBlocked: false,
+          auto: true,
+        };
+      } catch (e) {
+        console.error('[verifyNickname] autoMode process error:', e);
+        // 自动模式流程失败时，不直接抛出，让后续白名单/计数逻辑继续兜底
+      }
+    }
+
+    // 3. 检查昵称白名单（集合：valid_users）
+    // 结构：{ nickname: 'xxx', _openid: 'xxx', desc: '备注', createTime, updateTime }
+    let isWhitelisted = false;
+    try {
+      const validRes = await db
+        .collection('valid_users')
+        .where({ nickname })
+        .limit(1)
+        .get();
+
+      if (validRes && Array.isArray(validRes.data) && validRes.data.length > 0) {
+        // 如果 valid_users 中存在该昵称，视为有效白名单
+        isWhitelisted = true;
+      }
+    } catch (e) {
+      // 如果集合不存在或查询异常，不抛出，让逻辑继续执行，只是当作“没有命中白名单”
+      if (e.errCode === 'DATABASE_COLLECTION_NOT_EXIST' || e.errCode === -502005 || e.errCode === -1) {
+        console.log('[verifyNickname] ⚠️ valid_users 集合不存在，跳过白名单检查');
+      } else {
+        console.error('[verifyNickname] query valid_users error:', e);
+      }
+    }
+
+    // 4. 命中白名单 => 通过验证，更新登录日志，并确保取消封号标记
+    if (isWhitelisted) {
+      try {
+        // 🔴 关键：更新 login_logs（同一 openid 只保留一条记录）
+        if (lastLog && lastLog._id) {
+          await db.collection('login_logs').doc(lastLog._id).update({
+            data: {
+              nickname,
+              success: true,
+              isBanned: false,
+              failCount: 0,
+              auto: false, // 白名单通过，非自动模式
+              updateTime: db.serverDate(),
+            },
+          });
+        } else {
+          await db.collection('login_logs').add({
+            data: {
+              _openid: openid,
+              nickname,
+              success: true,
+              isBanned: false,
+              failCount: 0,
+              auto: false, // 白名单通过，非自动模式
+              createTime: db.serverDate(),
+              updateTime: db.serverDate(),
+            },
+          });
+        }
+      } catch (e) {
+        console.error('[verifyNickname] update success login_logs error:', e);
+      }
+
+      // 尝试把 user_list 里该用户的 isBanned 解除（如果存在）
+      try {
+        await db
+          .collection('user_list')
+          .where({ _openid: openid })
+          .update({
+            data: {
+              isBanned: false,
+              updateTime: db.serverDate(),
+            },
+          });
+      } catch (e) {
+        console.error('[verifyNickname] update user_list unban error:', e);
+      }
+
+      return {
+        success: true,
+        isBlocked: false,
+      };
+    }
+
+    // 5. 未命中白名单 => 视为一次失败尝试，叠加失败次数，达到 3 次即封号
+    const newFailCount = lastFailCount + 1;
+    const willBan = newFailCount >= 3;
+
+    try {
+      // 🔴 关键：更新 login_logs（同一 openid 只保留一条记录）
+      if (lastLog && lastLog._id) {
+        await db.collection('login_logs').doc(lastLog._id).update({
+          data: {
+            nickname,
+            success: false,
+            isBanned: willBan,
+            failCount: newFailCount,
+            auto: false, // 失败记录，非自动模式
+            updateTime: db.serverDate(),
+          },
+        });
+      } else {
+        await db.collection('login_logs').add({
+          data: {
+            _openid: openid,
+            nickname,
+            success: false,
+            isBanned: willBan,
+            failCount: newFailCount,
+            auto: false, // 失败记录，非自动模式
+            createTime: db.serverDate(),
+            updateTime: db.serverDate(),
+          },
+        });
+      }
+    } catch (e) {
+      console.error('[verifyNickname] update failed login_logs error:', e);
+    }
+
+    // 如果达到封号阈值，写入 blocked_logs，并同步 user_list 为封号
+    if (willBan) {
+      try {
+        await db.collection('blocked_logs').add({
+          data: {
+            _openid: openid,
+            nickname,
+            reason: 'nickname_verify_fail',
+            isBanned: true,
+            failCount: newFailCount,
+            createTime: db.serverDate(),
+            updateTime: db.serverDate(),
+          },
+        });
+      } catch (e) {
+        console.error('[verifyNickname] add blocked_logs error:', e);
+      }
+
+      try {
+        await db
+          .collection('user_list')
+          .where({ _openid: openid })
+          .update({
+            data: {
+              isBanned: true,
+              updateTime: db.serverDate(),
+            },
+          });
+      } catch (e) {
+        console.error('[verifyNickname] update user_list ban error:', e);
+      }
+
+      return {
+        success: false,
+        isBlocked: true,
+        type: 'banned',
+        failCount: newFailCount,
+      };
+    }
+
+    // 未通过，且未到封号次数
+    return {
+      success: false,
+      isBlocked: false,
+      type: 'invalid_nickname',
+      failCount: newFailCount,
+    };
+  } catch (err) {
+    // 兜底异常处理，保证不抛出到前端
+    console.error('[verifyNickname] unexpected error:', err);
+    return {
+      success: false,
+      isBlocked: false,
+      error: 'INTERNAL_ERROR',
+    };
   }
-});
+};
+
+

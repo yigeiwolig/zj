@@ -7,7 +7,16 @@
     <view class="back-icon" catchtap="goBack">
       <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
     </view>
-    <text class="header-title" bindtap="handleTitleTap">MT 案例库</text>
+    <view class="header-title">
+      <text>MT 案例库</text>
+      <!-- 只有白名单用户能看到的切换开关 -->
+      <view 
+        wx:if="{{isAuthorized}}" 
+        class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
+        catchtap="toggleAdminMode">
+        {{isAdmin ? 'EXIT' : 'EDIT'}}
+      </view>
+    </view>
   </view>
 </view>
 
@@ -154,17 +163,6 @@
   </view>
 </view>
 
-<!-- 8. 管理员密码框 -->
-<view class="modal-overlay active" wx:if="{{showPasswordModal}}">
-  <view class="ios-dialog">
-    <view class="dialog-title">管理员验证</view>
-    <input class="ios-input" password type="number" placeholder="输入密码" bindinput="onInputPassword" value="{{inputPassword}}" style="text-align:center;" />
-    <view style="display: flex; gap: 20rpx; margin-top:30rpx;">
-      <button class="dialog-btn" style="background:#ccc; color:#000" bindtap="closePasswordModal">取消</button>
-      <button class="dialog-btn" bindtap="confirmPassword">确认</button>
-    </view>
-  </view>
-</view>
 
 <!-- 9. 管理员上传表单 -->
 <view class="modal-overlay active" wx:if="{{showAdminForm}}">

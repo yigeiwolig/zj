@@ -7,19 +7,21 @@
     <text class="icon-back">‹</text>
   </view>
 
-  <view class="brand-box" bindtap="handleTitleClick">
+  <view class="brand-box">
     <text class="brand-main">MT</text>
     <text class="brand-sub">COLLECTION</text>
+    <!-- 只有白名单用户能看到的切换开关 -->
+    <view 
+      wx:if="{{isAuthorized}}" 
+      class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
+      catchtap="toggleAdminMode">
+      {{isAdmin ? 'EXIT' : 'EDIT'}}
+    </view>
   </view>
   
   <view class="nav-placeholder"></view>
 </view>
 
-<!-- 管理员状态条 -->
-<view class="admin-bar" wx:if="{{isAdmin}}">
-  <text>ADMIN MODE</text>
-  <view class="btn-exit" bindtap="exitAdmin">完成/退出</view>
-</view>
 
 <!-- ================= 2. 核心滑动区 ================= -->
 <view class="swiper-container">
@@ -97,16 +99,5 @@
   </swiper>
 </view>
 
-<!-- ================= 3. 密码弹窗 ================= -->
-<view class="modal-mask {{showPasswordModal ? 'active' : ''}}" catchtouchmove="true">
-  <view class="modal-box">
-    <view class="modal-title">管理员登录</view>
-    <input class="pwd-input" type="number" password maxlength="10" bindinput="onPwdInput" value="{{pwdInput}}"/>
-    <view class="modal-actions">
-      <view class="btn cancel" bindtap="closeModal">取消</view>
-      <view class="btn confirm" bindtap="checkPassword">确定</view>
-    </view>
-  </view>
-</view>
 
 </view>

@@ -13,11 +13,8 @@ Page({
     canScroll: false,
 
     // 管理员相关
-    adminClickCount: 0, // 记录连续点击次数
-    lastClickTime: 0,   // 记录上次点击时间
-    isAdmin: false,
-    showPwd: false,
-    tempPwd: '',
+    isAuthorized: false, // 是否是白名单里的管理员
+    isAdmin: false,      // 当前是否开启了管理员模式
     
     // 匹配码选择弹窗
     showMatchCodePicker: false,
@@ -63,7 +60,39 @@ Page({
 
   // 页面加载时从云数据库读取数据
   onLoad: function() {
+    // 检查管理员权限
+    this.checkAdminPrivilege();
     this.loadDataFromCloud();
+  },
+
+  // ================== 权限检查逻辑 ==================
+  async checkAdminPrivilege() {
+    try {
+      const res = await wx.cloud.callFunction({ name: 'login' });
+      const myOpenid = res.result.openid;
+      const db = wx.cloud.database();
+      const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      if (adminCheck.data.length > 0) {
+        this.setData({ isAuthorized: true });
+        console.log('[azjc.js] 身份验证成功：合法管理员');
+      }
+    } catch (err) {
+      console.error('[azjc.js] 权限检查失败', err);
+    }
+  },
+
+  // 管理员模式手动切换开关
+  toggleAdminMode() {
+    if (!this.data.isAuthorized) {
+      wx.showToast({ title: '无权限', icon: 'none' });
+      return;
+    }
+    const nextState = !this.data.isAdmin;
+    this.setData({ isAdmin: nextState });
+    wx.showToast({
+      title: nextState ? '管理模式开启' : '已回到用户模式',
+      icon: 'none'
+    });
   },
 
   // 从云数据库加载数据
@@ -421,67 +450,9 @@ Page({
     this.filterContent(); // 重新过滤内容
   },
 
-  // 管理员入口弹窗（保留用于密码验证后调用）
-  showPwdModal: function() {
-    this.setData({ showPwd: true });
-  },
-
-  // 标题点击逻辑：5次进入，3次退出
+  // 标题点击逻辑（已废弃点击计数逻辑）
   onAdminTap: function() {
-    let nowTime = Date.now();
-    let count = this.data.adminClickCount;
-
-    // 如果两次点击间隔超过 2 秒，重新计数，防止平时正常点击累计
-    if (nowTime - this.data.lastClickTime > 2000) {
-      count = 0;
-    }
-    
-    count++;
-    this.setData({ 
-      adminClickCount: count,
-      lastClickTime: nowTime 
-    });
-
-    // 逻辑 A：非管理员模式下，点满 5 次弹出密码框
-    if (!this.data.isAdmin) {
-      if (count >= 5) {
-        this.setData({ adminClickCount: 0 }); // 达成后重置计数
-        this.showPwdModal();
-      }
-    } 
-    // 逻辑 B：管理员模式下，点满 3 次退出
-    else {
-      if (count >= 3) {
-        this.setData({ 
-          isAdmin: false, 
-          adminClickCount: 0,
-          canScroll: false // 退出后恢复锁定逻辑
-        });
-        wx.showToast({ title: '已退出管理模式', icon: 'none' });
-      }
-    }
-  },
-
-  hidePwdModal: function() {
-    this.setData({ showPwd: false, tempPwd: '' });
-  },
-
-  onPwdInput: function(e) {
-    this.setData({ tempPwd: e.detail.value });
-  },
-
-  verifyPwd: function() {
-    if (this.data.tempPwd === '3252955872') {
-      this.setData({ 
-        isAdmin: true, 
-        showPwd: false,
-        canScroll: true,    // 管理员允许滑动
-        adminClickCount: 0  // 重置计数
-      });
-      wx.showToast({ title: '管理模式：全页面已解锁', icon: 'success' });
-    } else {
-      wx.showToast({ title: '密码错误', icon: 'none' });
-    }
+    // 废弃旧逻辑，不再使用
   },
 
   // 真实媒体上传

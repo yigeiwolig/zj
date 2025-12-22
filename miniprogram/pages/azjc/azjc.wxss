@@ -88,6 +88,32 @@ page { height: 100%; background: #fff; overflow: hidden; }
   letter-spacing: 2rpx;
   color: #000;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
+}
+
+/* 管理员切换按钮 */
+.admin-toggle-btn {
+  display: inline-block;
+  margin-left: 20rpx;
+  font-size: 20rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  background: #F2F2F7;
+  color: #8E8E93;
+  border: 1rpx solid #E5E5EA;
+  vertical-align: middle;
+  transition: all 0.3s;
+  font-weight: 600;
+}
+
+/* 开启状态的颜色 */
+.admin-toggle-btn.on {
+  background: #000;
+  color: #fff;
+  border-color: #000;
 }
 
 .step-indicator { 

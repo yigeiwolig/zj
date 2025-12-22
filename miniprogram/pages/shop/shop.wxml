@@ -1,11 +1,6 @@
 <!-- pages/shop/shop.wxml -->
 <view class="container">
 
-  <!-- ================= 0. 新增：顶部自定义错误提示 ================= -->
-  <view class="top-error-toast {{errorMsg ? 'show' : ''}}">
-    {{errorMsg}}
-  </view>
-
 <!-- ================= 1. 顶部导航 ================= -->
 <view class="nav-header">
   <!-- 左侧：返回按钮 -->
@@ -15,12 +10,16 @@
     </view>
   </view>
   
-  <!-- 中间区域：普通模式显示标题（可编辑），管理员模式显示退出按钮 -->
+  <!-- 中间区域：标题和管理员切换按钮 -->
   <view class="brand-title" bindtap="handleTitleClick">
-    <!-- 普通模式：展示可配置的店铺标题 -->
-    <text wx:if="{{!isAdmin}}">{{shopTitle || 'MT STORE'}}</text>
-    <!-- 管理员模式：中间显示“退出管理员模式”按钮 -->
-    <view wx:else class="btn-exit-center" catchtap="exitAdmin">退出管理员模式</view>
+    <text>{{shopTitle || 'MT STORE'}}</text>
+    <!-- 只有白名单用户能看到的切换开关 -->
+    <view 
+      wx:if="{{isAuthorized}}" 
+      class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
+      catchtap="toggleAdminMode">
+      {{isAdmin ? 'EXIT' : 'EDIT'}}
+    </view>
   </view>
   
   <view class="nav-right"></view>
@@ -62,6 +61,9 @@
           </view>
         </view>
         <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadCover" data-index="{{index}}">📷</view>
+        
+        <!-- 👇👇👇【新增】红色删除按钮 👇👇👇 -->
+        <view class="admin-del-card-btn" wx:if="{{isAdmin}}" catchtap="adminDeleteSeries" data-index="{{index}}">✕</view>
         
         <view class="p-info">
            <view class="p-row">
@@ -265,6 +267,33 @@
          </view>
        </block>
        <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddSpecRow">+ 添加参数行</view>
+       
+       <!-- ============ [新增] 底部全局视频区域 ============ -->
+       
+       <!-- 逻辑：如果是管理员，或者 (已有视频 且 开关是打开的) 显示区域 -->
+       <view class="spec-video-footer" 
+             wx:if="{{isAdmin || (currentSeries.compareVideo && currentSeries.showCompareVideo)}}">
+         
+         <!-- 1. 主按钮：查看对比演示 -->
+         <view class="btn-watch-compare" bindtap="watchCompareVideo">
+           <text class="icon-play">▶</text> 查看对比演示视频
+         </view>
+
+         <!-- 2. 管理员控制面板 (仅管理员可见) -->
+         <view class="admin-video-controls" wx:if="{{isAdmin}}">
+           <!-- 上传按钮 -->
+           <view class="admin-v-btn upload" bindtap="adminUploadCompareVideo">
+             {{currentSeries.compareVideo ? '更换视频' : '上传视频'}}
+           </view>
+           
+           <!-- 显示/隐藏开关 -->
+           <view class="admin-v-btn toggle {{currentSeries.showCompareVideo ? 'on' : 'off'}}" 
+                 bindtap="adminToggleVideoVis">
+             状态: {{currentSeries.showCompareVideo ? '已显示' : '已隐藏'}}
+           </view>
+         </view>
+
+       </view>
     </view>
   </scroll-view>
 </view>
@@ -317,9 +346,14 @@
 </view>
 
 <!-- ============================================================== -->
-<!-- 2. 重做：订单确认/结算弹窗 (解决"丑"的问题) -->
+<!-- 2. 重做：订单确认/结算弹窗 ================= -->
 <!-- ============================================================== -->
-<view class="overlay full-screen-overlay {{showOrderModal ? 'active' : ''}}" style="z-index: 500;">
+
+<!-- 1. [新增] 黑色半透明遮罩层 (点背景也能关闭) -->
+<view class="dark-mask" wx:if="{{showOrderModal}}" bindtap="closeOrderModal"></view>
+
+<!-- 2. 弹窗主体 (保持不变，只是为了定位) -->
+<view class="overlay full-screen-overlay {{showOrderModal ? 'active' : ''}}" style="z-index: 600;">
   <!-- 顶部 -->
   <view class="checkout-header">
     <view class="nav-close" bindtap="closeOrderModal">✕</view>
@@ -362,8 +396,18 @@
         </view>
       </view>
 
-      <!-- 收货信息 (列表式) -->
-      <view class="group-title">收货信息</view>
+      <!-- ================= 替换开始 ================= -->
+      
+      <!-- 1. 这一行是新的标题栏：左边是标题，右边是按钮 -->
+      <view class="group-header-row">
+        <!-- 左边文字 -->
+        <view class="group-title-text">收货信息</view>
+        
+        <!-- 右边按钮 (画圈的位置) -->
+        <view class="paste-btn-header" bindtap="openSmartPasteModal">智能粘贴</view>
+      </view>
+
+      <!-- 2. 表单区域 -->
       <view class="group-card form-group">
         <view class="form-item">
           <view class="form-label">收货人</view>
@@ -375,16 +419,21 @@
         </view>
         <view class="form-item">
           <view class="form-label">地址</view>
+          <!-- 注意：这里原来的 粘贴按钮 已经被彻底删除了，地址栏现在很干净 -->
           <input class="form-input" placeholder="省/市/区/街道门牌" placeholder-class="ph-style" bindinput="onInput" data-key="address" value="{{orderInfo.address}}"/>
         </view>
       </view>
+      <!-- ================= 替换结束 ================= -->
 
     </view>
   </scroll-view>
 
   <!-- 底部提交按钮 -->
   <view class="checkout-footer">
-    <view class="btn-black full" bindtap="submitOrder">提交订单并联系客服</view>
+    <!-- 显示金额，更像正规支付按钮 -->
+    <view class="btn-black full" bindtap="submitOrder">
+      立即支付 ¥{{cartTotalPrice}}
+    </view>
   </view>
 </view>
 
@@ -401,14 +450,6 @@
   </view>
 </view>
 
-<view class="pwd-mask {{showPasswordModal ? 'active' : ''}}">
-  <view class="pwd-box">
-    <view class="pwd-tit">Admin Access</view>
-    <input class="pwd-input" password type="number" bindinput="onPwdInput" focus="{{showPasswordModal}}"/>
-    <view class="btn-black full" bindtap="checkPassword">Unlock</view>
-    <view class="pwd-cancel" bindtap="closePwdModal">取消</view>
-  </view>
-</view>
 
 <!-- ================= 8. 新增：屏幕中间提示气泡 ================= -->
 <view class="center-toast-mask" wx:if="{{centerToast.show}}">
@@ -416,6 +457,46 @@
     <view class="ct-icon">!</view> <!-- 简单叹号图标 -->
     <view class="ct-text">{{centerToast.text}}</view>
   </view>
+</view>
+
+<!-- ================= 9. [新增] 智能粘贴输入弹窗 ================= -->
+<view class="smart-paste-mask" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;">
+  <view class="smart-paste-box">
+    <view class="sp-title">智能粘贴</view>
+    <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
+    
+    <!-- 输入区域 -->
+    <textarea 
+      class="sp-textarea" 
+      placeholder="例如：张三 13800138000 广东省深圳市南山区..." 
+      value="{{smartPasteVal}}" 
+      bindinput="onSmartPasteInput"
+      adjust-position="{{true}}"
+      fixed="{{true}}"
+    ></textarea>
+    
+    <view class="sp-btn-row">
+      <view class="sp-btn cancel" bindtap="closeSmartPasteModal">取消</view>
+      <view class="sp-btn confirm" bindtap="confirmSmartPaste">智能分析</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 10. [新增] 自定义全屏视频播放器 ================= -->
+<view class="video-modal-mask" wx:if="{{showVideoPlayer}}" style="z-index: 99999;">
+  
+  <!-- 关闭按钮 (你要的 X) -->
+  <view class="video-close-btn" bindtap="closeVideoPlayer">✕</view>
+
+  <!-- 视频组件 -->
+  <video 
+    src="{{currentVideoUrl}}" 
+    autoplay="{{true}}" 
+    class="fullscreen-video" 
+    show-fullscreen-btn="{{false}}" 
+    object-fit="contain"
+  ></video>
+  
 </view>
 
 </view>

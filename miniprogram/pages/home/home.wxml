@@ -11,6 +11,13 @@
     <view class="axis-line"></view>
     <view class="brand-letter">M</view>
     <view class="brand-letter">T</view>
+    <!-- 只有白名单用户能看到的切换开关 -->
+    <view 
+      wx:if="{{isAuthorized}}" 
+      class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
+      catchtap="toggleAdminMode">
+      {{isAdmin ? 'EXIT' : 'EDIT'}}
+    </view>
   </view>
 
   <!-- 1. 轮盘列表层 -->
@@ -243,29 +250,6 @@
       </view>
 
     </view> <!-- 结束 view -->
-  </view>
-
-  <!-- 自定义管理员认证弹窗 -->
-  <view class="auth-mask" wx:if="{{showAuthModal}}" catchtouchmove="true">
-    <view class="auth-box">
-      <view class="auth-title">ADMIN ACCESS</view>
-      <view class="auth-sub">请输入管理员密码</view>
-      
-      <!-- 长椭圆输入框 + 文字居中 -->
-      <input 
-        class="auth-input" 
-        password="{{true}}" 
-        type="number" 
-        placeholder="PASSWORD" 
-        placeholder-class="input-ph"
-        bindinput="onAuthInput"
-      />
-      
-      <view class="auth-btns">
-        <view class="auth-btn cancel" bindtap="closeAuthModal">取消</view>
-        <view class="auth-btn confirm" bindtap="checkAuth">确认</view>
-      </view>
-    </view>
   </view>
 
 </view> <!-- 容器结束 -->

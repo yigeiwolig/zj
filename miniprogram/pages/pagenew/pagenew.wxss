@@ -40,7 +40,37 @@ page {
 .nav-placeholder { width: 80rpx; }
 
 /* Logo */
-.brand-box { text-align: center; }
+.brand-box { 
+  text-align: center; 
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  position: relative;
+}
+
+/* 管理员切换按钮 */
+.admin-toggle-btn {
+  display: inline-block;
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  background: #F2F2F7;
+  color: #8E8E93;
+  border: 1rpx solid #E5E5EA;
+  transition: all 0.3s;
+  font-weight: 600;
+}
+
+/* 开启状态的颜色 */
+.admin-toggle-btn.on {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+
 .brand-main {
   font-family: 'Didot', 'Times New Roman', serif;
   font-size: 80rpx; font-weight: 900; color: #111;

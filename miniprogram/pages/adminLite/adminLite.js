@@ -24,10 +24,8 @@ Page({
     lastSubmission: null,
     // 新增：产品列表
     productList: [],
-    isAdmin: false,
-    password: '3252955872', // 管理员密码
-    showPasswordModal: false,
-    clickCount: 0,
+    isAuthorized: false, // 是否是白名单里的管理员
+    isAdmin: false,      // 当前是否开启了管理员模式
     // 新增：自定义编辑弹窗
     showCustomEditModal: false,
     customEditTitle: '',
@@ -41,18 +39,41 @@ Page({
       this.db = wx.cloud.database();
     }
     
-    // 尝试从storage读取管理员状态（如果从shop页面跳转过来）
-    const savedAdmin = wx.getStorageSync('isAdmin');
-    if (savedAdmin) {
-      this.setData({ isAdmin: true });
-      console.log('[adminLite] 从storage恢复管理员状态');
-    }
+    // 检查管理员权限
+    this.checkAdminPrivilege();
     
     // 加载产品列表
     this.loadProductList();
-    
-    // 调试：检查管理员状态
-    console.log('[adminLite] onLoad, isAdmin:', this.data.isAdmin);
+  },
+
+  // ================== 权限检查逻辑 ==================
+  async checkAdminPrivilege() {
+    try {
+      const res = await wx.cloud.callFunction({ name: 'login' });
+      const myOpenid = res.result.openid;
+      const db = wx.cloud.database();
+      const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      if (adminCheck.data.length > 0) {
+        this.setData({ isAuthorized: true });
+        console.log('[adminLite.js] 身份验证成功：合法管理员');
+      }
+    } catch (err) {
+      console.error('[adminLite.js] 权限检查失败', err);
+    }
+  },
+
+  // 管理员模式手动切换开关
+  toggleAdminMode() {
+    if (!this.data.isAuthorized) {
+      wx.showToast({ title: '无权限', icon: 'none' });
+      return;
+    }
+    const nextState = !this.data.isAdmin;
+    this.setData({ isAdmin: nextState });
+    wx.showToast({
+      title: nextState ? '管理模式开启' : '已回到用户模式',
+      icon: 'none'
+    });
   },
 
   onShow() {
@@ -104,43 +125,9 @@ Page({
   },
 
   // ========================================================
-  // 管理员权限逻辑
-  // ========================================================
+  // 管理员权限逻辑（已废弃旧逻辑）
   handleTitleClick() {
-    if (this.data.isAdmin) {
-      return;
-    }
-    this.data.clickCount++;
-    if (this.data.clickCount >= 5) {
-      this.setData({ showPasswordModal: true, clickCount: 0 });
-    }
-  },
-
-  onPwdInput(e) {
-    this.pwdVal = e.detail.value;
-  },
-
-  checkPassword() {
-    if (this.pwdVal === this.data.password) {
-      this.setData({ isAdmin: true, showPasswordModal: false });
-      // 保存管理员状态到storage
-      wx.setStorageSync('isAdmin', true);
-      console.log('[adminLite] 管理员模式已激活');
-      wx.showToast({ title: 'Admin On', icon: 'success' });
-    } else {
-      wx.showToast({ title: 'Error', icon: 'none' });
-    }
-  },
-
-  exitAdmin() {
-    this.setData({ isAdmin: false });
-    // 清除管理员状态
-    wx.removeStorageSync('isAdmin');
-    wx.showToast({ title: 'Admin Off', icon: 'success' });
-  },
-
-  closePasswordModal() {
-    this.setData({ showPasswordModal: false, clickCount: 0 });
+    // 废弃旧逻辑，不再使用
   },
 
   // ========================================================

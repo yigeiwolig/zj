@@ -55,7 +55,34 @@ page {
   font-weight: 800; 
   flex: 1;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20rpx;
 }
+
+/* 管理员切换按钮 */
+.admin-toggle-btn {
+  display: inline-block;
+  margin-left: 20rpx;
+  font-size: 20rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  background: #F2F2F7;
+  color: #8E8E93;
+  border: 1rpx solid #E5E5EA;
+  vertical-align: middle;
+  transition: all 0.3s;
+  font-weight: 600;
+}
+
+/* 开启状态的颜色 */
+.admin-toggle-btn.on {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
+
 .admin-badge { background: #000; color: #fff; font-size: 18rpx; padding: 6rpx 10rpx; border-radius: 8rpx; }
 
 /* ============ 2. 主页面 ============ */
@@ -95,7 +122,26 @@ page {
 .p-info { padding: 40rpx; }
 .p-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 34rpx; }
 .add-series-btn { text-align: center; padding: 60rpx; border: 4rpx dashed #ccc; border-radius: 30rpx; color: #999; font-weight: 600; }
-.admin-float { position: absolute; top: 20rpx; right: 20rpx; width: 60rpx; height: 60rpx; background: rgba(0,0,0,0.5); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24rpx; z-index: 15; }
+/* 2. 移动相机图标（上传封面）到右下角，避免和删除按钮打架 */
+.admin-float {
+  position: absolute !important;
+  top: auto !important;     /* 取消原本的 top */
+  bottom: 20rpx !important; /* 改到下面 */
+  right: 20rpx !important;
+  
+  width: 70rpx; 
+  height: 70rpx; 
+  background: rgba(255,255,255,0.8) !important; /* 改为半透明白底 */
+  backdrop-filter: blur(10px);
+  color: #000 !important;     /* 黑相机 */
+  border-radius: 50%; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  font-size: 32rpx; 
+  z-index: 25; 
+  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.1);
+}
 /* 跳转号码标识 */
 .jump-number-badge {
   position: absolute;
@@ -392,6 +438,16 @@ page {
 .form-label { width: 140rpx; font-size: 28rpx; font-weight: 600; color: #1D1D1F; }
 .form-input { flex: 1; height: 100%; font-size: 28rpx; text-align: right; color: #333; }
 .ph-style { color: #ccc; }
+/* 粘贴按钮（地址行右侧） */
+.paste-btn {
+  margin-left: 16rpx;
+  padding: 14rpx 18rpx;
+  background: #F2F2F7;
+  color: #0071E3;
+  border-radius: 18rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+}
 
 /* 底部按钮区 - 优化留白 */
 .checkout-footer {
@@ -847,4 +903,274 @@ page {
 @keyframes fadeInOut {
   from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
+}
+
+/* ============================================== */
+/* [新增] 智能粘贴弹窗样式 */
+/* ============================================== */
+.smart-paste-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); z-index: 99999 !important; /* 确保在最上层 */
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(5px);
+}
+
+.smart-paste-box {
+  background: #fff; width: 600rpx; border-radius: 40rpx; padding: 40rpx;
+  display: flex; flex-direction: column; align-items: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
+  animation: popUp 0.3s ease;
+}
+
+.sp-title { font-size: 34rpx; font-weight: 800; margin-bottom: 10rpx; color: #1D1D1F; }
+.sp-desc { font-size: 24rpx; color: #86868b; margin-bottom: 30rpx; }
+
+.sp-textarea {
+  background: #F5F5F7; width: 100%; height: 200rpx;
+  border-radius: 20rpx; padding: 20rpx; box-sizing: border-box;
+  font-size: 28rpx; color: #333; margin-bottom: 40rpx;
+}
+
+.sp-btn-row { width: 100%; display: flex; gap: 20rpx; }
+.sp-btn {
+  flex: 1; height: 80rpx; line-height: 80rpx; text-align: center;
+  border-radius: 40rpx; font-weight: 600; font-size: 28rpx;
+}
+.sp-btn.cancel { background: #F5F5F7; color: #666; }
+.sp-btn.confirm { background: #0071E3; color: #fff; }
+.sp-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+@keyframes popUp {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* ============================================== */
+/* 收货信息标题栏 (左右对齐) */
+/* ============================================== */
+.group-header-row {
+  display: flex;
+  justify-content: space-between; /* 关键：让两端对齐 */
+  align-items: center;
+  flex-wrap: nowrap; /* 防止换行 */
+  /* 这里的边距要和上面的卡片保持协调 */
+  margin: 30rpx 20rpx 16rpx 20rpx; 
+  padding: 0 10rpx;
+}
+
+/* 标题文字样式 */
+.group-title-text {
+  font-size: 24rpx; 
+  color: #86868b; 
+  font-weight: 600;
+  flex-shrink: 1; /* 允许文字区域收缩 */
+  min-width: 0; /* 允许收缩到最小 */
+}
+
+/* 右上角按钮样式 */
+.paste-btn-header {
+  font-size: 24rpx;
+  color: #0071E3;        /* 蓝色文字 */
+  font-weight: 600;
+  background: rgba(0, 113, 227, 0.1); /* 浅蓝色背景 */
+  padding: 8rpx 20rpx;
+  border-radius: 20rpx;  /* 圆角胶囊 */
+  flex-shrink: 0; /* 防止按钮被压缩 */
+  white-space: nowrap; /* 防止文字换行 */
+}
+
+.paste-btn-header:active {
+  opacity: 0.6;
+}
+
+/* ============================================== */
+/* [新增] 黑色遮罩层样式 */
+/* ============================================== */
+.dark-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5); /* 黑色半透明 */
+  backdrop-filter: blur(3px);     /* (可选) 增加一点背景模糊，更有高级感 */
+  z-index: 550; /* 层级要比弹窗(600)低，比页面高 */
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================================== */
+/* [修改] 优化弹窗的背景和圆角效果 */
+/* ============================================== */
+.full-screen-overlay {
+  /* 确保弹窗在遮罩层上面 */
+  z-index: 600 !important; 
+  
+  /* 给弹窗加个大阴影，让它更有立体感 */
+  box-shadow: 0 -10rpx 40rpx rgba(0, 0, 0, 0.2) !important;
+  
+  /* 确保顶部圆角切得干干净净 */
+  border-radius: 40rpx 40rpx 0 0;
+  overflow: hidden; /* 防止里面的直角内容溢出圆角 */
+  background: #F5F5F7; /* 保持你的灰底 */
+}
+
+/* 优化顶部的白色标题栏，让它看起来不像切断了 */
+.checkout-header {
+  background: #fff;
+  border-bottom: 1rpx solid rgba(0,0,0,0.05); /* 边框淡一点 */
+  /* 移除圆角，因为外层容器已经切了圆角 */
+  border-radius: 0; 
+}
+
+/* ============================================== */
+/* [新增] 对比弹窗底部视频区 */
+/* ============================================== */
+.spec-video-footer {
+  margin-top: 40rpx;
+  padding: 30rpx 0;
+  border-top: 1rpx dashed #eee;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+
+/* 1. 大播放按钮样式 */
+.btn-watch-compare {
+  background: #000;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+  padding: 24rpx 60rpx;
+  border-radius: 50rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+  transition: all 0.2s;
+}
+
+.btn-watch-compare:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+.icon-play {
+  font-size: 24rpx;
+}
+
+/* 2. 管理员控制面板 */
+.admin-video-controls {
+  display: flex;
+  gap: 20rpx;
+  background: #f0f0f0;
+  padding: 10rpx 20rpx;
+  border-radius: 20rpx;
+}
+
+.admin-v-btn {
+  font-size: 22rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 10rpx;
+  font-weight: 600;
+}
+
+.admin-v-btn.upload {
+  background: #fff;
+  border: 1rpx solid #ccc;
+  color: #333;
+}
+
+/* 开关状态颜色 */
+.admin-v-btn.toggle.on {
+  background: #34C759; /* 绿色 */
+  color: #fff;
+}
+.admin-v-btn.toggle.off {
+  background: #8E8E93; /* 灰色 */
+  color: #fff;
+}
+
+/* ============================================== */
+/* [新增] 自定义全屏视频弹窗样式 */
+/* ============================================== */
+.video-modal-mask {
+  position: fixed;
+  top: 0; 
+  left: 0; 
+  width: 100%; 
+  height: 100%;
+  background-color: #000; /* 全黑背景 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+/* 视频本体 */
+.fullscreen-video {
+  width: 100%;
+  height: 100%;
+}
+
+/* 关闭按钮 X */
+.video-close-btn {
+  position: absolute;
+  top: 80rpx;    /* 距离顶部，避开刘海屏 */
+  left: 40rpx;   /* 放左边或者右边都可以，这里放左边符合返回习惯 */
+  width: 80rpx;
+  height: 80rpx;
+  background: rgba(255, 255, 255, 0.3); /* 半透明白底 */
+  border-radius: 50%;
+  color: #fff;
+  font-size: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000; /* 必须比视频层级高 */
+  backdrop-filter: blur(5px);
+}
+
+/* 按下效果 */
+.video-close-btn:active {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* ============================================== */
+/* [新增] 主页卡片删除按钮 */
+/* ============================================== */
+/* 1. 优化主页卡片删除按钮：改为透明红叉风格 */
+.admin-del-card-btn {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  
+  /* 关键：去掉红色背景，只要红色的叉 */
+  background: transparent !important; 
+  color: #FF3B30 !important;
+  font-size: 40rpx !important; 
+  font-weight: 900;
+  
+  /* 增加点击区域 */
+  width: 90rpx !important;
+  height: 90rpx !important;
+  
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-top: 15rpx;
+  padding-right: 20rpx;
+  
+  z-index: 30; /* 层级最高 */
+  text-shadow: 0 2rpx 4rpx rgba(255,255,255,0.5); /* 增加一点白影，防止背景太乱看不清 */
+}
+
+.admin-del-card-btn:active {
+  transform: scale(0.95);
+  opacity: 0.8;
 }

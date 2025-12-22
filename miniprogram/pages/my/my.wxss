@@ -1,14 +1,56 @@
 page { background: #F7F7F7; color: #1D1D1F; }
-.container { padding-bottom: 180rpx; }
+.container { padding-bottom: 40rpx; }
 
+/* --- 1. 头部 (修改布局：返回键 + 下移文字) --- */
+.profile-header { 
+  background: #fff; 
+  /* 增加 padding 以适应返回键 */
+  padding: 100rpx 40rpx 60rpx; 
+  display: flex;
+  flex-direction: column; 
+}
 
-/* 头部 */
-.profile-header { background: #fff; padding: 120rpx 40rpx 60rpx; }
+/* 固定返回按钮 */
+.nav-back-fixed {
+  position: absolute; top: 80rpx; left: 40rpx; z-index: 100;
+  width: 80rpx; height: 80rpx; display: flex; align-items: center;
+  justify-content: center;
+}
+.nav-back-fixed:active {
+  opacity: 0.6;
+}
+.back-arrow {
+  font-size: 48rpx;
+  font-weight: 300;
+  color: #1D1D1F;
+  line-height: 1;
+}
+
+/* 返回按钮样式（保留兼容） */
+.nav-back {
+  position: relative;
+  width: 60rpx;
+  height: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 40rpx;
+  z-index: 100;
+  cursor: pointer;
+}
+.nav-back:active {
+  opacity: 0.6;
+}
+
+/* 包裹原来的头部信息，让它们保持原来的排版，但整体被推下去了 */
+.header-content {
+  display: block;
+}
+
 .header-main { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 60rpx; }
+.user-identity { display: flex; flex-direction: column; }
 .rank-tag { font-size: 20rpx; color: #AF9567; letter-spacing: 4rpx; font-weight: 700; display: block; margin-bottom: 12rpx; }
 .user-name { font-size: 64rpx; font-weight: 600; letter-spacing: -2rpx; }
-.add-btn { font-size: 60rpx; font-weight: 200; line-height: 1; }
-
 
 .header-stats { display: flex; align-items: center; }
 .stat-item { display: flex; flex-direction: column; }
@@ -18,66 +60,364 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .divider-v { width: 1px; height: 40rpx; background: #E5E5E5; margin: 0 60rpx; }
 
 
-/* 标签 */
-.section-label { padding: 40rpx 40rpx 20rpx; font-size: 22rpx; font-weight: 700; color: #BBB; letter-spacing: 2rpx; }
+/* 管理员标题 */
+.admin-page-title {
+  padding: 120rpx 48rpx 20rpx;
+  font-size: 50rpx; font-weight: 800; color: #000;
+}
+
+/* --- 标签 --- */
+.section-label { padding: 10rpx 48rpx 12rpx; font-size: 22rpx; font-weight: 700; color: #BBB; letter-spacing: 2rpx; }
+
+/* --- 调试工具 --- */
+.debug-tools { display: flex; padding: 20rpx 40rpx; gap: 15rpx; }
+.debug-btn { font-size: 20rpx; background: #f0f0f0; padding: 8rpx 15rpx; border-radius: 6rpx; color: #999; }
+
+/* --- 2. 订单区 --- */
+/* 1. 【修改】让订单列表高度自适应，不再被截断 */
+.order-swiper {
+  /* 意思是：屏幕总高度 - 顶部标题占用的高度 */
+  /* 如果还是不够，可以改小后面那个数字，比如 - 200rpx */
+  height: calc(100vh - 280rpx) !important; 
+}
+
+/* 订单详情卡片 */
+/* 确保内部卡片可以滚动 */
+.order-card.detail-mode {
+  display: flex; 
+  flex-direction: column;
+  padding: 30rpx; 
+  /* 允许卡片内部内容过多时撑开，配合 swiper 的 scroll-view 特性 */
+  height: auto; 
+  min-height: 700rpx;
+  padding-bottom: 60rpx; /* 底部多留点白，防止贴边 */
+  background: #fff; margin: 0 12rpx; border-radius: 40rpx;
+  position: relative; border: 1px solid #E5E5E5; box-sizing: border-box;
+}
+.order-card {
+  background: #fff; margin: 0 12rpx; height: 100%; border-radius: 40rpx; padding: 24rpx 40rpx;
+  position: relative; border: 1px solid #E5E5E5; box-sizing: border-box; display: flex; flex-direction: column;
+}
+
+/* --- 头部优化 --- */
+.card-header {
+  display: flex;
+  justify-content: space-between; /* 左右贴边 */
+  align-items: center;           /* 垂直居中对齐，让状态标签和订单号对齐 */
+  margin-bottom: 20rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.order-id-group {
+  display: flex;
+  flex-direction: column; /* 垂直排列 */
+}
+.order-label { font-size: 20rpx; color: #ccc; margin-bottom: 4rpx; }
+.order-val { font-size: 24rpx; color: #999; font-family: monospace; }
+.order-id-label { font-size: 20rpx; color: #999; margin-bottom: 4rpx; }
+.order-id-val { font-size: 28rpx; font-weight: 700; color: #000; }
+.order-no { font-size: 24rpx; color: #ccc; font-weight: bold; }
+.status-label { font-size: 24rpx; font-weight: bold; color: #007AFF; }
+.status-label.signed { color: #34C759; }
+.status-label.highlight { color: #FF9500; }
+
+/* ========================================= */
+/* 修复右上角标签：强力修正版 */
+/* ========================================= */
+.status-tag {
+  font-size: 22rpx;
+  font-weight: 600;
+  
+  /* Flex 布局基础 */
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  
+  height: auto !important;
+  
+  /* === 【核心修改】 === */
+  /* 上边距改到极小 (4rpx) */
+  /* 下边距加大 (14rpx) */
+  /* 这样底部空间非常厚，字就被迫往上跑了 */
+  padding: 4rpx 20rpx 14rpx 20rpx !important;
+  
+  /* 保持行高为1，防止干扰 */
+  line-height: 1 !important; 
+  
+  border-radius: 12rpx;
+  margin-left: 20rpx;
+}
+
+/* 状态颜色方案 (保持不变) */
+.status-tag.UNPAID { 
+  background: #FFF5F5; 
+  color: #FF3B30; 
+} 
+
+.status-tag.PAID { 
+  background: #F0F8FF; 
+  color: #0071E3; 
+}   
 
 
-/* 订单卡片 */
-.order-swiper { height: 420rpx; }
-.order-card { background: #fff; margin: 0 12rpx; height: 100%; border-radius: 40rpx; padding: 40rpx; position: relative; border: 1px solid #E5E5E5; box-sizing: border-box; }
-.order-index { position: absolute; left: 40rpx; top: 40rpx; font-size: 20rpx; color: #CCC; font-weight: 700; }
-.order-status { text-align: right; font-size: 22rpx; font-weight: 700; color: #007AFF; }
-.order-status.green { color: #34C759; }
-.order-title { font-size: 32rpx; font-weight: 600; margin: 30rpx 0 20rpx; }
 
+/* 运输中 */
+.status-tag.SHIPPED { 
+  background: rgba(52, 199, 89, 0.1); 
+  color: #34C759; 
+  border: 1rpx solid rgba(52, 199, 89, 0.3); 
+}
 
-.info-line { display: flex; justify-content: space-between; font-size: 24rpx; margin-bottom: 12rpx; color: #8E8E93; }
-.bold { color: #1D1D1F; font-weight: 500; }
-.copy-box { display: flex; align-items: center; }
-.copy-tag { font-size: 18rpx; padding: 4rpx 10rpx; background: #EEE; border-radius: 6rpx; margin-left: 10rpx; color: #666; }
+.status-tag.SIGNED { 
+  background: #F5F5F7; 
+  color: #8E8E93; 
+}
 
+.product-title { font-size: 34rpx; font-weight: bold; margin: 10rpx 0 20rpx; color: #1A1A1A; }
 
-.refund-btn { margin-top: 20rpx; padding: 20rpx; border: 1px solid #FF3B30; color: #FF3B30; border-radius: 100rpx; text-align: center; font-size: 24rpx; font-weight: 600; }
-.shipping-content { display: flex; align-items: center; padding-top: 20rpx; border-top: 1px solid #F2F2F2; margin-top: 20rpx; }
-.truck-icon { font-size: 48rpx; margin-right: 20rpx; }
-.ship-text { flex: 1; }
-.eta { font-size: 26rpx; font-weight: 600; display: block; }
-.desc { font-size: 22rpx; color: #8E8E93; margin-top: 4rpx; display: block; }
-.logistics-detail-link { margin-top: 20rpx; padding-top: 20rpx; border-top: 1px solid #F2F2F2; display: flex; justify-content: space-between; font-size: 24rpx; color: #007AFF; font-weight: 600; }
+.info-row { display: flex; justify-content: space-between; margin-bottom: 12rpx; font-size: 26rpx; }
+.info-row text:first-child { color: #8E8E93; }
+.info-row .val { color: #1D1D1F; font-weight: 500; font-family: "PingFang SC"; }
+.info-row .val.price { font-weight: 700; color: #1D1D1F; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, sans-serif; }
 
+.copy-wrap { display: flex; align-items: center; }
+.copy-tag { font-size: 18rpx; background: #f0f0f0; color: #666; padding: 4rpx 10rpx; border-radius: 4rpx; margin-left: 10rpx; }
 
-/* 设备卡片 */
-.device-card { background: #fff; margin: 0 40rpx 20rpx; padding: 40rpx; border-radius: 40rpx; border: 1px solid #E5E5E5; position: relative; }
+/* ========================================= */
+/* 2. 修复按钮：加高 + 胶囊形状 */
+/* ========================================= */
+
+/* 管理员发货按钮 & 用户查看物流按钮 (通用设置) */
+.admin-ship-btn,
+.btn-logistics-action,
+.logistics-btn {
+  margin-top: 30rpx;
+  width: 100%; /* 撑满宽度 */
+  
+  /* 高度加大 */
+  height: 100rpx !important;
+  line-height: 100rpx !important; /* 确保文字垂直居中 */
+  
+  border-radius: 50rpx !important; /* 纯圆角胶囊 */
+  font-size: 30rpx !important;
+  font-weight: 600;
+  text-align: center;
+  box-sizing: border-box; /* 防止边框撑大 */
+}
+
+/* 黑色发货按钮 */
+.admin-ship-btn {
+  background: #000;
+  color: #fff;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.2);
+}
+
+/* 白色查看物流按钮 */
+.btn-logistics-action,
+.logistics-btn {
+  background: #fff;
+  color: #000;
+  border: 2rpx solid #E5E5EA; /* 浅灰边框 */
+  line-height: 96rpx !important; /* 减去边框厚度，保持居中 */
+}
+
+/* 点击反馈 */
+.admin-ship-btn:active,
+.btn-logistics-action:active {
+  transform: scale(0.98);
+  opacity: 0.8;
+}
+
+/* 用户信息区 */
+.user-detail-box {
+  background: #f9f9f9; border-radius: 16rpx; padding: 20rpx; margin: 20rpx 0;
+}
+.u-info { margin-bottom: 10rpx; }
+.u-name { font-size: 32rpx; font-weight: 700; margin-right: 20rpx; }
+.u-phone { font-size: 26rpx; color: #666; }
+.u-addr { font-size: 24rpx; color: #888; line-height: 1.4; }
+
+/* 买家信息盒 */
+.buyer-info-box {
+  background: #F2F2F7; border-radius: 20rpx; padding: 24rpx; margin: 20rpx 0;
+}
+.b-row { display: flex; justify-content: space-between; margin-bottom: 8rpx; }
+.b-name { font-size: 30rpx; font-weight: 700; }
+.b-phone { font-size: 26rpx; color: #0071E3; font-weight: 600; }
+.b-addr { font-size: 24rpx; color: #666; line-height: 1.4; }
+
+/* 商品清单 */
+.goods-detail-list { flex: 1; margin: 20rpx 0; }
+.section-mini-title { font-size: 20rpx; color: #bbb; letter-spacing: 2rpx; margin-bottom: 15rpx; }
+.mini-tag { font-size: 20rpx; color: #bbb; letter-spacing: 2rpx; margin-bottom: 15rpx; }
+.g-item { 
+  display: flex; align-items: center; padding: 15rpx 0; border-bottom: 1rpx solid #f0f0f0;
+}
+.g-info { flex: 1; display: flex; flex-direction: column; }
+.g-n { font-size: 28rpx; font-weight: 600; }
+.g-s { font-size: 20rpx; color: #888; }
+.g-count { width: 60rpx; font-size: 24rpx; color: #bbb; }
+.g-p { font-size: 28rpx; font-weight: 700; width: 120rpx; text-align: right; }
+.g-main { display: flex; flex-direction: column; }
+.g-name { font-size: 28rpx; font-weight: 600; }
+.g-spec { font-size: 22rpx; color: #0071E3; margin-top: 4rpx; }
+.g-side { text-align: right; }
+.g-qty { font-size: 24rpx; color: #999; margin-right: 20rpx; }
+.g-price { font-size: 26rpx; font-weight: 700; }
+
+/* --- 底部优化 --- */
+.card-footer-new {
+  margin-top: 20rpx;
+  border-top: 1rpx dashed #eee;
+  padding-top: 20rpx;
+}
+
+.total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+.time-text { font-size: 22rpx; color: #ccc; }
+.price-box { font-size: 24rpx; color: #333; }
+.price-num { font-size: 36rpx; font-weight: 800; margin-left: 10rpx; }
+
+/* 按钮组右对齐 */
+.action-row-right {
+  display: flex;
+  justify-content: flex-end; /* 靠右排布 */
+  gap: 20rpx; /* 按钮间距 */
+}
+
+/* 小按钮样式 */
+.btn-mini {
+  padding: 16rpx 34rpx;
+  border-radius: 40rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+.btn-mini.gray {
+  background: #f0f0f0;
+  color: #666;
+}
+.btn-mini.black {
+  background: #000;
+  color: #fff;
+  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.2);
+}
+
+.footer-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx; }
+.total-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx; }
+.order-time { font-size: 22rpx; color: #bbb; }
+.time { font-size: 22rpx; color: #ccc; }
+.total { font-size: 24rpx; }
+.total-val { font-size: 24rpx; }
+.total-val .big { font-size: 36rpx; font-weight: 800; color: #000; }
+.price-big { font-size: 40rpx; font-weight: 800; }
+
+/* 按钮 */
+.btn-ship-action {
+  margin-top: 30rpx; background: #000; color: #fff; text-align: center;
+  padding: 24rpx; border-radius: 50rpx; font-size: 28rpx; font-weight: 600;
+}
+.wait-tip, .status-tip, .done-tip { 
+  font-size: 24rpx; color: #999; 
+  margin-top: 20rpx; text-align: center;
+}
+.action-row {
+  margin-top: 20rpx;
+}
+
+.refund-btn {
+  margin-top: 40rpx; padding: 24rpx 0; border: 1px solid #FF3B30; color: #FF3B30;
+  border-radius: 100rpx; text-align: center; font-size: 26rpx; font-weight: 600; width: 100%; display: block;
+}
+
+.shipping-box { margin-top: 20rpx; padding: 20rpx; background: #f9f9f9; border-radius: 15rpx; }
+.eta { font-size: 24rpx; font-weight: bold; display: block; margin-bottom: 5rpx; }
+.logistics-text { font-size: 22rpx; color: #8E8E93; }
+
+.logistics-detail-link {
+  margin-top: auto; padding-top: 30rpx; border-top: 1px solid #F2F2F2;
+  display: flex; justify-content: space-between; font-size: 26rpx; color: #007AFF; font-weight: 600; margin-bottom: 10rpx;
+}
+
+/* --- 3. 设备列表 --- */
+.device-card { background: #fff; margin: 0 40rpx 30rpx; padding: 40rpx; border-radius: 40rpx; border: 1px solid #E5E5E5; position: relative; }
 .remove-icon { position: absolute; right: 40rpx; top: 40rpx; font-size: 32rpx; color: #CCC; font-weight: 200; }
 .device-name { font-size: 36rpx; font-weight: 600; margin-bottom: 40rpx; }
+
+.spec-list { width: 100%; }
 .spec-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16rpx; }
 .spec-row .label { font-size: 22rpx; color: #8E8E93; }
 .spec-row .value { font-size: 26rpx; font-weight: 500; }
 .mono { font-family: monospace; color: #555; }
+
 .warranty-val { display: flex; align-items: center; }
 .days-num { font-size: 36rpx; font-weight: 700; color: #34C759; margin-right: 10rpx; }
 .days-num.warning { color: #FF9500; }
 .ext-tag { font-size: 18rpx; padding: 4rpx 10rpx; background: #FFF9E6; color: #AF9567; border: 1px solid #F0E6CC; border-radius: 6rpx; }
 
+.device-card.add-mode {
+  display: flex; justify-content: center; align-items: center; min-height: 200rpx;
+  background: #FAFAFA; border: 2px dashed #D1D1D1; box-shadow: none;
+}
+.device-card.add-mode:active { background: #F0F0F0; border-color: #BBB; }
+.add-content { display: flex; flex-direction: column; align-items: center; color: #999; }
+.big-plus { font-size: 60rpx; font-weight: 300; margin-bottom: 10rpx; line-height: 1; }
+.add-tips { font-size: 26rpx; font-weight: 600; letter-spacing: 1rpx; }
 
-/* 底部 */
-.footer-bar { position: fixed; bottom: 40rpx; left: 40rpx; right: 40rpx; display: flex; gap: 20rpx; }
-.f-btn { flex: 1; height: 100rpx; background: #fff; border: 1px solid #E5E5E5; border-radius: 100rpx; display: flex; align-items: center; justify-content: center; font-size: 28rpx; font-weight: 600; }
-.f-btn.dark { background: #000; color: #fff; border: none; }
+/* --- 5. 底部独立按钮 --- */
+.footer-bar {
+  background: transparent; margin-top: 60rpx; display: flex;
+  padding: 20rpx 40rpx calc(40rpx + env(safe-area-inset-bottom)); gap: 20rpx;
+}
+.f-btn { 
+  flex: 1; height: 100rpx; background: #fff; border: 1px solid #E5E5E5;
+  border-radius: 20rpx; display: flex; align-items: center; justify-content: center;
+  font-size: 28rpx; font-weight: 600; color: #1D1D1F;
+}
+.f-btn.dark { background: #000; color: #fff; border: 1px solid #000; }
 
-
-/* 弹窗 */
+/* --- 6. 模态窗 --- */
 .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); visibility: hidden; opacity: 0; transition: 0.3s; z-index: 1000; }
 .modal.show { visibility: visible; opacity: 1; }
-.modal-content { position: absolute; bottom: 0; width: 100%; background: #F7F7F7; border-radius: 60rpx 60rpx 0 0; padding: 60rpx 40rpx 100rpx; transform: translateY(100%); transition: 0.3s; }
+
+.modal-content { 
+  position: absolute; bottom: 0; width: 100%; background: #fff; border-radius: 40rpx 40rpx 0 0;
+  max-height: 85vh; display: flex; flex-direction: column;
+  transform: translateY(100%); transition: 0.3s;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+}
 .modal.show .modal-content { transform: translateY(0); }
-.modal-header { display: flex; justify-content: space-between; font-size: 32rpx; font-weight: 600; margin-bottom: 40rpx; }
-.bt-btn { width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; background: #fff; }
+
+.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
+.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+
+.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
+.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
+.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
+
+.bt-btn { 
+  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; background: #fff; box-sizing: border-box;
+}
 .bt-btn.ready { background: #34C759; border-color: #34C759; color: #fff; }
+
+.form-item { margin-bottom: 30rpx; }
 .form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
-.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; margin-bottom: 30rpx; font-size: 28rpx; }
-.upload-group { display: flex; gap: 20rpx; margin-bottom: 30rpx; }
-.upload-box { flex: 1; height: 160rpx; background: #fff; border: 1px dashed #CCC; border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 20rpx; color: #999; }
-.submit-btn { width: 100%; padding: 30rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
 
+.upload-group { display: flex; gap: 20rpx; }
+.upload-box { 
+  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
+  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
+  justify-content: center; font-size: 22rpx; color: #999; 
+}
+.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
 
+.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
+.submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }

@@ -20,8 +20,7 @@ Page({
     
     // --- 播放器与管理员状态 ---
     showVideoPlayer: false, 
-    currentVideo: null,     
-    isAdminUnlocked: false, // 管理员是否解锁
+    currentVideo: null,
 
     // --- 🆕 搜索栏状态 ---
     showSearchBar: true, // 默认显示
@@ -41,10 +40,8 @@ Page({
     cameraAnimating: false, // 🆕 录制页面动画状态
     
     // --- 管理员上传/编辑相关 ---
-    titleClickCount: 0,
-    lastClickTime: 0,
-    showPasswordModal: false,
-    inputPassword: '',
+    isAuthorized: false, // 是否是白名单里的管理员
+    isAdmin: false,      // 当前是否开启了管理员模式（使用 isAdminUnlocked 的别名）
     showAdminForm: false,
     
     // 🆕 编辑模式状态
@@ -73,6 +70,9 @@ Page({
     this.setData({ statusBarHeight: sysInfo.statusBarHeight });
     this.ctx = wx.createCameraContext();
     this.fetchCloudData();
+    
+    // 检查管理员权限
+    this.checkAdminPrivilege();
     
     this.captureScreenHandler = () => { this.handleScreenshot(); };
     wx.onUserCaptureScreen(this.captureScreenHandler);
@@ -166,7 +166,7 @@ Page({
   // 🆕 2. 智能底部按钮 (录制 vs 上传)
   // ==========================================
   handleFabTap() {
-    if (this.data.isAdminUnlocked) {
+    if (this.data.isAdmin) {
       // 管理员模式：直接打开上传表单 (新增模式)
       this.setData({
         isEditing: false,
@@ -191,7 +191,7 @@ Page({
     const id = e.currentTarget.dataset.id;
     const targetItem = this.data.displayList.find(item => item._id === id);
 
-    if (this.data.isAdminUnlocked) {
+    if (this.data.isAdmin) {
       // 🔧 管理员模式：进入编辑
       this.editCase(targetItem);
     } else {
@@ -676,24 +676,13 @@ Page({
 
   // 基础交互
   handleTitleTap() {
-    const now = Date.now();
-    if (now - this.data.lastClickTime < 500) { this.data.titleClickCount++; } else { this.data.titleClickCount = 1; }
-    this.setData({ lastClickTime: now });
-    if (this.data.titleClickCount >= 5) { this.setData({ titleClickCount: 0, showPasswordModal: true }); wx.vibrateShort(); }
-  },
-  confirmPassword() {
-    if (this.data.inputPassword === '3252955872') {
-      wx.showToast({ title: '解锁成功', icon: 'success' });
-      this.setData({ showPasswordModal: false, inputPassword: '', showAdminForm: true, isAdminUnlocked: true });
-    } else { wx.showToast({ title: '密码错误', icon: 'none' }); }
+    // 废弃旧逻辑，不再使用
   },
   closeVideoPlayer() { this.setData({ showVideoPlayer: false, currentVideo: null }); },
   goBack() { wx.navigateBack(); },
   closeAdminForm() { this.setData({ showAdminForm: false, adminVideoPath: null, adminThumbPath: null, isEditing: false }); },
-  closePasswordModal() { this.setData({ showPasswordModal: false, inputPassword: '' }); },
   closeIntro() { this.setData({ showIntro: false }); },
   closeSuccess() { this.setData({ showSuccess: false }); },
-  onInputPassword(e) { this.setData({ inputPassword: e.detail.value }); },
   onInputVehicle(e) { this.setData({ vehicleName: e.detail.value }); },
   bindCategoryChange(e) { this.setData({ categoryIndex: e.detail.value }); },
   bindPickerChange(e) { this.setData({ modelIndex: e.detail.value }); },

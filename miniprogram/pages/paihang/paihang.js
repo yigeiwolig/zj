@@ -48,7 +48,8 @@ Page({
     },
 
     // 管理员 & 表单
-    clickCount: 0, lastClickTime: 0, showPwdModal: false, isAdminMode: false, pwdInput: '',
+    isAuthorized: false, // 是否是白名单里的管理员
+    isAdminMode: false,   // 当前是否开启了管理员模式
     showEditModal: false, isEdit: false,
     form: { id: null, type: 'gas', name: '', bike: '', angle: '', dist: '', score: '', avatar: '' },
 
@@ -65,6 +66,9 @@ Page({
     this.calcNavBarInfo();
     this.updateTheme(); // 初始化主题
 
+    // 检查管理员权限
+    this.checkAdminPrivilege();
+
     // 读取数据
     const cache = wx.getStorageSync('moto_records');
     if (cache && cache.length > 0) {
@@ -75,6 +79,36 @@ Page({
     
     this.calculateStats(); // 计算个人统计
     this.computeRankings(); // 计算排名
+  },
+
+  // ================== 权限检查逻辑 ==================
+  async checkAdminPrivilege() {
+    try {
+      const res = await wx.cloud.callFunction({ name: 'login' });
+      const myOpenid = res.result.openid;
+      const db = wx.cloud.database();
+      const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      if (adminCheck.data.length > 0) {
+        this.setData({ isAuthorized: true });
+        console.log('[paihang.js] 身份验证成功：合法管理员');
+      }
+    } catch (err) {
+      console.error('[paihang.js] 权限检查失败', err);
+    }
+  },
+
+  // 管理员模式手动切换开关
+  toggleAdminMode() {
+    if (!this.data.isAuthorized) {
+      wx.showToast({ title: '无权限', icon: 'none' });
+      return;
+    }
+    const nextState = !this.data.isAdminMode;
+    this.setData({ isAdminMode: nextState });
+    wx.showToast({
+      title: nextState ? '管理模式开启' : '已回到用户模式',
+      icon: 'none'
+    });
   },
 
   // 1. 初始化假数据
@@ -257,31 +291,8 @@ Page({
   // === 管理员逻辑 ===
 
   handleTitleClick() {
-    const now = Date.now();
-    if (now - this.data.lastClickTime > 1000) this.data.clickCount = 0;
-    this.data.clickCount++;
-    this.data.lastClickTime = now;
-    if (this.data.clickCount >= 5) {
-      if (this.data.isAdminMode) {
-        this.setData({ isAdminMode: false, clickCount: 0 });
-        wx.showToast({ title: '退出管理', icon: 'none' });
-      } else {
-        this.setData({ showPwdModal: true, clickCount: 0, pwdInput: '' });
-      }
-    }
+    // 废弃旧逻辑，不再使用
   },
-
-  checkPassword() {
-    if (this.data.pwdInput === '3252955872') {
-      this.setData({ showPwdModal: false, isAdminMode: true });
-      wx.showToast({ title: '管理员已解锁', icon: 'success' });
-    } else {
-      wx.showToast({ title: '密码错误', icon: 'error' });
-    }
-  },
-  
-  closePwdModal() { this.setData({ showPwdModal: false }) },
-  handlePwdInput(e) { this.setData({ pwdInput: e.detail.value }) },
 
   openAddModal() {
     this.setData({ showEditModal: true, isEdit: false, form: { id: null, type: this.data.rankType, name: '', bike: '', angle: '', dist: '', score: '', avatar: '' } });

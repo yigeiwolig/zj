@@ -3,11 +3,8 @@ const app = getApp();
 
 Page({
   data: {
-    // ... 原有 isAdmin, password 等保持不变 ...
-    isAdmin: false,
-    password: '3252955872', // 管理员密码
-    showPasswordModal: false,
-    clickCount: 0,
+    isAuthorized: false, // 是否是白名单里的管理员
+    isAdmin: false,      // 当前是否开启了管理员模式
 
     // 新增：购物车数据
     cart: [],
@@ -101,7 +98,6 @@ Page({
     showSpecsModal: false,  // 对比表格弹窗
     showOrderModal: false,  // 订单弹窗
     showCartSuccess: false, // 新增：加入购物车成功弹窗
-    errorMsg: '', // 错误提示文字
 
     // 新增：中间弹窗数据
     centerToast: { show: false, text: '' },
@@ -121,7 +117,18 @@ Page({
     },
 
     // 订单信息
-    orderInfo: { name: '', phone: '', address: '' }
+    orderInfo: { name: '', phone: '', address: '' },
+
+    // 智能粘贴相关
+    showSmartPasteModal: false,
+    smartPasteVal: '',
+
+    // [新增] 自定义视频弹窗控制
+    showVideoPlayer: false,
+    currentVideoUrl: '',
+
+    // 新增：媒体区域的实际高度
+    mediaHeight: 0
   },
 
   onLoad(options) {
@@ -135,6 +142,9 @@ Page({
       console.error('[shop.js] wx.cloud 不存在！请检查云开发是否已开通');
     }
     
+    // 检查管理员权限
+    this.checkAdminPrivilege();
+    
     // 检查是否有跳转号码参数
     if (options && options.jumpNumber) {
       this.jumpNumber = parseInt(options.jumpNumber);
@@ -146,6 +156,23 @@ Page({
     // 立即加载数据
     this.loadDataFromCloud();
     this.calcTotal();
+  },
+
+  // 1. 页面每次显示时，读取本地缓存的购物车
+  onShow() {
+    // 读取本地存储的购物车数据
+    const cachedCart = wx.getStorageSync('my_cart') || [];
+    
+    // 如果有数据，计算一下总价并显示
+    if (cachedCart.length > 0) {
+      let total = 0;
+      cachedCart.forEach(item => total += item.total);
+      
+      this.setData({
+        cart: cachedCart,
+        cartTotalPrice: total
+      });
+    }
   },
   
   onReady() {
@@ -212,13 +239,6 @@ Page({
       this.adminEditShopTitle();
       return;
     }
-    // 普通模式：点击5次进入管理员
-    this.data.clickCount++;
-    console.log('[shop.js] 点击标题次数:', this.data.clickCount);
-    if(this.data.clickCount >= 5) {
-      this.setData({ showPasswordModal: true, clickCount: 0 });
-      console.log('[shop.js] 显示密码输入框');
-    }
   },
   
   // ========================================================
@@ -261,16 +281,46 @@ Page({
       }
     });
   },
-  onPwdInput(e) { this.pwdVal = e.detail.value; },
-  checkPassword() {
-    if(this.pwdVal === this.data.password) {
-      this.setData({ isAdmin: true, showPasswordModal: false });
-      wx.showToast({ title: 'Admin On', icon: 'success' });
+  // ================== 权限检查逻辑 ==================
+  async checkAdminPrivilege() {
+    try {
+      // 1. 获取当前用户的 OpenID (利用云函数)
+      const res = await wx.cloud.callFunction({ name: 'login' });
+      const myOpenid = res.result.openid;
+
+      // 2. 去数据库比对白名单
+      const db = wx.cloud.database();
+      const adminCheck = await db.collection('guanliyuan').where({
+        openid: myOpenid
+      }).get();
+
+      // 3. 如果找到了记录，说明你是受信任的管理员
+      if (adminCheck.data.length > 0) {
+        this.setData({ isAuthorized: true });
+        console.log('[shop.js] 身份验证成功：合法管理员');
     } else {
-      wx.showToast({ title: 'Error', icon: 'none' });
+        console.log('[shop.js] 未在管理员白名单中');
+      }
+    } catch (err) {
+      console.error('[shop.js] 权限检查失败', err);
     }
   },
-  closePwdModal() { this.setData({ showPasswordModal: false }); },
+
+  // 管理员模式手动切换开关
+  toggleAdminMode() {
+    if (!this.data.isAuthorized) {
+      wx.showToast({ title: '无权限', icon: 'none' });
+      return;
+    }
+    
+    const nextState = !this.data.isAdmin;
+    this.setData({ isAdmin: nextState });
+    
+    wx.showToast({
+      title: nextState ? '管理模式开启' : '已回到用户模式',
+      icon: 'none'
+    });
+  },
 
   // ========================================================
   // 1. 核心修改：重写 _input 方法，使用自定义弹窗代替 wx.showModal
@@ -513,11 +563,15 @@ Page({
     console.log('[shop.js] 尝试查询 shop_accessories 集合...');
     this.db.collection('shop_accessories').get().then(res => {
       console.log('[shop.js] ✅ shop_accessories 查询成功!');
-      console.log('[shop.js] 查询结果 - errMsg:', res.errMsg);
-      console.log('[shop.js] 查询结果 - data 数量:', res.data ? res.data.length : 0);
+      
       if (res.data && res.data.length > 0) {
-        console.log('[shop.js] 设置 accessoryList, 数量:', res.data.length);
-        this.setData({ accessoryList: res.data });
+        // 【关键修改】强制把所有配件设为"未选中"，防止数据库脏数据导致自动加购
+        const cleanList = res.data.map(item => {
+          return { ...item, selected: false };
+        });
+
+        console.log('[shop.js] 设置 accessoryList (已重置选中状态)');
+        this.setData({ accessoryList: cleanList });
       } else {
         console.log('[shop.js] ⚠️ shop_accessories 数据为空');
         console.log('[shop.js] 将使用本地默认数据');
@@ -791,37 +845,124 @@ Page({
   },
 
   // ================== 2. 主页产品列表 CRUD ==================
+  // ========================================================
+  // [修改] 新建产品系列 (智能克隆模板)
+  // ========================================================
   adminAddSeries() {
+    // 1. 【新增】立刻显示 Loading，防止重复点击
+    wx.showLoading({ title: '创建中...', mask: true });
+
+    // 2. 尝试找一个现有的产品做模板（通常是第1个）
+    const template = this.data.seriesList.length > 0 ? this.data.seriesList[0] : null;
+
+    // 3. 准备初始化数据
+    // 如果有模板，就复制它的 labels 和 specs 结构；如果没有，就用兜底默认值
+    
+    // 深度复制 labels (防止修改新的时候影响旧的)
+    const initLabels = template 
+      ? JSON.parse(JSON.stringify(template.labels)) 
+      : { configTitle: '选购配置', modelTitle: '选择型号', optionTitle: '配置方案', accTitle: '配件加购' };
+    
+    // 深度复制 specs (只复制 label 名，把值重置为 '-')
+    // 根据模板的型号数量动态生成列数
+    const modelCount = template && template.models ? template.models.length : 3;
+    const initSpecs = template && template.specs
+      ? template.specs.map(item => {
+          const newSpec = { label: item.label };
+          // 动态生成 v1, v2, v3... 根据型号数量
+          for (let i = 1; i <= modelCount; i++) {
+            newSpec[`v${i}`] = '-';
+          }
+          return newSpec;
+        })
+      : [{ label: '续航', v1: '-', v2: '-', v3: '-' }];
+
+    // 4. 构建新对象
     const newOne = {
-      id: Date.now(), name: '新产品名称', desc: '简短描述', cover: '',
-      jumpNumber: null, // 新增：跳转号码
+      id: Date.now().toString(), // 确保 ID 唯一
+      name: '新产品名称 (点击修改)',
+      desc: '请添加描述',
+      cover: '', // 封面为空
+      jumpNumber: null,
+
+      // 初始化必须的空数组，防止报错
       detailImages: [], 
-      specHeaders: ['型号1', '型号2', '型号3'],
-      labels: {
-        configTitle: '选购配置',
-        modelTitle: '选择型号 (MODEL)',
-        optionTitle: '配置方案 (OPTION)',
-        accTitle: '配件加购'
-      },
-      specs: [{label:'参数1', v1:'-', v2:'-', v3:'-'}],
-      models: [{name:'默认型号', price:999, desc:''}], 
-      options: [{name:'默认配置', price:0, img:''}]
+      
+      // 复制过来的表头
+      specHeaders: template ? [...template.specHeaders] : ['标准版', '高配版', '顶配版'],
+      
+      // 【关键】应用复制来的结构
+      labels: initLabels,
+      specs: initSpecs,
+
+      // 初始化默认型号 (必须有至少一个，否则支付会报错)
+      models: [
+        { name: '默认型号', price: 999, desc: '点击修改描述' }
+      ],
+
+      // 初始化默认配置 (必须有至少一个)
+      options: [
+        { name: '标准配置', price: 0, img: '' }
+      ],
+      
+      // 默认不参与对比勾选
+      selectedForCompare: false
     };
-    this.setData({ seriesList: [...this.data.seriesList, newOne] });
-    this.saveSeriesToCloud(newOne, true);
+
+    // 5. 更新本地列表
+    const newList = [...this.data.seriesList, newOne];
+    this.setData({ seriesList: newList });
+
+    // 6. 保存到云端 (isNew = true)
+    this.saveSeriesToCloud(newOne, true).then(() => {
+        // 【新增】创建完了再关掉 Loading
+        wx.hideLoading();
+        wx.showToast({ title: '已新建', icon: 'success' });
+    }).catch(() => {
+        wx.hideLoading();
+    });
   },
+
+  // ========================================================
+  // [修改] 删除产品系列 (同步删除云端)
+  // ========================================================
   adminDeleteSeries(e) {
     const idx = e.currentTarget.dataset.index;
     const series = this.data.seriesList[idx];
-    wx.showModal({title:'确认删除?', success:(res)=>{
-      if(res.confirm) {
+
+    wx.showModal({
+      title: '删除警告',
+      content: `确定要彻底删除产品 "${series.name}" 吗？此操作不可恢复。`,
+      confirmColor: '#FF3B30', // 红色确认键
+      success: (res) => {
+        if (res.confirm) {
+          wx.showLoading({ title: '删除中...' });
+
+          // 1. 如果有 _id，说明已经在云数据库里，需要删库
         if (this.db && series._id) {
-          this.db.collection('shop_series').doc(series._id).remove();
-        }
-        this.data.seriesList.splice(idx, 1);
-        this.setData({ seriesList: this.data.seriesList });
+            this.db.collection('shop_series').doc(series._id).remove()
+              .then(() => {
+                console.log('云端删除成功');
+              })
+              .catch(err => {
+                console.error('云端删除失败', err);
+              });
+          }
+
+          // 2. 删除本地数据
+          const newList = this.data.seriesList.filter((_, i) => i !== idx);
+          this.setData({ seriesList: newList });
+          
+          // 如果删的是当前选中的，关闭详情页
+          if (this.data.currentSeriesIdx === idx) {
+            this.setData({ showDetail: false });
+          }
+
+          wx.hideLoading();
+          wx.showToast({ title: '已删除', icon: 'none' });
       }
-    }});
+      }
+    });
   },
   adminUploadCover(e) {
     const idx = e.currentTarget.dataset.index;
@@ -939,12 +1080,27 @@ Page({
   // ========================================================
   onDetailScroll(e) {
     const scrollTop = e.detail.scrollTop;
-    // 设定阈值：350rpx (对应顶部大图 + 标题的高度)
-    // 当滚动超过 350 时，显示底部栏；否则隐藏
-    if (scrollTop > 350 && !this.data.showFooterBar) {
+    const { mediaHeight, showFooterBar, isAdmin } = this.data;
+
+    // 如果没有图片高度（比如还没传图的新产品），直接显示
+    if (mediaHeight <= 0) {
+      if (!showFooterBar) this.setData({ showFooterBar: true });
+      return;
+    }
+
+    // 【核心修改】判定条件
+    // 当滚动距离大于等于媒体区高度时显示；小于高度则隐藏
+    // 这里建议减去一个缓冲值（比如 50px），让过渡更顺滑一点点
+    if (scrollTop >= (mediaHeight - 50)) {
+      if (!showFooterBar) {
       this.setData({ showFooterBar: true });
-    } else if (scrollTop <= 350 && this.data.showFooterBar) {
+      }
+    } else {
+      // 只有在非管理员模式下才在滚回顶部时隐藏
+      // 如果是管理员，建议保持常显方便操作，或者也同步隐藏
+      if (showFooterBar) {
       this.setData({ showFooterBar: false });
+      }
     }
   },
 
@@ -980,16 +1136,25 @@ Page({
 
     // 正常进入详情
     const s = this.data.seriesList[idx];
+    
     this.setData({
       currentSeriesIdx: idx, 
       currentSeries: s,
       selectedModelIdx: -1, // 默认不选型号
       selectedOptionIdx: -1, // 默认不选配置
       showDetail: true,
-      
-      // 【关键】刚进来时，肯定在顶部，所以隐藏底部栏
-      showFooterBar: false 
+      showFooterBar: false // 初始先隐藏
+    }, () => {
+      // 【核心修改】弹窗打开后，动态计算媒体区高度
+      const query = wx.createSelectorQuery();
+      query.select('.detail-images').boundingClientRect(res => {
+        if (res) {
+          // 将测得的高度存入变量，作为滚动的阈值
+          this.setData({ mediaHeight: res.height });
+        }
+      }).exec();
     });
+    
     this.calcTotal();
   },
   closeDetail() { 
@@ -1038,6 +1203,12 @@ Page({
           
           // 保存到云端
           this.saveSeriesToCloud(updatedSeries);
+          
+          // 检查如果现在有图了，且在顶部，可以先关掉 bar 
+          // 或者为了操作方便，管理员模式下我们可以让它一直开启
+          if (this.data.isAdmin) {
+            this.setData({ showFooterBar: true });
+          }
           
           wx.hideLoading();
           wx.showToast({ title: '上传成功', icon: 'success' });
@@ -1323,6 +1494,101 @@ Page({
     });
   },
   closeSpecsModal() { this.setData({ showSpecsModal: false }); },
+  
+  // ========================================================
+  // [新增] 底部全局对比视频逻辑 (请复制这段代码到 shop.js)
+  // ========================================================
+
+  // ========================================================
+  // [修改] 视频播放逻辑 (改为自定义弹窗)
+  // ========================================================
+  
+  // 1. 点击播放 (打开弹窗)
+  watchCompareVideo() {
+    const s = this.data.currentSeries;
+    
+    if (!s.compareVideo) {
+      if (this.data.isAdmin) {
+        wx.showToast({ title: '请先上传视频', icon: 'none' });
+      } else {
+        wx.showToast({ title: '暂无演示视频', icon: 'none' });
+      }
+      return;
+    }
+
+    // 不再调用 wx.previewMedia，而是打开我们自己的弹窗
+    this.setData({
+      showVideoPlayer: true,
+      currentVideoUrl: s.compareVideo
+    });
+  },
+
+  // 2. [新增] 关闭视频弹窗
+  closeVideoPlayer() {
+    this.setData({
+      showVideoPlayer: false,
+      currentVideoUrl: '' // 清空地址停止播放
+    });
+  },
+
+  // 2. 管理员：上传/更换对比视频
+  adminUploadCompareVideo() {
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['video'],
+      sourceType: ['album', 'camera'],
+      success: async (res) => {
+        wx.showLoading({ title: '上传中...' });
+        try {
+          const tempPath = res.tempFiles[0].tempFilePath;
+          
+          // 上传到云存储 (文件夹路径可以自己定)
+          const fileID = await this.uploadToCloud(tempPath, 'shop/compare_videos');
+          
+          const s = this.data.currentSeries;
+          s.compareVideo = fileID; // 更新视频地址
+          
+          // 如果之前没设置过开关，默认上传后自动开启显示
+          if (s.showCompareVideo === undefined) {
+            s.showCompareVideo = true;
+          }
+
+          // 更新页面数据
+          this.setData({ 
+            currentSeries: s,
+            [`seriesList[${this.data.currentSeriesIdx}]`]: s 
+          });
+          
+          // 马上保存到云端
+          this.saveSeriesToCloud(s);
+          
+          wx.hideLoading();
+          wx.showToast({ title: '上传成功', icon: 'success' });
+        } catch (err) {
+          wx.hideLoading();
+          console.error('上传失败', err);
+          wx.showToast({ title: '上传失败', icon: 'none' });
+        }
+      }
+    });
+  },
+
+  // 3. 管理员：切换视频显示/隐藏状态
+  adminToggleVideoVis() {
+    const s = this.data.currentSeries;
+    
+    // 切换布尔值 (true变false，false变true)
+    s.showCompareVideo = !s.showCompareVideo;
+
+    // 更新页面
+    this.setData({ 
+      currentSeries: s,
+      [`seriesList[${this.data.currentSeriesIdx}]`]: s 
+    });
+    
+    // 保存状态到云端
+    this.saveSeriesToCloud(s); 
+  },
   
   adminAddSpecRow() {
     const s = this.data.currentSeries;
@@ -1622,7 +1888,122 @@ Page({
   onInput(e) { this.setData({ [`orderInfo.${e.currentTarget.dataset.key}`]: e.detail.value }); },
   
   // ========================================================
-  // 一键粘贴并自动解析地址
+  // 智能粘贴相关方法
+  // ========================================================
+  openSmartPasteModal() {
+    this.setData({ 
+      showSmartPasteModal: true,
+      smartPasteVal: ''
+    });
+  },
+  
+  closeSmartPasteModal() {
+    this.setData({ 
+      showSmartPasteModal: false,
+      smartPasteVal: ''
+    });
+  },
+  
+  onSmartPasteInput(e) {
+    this.setData({ smartPasteVal: e.detail.value });
+  },
+  
+  // ========================================================
+  // 智能分析：解析姓名、电话、地址
+  // ========================================================
+  confirmSmartPaste() {
+    const text = this.data.smartPasteVal.trim();
+    
+    if (!text) {
+      wx.showToast({ title: '请输入内容', icon: 'none' });
+      return;
+    }
+    
+    // 解析文本
+    const parsed = this.parseSmartText(text);
+    
+    // 更新订单信息
+    this.setData({
+      'orderInfo.name': parsed.name || '',
+      'orderInfo.phone': parsed.phone || '',
+      'orderInfo.address': parsed.address || ''
+    });
+    
+    // 关闭弹窗
+    this.closeSmartPasteModal();
+    
+    // 提示用户
+    if (parsed.name && parsed.phone && parsed.address) {
+      wx.showToast({ title: '解析成功', icon: 'success' });
+    } else {
+      wx.showToast({ 
+        title: `已解析：${parsed.name ? '姓名✓' : ''}${parsed.phone ? '电话✓' : ''}${parsed.address ? '地址✓' : ''}`, 
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  },
+  
+  // ========================================================
+  // 智能文本解析：提取姓名、电话、地址
+  // ========================================================
+  parseSmartText(text) {
+    let name = '';
+    let phone = '';
+    let address = '';
+    
+    // 1. 提取手机号（11位数字）
+    const phonePattern = /1[3-9]\d{9}/;
+    const phoneMatch = text.match(phonePattern);
+    if (phoneMatch) {
+      phone = phoneMatch[0];
+      text = text.replace(phone, '').trim();
+    }
+    
+    // 2. 提取固定电话（带区号的）
+    if (!phone) {
+      const telPattern = /0\d{2,3}-?\d{7,8}/;
+      const telMatch = text.match(telPattern);
+      if (telMatch) {
+        phone = telMatch[0];
+        text = text.replace(phone, '').trim();
+      }
+    }
+    
+    // 3. 提取姓名（通常在开头，2-4个汉字）
+    // 先尝试匹配开头的2-4个汉字
+    const namePattern = /^[\u4e00-\u9fa5]{2,4}/;
+    const nameMatch = text.match(namePattern);
+    if (nameMatch) {
+      name = nameMatch[0];
+      text = text.replace(name, '').trim();
+    }
+    
+    // 4. 剩余部分作为地址（使用现有的地址解析函数）
+    if (text) {
+      const parsedAddress = this.parseAddress(text);
+      address = parsedAddress.fullAddress;
+    }
+    
+    // 5. 如果姓名没提取到，尝试从常见格式提取
+    // 例如："张三 13800138000 广东省..."
+    if (!name && text) {
+      // 尝试匹配：姓名 + 空格/换行 + 电话
+      const namePhonePattern = /^([\u4e00-\u9fa5]{2,4})\s+(\d+)/;
+      const namePhoneMatch = text.match(namePhonePattern);
+      if (namePhoneMatch) {
+        name = namePhoneMatch[1];
+        if (!phone) {
+          phone = namePhoneMatch[2];
+        }
+      }
+    }
+    
+    return { name, phone, address };
+  },
+  
+  // ========================================================
+  // 一键粘贴并自动解析地址（保留旧方法，兼容性）
   // ========================================================
   pasteAndParseAddress() {
     wx.getClipboardData({
@@ -1789,25 +2170,20 @@ Page({
   // 1. 核心：加入购物车 (点击左边按钮)
   // ========================================================
   addToCart() {
-    // 调用内部添加逻辑
     const result = this._addCurrentSelectionToCart();
     
     if (result.success) {
-      // 成功后操作：
-      
       // 1. 准备重置配件列表
       const resetAccList = this.data.accessoryList.map(a => ({...a, selected: false}));
 
-      this.setData({
-        cart: result.newCart,
-        cartTotalPrice: result.newTotal,
+      // 2. 【修改这里】调用保存函数，而不是只 setData
+      this.saveCartToCache(result.newCart);
         
-        // 【关键修改】全部重置为未选中状态 (-1)
+      this.setData({
+        // 重置选中状态
         accessoryList: resetAccList,
         selectedModelIdx: -1, 
         selectedOptionIdx: -1, 
-        
-        // 弹出成功提示
         showCartSuccess: true 
       });
     }
@@ -1835,18 +2211,26 @@ Page({
   handleCartQty(e) {
     const idx = e.currentTarget.dataset.index;
     const type = e.currentTarget.dataset.type;
-    const cart = this.data.cart;
+    const cart = [...this.data.cart]; // 复制一份
     
     if (type === 'plus') {
       cart[idx].quantity++;
     } else {
-      if (cart[idx].quantity > 1) cart[idx].quantity--;
-      else cart.splice(idx, 1);
+      if (cart[idx].quantity > 1) {
+        cart[idx].quantity--;
+      } else {
+        // 如果数量是1还减，就删掉
+        cart.splice(idx, 1);
+    }
     }
     
-    if(cart[idx]) cart[idx].total = cart[idx].quantity * cart[idx].price;
-    this.setData({ cart });
-    this.reCalcCartTotal(cart);
+    // 更新该项的总价
+    if(cart[idx]) {
+      cart[idx].total = cart[idx].quantity * cart[idx].price;
+    }
+
+    // 【修改这里】调用保存函数
+    this.saveCartToCache(cart);
   },
 
   // ========================================================
@@ -1878,8 +2262,13 @@ Page({
       seriesId: currentSeries.id,
       modelName: m.name,
       optionName: o.name,
-      name: currentSeries.name + ' ' + m.name,
+      
+      // 大标题：显示型号 (如 Ultra)
+      name: m.name, 
+      
+      // 【修改这里】副标题：只显示配置名称 (如 触控屏)
       spec: o.name,
+      
       price: m.price + o.price,
       quantity: 1,
       total: m.price + o.price
@@ -1938,14 +2327,15 @@ Page({
   },
 
   // ========================================================
-  // 2. 自定义错误提示 (Top Toast)
+  // [修改] 错误提示改为微信原生样式 (去掉红色横幅)
   // ========================================================
   showError(msg) {
-    this.setData({ errorMsg: msg });
-    // 2秒后自动消失
-    setTimeout(() => {
-      this.setData({ errorMsg: '' });
-    }, 2000);
+    // 使用微信自带的黑色气泡，不显示那个红条了
+    wx.showToast({
+      title: msg,
+      icon: 'none',
+      duration: 2000
+    });
   },
 
   // ========================================================
@@ -1969,48 +2359,62 @@ Page({
     // 情况 A: 用户正在选购某个型号 -> 走"立即购买"逻辑
     if (this.data.selectedModelIdx > -1) {
       
-      // 获取当前选购信息
       const {currentSeries, selectedModelIdx, selectedOptionIdx} = this.data;
       const m = currentSeries.models[selectedModelIdx];
       const o = selectedOptionIdx > -1 ? currentSeries.options[selectedOptionIdx] : {name: '标配', price: 0};
       
-      // 1. 【核心优化】清理之前的"立即购买"临时项
-      // 如果用户之前点过立即购买但没付款，这次又换了配置点立即购买，
-      // 我们要把上次那个临时的删掉，避免购物车堆积。
+      // === 【核心修改开始】 ===
+      
+      // 1. 获取当前购物车副本
       let currentCart = [...this.data.cart];
-      if (this.data.tempBuyItemIds.length > 0) {
+
+      // 2. 如果之前有"立即购买"留下的旧商品，先删除它们
+      // (防止购物车里堆积了一堆未支付的"立即购买"商品)
+      if (this.data.tempBuyItemIds && this.data.tempBuyItemIds.length > 0) {
+        console.log('正在清理旧的立即购买项:', this.data.tempBuyItemIds);
         currentCart = currentCart.filter(item => !this.data.tempBuyItemIds.includes(item.id));
       }
 
-      // 2. 更新购物车数据，以便 _addCurrentSelectionToCart 基于干净的数据操作
+      // 3. 更新购物车数据 (此时旧的已经被删了)
       this.setData({ cart: currentCart });
 
-      // 3. 执行添加逻辑
+      // 4. 执行添加新商品逻辑 (生成新的 ID)
       const result = this._addCurrentSelectionToCart();
       
       if (result.success) {
-        // 4. 记录这次生成的 ID，标记为"临时购买项"
-        // 找到主产品项（type === 'main'），可能是新添加的或合并的
-        const mainItem = result.newCart.find(item => 
+        // 5. 找到刚刚新增进去的商品 ID (它是这次的"立即购买项")
+        // 逻辑：购物车里最后一个加进去的主商品，通常就是刚刚加的
+        // 或者更严谨一点，我们直接找刚刚生成的那个 mainItem
+        
+        // 这里的 result.newCart 是添加后的新购物车数组
+        // 我们假设刚加进去的都在数组末尾（或者合并了）
+        
+        // 为了简单准确，我们重新筛选一下，找到对应 seriesId 和 modelName 的 ID
+        const newMainItem = result.newCart.find(item => 
           item.type === 'main' && 
           item.seriesId === currentSeries.id &&
           item.modelName === m.name && 
           item.optionName === o.name
         );
-        const tempIds = mainItem ? [mainItem.id] : [];
         
-        // 5. 直接打开订单页
+        // 记录这次的新 ID
+        const newTempIds = newMainItem ? [newMainItem.id] : [];
+        
+        // 6. 保存购物车并持久化
+        this.saveCartToCache(result.newCart);
+        
+        // 7. 更新 tempBuyItemIds，下次点立即购买时，就会把这个 ID 删掉
         this.setData({
-          cart: result.newCart,
-          cartTotalPrice: result.newTotal,
           showOrderModal: true,
-          tempBuyItemIds: tempIds // 更新临时ID
+          tempBuyItemIds: newTempIds 
         });
       }
+      // === 【核心修改结束】 ===
+      
       return;
     }
 
-    // 情况 B: 没选型号，但购物车里有东西 -> 直接去结算
+    // 情况 B: 没选型号，直接去结算 (点购物车结算)
     if (this.data.cart.length > 0) {
       this.setData({ showOrderModal: true });
       return;
@@ -2023,72 +2427,124 @@ Page({
   closeOrderModal() { this.setData({ showOrderModal: false }); },
 
   // 修改 4：退出管理员模式
-  exitAdmin() {
+
+  // ========================================================
+  // 提交订单 -> 真实支付
+  // ========================================================
+  submitOrder() {
+    const { cart, orderInfo, cartTotalPrice } = this.data;
+
+    // 1. 基础校验 (防止空单)
+    if (cart.length === 0) return this.showError('购物车为空');
+    if (!orderInfo.name || !orderInfo.phone || !orderInfo.address) {
+      return this.showError('请补全收货信息');
+    }
+
+    // 2. 【修改这里】更新定制服务确认的文案
     wx.showModal({
-      title: '退出管理',
-      content: '确定要退出管理员模式吗？',
+      title: '定制服务确认',
+      content: '此产品为定制服务，下单后不支持退款，请确认无误后支付。',
+      confirmText: '确认支付',
+      cancelText: '取消',
+      confirmColor: '#000000', // 确认按钮设为黑色，更符合你的UI风格
       success: (res) => {
         if (res.confirm) {
-          this.setData({ isAdmin: false });
-          wx.showToast({ title: '已退出', icon: 'none' });
+          // 用户点击确认，进入真正的支付流程
+          this.doRealPayment();
         }
       }
     });
   },
 
   // ========================================================
-  // 3. 提交订单 (校验 + 美化)
+  // 真实支付流程
   // ========================================================
-  submitOrder() {
-    const { cart, orderInfo } = this.data;
+  doRealPayment() {
+    const { cart, orderInfo, cartTotalPrice } = this.data;
 
-    // 校验购物车
-    if (cart.length === 0) {
-      this.showError('购物车是空的，请先选购');
-      return;
-    }
-
-    // 校验表单
-    if (!orderInfo.name.trim()) {
-      this.showError('请填写收货人姓名');
-      return;
-    }
-    if (!orderInfo.phone.trim()) {
-      this.showError('请填写联系电话');
-      return;
-    }
-    if (orderInfo.phone.length < 11) { // 简单校验
-      this.showError('手机号码格式不正确');
-      return;
-    }
-    if (!orderInfo.address.trim()) {
-      this.showError('请填写详细地址');
+    // 【新增】检查支付金额
+    console.log('正在支付，金额为:', cartTotalPrice); // 检查控制台，这里绝对不能是 0 或 undefined
+    
+    if (!cartTotalPrice || cartTotalPrice <= 0) {
+      wx.showToast({ title: '金额异常', icon: 'none' });
       return;
     }
 
-    // 生成文本
-    let txt = "【MT STORE 订单】\n----------------\n";
-    cart.forEach((item, i) => {
-      txt += `${i+1}. ${item.name} (${item.spec})\n   x${item.quantity} | ¥${item.total}\n`;
-    });
-    txt += `----------------\n💰 总计: ¥${this.data.cartTotalPrice}\n----------------\n`;
-    txt += `👤 ${orderInfo.name}\n📞 ${orderInfo.phone}\n📍 ${orderInfo.address}`;
+    wx.showLoading({ title: '唤起收银台...', mask: true });
 
-    wx.setClipboardData({
-      data: txt,
-      success: () => {
-        wx.showModal({
-          title: '下单成功',
-          content: '订单信息已复制。请点击确定跳转客服发送。',
-          showCancel: false,
-          success: () => {
+    // 3. 调用云函数获取支付参数
+    wx.cloud.callFunction({
+      name: 'createOrder',
+      data: {
+        totalPrice: cartTotalPrice,
+        goods: cart,
+        addressData: orderInfo
+      },
+      success: res => {
+        wx.hideLoading();
+        const payment = res.result;
+
+        // 【新增检测】检查云函数返回的错误
+        if (payment && payment.error) {
+          wx.showModal({ 
+            title: '支付失败', 
+            content: payment.msg || '支付系统异常，请稍后再试', 
+            showCancel: false 
+          });
+      return;
+    }
+
+        if (!payment || !payment.paySign) {
+          // 如果这里报错，通常是商户号审核还没过
+          wx.showModal({ title: '提示', content: '支付系统对接中，请稍后再试', showCancel: false });
+      return;
+    }
+
+        // 4. 唤起微信原生支付界面
+        wx.requestPayment({
+          ...payment,
+          success: (payRes) => {
+            // 支付成功处理
+            wx.showToast({ title: '支付成功', icon: 'success' });
             this.closeOrderModal();
-            // 可选：清空购物车
-            // this.setData({ cart: [], cartTotalPrice: 0 });
+            
+            // 清理购物车
+            this.setData({ cart: [], cartTotalPrice: 0 });
+            wx.removeStorageSync('my_cart');
+            wx.setStorageSync('last_address', this.data.orderInfo);
+            
+            // 跳转到我的页面查看订单
+            wx.navigateTo({ url: '/pages/my/my' });
+          },
+          fail: (err) => {
+            console.error('用户取消或支付失败', err);
+            wx.showToast({ title: '支付已取消', icon: 'none' });
           }
         });
+      },
+      fail: err => {
+        wx.hideLoading();
+        console.error('创建订单失败', err);
+        wx.showToast({ title: '创建订单失败', icon: 'none' });
       }
     });
+  },
+
+  // ========================================================
+  // [新增] 辅助函数：更新购物车并保存到本地缓存
+  // ========================================================
+  saveCartToCache(newCart) {
+    // 1. 算总价
+    const newTotal = newCart.reduce((sum, item) => sum + item.total, 0);
+    
+    // 2. 更新页面显示
+    this.setData({
+      cart: newCart,
+      cartTotalPrice: newTotal
+    });
+
+    // 3. 【关键】存入本地缓存 (持久化)
+    wx.setStorageSync('my_cart', newCart);
   },
 
   // ========================================================

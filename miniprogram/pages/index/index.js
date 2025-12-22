@@ -249,15 +249,17 @@ Page({
 
   checkIsBlockedRegion(province, city, config) {
     if (!config || !config.is_active) return false;
-    const blockedProvinces = config.blocked_provinces || [];
     const blockedCities = config.blocked_cities || [];
 
+    // 🔴 高危地址判断：只以市为准，不检查省份
     if (blockedCities.length > 0) {
-      if (blockedCities.some(c => city.indexOf(c) !== -1 || c.indexOf(city) !== -1)) return true;
+      // 检查城市是否在拦截列表中
+      if (blockedCities.some(c => city.indexOf(c) !== -1 || c.indexOf(city) !== -1)) {
+        return true; // 城市匹配，视为高危地址
+      }
     }
-    if (blockedProvinces.length > 0) {
-      if (blockedProvinces.some(p => province.indexOf(p) !== -1 || p.indexOf(province) !== -1)) return true;
-    }
+    
+    // 🔴 不再检查省份，高危地址只以市为准
     return false;
   },
 
@@ -283,15 +285,22 @@ Page({
           phoneModel: phoneModel
         };
 
+        // 🔴 根据 app_config.blocking_rules 判断：高危地址用户写入 blocked_logs，普通地址用户写入 user_list
         this.loadBlockingConfig().then(config => {
           const isBlocked = this.checkIsBlockedRegion(locData.province, locData.city, config);
 
           if (isBlocked) {
+            // 🔴 高危地址用户（地址在 app_config.blocking_rules 拦截列表中）→ 写入 blocked_logs
+            console.log('[index] 高危地址用户，写入 blocked_logs:', locData.province, locData.city);
             this.appendDataAndJump('blocked_logs', locData, '/pages/products/products'); 
           } else {
+            // 🔴 普通地址用户（地址不在拦截列表中）→ 写入 user_list
+            console.log('[index] 普通地址用户，写入 user_list:', locData.province, locData.city);
             this.appendDataAndJump('user_list', locData, '/pages/products/products');
           }
         }).catch(err => {
+          // 🔴 配置加载失败，默认作为普通地址用户写入 user_list
+          console.error('[index] 加载拦截配置失败，默认写入 user_list:', err);
           this.appendDataAndJump('user_list', locData, '/pages/products/products');
         });
       }

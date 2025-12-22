@@ -62,8 +62,8 @@ const DRAG_CONFIG = {
 Page({
   data: {
     inDetail: false,
-    isAdmin: false,
-    adminClickCount: 0,
+    isAuthorized: false, // 是否是白名单里的管理员
+    isAdmin: false,      // 当前是否开启了管理员模式
 
     // 当前页面状态
     currentModelName: '',
@@ -97,9 +97,6 @@ Page({
     modalMode: '', // part 或 video
     modalInputVal: '',
     
-    // 管理员密码弹窗
-    showAdminModal: false,
-    adminPasswordInput: '',
 
     // 临时视频信息
     tempVideoPath: '',
@@ -127,7 +124,11 @@ Page({
     lastVibrateTime: 0,   // 上次震动时间，用于节流
     
     // 状态栏高度
-    statusBarHeight: 0
+    statusBarHeight: 0,
+
+    // [新增] 智能粘贴弹窗相关
+    showSmartPasteModal: false,
+    smartPasteVal: ''
   },
 
   // 页面加载时初始化
@@ -136,6 +137,9 @@ Page({
     if (wx.cloud) {
       this.db = wx.cloud.database();
     }
+    
+    // 检查管理员权限
+    this.checkAdminPrivilege();
     
     // 缓存系统信息，避免拖拽时重复调用
     const systemInfo = wx.getSystemInfoSync();
@@ -147,6 +151,47 @@ Page({
     const statusBarHeight = systemInfo.statusBarHeight || 44;
     this.setData({ statusBarHeight });
     console.log('状态栏高度:', statusBarHeight);
+  },
+
+  // ================== 权限检查逻辑 ==================
+  async checkAdminPrivilege() {
+    try {
+      // 1. 获取当前用户的 OpenID (利用云函数)
+      const res = await wx.cloud.callFunction({ name: 'login' });
+      const myOpenid = res.result.openid;
+
+      // 2. 去数据库比对白名单
+      const db = wx.cloud.database();
+      const adminCheck = await db.collection('guanliyuan').where({
+        openid: myOpenid
+      }).get();
+
+      // 3. 如果找到了记录，说明你是受信任的管理员
+      if (adminCheck.data.length > 0) {
+        this.setData({ isAuthorized: true });
+        console.log('[shouhou.js] 身份验证成功：合法管理员');
+      } else {
+        console.log('[shouhou.js] 未在管理员白名单中');
+      }
+    } catch (err) {
+      console.error('[shouhou.js] 权限检查失败', err);
+    }
+  },
+
+  // 管理员模式手动切换开关
+  toggleAdminMode() {
+    if (!this.data.isAuthorized) {
+      wx.showToast({ title: '无权限', icon: 'none' });
+      return;
+    }
+    
+    const nextState = !this.data.isAdmin;
+    this.setData({ isAdmin: nextState });
+    
+    wx.showToast({
+      title: nextState ? '管理模式开启' : '已回到用户模式',
+      icon: 'none'
+    });
   },
 
   // 页面卸载时清理
@@ -177,68 +222,9 @@ Page({
     }
   },
 
-  // 1. 首页逻辑
+  // 1. 首页逻辑（已废弃点击计数逻辑）
   triggerAdmin() {
-    if (this.data.isAdmin) return;
-    
-    // 点击计数
-    this.data.adminClickCount = (this.data.adminClickCount || 0) + 1;
-    
-    // 点击5次后才显示密码输入弹窗
-    if (this.data.adminClickCount >= 5) {
-      this.setData({ 
-        showAdminModal: true,
-        adminPasswordInput: '',
-        adminClickCount: 0 // 重置计数
-      });
-    }
-  },
-
-  // 管理员密码输入
-  onAdminPasswordInput(e) {
-    this.setData({ adminPasswordInput: e.detail.value });
-  },
-
-  // 确认管理员密码
-  confirmAdminPassword() {
-    if (this.data.adminPasswordInput === ADMIN_PASSWORD) {
-      this.setData({ 
-        isAdmin: true,
-        showAdminModal: false,
-        adminPasswordInput: ''
-      });
-      wx.showToast({ title: '管理员模式开启', icon: 'success' });
-      if (this.data.inDetail) this.renderParts();
-    } else {
-      wx.showToast({ title: '密码错误', icon: 'none' });
-      this.setData({ adminPasswordInput: '' });
-    }
-  },
-
-  // 取消管理员密码输入
-  cancelAdminPassword() {
-    this.setData({ 
-      showAdminModal: false,
-      adminPasswordInput: '',
-      adminClickCount: 0 // 重置计数
-    });
-  },
-
-  // 退出管理员模式
-  exitAdmin() {
-    wx.showModal({
-      title: '确认退出',
-      content: '确定要退出管理员模式吗？',
-      success: (res) => {
-        if (res.confirm) {
-          this.setData({ 
-            isAdmin: false,
-            adminClickCount: 0
-          });
-          wx.showToast({ title: '已退出管理员模式', icon: 'success' });
-        }
-      }
-    });
+    // 废弃旧逻辑，不再使用
   },
 
   enterModel(e) {
@@ -569,23 +555,154 @@ Page({
     });
   },
 
-  // 智能粘贴
-  smartPaste() {
-    wx.getClipboardData({
-      success: (res) => {
-        const text = res.data;
-        if (!text) { wx.showToast({ title: '剪贴板为空', icon: 'none' }); return; }
-        const phoneReg = /\d{11}/;
-        const phone = text.match(phoneReg);
-        if (phone) this.setData({ contactPhone: phone[0] });
-        const parts = text.split(/[\s,，]+/);
-        if (parts.length > 0) this.setData({ contactName: parts[0] });
-        let addr = '';
-        parts.forEach(p => { if (p.length > addr.length) addr = p; });
-        this.setData({ contactAddr: addr });
-        wx.showToast({ title: '已识别', icon: 'success' });
-      }
+  // ========================================================
+  // [修改] 智能粘贴相关逻辑
+  // ========================================================
+  
+  // 1. 打开智能粘贴弹窗
+  openSmartPasteModal() {
+    console.log('点击了智能粘贴按钮'); // 调试用：确认按钮是否被点击
+    this.setData({
+      showSmartPasteModal: true,
+      smartPasteVal: '' // 每次打开清空
     });
+  },
+
+  // 2. 关闭弹窗
+  closeSmartPasteModal() {
+    this.setData({ showSmartPasteModal: false });
+  },
+
+  // 3. 监听弹窗输入
+  onSmartPasteInput(e) {
+    this.setData({ smartPasteVal: e.detail.value });
+  },
+
+  // 4. 点击"智能分析"按钮
+  confirmSmartPaste() {
+    const text = this.data.smartPasteVal.trim();
+    if (!text) {
+      wx.showToast({ title: '请粘贴内容', icon: 'none' });
+      return;
+    }
+
+    // 调用地址解析函数
+    const parsed = this.parseAddress(text);
+
+    // 智能回填数据
+    let updateData = {
+      showSmartPasteModal: false // 分析完自动关闭
+    };
+    
+    // 识别姓名（第一个非数字非地址的词）
+    const parts = text.split(/[\s,，]+/);
+    if (parts.length > 0) {
+      const namePart = parts.find(p => p.length > 1 && !/\d{11}/.test(p) && !p.match(/省|市|区|县|街道|路|号/));
+      if (namePart) {
+        updateData.contactName = namePart.trim();
+      }
+    }
+    
+    // 识别电话号码
+    const phoneMatch = text.match(/\d{11}/);
+    if (phoneMatch) {
+      updateData.contactPhone = phoneMatch[0];
+    }
+    
+    // 填入地址
+    if (parsed.fullAddress) {
+      updateData.contactAddr = parsed.fullAddress;
+    }
+    
+    this.setData(updateData);
+    
+    wx.showToast({ title: '已智能分析', icon: 'success' });
+  },
+  
+  // ========================================================
+  // 地址解析函数（智能识别省市区）
+  // ========================================================
+  parseAddress(addressText) {
+    let text = addressText.trim();
+    let province = '';
+    let city = '';
+    let district = '';
+    let detail = '';
+    
+    // 移除常见的分隔符，统一处理
+    text = text.replace(/[\/、]/g, ' ').replace(/[,，]/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
+    let remaining = text;
+    
+    // 识别省（必须包含"省"字）
+    const provincePattern = /([^省\s]+省)/;
+    const provinceMatch = remaining.match(provincePattern);
+    if (provinceMatch) {
+      province = provinceMatch[1].trim();
+      remaining = remaining.replace(province, '').trim();
+    }
+    
+    // 识别市（必须包含"市"字，排除"省"字）
+    const cityPattern = /([^省市\s]+市)/;
+    const cityMatch = remaining.match(cityPattern);
+    if (cityMatch) {
+      city = cityMatch[1].trim();
+      remaining = remaining.replace(city, '').trim();
+    }
+    
+    // 识别区/县（必须包含"区"或"县"字）
+    const districtPattern = /([^省市区县\s]+[区县])/;
+    const districtMatch = remaining.match(districtPattern);
+    if (districtMatch) {
+      district = districtMatch[1].trim();
+      remaining = remaining.replace(district, '').trim();
+    }
+    
+    // 剩余部分作为详细地址
+    detail = remaining.trim();
+    
+    // 方法2: 如果没识别到，尝试识别特殊格式（如：北京市朝阳区）
+    if (!province && !city && !district) {
+      // 直辖市特殊处理：北京、上海、天津、重庆
+      const directCityPattern = /(北京市|上海市|天津市|重庆市|北京市|上海市|天津市|重庆市)/;
+      const directCityMatch = text.match(directCityPattern);
+      if (directCityMatch) {
+        city = directCityMatch[1];
+        remaining = text.replace(city, '').trim();
+        
+        // 继续识别区
+        const districtMatch2 = remaining.match(districtPattern);
+        if (districtMatch2) {
+          district = districtMatch2[1].trim();
+          remaining = remaining.replace(district, '').trim();
+        }
+        detail = remaining;
+      }
+    }
+    
+    // 组装完整地址（格式化输出）
+    let fullAddress = '';
+    const parts = [];
+    if (province) parts.push(province);
+    if (city) parts.push(city);
+    if (district) parts.push(district);
+    if (detail) parts.push(detail);
+    
+    fullAddress = parts.join(' ');
+    
+    // 如果解析失败，使用原始文本
+    if (!fullAddress) {
+      fullAddress = addressText;
+    }
+    
+    return {
+      province,
+      city,
+      district,
+      detail,
+      fullAddress
+    };
   },
 
   // 联系信息输入处理

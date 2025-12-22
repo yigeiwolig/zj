@@ -1,24 +1,24 @@
 {
-  "setting": {
-    "es6": true,
-    "postcss": true,
-    "minified": true,
-    "uglifyFileName": false,
-    "enhance": true,
-    "packNpmRelationList": [],
-    "babelSetting": {
-      "ignore": [],
-      "disablePlugins": [],
-      "outputPath": ""
-    },
-    "useCompilerPlugins": false
-  },
-  "compileType": "miniprogram",
-  "simulatorPluginLibVersion": {},
+  "compileType": "miniprogram", 
   "packOptions": {
-    "ignore": [],
+    "ignore": [], 
     "include": []
-  },
-  "appid": "wx9edeab423006c282",
-  "editorSetting": {}
+  }, 
+  "setting": {
+    "es6": true, 
+    "packNpmRelationList": [], 
+    "babelSetting": {
+      "ignore": [], 
+      "outputPath": "", 
+      "disablePlugins": []
+    }, 
+    "uglifyFileName": false, 
+    "useCompilerPlugins": false, 
+    "minified": true, 
+    "enhance": true, 
+    "postcss": true
+  }, 
+  "appid": "wxf1a81dd77d810edf", 
+  "editorSetting": {}, 
+  "simulatorPluginLibVersion": {}
 }

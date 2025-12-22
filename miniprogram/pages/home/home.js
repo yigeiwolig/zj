@@ -16,8 +16,8 @@ Page({
     scroll: 0,
     target: 0,
     isDetailOpen: false,
-    isAdmin: false,
-    clickCount: 0,
+    isAuthorized: false, // 是否是白名单里的管理员
+    isAdmin: false,      // 当前是否开启了管理员模式
 
     showPhantom: false,
     isExpanded: false,
@@ -28,9 +28,6 @@ Page({
     isAdding: false, // 标记是否正在添加新卡片
     editData: {},
     
-    // 新增：弹窗控制变量
-    showAuthModal: false,
-    inputPwd: '',
     
     // 测试模式
     isTestMode: false
@@ -40,6 +37,9 @@ Page({
     this.startY = 0;
     this.startScroll = 0;
     this.isDragging = false;
+    
+    // 检查管理员权限
+    this.checkAdminPrivilege();
     
     // 1. 获取用户位置
     this.getUserLocation().then(() => {
@@ -433,56 +433,34 @@ Page({
     return list;
   },
 
-  // --- 管理员认证 ---
-  onBgTap(e) {
-    if (e.mark && e.mark.type === 'card') return;
-    this.data.clickCount++;
-    if (this.clickTimer) clearTimeout(this.clickTimer);
-    
-    this.clickTimer = setTimeout(() => {
-      this.data.clickCount = 0;
-    }, 1500);
-
-    if (this.data.clickCount >= 5) {
-      this.data.clickCount = 0;
-      
-      // 如果已经是管理员，询问退出
-      if (this.data.isAdmin) {
-        wx.showModal({
-          title: '提示', content: '是否退出管理员模式？',
-          success: (res) => { if (res.confirm) this.setData({ isAdmin: false }); }
-        });
-      } else {
-        // 如果不是，打开自定义密码弹窗
-        this.setData({ showAuthModal: true, inputPwd: '' });
+  // ================== 权限检查逻辑 ==================
+  async checkAdminPrivilege() {
+    try {
+      const res = await wx.cloud.callFunction({ name: 'login' });
+      const myOpenid = res.result.openid;
+      const db = wx.cloud.database();
+      const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      if (adminCheck.data.length > 0) {
+        this.setData({ isAuthorized: true });
+        console.log('[home.js] 身份验证成功：合法管理员');
       }
+    } catch (err) {
+      console.error('[home.js] 权限检查失败', err);
     }
   },
 
-  // 2. 新增：监听输入
-  onAuthInput(e) {
-    this.setData({ inputPwd: e.detail.value });
-  },
-
-  // 3. 新增：关闭弹窗
-  closeAuthModal() {
-    this.setData({ showAuthModal: false, inputPwd: '' });
-  },
-
-  // 4. 新增：校验密码
-  checkAuth() {
-    if (this.data.inputPwd === "3252955872") {
-      this.setData({ 
-        isAdmin: true,
-        showAuthModal: false,
-        inputPwd: ''
-      });
-      wx.showToast({ title: '管理员模式: ON', icon: 'success' });
-    } else {
-              wx.showToast({ title: '密码错误', icon: 'error' });
-      // 可以选择是否清空输入框
-      // this.setData({ inputPwd: '' }); 
+  // 管理员模式手动切换开关
+  toggleAdminMode() {
+    if (!this.data.isAuthorized) {
+      wx.showToast({ title: '无权限', icon: 'none' });
+      return;
     }
+    const nextState = !this.data.isAdmin;
+    this.setData({ isAdmin: nextState });
+    wx.showToast({
+      title: nextState ? '管理模式开启' : '已回到用户模式',
+      icon: 'none'
+    });
   },
 
   // --- 1. 新增卡片 (修复：新增时绝对不排序，确保打开的是新卡片) ---

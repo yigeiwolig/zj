@@ -23,7 +23,7 @@ Page({
 
   startAutoCheck() {
     this.stopAutoCheck();
-    console.log('⏳ 开启云端状态检测 (3秒/次)...');
+    console.log('⏳ 开启云端状态检测 (5秒/次)...');
     
     // 立即执行一次
     this.callCheckCloud();
@@ -31,7 +31,7 @@ Page({
     this.setData({
       checkTimer: setInterval(() => {
         this.callCheckCloud();
-      }, 3000)
+      }, 5000)
     });
   },
 
