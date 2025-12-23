@@ -28,96 +28,232 @@
     </view>
   </view>
 
-  <!-- 3. 管理员专属标题 -->
-  <view class="admin-page-title" wx:if="{{isAdmin}}">订单管理后台</view>
-
-  <!-- 4. 订单区域 -->
-  <view class="section-label">
-    {{isAdmin ? 'ALL ORDERS / 全部订单' : 'LIVE ORDERS / 实时订单'}}
-  </view>
-
-  <swiper class="order-swiper" bindchange="onOrderChange" circular style="height: 900rpx;">
-    <swiper-item wx:for="{{orders}}" wx:key="id">
-      <view class="order-card detail-mode">
-        
-        <!-- 1. 头部：修复位置不对的问题 -->
-        <!-- 使用 flex 布局，让单号在左，状态在右 -->
-        <view class="card-header">
-          <view class="order-id-group">
-            <text class="order-label">订单号</text>
-            <text class="order-val">{{item.orderId}}</text>
-          </view>
-          <!-- 状态标签 -->
-          <text class="status-tag {{item.realStatus}}">
-            {{item.statusText}}
-          </text>
-        </view>
-
-        <!-- 【关键】买家信息栏：显示昵称、电话、地址 -->
-        <view class="buyer-info-box">
-          <view class="b-row">
-            <text class="b-name">{{item.userName || '匿名用户'}}</text>
-            <text class="b-phone">{{item.userPhone}}</text>
-          </view>
-          <view class="b-addr">{{item.userAddr}}</view>
-        </view>
-
-        <!-- 2. 中间商品列表 (保持不变) -->
-        <view class="goods-detail-list">
-          <view class="mini-tag">购物清单</view>
-          <block wx:for="{{item.goodsList}}" wx:for-item="g" wx:key="index">
-            <view class="g-item">
-              <view class="g-info">
-                <text class="g-n">{{g.name}}</text>
-                <text class="g-s">{{g.spec}}</text>
-              </view>
-              <view class="g-count">x{{g.quantity}}</view>
-              <view class="g-p">¥{{g.total}}</view>
-            </view>
-          </block>
-        </view>
-
-        <!-- 3. 底部：合计 + 操作按钮 -->
-        <view class="card-footer-new">
-          <!-- 合计行 -->
-          <view class="total-row">
-            <text class="time-text">{{item.createTime}}</text>
-            <view class="price-box">
-              <text>实付</text> 
-              <text class="price-num">¥{{item.amount}}</text>
-            </view>
-          </view>
-
-          <!-- 1. 待付款：显示模拟支付 -->
-          <view wx:if="{{item.realStatus === 'UNPAID'}}" class="action-row-right">
-            <view class="btn-mini gray" catchtap="debugSimulatePay" data-id="{{item.id}}">
-              ⚡️ 模拟支付
-            </view>
-          </view>
-
-          <!-- 2. 待发货：只有管理员能看到录入按钮 -->
-          <!-- 逻辑：必须是管理员 AND 状态是PAID -->
-          <view 
-            wx:if="{{isAdmin && item.realStatus === 'PAID'}}" 
-            class="admin-ship-btn" 
-            catchtap="adminShipOrder" 
-            data-id="{{item.id}}">
-            录入单号并发货
-          </view>
-
-          <!-- 3. 运输中：所有人都能看物流 -->
-          <view 
-            wx:if="{{item.realStatus === 'SHIPPED'}}" 
-            class="logistics-btn" 
-            catchtap="viewLogisticsDetail" 
-            data-sn="{{item.trackingId}}">
-            查看物流 ({{item.trackingId}})
-          </view>
-
-        </view>
+  <!-- === 【核心修改区域：管理员界面】 === -->
+  <block wx:if="{{isAdmin}}">
+    
+    <!-- 1. 标题栏 + 切换按钮 -->
+    <view class="admin-header-row">
+      <view class="admin-page-title">
+        {{showShippedMode ? '发货记录' : '待处理订单'}}
       </view>
-    </swiper-item>
-  </swiper>
+      
+      <!-- 右侧切换按钮 -->
+      <view class="switch-view-btn {{showShippedMode ? 'active' : ''}}" bindtap="toggleViewMode">
+        {{showShippedMode ? '← 返回待处理' : '查看已发货 ➔'}}
+      </view>
+    </view>
+
+    <!-- 2. 模式A：待发货 (横向 Swiper) -->
+    <swiper 
+      wx:if="{{!showShippedMode}}"
+      class="order-swiper" 
+      bindchange="onOrderChange" 
+      circular 
+      previous-margin="60rpx" 
+      next-margin="60rpx"
+      style="height: {{swiperHeight}}px; transition: height 0.3s ease;"
+    >
+      <!-- 如果没有待发货订单 -->
+      <swiper-item wx:if="{{pendingList.length === 0}}">
+        <view class="empty-card">🎉 太棒了，所有订单都已发货！</view>
+      </swiper-item>
+
+      <!-- 循环 pendingList -->
+      <swiper-item wx:for="{{pendingList}}" wx:key="id" wx:for-index="idx">
+        <view class="order-card detail-mode" id="card-{{idx}}">
+          
+          <!-- 1. 头部：修复位置不对的问题 -->
+          <view class="card-header">
+            <view class="order-id-group">
+              <text class="order-label">订单号</text>
+              <text class="order-val">{{item.orderId}}</text>
+            </view>
+            <view class="status-tag {{item.realStatus}}">{{item.statusText}}</view>
+          </view>
+
+          <!-- 【关键】买家信息栏：显示昵称、电话、地址 -->
+          <view class="buyer-info-box">
+            <view class="b-row">
+              <text class="b-name">{{item.userName || '匿名用户'}}</text>
+              <text class="b-phone">{{item.userPhone}}</text>
+            </view>
+            <view class="b-addr">{{item.userAddr}}</view>
+          </view>
+
+          <!-- 2. 中间商品列表 -->
+          <view class="goods-detail-list">
+            <view class="mini-tag">购物清单</view>
+            <block wx:for="{{item.goodsList}}" wx:for-item="g" wx:key="index">
+              <view class="g-item">
+                <view class="g-info">
+                  <text class="g-n">{{g.name}}</text>
+                  <text class="g-s">{{g.spec}}</text>
+                </view>
+                <view class="g-count">x{{g.quantity}}</view>
+                <view class="g-p">¥{{g.total}}</view>
+              </view>
+            </block>
+          </view>
+
+          <!-- 3. 底部：合计 + 操作按钮 -->
+          <view class="card-footer-new">
+            <view class="total-row">
+              <text class="time-text">{{item.createTime}}</text>
+              <view class="price-box">
+                <text>实付</text> 
+                <!-- 【修改】给金额加上点击事件（管理员待发货也可以改价） -->
+                <text 
+                  class="price-num {{isAdmin && item.realStatus === 'PAID' ? 'editable-price' : ''}}" 
+                  catchtap="adminModifyPrice" 
+                  data-id="{{item.id}}" 
+                  data-price="{{item.amount}}"
+                  data-status="{{item.realStatus}}">
+                  ¥{{item.amount}}
+                </text>
+              </view>
+            </view>
+            <view class="admin-ship-btn" catchtap="adminShipOrder" data-id="{{item.id}}">录入单号并发货</view>
+          </view>
+        </view>
+      </swiper-item>
+    </swiper>
+
+    <!-- 3. 模式B：已发货 (纵向 ScrollView) -->
+    <scroll-view 
+      wx:if="{{showShippedMode}}" 
+      scroll-y 
+      class="history-scroll-view"
+    >
+      <view class="history-list-container">
+        <block wx:for="{{shippedList}}" wx:key="id">
+          <!-- 历史订单卡片 (稍微简化一点，不需要大按钮) -->
+          <view class="order-card detail-mode history-item">
+             <!-- 头部 -->
+             <view class="card-header">
+                <text class="order-val">{{item.orderId}}</text>
+                <view class="status-tag {{item.realStatus}}">{{item.statusText}}</view>
+             </view>
+             <!-- 买家 (精简显示) -->
+             <view class="buyer-info-box small">
+                <text class="b-name">{{item.userName}}</text>
+                <text style="margin:0 10rpx; color:#ddd;">|</text>
+                <text class="b-addr">{{item.userAddr}}</text>
+             </view>
+             <!-- 底部 -->
+             <view class="card-footer-new">
+                <text class="time-text">{{item.createTime}}</text>
+                <!-- 查看物流按钮 -->
+                <view class="btn-logistics-action small" catchtap="viewLogisticsDetail" data-sn="{{item.trackingId}}">
+                  查看物流
+                </view>
+             </view>
+          </view>
+        </block>
+        <view class="end-tip">- 仅显示最近历史记录 -</view>
+      </view>
+    </scroll-view>
+
+  </block>
+
+  <!-- 普通用户视图 (保持不变，还是用原来的 swiper orders) -->
+  <block wx:if="{{!isAdmin}}">
+    <swiper 
+      class="order-swiper" 
+      bindchange="onOrderChange" 
+      circular 
+      previous-margin="60rpx" 
+      next-margin="60rpx"
+      style="height: {{swiperHeight}}px; transition: height 0.3s ease;"
+    >
+      <swiper-item wx:for="{{orders}}" wx:key="id" wx:for-index="idx">
+        <view class="order-card detail-mode" id="card-{{idx}}">
+          
+          <!-- 1. 头部 -->
+          <view class="card-header">
+            <view class="order-id-group">
+              <text class="order-label">订单号</text>
+              <text class="order-val">{{item.orderId}}</text>
+            </view>
+            <view class="status-tag {{item.realStatus}}">{{item.statusText}}</view>
+          </view>
+
+          <!-- 买家信息栏 -->
+          <view class="buyer-info-box">
+            <view class="b-row">
+              <text class="b-name">{{item.userName || '匿名用户'}}</text>
+              <text class="b-phone">{{item.userPhone}}</text>
+            </view>
+            <view class="b-addr">{{item.userAddr}}</view>
+          </view>
+
+          <!-- 商品列表 -->
+          <view class="goods-detail-list">
+            <view class="mini-tag">购物清单</view>
+            <block wx:for="{{item.goodsList}}" wx:for-item="g" wx:key="index">
+              <view class="g-item">
+                <view class="g-info">
+                  <text class="g-n">{{g.name}}</text>
+                  <text class="g-s">{{g.spec}}</text>
+                </view>
+                <view class="g-count">x{{g.quantity}}</view>
+                <view class="g-p">¥{{g.total}}</view>
+              </view>
+            </block>
+          </view>
+
+          <!-- 底部 -->
+          <view class="card-footer-new">
+            <view class="total-row">
+              <text class="time-text">{{item.createTime}}</text>
+              <view class="price-box">
+                <text>实付</text> 
+                <!-- 【修改】给金额加上点击事件 -->
+                <!-- 增加一个 editable-price 类名，如果是管理员且未支付，显示虚线提示可点 -->
+                <text 
+                  class="price-num {{isAdmin && item.realStatus === 'UNPAID' ? 'editable-price' : ''}}" 
+                  catchtap="adminModifyPrice" 
+                  data-id="{{item.id}}" 
+                  data-price="{{item.amount}}"
+                  data-status="{{item.realStatus}}">
+                  ¥{{item.amount}}
+                </text>
+              </view>
+            </view>
+
+            <!-- 1. 待付款：显示操作按钮 -->
+            <view wx:if="{{item.realStatus === 'UNPAID'}}" class="action-row-right">
+              
+              <!-- 【新增】左侧的取消订单按钮 -->
+              <view class="btn-mini outline-red" catchtap="userCancelOrder" data-id="{{item.id}}">
+                取消订单
+              </view>
+
+              <!-- 中间的占位（如果有模拟支付） -->
+              <view class="btn-mini gray" catchtap="debugSimulatePay" data-id="{{item.id}}">
+                ⚡️ 模拟
+              </view>
+
+              <!-- 右侧的支付按钮 -->
+              <view class="btn-mini black" catchtap="repayOrder" data-item="{{item}}">
+                立即支付
+              </view>
+              
+            </view>
+
+            <!-- 3. 运输中：所有人都能看物流 -->
+            <view 
+              wx:if="{{item.realStatus === 'SHIPPED'}}" 
+              class="logistics-btn" 
+              catchtap="viewLogisticsDetail" 
+              data-sn="{{item.trackingId}}">
+              查看物流 ({{item.trackingId}})
+            </view>
+
+          </view>
+        </view>
+      </swiper-item>
+    </swiper>
+  </block>
 
   <!-- 5. 设备列表 - 【管理员模式下隐藏】 -->
   <block wx:if="{{!isAdmin}}">
@@ -185,7 +321,15 @@
         </view>
 
         <view class="bt-btn {{bluetoothReady ? 'ready' : ''}}" bindtap="startConnect">
-          <text>{{bluetoothReady ? '✅ 蓝牙设备已连接' : '📡 点击连接蓝牙设备'}}</text>
+          
+          <!-- 扫描时的动画效果 -->
+          <view class="scan-radar" wx:if="{{isScanning}}">
+            <view class="ripple r1"></view>
+            <view class="ripple r2"></view>
+            <view class="ripple r3"></view>
+          </view>
+
+          <text>{{connectStatusText}}</text>
         </view>
 
         <view class="form-item">
@@ -201,16 +345,24 @@
           <text class="form-label">{{bindType == 'new' ? '上传凭证 (购买截图)' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
           
           <view class="upload-group">
-            <!-- 框1：购买截图 (始终显示) -->
-            <view class="upload-box">
-              <text class="plus-icon">+</text>
-              <text>购买截图</text>
+            <!-- 框1：购买截图 -->
+            <view class="upload-box" bindtap="chooseProofImage" data-type="receipt">
+              <!-- 如果有图，显示图 -->
+              <image wx:if="{{imgReceipt}}" src="{{imgReceipt}}" mode="aspectFill" class="uploaded-img" />
+              <!-- 没图，显示加号 -->
+              <block wx:else>
+                <text class="plus-icon">+</text>
+                <text>购买截图</text>
+              </block>
             </view>
 
-            <!-- 框2：聊天记录 (只有 'used' 才显示) -->
-            <view class="upload-box" wx:if="{{bindType == 'used'}}">
-              <text class="plus-icon">+</text>
-              <text>聊天记录</text>
+            <!-- 框2：聊天记录 -->
+            <view class="upload-box" wx:if="{{bindType == 'used'}}" bindtap="chooseProofImage" data-type="chat">
+              <image wx:if="{{imgChat}}" src="{{imgChat}}" mode="aspectFill" class="uploaded-img" />
+              <block wx:else>
+                <text class="plus-icon">+</text>
+                <text>聊天记录</text>
+              </block>
             </view>
           </view>
         </view>
@@ -226,7 +378,8 @@
       </scroll-view>
 
       <view class="modal-footer">
-        <button class="submit-btn">提交上传审核</button>
+        <!-- 绑定 submitAudit -->
+        <button class="submit-btn" bindtap="submitAudit">提交上传审核</button>
       </view>
 
     </view>

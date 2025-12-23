@@ -2,12 +2,13 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .container { padding-bottom: 40rpx; }
 
 /* --- 1. 头部 (修改布局：返回键 + 下移文字) --- */
+/* --- 头部优化：居中对齐版 --- */
 .profile-header { 
   background: #fff; 
-  /* 增加 padding 以适应返回键 */
-  padding: 100rpx 40rpx 60rpx; 
+  padding: 40rpx 40rpx 40rpx; /* 减小一点底部padding */
   display: flex;
   flex-direction: column; 
+  align-items: center; /* 【核心】让所有子元素水平居中 */
 }
 
 /* 固定返回按钮 */
@@ -47,24 +48,113 @@ page { background: #F7F7F7; color: #1D1D1F; }
   display: block;
 }
 
-.header-main { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 60rpx; }
-.user-identity { display: flex; flex-direction: column; }
+/* 用户名区域 */
+.header-main { 
+  display: flex; 
+  justify-content: center; /* 水平居中 */
+  align-items: center; 
+  margin-bottom: 40rpx; /* 减小间距 */
+  width: 100%;
+}
+
+.user-identity { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; /* 文字内部居中 */
+}
 .rank-tag { font-size: 20rpx; color: #AF9567; letter-spacing: 4rpx; font-weight: 700; display: block; margin-bottom: 12rpx; }
 .user-name { font-size: 64rpx; font-weight: 600; letter-spacing: -2rpx; }
 
-.header-stats { display: flex; align-items: center; }
-.stat-item { display: flex; flex-direction: column; }
+/* 数据统计区域 */
+.header-stats { 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; /* 整体居中 */
+  width: 100%;
+}
+
+/* 保持原有统计项样式 */
+.stat-item { 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; /* 文字居中 */
+}
 .stat-item .label { font-size: 22rpx; color: #8E8E93; margin-bottom: 8rpx; }
 .stat-item .value { font-size: 32rpx; font-weight: 600; }
 .stat-item .platinum { color: #AF9567; }
 .divider-v { width: 1px; height: 40rpx; background: #E5E5E5; margin: 0 60rpx; }
 
 
-/* 管理员标题 */
-.admin-page-title {
-  padding: 120rpx 48rpx 20rpx;
-  font-size: 50rpx; font-weight: 800; color: #000;
+/* --- 管理员头部布局 --- */
+.admin-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end; /* 底部对齐 */
+  /* 给原来的 padding 改一下，适应新布局 */
+  padding: 180rpx 40rpx 20rpx; 
 }
+
+/* 标题样式微调 */
+.admin-page-title {
+  padding: 0 !important; /* 去掉之前的 padding，由父容器控制 */
+  font-size: 48rpx;
+  font-weight: 800;
+  color: #000;
+}
+
+/* --- 切换按钮 (高级胶囊风) --- */
+.switch-view-btn {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #0071E3;
+  background: rgba(0, 113, 227, 0.1);
+  padding: 12rpx 24rpx;
+  border-radius: 30rpx;
+  transition: all 0.2s;
+}
+.switch-view-btn.active {
+  background: #000;
+  color: #fff;
+}
+.switch-view-btn:active { opacity: 0.7; }
+
+/* --- 空状态提示 --- */
+.empty-card {
+  height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 32rpx; color: #999; font-weight: 600;
+  background: #fff; border-radius: 40rpx; margin: 0 15rpx;
+  border: 4rpx dashed #eee;
+}
+
+/* --- 历史列表 (竖向) --- */
+.history-scroll-view {
+  height: calc(100vh - 280rpx); /* 占满剩余空间 */
+}
+.history-list-container {
+  padding: 0 40rpx 60rpx; /* 这里的 padding 替代 margin */
+}
+.history-item {
+  margin: 0 0 30rpx 0 !important; /* 覆盖原来的左右 margin，改为只有下方间距 */
+  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.05);
+}
+
+/* 历史卡片里的微调 */
+.buyer-info-box.small {
+  padding: 16rpx;
+  display: flex; align-items: center;
+  font-size: 24rpx; color: #666;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.btn-logistics-action.small {
+  margin-top: 0;
+  width: auto; /* 不撑满 */
+  height: 60rpx !important;
+  line-height: 56rpx !important;
+  padding: 0 30rpx;
+  font-size: 24rpx !important;
+}
+.end-tip { text-align: center; color: #ccc; font-size: 22rpx; margin-top: 20rpx; }
 
 /* --- 标签 --- */
 .section-label { padding: 10rpx 48rpx 12rpx; font-size: 22rpx; font-weight: 700; color: #BBB; letter-spacing: 2rpx; }
@@ -75,27 +165,45 @@ page { background: #F7F7F7; color: #1D1D1F; }
 
 /* --- 2. 订单区 --- */
 /* 1. 【修改】让订单列表高度自适应，不再被截断 */
+/* --- 订单列表高度调整 --- */
+/* 1. Swiper 容器 */
 .order-swiper {
-  /* 意思是：屏幕总高度 - 顶部标题占用的高度 */
-  /* 如果还是不够，可以改小后面那个数字，比如 - 200rpx */
-  height: calc(100vh - 280rpx) !important; 
+  width: 100%;
+  margin-bottom: 20rpx;
+  
+  /* ⚠️⚠️⚠️【重点检查】⚠️⚠️⚠️ */
+  /* 如果你的代码里还有下面这几行，一定要删掉！！！ */
+  /* height: 900rpx !important;  <-- 删除 */
+  /* height: calc(100vh...);     <-- 删除 */
+  /* height: 100%;               <-- 删除 */
+  
+  /* 这里什么高度都不要写，全靠 JS 的 style 控制 */
 }
 
-/* 订单详情卡片 */
-/* 确保内部卡片可以滚动 */
+/* 2. 卡片容器 */
 .order-card.detail-mode {
   display: flex; 
   flex-direction: column;
   padding: 30rpx; 
-  /* 允许卡片内部内容过多时撑开，配合 swiper 的 scroll-view 特性 */
-  height: auto; 
-  min-height: 700rpx;
+  /* 必须是 auto，才能被内容撑开 */
+  height: auto !important; 
+  min-height: 200rpx;
+  
+  /* 加上这个 transition，让高度变化有动画 */
+  transition: all 0.3s ease;
   padding-bottom: 60rpx; /* 底部多留点白，防止贴边 */
-  background: #fff; margin: 0 12rpx; border-radius: 40rpx;
+  background: #fff; 
+  /* 【关键】左右留出 15rpx 的缝隙 */
+  /* 这样加上 swiper 的露出距离，卡片之间就会有明显的间隔 */
+  margin: 0 15rpx !important; 
+  border-radius: 40rpx;
   position: relative; border: 1px solid #E5E5E5; box-sizing: border-box;
 }
 .order-card {
-  background: #fff; margin: 0 12rpx; height: 100%; border-radius: 40rpx; padding: 24rpx 40rpx;
+  background: #fff; 
+  /* 【关键】左右留出 15rpx 的缝隙 */
+  margin: 0 15rpx !important; 
+  height: 100%; border-radius: 40rpx; padding: 24rpx 40rpx;
   position: relative; border: 1px solid #E5E5E5; box-sizing: border-box; display: flex; flex-direction: column;
 }
 
@@ -123,56 +231,39 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .status-label.highlight { color: #FF9500; }
 
 /* ========================================= */
-/* 修复右上角标签：强力修正版 */
+/* 修复右上角标签：最终完美版 (针对 view 标签) */
 /* ========================================= */
 .status-tag {
   font-size: 22rpx;
   font-weight: 600;
   
-  /* Flex 布局基础 */
-  display: inline-flex !important;
+  /* 强制 Flex 布局 */
+  display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   
-  height: auto !important;
+  /* 放弃 padding 撑开法，改用固定高度法 (对 view 标签更稳) */
+  height: 48rpx !important;
+  width: fit-content; /* 宽度自适应 */
   
-  /* === 【核心修改】 === */
-  /* 上边距改到极小 (4rpx) */
-  /* 下边距加大 (14rpx) */
-  /* 这样底部空间非常厚，字就被迫往上跑了 */
-  padding: 4rpx 20rpx 14rpx 20rpx !important;
+  /* 左右边距 */
+  padding: 0 20rpx !important;
   
-  /* 保持行高为1，防止干扰 */
-  line-height: 1 !important; 
+  /* 关键：给一点点 padding-bottom 抵消汉字视觉重心 */
+  padding-bottom: 2rpx !important;
   
   border-radius: 12rpx;
   margin-left: 20rpx;
 }
 
-/* 状态颜色方案 (保持不变) */
-.status-tag.UNPAID { 
-  background: #FFF5F5; 
-  color: #FF3B30; 
-} 
+/* 颜色方案 (保持不变) */
+.status-tag.UNPAID { background: #FFF5F5; color: #FF3B30; } 
 
-.status-tag.PAID { 
-  background: #F0F8FF; 
-  color: #0071E3; 
-}   
+.status-tag.PAID   { background: #F0F8FF; color: #0071E3; }   
 
+.status-tag.SHIPPED{ background: rgba(52, 199, 89, 0.1); color: #34C759; border: 1rpx solid rgba(52, 199, 89, 0.3); }
 
-
-/* 运输中 */
-.status-tag.SHIPPED { 
-  background: rgba(52, 199, 89, 0.1); 
-  color: #34C759; 
-  border: 1rpx solid rgba(52, 199, 89, 0.3); 
-}
-
-.status-tag.SIGNED { 
-  background: #F5F5F7; 
-  color: #8E8E93; 
-}
+.status-tag.SIGNED { background: #F5F5F7; color: #8E8E93; }
 
 .product-title { font-size: 34rpx; font-weight: bold; margin: 10rpx 0 20rpx; color: #1A1A1A; }
 
@@ -307,6 +398,28 @@ page { background: #F7F7F7; color: #1D1D1F; }
   box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.2);
 }
 
+/* --- 取消按钮 (红边框) --- */
+.btn-mini.outline-red {
+  background: #fff;
+  border: 1rpx solid #FF3B30;
+  color: #FF3B30;
+  margin-right: auto; /* 【关键】让它靠左，和其他按钮分开 */
+}
+
+/* --- 改价样式提示 --- */
+.editable-price {
+  border-bottom: 2rpx dashed #0071E3; /* 蓝色虚线 */
+  color: #0071E3 !important;          /* 变成蓝色 */
+  position: relative;
+}
+/* 给个小铅笔图标提示（可选） */
+.editable-price::after {
+  content: '✎';
+  font-size: 20rpx;
+  vertical-align: super;
+  margin-left: 4rpx;
+}
+
 .footer-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx; }
 .total-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20rpx; }
 .order-time { font-size: 22rpx; color: #bbb; }
@@ -401,11 +514,55 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
 .tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
 
+/* 蓝牙按钮基础样式 */
 .bt-btn { 
   width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
-  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; background: #fff; box-sizing: border-box;
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
+  background: #fff; box-sizing: border-box;
+  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
+  transition: all 0.3s;
 }
-.bt-btn.ready { background: #34C759; border-color: #34C759; color: #fff; }
+
+/* 连接成功状态 */
+.bt-btn.ready { 
+  background: #34C759; border-color: #34C759; color: #fff; 
+}
+
+/* === 修复后的柔和波纹动画 === */
+.scan-radar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  overflow: visible; /* 允许波纹扩散出去 */
+}
+
+.ripple {
+  position: absolute;
+  width: 100rpx; height: 100rpx; /* 初始小圆 */
+  background: rgba(0, 122, 255, 0.6); /* 蓝色半透明 */
+  border-radius: 50%;
+  opacity: 0;
+  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* 错开动画时间 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.6s; }
+.r3 { animation-delay: 1.2s; }
+
+@keyframes rippleSmooth {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.5; /* 出现 */
+  }
+  100% {
+    transform: scale(4); /* 放大4倍 */
+    opacity: 0; /* 慢慢消失 */
+  }
+}
 
 .form-item { margin-bottom: 30rpx; }
 .form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
@@ -416,8 +573,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
   flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
   border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
   justify-content: center; font-size: 22rpx; color: #999; 
+  position: relative;
+  overflow: hidden;
 }
 .plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
+.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
 
 .modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
 .submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }

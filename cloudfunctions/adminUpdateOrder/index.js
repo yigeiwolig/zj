@@ -5,10 +5,10 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 exports.main = async (event, context) => {
   const db = cloud.database()
-  const { id, action, trackingId } = event
+  const { id, action, trackingId, newPrice } = event // 接收 newPrice
 
   try {
-    // 1. 发货逻辑
+    // 1. 发货
     if (action === 'ship') {
       return await db.collection('shop_orders').doc(id).update({
         data: {
@@ -20,17 +20,24 @@ exports.main = async (event, context) => {
       })
     }
     
-    // 2. 删除逻辑
+    // 2. 删除/取消订单 (用户点取消，或管理员删单)
     if (action === 'delete') {
       return await db.collection('shop_orders').doc(id).remove()
     }
 
-    // 3. 【你缺的就是这段】模拟支付逻辑
+    // 3. 模拟支付
     if (action === 'simulate_pay') {
       return await db.collection('shop_orders').doc(id).update({
+        data: { status: 'PAID', payTime: db.serverDate() }
+      })
+    }
+
+    // 4. 【新增】管理员改价
+    if (action === 'update_price') {
+      return await db.collection('shop_orders').doc(id).update({
         data: {
-          status: 'PAID', // 强制改为已支付
-          payTime: db.serverDate()
+          totalFee: Number(newPrice), // 确保是数字
+          updateTime: db.serverDate()
         }
       })
     }

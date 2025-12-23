@@ -2359,69 +2359,141 @@ Page({
     // 情况 A: 用户正在选购某个型号 -> 走"立即购买"逻辑
     if (this.data.selectedModelIdx > -1) {
       
-      const {currentSeries, selectedModelIdx, selectedOptionIdx} = this.data;
+
+      const {currentSeries, selectedModelIdx, selectedOptionIdx, accessoryList} = this.data;
+
       const m = currentSeries.models[selectedModelIdx];
+
       const o = selectedOptionIdx > -1 ? currentSeries.options[selectedOptionIdx] : {name: '标配', price: 0};
+
       
-      // === 【核心修改开始】 ===
-      
+
       // 1. 获取当前购物车副本
+
       let currentCart = [...this.data.cart];
 
-      // 2. 如果之前有"立即购买"留下的旧商品，先删除它们
-      // (防止购物车里堆积了一堆未支付的"立即购买"商品)
+
+
+      // 2. 清理旧的"立即购买"商品 (包括主产品 和 配件)
+
       if (this.data.tempBuyItemIds && this.data.tempBuyItemIds.length > 0) {
-        console.log('正在清理旧的立即购买项:', this.data.tempBuyItemIds);
+
         currentCart = currentCart.filter(item => !this.data.tempBuyItemIds.includes(item.id));
+
       }
 
-      // 3. 更新购物车数据 (此时旧的已经被删了)
+
+
+      // 3. 更新购物车 (此时旧的已删干净)
+
       this.setData({ cart: currentCart });
 
-      // 4. 执行添加新商品逻辑 (生成新的 ID)
+
+
+      // 4. 执行添加新商品逻辑
+
       const result = this._addCurrentSelectionToCart();
+
       
+
       if (result.success) {
-        // 5. 找到刚刚新增进去的商品 ID (它是这次的"立即购买项")
-        // 逻辑：购物车里最后一个加进去的主商品，通常就是刚刚加的
-        // 或者更严谨一点，我们直接找刚刚生成的那个 mainItem
+
+        // === 【核心修改：同时记录主产品 ID 和 配件 ID】 ===
+
         
-        // 这里的 result.newCart 是添加后的新购物车数组
-        // 我们假设刚加进去的都在数组末尾（或者合并了）
-        
-        // 为了简单准确，我们重新筛选一下，找到对应 seriesId 和 modelName 的 ID
+
+        let newTempIds = [];
+
+
+
+        // A. 找到刚刚加进去的主产品
+
         const newMainItem = result.newCart.find(item => 
+
           item.type === 'main' && 
-          item.seriesId === currentSeries.id &&
-          item.modelName === m.name && 
+
+          item.seriesId === currentSeries.id && 
+
+          item.modelName === m.name &&
+
           item.optionName === o.name
+
         );
-        
-        // 记录这次的新 ID
-        const newTempIds = newMainItem ? [newMainItem.id] : [];
-        
-        // 6. 保存购物车并持久化
-        this.saveCartToCache(result.newCart);
-        
-        // 7. 更新 tempBuyItemIds，下次点立即购买时，就会把这个 ID 删掉
-        this.setData({
-          showOrderModal: true,
-          tempBuyItemIds: newTempIds 
+
+        if (newMainItem) newTempIds.push(newMainItem.id);
+
+
+
+        // B. 找到刚刚加进去的配件
+
+        // (遍历所有被选中的配件，去购物车里找对应的 ID)
+
+        accessoryList.forEach(acc => {
+
+          if (acc.selected) {
+
+            // 在购物车里找同名的配件项
+
+            // 注意：这里可能会找到之前已有的同名配件，但在立即购买场景下，我们通常视为本次购买的一部分
+
+            const accItem = result.newCart.find(item => 
+
+              item.type === 'accessory' && item.name === acc.name
+
+            );
+
+            if (accItem) newTempIds.push(accItem.id);
+
+          }
+
         });
+
+
+
+        // 去重 (防止万一有重复 ID)
+
+        newTempIds = [...new Set(newTempIds)];
+
+
+
+        // 5. 保存购物车并持久化
+
+        this.saveCartToCache(result.newCart);
+
+        
+
+        // 6. 更新 tempBuyItemIds (下次点立即购买时，这一批 ID 会被全部删掉)
+
+        this.setData({
+
+          showOrderModal: true,
+
+          tempBuyItemIds: newTempIds 
+
+        });
+
       }
-      // === 【核心修改结束】 ===
-      
+
       return;
+
     }
 
-    // 情况 B: 没选型号，直接去结算 (点购物车结算)
+
+
+    // 情况 B: 没选型号，直接去结算
+
     if (this.data.cart.length > 0) {
+
       this.setData({ showOrderModal: true });
+
       return;
+
     }
 
-    // 情况 C: 啥都没
+
+
     this.showCenterToast('请先选择配置');
+
   },
   
   closeOrderModal() { this.setData({ showOrderModal: false }); },
