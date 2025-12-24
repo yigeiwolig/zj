@@ -62,7 +62,7 @@
         </view>
         <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadCover" data-index="{{index}}">📷</view>
         
-        <!-- 👇👇👇【新增】红色删除按钮 👇👇👇 -->
+        <!-- 红色删除按钮 -->
         <view class="admin-del-card-btn" wx:if="{{isAdmin}}" catchtap="adminDeleteSeries" data-index="{{index}}">✕</view>
         
         <view class="p-info">
@@ -85,7 +85,7 @@
   <!-- 弹窗头 -->
   <view class="modal-nav">
     <view class="nav-close" bindtap="closeDetail">✕</view>
-    <!-- 管理员模式下：标题可点击编辑，并同步到云端 -->
+    <!-- 管理员模式下：标题可点击编辑 -->
     <view 
       class="modal-title {{isAdmin ? 'editable' : ''}}" 
       catchtap="{{isAdmin ? 'adminEditSeriesNameInDetail' : ''}}">
@@ -95,30 +95,26 @@
   </view>
 
   <!-- 弹窗内容区 -->
-  <!-- 1. 修改：绑定滚动事件 bindscroll -->
   <scroll-view scroll-y class="modal-scroll" bindscroll="onDetailScroll">
     <view class="scroll-inner">
       
-      <!-- (A) 详情长图 -->
-      <!-- 修改 2：详情页长图区域支持视频 (Detail Images) -->
-<view class="detail-images">
+      <!-- (A) 详情长图/视频 -->
+      <view class="detail-images">
          <block wx:for="{{currentSeries.detailImages}}" wx:key="url">
            <view class="dimg-box">
-              <!-- 判断类型：如果是视频显示video，否则显示image -->
               <video wx:if="{{item.type === 'video'}}" src="{{item.url}}" class="dimg" style="height:400rpx; width:100%;" autoplay muted loop show-play-btn="{{false}}" controls="{{false}}"></video>
               <image wx:else src="{{item.url}}" mode="widthFix" class="dimg" />
               
               <view wx:if="{{isAdmin}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
            </view>
          </block>
-         <!-- 按钮文案改成添加媒体 -->
          <view class="add-txt-btn" wx:if="{{isAdmin}}" bindtap="adminAddDetailMedia">+ 添加详情图片/视频</view>
       </view>
 
-      <!-- 2. 修改：选购配置区 (支持标题修改 + 对比选择逻辑) -->
+      <!-- 2. 选购配置区 -->
       <view class="config-sec">
         
-        <!-- 标题行：对比按钮只在型号大于1时显示 -->
+        <!-- 标题行 -->
         <view class="sec-header-row">
             <view class="sec-title {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="configTitle">
               {{currentSeries.labels.configTitle || '选购配置'}}
@@ -131,7 +127,7 @@
             </view>
         </view>
 
-        <!-- 对比确认条 (浮动显示) -->
+        <!-- 对比确认条 -->
         <view wx:if="{{isModelCompareMode}}" style="text-align:center; margin-bottom:20rpx;">
           <view class="btn-black" style="display:inline-block; font-size:24rpx; padding:10rpx 40rpx;" bindtap="startCompare">
             开始对比 (已选{{compareSelectedModels.length}})
@@ -150,7 +146,6 @@
               bindtap="selectModel" 
               data-index="{{index}}">
               
-              <!-- 对比勾选圈 -->
               <view wx:if="{{isModelCompareMode}}" class="circle {{item.isCompareChecked ? 'checked' : ''}}" style="margin-right:20rpx;"></view>
 
               <view style="flex:1">
@@ -166,7 +161,7 @@
           <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddModel">+ 添加型号</view>
         </view>
 
-        <!-- B. 配置方案 (标题动态化) -->
+        <!-- B. 配置方案 -->
         <view class="cfg-group">
           <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="optionTitle">
             {{currentSeries.labels.optionTitle || '配置方案'}}
@@ -188,7 +183,7 @@
           </view>
         </view>
 
-        <!-- C. 配件加购 (标题动态化) -->
+        <!-- C. 配件加购 -->
         <view class="cfg-group" wx:if="{{accessoryList.length > 0 || isAdmin}}">
           <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="accTitle">
             {{currentSeries.labels.accTitle || '配件加购'}}
@@ -199,7 +194,6 @@
                      bindtap="openAccessoryDetail" data-index="{{index}}">
             
             <image class="acc-thumb" src="{{item.img}}" mode="aspectFill" />
-            <!-- Admin 改图 -->
             <view wx:if="{{isAdmin}}" class="admin-float-thumb" catchtap="adminUploadAccThumb" data-index="{{index}}">📷</view>
 
             <view class="acc-info">
@@ -207,16 +201,12 @@
                 <text class="acc-p">¥{{item.price}}</text>
             </view>
 
-            <!-- 原来的代码类似于： {{item.selected ? '✓' : '+'}} -->
-
-<!-- 替换为下面的代码： -->
-<view class="acc-add-btn {{item.selected ? 'checked' : ''}}" 
-      catchtap="toggleAccessorySelection" 
-      data-index="{{index}}">
-   {{item.selected ? '已选' : '添加'}}
-</view>
+            <view class="acc-add-btn {{item.selected ? 'checked' : ''}}" 
+                  catchtap="toggleAccessorySelection" 
+                  data-index="{{index}}">
+               {{item.selected ? '已选' : '添加'}}
+            </view>
             
-            <!-- 修改：删除按钮严格在右上角 -->
             <view wx:if="{{isAdmin}}" class="admin-del-corner-top" catchtap="adminDelAcc" data-index="{{index}}">✕</view>
           </view>
             </block>
@@ -225,13 +215,11 @@
   </view>
 
       </view>
-      <!-- 这里是为了让滚动到底部时，内容不被底部栏挡住 -->
       <view style="height:200rpx;"></view> 
     </view>
   </scroll-view>
 
-  <!-- 2. 修改：底部结算栏 (增加显隐控制类) -->
-  <!-- 只有当 showFooterBar 为 true 时，添加 .visible 类 -->
+  <!-- 2. 底部结算栏 -->
   <view class="modal-footer {{showFooterBar ? 'visible' : ''}}">
     <view class="footer-btn-group">
       <view class="btn-cart" id="cart-target" bindtap="addToCart">加入购物车</view>
@@ -240,13 +228,12 @@
   </view>
 </view>
 
-<!-- ================= 4. 对比表格弹窗 (动态列) ================= -->
+<!-- ================= 4. 对比表格弹窗 ================= -->
 <view class="overlay {{showSpecsModal ? 'active' : ''}}" style="z-index: 600;">
   <view class="overlay-head"><view bindtap="closeSpecsModal">✕</view><view>参数对比</view><view></view></view>
   <scroll-view scroll-y class="modal-scroll" style="max-height: 80vh;">
     <view class="specs-table">
        
-       <!-- 表头：动态渲染 headers -->
        <view class="sp-row header">
           <view class="sp-cell label">参数项</view>
           <block wx:for="{{compareData.headers}}" wx:key="*this">
@@ -255,11 +242,9 @@
           <view wx:if="{{isAdmin}}" class="sp-cell admin-w"></view>
        </view>
        
-       <!-- 内容：动态渲染 rows 和 vals -->
        <block wx:for="{{compareData.rows}}" wx:key="label" wx:for-index="rowIdx">
          <view class="sp-row">
             <view class="sp-cell label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSpecCell':''}}" data-row="{{rowIdx}}" data-key="label">{{item.label}}</view>
-            <!-- 里面的值也循环 -->
             <block wx:for="{{item.vals}}" wx:for-item="val" wx:key="*this" wx:for-index="valIdx">
                <view class="sp-cell {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSpecCell':''}}" data-row="{{rowIdx}}" data-key="v{{valIdx+1}}">{{val}}</view>
             </block>
@@ -268,25 +253,19 @@
        </block>
        <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddSpecRow">+ 添加参数行</view>
        
-       <!-- ============ [新增] 底部全局视频区域 ============ -->
-       
-       <!-- 逻辑：如果是管理员，或者 (已有视频 且 开关是打开的) 显示区域 -->
+       <!-- 底部全局视频区域 -->
        <view class="spec-video-footer" 
              wx:if="{{isAdmin || (currentSeries.compareVideo && currentSeries.showCompareVideo)}}">
          
-         <!-- 1. 主按钮：查看对比演示 -->
          <view class="btn-watch-compare" bindtap="watchCompareVideo">
            <text class="icon-play">▶</text> 查看对比演示视频
          </view>
 
-         <!-- 2. 管理员控制面板 (仅管理员可见) -->
          <view class="admin-video-controls" wx:if="{{isAdmin}}">
-           <!-- 上传按钮 -->
            <view class="admin-v-btn upload" bindtap="adminUploadCompareVideo">
              {{currentSeries.compareVideo ? '更换视频' : '上传视频'}}
            </view>
            
-           <!-- 显示/隐藏开关 -->
            <view class="admin-v-btn toggle {{currentSeries.showCompareVideo ? 'on' : 'off'}}" 
                  bindtap="adminToggleVideoVis">
              状态: {{currentSeries.showCompareVideo ? '已显示' : '已隐藏'}}
@@ -298,7 +277,7 @@
   </scroll-view>
 </view>
 
-<!-- ================= 5. 配件详情弹窗 (Accessory Detail) ================= -->
+<!-- ================= 5. 配件详情弹窗 ================= -->
 <view class="full-modal {{showAccDetail ? 'active' : ''}}" style="z-index: 300;">
   <view class="modal-nav">
      <view class="nav-close" bindtap="closeAccessoryDetail">✕</view>
@@ -306,7 +285,6 @@
      <view style="width:60rpx"></view>
   </view>
   <scroll-view scroll-y class="modal-scroll">
-     <!-- 配件大图 -->
      <view class="acc-detail-hero">
         <image wx:if="{{accessoryList[currentAccIdx].detailImages.length>0}}" 
                src="{{accessoryList[currentAccIdx].detailImages[0]}}" mode="widthFix" class="dimg"/>
@@ -315,7 +293,6 @@
         <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddAccDetailImg">+ 添加/更换图片</view>
      </view>
      
-     <!-- 配件信息 -->
      <view class="acc-detail-info">
         <view class="acc-d-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccName':''}}">{{accessoryList[currentAccIdx].name}}</view>
         <view class="acc-d-price {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccPrice':''}}">¥{{accessoryList[currentAccIdx].price}}</view>
@@ -329,9 +306,7 @@
   </view>
 </view>
 
-<!-- ============================================================== -->
-<!-- 1. 新增：加入购物车成功弹窗 (UI美化) -->
-<!-- ============================================================== -->
+<!-- ================= 6. 加入购物车成功弹窗 ================= -->
 <view class="success-mask" wx:if="{{showCartSuccess}}">
   <view class="success-box">
     <view class="s-icon">✔</view>
@@ -345,14 +320,9 @@
   </view>
 </view>
 
-<!-- ============================================================== -->
-<!-- 2. 重做：订单确认/结算弹窗 ================= -->
-<!-- ============================================================== -->
-
-<!-- 1. [新增] 黑色半透明遮罩层 (点背景也能关闭) -->
+<!-- ================= 7. 订单确认/结算弹窗 ================= -->
 <view class="dark-mask" wx:if="{{showOrderModal}}" bindtap="closeOrderModal"></view>
 
-<!-- 2. 弹窗主体 (保持不变，只是为了定位) -->
 <view class="overlay full-screen-overlay {{showOrderModal ? 'active' : ''}}" style="z-index: 600;">
   <!-- 顶部 -->
   <view class="checkout-header">
@@ -364,20 +334,24 @@
   <scroll-view scroll-y class="checkout-scroll">
     <view class="checkout-body">
       
-      <!-- 商品清单 (卡片式) -->
+      <!-- 商品清单 -->
       <view class="group-card">
+        <view class="cart-header-row">
+          <view class="cart-title">商品清单</view>
+          <view class="clear-btn-stylish" bindtap="clearCart">
+            <text>🗑 清空</text>
+          </view>
+        </view>
+
         <block wx:for="{{cart}}" wx:key="id">
           <view class="cart-row">
-            <!-- 左侧信息 -->
             <view class="cr-info">
               <view class="cr-name">{{item.name}}</view>
               <view class="cr-spec">{{item.spec}}</view>
             </view>
             
-            <!-- 右侧价格与数量 -->
             <view class="cr-action">
               <view class="cr-price">¥{{item.total}}</view>
-              <!-- 小巧的加减器 -->
               <view class="mini-stepper">
                 <view class="ms-btn" catchtap="handleCartQty" data-index="{{index}}" data-type="minus">-</view>
                 <view class="ms-num">{{item.quantity}}</view>
@@ -387,58 +361,77 @@
           </view>
         </block>
         
-          <view wx:if="{{cart.length === 0}}" class="empty-cart">购物车暂无商品</view>
+        <view wx:if="{{cart.length === 0}}" class="empty-cart">购物车暂无商品</view>
         
-        <!-- 总价行 -->
-        <view class="total-row">
-          <text>总计</text>
-          <text class="big-price">¥{{cartTotalPrice}}</text>
+      </view>
+
+      <!-- 配送方式 -->
+      <view class="group-header-row">
+        <view class="group-title-text">配送方式</view>
+      </view>
+      <view class="shipping-box">
+        <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
+          <view class="ship-name">中通快递</view>
+          <view class="ship-price">包邮</view>
+        </view>
+        <!-- 顺丰选项 -->
+        <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
+          <view class="ship-name">顺丰速运</view>
+          <view class="ship-price">
+             <!-- 如果没选地区，显示待计算；选了才显示金额 -->
+             {{region.length == 0 ? '待计算' : '¥'+shippingFee}}
+             <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+          </view>
         </view>
       </view>
 
-      <!-- ================= 替换开始 ================= -->
-      
-      <!-- 1. 这一行是新的标题栏：左边是标题，右边是按钮 -->
+      <!-- 总价显示区 -->
+      <view class="final-total-row">
+        <text class="ft-label">共 {{cart.length}} 件，总计</text>
+        <text class="ft-price">¥{{finalTotalPrice}}</text>
+      </view>
+
+      <!-- 收货信息 -->
       <view class="group-header-row">
-        <!-- 左边文字 -->
         <view class="group-title-text">收货信息</view>
-        
-        <!-- 右边按钮 (画圈的位置) -->
         <view class="paste-btn-header" bindtap="openSmartPasteModal">智能粘贴</view>
       </view>
 
-      <!-- 2. 表单区域 -->
       <view class="group-card form-group">
+
+        <!-- 姓名 -->
         <view class="form-item">
           <view class="form-label">收货人</view>
           <input class="form-input" placeholder="请填写姓名" placeholder-class="ph-style" bindinput="onInput" data-key="name" value="{{orderInfo.name}}"/>
         </view>
+
+        <!-- 手机号 -->
         <view class="form-item">
           <view class="form-label">手机号</view>
-          <input class="form-input" type="number" placeholder="请填写手机号码" placeholder-class="ph-style" bindinput="onInput" data-key="phone" value="{{orderInfo.phone}}"/>
+          <input class="form-input" type="number" maxlength="11" placeholder="请填写11位手机号" placeholder-class="ph-style" bindinput="onInput" data-key="phone" value="{{orderInfo.phone}}"/>
         </view>
+
+
+        <!-- [修改] 详细地址 -->
         <view class="form-item">
-          <view class="form-label">地址</view>
-          <!-- 注意：这里原来的 粘贴按钮 已经被彻底删除了，地址栏现在很干净 -->
-          <input class="form-input" placeholder="省/市/区/街道门牌" placeholder-class="ph-style" bindinput="onInput" data-key="address" value="{{orderInfo.address}}"/>
+          <view class="form-label">详细地址</view>
+          <input class="form-input" placeholder="街道、楼牌号等" placeholder-class="ph-style" bindinput="onInput" data-key="detailAddress" value="{{detailAddress}}"/>
         </view>
+
       </view>
-      <!-- ================= 替换结束 ================= -->
 
     </view>
   </scroll-view>
 
-  <!-- 底部提交按钮 -->
-  <view class="checkout-footer">
-    <!-- 显示金额，更像正规支付按钮 -->
+  <!-- 底部单按钮 (立即支付) -->
+  <view class="checkout-footer-single">
     <view class="btn-black full" bindtap="submitOrder">
-      立即支付 ¥{{cartTotalPrice}}
+      <text class="btn-main">立即支付 ¥{{finalTotalPrice}}</text>
     </view>
   </view>
 </view>
 
-<!-- ================= 7. 管理员密码弹窗 (Oval Input) ================= -->
-<!-- 1. 在 <view class="container"> 的 最下方 添加 自定义编辑弹窗 -->
+<!-- ================= 8. 自定义编辑弹窗 ================= -->
 <view class="custom-modal-mask" wx:if="{{showCustomEditModal}}">
   <view class="custom-modal-box">
     <view class="custom-modal-title">{{customEditTitle}}</view>
@@ -450,22 +443,19 @@
   </view>
 </view>
 
-
-<!-- ================= 8. 新增：屏幕中间提示气泡 ================= -->
+<!-- ================= 9. 屏幕中间提示气泡 ================= -->
 <view class="center-toast-mask" wx:if="{{centerToast.show}}">
   <view class="center-toast-box">
-    <view class="ct-icon">!</view> <!-- 简单叹号图标 -->
+    <view class="ct-icon">!</view> 
     <view class="ct-text">{{centerToast.text}}</view>
   </view>
 </view>
 
-<!-- ================= 9. [新增] 智能粘贴输入弹窗 ================= -->
+<!-- ================= 10. 智能粘贴输入弹窗 ================= -->
 <view class="smart-paste-mask" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;">
   <view class="smart-paste-box">
     <view class="sp-title">智能粘贴</view>
     <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
-    
-    <!-- 输入区域 -->
     <textarea 
       class="sp-textarea" 
       placeholder="例如：张三 13800138000 广东省深圳市南山区..." 
@@ -474,7 +464,6 @@
       adjust-position="{{true}}"
       fixed="{{true}}"
     ></textarea>
-    
     <view class="sp-btn-row">
       <view class="sp-btn cancel" bindtap="closeSmartPasteModal">取消</view>
       <view class="sp-btn confirm" bindtap="confirmSmartPaste">智能分析</view>
@@ -482,13 +471,9 @@
   </view>
 </view>
 
-<!-- ================= 10. [新增] 自定义全屏视频播放器 ================= -->
+<!-- ================= 11. 自定义全屏视频播放器 ================= -->
 <view class="video-modal-mask" wx:if="{{showVideoPlayer}}" style="z-index: 99999;">
-  
-  <!-- 关闭按钮 (你要的 X) -->
   <view class="video-close-btn" bindtap="closeVideoPlayer">✕</view>
-
-  <!-- 视频组件 -->
   <video 
     src="{{currentVideoUrl}}" 
     autoplay="{{true}}" 
@@ -496,7 +481,6 @@
     show-fullscreen-btn="{{false}}" 
     object-fit="contain"
   ></video>
-  
 </view>
 
 </view>

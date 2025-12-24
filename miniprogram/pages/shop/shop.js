@@ -9,6 +9,16 @@ Page({
     // 新增：购物车数据
     cart: [],
     cartTotalPrice: 0,
+    finalTotalPrice: 0, // 含运费总价
+
+    // [修改] 地址相关数据
+    orderInfo: { name: '', phone: '' }, // 这里不再存 address 字符串
+    region: [], // 存放 ['广东省', '佛山市', '南海区']
+    detailAddress: '', // 存放 '某某街道101号'
+
+    // [修改] 运费相关
+    shippingMethod: 'zto', // 默认中通
+    shippingFee: 0,
 
     // 新增：自定义编辑弹窗状态
     showCustomEditModal: false,
@@ -31,9 +41,9 @@ Page({
     // 核心数据 (注意 labels 的变化)
     seriesList: [
       {
-        id: '1', 
-        name: 'MT-1 Pro Series', 
-        desc: '强劲核心，静音运行', 
+        id: '1',
+        name: 'MT-1 Pro Series',
+        desc: '强劲核心，静音运行',
         cover: '',
         detailImages: [], // 注意：现在里面存的是 {type:'image', url:'...'}
         specHeaders: ['Standard', 'Max', 'Ultra'], // 新增：这里存表头文字
@@ -56,7 +66,7 @@ Page({
           { name: 'Ultra', price: 1999, desc: '顶配版' }
         ],
         options: [
-          { name: '机械按键', price: 0, img: '' }, 
+          { name: '机械按键', price: 0, img: '' },
           { name: '触控屏', price: 300, img: '' }
         ]
       }
@@ -64,23 +74,23 @@ Page({
 
     // ============ 配件数据 ============
     accessoryList: [
-      { 
-        id: 'a1', 
-        name: '备用电池', 
-        price: 299, 
-        img: '', 
-        selected: false, 
-        desc: '双倍续航，无忧出行，采用高密度锂离子电芯。', 
-        detailImages: [] 
+      {
+        id: 'a1',
+        name: '备用电池',
+        price: 299,
+        img: '',
+        selected: false,
+        desc: '双倍续航，无忧出行，采用高密度锂离子电芯。',
+        detailImages: []
       },
-      { 
-        id: 'a2', 
-        name: '挂绳', 
-        price: 59, 
-        img: '', 
-        selected: false, 
-        desc: '高强度尼龙材质，防丢防摔。', 
-        detailImages: [] 
+      {
+        id: 'a2',
+        name: '挂绳',
+        price: 59,
+        img: '',
+        selected: false,
+        desc: '高强度尼龙材质，防丢防摔。',
+        detailImages: []
       }
     ],
 
@@ -90,7 +100,7 @@ Page({
     selectedModelIdx: -1,   // 选中的型号索引 (初始为 -1，未选中状态)
     selectedOptionIdx: -1,  // 选中的配置索引 (初始为 -1，未选中状态)
     totalPrice: 0,          // 总价
-    
+
     // 弹窗控制开关
     showDetail: false,      // 产品选购主弹窗
     showAccDetail: false,   // 配件详情弹窗
@@ -103,8 +113,8 @@ Page({
     centerToast: { show: false, text: '' },
 
     // 新增：底部按钮栏是否显示 (默认false，滑下去才出来)
-    showFooterBar: false, 
-    
+    showFooterBar: false,
+
     // 新增：记录通过"立即购买"添加的临时商品ID，用于覆盖
     tempBuyItemIds: [],
 
@@ -115,9 +125,6 @@ Page({
       headers: [],
       rows: []
     },
-
-    // 订单信息
-    orderInfo: { name: '', phone: '', address: '' },
 
     // 智能粘贴相关
     showSmartPasteModal: false,
@@ -141,10 +148,10 @@ Page({
     } else {
       console.error('[shop.js] wx.cloud 不存在！请检查云开发是否已开通');
     }
-    
+
     // 检查管理员权限
     this.checkAdminPrivilege();
-    
+
     // 检查是否有跳转号码参数
     if (options && options.jumpNumber) {
       this.jumpNumber = parseInt(options.jumpNumber);
@@ -152,7 +159,7 @@ Page({
       this.fromOtherPage = true;
       console.log('[shop.js] 接收到跳转号码:', this.jumpNumber);
     }
-    
+
     // 立即加载数据
     this.loadDataFromCloud();
     this.calcTotal();
@@ -1885,7 +1892,31 @@ Page({
   },
   openOrderModal() { this.setData({ showOrderModal: true }); },
   closeOrderModal() { this.setData({ showOrderModal: false }); },
-  onInput(e) { this.setData({ [`orderInfo.${e.currentTarget.dataset.key}`]: e.detail.value }); },
+  // ========================================================
+  // 1. [新增] 省市区选择器监听
+  // ========================================================
+  onRegionChange(e) {
+    console.log('选择的地区:', e.detail.value);
+    this.setData({
+      region: e.detail.value
+    });
+    // 选完地区，立刻重新计算运费
+    this.reCalcFinalPrice();
+  },
+
+  // ========================================================
+  // 2. [修改] 输入监听 (处理详细地址 + 手机号)
+  // ========================================================
+  onInput(e) {
+    const key = e.currentTarget.dataset.key;
+    const val = e.detail.value;
+
+    if (key === 'detailAddress') {
+      this.setData({ detailAddress: val });
+    } else {
+      this.setData({ [`orderInfo.${key}`]: val });
+    }
+  },
   
   // ========================================================
   // 智能粘贴相关方法
@@ -2365,7 +2396,7 @@ Page({
       const m = currentSeries.models[selectedModelIdx];
 
       const o = selectedOptionIdx > -1 ? currentSeries.options[selectedOptionIdx] : {name: '标配', price: 0};
-
+      
       
 
       // 1. 获取当前购物车副本
@@ -2395,7 +2426,7 @@ Page({
       const result = this._addCurrentSelectionToCart();
 
       
-
+      
       if (result.success) {
 
         // === 【核心修改：同时记录主产品 ID 和 配件 ID】 ===
@@ -2412,9 +2443,9 @@ Page({
 
           item.type === 'main' && 
 
-          item.seriesId === currentSeries.id && 
+          item.seriesId === currentSeries.id &&
 
-          item.modelName === m.name &&
+          item.modelName === m.name && 
 
           item.optionName === o.name
 
@@ -2463,6 +2494,8 @@ Page({
         
 
         // 6. 更新 tempBuyItemIds (下次点立即购买时，这一批 ID 会被全部删掉)
+        // 7. 计算运费和最终价格
+        this.reCalcFinalPrice(result.newCartTotal);
 
         this.setData({
 
@@ -2483,11 +2516,10 @@ Page({
     // 情况 B: 没选型号，直接去结算
 
     if (this.data.cart.length > 0) {
-
+      // 计算运费和最终价格
+      this.reCalcFinalPrice(this.data.cartTotalPrice);
       this.setData({ showOrderModal: true });
-
       return;
-
     }
 
 
@@ -2501,43 +2533,55 @@ Page({
   // 修改 4：退出管理员模式
 
   // ========================================================
-  // 提交订单 -> 真实支付
+  // 6. [核心] 提交校验与组装
   // ========================================================
   submitOrder() {
-    const { cart, orderInfo, cartTotalPrice } = this.data;
+    const { cart, orderInfo, region, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
 
-    // 1. 基础校验 (防止空单)
+    // A. 购物车校验
     if (cart.length === 0) return this.showError('购物车为空');
-    if (!orderInfo.name || !orderInfo.phone || !orderInfo.address) {
-      return this.showError('请补全收货信息');
+
+    // B. 信息校验
+    if (!orderInfo.name) return this.showError('请填写收货人姓名');
+
+    // 手机号 11 位校验
+    if (!orderInfo.phone || !/^1[3-9]\d{9}$/.test(orderInfo.phone)) {
+      return this.showError('请输入正确的11位手机号');
     }
 
-    // 2. 【修改这里】更新定制服务确认的文案
-    wx.showModal({
-      title: '定制服务确认',
-      content: '此产品为定制服务，下单后不支持退款，请确认无误后支付。',
-      confirmText: '确认支付',
-      cancelText: '取消',
-      confirmColor: '#000000', // 确认按钮设为黑色，更符合你的UI风格
-      success: (res) => {
-        if (res.confirm) {
-          // 用户点击确认，进入真正的支付流程
-          this.doRealPayment();
-        }
-      }
-    });
+    // 地址校验 (省市区 + 详细)
+    if (region.length === 0) return this.showError('请选择省市区');
+    if (!detailAddress) return this.showError('请填写详细街道门牌');
+
+    // C. 组装完整地址字符串 (给后端和微信支付用)
+    // 格式：广东省 佛山市 南海区 某某街道101号
+    const fullAddressString = `${region[0]} ${region[1]} ${region[2]} ${detailAddress}`;
+
+    // 更新 orderInfo 里的 address，因为之前的逻辑是读这个字段的
+    const finalOrderInfo = {
+      ...orderInfo,
+      address: fullAddressString
+    };
+
+    // D. 顺丰未选地址拦截 (虽然上面已经校验了region，但为了保险)
+    if (shippingMethod === 'sf' && region.length === 0) {
+      return this.showError('请先选择收货地址以计算运费');
+    }
+
+    // E. 唤起支付 (复用之前的逻辑)
+    this.doRealPayment(cart, finalOrderInfo, finalTotalPrice);
   },
 
   // ========================================================
   // 真实支付流程
   // ========================================================
   doRealPayment() {
-    const { cart, orderInfo, cartTotalPrice } = this.data;
+    const { cart, orderInfo, finalTotalPrice, shippingFee, shippingMethod } = this.data;
 
     // 【新增】检查支付金额
-    console.log('正在支付，金额为:', cartTotalPrice); // 检查控制台，这里绝对不能是 0 或 undefined
+    console.log('正在支付，金额为:', finalTotalPrice); // 检查控制台，这里绝对不能是 0 或 undefined
     
-    if (!cartTotalPrice || cartTotalPrice <= 0) {
+    if (!finalTotalPrice || finalTotalPrice <= 0) {
       wx.showToast({ title: '金额异常', icon: 'none' });
       return;
     }
@@ -2548,9 +2592,11 @@ Page({
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
-        totalPrice: cartTotalPrice,
+        totalPrice: finalTotalPrice,
         goods: cart,
-        addressData: orderInfo
+        addressData: orderInfo,
+        shippingFee: shippingFee,
+        shippingMethod: shippingMethod
       },
       success: res => {
         wx.hideLoading();
@@ -2598,6 +2644,122 @@ Page({
         wx.hideLoading();
         console.error('创建订单失败', err);
         wx.showToast({ title: '创建订单失败', icon: 'none' });
+      }
+    });
+  },
+
+  // ========================================================
+  // [新增] 清空购物车
+  // ========================================================
+  clearCart() {
+    wx.showModal({
+      title: '确认清空',
+      content: '确定要清空购物车吗？',
+      confirmText: '清空',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) {
+          // 清空购物车数据
+          this.setData({ 
+            cart: [], 
+            cartTotalPrice: 0,
+            finalTotalPrice: 0,
+            shippingFee: 0
+          });
+          // 清空本地存储
+          wx.removeStorageSync('my_cart');
+          wx.showToast({ title: '已清空', icon: 'success' });
+        }
+      }
+    });
+  },
+
+  // ========================================================
+  // 5. [核心] 运费与总价计算逻辑
+  // ========================================================
+  reCalcFinalPrice(goodsPrice = this.data.cartTotalPrice) {
+    const { shippingMethod, region } = this.data;
+    let fee = 0;
+
+    if (shippingMethod === 'zto') {
+      fee = 0; // 中通包邮
+    } else if (shippingMethod === 'sf') {
+      // 顺丰逻辑：只有选择了地区才算钱
+      if (region.length === 0) {
+        fee = 0; // 没选地址，运费暂计为0
+      } else {
+        const province = region[0]; // 获取省份
+        // 判断是否广东
+        if (province.indexOf('广东') > -1) {
+          fee = 13;
+        } else {
+          fee = 22;
+        }
+      }
+    }
+
+    this.setData({
+      shippingFee: fee,
+      cartTotalPrice: goodsPrice,
+      finalTotalPrice: goodsPrice + fee
+    });
+  },
+
+  // ========================================================
+  // [新增] 切换快递方式
+  // ========================================================
+  changeShipping(e) {
+    const method = e.currentTarget.dataset.method;
+    this.setData({ shippingMethod: method });
+    this.reCalcFinalPrice();
+  },
+
+  // ========================================================
+  // [新增] 提交定制需求 (只下单不支付)
+  // ========================================================
+  // 定制单提交逻辑 (同理修改校验)
+  submitCustomOrder() {
+    const { cart, orderInfo, region, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
+
+    if (cart.length === 0) return this.showError('购物车为空');
+    if (!orderInfo.name) return this.showError('请填写姓名');
+    if (!/^1[3-9]\d{9}$/.test(orderInfo.phone)) return this.showError('手机号格式错误');
+    if (region.length === 0 || !detailAddress) return this.showError('请完善收货地址');
+
+    const fullAddressString = `${region[0]} ${region[1]} ${region[2]} ${detailAddress}`;
+    const finalOrderInfo = { ...orderInfo, address: fullAddressString };
+
+    wx.showModal({
+      title: '提交定制需求',
+      content: '订单将提交给管理员进行核价。',
+      confirmText: '提交',
+      success: (res) => {
+        if (res.confirm) {
+          wx.showLoading({ title: '提交中...' });
+          wx.cloud.callFunction({
+            name: 'createOrder',
+            data: {
+              action: 'save_only',
+              totalPrice: finalTotalPrice,
+              goods: cart,
+              addressData: finalOrderInfo, // 传拼好的地址
+              shippingFee: shippingFee,
+              shippingMethod: shippingMethod
+            },
+            success: () => {
+              wx.hideLoading();
+              wx.showToast({ title: '提交成功' });
+              this.closeOrderModal();
+              wx.removeStorageSync('my_cart');
+              this.setData({ cart: [], cartTotalPrice: 0 });
+              setTimeout(() => { wx.navigateTo({ url: '/pages/my/my' }); }, 1000);
+            },
+            fail: () => {
+              wx.hideLoading();
+              this.showError('提交失败');
+            }
+          });
+        }
       }
     });
   },

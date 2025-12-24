@@ -77,6 +77,7 @@ Page({
 
     // 选中状态
     selectedCount: 0,
+    totalPrice: 0, // [新增] 总价
 
     // 表单数据
     contactName: '',
@@ -85,6 +86,9 @@ Page({
     contactWechat: '',
     videoFileName: '',
     repairDescription: '', // 故障描述
+    
+    // [新增] 订单信息（统一格式）
+    orderInfo: { name: '', phone: '', address: '' },
 
     // 密码锁
     isLocked: true,
@@ -128,7 +132,25 @@ Page({
 
     // [新增] 智能粘贴弹窗相关
     showSmartPasteModal: false,
-    smartPasteVal: ''
+    smartPasteVal: '',
+    
+    // [新增] 购物车相关 (为了复用 shop 页面的 UI)
+    cart: [],
+    cartTotalPrice: 0,
+    finalTotalPrice: 0,
+    showOrderModal: false,
+    popupAnimationActive: false, // 专门控制弹窗动画状态
+    tempBuyItemIds: [], // 记录立即购买的临时ID
+    showCartSuccess: false, // [新增] 控制成功弹窗
+
+    // [新增] 运费与地址逻辑
+    detailAddress: '',    // 详细地址
+
+    shippingMethod: 'zto',// 默认中通
+    shippingFee: 0,
+
+    // 地区选择相关
+    region: []
   },
 
   // 页面加载时初始化
@@ -237,9 +259,11 @@ Page({
       activeTab: 'order',
       serviceType: 'parts',
       playingIndex: -1,
-      currentVideoList: [] // 立即清空视频列表，避免显示旧数据
+      currentVideoList: [], // 立即清空视频列表，避免显示旧数据
+      selectedCount: 0,
+      totalPrice: 0 // 重置总价
     });
-    this.renderParts();
+    this.loadParts(name); // 改用新的 loadParts 函数
     this.resetLock();
   },
 
@@ -290,76 +314,62 @@ Page({
     this.setData({ serviceType: e.currentTarget.dataset.type });
   },
 
-  // 配件逻辑 - 从云数据库 shouhou 集合读取（按型号独立）
-  renderParts() {
-    const modelName = this.data.currentModelName; // 使用型号名称作为唯一标识
-    
+  // 3. 加载配件 (支持云端价格) - 新版本
+  loadParts(modelName) {
     if (!modelName) {
       console.error('型号名称未设置');
       return;
     }
     
-    // 从云数据库读取配件数据（按型号查询）
-    if (this.db) {
-      this.db.collection('shouhou')
-        .where({
-          modelName: modelName // 使用 modelName 而不是 series
-        })
-        .orderBy('order', 'asc') // 按 order 排序
-        .get()
-        .then(res => {
-          if (res.data && res.data.length > 0) {
-            // 有数据，使用云数据库数据
-            const renderList = res.data.map(item => ({
-              _id: item._id,
-              name: item.name,
-              selected: false,
-              order: item.order || 0
-            }));
-            // 按 order 排序
-            renderList.sort((a, b) => (a.order || 0) - (b.order || 0));
-            const selectedCount = renderList.filter(item => item.selected).length;
-            this.setData({
-              currentPartsList: renderList,
-              selectedCount: selectedCount
-            });
-          } else {
-            // 没有数据，使用本地数据并同步到云端
-            const localList = DB_PARTS[modelName] || [];
-            const renderList = localList.map((name, index) => ({
-              name: name,
-              selected: false,
-              order: index
-            }));
-            this.setData({
-              currentPartsList: renderList,
-              selectedCount: 0
-            });
-            // 同步本地数据到云端
-            this.syncPartsToCloud(modelName, localList);
-          }
-        })
-        .catch(err => {
-          console.error('读取配件失败:', err);
-          // 失败时使用本地数据
-          const list = DB_PARTS[modelName] || [];
-          const renderList = list.map(item => ({ name: item, selected: false }));
-          const selectedCount = renderList.filter(item => item.selected).length;
-          this.setData({
-            currentPartsList: renderList,
-            selectedCount: selectedCount
-          });
-        });
-    } else {
-      // 没有云数据库时使用本地数据
-      const list = DB_PARTS[modelName] || [];
-      const renderList = list.map(item => ({ name: item, selected: false }));
-      const selectedCount = renderList.filter(item => item.selected).length;
-      this.setData({
-        currentPartsList: renderList,
-        selectedCount: selectedCount
-      });
-    }
+    const db = wx.cloud.database();
+    
+    // 从 shouhou 集合读取，如果没有就用本地默认
+    db.collection('shouhou').where({ modelName: modelName }).get().then(res => {
+      let parts = [];
+      
+      if (res.data.length > 0) {
+        // 云端有数据 (包含自定义价格)
+        parts = res.data.map(item => ({
+          _id: item._id,
+          name: item.name,
+          price: item.price || 0, // 云端价格
+          modelName: item.modelName,
+          order: item.order || 0,
+          selected: false
+        }));
+        // 按 order 排序
+        parts.sort((a, b) => (a.order || 0) - (b.order || 0));
+      } else {
+        // 云端没数据，加载本地默认，价格默认为 0
+        const defaultNames = DB_PARTS[modelName] || [];
+        parts = defaultNames.map((name, index) => ({
+          name: name,
+          price: 0, // 默认价格
+          modelName: modelName,
+          order: index,
+          selected: false
+        }));
+      }
+
+      this.setData({ currentPartsList: parts });
+    }).catch(err => {
+      console.error('读取配件失败:', err);
+      // 失败时使用本地数据
+      const defaultNames = DB_PARTS[modelName] || [];
+      const parts = defaultNames.map((name, index) => ({
+        name: name,
+        price: 0,
+        modelName: modelName,
+        order: index,
+        selected: false
+      }));
+      this.setData({ currentPartsList: parts });
+    });
+  },
+
+  // 保留旧的 renderParts 用于兼容（如果其他地方还在调用）
+  renderParts() {
+    this.loadParts(this.data.currentModelName);
   },
 
   // 同步配件数据到云端（按型号独立）
@@ -495,16 +505,122 @@ Page({
     });
   },
 
+  // 4. 选择配件 & 计算总价
   togglePart(e) {
     if (e.target.dataset.type === 'del') return;
     const idx = e.currentTarget.dataset.index;
-    const key = `currentPartsList[${idx}].selected`;
-    const currentVal = this.data.currentPartsList[idx].selected;
+    const list = this.data.currentPartsList;
+    
+    list[idx].selected = !list[idx].selected;
+    
+    // 计算
+    let count = 0;
+    let total = 0;
+    list.forEach(p => {
+      if (p.selected) {
+        count++;
+        total += Number(p.price || 0);
+      }
+    });
 
     this.setData({
-      [key]: !currentVal,
-      selectedCount: this.data.selectedCount + (!currentVal ? 1 : -1)
+      currentPartsList: list,
+      selectedCount: count,
+      totalPrice: total
     });
+  },
+
+  // [修改] 管理员编辑配件（点击铅笔触发）
+  adminEditPartPrice(e) {
+    if (!this.data.isAdmin) return;
+
+    const idx = e.currentTarget.dataset.index;
+    const part = this.data.currentPartsList[idx];
+
+    // 1. 弹出菜单让选
+    wx.showActionSheet({
+      itemList: ['修改名称', '修改价格'],
+      success: (res) => {
+        if (res.tapIndex === 0) {
+          this.showEditModal('name', part);  // 改名
+        } else if (res.tapIndex === 1) {
+          this.showEditModal('price', part); // 改价
+        }
+      }
+    });
+  },
+
+  // [新增] 显示输入弹窗
+  showEditModal(type, part) {
+    const title = type === 'name' ? '修改配件名称' : '修改价格';
+    // 如果是改名，填入旧名字；如果是改价，填入旧价格
+    const defaultVal = type === 'name' ? part.name : String(part.price || 0);
+
+    wx.showModal({
+      title: title,
+      editable: true,
+      placeholderText: `请输入新的${type === 'name' ? '名称' : '价格'}`,
+      content: defaultVal, // 预填旧值
+      success: (res) => {
+        if (res.confirm && res.content) {
+          // 执行更新
+          this.updatePartData(part, type, res.content);
+        }
+      }
+    });
+  },
+
+  // [新增] 执行数据库更新
+  updatePartData(part, type, value) {
+    wx.showLoading({ title: '保存中...' });
+    const db = wx.cloud.database();
+    
+    // 准备要更新的数据
+    let dataToUpdate = {};
+    if (type === 'price') {
+      dataToUpdate.price = Number(value); // 价格转数字
+    } else {
+      dataToUpdate.name = value; // 名字保持字符串
+    }
+
+    // A. 如果是云端已有数据 (有 _id)，直接更新
+    if (part._id) {
+      db.collection('shouhou').doc(part._id).update({
+        data: dataToUpdate
+      }).then(() => {
+        this.afterUpdateSuccess();
+      }).catch(err => {
+        wx.hideLoading();
+        wx.showToast({ title: '更新失败', icon: 'none' });
+        console.error(err);
+      });
+    } 
+    // B. 如果是本地默认数据 (还没存过云端)
+    else {
+      // 需要先新建一条完整的记录
+      db.collection('shouhou').add({
+        data: {
+          modelName: this.data.currentModelName,
+          name: type === 'name' ? value : part.name, // 如果改名就用新名
+          price: type === 'price' ? Number(value) : (part.price || 0), // 如果改价就用新价
+          order: part.order || 0,
+          createTime: db.serverDate()
+        }
+      }).then(() => {
+        this.afterUpdateSuccess();
+      }).catch(err => {
+        wx.hideLoading();
+        wx.showToast({ title: '新建失败', icon: 'none' });
+        console.error(err);
+      });
+    }
+  },
+
+  // [新增] 更新成功后的刷新
+  afterUpdateSuccess() {
+    wx.hideLoading();
+    wx.showToast({ title: '修改成功', icon: 'success' });
+    this.loadParts(this.data.currentModelName); // 重新拉取列表
   },
 
   // 管理员删除配件
@@ -524,7 +640,7 @@ Page({
             this.db.collection('shouhou').doc(part._id).remove()
               .then(() => {
                 // 重新加载配件列表
-                this.renderParts();
+                this.loadParts(this.data.currentModelName);
                 wx.showToast({ title: '已删除', icon: 'success' });
               })
               .catch(err => {
@@ -536,7 +652,7 @@ Page({
             if (DB_PARTS[modelName]) {
               DB_PARTS[modelName].splice(idx, 1);
             }
-            this.renderParts();
+            this.loadParts(this.data.currentModelName);
             wx.showToast({ title: '已删除', icon: 'success' });
           }
         }
@@ -578,138 +694,93 @@ Page({
     this.setData({ smartPasteVal: e.detail.value });
   },
 
-  // 4. 点击"智能分析"按钮
+  // [修改] 高级智能粘贴 (复用 shop.js 逻辑)
   confirmSmartPaste() {
     const text = this.data.smartPasteVal.trim();
     if (!text) {
-      wx.showToast({ title: '请粘贴内容', icon: 'none' });
+      wx.showToast({ title: '内容不能为空', icon: 'none' });
       return;
     }
 
-    // 调用地址解析函数
-    const parsed = this.parseAddress(text);
+    const result = this.parseAddress(text);
 
-    // 智能回填数据
+    // 构造更新数据
     let updateData = {
-      showSmartPasteModal: false // 分析完自动关闭
+      showSmartPasteModal: false
     };
-    
-    // 识别姓名（第一个非数字非地址的词）
-    const parts = text.split(/[\s,，]+/);
-    if (parts.length > 0) {
-      const namePart = parts.find(p => p.length > 1 && !/\d{11}/.test(p) && !p.match(/省|市|区|县|街道|路|号/));
-      if (namePart) {
-        updateData.contactName = namePart.trim();
-      }
-    }
-    
-    // 识别电话号码
-    const phoneMatch = text.match(/\d{11}/);
-    if (phoneMatch) {
-      updateData.contactPhone = phoneMatch[0];
-    }
-    
-    // 填入地址
-    if (parsed.fullAddress) {
-      updateData.contactAddr = parsed.fullAddress;
-    }
-    
+
+    if (result.name) updateData['orderInfo.name'] = result.name;
+    if (result.phone) updateData['orderInfo.phone'] = result.phone;
+    if (result.address) updateData['orderInfo.address'] = result.address;
+
     this.setData(updateData);
-    
-    wx.showToast({ title: '已智能分析', icon: 'success' });
+    wx.showToast({ title: '解析完成', icon: 'success' });
   },
   
-  // ========================================================
-  // 地址解析函数（智能识别省市区）
-  // ========================================================
-  parseAddress(addressText) {
-    let text = addressText.trim();
-    let province = '';
-    let city = '';
-    let district = '';
-    let detail = '';
+  // [修改] 高级解析算法
+  parseAddress(text) {
+    let cleanText = text.trim();
     
-    // 移除常见的分隔符，统一处理
-    text = text.replace(/[\/、]/g, ' ').replace(/[,，]/g, ' ').replace(/\s+/g, ' ').trim();
-    
-    // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
-    let remaining = text;
-    
-    // 识别省（必须包含"省"字）
-    const provincePattern = /([^省\s]+省)/;
-    const provinceMatch = remaining.match(provincePattern);
-    if (provinceMatch) {
-      province = provinceMatch[1].trim();
-      remaining = remaining.replace(province, '').trim();
+    // 1. 提取手机号
+    let phone = '';
+    const phoneReg = /(1[3-9]\d{9})/;
+    const phoneMatch = cleanText.match(phoneReg);
+    if (phoneMatch) {
+      phone = phoneMatch[1];
+      cleanText = cleanText.replace(phoneReg, ' ');
     }
-    
-    // 识别市（必须包含"市"字，排除"省"字）
-    const cityPattern = /([^省市\s]+市)/;
-    const cityMatch = remaining.match(cityPattern);
-    if (cityMatch) {
-      city = cityMatch[1].trim();
-      remaining = remaining.replace(city, '').trim();
-    }
-    
-    // 识别区/县（必须包含"区"或"县"字）
-    const districtPattern = /([^省市区县\s]+[区县])/;
-    const districtMatch = remaining.match(districtPattern);
-    if (districtMatch) {
-      district = districtMatch[1].trim();
-      remaining = remaining.replace(district, '').trim();
-    }
-    
-    // 剩余部分作为详细地址
-    detail = remaining.trim();
-    
-    // 方法2: 如果没识别到，尝试识别特殊格式（如：北京市朝阳区）
-    if (!province && !city && !district) {
-      // 直辖市特殊处理：北京、上海、天津、重庆
-      const directCityPattern = /(北京市|上海市|天津市|重庆市|北京市|上海市|天津市|重庆市)/;
-      const directCityMatch = text.match(directCityPattern);
-      if (directCityMatch) {
-        city = directCityMatch[1];
-        remaining = text.replace(city, '').trim();
-        
-        // 继续识别区
-        const districtMatch2 = remaining.match(districtPattern);
-        if (districtMatch2) {
-          district = districtMatch2[1].trim();
-          remaining = remaining.replace(district, '').trim();
-        }
-        detail = remaining;
+
+    // 2. 清理杂质
+    cleanText = cleanText
+      .replace(/收货人[:：]?|姓名[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?/g, ' ')
+      .replace(/[()（）\[\]]/g, ' ')
+      .replace(/\s+/g, ' ');
+
+    // 3. 切分片段
+    const fragments = cleanText.split(/[ ,，;；\n\t]+/).filter(v => v && v.trim().length > 0);
+
+    let name = '';
+    let addressBuffer = [];
+    const addrKeywords = ['省', '市', '区', '县', '镇', '街道', '路', '街', '道', '号', '室', '楼', '苑'];
+
+    fragments.forEach(frag => {
+      const isAddress = addrKeywords.some(k => frag.includes(k)) || frag.length > 5;
+      // 名字通常短且无关键字
+      if (!isAddress && frag.length >= 2 && frag.length <= 4 && !name) {
+        name = frag;
+      } else {
+        addressBuffer.push(frag);
       }
-    }
-    
-    // 组装完整地址（格式化输出）
-    let fullAddress = '';
-    const parts = [];
-    if (province) parts.push(province);
-    if (city) parts.push(city);
-    if (district) parts.push(district);
-    if (detail) parts.push(detail);
-    
-    fullAddress = parts.join(' ');
-    
-    // 如果解析失败，使用原始文本
-    if (!fullAddress) {
-      fullAddress = addressText;
-    }
-    
+    });
+
     return {
-      province,
-      city,
-      district,
-      detail,
-      fullAddress
+      name: name,
+      phone: phone,
+      address: addressBuffer.join('')
     };
   },
 
-  // 联系信息输入处理
+  // 联系信息输入处理（保留兼容）
   handleContactInput(e) {
     const { field } = e.currentTarget.dataset;
     const value = e.detail.value;
     this.setData({ [field]: value });
+    // 同步到 orderInfo
+    if (field === 'contactName') this.setData({ 'orderInfo.name': value });
+    if (field === 'contactPhone') this.setData({ 'orderInfo.phone': value });
+    if (field === 'contactAddr') this.setData({ 'orderInfo.address': value });
+  },
+
+
+
+  // 6. 表单输入（统一格式）
+  onInput(e) {
+    const key = e.currentTarget.dataset.key;
+    this.setData({ [`orderInfo.${key}`]: e.detail.value });
+    // 同步到旧字段（兼容）
+    if (key === 'name') this.setData({ contactName: e.detail.value });
+    if (key === 'phone') this.setData({ contactPhone: e.detail.value });
+    if (key === 'address') this.setData({ contactAddr: e.detail.value });
   },
 
   // 故障描述输入处理
@@ -717,103 +788,423 @@ Page({
     this.setData({ repairDescription: e.detail.value });
   },
 
-  submitOrder() {
-    // 验证逻辑
-    const { serviceType, selectedCount, contactName, contactPhone, contactAddr, contactWechat, repairDescription, videoFileName } = this.data;
-    
-    // 1. 验证购买配件或故障报修至少选一个
-    if (serviceType === 'parts' && selectedCount === 0) {
-      wx.showToast({ title: '请至少选择一个配件', icon: 'none' });
+  // 1. [加入购物车] -> 永久保存，不打标
+  addToCart() {
+    console.log('[shouhou] addToCart click', {
+      selectedCount: this.data.selectedCount,
+      currentPartsList: this.data.currentPartsList,
+      currentPartsListLength: this.data.currentPartsList.length,
+      showSmartPasteModal: this.data.showSmartPasteModal,
+      showModal: this.data.showModal,
+      showOrderModal: this.data.showOrderModal,
+      currentModelName: this.data.currentModelName,
+      serviceType: this.data.serviceType
+    });
+
+    const { currentPartsList, selectedCount, currentModelName } = this.data;
+
+    // 增强调试：检查配件列表状态
+    if (!currentPartsList || currentPartsList.length === 0) {
+      console.warn('[shouhou] 当前配件列表为空，型号:', currentModelName);
+      wx.showModal({
+        title: '提示',
+        content: `当前 ${currentModelName} 型号的配件列表为空，请先添加配件或联系管理员`,
+        showCancel: false
+      });
       return;
     }
+
+    if (selectedCount === 0) {
+      // 提示用户选择配件，并显示所有可用配件
+      const partNames = currentPartsList.map(p => p.name).join('、');
+      wx.showModal({
+        title: '请选择配件',
+        content: `请先点击配件进行选择。\n可用配件：${partNames.substring(0, 50)}${partNames.length > 50 ? '...' : ''}`,
+        showCancel: false
+      });
+      return;
+    }
+
+    // 1. 读取现有购物车
+    let cart = wx.getStorageSync('my_cart') || [];
+
+    // 2. 遍历当前选中的配件
+    currentPartsList.forEach(part => {
+      if (part.selected) {
+        // 查找是否已存在 (只找非临时的)
+        const existIdx = cart.findIndex(item => 
+          !item.isTemp && 
+          item.type === 'part' && 
+          item.name === part.name && 
+          item.spec === currentModelName
+        );
+
+        if (existIdx > -1) {
+          cart[existIdx].quantity++;
+          cart[existIdx].total = cart[existIdx].quantity * cart[existIdx].price;
+        } else {
+          cart.push({
+            id: Date.now() + Math.random(),
+            type: 'part',
+            name: part.name,
+            spec: currentModelName,
+            price: Number(part.price || 0),
+            quantity: 1,
+            total: Number(part.price || 0),
+            isTemp: false // 【关键】永久标记
+          });
+        }
+      }
+    });
+
+    // 3. 保存并弹窗
+    console.log('[shouhou] 准备保存购物车:', cart);
+    this.saveCartToCache(cart);
+    console.log('[shouhou] 购物车已保存，准备显示成功弹窗');
     
+    // 重置页面选中状态
+    const resetList = currentPartsList.map(p => ({ ...p, selected: false }));
+    console.log('[shouhou] 准备 setData:', {
+      resetList: resetList,
+      selectedCount: 0,
+      totalPrice: 0,
+      showCartSuccess: true
+    });
+    
+    this.setData({
+      currentPartsList: resetList,
+      selectedCount: 0,
+      totalPrice: 0,
+      showCartSuccess: true // 弹出成功提示
+    });
+    
+    console.log('[shouhou] setData 完成，当前 showCartSuccess:', this.data.showCartSuccess);
+  },
+
+  // 2. [新增] 成功弹窗的两个按钮逻辑
+  onContinueShopping() {
+    this.setData({ showCartSuccess: false });
+  },
+
+  onGoToCheckout() {
+    // 从本地存储加载购物车到页面数据
+    const cart = wx.getStorageSync('my_cart') || [];
+    const total = cart.reduce((sum, item) => sum + item.total, 0);
+    
+    this.setData({ 
+      showCartSuccess: false,
+      cart: cart,
+      cartTotalPrice: total,
+      showOrderModal: true // 直接打开结算单
+    });
+  },
+
+  // 3. [新增] 购物车加减数量逻辑
+  handleCartQty(e) {
+    const idx = e.currentTarget.dataset.index;
+    const type = e.currentTarget.dataset.type;
+    const cart = [...this.data.cart]; // 复制副本
+    
+    if (type === 'plus') {
+      cart[idx].quantity++;
+    } else {
+      if (cart[idx].quantity > 1) {
+        cart[idx].quantity--;
+      } else {
+        // 数量为1时点击减号，删除该项
+        cart.splice(idx, 1);
+      }
+    }
+    
+    // 重新计算单项总价 (如果还没被删)
+    if(cart[idx]) {
+      cart[idx].total = cart[idx].quantity * cart[idx].price;
+    }
+
+    // 保存并更新 UI，并重新计算
+    this.saveCartToCache(cart);
+    this.reCalcFinalPrice(cart);
+  },
+
+  // 4. [新增/确保有] 统一的保存函数
+  saveCartToCache(newCart) {
+    console.log('[shouhou] saveCartToCache 被调用，购物车数据:', newCart);
+    try {
+      wx.setStorageSync('my_cart', newCart);
+      this.setData({ cart: newCart });
+      console.log('[shouhou] 购物车保存成功');
+    } catch (error) {
+      console.error('[shouhou] 购物车保存失败:', error);
+    }
+  },
+
+  // ========================================================
+  // [新增] 省市区选择器监听
+  // ========================================================
+  onRegionChange(e) {
+    console.log('选择的地区:', e.detail.value);
+    this.setData({
+      region: e.detail.value
+    });
+    // 选完地区，立刻重新计算运费
+    this.reCalcFinalPrice();
+  },
+
+  // ========================================================
+  // [新增] 切换快递方式
+  // ========================================================
+  changeShipping(e) {
+    const method = e.currentTarget.dataset.method;
+    this.setData({ shippingMethod: method });
+    this.reCalcFinalPrice();
+  },
+
+  // [新增] 计算含运费的总价
+  reCalcFinalPrice(cart = this.data.cart) {
+    console.log('[shouhou] reCalcFinalPrice 开始计算，购物车数据:', cart);
+    const goodsTotal = cart.reduce((sum, item) => sum + item.total, 0);
+    const { shippingMethod, region } = this.data;
+    let fee = 0;
+
+    if (shippingMethod === 'zto') {
+      fee = 0; // 中通包邮
+    } else if (shippingMethod === 'sf') {
+      // 顺丰逻辑：只有选择了地区才算钱
+      if (region.length === 0) {
+        fee = 0; // 没选地址，运费暂计为0
+      } else {
+        const province = region[0]; // 获取省份
+        // 判断是否广东
+        if (province.indexOf('广东') > -1) {
+          fee = 13;
+        } else {
+          fee = 22;
+        }
+      }
+    }
+
+    console.log('[shouhou] 价格计算完成:', {
+      goodsTotal,
+      shippingMethod,
+      shippingFee: fee,
+      finalTotalPrice: goodsTotal + fee
+    });
+
+    this.setData({
+      cart,
+      cartTotalPrice: goodsTotal,
+      shippingFee: fee,
+      finalTotalPrice: goodsTotal + fee
+    });
+  },
+
+  // [核心修复] 立即购买 / 去下单
+  openCartOrder() {
+    console.log('[shouhou] openCartOrder click', {
+      selectedCount: this.data.selectedCount,
+      currentPartsList: this.data.currentPartsList,
+      currentPartsListLength: this.data.currentPartsList.length,
+      showSmartPasteModal: this.data.showSmartPasteModal,
+      showModal: this.data.showModal,
+      showOrderModal: this.data.showOrderModal,
+      currentModelName: this.data.currentModelName,
+      serviceType: this.data.serviceType
+    });
+
+    const { currentPartsList, selectedCount, currentModelName } = this.data;
+
+    // 1. 读取并清洗购物车 (删掉上次立即购买留下的垃圾)
+    let cart = wx.getStorageSync('my_cart') || [];
+    cart = cart.filter(item => !item.isTemp);
+
+    // 增强调试：检查配件列表状态
+    if (!currentPartsList || currentPartsList.length === 0) {
+      console.warn('[shouhou] 当前配件列表为空，型号:', currentModelName);
+      wx.showModal({
+        title: '提示',
+        content: `当前 ${currentModelName} 型号的配件列表为空，请先添加配件或联系管理员`,
+        showCancel: false
+      });
+      return;
+    }
+
+    // 2. 情况A: 没选新配件
+    if (selectedCount === 0) {
+      if (cart.length === 0) {
+        // 提示用户选择配件，并显示所有可用配件
+        const partNames = currentPartsList.map(p => p.name).join('、');
+        wx.showModal({
+          title: '请选择配件',
+          content: `请先点击配件进行选择，或者购物车中有商品。\n可用配件：${partNames.substring(0, 50)}${partNames.length > 50 ? '...' : ''}`,
+          showCancel: false
+        });
+        return;
+      }
+      // 直接结算购物车里的永久商品
+      this.reCalcFinalPrice(cart);
+      this.setData({ cart, showOrderModal: true });
+      return;
+    }
+
+    // 3. 情况B: 选了新配件 (添加为临时商品)
+    currentPartsList.forEach((part, index) => {
+      if (part.selected) {
+        cart.push({
+          id: Date.now() + index,
+          type: 'part',
+          name: part.name,
+          spec: currentModelName,
+          price: Number(part.price || 0),
+          quantity: 1,
+          total: Number(part.price || 0),
+          isTemp: true // 【关键】临时标记
+        });
+      }
+    });
+
+    // 4. 保存并弹窗
+    console.log('[shouhou] openCartOrder 准备保存购物车并显示订单弹窗:', cart);
+    this.saveCartToCache(cart); // 存入 Storage
+    this.reCalcFinalPrice(cart); // 计算运费和总价
+    console.log('[shouhou] 准备显示订单弹窗，showOrderModal 即将设置为 true');
+
+    // 【关键修复】分两步：先显示元素，再触发动画
+    this.setData({
+      showOrderModal: true,
+      popupAnimationActive: false // 确保动画从初始状态开始
+    });
+
+    // 延迟触发动画，确保元素先显示
+    wx.nextTick(() => {
+      setTimeout(() => {
+        this.setData({ popupAnimationActive: true });
+      }, 50);
+    });
+  },
+
+  // [新增] 关闭订单弹窗
+  closeOrderModal() {
+    // 先移除动画状态，让弹窗滑下去
+    this.setData({ popupAnimationActive: false });
+    // 等待动画完成后再隐藏元素
+    setTimeout(() => {
+      this.setData({ showOrderModal: false });
+    }, 300); // 与 CSS transition 时间匹配
+  },
+
+  // [新增] 最终支付 (对应弹窗里的黑色按钮)
+  submitRealOrder() {
+    const { cart, orderInfo, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
+
+    // 校验
+    if (cart.length === 0) return wx.showToast({ title: '清单为空', icon: 'none' });
+    if (!orderInfo.name || !orderInfo.phone) return wx.showToast({ title: '请填写联系人', icon: 'none' });
+    if (!detailAddress) return wx.showToast({ title: '请填写详细地址', icon: 'none' });
+
+    // 拼装地址
+    const finalInfo = { ...orderInfo, address: detailAddress };
+
+    // 调支付
+    wx.showModal({
+      title: '确认支付',
+      content: '定制服务不支持退款。',
+      confirmText: '支付',
+      success: (res) => {
+        if (res.confirm) {
+          this.doCloudSubmit('pay', cart, finalInfo, finalTotalPrice, shippingFee, shippingMethod);
+        }
+      }
+    });
+  },
+
+  // 统一的云函数调用
+  doCloudSubmit(action, goods, addr, total, fee, method) {
+    wx.showLoading({ title: '处理中...' });
+    wx.cloud.callFunction({
+      name: 'createOrder',
+      data: {
+        action,
+        totalPrice: total,
+        goods,
+        addressData: addr,
+        shippingFee: fee,
+        shippingMethod: method
+      },
+      success: res => {
+        wx.hideLoading();
+        const payment = res.result;
+
+        if (action === 'pay' && payment && payment.paySign) {
+          wx.requestPayment({
+            ...payment,
+            success: () => {
+              wx.showToast({ title: '支付成功' });
+              this.closeOrderModal();
+              wx.removeStorageSync('my_cart');
+              this.setData({
+                cart: [],
+                cartTotalPrice: 0,
+                finalTotalPrice: 0,
+                shippingFee: 0
+              });
+              wx.navigateTo({ url: '/pages/my/my' });
+            },
+            fail: () => {
+              wx.showToast({ title: '支付取消', icon: 'none' });
+            }
+          });
+        }
+      },
+      fail: () => {
+        wx.hideLoading();
+        wx.showToast({ title: '下单失败', icon: 'none' });
+      }
+    });
+  },
+
+  // 7. [核心] 提交订单并支付 (复用 createOrder) - 仅配件购买（保留兼容）
+  submitOrder() {
+    const { selectedCount, totalPrice, orderInfo, currentPartsList, currentModelName, serviceType } = this.data;
+
+    // 只处理配件购买，故障报修保持原逻辑
     if (serviceType === 'repair') {
+      // 故障报修保持原有逻辑
+      const { contactName, contactPhone, contactAddr, contactWechat, repairDescription, videoFileName } = this.data;
+      
       if (!repairDescription || repairDescription.trim() === '') {
         wx.showToast({ title: '请填写故障描述', icon: 'none' });
         return;
       }
-    }
-    
-    // 2. 验证联系信息（每一项都必须填写）
-    if (!contactName || contactName.trim() === '') {
-      wx.showToast({ title: '请填写姓名', icon: 'none' });
-      return;
-    }
-    
-    if (!contactPhone || contactPhone.trim() === '') {
-      wx.showToast({ title: '请填写手机号码', icon: 'none' });
-      return;
-    }
-    
-    // 验证手机号格式
-    const phoneReg = /^1[3-9]\d{9}$/;
-    if (!phoneReg.test(contactPhone)) {
-      wx.showToast({ title: '手机号码格式不正确', icon: 'none' });
-      return;
-    }
-    
-    if (!contactAddr || contactAddr.trim() === '') {
-      wx.showToast({ title: '请填写详细收货地址', icon: 'none' });
-      return;
-    }
-    
-    if (!contactWechat || contactWechat.trim() === '') {
-      wx.showToast({ title: '请填写微信昵称', icon: 'none' });
-      return;
-    }
-    
-    // 验证通过，提交到云数据库
-    wx.showLoading({ title: '提交中...', mask: true });
-    
-    // 准备提交数据
-    const orderData = {
-      serviceType: serviceType, // 'parts' 或 'repair'
-      modelName: this.data.currentModelName,
-      series: this.data.currentSeries,
-      contactName: contactName.trim(),
-      contactPhone: contactPhone.trim(),
-      contactAddr: contactAddr.trim(),
-      contactWechat: contactWechat.trim(),
-      createTime: this.db ? this.db.serverDate() : new Date(),
-      status: 'pending' // 待处理
-    };
-    
-    // 根据服务类型添加不同数据
-    if (serviceType === 'parts') {
-      // 购买配件：记录选中的配件
-      const selectedParts = this.data.currentPartsList
-        .filter(item => item.selected)
-        .map(item => item.name);
-      orderData.selectedParts = selectedParts;
-      orderData.partsCount = selectedCount;
-    } else if (serviceType === 'repair') {
-      // 故障报修：记录故障描述和视频
-      orderData.repairDescription = repairDescription.trim();
-      orderData.videoFileName = videoFileName || '';
-      // TODO: 如果有视频文件，需要上传到云存储
-    }
-    
-    // 提交到 shouhou_read 集合
-    if (this.db) {
-      this.db.collection('shouhou_read').add({
-        data: orderData,
+      
+      if (!contactName || !contactPhone || !contactAddr || !contactWechat) {
+        wx.showToast({ title: '请完善收货信息', icon: 'none' });
+        return;
+      }
+      
+      // 提交到 shouhou_read 集合（故障报修逻辑）
+      wx.showLoading({ title: '提交中...', mask: true });
+      const db = wx.cloud.database();
+      db.collection('shouhou_read').add({
+        data: {
+          serviceType: 'repair',
+          modelName: currentModelName,
+          contactName: contactName.trim(),
+          contactPhone: contactPhone.trim(),
+          contactAddr: contactAddr.trim(),
+          contactWechat: contactWechat.trim(),
+          repairDescription: repairDescription.trim(),
+          videoFileName: videoFileName || '',
+          createTime: db.serverDate(),
+          status: 'pending'
+        },
         success: () => {
           wx.hideLoading();
           wx.showToast({ title: '提交成功', icon: 'success' });
-          
-          // 清空表单
           setTimeout(() => {
             this.setData({
-              selectedCount: 0,
-              contactName: '',
-              contactPhone: '',
-              contactAddr: '',
-              contactWechat: '',
               repairDescription: '',
               videoFileName: ''
             });
-            // 重置配件选择状态
-            this.renderParts();
           }, 1500);
         },
         fail: (err) => {
@@ -822,10 +1213,91 @@ Page({
           wx.showToast({ title: '提交失败，请重试', icon: 'none' });
         }
       });
-    } else {
-      wx.hideLoading();
-      wx.showToast({ title: '云服务未初始化', icon: 'none' });
+      return;
     }
+
+    // 配件购买逻辑
+    // 校验
+    if (selectedCount === 0) {
+      wx.showToast({ title: '请选择配件', icon: 'none' });
+      return;
+    }
+    if (!orderInfo.name || !orderInfo.phone || !orderInfo.address) {
+      wx.showToast({ title: '请完善收货信息', icon: 'none' });
+      return;
+    }
+
+    // 组装商品数据 (为了适配 my 页面的显示)
+    const goods = currentPartsList
+      .filter(p => p.selected)
+      .map(p => ({
+        name: p.name,
+        spec: currentModelName, // 规格显示为型号
+        quantity: 1,
+        price: p.price || 0,
+        total: p.price || 0
+      }));
+
+    // 弹出免责声明
+    wx.showModal({
+      title: '维修服务确认',
+      content: '此为定制维修配件服务，下单后不支持退款。',
+      confirmText: '支付',
+      success: (res) => {
+        if (res.confirm) {
+          this.doPayment(goods, totalPrice, orderInfo);
+        }
+      }
+    });
+  },
+
+  // [修改] 支付执行函数 (适配新的参数结构)
+  doPayment(goodsList, totalPrice, addressData) {
+    wx.showLoading({ title: '正在下单...', mask: true });
+
+    wx.cloud.callFunction({
+      name: 'createOrder',
+      data: {
+        totalPrice: totalPrice,
+        goods: goodsList, // 直接传购物车数组
+        addressData: addressData
+      },
+      success: res => {
+        wx.hideLoading();
+        const payment = res.result;
+        
+        if (!payment || !payment.paySign) {
+           return wx.showToast({ title: '系统审核中', icon: 'none' });
+        }
+
+        wx.requestPayment({
+          ...payment,
+          success: () => {
+            wx.showToast({ title: '支付成功', icon: 'success' });
+            this.closeOrderModal();
+            // 清空选中状态
+            this.loadParts(this.data.currentModelName); 
+            this.setData({ 
+              cart: [], 
+              cartTotalPrice: 0,
+              selectedCount: 0,
+              totalPrice: 0
+            });
+            
+            setTimeout(() => {
+              wx.navigateTo({ url: '/pages/my/my' });
+            }, 1000);
+          },
+          fail: () => {
+            wx.showToast({ title: '支付取消', icon: 'none' });
+          }
+        });
+      },
+      fail: err => {
+        wx.hideLoading();
+        wx.showToast({ title: '下单失败', icon: 'none' });
+      }
+    });
   },
 
   // 3. 教程逻辑
@@ -1588,5 +2060,39 @@ Page({
     this.setData({
       isContactExpanded: !this.data.isContactExpanded
     });
-  }
+  },
+
+  // [新增] 清空购物车
+  clearCart() {
+    wx.showModal({
+      title: '清空购物车',
+      content: '确定要清空所有商品吗？',
+      confirmColor: '#FF3B30',
+      success: (res) => {
+        if (res.confirm) {
+          // 1. 清除本地缓存
+          wx.removeStorageSync('my_cart');
+          
+          // 2. 清除页面数据
+          this.setData({
+            cart: [],
+            cartTotalPrice: 0,
+            showOrderModal: false, // 既然空了，就关掉弹窗
+          });
+
+          // 3. 针对 shouhou 页面的额外重置
+          if (this.data.currentPartsList) {
+             const resetList = this.data.currentPartsList.map(p => ({...p, selected: false}));
+             this.setData({ 
+               currentPartsList: resetList,
+               selectedCount: 0,
+               totalPrice: 0
+             });
+          }
+
+          wx.showToast({ title: '已清空', icon: 'none' });
+        }
+      }
+    });
+  },
 })

@@ -20,7 +20,7 @@ Page({
     
     // --- 播放器与管理员状态 ---
     showVideoPlayer: false, 
-    currentVideo: null,
+    currentVideo: null,     
 
     // --- 🆕 搜索栏状态 ---
     showSearchBar: true, // 默认显示

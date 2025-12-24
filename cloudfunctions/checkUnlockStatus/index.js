@@ -225,7 +225,7 @@ exports.main = async (event, context) => {
         }
       }
     }
-
+    
     // 🔴 核心：检查 login_logs 中的 isBanned 状态
     if (record.isBanned === true) {
       // 如果被封禁，直接让前端等待，除非管理员手动解封或开启 AUTO
@@ -236,18 +236,18 @@ exports.main = async (event, context) => {
     if (record.auto === true && nickname) {
       // 搬运到 valid_users（如果还没有）
       try {
-        const validCheck = await db.collection('valid_users').where({ nickname: nickname }).get()
-        if (validCheck.data.length === 0) {
-          await db.collection('valid_users').add({
-            data: {
-              nickname: nickname,
-              _openid: OPENID,
-              createTime: db.serverDate(),
-              updateTime: db.serverDate(),
-              desc: '管理员放行'
-            }
-          })
-        }
+      const validCheck = await db.collection('valid_users').where({ nickname: nickname }).get()
+      if (validCheck.data.length === 0) {
+        await db.collection('valid_users').add({
+          data: {
+            nickname: nickname,
+            _openid: OPENID,
+            createTime: db.serverDate(),
+            updateTime: db.serverDate(),
+            desc: '管理员放行'
+          }
+        })
+      }
       } catch (e) {
         console.error('[checkUnlockStatus] add valid_users error:', e)
       }

@@ -1,3 +1,5 @@
+// cloudfunctions/bindDevice/index.js
+
 const cloud = require('wx-server-sdk')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
@@ -7,57 +9,86 @@ exports.main = async (event, context) => {
   const _ = db.command
   const wxContext = cloud.getWXContext()
   const myOpenid = wxContext.OPENID
-  
-  // 前端传来的 SN 码 (例如从蓝牙名解析出来的)
   const { sn, deviceName } = event
 
   try {
-    // 1. 先查询这个 SN 是否存在于数据库
-    const res = await db.collection('sn').where({
-      sn: sn
-    }).get()
+    // 1. 查询设备
+    const res = await db.collection('sn').where({ sn: sn }).get()
 
-    // --- 情况 A: 数据库里完全没这个设备 (第一次出现) ---
+    // A. 全新设备 -> 需审核
     if (res.data.length === 0) {
-      // 新增记录，直接绑定给当前用户
       await db.collection('sn').add({
         data: {
           sn: sn,
-          name: deviceName, // 蓝牙原始名称
-          openid: myOpenid, // 绑定当前用户
-          bindCount: 1,     // 绑定次数初始化
-          bindTime: db.serverDate(),
+          name: deviceName,
+          openid: myOpenid,
+          isActive: false,
+          activations: 0, // 初始为0，审核通过变1
           createTime: db.serverDate()
         }
       })
-      return { success: true, msg: '新设备绑定成功' }
+      return { success: true, status: 'NEED_AUDIT', msg: '新设备，请提交审核' }
     }
 
-    // --- 情况 B: 设备已存在，检查绑定状态 ---
     const device = res.data[0]
 
-    // B1: 设备当前绑定的就是我自己 -> 成功 (视为重新绑定或刷新)
+    // B. 是我自己的设备 (防抖，防止重复点)
     if (device.openid === myOpenid) {
-      return { success: true, msg: '设备已在您名下' }
-    }
-
-    // B2: 设备当前绑定了别人 (openid 不为空，且不是我) -> 失败
-    if (device.openid && device.openid !== '') {
-      return { success: false, msg: '该设备已被其他用户绑定，需原主解绑后方可操作。' }
-    }
-
-    // B3: 设备当前是"自由身" (openid 为空，说明前主人解绑了) -> 成功 (抢占)
-    await db.collection('sn').doc(device._id).update({
-      data: {
-        openid: myOpenid, // 写入我的ID
-        bindCount: _.inc(1), // 绑定次数 +1
-        bindTime: db.serverDate()
+      if (device.isActive) {
+        return { success: true, status: 'AUTO_APPROVED', msg: '设备已连接' }
+      } else {
+        return { success: true, status: 'NEED_AUDIT', msg: '审核未通过，请继续' }
       }
-    })
-    return { success: true, msg: '设备绑定成功' }
+    }
+
+    // C. 别人的设备 (拒绝)
+    if (device.openid && device.openid !== '') {
+      return { success: false, status: 'LOCKED', msg: '设备已被绑定，请联系原主解绑' }
+    }
+
+    // D. 无主设备 (openid 为空，且已激活)
+    if (device.isActive) {
+      await db.collection('sn').doc(device._id).update({
+        data: {
+          openid: myOpenid,      // 归我了
+          bindCount: _.inc(1),   // 绑定记录+1
+          activations: _.inc(1), // 激活次数+1 (易主/重连算一次)
+          lastBindTime: db.serverDate()
+        }
+      })
+      
+      // 【修改】文案统一改为"绑定成功"，不提"二手"
+      return { success: true, status: 'AUTO_APPROVED', msg: '绑定成功' }
+    } 
+    
+    // E. 未激活的无主设备
+    else {
+      await db.collection('sn').doc(device._id).update({ data: { openid: myOpenid } })
+      return { success: true, status: 'NEED_AUDIT', msg: '请提交审核' }
+    }
 
   } catch (err) {
     return { success: false, msg: err.errMsg }
   }
 }
 
+
+    else {
+      await db.collection('sn').doc(device._id).update({ data: { openid: myOpenid } })
+      return { success: true, status: 'NEED_AUDIT', msg: '请提交审核' }
+    }
+
+  } catch (err) {
+    return { success: false, msg: err.errMsg }
+  }
+}
+
+    else {
+      await db.collection('sn').doc(device._id).update({ data: { openid: myOpenid } })
+      return { success: true, status: 'NEED_AUDIT', msg: '请提交审核' }
+    }
+
+  } catch (err) {
+    return { success: false, msg: err.errMsg }
+  }
+}

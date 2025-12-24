@@ -157,7 +157,9 @@
 
   <!-- 普通用户视图 (保持不变，还是用原来的 swiper orders) -->
   <block wx:if="{{!isAdmin}}">
+    <!-- 情况 A: 有订单，显示滑动列表 -->
     <swiper 
+      wx:if="{{orders.length > 0}}"
       class="order-swiper" 
       bindchange="onOrderChange" 
       circular 
@@ -253,6 +255,59 @@
         </view>
       </swiper-item>
     </swiper>
+
+    <!-- 情况 B: 没订单，显示诱导卡片 -->
+    <view 
+      wx:else 
+      class="empty-order-card" 
+      bindtap="goToShop"
+    >
+      <view class="empty-content">
+        <view class="empty-icon">📦</view>
+        <view class="empty-title">开启您的改装之旅</view>
+        <view class="empty-desc">下单后，此处将实时追踪您的物流进度</view>
+        
+        <view class="go-shop-btn">去选购配件 ➔</view>
+      </view>
+    </view>
+  </block>
+
+  <!-- === 改动1：管理员审核区 (Swiper版) === -->
+  <block wx:if="{{isAdmin && auditList.length > 0}}">
+    <view class="section-label">PENDING AUDITS / 待审核申请</view>
+    
+    <swiper 
+      class="audit-swiper" 
+      circular 
+      previous-margin="60rpx" 
+      next-margin="60rpx"
+    >
+      <swiper-item wx:for="{{auditList}}" wx:key="_id">
+        <view class="audit-card">
+          <view class="audit-row">
+            <text class="audit-model">{{item.productModel}}</text>
+            <text class="audit-sn">SN: {{item.sn}}</text>
+          </view>
+          <view class="audit-row">
+            <!-- 这里只做展示，修改在弹窗里 -->
+            <text class="audit-date">用户填: {{item.buyDate}}</text>
+            <text class="audit-type">{{item.bindType == 'new' ? '全新' : '二手'}}</text>
+          </view>
+          
+          <view class="audit-imgs">
+            <image src="{{item.imgReceipt}}" mode="aspectFill" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgReceipt}}"></image>
+            <image wx:if="{{item.imgChat}}" src="{{item.imgChat}}" mode="aspectFill" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgChat}}"></image>
+          </view>
+
+          <view class="audit-actions">
+            <!-- 拒绝直接调用 -->
+            <view class="audit-btn reject" catchtap="handleReject" data-id="{{item._id}}">拒绝</view>
+            <!-- 通过打开弹窗 -->
+            <view class="audit-btn approve" catchtap="openAuditModal" data-item="{{item}}">审核设置</view>
+          </view>
+        </view>
+      </swiper-item>
+    </swiper>
   </block>
 
   <!-- 5. 设备列表 - 【管理员模式下隐藏】 -->
@@ -307,81 +362,168 @@
   <view class="modal {{showModal ? 'show' : ''}}">
     <view class="modal-content">
       
+      <!-- 1. 文案修改：绑定设备 -->
       <view class="modal-header">
-        <text>绑定资产</text>
+        <text>绑定设备</text>
         <view class="close-modal" bindtap="closeBindModal">✕</view>
       </view>
 
       <scroll-view scroll-y="true" class="modal-scroll-area">
         
-        <!-- Tab 切换 -->
-        <view class="type-tabs">
+        <!-- === 2. 蓝牙扫描按钮 (雷达) === -->
+        <!-- 只有未连接时显示 -->
+        <view class="bt-scan-container" wx:if="{{!bluetoothReady}}">
+          <view class="radar-circle" bindtap="startConnect">
+            <view class="radar-core">
+              <!-- 👇👇👇【核心修改】换成图片 👇👇👇 -->
+              <image class="bt-icon-img" src="data:image/svg+xml;base64,PHN2ZyB0PSIxNzEwNDg4ODg4ODg4IiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjQ3NTciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHBhdGggZD0iTTIyMy41NTIgNzI0LjQ4TDQ2NS45MiA1MTIgMjIzLjU1MiAyOTkuNTJsNTguOTA4LTY3LjI4TDQ5OC41MiA0MjEuNjg4VjM1Ljg0aDg5LjY4bDIzMC40IDIyNC42NC0yNDIuNTI4IDIxMi40OCAyNDIuNTI4IDIxMi40OC0yMzAuNCAyMjQuNjRINDk4LjUyVjYwMi4zMTJsLTIxNi4wNjQgMTg5LjQ0LTU4LjkwOC02Ny4yN3pNNTgyLjM1MiA1MTJMNjg4IDE5NC43NTIgNTg4LjE2IDk3LjQ0VjUxMnpNNTg4LjE2IDkyNi41Nkw2ODggODI5LjI0OCA1ODIuMzUyIDUxMnY0MTQuNTZ6IiBmaWxsPSIjRkZGRkZGIiBwLWlkPSI0NzU4Ij48L3BhdGg+PC9zdmc+" mode="aspectFit"></image>
+            </view>
+            
+            <!-- 波纹动画 (保持结构，样式下面重写) -->
+            <view class="radar-ring r1 {{isScanning?'anim':''}}"></view>
+            <view class="radar-ring r2 {{isScanning?'anim':''}}"></view>
+            <view class="radar-ring r3 {{isScanning?'anim':''}}"></view>
+          </view>
+          <text class="radar-tip">{{connectStatusText}}</text>
+        </view>
+
+        <!-- === 3. 连接成功后的状态条 === -->
+        <view class="bt-connected-bar" wx:if="{{bluetoothReady}}">
+          <view class="bt-c-icon">✅</view>
+          <view class="bt-c-info">
+            <text class="bt-c-name">已连接设备</text>
+            <text class="bt-c-sn">{{connectedDeviceName}}</text>
+          </view>
+          <view class="bt-disconnect-btn" bindtap="resetBluetoothState">断开</view>
+        </view>
+
+        <!-- === 4. Tab 切换 (逻辑修改：连上蓝牙后才显示！) === -->
+        <view class="type-tabs" wx:if="{{bluetoothReady && !isDeviceLocked}}">
           <view class="tab-item {{bindType == 'new' ? 'active' : ''}}" bindtap="changeBindType" data-type="new">全新设备</view>
           <view class="tab-item {{bindType == 'used' ? 'active' : ''}}" bindtap="changeBindType" data-type="used">二手/旧设备</view>
         </view>
 
-        <view class="bt-btn {{bluetoothReady ? 'ready' : ''}}" bindtap="startConnect">
+        <!-- === 5. 被锁状态 === -->
+        <view class="locked-view" wx:if="{{bluetoothReady && isDeviceLocked}}">
+          <view class="locked-icon">🚫</view>
+          <text class="locked-title">无法绑定</text>
+          <text class="locked-desc">{{lockedReason}}</text>
+        </view>
+
+        <!-- === 6. 正常填表区域 (连上且没锁才显示) === -->
+        <view class="bind-form-area" wx:if="{{bluetoothReady && !isDeviceLocked}}">
           
-          <!-- 扫描时的动画效果 -->
-          <view class="scan-radar" wx:if="{{isScanning}}">
-            <view class="ripple r1"></view>
-            <view class="ripple r2"></view>
-            <view class="ripple r3"></view>
+          <view class="form-item">
+            <text class="form-label">选择产品型号</text>
+            <picker bindchange="onModelChange" range="{{modelOptions}}">
+              <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
+            </picker>
           </view>
 
-          <text>{{connectStatusText}}</text>
-        </view>
-
-        <view class="form-item">
-          <text class="form-label">选择产品型号</text>
-          <picker bindchange="onModelChange" range="{{modelOptions}}">
-            <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
-          </picker>
-        </view>
-
-        <!-- 动态上传区域：根据 bindType 变化 -->
-        <view class="form-item">
-          <!-- 标题也会跟着变 -->
-          <text class="form-label">{{bindType == 'new' ? '上传凭证 (购买截图)' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
-          
-          <view class="upload-group">
-            <!-- 框1：购买截图 -->
-            <view class="upload-box" bindtap="chooseProofImage" data-type="receipt">
-              <!-- 如果有图，显示图 -->
-              <image wx:if="{{imgReceipt}}" src="{{imgReceipt}}" mode="aspectFill" class="uploaded-img" />
-              <!-- 没图，显示加号 -->
-              <block wx:else>
-                <text class="plus-icon">+</text>
-                <text>购买截图</text>
-              </block>
-            </view>
-
-            <!-- 框2：聊天记录 -->
-            <view class="upload-box" wx:if="{{bindType == 'used'}}" bindtap="chooseProofImage" data-type="chat">
-              <image wx:if="{{imgChat}}" src="{{imgChat}}" mode="aspectFill" class="uploaded-img" />
-              <block wx:else>
-                <text class="plus-icon">+</text>
-                <text>聊天记录</text>
-              </block>
+          <view class="form-item">
+            <text class="form-label">{{bindType == 'new' ? '上传凭证 (购买截图)' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
+            <view class="upload-group">
+              <view class="upload-box" bindtap="chooseProofImage" data-type="receipt">
+                <image wx:if="{{imgReceipt}}" src="{{imgReceipt}}" mode="aspectFill" class="uploaded-img" />
+                <block wx:else><text class="plus-icon">+</text><text>购买截图</text></block>
+              </view>
+              <view class="upload-box" wx:if="{{bindType == 'used'}}" bindtap="chooseProofImage" data-type="chat">
+                <image wx:if="{{imgChat}}" src="{{imgChat}}" mode="aspectFill" class="uploaded-img" />
+                <block wx:else><text class="plus-icon">+</text><text>聊天记录</text></block>
+              </view>
             </view>
           </view>
-        </view>
 
-        <view class="form-item">
-          <text class="form-label">购买日期</text>
-          <picker mode="date" bindchange="onDateChange">
-            <view class="picker-val">{{buyDate || '请选择日期'}}</view>
-          </picker>
+          <view class="form-item">
+            <text class="form-label">购买日期</text>
+            <picker mode="date" bindchange="onDateChange">
+              <view class="picker-val">{{buyDate || '请选择日期'}}</view>
+            </picker>
+          </view>
         </view>
         
         <view style="height: 40rpx;"></view>
       </scroll-view>
 
-      <view class="modal-footer">
-        <!-- 绑定 submitAudit -->
+      <!-- 底部提交按钮 -->
+      <view class="modal-footer" wx:if="{{bluetoothReady && !isDeviceLocked}}">
         <button class="submit-btn" bindtap="submitAudit">提交上传审核</button>
       </view>
 
+    </view>
+  </view>
+
+  <!-- === 改动2：管理员审核弹窗 (放在最底部) === -->
+  <view class="modal {{showAuditModal ? 'show' : ''}}" style="z-index: 2000;">
+    <view class="modal-content">
+      <view class="modal-header">
+        <text>审批设置</text>
+        <view class="close-modal" bindtap="closeAuditModal">✕</view>
+      </view>
+
+      <view class="modal-scroll-area">
+        <view class="form-item">
+          <text class="form-label">修改购买日期 (影响固件版本)</text>
+          <picker mode="date" value="{{adminSetDate}}" bindchange="onAdminDateChange">
+            <view class="picker-val">{{adminSetDate || '请选择日期'}}</view>
+          </picker>
+        </view>
+
+        <view class="form-item">
+          <text class="form-label">设置总质保时间</text>
+          <picker range="{{warrantyOptions}}" value="{{adminSetDaysIndex}}" bindchange="onAdminDaysChange">
+            <view class="picker-val">{{warrantyOptions[adminSetDaysIndex]}}</view>
+          </picker>
+        </view>
+      </view>
+
+      <view class="modal-footer">
+        <button class="submit-btn" bindtap="confirmApprove">确认通过并同步</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- ================= 全局自定义弹窗 (替代原生) ================= -->
+  <view class="custom-dialog-mask" wx:if="{{dialog.show}}">
+    <view class="custom-dialog-box">
+      <view class="cd-title">{{dialog.title}}</view>
+      <view class="cd-content">{{dialog.content}}</view>
+      
+      <view class="cd-btn-row">
+        <!-- 取消按钮 (可选) -->
+        <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText || '取消'}}</view>
+        <!-- 确认按钮 -->
+        <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText || '确定'}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ================= 全局自定义 Loading (极简黑) ================= -->
+  <view class="custom-loading-mask" wx:if="{{isLoading}}">
+    <view class="loading-box">
+      <!-- 纯CSS画的高清黑色Loading圈 -->
+      <view class="spinner"></view>
+      <text class="loading-text">{{loadingText}}</text>
+    </view>
+  </view>
+
+  <!-- ================= 输入弹窗 (替代 editable modal) ================= -->
+  <view class="custom-dialog-mask" wx:if="{{inputDialog.show}}">
+    <view class="custom-dialog-box">
+      <view class="cd-title">{{inputDialog.title}}</view>
+      <input 
+        class="cd-input" 
+        type="text" 
+        placeholder="{{inputDialog.placeholder}}"
+        value="{{inputDialog.value}}"
+        bindinput="onInputDialogInput"
+        confirm-type="done"
+        bindconfirm="onInputDialogConfirm"
+      />
+      <view class="cd-btn-row">
+        <view class="cd-btn cancel" bindtap="closeInputDialog">取消</view>
+        <view class="cd-btn confirm" bindtap="onInputDialogConfirm">确定</view>
+      </view>
     </view>
   </view>
 

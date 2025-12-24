@@ -159,6 +159,82 @@ page { background: #F7F7F7; color: #1D1D1F; }
 /* --- 标签 --- */
 .section-label { padding: 10rpx 48rpx 12rpx; font-size: 22rpx; font-weight: 700; color: #BBB; letter-spacing: 2rpx; }
 
+/* --- 审核列表 Swiper --- */
+.audit-swiper {
+  height: 420rpx; /* 高度根据卡片内容定 */
+  margin-bottom: 40rpx;
+}
+
+/* --- 审核卡片 --- */
+.audit-card {
+  /* 加上 margin 让左右露出来的部分有间隙 */
+  margin: 0 15rpx; 
+  height: 100%;
+  box-sizing: border-box;
+  background: #fff; 
+  padding: 30rpx; 
+  border-radius: 20rpx; 
+  border: 2rpx solid #000; /* 加个黑边框区别一下 */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.audit-row { 
+  display: flex; 
+  justify-content: space-between; 
+  margin-bottom: 10rpx; 
+}
+.audit-model { 
+  font-weight: 700; 
+  font-size: 30rpx; 
+}
+.audit-sn { 
+  font-family: monospace; 
+  color: #0071E3; 
+}
+.audit-date { 
+  font-size: 24rpx; 
+  color: #999; 
+}
+.audit-type {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.audit-imgs { 
+  display: flex; 
+  gap: 20rpx; 
+  margin: 20rpx 0; 
+}
+.audit-thumb { 
+  width: 100rpx; 
+  height: 100rpx; 
+  border-radius: 10rpx; 
+  background: #eee; 
+}
+
+.audit-actions { 
+  display: flex; 
+  gap: 20rpx; 
+  margin-top: 20rpx; 
+}
+.audit-btn { 
+  flex: 1; 
+  text-align: center; 
+  padding: 16rpx; 
+  border-radius: 10rpx; 
+  font-size: 26rpx; 
+  font-weight: 600; 
+}
+.audit-btn.reject { 
+  background: #f0f0f0; 
+  color: #FF3B30; 
+}
+.audit-btn.approve { 
+  background: #000; 
+  color: #fff; 
+}
+
 /* --- 调试工具 --- */
 .debug-tools { display: flex; padding: 20rpx 40rpx; gap: 15rpx; }
 .debug-btn { font-size: 20rpx; background: #f0f0f0; padding: 8rpx 15rpx; border-radius: 6rpx; color: #999; }
@@ -539,7 +615,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .ripple {
   position: absolute;
   width: 100rpx; height: 100rpx; /* 初始小圆 */
-  background: rgba(0, 122, 255, 0.6); /* 蓝色半透明 */
+  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
   border-radius: 50%;
   opacity: 0;
   animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
@@ -581,3 +657,2270 @@ page { background: #F7F7F7; color: #1D1D1F; }
 
 .modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
 .submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+/* === 自定义弹窗样式 === */
+.custom-dialog-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
+}
+.custom-dialog-box {
+  width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+}
+@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
+.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+
+.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
+.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
+.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.confirm { background: #000; color: #fff; }
+.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ========================================= */
+/* 蓝牙雷达按钮：Apple AirDrop 风格 */
+/* ========================================= */
+
+.bt-scan-container {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 80rpx 0; /* 上下留白加大 */
+}
+
+/* 1. 外层容器 */
+.radar-circle {
+  width: 200rpx; height: 200rpx; /* 整体加大，显得大气 */
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 2. 核心黑球 */
+.radar-core {
+  width: 120rpx; height: 120rpx; 
+  background: #000; /* 纯黑 */
+  border-radius: 50%; 
+  z-index: 20; /* 确保在波纹上面 */
+  display: flex; align-items: center; justify-content: center;
+  
+  /* 加一个高级的投影 */
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+/* 按下去的时候稍微缩一下，有反馈感 */
+.radar-circle:active .radar-core {
+  transform: scale(0.95);
+}
+
+/* 3. 蓝牙图标 (Base64图片) */
+.bt-icon-img {
+  width: 50rpx; height: 50rpx;
+}
+
+/* 4. 波纹圈 (极细线条) */
+.radar-ring {
+  position: absolute; 
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%); /* 物理居中 */
+  width: 120rpx; height: 120rpx;    /* 初始大小和黑球一样 */
+  
+  border-radius: 50%; 
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 极细的淡灰色线条 */
+  background: transparent;
+  box-sizing: border-box;
+  opacity: 0;
+  z-index: 10;
+}
+
+/* 5. 动画逻辑 (只有 isScanning 时才动) */
+.radar-ring.anim { 
+  animation: airDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite; 
+}
+
+/* 错开时间，制造连贯感 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.8s; }
+.r3 { animation-delay: 1.6s; }
+
+/* 动画关键帧：像水波一样扩散 */
+@keyframes airDropRipple {
+  0% {
+    width: 120rpx; height: 120rpx;
+    opacity: 0.6;
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    width: 300rpx; height: 300rpx; /* 扩散得更远 */
+    opacity: 0;
+    border-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* 底部提示文字 */
+.radar-tip {
+  margin-top: 50rpx; 
+  color: #888; 
+  font-size: 26rpx; 
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
+/* ================= 全局自定义 Loading (极简黑) ================= */
+.custom-loading-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: transparent; /* 背景完全透明 */
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-box {
+  background: rgba(0, 0, 0, 0.75); /* 黑色半透明底 */
+  padding: 40rpx 60rpx;
+  border-radius: 24rpx;
+  display: flex; flex-direction: column; align-items: center;
+  backdrop-filter: blur(10px); /* 磨砂玻璃效果 */
+}
+
+.spinner {
+  width: 60rpx; height: 60rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.2); /* 轨道颜色 */
+  border-top-color: #fff; /* 转动部分纯白 */
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+.loading-text {
+  color: #fff; 
+  font-size: 26rpx; 
+  letter-spacing: 2rpx;
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+/* ================= 空状态卡片 ================= */
+.empty-order-card {
+  /* 左右留边距，和下面的设备卡片对齐 */
+  margin: 0 40rpx 40rpx; 
+  /* 给一个合适的高度，占住位置 */
+  height: 400rpx; 
+  
+  background: #fff;
+  border-radius: 40rpx;
+  /* 关键：用虚线边框，暗示"这里缺东西" */
+  border: 4rpx dashed #E5E5E5; 
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 按压反馈 */
+.empty-order-card:active {
+  background: #FAFAFA;
+  border-color: #CCC;
+  transform: scale(0.99);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 60rpx;
+  margin-bottom: 20rpx;
+  opacity: 0.8;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin-bottom: 8rpx;
+}
+
+.empty-desc {
+  font-size: 22rpx;
+  color: #8E8E93;
+  margin-bottom: 40rpx;
+}
+
+/* 黑色引流按钮 */
+.go-shop-btn {
+  background: #000;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+}
+
+/* ================= 输入弹窗样式 ================= */
+.cd-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F5F5F7;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #000;
+  margin: 30rpx 0;
+  box-sizing: border-box;
+}
+
+/* === 2. 连接成功状态条 (黑白风) === */
+.bt-connected-bar {
+  background: #F7F7F7; /* 浅灰底 */
+  border: 2rpx solid #000; /* 【修改】黑边框 */
+  border-radius: 20rpx;
+  padding: 30rpx; display: flex; align-items: center; margin-bottom: 40rpx;
+}
+.bt-c-icon { font-size: 40rpx; margin-right: 20rpx; }
+.bt-c-info { flex: 1; display: flex; flex-direction: column; }
+.bt-c-name { font-size: 22rpx; color: #666; font-weight: 700; }
+.bt-c-sn { font-size: 32rpx; font-weight: 800; color: #000; letter-spacing: 2rpx; } /* SN码加粗变黑 */
+
+.bt-disconnect-btn {
+  font-size: 24rpx; 
+  color: #fff; background: #000; /* 【修改】黑色按钮 */
+  padding: 12rpx 30rpx;
+  border-radius: 30rpx; 
+  font-weight: 600;
+}
+.bt-disconnect-btn:active { opacity: 0.8; }
+
+/* === 被锁状态 UI (红色禁止) === */
+.locked-view {
+  display: flex; flex-direction: column; align-items: center; 
+  padding: 60rpx 0; background: #FFF0F0; border-radius: 20rpx;
+}
+.locked-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+.locked-title { font-size: 36rpx; font-weight: 800; color: #FF3B30; margin-bottom: 10rpx; }
+.locked-desc { font-size: 24rpx; color: #666; width: 80%; text-align: center; }
+.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
+.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+
+.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
+.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
+.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
+
+/* 蓝牙按钮基础样式 */
+.bt-btn { 
+  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
+  background: #fff; box-sizing: border-box;
+  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
+  transition: all 0.3s;
+}
+
+/* 连接成功状态 */
+.bt-btn.ready { 
+  background: #34C759; border-color: #34C759; color: #fff; 
+}
+
+/* === 修复后的柔和波纹动画 === */
+.scan-radar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  overflow: visible; /* 允许波纹扩散出去 */
+}
+
+.ripple {
+  position: absolute;
+  width: 100rpx; height: 100rpx; /* 初始小圆 */
+  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
+  border-radius: 50%;
+  opacity: 0;
+  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* 错开动画时间 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.6s; }
+.r3 { animation-delay: 1.2s; }
+
+@keyframes rippleSmooth {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.5; /* 出现 */
+  }
+  100% {
+    transform: scale(4); /* 放大4倍 */
+    opacity: 0; /* 慢慢消失 */
+  }
+}
+
+.form-item { margin-bottom: 30rpx; }
+.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
+
+.upload-group { display: flex; gap: 20rpx; }
+.upload-box { 
+  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
+  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
+  justify-content: center; font-size: 22rpx; color: #999; 
+  position: relative;
+  overflow: hidden;
+}
+.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
+.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
+
+.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
+.submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+/* === 自定义弹窗样式 === */
+.custom-dialog-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
+}
+.custom-dialog-box {
+  width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+}
+@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
+.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+
+.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
+.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
+.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.confirm { background: #000; color: #fff; }
+.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ========================================= */
+/* 蓝牙雷达按钮：Apple AirDrop 风格 */
+/* ========================================= */
+
+.bt-scan-container {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 80rpx 0; /* 上下留白加大 */
+}
+
+/* 1. 外层容器 */
+.radar-circle {
+  width: 200rpx; height: 200rpx; /* 整体加大，显得大气 */
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 2. 核心黑球 */
+.radar-core {
+  width: 120rpx; height: 120rpx; 
+  background: #000; /* 纯黑 */
+  border-radius: 50%; 
+  z-index: 20; /* 确保在波纹上面 */
+  display: flex; align-items: center; justify-content: center;
+  
+  /* 加一个高级的投影 */
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+/* 按下去的时候稍微缩一下，有反馈感 */
+.radar-circle:active .radar-core {
+  transform: scale(0.95);
+}
+
+/* 3. 蓝牙图标 (Base64图片) */
+.bt-icon-img {
+  width: 50rpx; height: 50rpx;
+}
+
+/* 4. 波纹圈 (极细线条) */
+.radar-ring {
+  position: absolute; 
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%); /* 物理居中 */
+  width: 120rpx; height: 120rpx;    /* 初始大小和黑球一样 */
+  
+  border-radius: 50%; 
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 极细的淡灰色线条 */
+  background: transparent;
+  box-sizing: border-box;
+  opacity: 0;
+  z-index: 10;
+}
+
+/* 5. 动画逻辑 (只有 isScanning 时才动) */
+.radar-ring.anim { 
+  animation: airDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite; 
+}
+
+/* 错开时间，制造连贯感 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.8s; }
+.r3 { animation-delay: 1.6s; }
+
+/* 动画关键帧：像水波一样扩散 */
+@keyframes airDropRipple {
+  0% {
+    width: 120rpx; height: 120rpx;
+    opacity: 0.6;
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    width: 300rpx; height: 300rpx; /* 扩散得更远 */
+    opacity: 0;
+    border-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* 底部提示文字 */
+.radar-tip {
+  margin-top: 50rpx; 
+  color: #888; 
+  font-size: 26rpx; 
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
+/* ================= 全局自定义 Loading (极简黑) ================= */
+.custom-loading-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: transparent; /* 背景完全透明 */
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-box {
+  background: rgba(0, 0, 0, 0.75); /* 黑色半透明底 */
+  padding: 40rpx 60rpx;
+  border-radius: 24rpx;
+  display: flex; flex-direction: column; align-items: center;
+  backdrop-filter: blur(10px); /* 磨砂玻璃效果 */
+}
+
+.spinner {
+  width: 60rpx; height: 60rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.2); /* 轨道颜色 */
+  border-top-color: #fff; /* 转动部分纯白 */
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+.loading-text {
+  color: #fff; 
+  font-size: 26rpx; 
+  letter-spacing: 2rpx;
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+/* ================= 空状态卡片 ================= */
+.empty-order-card {
+  /* 左右留边距，和下面的设备卡片对齐 */
+  margin: 0 40rpx 40rpx; 
+  /* 给一个合适的高度，占住位置 */
+  height: 400rpx; 
+  
+  background: #fff;
+  border-radius: 40rpx;
+  /* 关键：用虚线边框，暗示"这里缺东西" */
+  border: 4rpx dashed #E5E5E5; 
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 按压反馈 */
+.empty-order-card:active {
+  background: #FAFAFA;
+  border-color: #CCC;
+  transform: scale(0.99);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 60rpx;
+  margin-bottom: 20rpx;
+  opacity: 0.8;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin-bottom: 8rpx;
+}
+
+.empty-desc {
+  font-size: 22rpx;
+  color: #8E8E93;
+  margin-bottom: 40rpx;
+}
+
+/* 黑色引流按钮 */
+.go-shop-btn {
+  background: #000;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+}
+
+/* ================= 输入弹窗样式 ================= */
+.cd-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F5F5F7;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #000;
+  margin: 30rpx 0;
+  box-sizing: border-box;
+}
+
+/* === 2. 连接成功状态条 (黑白风) === */
+.bt-connected-bar {
+  background: #F7F7F7; /* 浅灰底 */
+  border: 2rpx solid #000; /* 【修改】黑边框 */
+  border-radius: 20rpx;
+  padding: 30rpx; display: flex; align-items: center; margin-bottom: 40rpx;
+}
+.bt-c-icon { font-size: 40rpx; margin-right: 20rpx; }
+.bt-c-info { flex: 1; display: flex; flex-direction: column; }
+.bt-c-name { font-size: 22rpx; color: #666; font-weight: 700; }
+.bt-c-sn { font-size: 32rpx; font-weight: 800; color: #000; letter-spacing: 2rpx; } /* SN码加粗变黑 */
+
+.bt-disconnect-btn {
+  font-size: 24rpx; 
+  color: #fff; background: #000; /* 【修改】黑色按钮 */
+  padding: 12rpx 30rpx;
+  border-radius: 30rpx; 
+  font-weight: 600;
+}
+.bt-disconnect-btn:active { opacity: 0.8; }
+
+/* === 被锁状态 UI (红色禁止) === */
+.locked-view {
+  display: flex; flex-direction: column; align-items: center; 
+  padding: 60rpx 0; background: #FFF0F0; border-radius: 20rpx;
+}
+.locked-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+.locked-title { font-size: 36rpx; font-weight: 800; color: #FF3B30; margin-bottom: 10rpx; }
+.locked-desc { font-size: 24rpx; color: #666; width: 80%; text-align: center; }
+.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
+.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+
+.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
+.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
+.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
+
+/* 蓝牙按钮基础样式 */
+.bt-btn { 
+  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
+  background: #fff; box-sizing: border-box;
+  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
+  transition: all 0.3s;
+}
+
+/* 连接成功状态 */
+.bt-btn.ready { 
+  background: #34C759; border-color: #34C759; color: #fff; 
+}
+
+/* === 修复后的柔和波纹动画 === */
+.scan-radar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  overflow: visible; /* 允许波纹扩散出去 */
+}
+
+.ripple {
+  position: absolute;
+  width: 100rpx; height: 100rpx; /* 初始小圆 */
+  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
+  border-radius: 50%;
+  opacity: 0;
+  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* 错开动画时间 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.6s; }
+.r3 { animation-delay: 1.2s; }
+
+@keyframes rippleSmooth {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.5; /* 出现 */
+  }
+  100% {
+    transform: scale(4); /* 放大4倍 */
+    opacity: 0; /* 慢慢消失 */
+  }
+}
+
+.form-item { margin-bottom: 30rpx; }
+.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
+
+.upload-group { display: flex; gap: 20rpx; }
+.upload-box { 
+  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
+  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
+  justify-content: center; font-size: 22rpx; color: #999; 
+  position: relative;
+  overflow: hidden;
+}
+.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
+.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
+
+.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
+.submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+/* === 自定义弹窗样式 === */
+.custom-dialog-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
+}
+.custom-dialog-box {
+  width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+}
+@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
+.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+
+.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
+.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
+.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.confirm { background: #000; color: #fff; }
+.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ========================================= */
+/* 蓝牙雷达按钮：Apple AirDrop 风格 */
+/* ========================================= */
+
+.bt-scan-container {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 80rpx 0; /* 上下留白加大 */
+}
+
+/* 1. 外层容器 */
+.radar-circle {
+  width: 200rpx; height: 200rpx; /* 整体加大，显得大气 */
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 2. 核心黑球 */
+.radar-core {
+  width: 120rpx; height: 120rpx; 
+  background: #000; /* 纯黑 */
+  border-radius: 50%; 
+  z-index: 20; /* 确保在波纹上面 */
+  display: flex; align-items: center; justify-content: center;
+  
+  /* 加一个高级的投影 */
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+/* 按下去的时候稍微缩一下，有反馈感 */
+.radar-circle:active .radar-core {
+  transform: scale(0.95);
+}
+
+/* 3. 蓝牙图标 (Base64图片) */
+.bt-icon-img {
+  width: 50rpx; height: 50rpx;
+}
+
+/* 4. 波纹圈 (极细线条) */
+.radar-ring {
+  position: absolute; 
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%); /* 物理居中 */
+  width: 120rpx; height: 120rpx;    /* 初始大小和黑球一样 */
+  
+  border-radius: 50%; 
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 极细的淡灰色线条 */
+  background: transparent;
+  box-sizing: border-box;
+  opacity: 0;
+  z-index: 10;
+}
+
+/* 5. 动画逻辑 (只有 isScanning 时才动) */
+.radar-ring.anim { 
+  animation: airDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite; 
+}
+
+/* 错开时间，制造连贯感 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.8s; }
+.r3 { animation-delay: 1.6s; }
+
+/* 动画关键帧：像水波一样扩散 */
+@keyframes airDropRipple {
+  0% {
+    width: 120rpx; height: 120rpx;
+    opacity: 0.6;
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    width: 300rpx; height: 300rpx; /* 扩散得更远 */
+    opacity: 0;
+    border-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* 底部提示文字 */
+.radar-tip {
+  margin-top: 50rpx; 
+  color: #888; 
+  font-size: 26rpx; 
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
+/* ================= 全局自定义 Loading (极简黑) ================= */
+.custom-loading-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: transparent; /* 背景完全透明 */
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-box {
+  background: rgba(0, 0, 0, 0.75); /* 黑色半透明底 */
+  padding: 40rpx 60rpx;
+  border-radius: 24rpx;
+  display: flex; flex-direction: column; align-items: center;
+  backdrop-filter: blur(10px); /* 磨砂玻璃效果 */
+}
+
+.spinner {
+  width: 60rpx; height: 60rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.2); /* 轨道颜色 */
+  border-top-color: #fff; /* 转动部分纯白 */
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+.loading-text {
+  color: #fff; 
+  font-size: 26rpx; 
+  letter-spacing: 2rpx;
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+/* ================= 空状态卡片 ================= */
+.empty-order-card {
+  /* 左右留边距，和下面的设备卡片对齐 */
+  margin: 0 40rpx 40rpx; 
+  /* 给一个合适的高度，占住位置 */
+  height: 400rpx; 
+  
+  background: #fff;
+  border-radius: 40rpx;
+  /* 关键：用虚线边框，暗示"这里缺东西" */
+  border: 4rpx dashed #E5E5E5; 
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 按压反馈 */
+.empty-order-card:active {
+  background: #FAFAFA;
+  border-color: #CCC;
+  transform: scale(0.99);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 60rpx;
+  margin-bottom: 20rpx;
+  opacity: 0.8;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin-bottom: 8rpx;
+}
+
+.empty-desc {
+  font-size: 22rpx;
+  color: #8E8E93;
+  margin-bottom: 40rpx;
+}
+
+/* 黑色引流按钮 */
+.go-shop-btn {
+  background: #000;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+}
+
+/* ================= 输入弹窗样式 ================= */
+.cd-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F5F5F7;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #000;
+  margin: 30rpx 0;
+  box-sizing: border-box;
+}
+
+/* === 2. 连接成功状态条 (黑白风) === */
+.bt-connected-bar {
+  background: #F7F7F7; /* 浅灰底 */
+  border: 2rpx solid #000; /* 【修改】黑边框 */
+  border-radius: 20rpx;
+  padding: 30rpx; display: flex; align-items: center; margin-bottom: 40rpx;
+}
+.bt-c-icon { font-size: 40rpx; margin-right: 20rpx; }
+.bt-c-info { flex: 1; display: flex; flex-direction: column; }
+.bt-c-name { font-size: 22rpx; color: #666; font-weight: 700; }
+.bt-c-sn { font-size: 32rpx; font-weight: 800; color: #000; letter-spacing: 2rpx; } /* SN码加粗变黑 */
+
+.bt-disconnect-btn {
+  font-size: 24rpx; 
+  color: #fff; background: #000; /* 【修改】黑色按钮 */
+  padding: 12rpx 30rpx;
+  border-radius: 30rpx; 
+  font-weight: 600;
+}
+.bt-disconnect-btn:active { opacity: 0.8; }
+
+/* === 被锁状态 UI (红色禁止) === */
+.locked-view {
+  display: flex; flex-direction: column; align-items: center; 
+  padding: 60rpx 0; background: #FFF0F0; border-radius: 20rpx;
+}
+.locked-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+.locked-title { font-size: 36rpx; font-weight: 800; color: #FF3B30; margin-bottom: 10rpx; }
+.locked-desc { font-size: 24rpx; color: #666; width: 80%; text-align: center; }
+.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
+.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+
+.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
+.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
+.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
+
+/* 蓝牙按钮基础样式 */
+.bt-btn { 
+  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
+  background: #fff; box-sizing: border-box;
+  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
+  transition: all 0.3s;
+}
+
+/* 连接成功状态 */
+.bt-btn.ready { 
+  background: #34C759; border-color: #34C759; color: #fff; 
+}
+
+/* === 修复后的柔和波纹动画 === */
+.scan-radar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  overflow: visible; /* 允许波纹扩散出去 */
+}
+
+.ripple {
+  position: absolute;
+  width: 100rpx; height: 100rpx; /* 初始小圆 */
+  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
+  border-radius: 50%;
+  opacity: 0;
+  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* 错开动画时间 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.6s; }
+.r3 { animation-delay: 1.2s; }
+
+@keyframes rippleSmooth {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.5; /* 出现 */
+  }
+  100% {
+    transform: scale(4); /* 放大4倍 */
+    opacity: 0; /* 慢慢消失 */
+  }
+}
+
+.form-item { margin-bottom: 30rpx; }
+.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
+
+.upload-group { display: flex; gap: 20rpx; }
+.upload-box { 
+  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
+  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
+  justify-content: center; font-size: 22rpx; color: #999; 
+  position: relative;
+  overflow: hidden;
+}
+.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
+.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
+
+.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
+.submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+/* === 自定义弹窗样式 === */
+.custom-dialog-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
+}
+.custom-dialog-box {
+  width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+}
+@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
+.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+
+.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
+.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
+.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.confirm { background: #000; color: #fff; }
+.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ========================================= */
+/* 蓝牙雷达按钮：Apple AirDrop 风格 */
+/* ========================================= */
+
+.bt-scan-container {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 80rpx 0; /* 上下留白加大 */
+}
+
+/* 1. 外层容器 */
+.radar-circle {
+  width: 200rpx; height: 200rpx; /* 整体加大，显得大气 */
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 2. 核心黑球 */
+.radar-core {
+  width: 120rpx; height: 120rpx; 
+  background: #000; /* 纯黑 */
+  border-radius: 50%; 
+  z-index: 20; /* 确保在波纹上面 */
+  display: flex; align-items: center; justify-content: center;
+  
+  /* 加一个高级的投影 */
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+/* 按下去的时候稍微缩一下，有反馈感 */
+.radar-circle:active .radar-core {
+  transform: scale(0.95);
+}
+
+/* 3. 蓝牙图标 (Base64图片) */
+.bt-icon-img {
+  width: 50rpx; height: 50rpx;
+}
+
+/* 4. 波纹圈 (极细线条) */
+.radar-ring {
+  position: absolute; 
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%); /* 物理居中 */
+  width: 120rpx; height: 120rpx;    /* 初始大小和黑球一样 */
+  
+  border-radius: 50%; 
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 极细的淡灰色线条 */
+  background: transparent;
+  box-sizing: border-box;
+  opacity: 0;
+  z-index: 10;
+}
+
+/* 5. 动画逻辑 (只有 isScanning 时才动) */
+.radar-ring.anim { 
+  animation: airDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite; 
+}
+
+/* 错开时间，制造连贯感 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.8s; }
+.r3 { animation-delay: 1.6s; }
+
+/* 动画关键帧：像水波一样扩散 */
+@keyframes airDropRipple {
+  0% {
+    width: 120rpx; height: 120rpx;
+    opacity: 0.6;
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    width: 300rpx; height: 300rpx; /* 扩散得更远 */
+    opacity: 0;
+    border-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* 底部提示文字 */
+.radar-tip {
+  margin-top: 50rpx; 
+  color: #888; 
+  font-size: 26rpx; 
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
+/* ================= 全局自定义 Loading (极简黑) ================= */
+.custom-loading-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: transparent; /* 背景完全透明 */
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-box {
+  background: rgba(0, 0, 0, 0.75); /* 黑色半透明底 */
+  padding: 40rpx 60rpx;
+  border-radius: 24rpx;
+  display: flex; flex-direction: column; align-items: center;
+  backdrop-filter: blur(10px); /* 磨砂玻璃效果 */
+}
+
+.spinner {
+  width: 60rpx; height: 60rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.2); /* 轨道颜色 */
+  border-top-color: #fff; /* 转动部分纯白 */
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+.loading-text {
+  color: #fff; 
+  font-size: 26rpx; 
+  letter-spacing: 2rpx;
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+/* ================= 空状态卡片 ================= */
+.empty-order-card {
+  /* 左右留边距，和下面的设备卡片对齐 */
+  margin: 0 40rpx 40rpx; 
+  /* 给一个合适的高度，占住位置 */
+  height: 400rpx; 
+  
+  background: #fff;
+  border-radius: 40rpx;
+  /* 关键：用虚线边框，暗示"这里缺东西" */
+  border: 4rpx dashed #E5E5E5; 
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 按压反馈 */
+.empty-order-card:active {
+  background: #FAFAFA;
+  border-color: #CCC;
+  transform: scale(0.99);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 60rpx;
+  margin-bottom: 20rpx;
+  opacity: 0.8;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin-bottom: 8rpx;
+}
+
+.empty-desc {
+  font-size: 22rpx;
+  color: #8E8E93;
+  margin-bottom: 40rpx;
+}
+
+/* 黑色引流按钮 */
+.go-shop-btn {
+  background: #000;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+}
+
+/* ================= 输入弹窗样式 ================= */
+.cd-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F5F5F7;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #000;
+  margin: 30rpx 0;
+  box-sizing: border-box;
+}
+
+/* === 2. 连接成功状态条 (黑白风) === */
+.bt-connected-bar {
+  background: #F7F7F7; /* 浅灰底 */
+  border: 2rpx solid #000; /* 【修改】黑边框 */
+  border-radius: 20rpx;
+  padding: 30rpx; display: flex; align-items: center; margin-bottom: 40rpx;
+}
+.bt-c-icon { font-size: 40rpx; margin-right: 20rpx; }
+.bt-c-info { flex: 1; display: flex; flex-direction: column; }
+.bt-c-name { font-size: 22rpx; color: #666; font-weight: 700; }
+.bt-c-sn { font-size: 32rpx; font-weight: 800; color: #000; letter-spacing: 2rpx; } /* SN码加粗变黑 */
+
+.bt-disconnect-btn {
+  font-size: 24rpx; 
+  color: #fff; background: #000; /* 【修改】黑色按钮 */
+  padding: 12rpx 30rpx;
+  border-radius: 30rpx; 
+  font-weight: 600;
+}
+.bt-disconnect-btn:active { opacity: 0.8; }
+
+/* === 被锁状态 UI (红色禁止) === */
+.locked-view {
+  display: flex; flex-direction: column; align-items: center; 
+  padding: 60rpx 0; background: #FFF0F0; border-radius: 20rpx;
+}
+.locked-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+.locked-title { font-size: 36rpx; font-weight: 800; color: #FF3B30; margin-bottom: 10rpx; }
+.locked-desc { font-size: 24rpx; color: #666; width: 80%; text-align: center; }
+.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
+.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+
+.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
+.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
+.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
+
+/* 蓝牙按钮基础样式 */
+.bt-btn { 
+  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
+  background: #fff; box-sizing: border-box;
+  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
+  transition: all 0.3s;
+}
+
+/* 连接成功状态 */
+.bt-btn.ready { 
+  background: #34C759; border-color: #34C759; color: #fff; 
+}
+
+/* === 修复后的柔和波纹动画 === */
+.scan-radar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  overflow: visible; /* 允许波纹扩散出去 */
+}
+
+.ripple {
+  position: absolute;
+  width: 100rpx; height: 100rpx; /* 初始小圆 */
+  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
+  border-radius: 50%;
+  opacity: 0;
+  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* 错开动画时间 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.6s; }
+.r3 { animation-delay: 1.2s; }
+
+@keyframes rippleSmooth {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.5; /* 出现 */
+  }
+  100% {
+    transform: scale(4); /* 放大4倍 */
+    opacity: 0; /* 慢慢消失 */
+  }
+}
+
+.form-item { margin-bottom: 30rpx; }
+.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
+
+.upload-group { display: flex; gap: 20rpx; }
+.upload-box { 
+  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
+  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
+  justify-content: center; font-size: 22rpx; color: #999; 
+  position: relative;
+  overflow: hidden;
+}
+.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
+.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
+
+.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
+.submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+/* === 自定义弹窗样式 === */
+.custom-dialog-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
+}
+.custom-dialog-box {
+  width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+}
+@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
+.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+
+.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
+.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
+.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.confirm { background: #000; color: #fff; }
+.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ========================================= */
+/* 蓝牙雷达按钮：Apple AirDrop 风格 */
+/* ========================================= */
+
+.bt-scan-container {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 80rpx 0; /* 上下留白加大 */
+}
+
+/* 1. 外层容器 */
+.radar-circle {
+  width: 200rpx; height: 200rpx; /* 整体加大，显得大气 */
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 2. 核心黑球 */
+.radar-core {
+  width: 120rpx; height: 120rpx; 
+  background: #000; /* 纯黑 */
+  border-radius: 50%; 
+  z-index: 20; /* 确保在波纹上面 */
+  display: flex; align-items: center; justify-content: center;
+  
+  /* 加一个高级的投影 */
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+/* 按下去的时候稍微缩一下，有反馈感 */
+.radar-circle:active .radar-core {
+  transform: scale(0.95);
+}
+
+/* 3. 蓝牙图标 (Base64图片) */
+.bt-icon-img {
+  width: 50rpx; height: 50rpx;
+}
+
+/* 4. 波纹圈 (极细线条) */
+.radar-ring {
+  position: absolute; 
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%); /* 物理居中 */
+  width: 120rpx; height: 120rpx;    /* 初始大小和黑球一样 */
+  
+  border-radius: 50%; 
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 极细的淡灰色线条 */
+  background: transparent;
+  box-sizing: border-box;
+  opacity: 0;
+  z-index: 10;
+}
+
+/* 5. 动画逻辑 (只有 isScanning 时才动) */
+.radar-ring.anim { 
+  animation: airDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite; 
+}
+
+/* 错开时间，制造连贯感 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.8s; }
+.r3 { animation-delay: 1.6s; }
+
+/* 动画关键帧：像水波一样扩散 */
+@keyframes airDropRipple {
+  0% {
+    width: 120rpx; height: 120rpx;
+    opacity: 0.6;
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    width: 300rpx; height: 300rpx; /* 扩散得更远 */
+    opacity: 0;
+    border-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* 底部提示文字 */
+.radar-tip {
+  margin-top: 50rpx; 
+  color: #888; 
+  font-size: 26rpx; 
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
+/* ================= 全局自定义 Loading (极简黑) ================= */
+.custom-loading-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: transparent; /* 背景完全透明 */
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-box {
+  background: rgba(0, 0, 0, 0.75); /* 黑色半透明底 */
+  padding: 40rpx 60rpx;
+  border-radius: 24rpx;
+  display: flex; flex-direction: column; align-items: center;
+  backdrop-filter: blur(10px); /* 磨砂玻璃效果 */
+}
+
+.spinner {
+  width: 60rpx; height: 60rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.2); /* 轨道颜色 */
+  border-top-color: #fff; /* 转动部分纯白 */
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+.loading-text {
+  color: #fff; 
+  font-size: 26rpx; 
+  letter-spacing: 2rpx;
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+/* ================= 空状态卡片 ================= */
+.empty-order-card {
+  /* 左右留边距，和下面的设备卡片对齐 */
+  margin: 0 40rpx 40rpx; 
+  /* 给一个合适的高度，占住位置 */
+  height: 400rpx; 
+  
+  background: #fff;
+  border-radius: 40rpx;
+  /* 关键：用虚线边框，暗示"这里缺东西" */
+  border: 4rpx dashed #E5E5E5; 
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 按压反馈 */
+.empty-order-card:active {
+  background: #FAFAFA;
+  border-color: #CCC;
+  transform: scale(0.99);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 60rpx;
+  margin-bottom: 20rpx;
+  opacity: 0.8;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin-bottom: 8rpx;
+}
+
+.empty-desc {
+  font-size: 22rpx;
+  color: #8E8E93;
+  margin-bottom: 40rpx;
+}
+
+/* 黑色引流按钮 */
+.go-shop-btn {
+  background: #000;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+}
+
+/* ================= 输入弹窗样式 ================= */
+.cd-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F5F5F7;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #000;
+  margin: 30rpx 0;
+  box-sizing: border-box;
+}
+
+/* === 2. 连接成功状态条 (黑白风) === */
+.bt-connected-bar {
+  background: #F7F7F7; /* 浅灰底 */
+  border: 2rpx solid #000; /* 【修改】黑边框 */
+  border-radius: 20rpx;
+  padding: 30rpx; display: flex; align-items: center; margin-bottom: 40rpx;
+}
+.bt-c-icon { font-size: 40rpx; margin-right: 20rpx; }
+.bt-c-info { flex: 1; display: flex; flex-direction: column; }
+.bt-c-name { font-size: 22rpx; color: #666; font-weight: 700; }
+.bt-c-sn { font-size: 32rpx; font-weight: 800; color: #000; letter-spacing: 2rpx; } /* SN码加粗变黑 */
+
+.bt-disconnect-btn {
+  font-size: 24rpx; 
+  color: #fff; background: #000; /* 【修改】黑色按钮 */
+  padding: 12rpx 30rpx;
+  border-radius: 30rpx; 
+  font-weight: 600;
+}
+.bt-disconnect-btn:active { opacity: 0.8; }
+
+/* === 被锁状态 UI (红色禁止) === */
+.locked-view {
+  display: flex; flex-direction: column; align-items: center; 
+  padding: 60rpx 0; background: #FFF0F0; border-radius: 20rpx;
+}
+.locked-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+.locked-title { font-size: 36rpx; font-weight: 800; color: #FF3B30; margin-bottom: 10rpx; }
+.locked-desc { font-size: 24rpx; color: #666; width: 80%; text-align: center; }
+.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
+.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+
+.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
+.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
+.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
+
+/* 蓝牙按钮基础样式 */
+.bt-btn { 
+  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
+  background: #fff; box-sizing: border-box;
+  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
+  transition: all 0.3s;
+}
+
+/* 连接成功状态 */
+.bt-btn.ready { 
+  background: #34C759; border-color: #34C759; color: #fff; 
+}
+
+/* === 修复后的柔和波纹动画 === */
+.scan-radar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  overflow: visible; /* 允许波纹扩散出去 */
+}
+
+.ripple {
+  position: absolute;
+  width: 100rpx; height: 100rpx; /* 初始小圆 */
+  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
+  border-radius: 50%;
+  opacity: 0;
+  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* 错开动画时间 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.6s; }
+.r3 { animation-delay: 1.2s; }
+
+@keyframes rippleSmooth {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.5; /* 出现 */
+  }
+  100% {
+    transform: scale(4); /* 放大4倍 */
+    opacity: 0; /* 慢慢消失 */
+  }
+}
+
+.form-item { margin-bottom: 30rpx; }
+.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
+
+.upload-group { display: flex; gap: 20rpx; }
+.upload-box { 
+  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
+  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
+  justify-content: center; font-size: 22rpx; color: #999; 
+  position: relative;
+  overflow: hidden;
+}
+.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
+.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
+
+.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
+.submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+/* === 自定义弹窗样式 === */
+.custom-dialog-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
+}
+.custom-dialog-box {
+  width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+}
+@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
+.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+
+.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
+.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
+.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.confirm { background: #000; color: #fff; }
+.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ========================================= */
+/* 蓝牙雷达按钮：Apple AirDrop 风格 */
+/* ========================================= */
+
+.bt-scan-container {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 80rpx 0; /* 上下留白加大 */
+}
+
+/* 1. 外层容器 */
+.radar-circle {
+  width: 200rpx; height: 200rpx; /* 整体加大，显得大气 */
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 2. 核心黑球 */
+.radar-core {
+  width: 120rpx; height: 120rpx; 
+  background: #000; /* 纯黑 */
+  border-radius: 50%; 
+  z-index: 20; /* 确保在波纹上面 */
+  display: flex; align-items: center; justify-content: center;
+  
+  /* 加一个高级的投影 */
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+/* 按下去的时候稍微缩一下，有反馈感 */
+.radar-circle:active .radar-core {
+  transform: scale(0.95);
+}
+
+/* 3. 蓝牙图标 (Base64图片) */
+.bt-icon-img {
+  width: 50rpx; height: 50rpx;
+}
+
+/* 4. 波纹圈 (极细线条) */
+.radar-ring {
+  position: absolute; 
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%); /* 物理居中 */
+  width: 120rpx; height: 120rpx;    /* 初始大小和黑球一样 */
+  
+  border-radius: 50%; 
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 极细的淡灰色线条 */
+  background: transparent;
+  box-sizing: border-box;
+  opacity: 0;
+  z-index: 10;
+}
+
+/* 5. 动画逻辑 (只有 isScanning 时才动) */
+.radar-ring.anim { 
+  animation: airDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite; 
+}
+
+/* 错开时间，制造连贯感 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.8s; }
+.r3 { animation-delay: 1.6s; }
+
+/* 动画关键帧：像水波一样扩散 */
+@keyframes airDropRipple {
+  0% {
+    width: 120rpx; height: 120rpx;
+    opacity: 0.6;
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    width: 300rpx; height: 300rpx; /* 扩散得更远 */
+    opacity: 0;
+    border-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* 底部提示文字 */
+.radar-tip {
+  margin-top: 50rpx; 
+  color: #888; 
+  font-size: 26rpx; 
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
+/* ================= 全局自定义 Loading (极简黑) ================= */
+.custom-loading-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: transparent; /* 背景完全透明 */
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-box {
+  background: rgba(0, 0, 0, 0.75); /* 黑色半透明底 */
+  padding: 40rpx 60rpx;
+  border-radius: 24rpx;
+  display: flex; flex-direction: column; align-items: center;
+  backdrop-filter: blur(10px); /* 磨砂玻璃效果 */
+}
+
+.spinner {
+  width: 60rpx; height: 60rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.2); /* 轨道颜色 */
+  border-top-color: #fff; /* 转动部分纯白 */
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+.loading-text {
+  color: #fff; 
+  font-size: 26rpx; 
+  letter-spacing: 2rpx;
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+/* ================= 空状态卡片 ================= */
+.empty-order-card {
+  /* 左右留边距，和下面的设备卡片对齐 */
+  margin: 0 40rpx 40rpx; 
+  /* 给一个合适的高度，占住位置 */
+  height: 400rpx; 
+  
+  background: #fff;
+  border-radius: 40rpx;
+  /* 关键：用虚线边框，暗示"这里缺东西" */
+  border: 4rpx dashed #E5E5E5; 
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 按压反馈 */
+.empty-order-card:active {
+  background: #FAFAFA;
+  border-color: #CCC;
+  transform: scale(0.99);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 60rpx;
+  margin-bottom: 20rpx;
+  opacity: 0.8;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin-bottom: 8rpx;
+}
+
+.empty-desc {
+  font-size: 22rpx;
+  color: #8E8E93;
+  margin-bottom: 40rpx;
+}
+
+/* 黑色引流按钮 */
+.go-shop-btn {
+  background: #000;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+}
+
+/* ================= 输入弹窗样式 ================= */
+.cd-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F5F5F7;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #000;
+  margin: 30rpx 0;
+  box-sizing: border-box;
+}
+
+/* === 2. 连接成功状态条 (黑白风) === */
+.bt-connected-bar {
+  background: #F7F7F7; /* 浅灰底 */
+  border: 2rpx solid #000; /* 【修改】黑边框 */
+  border-radius: 20rpx;
+  padding: 30rpx; display: flex; align-items: center; margin-bottom: 40rpx;
+}
+.bt-c-icon { font-size: 40rpx; margin-right: 20rpx; }
+.bt-c-info { flex: 1; display: flex; flex-direction: column; }
+.bt-c-name { font-size: 22rpx; color: #666; font-weight: 700; }
+.bt-c-sn { font-size: 32rpx; font-weight: 800; color: #000; letter-spacing: 2rpx; } /* SN码加粗变黑 */
+
+.bt-disconnect-btn {
+  font-size: 24rpx; 
+  color: #fff; background: #000; /* 【修改】黑色按钮 */
+  padding: 12rpx 30rpx;
+  border-radius: 30rpx; 
+  font-weight: 600;
+}
+.bt-disconnect-btn:active { opacity: 0.8; }
+
+/* === 被锁状态 UI (红色禁止) === */
+.locked-view {
+  display: flex; flex-direction: column; align-items: center; 
+  padding: 60rpx 0; background: #FFF0F0; border-radius: 20rpx;
+}
+.locked-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+.locked-title { font-size: 36rpx; font-weight: 800; color: #FF3B30; margin-bottom: 10rpx; }
+.locked-desc { font-size: 24rpx; color: #666; width: 80%; text-align: center; }
+.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
+.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+
+.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
+.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
+.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
+
+/* 蓝牙按钮基础样式 */
+.bt-btn { 
+  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
+  background: #fff; box-sizing: border-box;
+  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
+  transition: all 0.3s;
+}
+
+/* 连接成功状态 */
+.bt-btn.ready { 
+  background: #34C759; border-color: #34C759; color: #fff; 
+}
+
+/* === 修复后的柔和波纹动画 === */
+.scan-radar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  overflow: visible; /* 允许波纹扩散出去 */
+}
+
+.ripple {
+  position: absolute;
+  width: 100rpx; height: 100rpx; /* 初始小圆 */
+  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
+  border-radius: 50%;
+  opacity: 0;
+  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* 错开动画时间 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.6s; }
+.r3 { animation-delay: 1.2s; }
+
+@keyframes rippleSmooth {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.5; /* 出现 */
+  }
+  100% {
+    transform: scale(4); /* 放大4倍 */
+    opacity: 0; /* 慢慢消失 */
+  }
+}
+
+.form-item { margin-bottom: 30rpx; }
+.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
+
+.upload-group { display: flex; gap: 20rpx; }
+.upload-box { 
+  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
+  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
+  justify-content: center; font-size: 22rpx; color: #999; 
+  position: relative;
+  overflow: hidden;
+}
+.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
+.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
+
+.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
+.submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+/* === 自定义弹窗样式 === */
+.custom-dialog-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
+}
+.custom-dialog-box {
+  width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+}
+@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
+.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+
+.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
+.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
+.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.confirm { background: #000; color: #fff; }
+.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ========================================= */
+/* 蓝牙雷达按钮：Apple AirDrop 风格 */
+/* ========================================= */
+
+.bt-scan-container {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 80rpx 0; /* 上下留白加大 */
+}
+
+/* 1. 外层容器 */
+.radar-circle {
+  width: 200rpx; height: 200rpx; /* 整体加大，显得大气 */
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 2. 核心黑球 */
+.radar-core {
+  width: 120rpx; height: 120rpx; 
+  background: #000; /* 纯黑 */
+  border-radius: 50%; 
+  z-index: 20; /* 确保在波纹上面 */
+  display: flex; align-items: center; justify-content: center;
+  
+  /* 加一个高级的投影 */
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+/* 按下去的时候稍微缩一下，有反馈感 */
+.radar-circle:active .radar-core {
+  transform: scale(0.95);
+}
+
+/* 3. 蓝牙图标 (Base64图片) */
+.bt-icon-img {
+  width: 50rpx; height: 50rpx;
+}
+
+/* 4. 波纹圈 (极细线条) */
+.radar-ring {
+  position: absolute; 
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%); /* 物理居中 */
+  width: 120rpx; height: 120rpx;    /* 初始大小和黑球一样 */
+  
+  border-radius: 50%; 
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 极细的淡灰色线条 */
+  background: transparent;
+  box-sizing: border-box;
+  opacity: 0;
+  z-index: 10;
+}
+
+/* 5. 动画逻辑 (只有 isScanning 时才动) */
+.radar-ring.anim { 
+  animation: airDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite; 
+}
+
+/* 错开时间，制造连贯感 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.8s; }
+.r3 { animation-delay: 1.6s; }
+
+/* 动画关键帧：像水波一样扩散 */
+@keyframes airDropRipple {
+  0% {
+    width: 120rpx; height: 120rpx;
+    opacity: 0.6;
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    width: 300rpx; height: 300rpx; /* 扩散得更远 */
+    opacity: 0;
+    border-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* 底部提示文字 */
+.radar-tip {
+  margin-top: 50rpx; 
+  color: #888; 
+  font-size: 26rpx; 
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
+/* ================= 全局自定义 Loading (极简黑) ================= */
+.custom-loading-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: transparent; /* 背景完全透明 */
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-box {
+  background: rgba(0, 0, 0, 0.75); /* 黑色半透明底 */
+  padding: 40rpx 60rpx;
+  border-radius: 24rpx;
+  display: flex; flex-direction: column; align-items: center;
+  backdrop-filter: blur(10px); /* 磨砂玻璃效果 */
+}
+
+.spinner {
+  width: 60rpx; height: 60rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.2); /* 轨道颜色 */
+  border-top-color: #fff; /* 转动部分纯白 */
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+.loading-text {
+  color: #fff; 
+  font-size: 26rpx; 
+  letter-spacing: 2rpx;
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+/* ================= 空状态卡片 ================= */
+.empty-order-card {
+  /* 左右留边距，和下面的设备卡片对齐 */
+  margin: 0 40rpx 40rpx; 
+  /* 给一个合适的高度，占住位置 */
+  height: 400rpx; 
+  
+  background: #fff;
+  border-radius: 40rpx;
+  /* 关键：用虚线边框，暗示"这里缺东西" */
+  border: 4rpx dashed #E5E5E5; 
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 按压反馈 */
+.empty-order-card:active {
+  background: #FAFAFA;
+  border-color: #CCC;
+  transform: scale(0.99);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 60rpx;
+  margin-bottom: 20rpx;
+  opacity: 0.8;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin-bottom: 8rpx;
+}
+
+.empty-desc {
+  font-size: 22rpx;
+  color: #8E8E93;
+  margin-bottom: 40rpx;
+}
+
+/* 黑色引流按钮 */
+.go-shop-btn {
+  background: #000;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+}
+
+/* ================= 输入弹窗样式 ================= */
+.cd-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F5F5F7;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #000;
+  margin: 30rpx 0;
+  box-sizing: border-box;
+}
+
+/* === 2. 连接成功状态条 (黑白风) === */
+.bt-connected-bar {
+  background: #F7F7F7; /* 浅灰底 */
+  border: 2rpx solid #000; /* 【修改】黑边框 */
+  border-radius: 20rpx;
+  padding: 30rpx; display: flex; align-items: center; margin-bottom: 40rpx;
+}
+.bt-c-icon { font-size: 40rpx; margin-right: 20rpx; }
+.bt-c-info { flex: 1; display: flex; flex-direction: column; }
+.bt-c-name { font-size: 22rpx; color: #666; font-weight: 700; }
+.bt-c-sn { font-size: 32rpx; font-weight: 800; color: #000; letter-spacing: 2rpx; } /* SN码加粗变黑 */
+
+.bt-disconnect-btn {
+  font-size: 24rpx; 
+  color: #fff; background: #000; /* 【修改】黑色按钮 */
+  padding: 12rpx 30rpx;
+  border-radius: 30rpx; 
+  font-weight: 600;
+}
+.bt-disconnect-btn:active { opacity: 0.8; }
+
+/* === 被锁状态 UI (红色禁止) === */
+.locked-view {
+  display: flex; flex-direction: column; align-items: center; 
+  padding: 60rpx 0; background: #FFF0F0; border-radius: 20rpx;
+}
+.locked-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+.locked-title { font-size: 36rpx; font-weight: 800; color: #FF3B30; margin-bottom: 10rpx; }
+.locked-desc { font-size: 24rpx; color: #666; width: 80%; text-align: center; }
+.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
+.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+
+.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
+.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
+.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
+
+/* 蓝牙按钮基础样式 */
+.bt-btn { 
+  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
+  background: #fff; box-sizing: border-box;
+  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
+  transition: all 0.3s;
+}
+
+/* 连接成功状态 */
+.bt-btn.ready { 
+  background: #34C759; border-color: #34C759; color: #fff; 
+}
+
+/* === 修复后的柔和波纹动画 === */
+.scan-radar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  overflow: visible; /* 允许波纹扩散出去 */
+}
+
+.ripple {
+  position: absolute;
+  width: 100rpx; height: 100rpx; /* 初始小圆 */
+  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
+  border-radius: 50%;
+  opacity: 0;
+  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* 错开动画时间 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.6s; }
+.r3 { animation-delay: 1.2s; }
+
+@keyframes rippleSmooth {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.5; /* 出现 */
+  }
+  100% {
+    transform: scale(4); /* 放大4倍 */
+    opacity: 0; /* 慢慢消失 */
+  }
+}
+
+.form-item { margin-bottom: 30rpx; }
+.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
+
+.upload-group { display: flex; gap: 20rpx; }
+.upload-box { 
+  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
+  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
+  justify-content: center; font-size: 22rpx; color: #999; 
+  position: relative;
+  overflow: hidden;
+}
+.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
+.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
+
+.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }

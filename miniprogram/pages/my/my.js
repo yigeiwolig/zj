@@ -11,21 +11,42 @@ Page({
     
     // 蓝牙相关状态
     isScanning: false,      // 是否正在扫描(控制动画)
-    connectStatusText: '📡 点击连接蓝牙设备',
+    connectStatusText: '点击搜索设备',
     currentSn: '', // 【新增】用来存提取出来的纯数字SN
+    isDeviceLocked: false, // [新增] 是否被锁
+    lockedReason: '',      // [新增] 被锁原因
+    connectedDeviceName: '', // [新增] 连接的设备名称
+    
+    // [新增] 弹窗控制数据
+    dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+    // 输入弹窗（用于需要输入的场景）
+    inputDialog: { show: false, title: '', placeholder: '', value: '', callback: null },
     
     // 图片路径
     imgReceipt: '', // 购买截图
     imgChat: '',    // 聊天记录
+    
+    // 绑定类型 (new/used)
+    bindType: 'new', // 默认新机
 
     // 这里先留空，等 onShow 自动去云端拉取
     orders: [],
 
-    // 模拟设备数据 (这个暂时保持静态，后续也可以上云)
-    deviceList: [
-      { name: 'F2 PRO Long', sn: 'F2L-882019902', days: 482, hasExtra: true, expiryDate: '2026-12-15', activations: 12, firmware: 'v3.2.1' },
-      { name: 'F1 MAX', sn: 'F1M-110293308', days: 28, hasExtra: false, expiryDate: '2026-01-20', activations: 1, firmware: 'v1.0.5' }
-    ],
+    // 设备数据 (从云端 sn 集合读取)
+    deviceList: [],
+    
+    // 审核列表 (管理员用)
+    auditList: [],
+    
+    // 【新增】管理员审核弹窗数据
+    showAuditModal: false,
+    currentAuditItem: null, // 当前正在审的那一条
+    adminSetDate: '',       // 管理员修改的日期
+    adminSetDaysIndex: 1,   // 选中的天数索引（默认365天）
+    warrantyOptions: ['180天 (半年)', '365天 (一年)', '500天', '720天 (两年)'], // 选项文案
+    warrantyValues: [180, 365, 500, 720], // 对应的值
+
+    myOpenid: '', // 【新增】用来存当前用户的 OpenID
 
     isAuthorized: false, // 是否是授权管理员
     isAdmin: false,      // 是否开启了管理模式
@@ -37,11 +58,12 @@ Page({
     pendingList: [], // 待发货 (PAID)
     shippedList: [], // 已发货 + 已完成 (SHIPPED + SIGNED)
     
-    // 普通用户还是用这个
-    orders: [],
-    
     // Swiper 动态高度
-    swiperHeight: 900 // 默认高度，单位 px
+    swiperHeight: 900, // 默认高度，单位 px
+    
+    // Loading 状态
+    isLoading: false,
+    loadingText: '加载中...',
   },
 
   onLoad() {
@@ -62,8 +84,9 @@ Page({
 
   // --- 1. 页面显示时，加载云端数据 ---
   onShow() {
-    this.checkAdminPrivilege(); // 登录时检查权限
+    this.checkAdminPrivilege(); // 登录时检查权限（内部会调用 loadMyDevices）
     this.loadMyOrders();
+    // loadMyDevices 已经在 checkAdminPrivilege 中调用，确保 myOpenid 已获取
   },
 
   // ================== 权限检查逻辑 ==================
@@ -71,8 +94,13 @@ Page({
     try {
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
+      
+      // 【关键】存下来，给 loadMyDevices 用
+      this.setData({ myOpenid: myOpenid });
+
       const db = wx.cloud.database();
       const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      
       if (adminCheck.data.length > 0) {
         this.setData({ 
           isAuthorized: true, 
@@ -80,7 +108,13 @@ Page({
         });
         // 权限确认后，立刻重新加载订单，这样才能切到管理员视图
         this.loadMyOrders();
+        this.loadAuditList(); // 如果是管理员，加载审核列表
       }
+      
+      // 不管是不是管理员，都要加载我的设备
+      // 放在这里调用，确保 myOpenid 已经拿到了
+      this.loadMyDevices();
+
     } catch (err) {
       console.error('[my.js] 权限检查失败', err);
     }
@@ -91,14 +125,17 @@ Page({
   adminShipOrder(e) {
     const orderId = e.currentTarget.dataset.id; // 数据库 _id
     
-    wx.showModal({
+    this.showInputDialog({
       title: '录入快递单号',
-      editable: true,
-      placeholderText: '请输入顺丰/圆通单号',
+      placeholder: '请输入顺丰/圆通单号',
       success: (res) => {
         if (res.confirm && res.content) {
           const sn = res.content.trim();
-          wx.showLoading({ title: '正在同步...' });
+          if (!sn) {
+            this.showMyDialog({ title: '提示', content: '请输入单号' });
+            return;
+          }
+          this.showMyLoading('正在提交...');
 
           // 【核心修改】调用云函数去修改，而不是直接 db.update
           wx.cloud.callFunction({
@@ -109,13 +146,20 @@ Page({
               trackingId: sn
             },
             success: r => {
-              wx.hideLoading();
-              wx.showToast({ title: '发货成功' });
-              this.loadMyOrders(); // 刷新列表
+              this.hideMyLoading();
+              
+              // ✅ [替换]
+              this.showMyDialog({
+                title: '发货成功',
+                content: '物流单号已录入，用户端已同步。',
+                success: () => {
+                  this.loadMyOrders(); // 刷新订单列表
+                }
+              });
             },
             fail: err => {
-              wx.hideLoading();
-              wx.showModal({ title: '失败', content: err.toString() });
+              this.hideMyLoading();
+              this.showMyDialog({ title: '失败', content: err.toString() });
             }
           })
         }
@@ -137,7 +181,7 @@ Page({
 
   // --- 2. 从云数据库拉取订单 ---
   loadMyOrders() {
-    wx.showLoading({ title: '同步中...' });
+    this.showMyLoading('同步中...');
 
     const getAction = this.data.isAdmin 
       ? wx.cloud.callFunction({ name: 'adminGetOrders' }) 
@@ -146,7 +190,7 @@ Page({
     const promise = this.data.isAdmin ? getAction.then(res => res.result) : getAction;
 
     promise.then(res => {
-      wx.hideLoading();
+      this.hideMyLoading();
       
       // 数据清洗 (保持之前的逻辑不变)
       const formatted = res.data.map(item => {
@@ -195,7 +239,7 @@ Page({
       }
 
     }).catch(err => {
-      wx.hideLoading();
+      this.hideMyLoading();
       console.error(err);
     });
   },
@@ -232,7 +276,7 @@ Page({
   // 1. [调试] 模拟支付成功 (直接改数据库状态)
   debugSimulatePay(e) {
     const id = e.currentTarget.dataset.id;
-    wx.showLoading({ title: '模拟支付中...' });
+    this.showMyLoading('模拟支付中...');
 
     // 直接调用云函数强行改状态
     wx.cloud.callFunction({
@@ -242,17 +286,17 @@ Page({
         action: 'simulate_pay' // 需要去云函数里加这个 case
       },
       success: res => {
-        wx.hideLoading();
-        wx.showToast({ title: '模拟成功', icon: 'success' });
+        this.hideMyLoading();
+        this.showMyDialog({ title: '模拟成功', content: '订单状态已更新' });
         this.loadMyOrders(); // 刷新列表
       },
       fail: err => {
-        wx.hideLoading();
+        this.hideMyLoading();
         // 【修改】把错误打印在控制台，截图给我看
         console.error("模拟支付失败，详细报错:", err); 
         
         // 把 err.errMsg 弹出来，这样我就知道具体错哪了
-        wx.showModal({ 
+        this.showMyDialog({ 
           title: '调用失败', 
           content: err.errMsg || JSON.stringify(err),
           showCancel: false
@@ -270,14 +314,15 @@ Page({
     // 真正的"重新支付"需要后端支持原单号支付，比较复杂。
     // 建议这里简单处理：
     
-    wx.showModal({
+    this.showMyDialog({
       title: '重新支付',
       content: '是否重新发起支付请求？',
+      showCancel: true,
       success: (res) => {
         if(res.confirm) {
            // 这里调用和 shop.js 一样的支付逻辑
            // 由于代码复用问题，建议引导用户重新下单，或者把 shop.js 的支付逻辑抽离到 app.js
-           wx.showToast({ title: '功能开发中', icon: 'none' });
+           this.showMyDialog({ title: '提示', content: '功能开发中' });
         }
       }
     })
@@ -357,7 +402,10 @@ Page({
     const sn = e.currentTarget.dataset.sn;
     console.log("尝试跳转查单号:", sn);
 
-    if (!sn) return wx.showToast({ title: '无单号', icon: 'none' });
+    if (!sn) {
+      this.showMyDialog({ title: '提示', content: '无单号' });
+      return;
+    }
 
     wx.navigateToMiniProgram({
       // 👇👇👇【这里也要改】把 a 改成 c 👇👇👇
@@ -367,9 +415,9 @@ Page({
       success(res) {
         console.log('跳转成功');
       },
-      fail(err) {
+      fail: (err) => {
         console.error('跳转失败', err);
-        wx.showModal({
+        this.showMyDialog({
           title: '跳转失败',
           // 把错误打印出来看，通常是因为 app.json 没生效
           content: err.errMsg, 
@@ -383,26 +431,29 @@ Page({
   userCancelOrder(e) {
     const id = e.currentTarget.dataset.id;
     
-    wx.showModal({
+    this.showMyDialog({
       title: '取消订单',
       content: '确定要取消并删除该订单吗？',
-      confirmColor: '#FF3B30',
+      showCancel: true,
+      confirmText: '确定取消',
+      cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '处理中...' });
+          this.showMyLoading('处理中...');
           
           // 调用云函数删除订单
           wx.cloud.callFunction({
             name: 'adminUpdateOrder',
             data: { id: id, action: 'delete' },
             success: () => {
-              wx.hideLoading();
-              wx.showToast({ title: '已取消' });
+              this.hideMyLoading();
+              this.showMyDialog({ title: '已取消', content: '订单已删除' });
               this.loadMyOrders(); // 刷新列表，订单消失
             },
             fail: err => {
-              wx.hideLoading();
+              this.hideMyLoading();
               console.error(err);
+              this.showMyDialog({ title: '失败', content: err.errMsg || '操作失败' });
             }
           });
         }
@@ -419,39 +470,14 @@ Page({
     const id = e.currentTarget.dataset.id;
     const currentPrice = e.currentTarget.dataset.price;
 
-    wx.showModal({
+    // 注意：自定义弹窗不支持 editable，需要改用其他方式输入
+    // 这里先用简单提示，后续可以改为自定义输入框
+    this.showMyDialog({
       title: '修改订单金额',
-      content: `当前金额：¥${currentPrice}`,
-      editable: true,
-      placeholderText: '输入新金额 (如 888)',
-      success: (res) => {
-        if (res.confirm && res.content) {
-          const price = parseFloat(res.content);
-          if (isNaN(price) || price < 0) {
-            return wx.showToast({ title: '金额无效', icon: 'none' });
-          }
-
-          wx.showLoading({ title: '正在改价...' });
-          
-          wx.cloud.callFunction({
-            name: 'adminUpdateOrder',
-            data: { 
-              id: id, 
-              action: 'update_price',
-              newPrice: price
-            },
-            success: () => {
-              wx.hideLoading();
-              wx.showToast({ title: '改价成功', icon: 'success' });
-              this.loadMyOrders(); // 刷新显示新价格
-            },
-            fail: err => {
-              wx.hideLoading();
-              wx.showToast({ title: '改价失败', icon: 'none' });
-            }
-          });
-        }
-      }
+      content: `当前金额：¥${currentPrice}\n\n提示：改价功能需要输入框支持，请使用其他方式修改。`,
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消'
     });
   },
 
@@ -461,16 +487,17 @@ Page({
     if(!text) return;
     wx.setClipboardData({
       data: text,
-      success: () => wx.showToast({ title: '已复制', icon: 'none' })
+      success: () => this.showMyDialog({ title: '提示', content: '已复制' })
     });
   },
 
   // --- 申请退款 ---
   onRefund() {
-    wx.showModal({
+    this.showMyDialog({
       title: '申请退款',
       content: '请联系客服进行人工退款审核。',
       confirmText: '联系客服',
+      showCancel: true,
       success: (res) => {
         if(res.confirm) {
           // 可以在这里跳转客服
@@ -480,8 +507,106 @@ Page({
   },
 
   // --- 绑定设备相关逻辑 ---
-  openBindModal() { this.setData({ showModal: true }); },
-  closeBindModal() { this.setData({ showModal: false }); },
+  openBindModal() { 
+    this.resetBluetoothState(); // 这一步保证了每次进来都是干净的
+    this.setData({ showModal: true }); 
+  },
+  closeBindModal() { 
+    this.resetBluetoothState(); // 关闭时也重置
+    this.setData({ showModal: false }); 
+  },
+  
+  // [新增] 重置蓝牙和表单状态
+  resetBluetoothState() {
+    // 1. 断开物理连接
+    if (this.ble) {
+      this.ble.stopScan();
+      this.ble.disconnect();
+    }
+
+    // 2. 清空数据
+    this.setData({
+      isScanning: false,
+      bluetoothReady: false,
+      connectStatusText: '点击搜索设备',
+      currentSn: '',
+      connectedDeviceName: '',
+      
+      // 锁状态清空
+      isDeviceLocked: false,
+      lockedReason: '',
+      
+      // 表单清空
+      modelIndex: null,
+      buyDate: '',
+      imgReceipt: '',
+      imgChat: ''
+    });
+  },
+  
+  // [工具] 呼叫自定义弹窗
+  showMyDialog(options) {
+    this.setData({
+      'dialog.show': true,
+      'dialog.title': options.title || '提示',
+      'dialog.content': options.content || '',
+      'dialog.showCancel': options.showCancel || false,
+      'dialog.confirmText': options.confirmText || '确定',
+      'dialog.cancelText': options.cancelText || '取消',
+      'dialog.callback': options.success || null // 存下回调函数
+    });
+  },
+
+  // [交互] 点击弹窗确定
+  onDialogConfirm() {
+    const cb = this.data.dialog.callback;
+    this.setData({ 'dialog.show': false }); // 先关弹窗
+    if (cb) cb({ confirm: true }); // 执行回调
+  },
+
+  // [交互] 点击取消
+  closeCustomDialog() {
+    this.setData({ 'dialog.show': false });
+  },
+
+  // 显示 Loading
+  showMyLoading(title = '加载中...') {
+    this.setData({ isLoading: true, loadingText: title });
+  },
+
+  // 隐藏 Loading
+  hideMyLoading() {
+    this.setData({ isLoading: false });
+  },
+
+  // 显示输入弹窗
+  showInputDialog(options) {
+    this.setData({
+      'inputDialog.show': true,
+      'inputDialog.title': options.title || '输入',
+      'inputDialog.placeholder': options.placeholder || '请输入',
+      'inputDialog.value': options.value || '',
+      'inputDialog.callback': options.success || null
+    });
+  },
+
+  // 关闭输入弹窗
+  closeInputDialog() {
+    this.setData({ 'inputDialog.show': false });
+  },
+
+  // 输入弹窗输入监听
+  onInputDialogInput(e) {
+    this.setData({ 'inputDialog.value': e.detail.value });
+  },
+
+  // 输入弹窗确认
+  onInputDialogConfirm() {
+    const callback = this.data.inputDialog.callback;
+    const value = this.data.inputDialog.value;
+    this.setData({ 'inputDialog.show': false });
+    if (callback) callback({ confirm: true, content: value });
+  },
 
   // --- 配置蓝牙回调 ---
   setupBleCallbacks() {
@@ -510,7 +635,7 @@ Page({
 
     // 状态：错误
     this.ble.onError = (err) => {
-      wx.hideLoading();
+      this.hideMyLoading();
       this.setData({ 
         isScanning: false, 
         connectStatusText: '蓝牙错误，请检查权限' 
@@ -536,70 +661,94 @@ Page({
         this.ble.startScan(); 
       })
       .catch(() => {
-        wx.showToast({ title: '请开启手机蓝牙', icon: 'none' });
+        this.showMyDialog({ title: '提示', content: '请开启手机蓝牙' });
         this.setData({ isScanning: false, connectStatusText: '请开启蓝牙后重试' });
       });
   },
 
   // --- 核心业务：处理设备绑定 (连接成功后调用) ---
   handleDeviceBound(device) {
-    const deviceName = device.name || device.localName || '';
+    const rawName = device.name || device.localName || '';
     
-    // 扫描时识别的是 NB 开头，但连接后显示为 MT
-    // 如果设备名是 NB 开头，提取后面的部分作为 SN
-    // 如果设备名是 MT 开头，也提取后面的部分作为 SN
-    let sn = '';
-    
-    if (deviceName.toUpperCase().startsWith('NB')) {
-      // NB 开头的设备，去掉 NB 前缀，剩下的就是 SN
-      sn = deviceName.replace(/^NB/i, '').trim();
-    } else if (deviceName.toUpperCase().startsWith('MT')) {
-      // MT 开头的设备，去掉 MT 前缀
-      sn = deviceName.replace(/^MT/i, '').trim();
-    } else {
-      // 既不是 NB 也不是 MT，可能是误连
-      console.log('非目标设备，忽略:', deviceName);
-      return;
-    } 
+    // 1. 【搜 NB】只允许 NB 开头的设备连接
+    if (!rawName.toUpperCase().startsWith('NB')) {
+      console.log('非NB设备，忽略:', rawName);
+      return; 
+    }
+
+    // 2. 【取 SN】去掉 NB，剩下的就是纯数字 SN
+    const sn = rawName.replace(/^NB/i, '').trim(); 
 
     if (!sn) {
-      wx.showModal({ title: '错误', content: 'SN码解析失败', showCancel: false });
+      this.showMyDialog({ title: '错误', content: '无法识别SN码' });
       this.ble.disconnect();
       return;
     }
 
-    // 存到 data 里，给后面的提交按钮用
-    // 显示时使用 MT + SN 格式
+    // 3. 【变 MT】生成一个假的显示名称，给用户看，也给数据库存
     const displayName = 'MT' + sn;
+
+    // 更新界面提示
     this.setData({ 
-      currentSn: sn,
-      connectStatusText: `正在验证: ${displayName}` 
+      isScanning: false,
+      connectStatusText: `正在验证: ${displayName}...` 
     });
 
-    // 调用之前的 bindDevice 云函数 (锁定设备)
-    // 这一步是 "抢占设备"，防止别人连
-    // 注意：云函数中存储的 deviceName 使用 MT 前缀显示
+    // 4. 调用云函数 (传过去的 deviceName 是 MT 开头的)
     wx.cloud.callFunction({
-      name: 'bindDevice', // 这个云函数保持之前的逻辑，它负责存 sn 集合
+      name: 'bindDevice',
       data: {
         sn: sn,
-        deviceName: displayName // 存储时使用 MT + SN
+        deviceName: displayName // 告诉云端这个设备叫 MTxxx
       },
       success: res => {
-        if (res.result.success) {
-          wx.showToast({ title: '设备验证通过', icon: 'success' });
-          this.setData({ 
-            isScanning: false,
-            bluetoothReady: true,
-            connectStatusText: `✅ 已连接: ${displayName}` 
-          });
+        const result = res.result;
+        
+        // 只要物理连接成功，界面上就显示 MTxxx
+        this.setData({
+          bluetoothReady: true,
+          connectedDeviceName: displayName, // 【关键】界面显示 MT
+          connectStatusText: '已连接'
+        });
+
+        if (result.success) {
+          // 情况1：自动通过 (重绑/二手)
+          if (result.status === 'AUTO_APPROVED') {
+            // 使用自定义弹窗，而不是 Toast
+            this.showMyDialog({
+              title: '绑定成功',
+              content: '设备已激活并连接，数据已同步。',
+              confirmText: '好的',
+              success: () => {
+                this.closeBindModal();
+                this.loadMyDevices();
+              }
+            });
+          } 
+          // 情况2：新机需审核
+          else if (result.status === 'NEED_AUDIT') {
+            // 这里不需要弹窗，只需要 Toast 提示一下让用户填表，或者直接静默
+            // 如果非要弹窗，可以用 showMyDialog
+            // 但建议这里用这一行轻提示即可，否则太打断流程
+            this.showMyDialog({ title: '提示', content: '验证通过，请填表' });
+            
+            this.setData({ 
+              currentSn: sn,
+              isDeviceLocked: false 
+            });
+          }
+
         } else {
-          wx.showModal({ title: '绑定失败', content: res.result.msg, showCancel: false });
-          this.ble.disconnect();
+          // 失败情况 (被锁)
+          this.setData({
+            isDeviceLocked: true,
+            lockedReason: result.msg
+          });
         }
       },
       fail: () => {
-        this.ble.disconnect();
+        this.showMyDialog({ title: '错误', content: '网络校验失败' });
+        this.resetBluetoothState();
       }
     });
   },
@@ -615,7 +764,7 @@ Page({
       mediaType: ['image'],
       success: async (res) => {
         const tempPath = res.tempFiles[0].tempFilePath;
-        wx.showLoading({ title: '上传中...' });
+        this.showMyLoading('上传中...');
         
         // 上传到云存储
         const cloudPath = `proofs/${Date.now()}-${Math.floor(Math.random()*1000)}.png`;
@@ -624,7 +773,7 @@ Page({
           cloudPath: cloudPath,
           filePath: tempPath,
           success: uploadRes => {
-            wx.hideLoading();
+            this.hideMyLoading();
             // 更新页面显示
             if (type === 'receipt') {
               this.setData({ imgReceipt: uploadRes.fileID });
@@ -633,8 +782,8 @@ Page({
             }
           },
           fail: err => {
-            wx.hideLoading();
-            wx.showToast({ title: '上传失败', icon: 'none' });
+            this.hideMyLoading();
+            this.showMyDialog({ title: '上传失败', content: err.errMsg || '请重试' });
           }
         });
       }
@@ -647,24 +796,28 @@ Page({
   submitAudit() {
     // A. 校验蓝牙是否连接 (必须有 SN)
     if (!this.data.bluetoothReady || !this.data.currentSn) {
-      return wx.showToast({ title: '请先连接MT设备', icon: 'none' });
+      this.showMyDialog({ title: '提示', content: '请先连接MT设备' });
+      return;
     }
 
     // B. 校验型号
     if (this.data.modelIndex === null) {
-      return wx.showToast({ title: '请选择型号', icon: 'none' });
+      this.showMyDialog({ title: '提示', content: '请选择型号' });
+      return;
     }
 
     // C. 校验图片 (购买截图必传)
     if (!this.data.imgReceipt) {
-      return wx.showToast({ title: '请上传购买截图', icon: 'none' });
+      this.showMyDialog({ title: '提示', content: '请上传购买截图' });
+      return;
     }
     // 如果是二手，校验聊天记录
     if (this.data.bindType === 'used' && !this.data.imgChat) {
-      return wx.showToast({ title: '请上传聊天记录', icon: 'none' });
+      this.showMyDialog({ title: '提示', content: '请上传聊天记录' });
+      return;
     }
 
-    wx.showLoading({ title: '提交中...' });
+    this.showMyLoading('提交中...');
 
     // D. 存入数据库 my_read
     const db = wx.cloud.database();
@@ -686,29 +839,21 @@ Page({
         createTime: db.serverDate()
       }
     }).then(res => {
-      wx.hideLoading();
-      wx.showModal({
-        title: '提交成功',
-        content: '您的绑定申请已提交，审核通过后生效。',
-        showCancel: false,
+      this.hideMyLoading();
+      
+      // 使用自定义弹窗
+      this.showMyDialog({
+        title: '已提交',
+        content: '审核通过后将自动生效。',
         success: () => {
           this.closeBindModal();
-          // 清空表单
-          this.setData({
-            imgReceipt: '',
-            imgChat: '',
-            modelIndex: null,
-            bluetoothReady: false,
-            currentSn: ''
-          });
-          // 断开蓝牙
-          if(this.ble) this.ble.disconnect();
+          this.resetBluetoothState(); // 【关键】提交成功后，断开连接，清空状态
         }
       });
     }).catch(err => {
-      wx.hideLoading();
+      this.hideMyLoading();
       console.error(err);
-      wx.showToast({ title: '提交失败', icon: 'none' });
+      this.showMyDialog({ title: '提交失败', content: err.errMsg || '网络错误，请重试' });
     });
   },
 
@@ -719,17 +864,50 @@ Page({
   onModelChange(e) { this.setData({ modelIndex: e.detail.value }); },
   onDateChange(e) { this.setData({ buyDate: e.detail.value }); },
 
+  // 点击设备卡片右上角的 X
   removeDevice(e) {
     const index = e.currentTarget.dataset.index;
-    wx.showModal({
+    const device = this.data.deviceList[index];
+    
+    // 这里的 device.sn 前端显示时加了 'MT'，我们需要去掉
+    // 假设 device.sn 是 "MT8820"，我们要取 "8820"
+    const rawSn = device.sn.replace(/^MT/i, ''); 
+
+    // 使用自定义弹窗替代 wx.showModal
+    this.showMyDialog({
       title: '解除绑定',
-      content: '确定要移除该设备并放弃相关质保权益吗？',
-      confirmColor: '#FF3B30',
+      content: '解绑后您将无法查看该设备状态。如果设备转让给他人，解绑后对方才可连接。确定操作吗？',
+      showCancel: true,
+      confirmText: '确定解绑',
+      cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          let list = this.data.deviceList;
-          list.splice(index, 1);
-          this.setData({ deviceList: list });
+          this.showMyLoading('正在解绑...');
+          
+          wx.cloud.callFunction({
+            name: 'unbindDevice',
+            data: { sn: rawSn },
+            success: res => {
+              this.hideMyLoading();
+              if (res.result.success) {
+                
+                // ✅ [替换]
+                this.showMyDialog({
+                  title: '解绑成功',
+                  content: '设备已移除',
+                  success: () => {
+                    this.loadMyDevices(); // 刷新设备列表
+                  }
+                });
+              } else {
+                this.showMyDialog({ title: '失败', content: res.result.msg });
+              }
+            },
+            fail: err => {
+              this.hideMyLoading();
+              this.showMyDialog({ title: '错误', content: '网络异常' });
+            }
+          });
         }
       }
     });
@@ -741,6 +919,209 @@ Page({
     wx.navigateBack({
       fail: () => { 
         wx.reLaunch({ url: '/pages/products/products' }); 
+      }
+    });
+  },
+
+  // ================== 设备管理相关 ==================
+  // 1. 【核心修改】修复加载设备的查询条件
+  loadMyDevices() {
+    // 如果还没拿到 OpenID，先不查
+    if (!this.data.myOpenid) return;
+
+    const db = wx.cloud.database();
+    
+    // 【修改】这里使用我们之前在 bindDevice 里存的 'openid' 字段
+    // 并且不再写 '{openid}' 这种无效代码
+    db.collection('sn').where({
+      openid: this.data.myOpenid,  // 必须匹配当前用户
+      isActive: true               // 必须是审核通过的
+    }).get().then(res => {
+      console.log('查到的设备:', res.data); // 调试打印
+
+      // === 【新增】前端去重逻辑 ===
+      const uniqueMap = new Map();
+      const uniqueList = [];
+
+      res.data.forEach(item => {
+        // 如果这个 SN 还没出现过，才放进去
+        if (!uniqueMap.has(item.sn)) {
+          uniqueMap.set(item.sn, true);
+          
+          // 原有的计算逻辑
+          const now = new Date();
+          const exp = new Date(item.expiryDate);
+          const diff = Math.ceil((exp - now) / (86400000));
+
+          uniqueList.push({
+            name: item.productModel || '未知型号',
+            sn: 'MT' + item.sn,
+            days: diff > 0 ? diff : 0,
+            hasExtra: item.hasExtra,
+            expiryDate: item.expiryDate,
+            activations: item.activations,
+            firmware: item.firmware
+          });
+        }
+      });
+      // ==========================
+      
+      this.setData({ deviceList: uniqueList });
+    }).catch(err => {
+      console.error('设备加载失败:', err);
+    });
+  },
+
+  // 2. 加载待审核列表 (管理员用)
+  loadAuditList() {
+    if (!this.data.isAdmin) return;
+    
+    wx.cloud.database().collection('my_read')
+      .where({ status: 'PENDING' }) // 只看待审核
+      .orderBy('createTime', 'desc')
+      .get()
+      .then(res => {
+        this.setData({ auditList: res.data });
+      })
+      .catch(err => {
+        console.error('加载审核列表失败', err);
+      });
+  },
+
+  // 3. 打开审核弹窗（点击"审核设置"按钮）
+  openAuditModal(e) {
+    const item = e.currentTarget.dataset.item;
+    this.setData({
+      showAuditModal: true,
+      currentAuditItem: item,
+      adminSetDate: item.buyDate, // 默认填用户写的日期
+      adminSetDaysIndex: 1        // 默认选 365天
+    });
+  },
+
+  // 4. 关闭弹窗
+  closeAuditModal() {
+    this.setData({ showAuditModal: false, currentAuditItem: null });
+  },
+
+  // 5. 弹窗里的输入监听
+  onAdminDateChange(e) { 
+    this.setData({ adminSetDate: e.detail.value }); 
+  },
+  
+  onAdminDaysChange(e) { 
+    this.setData({ adminSetDaysIndex: e.detail.value }); 
+  },
+
+  // 6. 【核心】确认通过 -> 调用云函数
+  confirmApprove() {
+    const { currentAuditItem, adminSetDate, adminSetDaysIndex, warrantyValues } = this.data;
+    const days = warrantyValues[adminSetDaysIndex];
+
+    this.showMyLoading('正在同步...');
+
+    wx.cloud.callFunction({
+      name: 'adminAuditDevice',
+      data: { 
+        id: currentAuditItem._id, 
+        action: 'approve',
+        customDate: adminSetDate, // 传修改后的日期
+        customDays: days          // 传选择的天数
+      },
+      success: res => {
+        this.hideMyLoading();
+        if (res.result.success) {
+          
+          // ✅ [替换为自定义弹窗]
+          this.showMyDialog({
+            title: '审核完成',
+            content: '该设备已激活，数据已同步给用户。',
+            confirmText: '好的',
+            success: () => {
+              this.closeAuditModal(); // 关闭审核框
+              this.loadAuditList();   // 刷新列表
+              this.loadMyDevices();   // 刷新设备
+            }
+          });
+        } else {
+          // ✅ 替换
+          this.showMyDialog({ title: '失败', content: res.result.errMsg });
+        }
+      },
+      fail: err => {
+        this.hideMyLoading();
+        console.error(err);
+        this.showMyDialog({ title: '操作失败', content: err.errMsg || '网络错误，请重试' });
+      }
+    });
+  },
+
+  // 7. 拒绝操作
+  handleReject(e) {
+    const id = e.currentTarget.dataset.id;
+    
+    // 原生 wx.showModal 替换为 this.showMyDialog
+    this.showMyDialog({
+      title: '拒绝申请',
+      content: '确定要拒绝该设备的绑定申请吗？此操作不可撤销。',
+      showCancel: true,     // 显示取消按钮
+      confirmText: '确认拒绝',
+      cancelText: '手滑了',
+      success: (res) => {
+        // 只有点击确定才执行
+        if (res.confirm) {
+          this.showMyLoading('处理中...');
+          wx.cloud.callFunction({
+            name: 'adminAuditDevice',
+            data: { id: id, action: 'reject' },
+            success: () => {
+              this.hideMyLoading();
+              // 操作完成后也提示一下
+              this.showMyDialog({ title: '已拒绝', content: '该申请已被驳回。' });
+              this.loadAuditList();
+            },
+            fail: err => {
+              this.hideMyLoading();
+              console.error(err);
+              this.showMyDialog({ title: '操作失败', content: '网络错误，请重试' });
+            }
+          });
+        }
+      }
+    });
+  },
+
+  // 4. 预览图片
+  previewImage(e) {
+    const url = e.currentTarget.dataset.url;
+    if (!url) return;
+    
+    wx.previewImage({
+      urls: [url],
+      current: url
+    });
+  },
+
+  // [新增] 跳转去商城
+  goToShop() {
+    // 使用 reLaunch 确保跳转成功，并清除页面栈
+    wx.reLaunch({
+      url: '/pages/products/products',
+      success: () => {
+        console.log('跳转到产品列表页成功');
+      },
+      fail: (err) => {
+        console.error('跳转失败:', err);
+        // 如果失败，尝试跳转到主页
+        wx.reLaunch({
+          url: '/pages/index/index',
+          fail: () => {
+            this.showMyDialog({ 
+              title: '跳转失败', 
+              content: '请手动返回首页' 
+            });
+          }
+        });
       }
     });
   }

@@ -12,7 +12,6 @@ Page({
     isShowNicknameUI: false,
     isAuthorized: false,
     inputNickName: '', 
-    isLoading: false,
     step: 0, 
     locationResult: null,
     
@@ -27,7 +26,14 @@ Page({
     // 【新增】控制自定义成功提示弹窗 (黑白风)
     showCustomSuccessModal: false,
     successModalTitle: '',
-    successModalContent: ''
+    successModalContent: '',
+    
+    // Loading 状态（合并重复定义）
+    isLoading: false,
+    loadingText: '加载中...',
+    
+    // 自定义弹窗
+    dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' }
   },
 
   onLoad(options) {
@@ -46,7 +52,16 @@ Page({
 
   // === 全局封号检查 ===
   checkGlobalBanStatus() {
-    wx.cloud.callFunction({ name: 'login' }).then(res => {
+    // 添加超时和错误处理，避免卡死
+    wx.cloud.callFunction({ 
+      name: 'login',
+      timeout: 5000 // 5秒超时
+    }).then(res => {
+      if (!res || !res.result || !res.result.openid) {
+        console.warn('登录云函数返回异常，跳过封号检查');
+        return;
+      }
+      
       const openid = res.result.openid;
       
       // 🔴 统一只检查 login_logs
@@ -57,7 +72,7 @@ Page({
         .get()
         .then(result => {
           let isBanned = false;
-          if (result.data.length > 0 && result.data[0].isBanned === true) {
+          if (result.data && result.data.length > 0 && result.data[0].isBanned === true) {
             isBanned = true;
           }
 
@@ -65,7 +80,15 @@ Page({
             wx.setStorageSync('is_user_banned', true);
             wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           }
+        })
+        .catch(err => {
+          console.error('查询封号状态失败:', err);
+          // 查询失败不影响正常使用，静默处理
         });
+    })
+    .catch(err => {
+      console.error('登录云函数调用失败:', err);
+      // 云函数失败不影响正常使用，静默处理，避免卡死
     });
   },
 
@@ -83,17 +106,20 @@ Page({
   handleLogin() {
     if (this.data.isLoading) return;
     const name = this.data.inputNickName.trim();
-    if (!name) return wx.showToast({ title: '请输入昵称', icon: 'none' });
+    if (!name) {
+      this.showMyDialog({ title: '提示', content: '请输入昵称' });
+      return;
+    }
 
     this.setData({ isLoading: true });
-    wx.showLoading({ title: '验证身份...' });
+    this.showMyLoading('验证身份...');
 
     wx.cloud.callFunction({
       name: 'verifyNickname',
       data: { nickname: name }
     }).then(res => {
       this.setData({ isLoading: false });
-      wx.hideLoading();
+      this.hideMyLoading();
       
       const result = res.result || {};
 
@@ -161,8 +187,8 @@ Page({
       }
     }).catch(err => {
       this.setData({ isLoading: false });
-      wx.hideLoading();
-      wx.showToast({ title: '网络错误，请重试', icon: 'none' });
+      this.hideMyLoading();
+      this.showMyDialog({ title: '错误', content: '网络错误，请重试' });
     });
   },
 
@@ -184,9 +210,24 @@ Page({
 
   // === 点击进入逻辑 ===
   handleAccess() {
-    if (this.data.step > 0) return; 
-    if (!this.data.isAuthorized) return; 
+    console.log('[handleAccess] 点击事件触发');
+    console.log('[handleAccess] step:', this.data.step);
+    console.log('[handleAccess] isAuthorized:', this.data.isAuthorized);
+    
+    // 如果动画已经开始，不允许重复点击
+    if (this.data.step > 0) {
+      console.log('[handleAccess] 动画已开始，忽略点击');
+      return; 
+    }
+    
+    // 如果未授权，不允许进入
+    if (!this.data.isAuthorized) {
+      console.log('[handleAccess] 未授权，不允许进入');
+      this.showMyDialog({ title: '提示', content: '请先完成身份验证' });
+      return; 
+    }
 
+    console.log('[handleAccess] 开始获取位置...');
     const sysInfo = wx.getSystemInfoSync();
     const phoneModel = sysInfo.model || '未知机型';
 
@@ -194,10 +235,12 @@ Page({
       type: 'gcj02',
       isHighAccuracy: true,
       success: (res) => {
-          this.runAnimation();
+        console.log('[handleAccess] 位置获取成功:', res);
+        this.runAnimation();
         this.analyzeRegion(res.latitude, res.longitude, phoneModel);
-            },
-            fail: () => { 
+      },
+      fail: (err) => {
+        console.error('[handleAccess] 位置获取失败:', err);
         this.setData({ 
           showAuthForceModal: true, 
           authMissingType: 'location' 
@@ -256,7 +299,7 @@ Page({
       // 检查城市是否在拦截列表中
       if (blockedCities.some(c => city.indexOf(c) !== -1 || c.indexOf(city) !== -1)) {
         return true; // 城市匹配，视为高危地址
-      }
+    }
     }
     
     // 🔴 不再检查省份，高危地址只以市为准
@@ -365,7 +408,44 @@ Page({
     });
   },
 
-  handleDeny() { wx.showToast({ title: '需要授权才能使用', icon: 'none' }); },
+  // 显示自定义弹窗
+  showMyDialog(options) {
+    this.setData({
+      'dialog.show': true,
+      'dialog.title': options.title || '提示',
+      'dialog.content': options.content || '',
+      'dialog.showCancel': options.showCancel || false,
+      'dialog.confirmText': options.confirmText || '确定',
+      'dialog.cancelText': options.cancelText || '取消',
+      'dialog.callback': options.success || null
+    });
+  },
+
+  // 关闭自定义弹窗
+  closeCustomDialog() {
+    this.setData({ 'dialog.show': false });
+  },
+
+  // 点击弹窗确定
+  onDialogConfirm() {
+    const cb = this.data.dialog.callback;
+    this.setData({ 'dialog.show': false });
+    if (cb) cb({ confirm: true });
+  },
+
+  // 显示 Loading
+  showMyLoading(title = '加载中...') {
+    this.setData({ isLoading: true, loadingText: title });
+  },
+
+  // 隐藏 Loading
+  hideMyLoading() {
+    this.setData({ isLoading: false });
+  },
+
+  handleDeny() { 
+    this.showMyDialog({ title: '提示', content: '需要授权才能使用' });
+  },
   onOpenSettingResult(e) {
     if (e.detail.authSetting && e.detail.authSetting['scope.userLocation']) {
       this.setData({ showAuthForceModal: false });
@@ -403,7 +483,7 @@ Page({
   setMockLocation(e) {
     const city = e.currentTarget.dataset.city;
     app.globalData.mockLocation = city;
-    wx.showToast({ title: '已切换模拟定位', icon: 'none' });
+    this.showMyDialog({ title: '提示', content: '已切换模拟定位' });
   },
 
   // 管理员入口
@@ -420,16 +500,16 @@ Page({
       // 无论 step 是多少，都允许点击
       // 微信小程序不支持 editable，使用自定义输入框
       // 简化处理：直接跳转（实际项目中应使用自定义弹窗组件实现密码输入）
-      wx.showModal({
+      this.showMyDialog({
         title: '管理员验证',
         content: '请输入管理密码：3252955872',
-        editable: false,
+        showCancel: true,
         success: (res) => {
           console.log('Modal success callback:', res);
           if (res.confirm) {
             // 这里简化处理，实际应该使用自定义输入弹窗
             // 暂时直接跳转，后续可以添加自定义密码输入组件
-            wx.showToast({ title: '验证通过', icon: 'success' });
+            this.showMyDialog({ title: '提示', content: '验证通过' });
             setTimeout(() => {
               wx.navigateTo({
                 url: '/pages/admin/admin',
@@ -438,27 +518,22 @@ Page({
                 },
                 fail: (navErr) => {
                   console.error('导航失败:', navErr);
-                  wx.showToast({ title: '导航失败: ' + navErr.errMsg, icon: 'none', duration: 3000 });
+                  this.showMyDialog({ title: '导航失败', content: navErr.errMsg });
                 }
               });
             }, 1000);
           } else {
             console.log('用户取消了验证');
           }
-        },
-        fail: (err) => {
-          console.error('Modal fail callback:', err);
-          wx.showToast({ title: '弹窗失败: ' + err.errMsg, icon: 'none', duration: 3000 });
         }
       });
     } catch (error) {
       console.error('========== onAdminTap 发生错误 ==========');
       console.error('错误信息:', error);
       console.error('错误堆栈:', error.stack);
-      wx.showToast({ 
-        title: '点击事件错误: ' + error.message, 
-        icon: 'none', 
-        duration: 3000 
+      this.showMyDialog({ 
+        title: '错误', 
+        content: '点击事件错误: ' + error.message
       });
     }
   }

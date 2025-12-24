@@ -1,343 +1,338 @@
+<!-- pages/shouhou/shouhou.wxml -->
 <view class="container">
 
-  <!-- ================== 首页 (iOS 风格) ================== -->
-  <view class="home-view {{inDetail ? 'shrink' : ''}}">
-    <!-- 顶部导航 -->
-    <view class="nav-header">
-      <!-- 左上角返回键 -->
-      <view class="nav-back-btn" bindtap="goBack">
-        <text class="back-icon">‹</text>
-      </view>
-      <!-- 中间标题区域 -->
-      <view class="header-title-row">
-        <view class="large-title">
-          MT
-          <!-- 只有白名单用户能看到的切换开关 -->
-          <view 
-            wx:if="{{isAuthorized}}" 
-            class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
-            catchtap="toggleAdminMode">
-            {{isAdmin ? 'EXIT' : 'EDIT'}}
-          </view>
-        </view>
-        <view class="subtitle">请选择你的设备</view>
-      </view>
-      <!-- 右侧占位 -->
-      <view class="nav-right-placeholder"></view>
+<!-- ================== 首页 (iOS 风格) ================== -->
+<view class="home-view {{inDetail ? 'shrink' : ''}}">
+  <!-- 顶部导航 -->
+  <view class="nav-header">
+    <view class="nav-back-btn" bindtap="goBack">
+      <text class="back-icon">‹</text>
     </view>
-    
-    <!-- 管理员功能区域（独立区域） -->
-    <view wx:if="{{isAdmin}}" class="admin-actions-container">
-      <!-- 同步配件按钮 -->
-      <view class="sync-parts-btn" bindtap="syncAllPartsToCloud">
-        <text class="sync-icon">🔄</text>
-        <text class="sync-text">同步配件数据</text>
+    <view class="header-title-row">
+      <view class="large-title">
+        MT
+        <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
+          {{isAdmin ? 'EXIT' : 'EDIT'}}
+        </view>
       </view>
+      <view class="subtitle">请选择你的设备</view>
     </view>
-
-    <!-- F1 系列 -->
-    <view class="section-title">F1 SERIES</view>
-    <view class="card-grid">
-      <!-- F1 PRO (白) -->
-      <view class="i-card style-white" bindtap="enterModel" data-name="F1 PRO" data-series="F1">
-        <view class="card-top"><text class="badge">标准版</text></view>
-        <view class="card-btm">
-          <view class="p-name">F1 PRO</view>
-          <view class="p-desc">标准版</view>
-        </view>
-        <view class="circle-decor"></view>
-      </view>
-      <!-- F1 MAX (黑) -->
-      <view class="i-card style-black" bindtap="enterModel" data-name="F1 MAX" data-series="F1">
-        <view class="card-top"><text class="badge">高级版</text></view>
-        <view class="card-btm">
-          <view class="p-name">F1 MAX</view>
-          <view class="p-desc">高级版</view>
-        </view>
-        <view class="circle-decor"></view>
-      </view>
+    <view class="nav-right-placeholder"></view>
+  </view>
+  
+  <!-- F1 系列 -->
+  <view class="section-title">F1 SERIES</view>
+  <view class="card-grid">
+    <view class="i-card style-white" bindtap="enterModel" data-name="F1 PRO" data-series="F1">
+      <view class="card-top"><text class="badge">标准版</text></view>
+      <view class="card-btm"><view class="p-name">F1 PRO</view><view class="p-desc">标准版</view></view>
+      <view class="circle-decor"></view>
     </view>
-
-    <!-- F2 系列 -->
-    <view class="section-title">F2 SERIES</view>
-    <view class="card-grid">
-      <view class="i-card style-white" bindtap="enterModel" data-name="F2 PRO" data-series="F2">
-        <view class="card-top"><text class="badge">普通版</text></view>
-        <view class="card-btm">
-          <view class="p-name">F2 PRO</view>
-          <view class="p-desc">普通版</view>
-        </view>
-        <view class="circle-decor"></view>
-      </view>
-      <view class="i-card style-black" bindtap="enterModel" data-name="F2 MAX" data-series="F2">
-        <view class="card-top"><text class="badge">进阶版</text></view>
-        <view class="card-btm">
-          <view class="p-name">F2 MAX</view>
-          <view class="p-desc">进阶版</view>
-        </view>
-        <view class="circle-decor"></view>
-      </view>
-    </view>
-
-    <!-- F2 Long 系列 -->
-    <view class="section-title">F2 LONG SERIES</view>
-    <view class="card-grid" style="padding-bottom: 50px;">
-      <view class="i-card style-white" bindtap="enterModel" data-name="F2 PRO Long" data-series="F2">
-        <view class="card-top"><text class="badge">加长版</text></view>
-        <view class="card-btm">
-          <view class="p-name">F2 PRO Long</view>
-          <view class="p-desc">加长普通</view>
-        </view>
-        <view class="circle-decor"></view>
-      </view>
-      <view class="i-card style-black" bindtap="enterModel" data-name="F2 MAX Long" data-series="F2">
-        <view class="card-top"><text class="badge">性能版</text></view>
-        <view class="card-btm">
-          <view class="p-name">F2 MAX Long</view>
-          <view class="p-desc">加长高级</view>
-        </view>
-        <view class="circle-decor"></view>
-      </view>
+    <view class="i-card style-black" bindtap="enterModel" data-name="F1 MAX" data-series="F1">
+      <view class="card-top"><text class="badge">高级版</text></view>
+      <view class="card-btm"><view class="p-name">F1 MAX</view><view class="p-desc">高级版</view></view>
+      <view class="circle-decor"></view>
     </view>
   </view>
 
-  <!-- ================== 二级页面 (侧滑详情) ================== -->
-  <view class="detail-view {{inDetail ? 'slide-in' : ''}}" style="padding-top: {{statusBarHeight}}px;">
-    <!-- 导航栏 -->
-    <view class="detail-nav">
-      <view class="nav-back-btn" bindtap="exitModel">
-        <text class="back-icon">‹</text>
-      </view>
-      <view class="nav-title">{{currentModelName}}</view>
-      <view style="width: 40px;"></view>
+  <!-- F2 系列 -->
+  <view class="section-title">F2 SERIES</view>
+  <view class="card-grid">
+    <view class="i-card style-white" bindtap="enterModel" data-name="F2 PRO" data-series="F2">
+      <view class="card-top"><text class="badge">普通版</text></view>
+      <view class="card-btm"><view class="p-name">F2 PRO</view><view class="p-desc">普通版</view></view>
+      <view class="circle-decor"></view>
     </view>
-
-    <view class="content-scroll">
-      <!-- 顶部 Tab -->
-      <view class="tab-group">
-        <view class="tab-item {{activeTab==='order'?'active':''}}" bindtap="switchTab" data-mode="order">维修工单</view>
-        <view class="tab-item {{activeTab==='tutorial'?'active':''}}" bindtap="switchTab" data-mode="tutorial">维修教程</view>
-      </view>
-
-      <!-- TAB 1: 维修工单 -->
-      <view wx:if="{{activeTab === 'order'}}">
-        
-        <!-- 服务类型切换 -->
-        <view class="svc-switch">
-          <view class="svc-item {{serviceType==='parts'?'selected':''}}" bindtap="toggleService" data-type="parts">购买配件</view>
-          <view class="svc-item {{serviceType==='repair'?'selected':''}}" bindtap="toggleService" data-type="repair">故障报修</view>
-        </view>
-
-        <!-- A. 配件选择区 (Tag网格样式) -->
-        <view wx:if="{{serviceType === 'parts'}}">
-          <view class="section-label">配件清单</view>
-          <view class="parts-container">
-            <block wx:for="{{currentPartsList}}" wx:key="index">
-              <view class="part-tag {{item.selected ? 'active' : ''}}" bindtap="togglePart" data-index="{{index}}">
-                {{item.name}}
-                <!-- 管理员删除按钮 -->
-                <view wx:if="{{isAdmin}}" class="del-btn" catchtap="deletePart" data-index="{{index}}">✕</view>
-              </view>
-            </block>
-            <!-- 管理员添加按钮 -->
-            <view wx:if="{{isAdmin}}" class="add-btn-dashed" bindtap="openModal" data-mode="part">+ 添加配件</view>
-          </view>
-        </view>
-
-        <!-- B. 故障报修区 -->
-        <view wx:if="{{serviceType === 'repair'}}">
-          <view class="section-label">故障描述</view>
-          <textarea 
-            class="input-area" 
-            placeholder="请详细描述故障现象..." 
-            style="height: 100px;"
-            value="{{repairDescription}}"
-            bindinput="handleRepairInput"
-          ></textarea>
-          
-          <view class="upload-box" bindtap="chooseVideo">
-            <view style="font-size:24px;">📹</view>
-            <view class="upload-text">{{videoFileName || '点击上传故障视频'}}</view>
-          </view>
-        </view>
-
-        <!-- C. 联系信息 (公共，带折叠动画) -->
-        <view class="contact-section">
-          <!-- 标题栏：点击触发折叠/展开 -->
-          <view class="contact-header" bindtap="toggleContact">
-            <view class="header-left">
-              <text class="section-label">联系信息</text>
-              <!-- 旋转箭头 -->
-              <view class="arrow {{isContactExpanded ? 'up' : ''}}"></view>
-            </view>
-            <!-- 智能粘贴按钮 (阻止冒泡，避免触发折叠) -->
-            <view class="smart-paste" catchtap="openSmartPasteModal">✨ 智能粘贴</view>
-          </view>
-
-          <!-- 内容区域：带有展开动画 -->
-          <view class="contact-body {{isContactExpanded ? 'expanded' : ''}}">
-            <view class="input-wrapper">
-              <input 
-                class="input-field" 
-                placeholder="姓名" 
-                value="{{contactName}}" 
-                data-field="contactName"
-                bindinput="handleContactInput"
-                placeholder-class="ph-style" 
-              />
-              <input 
-                class="input-field" 
-                type="number" 
-                placeholder="手机号码" 
-                value="{{contactPhone}}" 
-                data-field="contactPhone"
-                bindinput="handleContactInput"
-                placeholder-class="ph-style" 
-              />
-              <input 
-                class="input-field" 
-                placeholder="详细收货地址" 
-                value="{{contactAddr}}" 
-                data-field="contactAddr"
-                bindinput="handleContactInput"
-                placeholder-class="ph-style" 
-              />
-              <input 
-                class="input-field" 
-                placeholder="微信昵称" 
-                value="{{contactWechat}}" 
-                data-field="contactWechat"
-                bindinput="handleContactInput"
-                placeholder-class="ph-style" 
-              />
-            </view>
-          </view>
-        </view>
-
-        <view style="height: 100px;"></view> <!-- 底部垫高 -->
-      </view>
-
-      <!-- TAB 2: 维修教程 -->
-      <view wx:if="{{activeTab === 'tutorial'}}">
-        
-        <!-- 锁屏界面：整块可点，点击后强制聚焦隐藏输入框 -->
-        <view wx:if="{{isLocked}}" class="lock-screen" bindtap="focusInput">
-          <view style="font-size:40px; margin-bottom:20px;">🔒</view>
-          <view style="font-weight:700; font-size:18px;">访客验证</view>
-          <view style="color:#999; font-size:14px; margin-top:10px;">请输入对应型号密码</view>
-          
-          <view class="dots-row">
-            <block wx:for="{{[0,1,2,3,4,5]}}" wx:key="*this">
-              <view class="dot {{passInput.length > item ? 'filled' : ''}}"></view>
-            </block>
-          </view>
-
-          <view wx:if="{{passError}}" style="color:red; font-size:14px; margin-top:20px;">密码错误</view>
-
-          <!-- 覆盖在锁屏区域的隐形输入框（通过 focusPass 控制聚焦） -->
-          <input class="hidden-input"
-                 type="number"
-                 maxlength="6"
-                 bindinput="onPassInput"
-                 value="{{passInput}}"
-                 focus="{{focusPass}}" />
-        </view>
-
-        <!-- 视频列表 (修复播放功能) -->
-        <view wx:else>
-
-          <!-- 管理员入口按钮 -->
-          <view wx:if="{{isAdmin}}" class="admin-add-area" bindtap="openModal" data-mode="video">
-            <view class="plus-icon">+</view>
-            <text>上传新教程视频</text>
-          </view>
-
-          <view class="section-label">{{currentModelName}} 维修教程库</view>
-          
-          <view class="video-list-container">
-            <block wx:for="{{currentVideoList}}" wx:key="index">
-              <view 
-                class="video-card {{isAdmin && isDragging && dragIndex === index ? 'dragging' : ''}}"
-                style="{{isAdmin && isDragging && dragIndex === index ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
-                bindtouchstart="{{isAdmin ? 'onDragStart' : ''}}"
-                catchtouchmove="{{isAdmin ? 'onDragMove' : ''}}"
-                bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
-                bindlongpress="{{isAdmin ? 'onLongPress' : ''}}"
-                data-index="{{index}}"
-              >
-
-                <!-- 情况A：正在播放 (显示 Video 组件) -->
-                <view wx:if="{{playingIndex === index}}" class="video-player-box">
-                  <video 
-                    src="{{item.src}}" 
-                    autoplay="false" 
-                    controls="true"
-                    show-center-play-btn="true" 
-                    object-fit="contain"
-                    class="real-video"
-                  ></video>
-                </view>
-
-                <!-- 情况B：未播放 (显示封面) -->
-                <view wx:else class="video-cover" bindtap="playVideo" data-index="{{index}}">
-                  <!-- 优先显示上传的封面(thumb)，没有则显示模拟色块 -->
-                  <image wx:if="{{item.thumb}}" src="{{item.thumb}}" mode="aspectFill" class="cover-img"></image>
-                  <view wx:else class="video-placeholder" style="background: {{item.coverColor || '#1c1c1e'}};">
-                    <view class="play-btn-overlay">▶</view>
-                  </view>
-                  <!-- 如果有thumb，也显示播放按钮 -->
-                  <view wx:if="{{item.thumb}}" class="play-btn-center">▶</view>
-                </view>
-                
-                <!-- 下方：文字信息区 -->
-                <view class="video-info">
-                  <view class="video-title">{{item.title}}</view>
-                  <view class="video-meta">
-                    <!-- 隐藏"刚刚更新"这类更新时间，只展示正常时长 -->
-                    <block wx:if="{{item.time && item.time !== '刚刚更新'}}">
-                      <text class="time-badge">{{item.time}}</text>
-                    </block>
-                    <text class="status-text">点击播放</text>
-                    <!-- 管理员模式下的视频管理操作 -->
-                    <view wx:if="{{isAdmin}}" class="video-admin-ops">
-                      <text class="video-del" data-index="{{index}}" bindtap="deleteVideo">删除</text>
-                    </view>
-                  </view>
-                </view>
-              </view>
-            </block>
-          </view>
-        </view>
-      </view>
-
-    </view>
-
-    <!-- 底部提交栏 (仅工单模式显示) -->
-    <view class="bottom-dock" wx:if="{{activeTab === 'order'}}">
-      <view style="font-size:13px; color:#666;">
-        已选 <text style="color:#000; font-weight:bold; font-size:16px;">{{selectedCount}}</text> 件
-      </view>
-      <button class="submit-btn" bindtap="submitOrder">提交工单</button>
+    <view class="i-card style-black" bindtap="enterModel" data-name="F2 MAX" data-series="F2">
+      <view class="card-top"><text class="badge">进阶版</text></view>
+      <view class="card-btm"><view class="p-name">F2 MAX</view><view class="p-desc">进阶版</view></view>
+      <view class="circle-decor"></view>
     </view>
   </view>
 
+  <!-- F2 Long 系列 -->
+  <view class="section-title">F2 LONG SERIES</view>
+  <view class="card-grid" style="padding-bottom: 50px;">
+    <view class="i-card style-white" bindtap="enterModel" data-name="F2 PRO Long" data-series="F2">
+      <view class="card-top"><text class="badge">加长版</text></view>
+      <view class="card-btm"><view class="p-name">F2 PRO Long</view><view class="p-desc">加长普通</view></view>
+      <view class="circle-decor"></view>
+    </view>
+    <view class="i-card style-black" bindtap="enterModel" data-name="F2 MAX Long" data-series="F2">
+      <view class="card-top"><text class="badge">性能版</text></view>
+      <view class="card-btm"><view class="p-name">F2 MAX Long</view><view class="p-desc">加长高级</view></view>
+      <view class="circle-decor"></view>
+    </view>
+  </view>
+</view>
 
-  <!-- 管理员弹窗 (增加预览) -->
+<!-- ================== 二级页面 (侧滑详情) ================== -->
+<view class="detail-view {{inDetail ? 'slide-in' : ''}}" style="padding-top: {{statusBarHeight}}px;">
+  <!-- 导航栏 -->
+  <view class="detail-nav">
+    <view class="nav-back-btn" bindtap="exitModel">
+      <text class="back-icon">‹</text>
+    </view>
+    <view class="nav-title">{{currentModelName}}</view>
+    <view style="width: 40px;"></view>
+  </view>
+
+  <view class="content-scroll">
+    <!-- 顶部 Tab -->
+    <view class="tab-group">
+      <view class="tab-item {{activeTab==='order'?'active':''}}" bindtap="switchTab" data-mode="order">维修工单</view>
+      <view class="tab-item {{activeTab==='tutorial'?'active':''}}" bindtap="switchTab" data-mode="tutorial">维修教程</view>
+    </view>
+
+    <!-- TAB 1: 维修工单 -->
+    <view wx:if="{{activeTab === 'order'}}">
+      
+      <!-- 服务类型切换 -->
+      <view class="svc-switch">
+        <view class="svc-item {{serviceType==='parts'?'selected':''}}" bindtap="toggleService" data-type="parts">购买配件</view>
+        <view class="svc-item {{serviceType==='repair'?'selected':''}}" bindtap="toggleService" data-type="repair">故障报修</view>
+      </view>
+
+      <!-- A. 配件选择区 -->
+      <view wx:if="{{serviceType === 'parts'}}">
+        <view class="section-label">配件清单</view>
+        <view class="parts-container">
+          <block wx:for="{{currentPartsList}}" wx:key="index">
+            <view class="part-tag {{item.selected ? 'active' : ''}}" bindtap="togglePart" data-index="{{index}}">
+              <text>{{item.name}}</text>
+              <!-- 显示价格 -->
+              <text class="part-price">¥{{item.price || 0}}</text>
+              <!-- 管理员改价/改名按钮 (右下角) -->
+              <view wx:if="{{isAdmin}}" class="admin-edit-price" catchtap="adminEditPartPrice" data-index="{{index}}">✎</view>
+            </view>
+          </block>
+        </view>
+      </view>
+
+      <!-- B. 故障报修区 -->
+      <view wx:if="{{serviceType === 'repair'}}">
+        <view class="section-label">故障描述</view>
+        <textarea class="input-area" placeholder="请详细描述故障现象..." style="height: 100px;" value="{{repairDescription}}" bindinput="handleRepairInput"></textarea>
+        <view class="upload-box" bindtap="chooseVideo">
+          <view style="font-size:24px;">📹</view>
+          <view class="upload-text">{{videoFileName || '点击上传故障视频'}}</view>
+        </view>
+      </view>
+
+      <!-- 这里的收货信息已经在结算弹窗里了，这里不需要了，留空或者展示简单的提示 -->
+      <view style="height: 200px;"></view> 
+    </view>
+
+    <!-- TAB 2: 维修教程 -->
+    <view wx:if="{{activeTab === 'tutorial'}}">
+      <!-- 锁屏界面 -->
+      <view wx:if="{{isLocked}}" class="lock-screen" bindtap="focusInput">
+        <view style="font-size:40px; margin-bottom:20px;">🔒</view>
+        <view style="font-weight:700; font-size:18px;">访客验证</view>
+        <view style="color:#999; font-size:14px; margin-top:10px;">请输入对应型号密码</view>
+        <view class="dots-row">
+          <block wx:for="{{[0,1,2,3,4,5]}}" wx:key="*this">
+            <view class="dot {{passInput.length > item ? 'filled' : ''}}"></view>
+          </block>
+        </view>
+        <view wx:if="{{passError}}" style="color:red; font-size:14px; margin-top:20px;">密码错误</view>
+        <input class="hidden-input" type="number" maxlength="6" bindinput="onPassInput" value="{{passInput}}" focus="{{focusPass}}" />
+      </view>
+
+      <!-- 视频列表 -->
+      <view wx:else>
+        <view wx:if="{{isAdmin}}" class="admin-add-area" bindtap="openModal" data-mode="video">
+          <view class="plus-icon">+</view><text>上传新教程视频</text>
+        </view>
+        <view class="section-label">{{currentModelName}} 维修教程库</view>
+        <view class="video-list-container">
+          <block wx:for="{{currentVideoList}}" wx:key="index">
+            <view class="video-card {{isAdmin && isDragging && dragIndex === index ? 'dragging' : ''}}"
+              style="{{isAdmin && isDragging && dragIndex === index ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
+              bindtouchstart="{{isAdmin ? 'onDragStart' : ''}}"
+              catchtouchmove="{{isAdmin ? 'onDragMove' : ''}}"
+              bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
+              bindlongpress="{{isAdmin ? 'onLongPress' : ''}}"
+              data-index="{{index}}"
+            >
+              <view wx:if="{{playingIndex === index}}" class="video-player-box">
+                <video src="{{item.src}}" autoplay="true" controls="true" show-center-play-btn="true" object-fit="contain" class="real-video"></video>
+              </view>
+              <view wx:else class="video-cover" bindtap="playVideo" data-index="{{index}}">
+                <image wx:if="{{item.thumb}}" src="{{item.thumb}}" mode="aspectFill" class="cover-img"></image>
+                <view wx:else class="video-placeholder" style="background: {{item.coverColor || '#1c1c1e'}};">
+                  <view class="play-btn-overlay">▶</view>
+                </view>
+                <view wx:if="{{item.thumb}}" class="play-btn-center">▶</view>
+              </view>
+              <view class="video-info">
+                <view class="video-title">{{item.title}}</view>
+                <view class="video-meta">
+                  <block wx:if="{{item.time && item.time !== '刚刚更新'}}">
+                    <text class="time-badge">{{item.time}}</text>
+                  </block>
+                  <text class="status-text">点击播放</text>
+                  <view wx:if="{{isAdmin}}" class="video-admin-ops">
+                    <text class="video-del" data-index="{{index}}" bindtap="deleteVideo">删除</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+          </block>
+        </view>
+      </view>
+    </view>
+
+  </view>
+
+  <!-- 底部双按钮 (完全对齐 Shop 页面) -->
+  <view class="bottom-dock" wx:if="{{activeTab === 'order'}}">
+    <view class="footer-btn-group">
+      <!-- 绑定 JS 中的 addToCart -->
+      <view class="btn-cart" bindtap="addToCart">加入购物车</view>
+      <!-- 绑定 JS 中的 openCartOrder -->
+      <view class="btn-buy" bindtap="openCartOrder">立即购买</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 核心弹窗区域 ================= -->
+
+<!-- 1. 加入购物车成功弹窗 -->
+<view class="success-mask" wx:if="{{showCartSuccess}}">
+  <view class="success-box">
+    <view class="s-icon">✔</view>
+    <view class="s-title">已加入购物车</view>
+    <view class="s-desc">商品已保存，您可以继续选购或去结算</view>
+    <view class="s-btn-row">
+      <view class="s-btn outline" bindtap="onContinueShopping">继续选购</view>
+      <view class="s-btn fill" bindtap="onGoToCheckout">立即结算</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 2. 订单确认/结算弹窗 ================= -->
+<view class="dark-mask" wx:if="{{showOrderModal}}" bindtap="closeOrderModal"></view>
+
+<view class="overlay full-screen-overlay {{showOrderModal ? 'active' : ''}}" style="z-index: 600;">
+  <!-- 顶部 -->
+  <view class="checkout-header">
+    <view class="nav-close" bindtap="closeOrderModal">✕</view>
+    <view class="co-title">确认工单</view>
+    <view style="width:40rpx"></view>
+  </view>
+
+  <scroll-view scroll-y class="checkout-scroll">
+    <view class="checkout-body">
+
+      <!-- 商品清单 -->
+      <view class="group-card">
+        <view class="cart-header-row">
+          <view class="cart-title">商品清单</view>
+          <view class="clear-btn-stylish" bindtap="clearCart">
+            <text>🗑 清空</text>
+          </view>
+        </view>
+
+        <block wx:for="{{cart}}" wx:key="id">
+          <view class="cart-row">
+            <view class="cr-info">
+              <view class="cr-name">{{item.name}}</view>
+              <view class="cr-spec">{{item.spec}}</view>
+            </view>
+
+            <view class="cr-action">
+              <view class="cr-price">¥{{item.total}}</view>
+              <view class="mini-stepper">
+                <view class="ms-btn" catchtap="handleCartQty" data-index="{{index}}" data-type="minus">-</view>
+                <view class="ms-num">{{item.quantity}}</view>
+                <view class="ms-btn" catchtap="handleCartQty" data-index="{{index}}" data-type="plus">+</view>
+              </view>
+            </view>
+          </view>
+        </block>
+
+        <view wx:if="{{cart.length === 0}}" class="empty-cart">购物车暂无商品</view>
+
+      </view>
+
+      <!-- 配送方式 -->
+      <view class="group-header-row">
+        <view class="group-title-text">配送方式</view>
+      </view>
+      <view class="shipping-box">
+        <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
+          <view class="ship-name">中通快递</view>
+          <view class="ship-price">包邮</view>
+        </view>
+        <!-- 顺丰选项 -->
+        <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
+          <view class="ship-name">顺丰速运</view>
+          <view class="ship-price">
+             <!-- 如果没选地区，显示待计算；选了才显示金额 -->
+             {{region.length == 0 ? '待计算' : '¥'+shippingFee}}
+             <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 总价显示区 -->
+      <view class="final-total-row">
+        <text class="ft-label">共 {{cart.length}} 件，总计</text>
+        <text class="ft-price">¥{{finalTotalPrice}}</text>
+      </view>
+
+      <!-- 收货信息 -->
+      <view class="group-header-row">
+        <view class="group-title-text">收货信息</view>
+        <view class="paste-btn-header" bindtap="openSmartPasteModal">智能粘贴</view>
+      </view>
+
+      <view class="group-card form-group">
+
+        <!-- 姓名 -->
+        <view class="form-item">
+          <view class="form-label">收货人</view>
+          <input class="form-input" placeholder="请填写姓名" placeholder-class="ph-style" bindinput="onInput" data-key="name" value="{{orderInfo.name}}"/>
+        </view>
+
+        <!-- 手机号 -->
+        <view class="form-item">
+          <view class="form-label">手机号</view>
+          <input class="form-input" type="number" maxlength="11" placeholder="请填写11位手机号" placeholder-class="ph-style" bindinput="onInput" data-key="phone" value="{{orderInfo.phone}}"/>
+        </view>
+
+
+        <!-- [修改] 详细地址 -->
+        <view class="form-item">
+          <view class="form-label">详细地址</view>
+          <input class="form-input" placeholder="街道、楼牌号等" placeholder-class="ph-style" bindinput="onInput" data-key="detailAddress" value="{{detailAddress}}"/>
+        </view>
+
+      </view>
+
+    </view>
+  </scroll-view>
+
+  <!-- 底部单按钮 (立即支付) -->
+  <view class="checkout-footer-single">
+    <view class="btn-black full" bindtap="submitRealOrder">
+      <text class="btn-main">立即支付 ¥{{finalTotalPrice}}</text>
+    </view>
+  </view>
+</view>
+
+  <!-- 3. 管理员上传弹窗 -->
   <view class="modal-mask" wx:if="{{showModal}}">
     <view class="modal-box">
       <view class="modal-header">
         <text class="modal-title">{{modalMode === 'part' ? '添加新配件' : '发布新教程'}}</text>
       </view>
-      
-      <!-- 输入名称 -->
       <view class="input-label">名称/标题</view>
       <input class="modal-input" placeholder="{{modalMode === 'part' ? '输入配件名称' : '例如：更换主板教程'}}" model:value="{{modalInputVal}}" />
       
-      <!-- 视频上传预览区 -->
       <block wx:if="{{modalMode === 'video'}}">
         <view class="input-label">视频文件</view>
-        
-        <!-- 如果已选，显示预览（有封面就用封面，没有就用占位提示） -->
         <view wx:if="{{tempVideoThumb || tempVideoPath}}" class="upload-preview" bindtap="adminChooseVideo">
           <block wx:if="{{tempVideoThumb}}">
             <image src="{{tempVideoThumb}}" mode="aspectFill" class="preview-img"></image>
@@ -347,8 +342,6 @@
           </block>
           <view class="re-upload-tip">点击更换</view>
         </view>
-
-        <!-- 如果未选，显示按钮 -->
         <view wx:else class="file-upload-btn" bindtap="adminChooseVideo">
           <text>＋ 点击选择视频文件</text>
         </view>
@@ -361,23 +354,11 @@
     </view>
   </view>
 
-  <!-- 隐藏的视频组件，用于提取第一帧 -->
-  <video 
-    wx:if="{{tempVideoPath && !tempVideoThumb && extractingThumb}}"
-    id="thumbVideo"
-    src="{{tempVideoPath}}"
-    style="position: fixed; top: -9999px; left: -9999px; width: 400px; height: 300px; opacity: 0;"
-    bindloadedmetadata="onVideoMetadataLoaded"
-    bindtimeupdate="onVideoTimeUpdate"
-  ></video>
-
-  <!-- ================= 智能粘贴输入弹窗 ================= -->
+  <!-- 4. 智能粘贴弹窗 -->
   <view class="smart-paste-mask" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;">
     <view class="smart-paste-box">
       <view class="sp-title">智能粘贴</view>
       <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
-      
-      <!-- 输入区域 -->
       <textarea 
         class="sp-textarea" 
         placeholder="例如：张三 13800138000 广东省深圳市南山区..." 
@@ -386,12 +367,33 @@
         adjust-position="{{true}}"
         fixed="{{true}}"
       ></textarea>
-      
       <view class="sp-btn-row">
         <view class="sp-btn cancel" bindtap="closeSmartPasteModal">取消</view>
         <view class="sp-btn confirm" bindtap="confirmSmartPaste">智能分析</view>
       </view>
     </view>
   </view>
+
+  <!-- 5. 全局自定义弹窗 -->
+  <view class="custom-dialog-mask" wx:if="{{dialog.show}}">
+    <view class="custom-dialog-box">
+      <view class="cd-title">{{dialog.title}}</view>
+      <view class="cd-content">{{dialog.content}}</view>
+      <view class="cd-btn-row">
+        <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText || '取消'}}</view>
+        <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText || '确定'}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 隐藏视频组件 (提取封面用) -->
+  <video 
+    wx:if="{{tempVideoPath && !tempVideoThumb && extractingThumb}}"
+    id="thumbVideo"
+    src="{{tempVideoPath}}"
+    style="position: fixed; top: -9999px; left: -9999px; width: 400px; height: 300px; opacity: 0;"
+    bindloadedmetadata="onVideoMetadataLoaded"
+    bindtimeupdate="onVideoTimeUpdate"
+  ></video>
 
 </view>

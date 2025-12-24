@@ -124,7 +124,7 @@ exports.main = async (event, context) => {
               updateTime: db.serverDate(),
             },
           });
-        } else {
+      } else {
           // 如果不存在，才新增
           await db.collection('login_logs').add({
             data: {
@@ -137,8 +137,8 @@ exports.main = async (event, context) => {
               createTime: db.serverDate(),
               updateTime: db.serverDate(),
             },
-          });
-        }
+                 });
+               }
 
         // 把 user_list 中该用户的封禁状态解除（如果存在）
         try {
@@ -201,7 +201,7 @@ exports.main = async (event, context) => {
         console.log('[verifyNickname] ⚠️ valid_users 集合不存在，跳过白名单检查');
       } else {
         console.error('[verifyNickname] query valid_users error:', e);
-      }
+        }
     }
 
     // 4. 命中白名单 => 通过验证，更新登录日志，并确保取消封号标记
@@ -275,7 +275,7 @@ exports.main = async (event, context) => {
             updateTime: db.serverDate(),
           },
         });
-      } else {
+          } else {
         await db.collection('login_logs').add({
           data: {
             _openid: openid,
@@ -291,7 +291,7 @@ exports.main = async (event, context) => {
       }
     } catch (e) {
       console.error('[verifyNickname] update failed login_logs error:', e);
-    }
+          }
 
     // 如果达到封号阈值，写入 blocked_logs，并同步 user_list 为封号
     if (willBan) {

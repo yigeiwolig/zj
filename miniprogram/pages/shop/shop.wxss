@@ -9,7 +9,7 @@ page {
 
 /* ============ 通用组件 ============ */
 .btn-black {
-  background: #000; color: #fff; font-weight: 600; padding: 24rpx 40rpx;
+  background: #000; color: #fff; font-weight: 600; padding: 30rpx 40rpx;
   border-radius: 60rpx; font-size: 30rpx; text-align: center;
 }
 .btn-black.full { width: 100%; box-sizing: border-box; }
@@ -1174,3 +1174,369 @@ page {
   transform: scale(0.95);
   opacity: 0.8;
 }
+
+/* === 清空购物车按钮 === */
+.clear-cart-box {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 靠右显示 */
+  padding-top: 20rpx;
+  border-top: 1rpx dashed #eee; /* 上面加条虚线，和总价分开 */
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.trash-icon {
+  margin-right: 8rpx;
+  font-size: 26rpx;
+}
+
+.clear-cart-box:active {
+  opacity: 0.6;
+}
+
+/* === 清空购物车按钮 === */
+.clear-cart-box {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 靠右显示 */
+  padding-top: 20rpx;
+  border-top: 1rpx dashed #eee; /* 上面加条虚线，和总价分开 */
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.trash-icon {
+  margin-right: 8rpx;
+  font-size: 26rpx;
+}
+
+.clear-cart-box:active {
+  opacity: 0.6;
+}
+
+/* === 清空购物车按钮 === */
+.clear-cart-box {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 靠右显示 */
+  padding-top: 20rpx;
+  border-top: 1rpx dashed #eee; /* 上面加条虚线，和总价分开 */
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.trash-icon {
+  margin-right: 8rpx;
+  font-size: 26rpx;
+}
+
+.clear-cart-box:active {
+  opacity: 0.6;
+}
+
+/* === 清空购物车按钮 === */
+.clear-cart-box {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 靠右显示 */
+  padding-top: 20rpx;
+  border-top: 1rpx dashed #eee; /* 上面加条虚线，和总价分开 */
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.trash-icon {
+  margin-right: 8rpx;
+  font-size: 26rpx;
+}
+
+.clear-cart-box:active {
+  opacity: 0.6;
+}
+
+/* === 清空购物车按钮 === */
+.clear-cart-box {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 靠右显示 */
+  padding-top: 20rpx;
+  border-top: 1rpx dashed #eee; /* 上面加条虚线，和总价分开 */
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.trash-icon {
+  margin-right: 8rpx;
+  font-size: 26rpx;
+}
+
+.clear-cart-box:active {
+  opacity: 0.6;
+}
+
+/* === 清空购物车按钮 === */
+.clear-cart-box {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 靠右显示 */
+  padding-top: 20rpx;
+  border-top: 1rpx dashed #eee; /* 上面加条虚线，和总价分开 */
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.trash-icon {
+  margin-right: 8rpx;
+  font-size: 26rpx;
+}
+
+.clear-cart-box:active {
+  opacity: 0.6;
+}
+
+/* === 清空购物车按钮 === */
+.clear-cart-box {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 靠右显示 */
+  padding-top: 20rpx;
+  border-top: 1rpx dashed #eee; /* 上面加条虚线，和总价分开 */
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.trash-icon {
+  margin-right: 8rpx;
+  font-size: 26rpx;
+}
+
+.clear-cart-box:active {
+  opacity: 0.6;
+}
+
+/* === 清空购物车按钮 === */
+.clear-cart-box {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end; /* 靠右显示 */
+  padding-top: 20rpx;
+  border-top: 1rpx dashed #eee; /* 上面加条虚线，和总价分开 */
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #999;
+}
+
+.trash-icon {
+  margin-right: 8rpx;
+  font-size: 26rpx;
+}
+
+.clear-cart-box:active {
+  opacity: 0.6;
+}
+/* ============================================== */
+/* [新增] 清空购物车按钮美化 */
+/* ============================================== */
+.cart-header-row {
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  margin-bottom: 20rpx; 
+  padding: 0 10rpx;
+}
+.cart-title { 
+  font-weight: 700; 
+  font-size: 28rpx; 
+}
+.clear-btn-stylish {
+  background: #F5F5F7; 
+  padding: 8rpx 24rpx; 
+  border-radius: 30rpx;
+  font-size: 22rpx; 
+  color: #999;
+}
+
+/* ============================================== */
+/* [新增] 快递选择卡片 */
+/* ============================================== */
+.shipping-box {
+  display: flex; 
+  gap: 20rpx; 
+  margin-bottom: 40rpx;
+  padding: 0 20rpx;
+}
+.ship-item {
+  flex: 1; 
+  background: #fff; 
+  border: 2rpx solid #eee;
+  padding: 24rpx; 
+  border-radius: 16rpx; 
+  position: relative;
+  transition: all 0.2s ease;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transform: scale(1);
+}
+.ship-item:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+.ship-item.active {
+  border-color: #000; 
+  background: #FFF;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.05);
+  transform: scale(1.05);
+}
+.ship-name { 
+  font-size: 28rpx; 
+  font-weight: 700; 
+  margin-bottom: 8rpx; 
+  text-align: center;
+}
+.ship-price { 
+  font-size: 24rpx; 
+  color: #666; 
+  text-align: center;
+}
+.ship-item.active .ship-name { 
+  color: #000; 
+}
+
+/* =========================================================================
+   👇 请粘贴到 shop.wxss 最底部 (修复确认订单弹窗) 👇
+   ========================================================================= */
+
+/* 1. 遮罩层 (修复变黑) */
+.dark-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(3px); z-index: 550;
+  animation: fadeIn 0.3s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* 2. 半屏弹窗主体 */
+.full-screen-overlay {
+  position: fixed; bottom: 0; left: 0; width: 100%; height: 90%;
+  background: #F5F5F7; border-radius: 40rpx 40rpx 0 0;
+  transform: translateY(110%); transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  z-index: 600; display: flex; flex-direction: column; overflow: hidden;
+}
+.full-screen-overlay.active { transform: translateY(0); }
+
+/* 弹窗头部 */
+.checkout-header {
+  padding: 30rpx 40rpx; background: #fff;
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 1rpx solid #f5f5f7; flex-shrink: 0;
+}
+.co-title { font-size: 32rpx; font-weight: 700; color: #1D1D1F; }
+.nav-close { font-size: 40rpx; color: #999; padding: 10rpx; }
+
+/* 滚动区域 */
+.checkout-scroll { flex: 1; overflow-y: auto; }
+.checkout-body { padding: 40rpx; padding-bottom: 200rpx; }
+
+/* 3. 卡片通用样式 */
+.group-card {
+  background: #fff; border-radius: 24rpx; margin-bottom: 30rpx; overflow: hidden;
+  padding-bottom: 10rpx;
+}
+
+/* 4. 快递选择区 */
+.shipping-box {
+  display: flex; gap: 20rpx; margin-bottom: 40rpx; padding: 0 20rpx;
+}
+.ship-item {
+  flex: 1; background: #fff; border: 2rpx solid #eee;
+  padding: 24rpx; border-radius: 16rpx; position: relative;
+  transition: all 0.2s ease;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  transform: scale(1);
+}
+.ship-item:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+.ship-item.active {
+  border-color: #000; background: #FFF;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.05);
+  transform: scale(1.05);
+}
+.ship-name { font-size: 28rpx; font-weight: 700; margin-bottom: 8rpx; text-align: center; }
+.ship-price { font-size: 24rpx; color: #666; text-align: center; }
+.ship-item.active .ship-name { color: #000; }
+
+/* 5. 总价大字 */
+.final-total-row {
+  display: flex; justify-content: flex-end; align-items: baseline;
+  margin-top: 20rpx; padding: 20rpx 40rpx; background: #fff; border-radius: 24rpx;
+}
+.ft-label { font-size: 24rpx; color: #86868B; margin-right: 16rpx; }
+.ft-price { font-size: 40rpx; font-weight: 800; color: #000; }
+
+/* 6. 地址表单样式 */
+.form-group { background: #fff; border-radius: 24rpx; padding: 0 30rpx; margin-bottom: 60rpx; }
+.form-item {
+  display: flex; align-items: center; height: 100rpx;
+  border-bottom: 1rpx solid #f5f5f5; padding-right: 10rpx;
+}
+.form-label { width: 140rpx; font-size: 28rpx; font-weight: 600; }
+.form-input { flex: 1; text-align: right; font-size: 28rpx; height: 100%; }
+.picker-view { flex: 1; text-align: right; font-size: 28rpx; color: #333; }
+.picker-view.ph-style { color: #ccc; }
+.arrow-right { margin-left: 10rpx; color: #ccc; font-size: 24rpx; }
+
+/* 清空购物车按钮 */
+.cart-header-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 30rpx 40rpx; border-bottom: 1rpx solid #F2F2F7;
+}
+.cart-title { font-size: 30rpx; font-weight: 700; }
+.clear-btn-stylish {
+  font-size: 24rpx; color: #FF3B30; padding: 8rpx 16rpx;
+  background: rgba(255,59,48,0.1); border-radius: 12rpx; font-weight: 600;
+}
+
+/* 商品行 */
+.cart-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 30rpx 40rpx; border-bottom: 1rpx solid #f5f5f5;
+}
+.cr-info { flex: 1; }
+.cr-name { font-size: 28rpx; font-weight: 600; margin-bottom: 8rpx; }
+.cr-spec { font-size: 24rpx; color: #86868B; }
+.cr-action { display: flex; flex-direction: column; align-items: flex-end; gap: 10rpx; }
+.cr-price { font-size: 28rpx; font-weight: 700; }
+
+/* 迷你加减器 */
+.mini-stepper {
+  display: flex; align-items: center; gap: 8rpx; background: #F5F5F7;
+  border-radius: 8rpx; padding: 4rpx;
+}
+.ms-btn {
+  width: 44rpx; height: 44rpx; line-height: 44rpx; text-align: center;
+  font-weight: 600; color: #666;
+}
+.ms-num { width: 40rpx; text-align: center; font-size: 24rpx; font-weight: 600; }
+
+/* 7. 底部单按钮 (立即支付) */
+.checkout-footer-single {
+  position: absolute; bottom: 0; left: 0; width: 100%;
+  /* 纯白实心背景，防止透视 */
+  background: #FFFFFF;
+  padding: 20rpx 30rpx calc(40rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #eee; display: flex; justify-content: flex-start; box-sizing: border-box;
+  z-index: 601;
+}
+.btn-main { font-size: 30rpx; font-weight: 700; }
+/* 去掉小字，如果 wxml 还有 btn-sub 也不显示 */
+.btn-sub { display: none; }
+
+

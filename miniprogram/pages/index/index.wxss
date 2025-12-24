@@ -128,9 +128,10 @@ input, textarea { text-align: left; }
   border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
   box-shadow: 24rpx 24rpx 60rpx rgba(174, 174, 192, 0.4), -24rpx -24rpx 60rpx rgba(255, 255, 255, 1);
   display: flex; justify-content: center; align-items: center;
-  position: absolute; z-index: 100;
+  position: absolute; z-index: 200; /* 提高 z-index，确保在遮罩层上方 */
   animation: morph 3.5s ease-in-out infinite;
   transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  pointer-events: auto; /* 确保可以点击 */
 }
 
 .btn-text { font-size: 32rpx; font-weight: 600; letter-spacing: 6rpx; color: #666; mix-blend-mode: multiply; }
