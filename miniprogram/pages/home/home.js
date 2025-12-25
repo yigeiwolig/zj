@@ -1435,3 +1435,4 @@ Page({
   makeCall() { 
     if(this.data.activeItem.phone) wx.makePhoneCall({ phoneNumber: this.data.activeItem.phone }); 
   }
+})

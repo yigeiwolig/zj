@@ -1,0 +1,10 @@
+{
+  "name": "adminAuditVideo",
+  "version": "1.0.0",
+  "description": "管理员审核视频并自动延保",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
+

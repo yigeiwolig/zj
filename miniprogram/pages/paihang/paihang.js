@@ -81,6 +81,17 @@ Page({
     this.computeRankings(); // 计算排名
   },
 
+  // 🔴 返回按钮点击事件
+  goBack() {
+    wx.navigateBack({
+      delta: 1,
+      fail: () => {
+        // 如果无法返回，则跳转到首页
+        wx.switchTab({ url: '/pages/home/home' });
+      }
+    });
+  },
+
   // ================== 权限检查逻辑 ==================
   async checkAdminPrivilege() {
     try {

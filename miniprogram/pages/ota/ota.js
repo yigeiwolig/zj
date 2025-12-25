@@ -171,6 +171,11 @@ Page({
       this.vibrateShort();
       this.playSuccessSound();
       
+      // 🔴 连接成功后，保存到云端数据库（异步执行，不阻塞后续流程）
+      this.saveOtaConnectionToCloud().catch(err => {
+        console.error('保存OTA记录失败，但不影响后续流程:', err);
+      });
+      
       // 连接成功后，先隐藏"正在连接中"的提示，显示"连接成功"
       this.setData({ 
         islandState: 'active', 
@@ -180,7 +185,7 @@ Page({
       });
       setTimeout(() => {
         this.setData({ islandState: '', showStage: true });
-        setTimeout(() => this.setData({ showSelector: true }), 500);
+        setTimeout(() => { this.setData({ showSelector: true }); }, 500);
       }, 1500);
     };
     
@@ -241,6 +246,60 @@ Page({
   showIslandTip(text, isSuccess) {
     this.setData({ islandState: 'active', connectSuccess: isSuccess, islandText: text });
     setTimeout(() => { this.setData({ islandState: '' }); }, 2500);
+  },
+
+  // 🔴 保存OTA连接记录到云端
+  async saveOtaConnectionToCloud() {
+    try {
+      // 1. 获取用户openid
+      const loginRes = await wx.cloud.callFunction({ name: 'login' });
+      const openid = loginRes.result.openid;
+      console.log('🔍 [saveOtaConnectionToCloud] 用户openid:', openid);
+      
+      // 2. 获取设备信息
+      const device = this.data.targetDevice;
+      if (!device) {
+        console.warn('⚠️ [saveOtaConnectionToCloud] 设备信息不存在');
+        return;
+      }
+      
+      console.log('🔍 [saveOtaConnectionToCloud] 设备信息:', {
+        deviceId: device.deviceId,
+        deviceName: device.name
+      });
+      
+      // 3. 先检查是否已存在记录（避免重复保存）
+      const db = wx.cloud.database();
+      const existingRes = await db.collection('ota_connections')
+        .where({ 
+          _openid: openid,
+          deviceId: device.deviceId 
+        })
+        .get();
+      
+      if (existingRes.data.length > 0) {
+        console.log('✅ [saveOtaConnectionToCloud] 记录已存在，跳过保存');
+        return;
+      }
+      
+      // 4. 保存到云端数据库
+      // 🔴 注意：_openid 是系统自动生成的，不能手动设置
+      const addRes = await db.collection('ota_connections').add({
+        data: {
+          deviceId: device.deviceId,
+          deviceName: device.name || '未知设备',
+          connectTime: db.serverDate(),
+          // 可选：添加其他信息
+          RSSI: device.RSSI || 0,
+          advertisData: device.advertisData || ''
+        }
+      });
+      
+      console.log('✅ [saveOtaConnectionToCloud] OTA连接记录已保存到云端:', addRes._id);
+    } catch (err) {
+      console.error('❌ [saveOtaConnectionToCloud] 保存失败:', err);
+      // 🔴 静默失败，不影响用户体验和后续流程
+    }
   },
 
   // ================= 动画交互 =================

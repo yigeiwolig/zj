@@ -3,6 +3,11 @@
 
   <!-- 顶部导航 -->
   <view class="custom-nav-container" style="padding-top: {{statusBarHeight}}px;">
+    <!-- 🔴 左上角返回按钮 -->
+    <view class="back-btn" bindtap="goBack" style="top: {{statusBarHeight + 10}}px;">
+      <text class="back-icon">‹</text>
+    </view>
+    
     <view class="nav-bar-row" style="height: {{navBarHeight}}px; line-height: {{navBarHeight}}px;">
       <view class="brand-title">
         <text class="brand-sub">{{isAdminMode ? 'ADMIN MODE' : 'LIVE STANDINGS'}}</text>

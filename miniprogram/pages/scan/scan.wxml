@@ -90,7 +90,7 @@
             style="transform: translateX({{item.status === 'active' ? (modelDragOffset + 'px') : (item.status === 'next' ? (nextCardOffsetPercent + '%') : (item.status === 'prev' ? (prevCardOffsetPercent + '%') : '0'))}}) scale({{item.status === 'active' ? modelActiveScale : modelSideScale}}); transition: {{isDraggingModel ? 'none' : 'all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1)'}};">
         <view class="card-header">
           <view class="series-tag">{{item.tag}}</view>
-          <view class="model-name">{{item.name}} <text class="model-suffix {{item.type === 'Max' ? 'max' : ''}}">{{item.type}}</text></view>
+          <view class="model-name">{{item.name}} <text class="model-suffix {{item.type === 'Max' ? 'max' : ''}} {{item.type === 'Pro Long' ? 'pro-long' : ''}} {{item.type === 'Max Long' ? 'max-long' : ''}}">{{item.type}}</text></view>
         </view>
         <view class="visual-area">
           <image class="custom-icon" src="{{item.icon}}" mode="aspectFit"></image>
@@ -175,6 +175,11 @@
               <view class="t-icon err">!</view>
               <text>蓝牙已断开</text>
             </view>
+            <!-- OTA提示 -->
+            <view class="toast {{showOtaTip ? 'show' : ''}}">
+              <view class="t-icon err">!</view>
+              <text>请先在OTA页面进行升级</text>
+            </view>
           </view>
           
           <!-- 3. 设备图 -->
@@ -197,7 +202,7 @@
               </view>
             </view>
 
-            <view class="split-btn-group" wx:if="{{currentModel.type === 'Max'}}">
+            <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Max Long'}}">
                <view class="split-item" style="{{currentModel.name === 'F1' ? 'opacity:0.3; pointer-events:none;' : ''}}" bindtap="handleAutoCalibrate">
                  <view class="btn-icon-circle"><image class="svg-icon" src="{{icons.cali}}"></image></view>
                  <text class="btn-text">自动校准</text>

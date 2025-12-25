@@ -13,8 +13,7 @@ Page({
 
     // [修改] 地址相关数据
     orderInfo: { name: '', phone: '' }, // 这里不再存 address 字符串
-    region: [], // 存放 ['广东省', '佛山市', '南海区']
-    detailAddress: '', // 存放 '某某街道101号'
+    detailAddress: '', // 存放完整地址，如 '广东省 佛山市 南海区 某某街道101号'
 
     // [修改] 运费相关
     shippingMethod: 'zto', // 默认中通
@@ -1893,19 +1892,7 @@ Page({
   openOrderModal() { this.setData({ showOrderModal: true }); },
   closeOrderModal() { this.setData({ showOrderModal: false }); },
   // ========================================================
-  // 1. [新增] 省市区选择器监听
-  // ========================================================
-  onRegionChange(e) {
-    console.log('选择的地区:', e.detail.value);
-    this.setData({
-      region: e.detail.value
-    });
-    // 选完地区，立刻重新计算运费
-    this.reCalcFinalPrice();
-  },
-
-  // ========================================================
-  // 2. [修改] 输入监听 (处理详细地址 + 手机号)
+  // 1. [修改] 输入监听 (处理详细地址 + 手机号)
   // ========================================================
   onInput(e) {
     const key = e.currentTarget.dataset.key;
@@ -1913,6 +1900,10 @@ Page({
 
     if (key === 'detailAddress') {
       this.setData({ detailAddress: val });
+      // 输入详细地址后，解析地址并重新计算运费
+      if (val && val.trim()) {
+        this.reCalcFinalPrice();
+      }
     } else {
       this.setData({ [`orderInfo.${key}`]: val });
     }
@@ -1957,8 +1948,13 @@ Page({
     this.setData({
       'orderInfo.name': parsed.name || '',
       'orderInfo.phone': parsed.phone || '',
-      'orderInfo.address': parsed.address || ''
+      detailAddress: parsed.address || ''
     });
+    
+    // 如果解析到了地址，重新计算运费
+    if (parsed.address && parsed.address.trim()) {
+      this.reCalcFinalPrice();
+    }
     
     // 关闭弹窗
     this.closeSmartPasteModal();
@@ -2048,10 +2044,13 @@ Page({
         // 解析地址
         const parsed = this.parseAddress(clipboardText);
         
-        // 更新地址信息
+        // 更新地址信息到 detailAddress
         this.setData({
-          'orderInfo.address': parsed.fullAddress
+          detailAddress: parsed.fullAddress
         });
+        
+        // 重新计算运费
+        this.reCalcFinalPrice();
         
         // 如果解析出了省市区，可以提示用户
         if (parsed.province || parsed.city || parsed.district) {
@@ -2536,7 +2535,7 @@ Page({
   // 6. [核心] 提交校验与组装
   // ========================================================
   submitOrder() {
-    const { cart, orderInfo, region, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
+    const { cart, orderInfo, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
 
     // A. 购物车校验
     if (cart.length === 0) return this.showError('购物车为空');
@@ -2549,13 +2548,19 @@ Page({
       return this.showError('请输入正确的11位手机号');
     }
 
-    // 地址校验 (省市区 + 详细)
-    if (region.length === 0) return this.showError('请选择省市区');
-    if (!detailAddress) return this.showError('请填写详细街道门牌');
+    // 地址校验
+    if (!detailAddress || !detailAddress.trim()) {
+      return this.showError('请填写详细地址');
+    }
 
-    // C. 组装完整地址字符串 (给后端和微信支付用)
-    // 格式：广东省 佛山市 南海区 某某街道101号
-    const fullAddressString = `${region[0]} ${region[1]} ${region[2]} ${detailAddress}`;
+    // C. 解析地址，验证是否包含省市区信息
+    const parsed = this.parseAddress(detailAddress);
+    if (!parsed.province && !parsed.city) {
+      return this.showError('地址格式不正确，请包含省市区信息，如：广东省 佛山市 南海区 某某街道101号');
+    }
+
+    // D. 组装完整地址字符串 (给后端和微信支付用)
+    const fullAddressString = parsed.fullAddress || detailAddress;
 
     // 更新 orderInfo 里的 address，因为之前的逻辑是读这个字段的
     const finalOrderInfo = {
@@ -2563,12 +2568,12 @@ Page({
       address: fullAddressString
     };
 
-    // D. 顺丰未选地址拦截 (虽然上面已经校验了region，但为了保险)
-    if (shippingMethod === 'sf' && region.length === 0) {
-      return this.showError('请先选择收货地址以计算运费');
+    // E. 顺丰运费校验
+    if (shippingMethod === 'sf' && shippingFee === 0) {
+      return this.showError('请完善地址信息以计算运费');
     }
 
-    // E. 唤起支付 (复用之前的逻辑)
+    // F. 唤起支付 (复用之前的逻辑)
     this.doRealPayment(cart, finalOrderInfo, finalTotalPrice);
   },
 
@@ -2675,25 +2680,32 @@ Page({
   },
 
   // ========================================================
-  // 5. [核心] 运费与总价计算逻辑
+  // 5. [核心] 运费与总价计算逻辑（从详细地址解析省市区）
   // ========================================================
   reCalcFinalPrice(goodsPrice = this.data.cartTotalPrice) {
-    const { shippingMethod, region } = this.data;
+    const { shippingMethod, detailAddress } = this.data;
     let fee = 0;
 
     if (shippingMethod === 'zto') {
       fee = 0; // 中通包邮
     } else if (shippingMethod === 'sf') {
-      // 顺丰逻辑：只有选择了地区才算钱
-      if (region.length === 0) {
-        fee = 0; // 没选地址，运费暂计为0
+      // 顺丰逻辑：从详细地址中解析省市区
+      if (!detailAddress || !detailAddress.trim()) {
+        fee = 0; // 没填地址，运费暂计为0
       } else {
-        const province = region[0]; // 获取省份
+        // 解析地址，提取省份信息
+        const parsed = this.parseAddress(detailAddress);
+        const province = parsed.province || '';
+        
         // 判断是否广东
         if (province.indexOf('广东') > -1) {
           fee = 13;
-        } else {
+        } else if (province) {
+          // 如果解析到了省份但不是广东，则按省外计算
           fee = 22;
+        } else {
+          // 如果解析不到省份，运费暂计为0（待用户完善地址）
+          fee = 0;
         }
       }
     }
@@ -2719,14 +2731,16 @@ Page({
   // ========================================================
   // 定制单提交逻辑 (同理修改校验)
   submitCustomOrder() {
-    const { cart, orderInfo, region, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
+    const { cart, orderInfo, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
 
     if (cart.length === 0) return this.showError('购物车为空');
     if (!orderInfo.name) return this.showError('请填写姓名');
     if (!/^1[3-9]\d{9}$/.test(orderInfo.phone)) return this.showError('手机号格式错误');
-    if (region.length === 0 || !detailAddress) return this.showError('请完善收货地址');
+    if (!detailAddress || !detailAddress.trim()) return this.showError('请完善收货地址');
 
-    const fullAddressString = `${region[0]} ${region[1]} ${region[2]} ${detailAddress}`;
+    // 解析地址
+    const parsed = this.parseAddress(detailAddress);
+    const fullAddressString = parsed.fullAddress || detailAddress;
     const finalOrderInfo = { ...orderInfo, address: fullAddressString };
 
     wx.showModal({

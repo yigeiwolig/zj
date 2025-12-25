@@ -12,7 +12,7 @@
     <view class="header-content">
       <view class="user-identity">
         <text class="rank-tag">PLATINUM MEMBER</text>
-        <text class="user-name">Alexander</text>
+        <text class="user-name">{{userName}}</text>
       </view>
       <view class="header-stats">
         <view class="stat-item">
@@ -324,8 +324,17 @@
         <view class="spec-row">
           <text class="label">总剩余质保</text>
           <view class="warranty-val">
+            <!-- 剩余天数 -->
             <text class="days-num {{item.days < 30 ? 'warning' : ''}}">{{item.days}} Days</text>
-            <text class="ext-tag" wx:if="{{item.hasExtra}}">含延保</text>
+            
+            <!-- 👇👇👇 [新增] 赠送质保标记 👇👇👇 -->
+            <view class="reward-tag" wx:if="{{item.hasReward}}">
+               <text>🎁 已获赠30天</text>
+            </view>
+            <!-- 👆👆👆 只有 hasReward 为 true 时才显示 👆👆👆 -->
+            
+            <!-- 原有的延保标记 (如果有) -->
+            <text class="ext-tag" wx:if="{{item.hasExtra && !item.hasReward}}">含延保</text>
           </view>
         </view>
         <view class="spec-row">
@@ -350,6 +359,55 @@
         <text class="add-tips">绑定新产品</text>
       </view>
     </view>
+
+    <!-- 👇👇👇【核心补全】在这里插入申请记录列表 👇👇👇 -->
+    <view class="section-label" wx:if="{{myActivityList.length > 0}}">MY ACTIVITIES / 申请进度</view>
+    
+    <view class="activity-list" wx:if="{{myActivityList.length > 0}}">
+      <block wx:for="{{myActivityList}}" wx:key="_id">
+        <!-- 点击驳回的卡片可以重新上传 -->
+        <view class="act-card" bindtap="{{item.status == -1 ? 'reUpload' : ''}}" data-item="{{item}}">
+          
+          <!-- 🔴 主要内容区域：保持横向布局 -->
+          <view class="act-main-row">
+            <view class="act-left">
+              <!-- 标题：显示是视频还是设备 -->
+              <view class="act-title">
+                <text class="act-tag {{item.type}}">{{item.type === 'video' ? '视频' : '设备'}}</text>
+                <text class="act-name">{{item.title}}</text>
+              </view>
+              <view class="act-time">{{item.createTime}}</view>
+            </view>
+            
+            <!-- 右侧状态 -->
+            <view class="act-right">
+              <!-- 审核中 (0 或 PENDING) -->
+              <view class="status-pill processing" wx:if="{{item.status === 0 || item.status === 'PENDING'}}">
+                <view class="dot-p"></view>审核中
+              </view>
+              
+              <!-- 已通过 (1 或 APPROVED) -->
+              <view class="status-pill success" wx:if="{{item.status === 1 || item.status === 'APPROVED'}}">
+                <view class="dot-s"></view>已通过
+              </view>
+              
+              <!-- 已驳回 (-1 或 REJECTED) -->
+              <view class="status-pill fail" wx:if="{{item.status === -1 || item.status === 'REJECTED'}}">已驳回</view>
+            </view>
+          </view>
+          
+          <!-- 🔴 拒绝理由独立显示在下方，完全不影响上面的布局 -->
+          <view class="reject-reason-wrapper" wx:if="{{(item.status === -1 || item.status === 'REJECTED') && item.rejectReason}}">
+            <view class="reject-reason">
+              <text class="reason-label">拒绝理由：</text>
+              <text class="reason-text">{{item.rejectReason}}</text>
+            </view>
+          </view>
+
+        </view>
+      </block>
+    </view>
+    <!-- 👆👆👆【核心补全】结束 👆👆👆 -->
 
     <!-- 4. 底部服务按钮 -->
     <view class="footer-bar">

@@ -378,8 +378,8 @@
         <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
           <view class="ship-name">顺丰速运</view>
           <view class="ship-price">
-             <!-- 如果没选地区，显示待计算；选了才显示金额 -->
-             {{region.length == 0 ? '待计算' : '¥'+shippingFee}}
+             <!-- 如果没填地址或解析不到省份，显示待计算；否则显示金额 -->
+             {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
              <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
           </view>
         </view>
@@ -415,7 +415,7 @@
         <!-- [修改] 详细地址 -->
         <view class="form-item">
           <view class="form-label">详细地址</view>
-          <input class="form-input" placeholder="街道、楼牌号等" placeholder-class="ph-style" bindinput="onInput" data-key="detailAddress" value="{{detailAddress}}"/>
+          <input class="form-input" placeholder="如：广东省 佛山市 南海区 某某街道101号" placeholder-class="ph-style" bindinput="onInput" data-key="detailAddress" value="{{detailAddress}}"/>
         </view>
 
       </view>

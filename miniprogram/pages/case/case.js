@@ -16,7 +16,8 @@ Page({
     showIntro: true,
     showCamera: false,
     showForm: false,      
-    showSuccess: false,   
+    showSuccess: false,
+    showUploadOptions: false, // 显示上传选项弹窗（选择相册/录制）   
     
     // --- 播放器与管理员状态 ---
     showVideoPlayer: false, 
@@ -62,7 +63,14 @@ Page({
     
     // --- 列表数据 ---
     list: [],        
-    displayList: []  
+    displayList: [],
+    
+    // --- 🆕 待审核列表 ---
+    pendingList: [],  // 管理员待审核的用户投稿
+    
+    // --- 🆕 设备选择相关 ---
+    myDevices: [], // 用户已绑定的设备
+    selectedSnIndex: null, // 选中的设备索引
   },
 
   onLoad() {
@@ -81,6 +89,9 @@ Page({
     setTimeout(() => {
        this.initTabPosition();
     }, 500);
+    
+    // 【新增】加载用户的设备用于选择
+    this.loadUserDevices();
   },
 
   onUnload() {
@@ -155,6 +166,284 @@ Page({
         wx.hideLoading();
         console.error(err);
       });
+    
+    // 🆕 如果是管理员，同时加载待审核列表
+    if (this.data.isAdmin) {
+      this.loadPendingList();
+    }
+  },
+  
+  // 🆕 检查管理员权限
+  async checkAdminPrivilege() {
+    try {
+      const res = await wx.cloud.callFunction({ name: 'login' });
+      const myOpenid = res.result.openid;
+      const db = wx.cloud.database();
+      const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      
+      if (adminCheck.data.length > 0) {
+        this.setData({ isAuthorized: true });
+      }
+    } catch (err) {
+      console.error('[case.js] 权限检查失败', err);
+    }
+  },
+  
+  // 🆕 切换管理员模式
+  toggleAdminMode() {
+    if (!this.data.isAuthorized) return;
+    const newState = !this.data.isAdmin;
+    
+    this.setData({ isAdmin: newState });
+    wx.showToast({ title: newState ? '管理模式' : '浏览模式', icon: 'none' });
+
+    // 【新增】如果是开启管理员，立刻拉取待审核视频
+    if (newState) {
+      this.fetchPendingVideos();
+    }
+  },
+
+  // ==========================================
+  // [新增] 管理员审核逻辑模块
+  // ==========================================
+
+  // 1. 加载用户可用设备
+  loadUserDevices() {
+    wx.cloud.callFunction({ name: 'login' }).then(res => {
+      const openid = res.result.openid;
+      db.collection('sn').where({
+        openid: openid,
+        isActive: true // 必须是已激活的
+      }).get().then(devRes => {
+        const devices = devRes.data;
+        this.setData({ myDevices: devices });
+        
+        // 【核心】如果只有 1 个设备，自动选中
+        if (devices.length === 1) {
+          this.setData({ selectedSnIndex: 0 });
+        }
+      });
+    });
+  },
+
+  // 2. 监听设备选择
+  bindSnChange(e) {
+    this.setData({ selectedSnIndex: e.detail.value });
+  },
+
+  // [修改] 获取待审核视频 (修复时间显示问题)
+  fetchPendingVideos() {
+    db.collection('video')
+      .where({ status: 0 }) 
+      .orderBy('createTime', 'desc')
+      .get()
+      .then(res => {
+        // 数据清洗
+        const formattedList = res.data.map(item => {
+          return {
+            ...item,
+            // 【核心修复】把时间对象转成字符串
+            displayTime: this.formatTime(item.createTime) 
+          };
+        });
+        
+        this.setData({ pendingList: formattedList });
+        console.log('待审核视频:', formattedList);
+      });
+  },
+
+  // [新增] 简易时间格式化工具
+  formatTime(dateInput) {
+    if (!dateInput) return '刚刚';
+    const date = new Date(dateInput);
+    const m = (date.getMonth() + 1).toString().padStart(2, '0');
+    const d = date.getDate().toString().padStart(2, '0');
+    const h = date.getHours().toString().padStart(2, '0');
+    const min = date.getMinutes().toString().padStart(2, '0');
+    return `${m}-${d} ${h}:${min}`;
+  },
+
+  // 2. 审核通过：调用云函数处理（包含自动延保）
+  approvePending(e) {
+    const item = e.currentTarget.dataset.item;
+    
+    wx.showModal({
+      title: '确认通过',
+      content: '该视频将发布到公开案例列表，并自动赠送30天延保',
+      success: (res) => {
+        if (res.confirm) {
+          wx.showLoading({ title: '处理中...' });
+          
+          // 调用云函数处理审核和延保
+          wx.cloud.callFunction({
+            name: 'adminAuditVideo',
+            data: {
+              item: item,
+              action: 'approve'
+            }
+          }).then(result => {
+            wx.hideLoading();
+            if (result.result.success) {
+              wx.showToast({ title: result.result.msg || '已发布', icon: 'success' });
+              
+              // 刷新两个列表
+              this.fetchPendingVideos(); 
+              this.fetchCloudData();
+            } else {
+              wx.showToast({ title: result.result.errMsg || '操作失败', icon: 'none' });
+            }
+          }).catch(err => {
+            wx.hideLoading();
+            console.error('审核失败:', err);
+            wx.showToast({ title: '操作失败', icon: 'none' });
+          });
+        }
+      }
+    });
+  },
+
+  // 3. 审核拒绝：调用云函数处理（需要填写拒绝理由）
+  rejectPending(e) {
+    const id = e.currentTarget.dataset.id;
+    const item = this.data.pendingList.find(i => i._id === id);
+    if (!item) return;
+    
+    // 使用输入框让管理员填写拒绝理由
+    wx.showModal({
+      title: '拒绝理由',
+      editable: true,
+      placeholderText: '请输入拒绝理由（必填）',
+      confirmColor: '#FF3B30',
+      success: (res) => {
+        if (res.confirm) {
+          const rejectReason = res.content.trim();
+          if (!rejectReason) {
+            wx.showToast({ title: '请填写拒绝理由', icon: 'none' });
+            return;
+          }
+          
+          wx.showLoading({ title: '处理中...' });
+          
+          // 调用云函数处理，传递拒绝理由
+          wx.cloud.callFunction({
+            name: 'adminAuditVideo',
+            data: {
+              item: item,
+              action: 'reject',
+              rejectReason: rejectReason // 传递拒绝理由
+            }
+          }).then(result => {
+            wx.hideLoading();
+            if (result.result.success) {
+              wx.showToast({ title: result.result.msg || '已驳回', icon: 'none' });
+              this.fetchPendingVideos(); // 刷新列表
+            } else {
+              wx.showToast({ title: result.result.errMsg || '操作失败', icon: 'none' });
+            }
+          }).catch(err => {
+            wx.hideLoading();
+            console.error('拒绝失败:', err);
+            wx.showToast({ title: '操作失败', icon: 'none' });
+          });
+        }
+      }
+    });
+  },
+
+  // [新增] 标记为已采纳 (告诉用户视频通过了，可以领奖励了)
+  markAsProcessed(e) {
+    const id = e.currentTarget.dataset.id;
+    const item = this.data.pendingList.find(i => i._id === id);
+    if (!item) return;
+    
+    wx.showModal({
+      title: '确认采纳',
+      content: '将通知用户审核通过并发放奖励，但不会直接发布此视频（需您手动打码后上传）。',
+      success: (res) => {
+        if (res.confirm) {
+          wx.showLoading({ title: '处理中...' });
+          // 调用云函数，只改状态，不搬运数据
+          // 必须是 item: { _id: ..., sn: ... } 这种结构，因为云函数里需要 item._id 和 item.sn
+          wx.cloud.callFunction({
+            name: 'adminAuditVideo',
+            data: { 
+              item: {
+                _id: item._id,
+                sn: item.sn // 为了能发奖励，必须传 sn
+              },
+              action: 'mark_pass'
+            },
+            success: (result) => {
+              wx.hideLoading();
+              if (result.result && result.result.success) {
+                wx.showToast({ title: result.result.msg || '已标记', icon: 'success' });
+                this.fetchPendingVideos(); // 刷新列表
+              } else {
+                // 如果失败，把错误弹出来看
+                wx.showModal({ 
+                  title: '操作失败', 
+                  content: result.result ? result.result.errMsg || '未知错误' : '返回数据异常',
+                  showCancel: false
+                });
+              }
+            },
+            fail: (err) => {
+              wx.hideLoading();
+              console.error('标记失败:', err);
+              wx.showModal({ 
+                title: '调用失败', 
+                content: err.errMsg || '网络错误，请重试',
+                showCancel: false
+              });
+            }
+          });
+        }
+      }
+    });
+  },
+
+  // [新增] 下载视频到相册
+  downloadPending(e) {
+    const fileID = e.currentTarget.dataset.fileid;
+    if (!fileID) return;
+
+    wx.showLoading({ title: '下载中...', mask: true });
+
+    // 1. 先下载临时文件
+    wx.cloud.downloadFile({
+      fileID: fileID,
+      success: res => {
+        // 2. 保存到相册
+        wx.saveVideoToPhotosAlbum({
+          filePath: res.tempFilePath,
+          success: () => {
+            wx.hideLoading();
+            wx.showToast({ title: '已保存到相册', icon: 'success' });
+          },
+          fail: (err) => {
+            wx.hideLoading();
+            // 如果用户拒绝授权，提示去设置
+            if (err.errMsg.indexOf('auth') > -1) {
+              wx.showModal({
+                title: '权限不足',
+                content: '需要保存视频权限，请在设置中开启',
+                confirmText: '去设置',
+                success: (settingRes) => {
+                  if (settingRes.confirm) wx.openSetting();
+                }
+              });
+            } else {
+              wx.showToast({ title: '保存失败', icon: 'none' });
+            }
+          }
+        });
+      },
+      fail: err => {
+        wx.hideLoading();
+        console.error(err);
+        wx.showToast({ title: '下载文件失败', icon: 'none' });
+      }
+    });
   },
 
   getRandomColor() {
@@ -179,9 +468,68 @@ Page({
         showAdminForm: true
       });
     } else {
-      // 普通用户：打开录制
-      this.openCamera();
+      // 普通用户：显示选择弹窗（选择相册/录制）
+      this.setData({ showUploadOptions: true });
     }
+  },
+
+  // 选择相册
+  chooseVideoFromAlbum() {
+    this.setData({ showUploadOptions: false });
+    
+    // 校验：必须先绑定设备
+    if (this.data.myDevices.length === 0) {
+      wx.showModal({
+        title: '无法上传',
+        content: '您尚未绑定任何 MT 设备，无法参与延保活动。请先去"我的"页面绑定设备。',
+        confirmText: '去绑定',
+        success: (res) => {
+          if(res.confirm) {
+             wx.navigateTo({ url: '/pages/my/my' });
+          }
+        }
+      });
+      return;
+    }
+
+    wx.chooseVideo({
+      sourceType: ['album'],
+      maxDuration: 60,
+      camera: 'back',
+      success: (res) => {
+        console.log('选择视频成功:', res);
+        // 直接打开表单，使用选择的视频
+        this.setData({
+          showForm: true,
+          videoPath: res.tempFilePath
+        });
+      },
+      fail: (err) => {
+        console.error('选择视频失败:', err);
+        if (err.errMsg !== 'chooseVideo:fail cancel') {
+          wx.showToast({ title: '选择失败', icon: 'none' });
+        }
+      }
+    });
+  },
+
+  // 选择录制
+  chooseRecord() {
+    this.setData({ showUploadOptions: false });
+    // 延迟一下，让弹窗关闭动画完成
+    setTimeout(() => {
+      this.openCamera();
+    }, 200);
+  },
+
+  // 关闭上传选项弹窗
+  closeUploadOptions() {
+    this.setData({ showUploadOptions: false });
+  },
+
+  // 阻止事件冒泡
+  preventBubble() {
+    // 空函数，用于阻止事件冒泡
   },
 
   // ==========================================
@@ -471,17 +819,39 @@ Page({
   },
 
   openCamera() { 
-    // 1. 🔴 先设置显示状态，但动画还未开始（初始状态：很小，圆形，透明）
+    // 校验：必须先绑定设备
+    if (this.data.myDevices.length === 0) {
+      wx.showModal({
+        title: '无法上传',
+        content: '您尚未绑定任何 MT 设备，无法参与延保活动。请先去"我的"页面绑定设备。',
+        confirmText: '去绑定',
+        success: (res) => {
+          if(res.confirm) {
+             wx.navigateTo({ url: '/pages/my/my' }); // 跳转去绑定
+          }
+        }
+      });
+      return;
+    }
+    
+    // 1. 🔴 优化：先设置显示状态
     this.setData({ 
       showCamera: true, 
       cameraAnimating: true, // 标记为动画初始状态
       showPrivacyTip: true 
     }); 
     
-    // 2. 🔴 等待一帧（约16ms），让初始状态先渲染，然后触发弹出动画
-    setTimeout(() => {
-      this.setData({ cameraAnimating: false }); // 触发弹出动画
-    }, 20);
+    // 2. 🔴 优化：使用更短的延迟，减少卡顿感
+    // 使用 wx.nextTick 确保在下一帧渲染（如果支持），否则用短延迟
+    if (typeof wx.nextTick === 'function') {
+      wx.nextTick(() => {
+        this.setData({ cameraAnimating: false }); // 触发弹出动画
+      });
+    } else {
+      setTimeout(() => {
+        this.setData({ cameraAnimating: false }); // 触发弹出动画
+      }, 16); // 约一帧的时间
+    }
     
     // 3. 隐私提示显示 4 秒后自动消失
     setTimeout(() => {
@@ -489,29 +859,34 @@ Page({
     }, 4000);
   },
   closeCamera() { 
+    // 🔴 优化：立即隐藏所有组件，不等待动画
+    this.setData({ 
+      showPrivacyTip: false,
+      isRecording: false, // 立即停止录制状态，让组件快速退场
+      recTimeStr: "00:00"
+    });
+    
     if(this.data.isRecording) {
       // 🔴 如果正在录制，先停止录制
       this.stopRecordLogic(false); 
-      // 🔴 等待停止完成后再关闭相机（延迟一下）
+      // 🔴 优化：缩短延迟，快速关闭
       setTimeout(() => {
         this.setData({ 
           cameraAnimating: true, // 开始关闭动画（缩回按钮）
-          showPrivacyTip: false 
         });
         setTimeout(() => {
           this.setData({ showCamera: false, cameraAnimating: false });
-        }, 500); // 等待动画完成（与CSS动画时间一致）
-      }, 100);
+        }, 200); // 🔴 优化：进一步缩短到 200ms
+      }, 30); // 🔴 优化：缩短到 30ms
     } else {
-      // 🔴 如果没有录制，先触发关闭动画（缩回按钮）
+      // 🔴 优化：直接触发关闭动画，立即隐藏组件
       this.setData({ cameraAnimating: true });
       setTimeout(() => {
         this.setData({ 
           showCamera: false, 
-          showPrivacyTip: false,
           cameraAnimating: false 
         }); 
-      }, 500); // 等待动画完成（与CSS动画时间一致）
+      }, 200); // 🔴 优化：进一步缩短到 200ms
     }
   },
   toggleRecord() { 
@@ -609,7 +984,7 @@ Page({
             } else if (save) {
               wx.showToast({ title: '录制无效', icon: 'none' });
             }
-        }, 500); // 等待 500 毫秒
+        }, 250); // 🔴 优化：从 500ms 缩短到 250ms，加快响应
       },
       fail: (err) => {
         console.error('❌ 停止失败', err);
@@ -624,11 +999,18 @@ Page({
   },
   
   submitForm() {
-    const { vehicleName, categoryIndex, modelIndex, videoPath, categoryValueArray, categoryArray, modelArray } = this.data;
+    const { vehicleName, categoryIndex, modelIndex, videoPath, categoryValueArray, categoryArray, modelArray, myDevices, selectedSnIndex } = this.data;
     if (!videoPath) return wx.showToast({ title: '视频丢失', icon: 'none' });
     if (!vehicleName) return wx.showToast({ title: '请填写车型', icon: 'none' });
     if (categoryIndex === null) return wx.showToast({ title: '请选分类', icon: 'none' });
     if (modelIndex === null) return wx.showToast({ title: '请选型号', icon: 'none' });
+    
+    // 校验 SN 选择
+    if (selectedSnIndex === null) {
+      return wx.showToast({ title: '请选择关联设备', icon: 'none' });
+    }
+    const targetSn = myDevices[selectedSnIndex].sn; // 获取选中的 SN
+    
     this.setData({ isSubmitting: true });
     wx.showLoading({ title: '上传中...', mask: true });
     const cloudPath = `video/${Date.now()}_user.mp4`;
@@ -637,9 +1019,19 @@ Page({
       success: res => {
         db.collection('video').add({
           data: {
-            vehicleName, category: categoryValueArray[categoryIndex], categoryName: categoryArray[categoryIndex], model: modelArray[modelIndex], videoFileID: res.fileID, createTime: db.serverDate(), status: 0
+            vehicleName, 
+            category: categoryValueArray[categoryIndex], 
+            categoryName: categoryArray[categoryIndex], 
+            model: modelArray[modelIndex], 
+            videoFileID: res.fileID, 
+            createTime: db.serverDate(), 
+            status: 0, // 0:审核中
+            sn: targetSn // 【新增】关联 SN
           },
-          success: () => { wx.hideLoading(); this.setData({ isSubmitting: false, showForm: false, showSuccess: true, videoPath: null }); }
+          success: () => { 
+             wx.hideLoading(); 
+             this.setData({ isSubmitting: false, showForm: false, showSuccess: true, videoPath: null }); 
+          }
         });
       }
     });

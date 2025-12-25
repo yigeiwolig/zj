@@ -92,53 +92,19 @@ page {
   padding-top: 20rpx;
 }
 
-/* --- 方案2：赛博故障艺术字设计 --- */
+/* 普通标题样式 */
 .h1-wrapper {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10rpx;
   margin-bottom: 32rpx;
-  position: relative;
-  /* 整体稍微倾斜，增加速度感 */
-  transform: skewX(-5deg); 
 }
 
-.h1-main, .h1-sub {
-  font-size: 64rpx; /* 进一步改小字体 */
-  font-weight: 900;  /* 极粗 */
+.h1-text {
+  font-size: 48rpx;
+  font-weight: 600;
   color: #000;
-  position: relative;
-  letter-spacing: 3rpx;
-  line-height: 1;
-  font-family: "Impact", "Arial Black", sans-serif; /* 尽量使用厚重的字体 */
-  
-  /* 核心：赛博故障色偏效果 (青色与玫红的错位) */
-  text-shadow: 
-    2rpx 0 #00FFF0,  /* 左侧青色 */
-    -2rpx 0 #FF00C1; /* 右侧玫红 */
-    
-  /* 这里的动画是可选的，如果你不需要它动，可以删掉下面这一行 */
-  animation: glitch-anim 3s infinite linear alternate-reverse;
-}
-
-.h1-dash {
-  font-size: 48rpx; /* 进一步改小字体 */
-  font-weight: 900;
-  color: #000;
-  margin: 0 10rpx;
-  /* 连字符也加上同样的色偏 */
-  text-shadow: 1rpx 0 #00FFF0, -1rpx 0 #FF00C1;
-}
-
-/* 故障抖动动画 (每隔几秒轻微跳动一次) */
-@keyframes glitch-anim {
-  0% { text-shadow: 4rpx 0 #00FFF0, -4rpx 0 #FF00C1; transform: translate(0); }
-  92% { text-shadow: 4rpx 0 #00FFF0, -4rpx 0 #FF00C1; transform: translate(0); }
-  94% { text-shadow: -6rpx 0 #00FFF0, 6rpx 0 #FF00C1; transform: translate(2rpx, -2rpx); }
-  96% { text-shadow: 8rpx 0 #00FFF0, -8rpx 0 #FF00C1; transform: translate(-2rpx, 2rpx); }
-  98% { text-shadow: -4rpx 0 #00FFF0, 4rpx 0 #FF00C1; transform: translate(0); }
-  100% { text-shadow: 4rpx 0 #00FFF0, -4rpx 0 #FF00C1; transform: translate(0); }
+  line-height: 1.2;
 }
 
 /* 下方的副标题调整，配合艺术字 */

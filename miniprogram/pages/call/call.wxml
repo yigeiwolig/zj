@@ -16,9 +16,7 @@
   <!-- 标题区 -->
   <view class="header">
     <view class="h1-wrapper">
-      <view class="h1-main">MT</view>
-      <view class="h1-dash">-</view>
-      <view class="h1-sub">摩改社</view>
+      <text class="h1-text">MT-摩改社</text>
     </view>
     <view class="p-wrapper">
       <view class="p-line"></view>

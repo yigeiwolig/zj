@@ -8,6 +8,7 @@ Page({
     modelOptions: ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 PRO Long', 'F2 MAX Long'],
     modelIndex: null,
     buyDate: '',
+    userName: 'Alexander', // 用户昵称，从存储中读取
     
     // 蓝牙相关状态
     isScanning: false,      // 是否正在扫描(控制动画)
@@ -64,9 +65,18 @@ Page({
     // Loading 状态
     isLoading: false,
     loadingText: '加载中...',
+    
+    // 【新增】我的申请记录
+    myActivityList: [], // 存放所有的审核记录
   },
 
   onLoad() {
+    // 读取用户昵称
+    const savedNickname = wx.getStorageSync('user_nickname');
+    if (savedNickname) {
+      this.setData({ userName: savedNickname });
+    }
+    
     this.checkAdminPrivilege();
     
     // 1. 初始化蓝牙助手
@@ -84,9 +94,24 @@ Page({
 
   // --- 1. 页面显示时，加载云端数据 ---
   onShow() {
-    this.checkAdminPrivilege(); // 登录时检查权限（内部会调用 loadMyDevices）
-    this.loadMyOrders();
-    // loadMyDevices 已经在 checkAdminPrivilege 中调用，确保 myOpenid 已获取
+    // 每次显示时重新读取昵称（可能在其他页面修改了）
+    const savedNickname = wx.getStorageSync('user_nickname');
+    if (savedNickname) {
+      this.setData({ userName: savedNickname });
+    }
+    
+    // 🔴 先检查权限获取 openid，然后再加载数据
+    this.checkAdminPrivilege().then(() => {
+      // 确保 myOpenid 已获取后再加载数据
+      this.loadMyOrders();
+      this.loadMyActivities();
+    }).catch(() => {
+      // 如果权限检查失败，也尝试加载（可能只是普通用户）
+      if (this.data.myOpenid) {
+        this.loadMyOrders();
+        this.loadMyActivities();
+      }
+    });
   },
 
   // ================== 权限检查逻辑 ==================
@@ -95,8 +120,9 @@ Page({
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
       
-      // 【关键】存下来，给 loadMyDevices 用
+      // 【关键】存下来，给所有查询用
       this.setData({ myOpenid: myOpenid });
+      console.log('✅ [checkAdminPrivilege] 已获取 openid:', myOpenid);
 
       const db = wx.cloud.database();
       const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
@@ -106,17 +132,19 @@ Page({
           isAuthorized: true, 
           isAdmin: true 
         });
-        // 权限确认后，立刻重新加载订单，这样才能切到管理员视图
-        this.loadMyOrders();
-        this.loadAuditList(); // 如果是管理员，加载审核列表
+        // 权限确认后，如果是管理员，加载审核列表
+        this.loadAuditList();
       }
       
       // 不管是不是管理员，都要加载我的设备
       // 放在这里调用，确保 myOpenid 已经拿到了
       this.loadMyDevices();
+      
+      return Promise.resolve(); // 🔴 返回 Promise，让调用者知道已完成
 
     } catch (err) {
       console.error('[my.js] 权限检查失败', err);
+      return Promise.reject(err); // 🔴 返回 rejected Promise
     }
   },
 
@@ -185,7 +213,13 @@ Page({
 
     const getAction = this.data.isAdmin 
       ? wx.cloud.callFunction({ name: 'adminGetOrders' }) 
-      : wx.cloud.database().collection('shop_orders').orderBy('createTime', 'desc').get();
+      : // 🔴 普通用户：确保只查询当前用户的订单（系统会自动注入 _openid，但为了保险，我们确保 myOpenid 已获取）
+        (this.data.myOpenid 
+          ? wx.cloud.database().collection('shop_orders')
+              .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
+              .orderBy('createTime', 'desc')
+              .get()
+          : Promise.resolve({ data: [] })); // 如果还没获取到 openid，返回空数组
 
     const promise = this.data.isAdmin ? getAction.then(res => res.result) : getAction;
 
@@ -1054,6 +1088,128 @@ Page({
         this.showMyDialog({ title: '操作失败', content: err.errMsg || '网络错误，请重试' });
       }
     });
+  },
+
+  // 加载审核记录
+  loadMyActivities() {
+    console.log('🔍 [loadMyActivities] 开始加载申请记录');
+    
+    // 🔴 确保已获取 openid
+    if (!this.data.myOpenid) {
+      console.warn('⚠️ [loadMyActivities] myOpenid 未获取，等待获取后再查询');
+      // 如果还没获取到，延迟一下再试
+      setTimeout(() => {
+        if (this.data.myOpenid) {
+          this.loadMyActivities();
+        }
+      }, 500);
+      return;
+    }
+    
+    const db = wx.cloud.database();
+    
+    // 🔴 修复：明确指定当前用户的 _openid，确保只查询当前用户的数据
+    // 1. 查设备绑定申请
+    const p1 = db.collection('my_read')
+      .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
+      .orderBy('createTime', 'desc')
+      .get();
+    
+    // 2. 查视频投稿申请
+    const p2 = db.collection('video')
+      .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
+      .orderBy('createTime', 'desc')
+      .get();
+
+    Promise.all([p1, p2]).then(res => {
+      console.log('📋 [loadMyActivities] 查询结果 - 设备申请:', res[0].data.length, '条, 视频申请:', res[1].data.length, '条');
+      console.log('📋 [loadMyActivities] 设备申请详情:', res[0].data);
+      console.log('📋 [loadMyActivities] 视频申请详情:', res[1].data);
+      
+      // 处理设备数据
+      const deviceApps = res[0].data.map(i => {
+        // 🔴 统一状态值：设备申请使用字符串，需要转换为数字
+        let statusNum = 0; // 默认审核中
+        if (i.status === 'APPROVED') {
+          statusNum = 1; // 已通过
+        } else if (i.status === 'REJECTED') {
+          statusNum = -1; // 已驳回
+        } else if (i.status === 'PENDING') {
+          statusNum = 0; // 审核中
+        }
+        
+        return {
+          ...i, 
+          type: 'device', 
+          title: '绑定: ' + (i.productModel || '未知设备'),
+          status: statusNum, // 🔴 统一转换为数字状态
+          originalCreateTime: i.createTime, // 🔴 保留原始时间用于排序
+          // 格式化时间用于显示
+          createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚'
+        };
+      });
+      
+      // 处理视频数据
+      const videoApps = res[1].data.map(i => ({
+        ...i, 
+        type: 'video', 
+        title: '投稿: ' + (i.vehicleName || '未知车型'),
+        // 视频申请已经是数字状态（0/1/-1），直接使用
+        originalCreateTime: i.createTime, // 🔴 保留原始时间用于排序
+        // 格式化时间用于显示
+        createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚'
+      }));
+      
+      // 合并并按时间倒序（使用原始时间对象排序）
+      const all = [...deviceApps, ...videoApps].sort((a, b) => {
+        // 使用原始 createTime 对象排序
+        const timeA = a.originalCreateTime ? new Date(a.originalCreateTime).getTime() : 0;
+        const timeB = b.originalCreateTime ? new Date(b.originalCreateTime).getTime() : 0;
+        return timeB - timeA;
+      });
+      
+      // 🔴 过滤掉已通过的记录，只显示审核中和已驳回的
+      const filtered = all.filter(i => {
+        const status = i.status;
+        // 只保留：审核中(0/PENDING) 和 已驳回(-1/REJECTED)
+        return status === 0 || status === 'PENDING' || status === -1 || status === 'REJECTED';
+      });
+      
+      console.log('📋 [loadMyActivities] 过滤后的申请记录（已通过已排除）:', filtered);
+      console.log('📋 [loadMyActivities] 记录数量:', filtered.length);
+      
+      this.setData({ myActivityList: filtered }, () => {
+        console.log('✅ [loadMyActivities] 数据已更新到页面，当前 myActivityList 长度:', this.data.myActivityList.length);
+      });
+    }).catch(err => {
+      console.error('❌ [loadMyActivities] 加载申请记录失败:', err);
+      wx.showToast({ title: '加载失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+    });
+  },
+
+  // 重新上传逻辑 (点击驳回条目)
+  reUpload(e) {
+    const item = e.currentTarget.dataset.item;
+    if (item.type === 'device') {
+      // 重新打开设备绑定
+      this.openBindModal();
+    } else {
+      // 视频被拒，跳去 case 页面
+      wx.switchTab({ url: '/pages/case/case' });
+      // 可以在这里存个标记，让 case 页面知道是要重传
+      wx.setStorageSync('reupload_video', true);
+    }
+  },
+  
+  // 简单时间格式化 (用于申请记录列表)
+  formatTimeSimple(dateStr) {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    const m = (d.getMonth() + 1).toString().padStart(2, '0');
+    const day = d.getDate().toString().padStart(2, '0');
+    const h = d.getHours().toString().padStart(2, '0');
+    const min = d.getMinutes().toString().padStart(2, '0');
+    return `${m}-${day} ${h}:${min}`;
   },
 
   // 7. 拒绝操作

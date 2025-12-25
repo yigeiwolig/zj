@@ -144,13 +144,10 @@ Page({
     showCartSuccess: false, // [新增] 控制成功弹窗
 
     // [新增] 运费与地址逻辑
-    detailAddress: '',    // 详细地址
+    detailAddress: '',    // 详细地址，如 '广东省 佛山市 南海区 某某街道101号'
 
     shippingMethod: 'zto',// 默认中通
-    shippingFee: 0,
-
-    // 地区选择相关
-    region: []
+    shippingFee: 0
   },
 
   // 页面加载时初始化
@@ -711,13 +708,22 @@ Page({
 
     if (result.name) updateData['orderInfo.name'] = result.name;
     if (result.phone) updateData['orderInfo.phone'] = result.phone;
-    if (result.address) updateData['orderInfo.address'] = result.address;
+    if (result.address) {
+      updateData['detailAddress'] = result.address;
+      updateData['orderInfo.address'] = result.address;
+    }
 
     this.setData(updateData);
+    
+    // 如果解析到了地址，重新计算运费
+    if (result.address && result.address.trim()) {
+      this.reCalcFinalPrice();
+    }
+    
     wx.showToast({ title: '解析完成', icon: 'success' });
   },
   
-  // [修改] 高级解析算法
+  // [修改] 高级解析算法（解析姓名、电话、地址）
   parseAddress(text) {
     let cleanText = text.trim();
     
@@ -760,6 +766,92 @@ Page({
     };
   },
 
+  // ========================================================
+  // [新增] 地址解析函数（智能识别省市区，用于计算运费）
+  // ========================================================
+  parseAddressForShipping(addressText) {
+    let text = addressText.trim();
+    let province = '';
+    let city = '';
+    let district = '';
+    let detail = '';
+    
+    // 移除常见的分隔符，统一处理
+    text = text.replace(/[\/、]/g, ' ').replace(/[,，]/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
+    let remaining = text;
+    
+    // 识别省（必须包含"省"字）
+    const provincePattern = /([^省\s]+省)/;
+    const provinceMatch = remaining.match(provincePattern);
+    if (provinceMatch) {
+      province = provinceMatch[1].trim();
+      remaining = remaining.replace(province, '').trim();
+    }
+    
+    // 识别市（必须包含"市"字，排除"省"字）
+    const cityPattern = /([^省市\s]+市)/;
+    const cityMatch = remaining.match(cityPattern);
+    if (cityMatch) {
+      city = cityMatch[1].trim();
+      remaining = remaining.replace(city, '').trim();
+    }
+    
+    // 识别区/县（必须包含"区"或"县"字）
+    const districtPattern = /([^省市区县\s]+[区县])/;
+    const districtMatch = remaining.match(districtPattern);
+    if (districtMatch) {
+      district = districtMatch[1].trim();
+      remaining = remaining.replace(district, '').trim();
+    }
+    
+    // 剩余部分作为详细地址
+    detail = remaining.trim();
+    
+    // 方法2: 如果没识别到，尝试识别特殊格式（如：北京市朝阳区）
+    if (!province && !city && !district) {
+      // 直辖市特殊处理：北京、上海、天津、重庆
+      const directCityPattern = /(北京市|上海市|天津市|重庆市)/;
+      const directCityMatch = text.match(directCityPattern);
+      if (directCityMatch) {
+        city = directCityMatch[1];
+        remaining = text.replace(city, '').trim();
+        
+        // 继续识别区
+        const districtMatch2 = remaining.match(districtPattern);
+        if (districtMatch2) {
+          district = districtMatch2[1].trim();
+          remaining = remaining.replace(district, '').trim();
+        }
+        detail = remaining;
+      }
+    }
+    
+    // 组装完整地址（格式化输出）
+    let fullAddress = '';
+    const parts = [];
+    if (province) parts.push(province);
+    if (city) parts.push(city);
+    if (district) parts.push(district);
+    if (detail) parts.push(detail);
+    
+    fullAddress = parts.join(' ');
+    
+    // 如果解析失败，使用原始文本
+    if (!fullAddress) {
+      fullAddress = addressText;
+    }
+    
+    return {
+      province,
+      city,
+      district,
+      detail,
+      fullAddress
+    };
+  },
+
   // 联系信息输入处理（保留兼容）
   handleContactInput(e) {
     const { field } = e.currentTarget.dataset;
@@ -776,11 +868,21 @@ Page({
   // 6. 表单输入（统一格式）
   onInput(e) {
     const key = e.currentTarget.dataset.key;
-    this.setData({ [`orderInfo.${key}`]: e.detail.value });
-    // 同步到旧字段（兼容）
-    if (key === 'name') this.setData({ contactName: e.detail.value });
-    if (key === 'phone') this.setData({ contactPhone: e.detail.value });
-    if (key === 'address') this.setData({ contactAddr: e.detail.value });
+    const val = e.detail.value;
+    
+    if (key === 'detailAddress') {
+      this.setData({ detailAddress: val });
+      // 输入详细地址后，解析地址并重新计算运费
+      if (val && val.trim()) {
+        this.reCalcFinalPrice();
+      }
+    } else {
+      this.setData({ [`orderInfo.${key}`]: val });
+      // 同步到旧字段（兼容）
+      if (key === 'name') this.setData({ contactName: val });
+      if (key === 'phone') this.setData({ contactPhone: val });
+      if (key === 'address') this.setData({ contactAddr: val });
+    }
   },
 
   // 故障描述输入处理
@@ -938,17 +1040,6 @@ Page({
     }
   },
 
-  // ========================================================
-  // [新增] 省市区选择器监听
-  // ========================================================
-  onRegionChange(e) {
-    console.log('选择的地区:', e.detail.value);
-    this.setData({
-      region: e.detail.value
-    });
-    // 选完地区，立刻重新计算运费
-    this.reCalcFinalPrice();
-  },
 
   // ========================================================
   // [新增] 切换快递方式
@@ -959,26 +1050,33 @@ Page({
     this.reCalcFinalPrice();
   },
 
-  // [新增] 计算含运费的总价
+  // [新增] 计算含运费的总价（从详细地址解析省市区）
   reCalcFinalPrice(cart = this.data.cart) {
     console.log('[shouhou] reCalcFinalPrice 开始计算，购物车数据:', cart);
     const goodsTotal = cart.reduce((sum, item) => sum + item.total, 0);
-    const { shippingMethod, region } = this.data;
+    const { shippingMethod, detailAddress } = this.data;
     let fee = 0;
 
     if (shippingMethod === 'zto') {
       fee = 0; // 中通包邮
     } else if (shippingMethod === 'sf') {
-      // 顺丰逻辑：只有选择了地区才算钱
-      if (region.length === 0) {
-        fee = 0; // 没选地址，运费暂计为0
+      // 顺丰逻辑：从详细地址中解析省市区
+      if (!detailAddress || !detailAddress.trim()) {
+        fee = 0; // 没填地址，运费暂计为0
       } else {
-        const province = region[0]; // 获取省份
+        // 解析地址，提取省份信息
+        const parsed = this.parseAddressForShipping(detailAddress);
+        const province = parsed.province || '';
+        
         // 判断是否广东
         if (province.indexOf('广东') > -1) {
           fee = 13;
-        } else {
+        } else if (province) {
+          // 如果解析到了省份但不是广东，则按省外计算
           fee = 22;
+        } else {
+          // 如果解析不到省份，运费暂计为0（待用户完善地址）
+          fee = 0;
         }
       }
     }
@@ -1000,86 +1098,34 @@ Page({
 
   // [核心修复] 立即购买 / 去下单
   openCartOrder() {
-    console.log('[shouhou] openCartOrder click', {
-      selectedCount: this.data.selectedCount,
-      currentPartsList: this.data.currentPartsList,
-      currentPartsListLength: this.data.currentPartsList.length,
-      showSmartPasteModal: this.data.showSmartPasteModal,
-      showModal: this.data.showModal,
-      showOrderModal: this.data.showOrderModal,
-      currentModelName: this.data.currentModelName,
-      serviceType: this.data.serviceType
-    });
-
+    console.log('点击立即购买'); // 调试用
     const { currentPartsList, selectedCount, currentModelName } = this.data;
-
-    // 1. 读取并清洗购物车 (删掉上次立即购买留下的垃圾)
     let cart = wx.getStorageSync('my_cart') || [];
+    
+    // 清理旧临时
     cart = cart.filter(item => !item.isTemp);
 
-    // 增强调试：检查配件列表状态
-    if (!currentPartsList || currentPartsList.length === 0) {
-      console.warn('[shouhou] 当前配件列表为空，型号:', currentModelName);
-      wx.showModal({
-        title: '提示',
-        content: `当前 ${currentModelName} 型号的配件列表为空，请先添加配件或联系管理员`,
-        showCancel: false
-      });
-      return;
-    }
-
-    // 2. 情况A: 没选新配件
+    // 没选新配件 -> 尝试直接结算购物车
     if (selectedCount === 0) {
-      if (cart.length === 0) {
-        // 提示用户选择配件，并显示所有可用配件
-        const partNames = currentPartsList.map(p => p.name).join('、');
-        wx.showModal({
-          title: '请选择配件',
-          content: `请先点击配件进行选择，或者购物车中有商品。\n可用配件：${partNames.substring(0, 50)}${partNames.length > 50 ? '...' : ''}`,
-          showCancel: false
-        });
-        return;
-      }
-      // 直接结算购物车里的永久商品
+      if (cart.length === 0) return wx.showToast({ title: '请选择配件', icon: 'none' });
       this.reCalcFinalPrice(cart);
-      this.setData({ cart, showOrderModal: true });
+      this.setData({ cart, showOrderModal: true }); // 打开弹窗
       return;
     }
 
-    // 3. 情况B: 选了新配件 (添加为临时商品)
+    // 选了新配件 -> 添加临时项
     currentPartsList.forEach((part, index) => {
       if (part.selected) {
         cart.push({
-          id: Date.now() + index,
-          type: 'part',
-          name: part.name,
-          spec: currentModelName,
-          price: Number(part.price || 0),
-          quantity: 1,
-          total: Number(part.price || 0),
-          isTemp: true // 【关键】临时标记
+          id: Date.now() + index, type: 'part', name: part.name, spec: currentModelName,
+          price: Number(part.price||0), quantity: 1, total: Number(part.price||0), isTemp: true
         });
       }
     });
 
-    // 4. 保存并弹窗
-    console.log('[shouhou] openCartOrder 准备保存购物车并显示订单弹窗:', cart);
-    this.saveCartToCache(cart); // 存入 Storage
-    this.reCalcFinalPrice(cart); // 计算运费和总价
-    console.log('[shouhou] 准备显示订单弹窗，showOrderModal 即将设置为 true');
-
-    // 【关键修复】分两步：先显示元素，再触发动画
-    this.setData({
-      showOrderModal: true,
-      popupAnimationActive: false // 确保动画从初始状态开始
-    });
-
-    // 延迟触发动画，确保元素先显示
-    wx.nextTick(() => {
-      setTimeout(() => {
-        this.setData({ popupAnimationActive: true });
-      }, 50);
-    });
+    this.saveCartToCache(cart);
+    this.reCalcFinalPrice(cart);
+    this.setData({ showOrderModal: true }); // 打开弹窗
   },
 
   // [新增] 关闭订单弹窗
@@ -1099,10 +1145,28 @@ Page({
     // 校验
     if (cart.length === 0) return wx.showToast({ title: '清单为空', icon: 'none' });
     if (!orderInfo.name || !orderInfo.phone) return wx.showToast({ title: '请填写联系人', icon: 'none' });
-    if (!detailAddress) return wx.showToast({ title: '请填写详细地址', icon: 'none' });
+    if (!detailAddress || !detailAddress.trim()) {
+      return wx.showToast({ title: '请填写详细地址', icon: 'none' });
+    }
+
+    // 解析地址，验证是否包含省市区信息
+    const parsed = this.parseAddressForShipping(detailAddress);
+    if (!parsed.province && !parsed.city) {
+      return wx.showToast({ 
+        title: '地址格式不正确，请包含省市区信息，如：广东省 佛山市 南海区 某某街道101号', 
+        icon: 'none',
+        duration: 3000
+      });
+    }
+
+    // 顺丰运费校验
+    if (shippingMethod === 'sf' && shippingFee === 0) {
+      return wx.showToast({ title: '请完善地址信息以计算运费', icon: 'none' });
+    }
 
     // 拼装地址
-    const finalInfo = { ...orderInfo, address: detailAddress };
+    const fullAddressString = parsed.fullAddress || detailAddress;
+    const finalInfo = { ...orderInfo, address: fullAddressString };
 
     // 调支付
     wx.showModal({

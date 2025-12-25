@@ -378,6 +378,8 @@ page {
 .model-name { font-size: 64rpx; font-weight: 900; color: #1c1c1e; line-height: 1; }
 .model-suffix { color: #007AFF; }
 .model-suffix.max { color: #FF3B30; }
+.model-suffix.pro-long { color: #007AFF; }
+.model-suffix.max-long { color: #FF3B30; }
 .visual-area { flex: 1; display: flex; align-items: center; justify-content: center; }
 .custom-icon { width: 400rpx; height: 300rpx; filter: drop-shadow(0 20rpx 40rpx rgba(0,0,0,0.1)); }
 .action-btn {
