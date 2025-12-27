@@ -28,27 +28,24 @@ page {
   background: transparent; 
 }
 .back-icon {
-  width: 60rpx; 
-  height: 60rpx; 
-  display: flex; 
-  align-items: center; 
-  justify-content: center; 
+  width: 70rpx;
+  height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
+  font-size: 52rpx;
+  font-weight: 300;
+  color: #000;
+  line-height: 1;
 }
 .back-icon:active {
   transform: scale(0.95);
   opacity: 0.7;
 }
 .back-icon::before {
-  content: '‹';
-  font-size: 48rpx;
-  font-weight: 300;
-  color: #000;
-  line-height: 1;
-  border: none;
-  transform: none;
-  margin: 0;
+  display: none;
 }
 
 /* 容器 */

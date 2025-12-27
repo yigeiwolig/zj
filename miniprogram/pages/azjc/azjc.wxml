@@ -1,7 +1,13 @@
 <view class="app-container">
+  <!-- 顶部导航 -->
+  <view class="header">
+    <view class="back-icon" catchtap="handleBack">
+      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+    </view>
+  </view>
   <!-- 顶部标题保持固定 -->
   <view class="fixed-nav">
-    <view class="back-btn" bindtap="handleBack">
+    <view class="back-btn" bindtap="handleBack" style="display: none;">
       <text class="back-icon">‹</text>
     </view>
     <view class="brand">

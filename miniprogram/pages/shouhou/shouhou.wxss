@@ -26,6 +26,35 @@ page {
   pointer-events: none;
 }
 
+/* 顶部导航 */
+.header {
+  position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
+  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
+  box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
+  z-index: 10000; pointer-events: none;
+  background: transparent; 
+}
+.back-icon {
+  width: 70rpx;
+  height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transition: all 0.2s;
+  font-size: 52rpx;
+  font-weight: 300;
+  color: #000;
+  line-height: 1;
+}
+.back-icon:active {
+  transform: scale(0.95);
+  opacity: 0.7;
+}
+.back-icon::before {
+  display: none;
+}
+
 .nav-header {
   padding-top: calc(env(safe-area-inset-top) + 88rpx);
   padding-left: 40rpx;
@@ -587,7 +616,133 @@ page {
   padding: 60rpx;
   text-align: center;
   margin-bottom: 40rpx;
+  position: relative;
+  min-height: 200rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.upload-sub {
+  font-size: 22rpx;
+  color: #8E8E93;
+}
+
+.upload-selected {
+  width: 100%;
+}
+
+.upload-preview-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  color: #fff;
+  font-size: 26rpx;
+}
+
+.upload-remove {
+  position: absolute;
+  top: 16rpx;
+  right: 16rpx;
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 28rpx;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.upload-preview-container {
+  position: relative;
+  width: 100%;
+  height: 400rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.upload-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upload-play-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80rpx;
+  height: 80rpx;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 40rpx;
+  font-weight: bold;
+}
+
+.upload-preview-video {
+  width: 100%;
+  height: 400rpx;
+  border-radius: 12rpx;
+}
+.video-preview-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 650;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-preview-box {
+  width: 92%;
+  background: #000;
+  border-radius: 24rpx;
+  overflow: hidden;
+  position: relative;
+}
+
+.video-preview-close {
+  position: absolute;
+  top: 16rpx;
+  right: 16rpx;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 32rpx;
+  background: rgba(255,255,255,0.18);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+  z-index: 2;
+}
+
+.video-preview-player {
+  width: 100%;
+  height: 900rpx;
+}
+
 /* 旧的 section-row / smart-paste 已被新的 contact-section 替代 */
 
 /* 底部悬浮栏 (完全复用 shop 风格) */
@@ -598,7 +753,9 @@ page {
   width: 100%;
   background: rgba(255,255,255,0.95); 
   backdrop-filter: blur(20px);
-  padding: 20rpx 40rpx calc(60rpx + env(safe-area-inset-bottom));
+  height: 180rpx;
+  padding: 20rpx 40rpx 0;
+  padding-bottom: env(safe-area-inset-bottom);
   border-top: 1rpx solid #eee; 
   display: flex; 
   align-items: center;
@@ -1402,6 +1559,79 @@ page {
 
 .btn-main { font-size: 30rpx; font-weight: 700; }
 .btn-sub { display: none; }
+
+/* ================= 故障报修信息显示样式 ================= */
+.repair-info-display {
+  padding: 30rpx 40rpx;
+}
+
+.repair-desc-section {
+  margin-bottom: 30rpx;
+}
+
+.repair-label {
+  font-size: 24rpx;
+  color: #86868B;
+  margin-bottom: 12rpx;
+}
+
+.repair-desc-text {
+  font-size: 28rpx;
+  color: #1D1D1F;
+  line-height: 1.6;
+  word-wrap: break-word;
+}
+
+.repair-video-section {
+  margin-top: 30rpx;
+}
+
+.repair-preview-video {
+  width: 100%;
+  height: 400rpx;
+  background: #000;
+  border-radius: 12rpx;
+  margin-top: 12rpx;
+}
+
+.repair-video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 400rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+  margin-top: 12rpx;
+}
+
+.repair-video-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.repair-play-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80rpx;
+  height: 80rpx;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 40rpx;
+  font-weight: bold;
+}
+
+.repair-no-video {
+  font-size: 24rpx;
+  color: #86868B;
+  padding: 20rpx 0;
+  text-align: center;
+}
 
 /* =========================================================================
    👇 修复结算弹窗样式 👇

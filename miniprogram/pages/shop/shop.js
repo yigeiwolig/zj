@@ -192,25 +192,31 @@ Page({
   goBack() {
     console.log('[shop.js] goBack 被调用, fromOtherPage:', this.fromOtherPage);
     
-    // 如果是从其他页面跳转过来的（通过号码跳转），返回到products页面
-    if (this.fromOtherPage) {
-      console.log('[shop.js] 从其他页面跳转过来，返回到products页面');
-      wx.navigateTo({
-        url: '/pages/products/products'
-      });
+    const pages = getCurrentPages();
+    console.log('[shop.js] 页面栈长度:', pages.length);
+    
+    // 检查页面栈中是否有products页面
+    const productsPageIndex = pages.findIndex(page => {
+      const route = page.route || '';
+      return route.includes('products/products');
+    });
+    
+    if (productsPageIndex >= 0) {
+      // 如果页面栈中有products页面，计算需要返回的层数
+      const delta = pages.length - 1 - productsPageIndex;
+      console.log('[shop.js] 找到products页面，在栈中位置:', productsPageIndex, '需要返回层数:', delta);
+      wx.navigateBack({ delta: delta });
       return;
     }
     
-    // 否则正常返回上一页
-    const pages = getCurrentPages();
-    console.log('[shop.js] 页面栈长度:', pages.length);
+    // 如果页面栈中没有products页面，但有上一页，正常返回
     if (pages.length > 1) {
       console.log('[shop.js] 返回上一页');
       wx.navigateBack();
     } else {
-      // 如果没有上一页，跳转到products页面
+      // 如果没有上一页，跳转到products页面（这种情况应该很少见）
       console.log('[shop.js] 没有上一页，跳转到products页面');
-      wx.navigateTo({
+      wx.redirectTo({
         url: '/pages/products/products'
       });
     }

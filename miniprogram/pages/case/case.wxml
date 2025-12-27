@@ -2,11 +2,13 @@
 <view class="brand-bg-watermark">MT-摩改社</view>
 
 <!-- 顶部导航 -->
+<view class="header">
+  <view class="back-icon" catchtap="goBack">
+    <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+  </view>
+</view>
 <view class="custom-header" style="padding-top: {{statusBarHeight}}px;">
   <view class="header-content">
-    <view class="back-icon" catchtap="goBack">
-      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
-    </view>
     <view class="header-title">
       <text>MT 案例库</text>
       <!-- 只有白名单用户能看到的切换开关 -->

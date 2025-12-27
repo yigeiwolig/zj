@@ -2,12 +2,14 @@
 <view class="container">
 
 <!-- ================= 1. 顶部导航 ================= -->
+<view class="header">
+  <view class="back-icon" catchtap="goBack">
+    <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+  </view>
+</view>
 <view class="nav-header">
   <!-- 左侧：返回按钮 -->
   <view class="nav-left">
-    <view class="nav-back-btn" bindtap="goBack">
-      <text class="icon-back">‹</text>
-    </view>
   </view>
   
   <!-- 中间区域：标题和管理员切换按钮 -->

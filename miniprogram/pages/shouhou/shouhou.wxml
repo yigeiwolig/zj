@@ -5,7 +5,13 @@
 <view class="home-view {{inDetail ? 'shrink' : ''}}">
   <!-- 顶部导航 -->
   <view class="nav-header">
-    <view class="nav-back-btn" bindtap="goBack">
+    <!-- 顶部导航 -->
+    <view class="header">
+      <view class="back-icon" catchtap="goBack">
+        <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+      </view>
+    </view>
+    <view class="nav-back-btn" bindtap="goBack" style="display: none;">
       <text class="back-icon">‹</text>
     </view>
     <view class="header-title-row">
@@ -114,13 +120,27 @@
         <view class="section-label">故障描述</view>
         <textarea class="input-area" placeholder="请详细描述故障现象..." style="height: 100px;" value="{{repairDescription}}" bindinput="handleRepairInput"></textarea>
         <view class="upload-box" bindtap="chooseVideo">
-          <view style="font-size:24px;">📹</view>
-          <view class="upload-text">{{videoFileName || '点击上传故障视频'}}</view>
+          <!-- 已选择视频：显示封面 + 删除按钮 + 点击预览 -->
+          <view wx:if="{{tempVideoPath}}" class="upload-selected" catchtap="openVideoPreview">
+            <view class="upload-preview-container">
+              <image wx:if="{{tempVideoThumb}}" src="{{tempVideoThumb}}" mode="aspectFill" class="upload-preview-img"></image>
+              <view wx:else class="upload-preview-fallback">已选择视频</view>
+              <view class="upload-play-icon">▶</view>
+              <view class="upload-remove" catchtap="removeRepairVideo">✕</view>
+            </view>
+          </view>
+
+          <!-- 未选择视频：显示上传提示 -->
+          <view wx:else class="upload-placeholder">
+            <view style="font-size:24px;">📹</view>
+            <view class="upload-text">点击上传故障视频</view>
+            <view class="upload-sub">支持拍摄或从相册选择</view>
+          </view>
         </view>
       </view>
 
-      <!-- 这里的收货信息已经在结算弹窗里了，这里不需要了，留空或者展示简单的提示 -->
-      <view style="height: 200px;"></view> 
+      <!-- 购买配件模式下的占位 -->
+      <view wx:if="{{serviceType === 'parts'}}" style="height: 200px;"></view> 
     </view>
 
     <!-- TAB 2: 维修教程 -->
@@ -185,14 +205,29 @@
 
   </view>
 
-  <!-- 底部双按钮 (完全对齐 Shop 页面) -->
+  <!-- 底部栏 (根据 Service Type 变化) -->
   <view class="bottom-dock" wx:if="{{activeTab === 'order'}}">
-    <view class="footer-btn-group">
-      <!-- 绑定 JS 中的 addToCart -->
+    
+    <!-- 情况A: 购买配件 (双按钮) -->
+    <view class="footer-btn-group" wx:if="{{serviceType === 'parts'}}">
       <view class="btn-cart" bindtap="addToCart">加入购物车</view>
-      <!-- 绑定 JS 中的 openCartOrder -->
       <view class="btn-buy" bindtap="openCartOrder">立即购买</view>
     </view>
+
+    <!-- 情况B: 故障报修 (单按钮) -->
+    <view class="footer-btn-group" wx:if="{{serviceType === 'repair'}}">
+      <view class="btn-black full" bindtap="openRepairOrder">提交维修工单</view>
+    </view>
+
+  </view>
+</view>
+
+<!-- 6. 故障视频预览弹窗 -->
+<view class="dark-mask" wx:if="{{showVideoPreview}}" bindtap="closeVideoPreview"></view>
+<view class="video-preview-modal" wx:if="{{showVideoPreview}}">
+  <view class="video-preview-box">
+    <view class="video-preview-close" bindtap="closeVideoPreview">✕</view>
+    <video src="{{tempVideoPath}}" controls autoplay object-fit="contain" class="video-preview-player"></video>
   </view>
 </view>
 
@@ -225,8 +260,33 @@
   <scroll-view scroll-y class="checkout-scroll">
     <view class="checkout-body">
 
-      <!-- 商品清单 -->
-      <view class="group-card">
+      <!-- 故障报修信息（仅在故障报修模式下显示） -->
+      <view wx:if="{{serviceType === 'repair'}}" class="group-card">
+        <view class="cart-header-row">
+          <view class="cart-title">故障信息</view>
+        </view>
+        <view class="repair-info-display">
+          <view class="repair-desc-section">
+            <view class="repair-label">故障描述</view>
+            <view class="repair-desc-text">{{repairDescription || '未填写'}}</view>
+          </view>
+          <view class="repair-video-section" wx:if="{{tempVideoPath}}">
+            <view class="repair-label">故障视频</view>
+            <view wx:if="{{tempVideoThumb}}" class="repair-video-wrapper">
+              <image src="{{tempVideoThumb}}" mode="aspectFill" class="repair-video-thumb"></image>
+              <view class="repair-play-overlay">▶</view>
+            </view>
+            <video wx:else src="{{tempVideoPath}}" id="repairVideoPreview" class="repair-preview-video" controls></video>
+          </view>
+          <view class="repair-video-section" wx:else>
+            <view class="repair-label">故障视频</view>
+            <view class="repair-no-video">未上传视频</view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 商品清单（仅在购买配件模式下显示） -->
+      <view wx:if="{{serviceType === 'parts'}}" class="group-card">
         <view class="cart-header-row">
           <view class="cart-title">商品清单</view>
           <view class="clear-btn-stylish" bindtap="clearCart">
@@ -256,28 +316,29 @@
 
       </view>
 
-      <!-- 配送方式 -->
+      <!-- 配送方式（购买配件/故障报修都显示，风格对齐 shop） -->
       <view class="group-header-row">
         <view class="group-title-text">配送方式</view>
       </view>
       <view class="shipping-box">
         <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
           <view class="ship-name">中通快递</view>
-          <view class="ship-price">包邮</view>
+          <!-- 购买配件：显示运费；维修工单：包邮 -->
+          <view class="ship-price">{{serviceType === 'repair' ? '包邮' : '¥12'}}</view>
         </view>
         <!-- 顺丰选项 -->
         <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
           <view class="ship-name">顺丰速运</view>
+          <!-- 购买配件：按地址计算；维修工单：到付 -->
           <view class="ship-price">
-             <!-- 如果没填地址或解析不到省份，显示待计算；否则显示金额 -->
-             {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
-             <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+             {{serviceType === 'repair' ? '到付' : (!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee)}}
+             <text wx:if="{{serviceType !== 'repair'}}" style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
           </view>
         </view>
       </view>
 
-      <!-- 总价显示区 -->
-      <view class="final-total-row">
+      <!-- 总价显示区（仅在购买配件模式下显示） -->
+      <view wx:if="{{serviceType === 'parts'}}" class="final-total-row">
         <text class="ft-label">共 {{cart.length}} 件，总计</text>
         <text class="ft-price">¥{{finalTotalPrice}}</text>
       </view>
@@ -314,10 +375,11 @@
     </view>
   </scroll-view>
 
-  <!-- 底部单按钮 (立即支付) -->
+  <!-- 底部单按钮 (立即支付/提交维修工单) -->
   <view class="checkout-footer-single">
     <view class="btn-black full" bindtap="submitRealOrder">
-      <text class="btn-main">立即支付 ¥{{finalTotalPrice}}</text>
+      <text class="btn-main" wx:if="{{serviceType === 'parts'}}">立即支付 ¥{{finalTotalPrice}}</text>
+      <text class="btn-main" wx:else>提交维修工单</text>
     </view>
   </view>
 </view>
@@ -375,8 +437,8 @@
   </view>
 
   <!-- 5. 全局自定义弹窗 -->
-  <view class="custom-dialog-mask" wx:if="{{dialog.show}}">
-    <view class="custom-dialog-box">
+  <view class="custom-dialog-mask" wx:if="{{dialog.show}}" bindtap="onDialogMaskTap">
+    <view class="custom-dialog-box" catchtap="noop">
       <view class="cd-title">{{dialog.title}}</view>
       <view class="cd-content">{{dialog.content}}</view>
       <view class="cd-btn-row">
@@ -386,10 +448,20 @@
     </view>
   </view>
 
-  <!-- 隐藏视频组件 (提取封面用) -->
+  <!-- 隐藏视频组件 (提取封面用 - 管理员上传教程) -->
   <video 
-    wx:if="{{tempVideoPath && !tempVideoThumb && extractingThumb}}"
+    wx:if="{{tempVideoPath && !tempVideoThumb && extractingThumb && modalMode === 'video'}}"
     id="thumbVideo"
+    src="{{tempVideoPath}}"
+    style="position: fixed; top: -9999px; left: -9999px; width: 400px; height: 300px; opacity: 0;"
+    bindloadedmetadata="onVideoMetadataLoaded"
+    bindtimeupdate="onVideoTimeUpdate"
+  ></video>
+
+  <!-- 隐藏视频组件 (提取封面用 - 故障报修) -->
+  <video 
+    wx:if="{{tempVideoPath && !tempVideoThumb && extractingThumb && serviceType === 'repair'}}"
+    id="repairVideoPreview"
     src="{{tempVideoPath}}"
     style="position: fixed; top: -9999px; left: -9999px; width: 400px; height: 300px; opacity: 0;"
     bindloadedmetadata="onVideoMetadataLoaded"

@@ -1,13 +1,15 @@
 <view class="container">
   
   <!-- 顶部导航 -->
-  <view class="navbar">
-    <view class="nav-back" bindtap="goBack">←</view>
+  <view class="header">
+    <view class="back-icon" catchtap="goBack">
+      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+    </view>
     <view class="nav-logo">MT CONTROL</view>
   </view>
 
   <!-- ======================= -->
-  <!-- 新增：蓝牙未开启弹窗 -->
+  <!-- 新增：蓝牙未开启弹窗（全屏样式） -->
   <!-- ======================= -->
   <view class="password-modal-mask" wx:if="{{showBluetoothAlert}}">
     <view class="password-box">
@@ -15,12 +17,13 @@
         <image class="bt-icon-img" src="{{icons.btSmall}}" mode="aspectFit"></image>
       </view>
       <view class="pass-title">蓝牙未开启</view>
-      <view class="pass-desc">请在手机“设置”中打开蓝牙功能\n以便连接设备</view>
+      <view class="pass-desc">请在手机"设置"中打开蓝牙功能\n以便连接设备</view>
       <view class="pass-btns">
         <view class="p-btn confirm full-width {{modalBtnDisabled ? 'btn-locked' : ''}}" bindtap="closeBluetoothAlert">知道了</view>
       </view>
     </view>
   </view>
+
 
   <!-- ======================= -->
   <!-- 1. 密码验证弹窗 -->
@@ -179,6 +182,11 @@
             <view class="toast {{showOtaTip ? 'show' : ''}}">
               <view class="t-icon err">!</view>
               <text>请先在OTA页面进行升级</text>
+            </view>
+            <!-- 请先连接蓝牙提示 -->
+            <view class="toast {{showConnectBluetoothTip ? 'show' : ''}}">
+              <view class="t-icon warn">!</view>
+              <text>点击上方按钮连接设备</text>
             </view>
           </view>
           

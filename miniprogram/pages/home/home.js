@@ -40,6 +40,7 @@ Page({
     this._isLoadingShops = false; // 防止重复加载的标志
     this._isDeleting = false; // 防止重复删除的标志
     this._deletedIds = new Set(); // 记录已删除的ID，避免重复删除
+    this._hasGeneratedTestData = false; // 标记是否已经生成过测试数据（本次会话）
     
     // 检查管理员权限
     this.checkAdminPrivilege();
@@ -73,6 +74,15 @@ Page({
     if (this.statusTimer) {
       clearInterval(this.statusTimer);
     }
+  },
+  
+  // 返回按钮
+  goBack() {
+    wx.navigateBack({
+      fail: () => { 
+        wx.reLaunch({ url: '/pages/products/products' }); 
+      }
+    });
   },
   
   // 更新所有店铺的营业状态
@@ -245,10 +255,20 @@ Page({
   // 从云数据库加载店铺数据
   async loadShopsFromCloud(isRetry = false) {
     return new Promise((resolve, reject) => {
-      // 防止无限递归：如果已经是重试，直接返回，避免循环
+      // 防止无限递归：如果已经是重试，检查是否正在加载
       if (isRetry && this._isLoadingShops) {
-        console.warn('⚠️ 检测到重复加载，跳过本次请求');
-        resolve(this.data.shops || []);
+        console.warn('⚠️ 检测到重复加载，等待当前加载完成...');
+        // 等待当前加载完成
+        let waitCount = 0;
+        const checkLoading = () => {
+          if (!this._isLoadingShops || waitCount > 100) {
+            resolve(this.data.shops || []);
+          } else {
+            waitCount++;
+            setTimeout(checkLoading, 100);
+          }
+        };
+        checkLoading();
         return;
       }
       
@@ -289,76 +309,130 @@ Page({
               const oldTestShops = shops.filter(item => item.isTest);
               const nonTestShops = shops.filter(item => !item.isTest);
               
-              // 检查是否需要重新生成测试数据
-              const needRegenerate = await this.shouldRegenerateTestData(oldTestShops);
+              // 如果是重试加载（刚生成完测试数据），直接使用现有数据，不再删除和生成
+              if (isRetry) {
+                console.log('🔄 重试加载：使用刚生成的测试数据，不再删除和生成');
+                shops = shops.filter(item => item.isTest);
+                this.setData({ shops });
+                // 处理数据（计算距离、营业状态、排序）
+                this.preprocessData();
+                this.updateWheel();
+                this._isLoadingShops = false;
+                resolve(shops);
+                return;
+              }
               
-              if (oldTestShops.length !== 5 || needRegenerate) {
-                console.log(`✅ 测试模式已开启，当前测试数据数量: ${oldTestShops.length}，需要重新生成`);
+              // 只在首次加载且测试数据数量不对时才生成，不再检查位置变化
+              // 如果已经生成过测试数据（本次会话），不再重新生成
+              if (this._hasGeneratedTestData) {
+                console.log('✅ 本次会话已生成过测试数据，不再重新生成，直接使用现有数据');
+                shops = shops.filter(item => item.isTest);
+                this.setData({ shops });
+                this._isLoadingShops = false;
+                resolve(shops);
+                return;
+              }
+              
+              // 只在测试数据数量不对时才生成（首次加载）
+              if (oldTestShops.length !== 6) {
+                console.log(`✅ 测试模式已开启，当前测试数据数量: ${oldTestShops.length}，需要生成（首次加载）`);
                 
-              // 先删除旧的测试数据（如果有）
-              if (oldTestShops.length > 0 && !this._isDeleting) {
-                this._isDeleting = true;
-                try {
-                  // 过滤掉已经删除过的ID
-                  const shopsToDelete = oldTestShops.filter(shop => 
-                    shop._id && !this._deletedIds.has(shop._id)
-                  );
-                  
-                  if (shopsToDelete.length === 0) {
-                    console.log('⚠️ 所有测试数据都已被标记为已删除，跳过删除操作');
-                    this._isDeleting = false;
-                  } else {
-                    console.log(`准备删除 ${shopsToDelete.length} 个测试数据`);
+                // 先删除旧的测试数据（如果有）
+                if (oldTestShops.length > 0 && !this._isDeleting) {
+                  this._isDeleting = true;
+                  try {
+                    // 过滤掉已经删除过的ID
+                    const shopsToDelete = oldTestShops.filter(shop => 
+                      shop._id && !this._deletedIds.has(shop._id)
+                    );
                     
-                    // 逐个删除，添加延迟避免请求过快
-                    for (let i = 0; i < shopsToDelete.length; i++) {
-                      const shop = shopsToDelete[i];
-                      if (shop._id && !this._deletedIds.has(shop._id)) {
-                        try {
-                          // 先检查文档是否存在
-                          const doc = await db.collection('home').doc(shop._id).get();
-                          if (doc.data) {
-                            await db.collection('home').doc(shop._id).remove();
-                            this._deletedIds.add(shop._id);
-                            console.log(`✅ 已删除测试数据: ${shop._id}`);
-                          } else {
-                            console.log(`⚠️ 文档不存在，跳过: ${shop._id}`);
-                            this._deletedIds.add(shop._id);
+                    if (shopsToDelete.length === 0) {
+                      console.log('⚠️ 所有测试数据都已被标记为已删除，跳过删除操作');
+                      this._isDeleting = false;
+                    } else {
+                      console.log(`准备删除 ${shopsToDelete.length} 个测试数据`);
+                      
+                      // 逐个删除，添加延迟避免请求过快
+                      for (let i = 0; i < shopsToDelete.length; i++) {
+                        const shop = shopsToDelete[i];
+                        if (shop._id && !this._deletedIds.has(shop._id)) {
+                          try {
+                            // 先检查文档是否存在
+                            const doc = await db.collection('home').doc(shop._id).get();
+                            if (doc.data) {
+                              await db.collection('home').doc(shop._id).remove();
+                              this._deletedIds.add(shop._id);
+                              console.log(`✅ 已删除测试数据: ${shop._id}`);
+                            } else {
+                              console.log(`⚠️ 文档不存在，跳过: ${shop._id}`);
+                              this._deletedIds.add(shop._id);
+                            }
+                          } catch (deleteErr) {
+                            // 单个删除失败不影响整体流程
+                            const errMsg = deleteErr.errMsg || deleteErr.message || String(deleteErr);
+                            if (errMsg.includes('not exist') || errMsg.includes('不存在')) {
+                              console.log(`⚠️ 文档已不存在，跳过: ${shop._id}`);
+                              this._deletedIds.add(shop._id);
+                            } else {
+                              console.warn(`⚠️ 删除测试数据失败: ${shop._id}`, errMsg);
+                            }
                           }
-                        } catch (deleteErr) {
-                          // 单个删除失败不影响整体流程
-                          const errMsg = deleteErr.errMsg || deleteErr.message || String(deleteErr);
-                          if (errMsg.includes('not exist') || errMsg.includes('不存在')) {
-                            console.log(`⚠️ 文档已不存在，跳过: ${shop._id}`);
-                            this._deletedIds.add(shop._id);
-                          } else {
-                            console.warn(`⚠️ 删除测试数据失败: ${shop._id}`, errMsg);
+                          // 添加延迟，避免请求过快
+                          if (i < shopsToDelete.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 100));
                           }
-                        }
-                        // 添加延迟，避免请求过快
-                        if (i < shopsToDelete.length - 1) {
-                          await new Promise(resolve => setTimeout(resolve, 100));
                         }
                       }
+                      console.log('✅ 旧测试数据清理完成');
                     }
-                    console.log('✅ 旧测试数据清理完成');
+                  } catch (err) {
+                    console.error('删除旧测试数据过程出错:', err);
+                    // 即使删除失败，也继续生成新数据
+                  } finally {
+                    this._isDeleting = false;
                   }
-                } catch (err) {
-                  console.error('删除旧测试数据过程出错:', err);
-                  // 即使删除失败，也继续生成新数据
-                } finally {
-                  this._isDeleting = false;
+                } else if (this._isDeleting) {
+                  console.log('⚠️ 删除操作正在进行中，等待删除完成...');
+                  // 等待删除完成，最多等待5秒
+                  let waitCount = 0;
+                  while (this._isDeleting && waitCount < 50) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    waitCount++;
+                  }
                 }
-              } else if (this._isDeleting) {
-                console.log('⚠️ 删除操作正在进行中，跳过本次删除');
-              }
+                
+                // 等待一小段时间，确保删除操作完全完成
+                await new Promise(resolve => setTimeout(resolve, 500));
                 
                 // 生成新的测试数据
                 try {
+                  console.log('开始生成新的测试数据...');
                   await this.generateTestData();
+                  console.log('✅ 测试数据生成完成，等待数据保存...');
+                  
+                  // 等待数据保存完成（5个数据，每个200ms延迟，总共约1秒，再加上额外等待时间）
+                  await new Promise(resolve => setTimeout(resolve, 2000));
+                  
                   // 重新加载数据（标记为重试，避免无限循环）
                   this._isLoadingShops = false;
-                  return this.loadShopsFromCloud(true).then(resolve).catch(reject);
+                  // 清空已删除ID记录，因为已经重新生成了
+                  this._deletedIds.clear();
+                  
+                  // 标记已生成过测试数据
+                  this._hasGeneratedTestData = true;
+                  
+                  // 重新加载，但这次应该能加载到新生成的测试数据
+                  const reloadedShops = await this.loadShopsFromCloud(true);
+                  
+                  // 确保只显示测试数据
+                  const testShopsOnly = reloadedShops.filter(item => item.isTest);
+                  this.setData({ shops: testShopsOnly });
+                  this.preprocessData();
+                  this.updateWheel();
+                  
+                  this._isLoadingShops = false;
+                  resolve(testShopsOnly);
+                  return;
                 } catch (err) {
                   console.error('生成测试数据失败:', err);
                   // 生成失败，使用现有数据
@@ -369,73 +443,16 @@ Page({
                   return;
                 }
               } else {
-                console.log('✅ 测试模式已开启，测试数据已存在（5个）且位置未变化，沿用旧数据');
+                console.log('✅ 测试模式已开启，测试数据已存在（6个），沿用旧数据');
               }
               
               // 测试模式开启时，只显示测试数据，隐藏真实店铺
               shops = shops.filter(item => item.isTest);
               console.log('✅ 测试模式已开启，已隐藏真实店铺，只显示测试数据');
             } else {
-            // 如果测试模式关闭，删除所有测试数据并过滤
-            const oldTestShops = shops.filter(item => item.isTest);
-            if (oldTestShops.length > 0 && !this._isDeleting) {
-              this._isDeleting = true;
-              try {
-                // 过滤掉已经删除过的ID
-                const shopsToDelete = oldTestShops.filter(shop => 
-                  shop._id && !this._deletedIds.has(shop._id)
-                );
-                
-                if (shopsToDelete.length === 0) {
-                  console.log('⚠️ 所有测试数据都已被标记为已删除，跳过删除操作');
-                  this._isDeleting = false;
-                } else {
-                  console.log(`准备删除 ${shopsToDelete.length} 个测试数据`);
-                  
-                  // 逐个删除，添加延迟避免请求过快
-                  for (let i = 0; i < shopsToDelete.length; i++) {
-                    const shop = shopsToDelete[i];
-                    if (shop._id && !this._deletedIds.has(shop._id)) {
-                      try {
-                        // 先检查文档是否存在
-                        const doc = await db.collection('home').doc(shop._id).get();
-                        if (doc.data) {
-                          await db.collection('home').doc(shop._id).remove();
-                          this._deletedIds.add(shop._id);
-                          console.log(`✅ 已删除测试数据: ${shop._id}`);
-                        } else {
-                          console.log(`⚠️ 文档不存在，跳过: ${shop._id}`);
-                          this._deletedIds.add(shop._id);
-                        }
-                      } catch (deleteErr) {
-                        // 单个删除失败不影响整体流程
-                        const errMsg = deleteErr.errMsg || deleteErr.message || String(deleteErr);
-                        if (errMsg.includes('not exist') || errMsg.includes('不存在')) {
-                          console.log(`⚠️ 文档已不存在，跳过: ${shop._id}`);
-                          this._deletedIds.add(shop._id);
-                        } else {
-                          console.warn(`⚠️ 删除测试数据失败: ${shop._id}`, errMsg);
-                        }
-                      }
-                      // 添加延迟，避免请求过快
-                      if (i < shopsToDelete.length - 1) {
-                        await new Promise(resolve => setTimeout(resolve, 100));
-                      }
-                    }
-                  }
-                  console.log('✅ 测试模式已关闭，测试数据清理完成');
-                }
-              } catch (err) {
-                console.error('删除测试数据过程出错:', err);
-                // 即使删除失败，也继续过滤数据
-              } finally {
-                this._isDeleting = false;
-              }
-            } else if (this._isDeleting) {
-              console.log('⚠️ 删除操作正在进行中，跳过本次删除');
-            }
-              shops = shops.filter(item => !item.isTest);
-              console.log('✅ 测试模式已关闭，已过滤测试数据，只显示真实店铺');
+            // 如果测试模式关闭，只过滤测试数据（不删除），只显示真实店铺
+            shops = shops.filter(item => !item.isTest);
+            console.log('✅ 测试模式已关闭，已过滤测试数据，只显示真实店铺（测试数据保留在数据库中）');
             }
             
             this.setData({ shops });
@@ -577,6 +594,26 @@ Page({
       title: nextState ? '管理模式开启' : '已回到用户模式',
       icon: 'none'
     });
+  },
+
+  // 点击空白处进入管理员模式（仅管理员）
+  onBgTap(e) {
+    // 如果点击的是卡片或其他交互元素，不处理
+    if (e.target.dataset && e.target.dataset.type === 'card') {
+      return;
+    }
+    // 如果详情页已打开，不处理
+    if (this.data.isDetailOpen) {
+      return;
+    }
+    // 只有管理员才能通过点击空白处进入管理员模式
+    if (this.data.isAuthorized && !this.data.isAdmin) {
+      this.setData({ isAdmin: true });
+      wx.showToast({
+        title: '管理模式开启',
+        icon: 'none'
+      });
+    }
   },
 
   // --- 1. 新增卡片 (修复：新增时绝对不排序，确保打开的是新卡片) ---
@@ -1046,26 +1083,26 @@ Page({
       '大伟', '小强', '小明', '小华', '小军', '小斌', '小杰', '小勇'
     ];
     
-    // 随机选择5个不同的昵称
+    // 随机选择6个不同的昵称
     const shuffledNames = [...randomNames].sort(() => Math.random() - 0.5);
-    const selectedNames = shuffledNames.slice(0, 5);
+    const selectedNames = shuffledNames.slice(0, 6);
     
     const testSubs = [
-      '专业维修服务', '快速保养中心', '精品改装店', '咖啡机车馆', '洗车美容店'
+      '专业维修服务', '快速保养中心', '精品改装店', '咖啡机车馆', '洗车美容店', '高端定制中心'
     ];
     const testAddresses = [
-      '测试地址A', '测试地址B', '测试地址C', '测试地址D', '测试地址E'
+      '测试地址A', '测试地址B', '测试地址C', '测试地址D', '测试地址E', '测试地址F'
     ];
     const testPhones = [
-      '13800000001', '13800000002', '13800000003', '13800000004', '13800000005'
+      '13800000001', '13800000002', '13800000003', '13800000004', '13800000005', '13800000006'
     ];
     const testTimes = [
-      '08:00 - 20:00', '09:00 - 18:00', '10:00 - 22:00', '07:00 - 19:00', '09:30 - 21:30'
+      '08:00 - 20:00', '09:00 - 18:00', '10:00 - 22:00', '07:00 - 19:00', '09:30 - 21:30', '08:30 - 20:30'
     ];
     
-    // 随机生成5个测试点位（距离在40-60km之间）
+    // 随机生成6个测试点位（距离在40-60km之间）
     const testShops = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       // 生成随机距离（40-60km）
       const targetDistance = 40 + Math.random() * 20; // 40-60km
       
@@ -1118,38 +1155,51 @@ Page({
     
     // 逐个保存到云数据库（小程序端不支持 batch）
     try {
-      for (const shop of testShops) {
-        await db.collection('home').add({
-          data: {
-            name: shop.name,
-            sub: shop.sub,
-            dist: shop.dist,
-            status: shop.status,
-            statusColor: shop.statusColor,
-            img: shop.img,
-            address: shop.address,
-            latitude: shop.latitude,
-            longitude: shop.longitude,
-            phone: shop.phone,
-            time: shop.time,
-            services: shop.services,
-            isTest: true,
-            id: shop.id,
-            // 保存生成时的用户位置，用于判断是否需要重新生成
-            testLocation: {
-              latitude: userLocation.latitude,
-              longitude: userLocation.longitude
-            },
-            createTime: shop.createTime,
-            updateTime: shop.updateTime
-          }
-        });
+      console.log('开始保存测试数据到云数据库，共', testShops.length, '个');
+      for (let i = 0; i < testShops.length; i++) {
+        const shop = testShops[i];
+        try {
+          const res = await db.collection('home').add({
+            data: {
+              name: shop.name,
+              sub: shop.sub,
+              dist: shop.dist,
+              status: shop.status,
+              statusColor: shop.statusColor,
+              img: shop.img,
+              address: shop.address,
+              latitude: shop.latitude,
+              longitude: shop.longitude,
+              phone: shop.phone,
+              time: shop.time,
+              services: shop.services,
+              isTest: true,
+              id: shop.id,
+              // 保存生成时的用户位置，用于判断是否需要重新生成
+              testLocation: {
+                latitude: userLocation.latitude,
+                longitude: userLocation.longitude
+              },
+              createTime: shop.createTime,
+              updateTime: shop.updateTime
+            }
+          });
+          console.log(`✅ 测试数据 ${i + 1}/${testShops.length} 保存成功，ID:`, res._id);
+        } catch (saveErr) {
+          console.error(`❌ 测试数据 ${i + 1}/${testShops.length} 保存失败:`, saveErr);
+        }
+        // 添加延迟，避免请求过快
+        if (i < testShops.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
       }
+      console.log('✅ 所有测试数据保存完成');
       
       // 注意：不在这里重新加载，避免循环
       // 由调用方（loadShopsFromCloud）决定是否重新加载
     } catch (err) {
       console.error('生成测试数据失败:', err);
+      throw err; // 抛出错误，让调用方知道生成失败
     }
   },
   
@@ -1210,6 +1260,7 @@ Page({
         // 新建
         dataToSave.id = shopData.id;
         dataToSave.createTime = new Date();
+        dataToSave.isTest = false; // 🔴 明确标记为非测试数据
         db.collection('home').add({
           data: dataToSave,
           success: (res) => {
@@ -1314,10 +1365,45 @@ Page({
       
       // 如果是新店铺，更新 _id
       if (isNewShop) {
-        // 重新从云数据库加载以获取真实的 _id
+        // 更新 item 的 _id
+        item._id = savedId;
+        
+        // 重新从云数据库加载以获取完整的店铺列表
         await this.loadShopsFromCloud();
         // 重新处理数据
         this.preprocessData();
+        
+        // 找到新店铺在排序后的位置（使用保存后的 _id）
+        const sortedList = this.data.shops;
+        const newIndex = sortedList.findIndex(i => {
+          // 优先使用 _id 匹配
+          if (i._id && savedId && i._id === savedId) return true;
+          // 其次使用 id 匹配（排除临时ID）
+          if (i.id === item.id && item.id && !item.id.toString().startsWith('new_')) return true;
+          return false;
+        });
+        
+        // 更新界面
+        this.setData({ 
+          activeItem: sortedList[newIndex] || item,
+          scroll: newIndex >= 0 ? newIndex : 0,
+          target: newIndex >= 0 ? newIndex : 0,
+          isEditing: false, 
+          isAdding: false 
+        });
+        
+        this.updateWheel();
+        
+        // 如果找不到新店铺（可能被测试模式过滤），提示用户
+        if (newIndex < 0) {
+          wx.showToast({ 
+            title: '保存成功，但当前测试模式已开启，请关闭测试模式查看', 
+            icon: 'none',
+            duration: 3000
+          });
+        } else {
+          wx.showToast({ title: '保存成功', icon: 'success' });
+        }
       } else {
         // 编辑已有店铺：更新本地数据中的 _id（如果返回了新的ID）
         if (savedId && !item._id) {
@@ -1325,29 +1411,29 @@ Page({
         }
         // 重新处理数据（计算距离、营业状态、排序）
         this.preprocessData();
+        
+        // 找到这个店排序后的位置
+        const sortedList = this.data.shops;
+        const newIndex = sortedList.findIndex(i => {
+          // 优先使用 _id 匹配
+          if (i._id && item._id && i._id === item._id) return true;
+          // 其次使用 id 匹配（排除临时ID）
+          if (i.id === item.id && item.id && !item.id.toString().startsWith('new_')) return true;
+          return false;
+        });
+
+        // 更新界面
+        this.setData({ 
+          activeItem: sortedList[newIndex] || item,
+          scroll: newIndex >= 0 ? newIndex : 0,
+          target: newIndex >= 0 ? newIndex : 0,
+          isEditing: false, 
+          isAdding: false 
+        });
+
+        this.updateWheel();
+        wx.showToast({ title: '保存成功', icon: 'success' });
       }
-      
-      // 找到这个店排序后的位置
-      const sortedList = this.data.shops;
-      const newIndex = sortedList.findIndex(i => {
-        // 优先使用 _id 匹配
-        if (i._id && item._id && i._id === item._id) return true;
-        // 其次使用 id 匹配（排除临时ID）
-        if (i.id === item.id && item.id && !item.id.toString().startsWith('new_')) return true;
-        return false;
-      });
-
-      // 更新界面
-      this.setData({ 
-        activeItem: sortedList[newIndex] || item,
-        scroll: newIndex >= 0 ? newIndex : 0,
-        target: newIndex >= 0 ? newIndex : 0,
-        isEditing: false, 
-        isAdding: false 
-      });
-
-      this.updateWheel();
-      wx.showToast({ title: '保存成功', icon: 'success' });
     } catch (err) {
       console.error('保存到云数据库失败:', err);
       wx.showToast({ title: '保存失败，请重试', icon: 'none' });

@@ -6,18 +6,19 @@
 
 <view class="container" bindtap="onBgTap">
   
-  <!-- 品牌轴心 -->
-  <view class="brand-axis">
-    <view class="axis-line"></view>
-    <view class="brand-letter">M</view>
-    <view class="brand-letter">T</view>
-    <!-- 只有白名单用户能看到的切换开关 -->
-    <view 
-      wx:if="{{isAuthorized}}" 
-      class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
-      catchtap="toggleAdminMode">
-      {{isAdmin ? 'EXIT' : 'EDIT'}}
+  <!-- 顶部导航 -->
+  <view class="header">
+    <view class="back-icon" catchtap="goBack">
+      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
     </view>
+  </view>
+  
+  <!-- 管理员切换按钮 -->
+  <view 
+    wx:if="{{isAuthorized}}" 
+    class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
+    catchtap="toggleAdminMode">
+    {{isAdmin ? 'EXIT' : 'EDIT'}}
   </view>
 
   <!-- 1. 轮盘列表层 -->

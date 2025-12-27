@@ -29,6 +29,9 @@
   "permission": {
     "scope.userLocation": {
       "desc": "我们需要您的位置来获取店铺的真实定位"
+    },
+    "scope.bluetooth": {
+      "desc": "我们需要蓝牙权限来连接和控制您的设备"
     }
   },
   "requiredPrivateInfos": [
@@ -42,10 +45,3 @@
     "wx6885acbedba59c14"
   ]
 }
-
-
-
-
-
-
-

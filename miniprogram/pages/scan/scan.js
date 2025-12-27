@@ -75,16 +75,60 @@ class BLEHelper {
 
   initBluetoothAdapter() {
     return new Promise((resolve, reject) => {
-      this.api.openBluetoothAdapter({
+      // 先检查系统蓝牙是否开启
+      this.api.getBluetoothAdapterState({
         success: (res) => {
-          this.api.onBluetoothAdapterStateChange((res) => {
-            console.log('蓝牙适配器状态变化', res);
+          if (!res.available) {
+            reject(new Error('系统蓝牙未开启，请先开启系统蓝牙'));
+            return;
+          }
+          // 蓝牙已开启，初始化适配器
+          this.api.openBluetoothAdapter({
+            success: (res) => {
+              this.api.onBluetoothAdapterStateChange((res) => {
+                console.log('蓝牙适配器状态变化', res);
+              });
+              resolve(res);
+            },
+            fail: (err) => {
+            // 如果用户拒绝蓝牙授权，提示去设置中开启
+            if (err && err.errMsg && err.errMsg.includes('auth deny')) {
+              wx.showModal({
+                title: '蓝牙权限被拒绝',
+                content: '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。',
+                showCancel: false,
+                confirmText: '知道了'
+              });
+            }
+              if (this.onError) this.onError(err);
+              reject(err);
+            }
           });
-          resolve(res);
         },
         fail: (err) => {
-          if (this.onError) this.onError(err);
-          reject(err);
+          // 如果getBluetoothAdapterState失败，直接尝试openBluetoothAdapter
+          // 这可能是因为适配器还未初始化
+          this.api.openBluetoothAdapter({
+            success: (res) => {
+              this.api.onBluetoothAdapterStateChange((res) => {
+                console.log('蓝牙适配器状态变化', res);
+              });
+              resolve(res);
+            },
+            fail: (err) => {
+              // 如果是权限错误，提供更友好的提示
+              if (err.errMsg && err.errMsg.includes('auth deny')) {
+                wx.showModal({
+                  title: '蓝牙功能不可用',
+                  content: '请确保：\n1. 系统蓝牙已开启\n2. 已授权小程序使用蓝牙功能\n\n可在手机设置中检查权限',
+                  showCancel: false,
+                  confirmText: '知道了'
+                });
+              }
+              if (this.onError) this.onError(err);
+              reject(err);
+            }
+          });
         }
       });
     });
@@ -311,11 +355,15 @@ Page({
     // 新增：蓝牙未开启提示弹窗
     showBluetoothAlert: false,
     
+    // 新增：请先连接蓝牙提示（小胶囊样式）
+    showConnectBluetoothTip: false,
+    
     // 🔴 新增：OTA提示
     showOtaTip: false,
     
     // 新增：连接状态
     isConnecting: false,      // 正在连接中
+    isNavigatingToOta: false, // 正在跳转到OTA页面（防止重复跳转）
 
     // 【新增】弹窗按钮锁定状态（防误触）
     modalBtnDisabled: false,
@@ -423,6 +471,10 @@ Page({
     this.updateCardStatus(0);
 
     this.ble = new BLEHelper(wx);
+    
+    // 重置跳转标记
+    this.setData({ isNavigatingToOta: false });
+    
     this.ble.onConnecting = () => {
       // 开始连接时设置状态
       this.setData({
@@ -518,7 +570,10 @@ Page({
   // 蓝牙连接交互 (修改版)
   // ===============================================
   async handleConnect() {
-    if (this.data.isConnected) return;
+    // 防止重复点击：如果已连接、正在连接、正在跳转到OTA页面，则直接返回
+    if (this.data.isConnected || this.data.isConnecting || this.data.isNavigatingToOta) {
+      return;
+    }
     
     // 1. 显示"靠近车辆"提示 (2秒)
     this.setData({ showApproachTip: true });
@@ -570,6 +625,7 @@ Page({
     this.setData({ showBluetoothAlert: false });
   },
 
+
   // 监听断开 (修改：增加 UI 反馈)
   onBleDisconnected() {
     this.setData({ 
@@ -619,6 +675,14 @@ Page({
 
   // 🔴 显示需要OTA升级的提示（使用toast样式）
   showOtaRequiredTip() {
+    // 如果已经在跳转中，直接返回，防止重复跳转
+    if (this.data.isNavigatingToOta) {
+      return;
+    }
+    
+    // 设置跳转标记，防止重复点击
+    this.setData({ isNavigatingToOta: true });
+    
     // 显示提示（使用toast样式）
     this.setData({ showOtaTip: true });
     
@@ -627,8 +691,14 @@ Page({
       this.setData({ showOtaTip: false });
       wx.navigateTo({ 
         url: '/pages/ota/ota',
+        success: () => {
+          // 跳转成功后，重置标记（在页面返回时会重新设置）
+          console.log('✅ 已跳转到OTA页面');
+        },
         fail: (err) => {
           console.error('跳转失败:', err);
+          // 跳转失败时重置标记，允许重试
+          this.setData({ isNavigatingToOta: false });
           wx.showToast({ title: '请先进行OTA升级', icon: 'none' });
         }
       });
@@ -779,6 +849,17 @@ Page({
   // 进入编辑模式 (入口分发)
   // ===============================================
   enterEdit(e) {
+    // 🔴 检查蓝牙连接状态：未连接时不允许进入编辑模式
+    if (!this.data.isConnected) {
+      // 显示"请先连接蓝牙"小胶囊提示
+      this.setData({ showConnectBluetoothTip: true });
+      // 2秒后自动隐藏
+      setTimeout(() => {
+        this.setData({ showConnectBluetoothTip: false });
+      }, 2000);
+      return;
+    }
+    
     const type = e.currentTarget.dataset.type;
     this.setData({ pendingEditType: type });
 
@@ -1019,6 +1100,16 @@ Page({
   // 切换预设角度 (F2 点击160跳转，但能滑到170)
   // ===============================================
   switchAngle(e) {
+    // 🔴 检查蓝牙连接状态
+    if (!this.data.isConnected) {
+      wx.showToast({
+        title: '未连接蓝牙',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+    
     const angle = parseInt(e.currentTarget.dataset.angle);
     
     // 默认目标就是点击的角度
@@ -1235,6 +1326,16 @@ Page({
   // 3. 微调逻辑 (核心修正)
   // ===============================================
   handleAdjust(e) {
+    // 🔴 检查蓝牙连接状态
+    if (!this.data.isConnected) {
+      wx.showToast({
+        title: '未连接蓝牙',
+        icon: 'none',
+        duration: 2000
+      });
+      return;
+    }
+    
     const action = e.currentTarget.dataset.action; 
     const editType = this.data.editType || (this.data.detailMode === 'edit' ? this.data.editType : 'open');
 
@@ -1527,19 +1628,26 @@ Page({
   // 🔴 自动校准功能
   // ===============================================
   handleAutoCalibrate() {
+    // 🔴 检查蓝牙连接状态：未连接时不允许使用
+    if (!this.data.isConnected) {
+      // 显示"请先连接蓝牙"小胶囊提示
+      this.setData({ showConnectBluetoothTip: true });
+      // 2秒后自动隐藏
+      setTimeout(() => {
+        this.setData({ showConnectBluetoothTip: false });
+      }, 2000);
+      return;
+    }
+    
     const currentModel = this.data.currentModel;
     const isF2 = currentModel && currentModel.name && currentModel.name.includes('F2');
     
     // 只有 F2 PRO/MAX 可以点击
     if (!isF2) return;
     
-    if (this.data.isConnected) {
-      console.log('📤 [蓝牙] 发送"自动调平"');
-      this.sendData('自动调平');
-      wx.showToast({ title: '已发送自动调平', icon: 'success' });
-    } else {
-      wx.showToast({ title: '请先连接蓝牙', icon: 'none' });
-    }
+    console.log('📤 [蓝牙] 发送"自动调平"');
+    this.sendData('自动调平');
+    wx.showToast({ title: '已发送自动调平', icon: 'success' });
   },
 
   // ===============================================
@@ -1548,6 +1656,17 @@ Page({
 
   // 打开设置弹窗
   openSettings() {
+    // 🔴 检查蓝牙连接状态：未连接时不允许使用
+    if (!this.data.isConnected) {
+      // 显示"请先连接蓝牙"小胶囊提示
+      this.setData({ showConnectBluetoothTip: true });
+      // 2秒后自动隐藏
+      setTimeout(() => {
+        this.setData({ showConnectBluetoothTip: false });
+      }, 2000);
+      return;
+    }
+    
     // 权限校验：只有 Max 机型可以打开
     // F1 Max: 可以打开，但部分功能隐藏
     // F2 Max: 可以打开，全功能

@@ -4,6 +4,35 @@ page {
   height: 100%;
 }
 
+/* 顶部导航 */
+.header {
+  position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
+  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
+  box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
+  z-index: 10000; pointer-events: none;
+  background: transparent; 
+}
+.back-icon {
+  width: 70rpx;
+  height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transition: all 0.2s;
+  font-size: 52rpx;
+  font-weight: 300;
+  color: #000;
+  line-height: 1;
+}
+.back-icon:active {
+  transform: scale(0.95);
+  opacity: 0.7;
+}
+.back-icon::before {
+  display: none;
+}
+
 /* 左上角返回按钮 - 统一样式 */
 .back-btn {
   position: fixed;
@@ -22,13 +51,6 @@ page {
 .back-btn:active {
   transform: scale(0.95);
   opacity: 0.7;
-}
-
-.back-icon {
-  font-size: 48rpx;
-  font-weight: 300;
-  color: #000;
-  line-height: 1;
 }
 
 .container {
@@ -84,12 +106,13 @@ page {
   justify-content: center;
 }
 
-.header { 
+.title-header { 
   text-align: center; 
   margin-bottom: 60rpx; 
   flex-shrink: 0; 
   position: relative;
   padding-top: 20rpx;
+  width: 100%;
 }
 
 /* 普通标题样式 */

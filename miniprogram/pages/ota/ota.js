@@ -9,6 +9,7 @@ class BLEHelper {
   constructor(api = wx) {
     this.api = api; this.device = null;
     this.onDeviceFound = null; this.onConnected = null; this.onDisconnected = null; this.onError = null;
+    this.isScanning = false;
   }
   initBluetoothAdapter() {
     return new Promise((resolve, reject) => {
@@ -37,20 +38,53 @@ class BLEHelper {
     });
   }
   startScan() {
-    this.api.startBluetoothDevicesDiscovery({ allowDuplicatesKey: false, success: () => {
-      this.api.onBluetoothDeviceFound((res) => {
-        const device = res.devices[0];
+    this.isScanning = true;
+    this.api.startBluetoothDevicesDiscovery({ 
+      powerLevel: 'high',
+      allowDuplicatesKey: true,
+      success: () => {
+        this.setupDeviceFoundListener();
+      },
+      fail: (err) => {
+        this.isScanning = false;
+        console.error('开始扫描失败:', err);
+        if (this.onError) this.onError(err);
+      }
+    });
+  }
+
+  setupDeviceFoundListener() {
+    this.api.onBluetoothDeviceFound((res) => {
+      // 遍历所有发现的设备，不只是第一个
+      if (!res.devices || res.devices.length === 0) return;
+      
+      for (let i = 0; i < res.devices.length; i++) {
+        const device = res.devices[i];
+        // 检查设备名称是否以NB开头
         if (device.name && device.name.startsWith('NB')) {
-           if (this.onDeviceFound) this.onDeviceFound(device);
+          if (this.onDeviceFound) {
+            this.onDeviceFound(device);
+            // 找到设备后停止扫描
+            this.stopScan();
+            return;
+          }
         }
-      });
-    }});
+      }
+    });
+  }
+
+  stopScan() {
+    if (this.isScanning) {
+      this.api.stopBluetoothDevicesDiscovery();
+      this.isScanning = false;
+    }
   }
   connectDevice(device) {
-    this.api.stopBluetoothDevicesDiscovery();
+    this.stopScan();
     return new Promise((resolve, reject) => {
       this.api.createBLEConnection({
         deviceId: device.deviceId,
+        timeout: 20000, // 20秒超时
         success: (res) => {
           this.device = device;
           setTimeout(() => {
@@ -62,9 +96,13 @@ class BLEHelper {
               }
             });
             resolve(device);
-          }, 1000);
+          }, 1500);
         },
-        fail: (err) => { if (this.onError) this.onError(err); reject(err); }
+        fail: (err) => {
+          console.error('连接设备失败:', err);
+          if (this.onError) this.onError(err);
+          reject(err);
+        }
       });
     });
   }
@@ -84,7 +122,8 @@ Page({
     targetDevice: null,
     devices: ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX'],
     currentDevIdx: 0,
-    currentSvg: iconF1Pro
+    currentSvg: iconF1Pro,
+    hasSavedOtaRecord: false // 仅在动画完成且显示“升级完成”后再保存
   },
 
   onLoad() {
@@ -151,8 +190,16 @@ Page({
   },
 
   onUnload() {
-    if(this.ble) this.ble.disconnect();
+    if(this.ble) {
+      this.ble.stopScan();
+      this.ble.disconnect();
+    }
     if(this.canvas) this.canvas.cancelAnimationFrame(this.animReq);
+    // 清除扫描超时
+    if (this.scanTimeout) {
+      clearTimeout(this.scanTimeout);
+      this.scanTimeout = null;
+    }
     // 停止震动
     this.stopInjectionVibration();
     // 销毁音频上下文
@@ -163,18 +210,27 @@ Page({
   // ================= 蓝牙 =================
   initBLE() {
     this.ble = new BLEHelper(wx);
+    this.scanTimeout = null;
+    
     this.ble.onDeviceFound = (device) => {
-      if(!this.data.targetDevice) this.setData({ targetDevice: device });
+      console.log('🔍 发现设备:', device.name, device.deviceId);
+      if(!this.data.targetDevice) {
+        this.setData({ targetDevice: device });
+        // 找到设备后，显示提示
+        this.showIslandTip('设备已找到，点击连接', false);
+      }
     };
+    
     this.ble.onConnected = () => {
+      // 清除扫描超时
+      if (this.scanTimeout) {
+        clearTimeout(this.scanTimeout);
+        this.scanTimeout = null;
+      }
+      
       // 连接成功：震动 + 音效
       this.vibrateShort();
       this.playSuccessSound();
-      
-      // 🔴 连接成功后，保存到云端数据库（异步执行，不阻塞后续流程）
-      this.saveOtaConnectionToCloud().catch(err => {
-        console.error('保存OTA记录失败，但不影响后续流程:', err);
-      });
       
       // 连接成功后，先隐藏"正在连接中"的提示，显示"连接成功"
       this.setData({ 
@@ -222,25 +278,67 @@ Page({
       }
     };
 
-    this.ble.onError = () => {
+    this.ble.onError = (err) => {
+      console.error('蓝牙错误:', err);
       this.showIslandTip('连接失败', false);
       // 连接失败时，保持加载界面显示，不跳转
       this.setData({ loaderFading: false });
     };
 
-    this.ble.initBluetoothAdapter().then(() => { this.ble.startScan(); });
+    // 初始化蓝牙适配器并开始扫描
+    this.ble.initBluetoothAdapter()
+      .then(() => { 
+        this.ble.startScan();
+        // 设置扫描超时（15秒）
+        this.scanTimeout = setTimeout(() => {
+          if (!this.data.targetDevice) {
+            this.ble.stopScan();
+            this.showIslandTip('未找到设备，请重试', false);
+            this.setData({ loaderFading: false });
+          }
+        }, 15000);
+      })
+      .catch((err) => {
+        console.error('蓝牙初始化失败:', err);
+        this.showIslandTip('蓝牙初始化失败', false);
+        this.setData({ loaderFading: false });
+      });
   },
 
   handleConnect() {
     if (this.data.loaderFading) return;
+    
     if (!this.data.targetDevice) {
-      this.showIslandTip('搜索设备中...', false);
+      // 如果没有找到设备，重新开始扫描
+      this.showIslandTip('重新搜索设备...', false);
+      this.setData({ targetDevice: null });
+      
+      // 清除之前的超时
+      if (this.scanTimeout) {
+        clearTimeout(this.scanTimeout);
+        this.scanTimeout = null;
+      }
+      
+      // 重新扫描
+      this.ble.startScan();
+      this.scanTimeout = setTimeout(() => {
+        if (!this.data.targetDevice) {
+          this.ble.stopScan();
+          this.showIslandTip('未找到设备，请确保设备已开启', false);
+        }
+      }, 15000);
       return;
     }
+    
     // 点击后先显示"正在连接中"的灵动岛，不要立即跳转画面
     this.showIslandTip('正在连接中...', false);
     // 不设置 loaderFading，等连接成功后再跳转
-    this.ble.connectDevice(this.data.targetDevice);
+    this.ble.connectDevice(this.data.targetDevice).catch((err) => {
+      console.error('连接失败:', err);
+      this.showIslandTip('连接失败，请重试', false);
+      // 连接失败后，清除设备，允许重新扫描
+      this.setData({ targetDevice: null });
+    });
   },
 
   showIslandTip(text, isSuccess) {
@@ -317,6 +415,8 @@ Page({
   startInject() {
     // 开始注入：短震动
     this.vibrateShort();
+    // 开始一次新的流程时重置保存标记
+    this.setData({ hasSavedOtaRecord: false });
     
     // 开始持续高频震动
     this.startInjectionVibration();
@@ -378,17 +478,49 @@ Page({
       this.setData({ showEnd: true });
       setTimeout(() => { 
         this.setData({ showFinishBtn: true }); 
+        // 动画完成且显示“升级完成”后再保存 OTA 记录
+        if (!this.data.hasSavedOtaRecord) {
+          this.saveOtaConnectionToCloud()
+            .then(() => this.setData({ hasSavedOtaRecord: true }))
+            .catch(err => console.error('保存OTA记录失败:', err));
+        }
       }, 500);
     }, 2200); 
   },
   
   restart() {
     // 升级完成/失败后返回选择列表
-    wx.reLaunch({ url: '/pages/products/products' });
+    // 重置保存标记，防止下次流程被跳过
+    this.setData({ hasSavedOtaRecord: false });
+    const pages = getCurrentPages();
+    const productsPageIndex = pages.findIndex(page => {
+      const route = page.route || '';
+      return route.includes('products/products');
+    });
+    
+    if (productsPageIndex >= 0) {
+      const delta = pages.length - 1 - productsPageIndex;
+      wx.navigateBack({ delta: delta });
+    } else {
+      wx.redirectTo({ url: '/pages/products/products' });
+    }
   },
 
   goBack() {
-    wx.reLaunch({ url: '/pages/products/products' });
+    const pages = getCurrentPages();
+    const productsPageIndex = pages.findIndex(page => {
+      const route = page.route || '';
+      return route.includes('products/products');
+    });
+    
+    if (productsPageIndex >= 0) {
+      const delta = pages.length - 1 - productsPageIndex;
+      wx.navigateBack({ delta: delta });
+    } else if (pages.length > 1) {
+      wx.navigateBack();
+    } else {
+      wx.redirectTo({ url: '/pages/products/products' });
+    }
   },
 
   // ================= 粒子系统 =================

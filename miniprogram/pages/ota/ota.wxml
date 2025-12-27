@@ -1,5 +1,8 @@
-<view class="ota-back" bindtap="goBack">
-  <text class="ota-back-icon">‹</text>
+<!-- 顶部导航 -->
+<view class="header">
+  <view class="back-icon" catchtap="goBack">
+    <text style="font-size: 48rpx; font-weight: 300; color: #fff; line-height: 1;">‹</text>
+  </view>
 </view>
 
 <canvas type="2d" id="particleCanvas" class="particle-canvas"></canvas>

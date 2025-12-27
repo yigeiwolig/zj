@@ -68,6 +68,9 @@ Page({
     
     // 【新增】我的申请记录
     myActivityList: [], // 存放所有的审核记录
+    
+    // 【新增】维修工单列表（管理员用）
+    repairList: [], // 管理员用的维修列表
   },
 
   onLoad() {
@@ -226,8 +229,21 @@ Page({
     promise.then(res => {
       this.hideMyLoading();
       
+      // [修复] 管理员：同时加载维修工单（兼容云函数未返回 repairs 的情况）
+      if (this.data.isAdmin) {
+        if (res && Array.isArray(res.repairs)) {
+          const pendingRepairs = res.repairs.filter(i => i.status === 'PENDING');
+          this.setData({ repairList: pendingRepairs });
+        } else {
+          // 云函数没返回 repairs，就直接从数据库拉取
+          this.loadPendingRepairs();
+        }
+      }
+      
       // 数据清洗 (保持之前的逻辑不变)
-      const formatted = res.data.map(item => {
+      // 注意：管理员模式下 res.data 是数组，普通用户模式下 res.data 也是数组
+      const orderData = Array.isArray(res.data) ? res.data : (res.data || []);
+      const formatted = orderData.map(item => {
         return {
           id: item._id,
           orderId: item.orderId,
@@ -276,6 +292,21 @@ Page({
       this.hideMyLoading();
       console.error(err);
     });
+  },
+
+  // [新增] 管理员：加载待处理维修工单
+  loadPendingRepairs() {
+    const db = wx.cloud.database();
+    db.collection('shouhou_repair')
+      .where({ status: 'PENDING' })
+      .orderBy('createTime', 'desc')
+      .get()
+      .then(res => {
+        this.setData({ repairList: res.data || [] });
+      })
+      .catch(err => {
+        console.error('❌ [loadPendingRepairs] 加载维修工单失败:', err);
+      });
   },
 
   // 状态映射辅助
@@ -496,6 +527,62 @@ Page({
   },
 
   // 2. [新增] 管理员点击金额改价
+  // [新增] 管理员处理维修单
+  resolveRepair(e) {
+    const id = e.currentTarget.dataset.id;
+    const type = e.currentTarget.dataset.type; // 'ship' 或 'tutorial'
+    
+    if (type === 'ship') {
+       // 录入单号逻辑
+       wx.showModal({
+         title: '发货维修件',
+         editable: true,
+         placeholderText: '输入快递单号',
+         success: (res) => {
+           if (res.confirm && res.content) {
+             this.updateRepairStatus(id, 'SHIPPED', res.content);
+           }
+         }
+       });
+    } else {
+       // 无需录入
+       wx.showModal({
+         title: '确认',
+         content: '将通知用户"查看维修教程可修复"，确定吗？',
+         success: (res) => {
+           if (res.confirm) {
+             this.updateRepairStatus(id, 'TUTORIAL');
+           }
+         }
+       });
+    }
+  },
+
+  // 更新数据库状态
+  updateRepairStatus(id, status, trackingId = '') {
+    wx.showLoading({ title: '处理中...' });
+    const db = wx.cloud.database();
+    db.collection('shouhou_repair').doc(id).update({
+      data: {
+        status: status,
+        trackingId: trackingId,
+        solveTime: db.serverDate()
+      }
+    }).then(() => {
+      wx.hideLoading();
+      wx.showToast({ title: '处理完成', icon: 'success' });
+      this.loadMyOrders(); // 刷新订单列表
+      // 如果是用户模式，也刷新申请进度
+      if (!this.data.isAdmin) {
+        this.loadMyActivities();
+      }
+    }).catch(err => {
+      wx.hideLoading();
+      console.error('更新失败:', err);
+      wx.showToast({ title: '处理失败', icon: 'none' });
+    });
+  },
+
   adminModifyPrice(e) {
     // 如果不是管理员，或者订单不是"待付款"或"待发货"状态，不让改
     const status = e.currentTarget.dataset.status;
@@ -1121,7 +1208,13 @@ Page({
       .orderBy('createTime', 'desc')
       .get();
 
-    Promise.all([p1, p2]).then(res => {
+    // 3. 查维修工单 (新增)
+    const p3 = db.collection('shouhou_repair')
+      .where({ _openid: this.data.myOpenid })
+      .orderBy('createTime', 'desc')
+      .get();
+
+    Promise.all([p1, p2, p3]).then(res => {
       console.log('📋 [loadMyActivities] 查询结果 - 设备申请:', res[0].data.length, '条, 视频申请:', res[1].data.length, '条');
       console.log('📋 [loadMyActivities] 设备申请详情:', res[0].data);
       console.log('📋 [loadMyActivities] 视频申请详情:', res[1].data);
@@ -1160,18 +1253,55 @@ Page({
         createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚'
       }));
       
+      // [新增] 处理维修工单
+      const repairApps = res[2].data.map(i => {
+        let statusText = '审核中';
+        let statusClass = 'processing';
+        let statusNum = 0; // 统一状态值，用于过滤逻辑
+        
+        if (i.status === 'SHIPPED') {
+          statusText = '维修件已发货';
+          statusClass = 'success';
+          statusNum = 1; // 已处理
+        } else if (i.status === 'TUTORIAL') {
+          statusText = '查看教程可修复'; // 用户看到这个状态
+          statusClass = 'info'; // 蓝色
+          statusNum = 1; // 已处理
+        } else if (i.status === 'PENDING') {
+          statusText = '审核中';
+          statusClass = 'processing';
+          statusNum = 0; // 审核中
+        }
+        
+        return {
+          ...i,
+          type: 'repair',
+          title: '故障报修: ' + (i.model || '未知型号'),
+          statusText: statusText, // 自定义显示文本
+          statusClass: statusClass,
+          status: statusNum, // 统一状态值
+          originalCreateTime: i.createTime,
+          createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚',
+          trackingId: i.trackingId || '' // 确保有 trackingId 字段
+        };
+      });
+      
       // 合并并按时间倒序（使用原始时间对象排序）
-      const all = [...deviceApps, ...videoApps].sort((a, b) => {
+      const all = [...deviceApps, ...videoApps, ...repairApps].sort((a, b) => {
         // 使用原始 createTime 对象排序
         const timeA = a.originalCreateTime ? new Date(a.originalCreateTime).getTime() : 0;
         const timeB = b.originalCreateTime ? new Date(b.originalCreateTime).getTime() : 0;
         return timeB - timeA;
       });
       
-      // 🔴 过滤掉已通过的记录，只显示审核中和已驳回的
+      // 🔴 过滤规则：
+      // - 设备 / 视频申请：只显示「审核中 / 已驳回」
+      // - 维修工单：全部展示（含 SHIPPED / TUTORIAL），因为用户需要看到处理结果
       const filtered = all.filter(i => {
+        // 维修工单始终保留
+        if (i.type === 'repair') return true;
         const status = i.status;
-        // 只保留：审核中(0/PENDING) 和 已驳回(-1/REJECTED)
+        // 设备 / 视频：只保留 审核中(0/PENDING) 和 已驳回(-1/REJECTED)
         return status === 0 || status === 'PENDING' || status === -1 || status === 'REJECTED';
       });
       

@@ -2,9 +2,11 @@
 
 <view class="container">
 
-  <!-- 1. 顶部返回按钮 (一直存在) -->
-  <view class="nav-back-fixed" bindtap="goBack">
-    <text class="back-arrow">←</text>
+  <!-- 顶部导航 -->
+  <view class="header">
+    <view class="back-icon" catchtap="goBack">
+      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+    </view>
   </view>
 
   <!-- 2. 用户个人信息 - 【管理员模式下隐藏】 -->
@@ -117,6 +119,31 @@
         </view>
       </swiper-item>
     </swiper>
+
+    <!-- [新增] 维修工单处理区 -->
+    <view class="section-label" wx:if="{{repairList.length > 0}}">PENDING REPAIRS / 待处理报修</view>
+    
+    <view class="repair-list-admin">
+      <block wx:for="{{repairList}}" wx:key="_id">
+        <view class="repair-admin-card">
+          <!-- 视频预览 -->
+          <video src="{{item.videoFileID}}" class="repair-video" controls></video>
+          
+          <!-- 信息 -->
+          <view class="repair-info">
+            <view class="r-title">{{item.model}} - {{item.contact.name}}</view>
+            <view class="r-desc">"{{item.description}}"</view>
+            <view class="r-addr">{{item.contact.address}}</view>
+          </view>
+          
+          <!-- 两个按钮 -->
+          <view class="repair-actions">
+            <view class="r-btn tutorial" bindtap="resolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
+            <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单发货</view>
+          </view>
+        </view>
+      </block>
+    </view>
 
     <!-- 3. 模式B：已发货 (纵向 ScrollView) -->
     <scroll-view 
@@ -373,7 +400,7 @@
             <view class="act-left">
               <!-- 标题：显示是视频还是设备 -->
               <view class="act-title">
-                <text class="act-tag {{item.type}}">{{item.type === 'video' ? '视频' : '设备'}}</text>
+                <text class="act-tag {{item.type}}">{{item.type === 'video' ? '视频' : (item.type === 'repair' ? '故障' : '设备')}}</text>
                 <text class="act-name">{{item.title}}</text>
               </view>
               <view class="act-time">{{item.createTime}}</view>
@@ -382,17 +409,34 @@
             <!-- 右侧状态 -->
             <view class="act-right">
               <!-- 审核中 (0 或 PENDING) -->
-              <view class="status-pill processing" wx:if="{{item.status === 0 || item.status === 'PENDING'}}">
+              <view class="status-pill processing" wx:if="{{(item.type !== 'repair') && (item.status === 0 || item.status === 'PENDING')}}">
                 <view class="dot-p"></view>审核中
               </view>
               
               <!-- 已通过 (1 或 APPROVED) -->
-              <view class="status-pill success" wx:if="{{item.status === 1 || item.status === 'APPROVED'}}">
+              <view class="status-pill success" wx:if="{{(item.type !== 'repair') && (item.status === 1 || item.status === 'APPROVED')}}">
                 <view class="dot-s"></view>已通过
               </view>
               
               <!-- 已驳回 (-1 或 REJECTED) -->
               <view class="status-pill fail" wx:if="{{item.status === -1 || item.status === 'REJECTED'}}">已驳回</view>
+              
+              <!-- [新增] 维修单特殊状态 -->
+              
+              <!-- 已发货（使用 statusNum 判断） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'SHIPPED') && item.trackingId}}">
+                已发货 {{item.trackingId}}
+              </view>
+              
+              <!-- 看教程 (蓝色) -->
+              <view class="status-pill info" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'TUTORIAL') && !item.trackingId}}">
+                查看教程可修复
+              </view>
+              
+              <!-- 维修单审核中 -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 0 || item.status === 'PENDING')}}">
+                <view class="dot-p"></view>审核中
+              </view>
             </view>
           </view>
           

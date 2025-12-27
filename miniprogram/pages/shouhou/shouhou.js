@@ -100,6 +100,12 @@ Page({
     showModal: false,
     modalMode: '', // part 或 video
     modalInputVal: '',
+
+    // 全局自定义弹窗
+    dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+
+    // 自定义视频预览弹窗
+    showVideoPreview: false,
     
 
     // 临时视频信息
@@ -200,16 +206,60 @@ Page({
   // 管理员模式手动切换开关
   toggleAdminMode() {
     if (!this.data.isAuthorized) {
-      wx.showToast({ title: '无权限', icon: 'none' });
+      getApp().showDialog({ title: '提示', content: '无权限' });
       return;
     }
     
     const nextState = !this.data.isAdmin;
     this.setData({ isAdmin: nextState });
     
-    wx.showToast({
-      title: nextState ? '管理模式开启' : '已回到用户模式',
-      icon: 'none'
+    getApp().showDialog({
+      title: '提示',
+      content: nextState ? '管理模式开启' : '已回到用户模式',
+      showCancel: false
+    });
+  },
+
+
+  // ================= 自定义弹窗工具 =================
+  showMyDialog({ title = '提示', content = '', showCancel = false, confirmText = '确定', cancelText = '取消', callback = null, maskClosable = true } = {}) {
+    this.setData({
+      dialog: { show: true, title, content, showCancel, confirmText, cancelText, callback, maskClosable }
+    });
+  },
+  closeCustomDialog() {
+    this.setData({ dialog: { ...this.data.dialog, show: false, callback: null } });
+  },
+  onDialogConfirm() {
+    const cb = this.data.dialog && this.data.dialog.callback;
+    getApp().hideDialog();
+    if (typeof cb === 'function') cb();
+  },
+  onDialogMaskTap() {
+    if (this.data.dialog && this.data.dialog.maskClosable) {
+      getApp().hideDialog();
+    }
+  },
+  noop() {},
+
+  // ================= 视频预览 =================
+  openVideoPreview() {
+    if (!this.data.tempVideoPath) return;
+    this.setData({ showVideoPreview: true });
+  },
+  closeVideoPreview() {
+    this.setData({ showVideoPreview: false });
+  },
+
+  // 删除已选择的故障视频
+  removeRepairVideo(e) {
+    // 阻止触发 chooseVideo
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    this.setData({
+      tempVideoPath: '',
+      tempVideoThumb: '',
+      videoFileName: '',
+      extractingThumb: false
     });
   },
 
@@ -397,21 +447,23 @@ Page({
   // 一键同步所有本地配件数据到云端（管理员功能）
   syncAllPartsToCloud() {
     if (!this.data.isAdmin) {
-      wx.showToast({ title: '需要管理员权限', icon: 'none' });
+      getApp().showDialog({ title: '提示', content: '需要管理员权限', showCancel: false });
       return;
     }
 
     if (!this.db) {
-      wx.showToast({ title: '云服务未初始化', icon: 'none' });
+      getApp().showDialog({ title: '提示', content: '云服务未初始化', showCancel: false });
       return;
     }
 
-    wx.showModal({
+    getApp().showDialog({
       title: '确认同步',
       content: '将同步所有6个型号（F1 PRO、F1 MAX、F2 PRO、F2 MAX、F2 PRO Long、F2 MAX Long）的配件数据到云端，是否继续？',
-      success: (res) => {
-        if (res.confirm) {
-          wx.showLoading({ title: '同步中...', mask: true });
+      showCancel: true,
+      confirmText: '继续',
+      cancelText: '取消',
+      onConfirm: () => {
+          getApp().showDialog({ title: '同步中', content: '正在同步，请稍候...', showCancel: false, maskClosable: false });
           
           // 先检查云端是否已有数据（6个独立型号）
           const allModels = ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 PRO Long', 'F2 MAX Long'];
@@ -471,13 +523,9 @@ Page({
           // 等待所有同步完成
           Promise.all(syncPromises)
             .then(() => {
-              wx.hideLoading();
+              getApp().hideDialog();
               if (syncedCount > 0) {
-                wx.showToast({ 
-                  title: `同步完成！共 ${syncedCount} 个配件`, 
-                  icon: 'success',
-                  duration: 2000
-                });
+                getApp().showDialog({ title: '完成', content: `同步完成！共 ${syncedCount} 个配件`, showCancel: false });
                 // 如果当前在详情页，重新加载配件列表
                 if (this.data.inDetail && this.data.currentSeries) {
                   setTimeout(() => {
@@ -485,19 +533,14 @@ Page({
                   }, 500);
                 }
               } else {
-                wx.showToast({ 
-                  title: '所有数据已存在，无需同步', 
-                  icon: 'none',
-                  duration: 2000
-                });
+                getApp().showDialog({ title: '提示', content: '所有数据已存在，无需同步', showCancel: false });
               }
             })
             .catch(err => {
-              wx.hideLoading();
+              getApp().hideDialog();
               console.error('同步过程出错:', err);
-              wx.showToast({ title: '同步失败，请重试', icon: 'none' });
+              getApp().showDialog({ title: '提示', content: '同步失败，请重试', showCancel: false });
             });
-        }
       }
     });
   },
@@ -662,10 +705,86 @@ Page({
     wx.chooseMedia({
       count: 1,
       mediaType: ['video'],
+      sourceType: ['album', 'camera'], // 允许从相册或相机选择
       success: (res) => {
-        this.setData({ videoFileName: '已选择视频 (点击重新上传)' });
+        console.log('选择视频成功:', res);
+        if (res.tempFiles && res.tempFiles.length > 0) {
+          const file = res.tempFiles[0];
+          console.log('视频文件信息:', file);
+          if (file.tempFilePath) {
+            // 如果有微信自动生成的封面，直接使用
+            if (file.thumbTempFilePath) {
+              this.setData({ 
+                videoFileName: '已选择视频 (点击重新上传)',
+                tempVideoPath: file.tempFilePath,
+                tempVideoThumb: file.thumbTempFilePath // 保存封面
+              });
+              // 静默成功（不使用原生 toast）
+            } else {
+              // 如果没有封面，先保存视频路径，然后尝试提取封面
+              this.setData({ 
+                videoFileName: '已选择视频 (点击重新上传)',
+                tempVideoPath: file.tempFilePath,
+                tempVideoThumb: '', // 先清空封面
+                extractingThumb: true // 标记正在提取封面
+              });
+              // 不使用原生 loading
+              getApp().showDialog({ title: '处理中', content: '正在提取封面，请稍后...', showCancel: false });
+              // 延迟一下，确保视频组件已准备好
+              setTimeout(() => {
+                this.captureRepairVideoFrame();
+              }, 500);
+            }
+          } else {
+            console.error('视频文件路径不存在');
+            wx.showToast({ title: '视频文件异常，请重试', icon: 'none' });
+          }
+        } else {
+          console.error('未选择到视频文件');
+          wx.showToast({ title: '未选择视频', icon: 'none' });
+        }
+      },
+      fail: (err) => {
+        // 用户取消不提示
+        if (err && (err.errMsg || '').includes('fail cancel')) {
+          return;
+        }
+        console.error('选择视频失败:', err);
+        getApp().showDialog({ title: '提示', content: '选择视频失败，请重试' });
       }
     });
+  },
+
+  // [新增] 提取故障报修视频封面
+  captureRepairVideoFrame() {
+    const videoContext = wx.createVideoContext('repairVideoPreview', this);
+    
+    // 先定位到第一帧
+    videoContext.seek(0);
+    
+    // 等待定位完成后再截图
+    setTimeout(() => {
+      videoContext.snapshot({
+        success: (res) => {
+          // 截图成功，保存封面路径
+          this.setData({
+            tempVideoThumb: res.tempImagePath,
+            extractingThumb: false
+          });
+          // 关闭提示弹窗
+          getApp().hideDialog();
+        },
+        fail: (err) => {
+          // 截图失败，使用占位提示
+          console.error('截图失败:', err);
+          this.setData({
+            extractingThumb: false
+          });
+          getApp().hideDialog();
+          // 封面失败也不弹原生提示
+        }
+      });
+    }, 500);
   },
 
   // ========================================================
@@ -871,7 +990,10 @@ Page({
     const val = e.detail.value;
     
     if (key === 'detailAddress') {
-      this.setData({ detailAddress: val });
+      this.setData({ 
+        detailAddress: val,
+        'orderInfo.address': val // 同步到 orderInfo.address
+      });
       // 输入详细地址后，解析地址并重新计算运费
       if (val && val.trim()) {
         this.reCalcFinalPrice();
@@ -881,7 +1003,12 @@ Page({
       // 同步到旧字段（兼容）
       if (key === 'name') this.setData({ contactName: val });
       if (key === 'phone') this.setData({ contactPhone: val });
-      if (key === 'address') this.setData({ contactAddr: val });
+      if (key === 'address') {
+        this.setData({ 
+          contactAddr: val,
+          detailAddress: val // 同步到 detailAddress
+        });
+      }
     }
   },
 
@@ -999,6 +1126,8 @@ Page({
       cartTotalPrice: total,
       showOrderModal: true // 直接打开结算单
     });
+    // 重新计算价格（包含运费）
+    this.reCalcFinalPrice(cart);
   },
 
   // 3. [新增] 购物车加减数量逻辑
@@ -1058,7 +1187,7 @@ Page({
     let fee = 0;
 
     if (shippingMethod === 'zto') {
-      fee = 0; // 中通包邮
+      fee = 12; // 中通运费12元
     } else if (shippingMethod === 'sf') {
       // 顺丰逻辑：从详细地址中解析省市区
       if (!detailAddress || !detailAddress.trim()) {
@@ -1128,6 +1257,22 @@ Page({
     this.setData({ showOrderModal: true }); // 打开弹窗
   },
 
+  // [新增] 打开故障报修订单弹窗
+  openRepairOrder() {
+    const { repairDescription, tempVideoPath } = this.data;
+    
+    // 校验
+    if (!repairDescription || repairDescription.trim() === '') {
+      return wx.showToast({ title: '请填写故障描述', icon: 'none' });
+    }
+    if (!tempVideoPath) {
+      return wx.showToast({ title: '请上传故障视频', icon: 'none' });
+    }
+    
+    // 打开订单弹窗
+    this.setData({ showOrderModal: true });
+  },
+
   // [新增] 关闭订单弹窗
   closeOrderModal() {
     // 先移除动画状态，让弹窗滑下去
@@ -1140,8 +1285,29 @@ Page({
 
   // [新增] 最终支付 (对应弹窗里的黑色按钮)
   submitRealOrder() {
-    const { cart, orderInfo, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
+    const { cart, orderInfo, detailAddress, finalTotalPrice, shippingFee, shippingMethod, serviceType, repairDescription, tempVideoPath, currentModelName } = this.data;
 
+    // 如果是故障报修模式，走故障报修提交逻辑
+    if (serviceType === 'repair') {
+      // 校验
+      if (!repairDescription || repairDescription.trim() === '') {
+        return wx.showToast({ title: '请填写故障描述', icon: 'none' });
+      }
+      if (!tempVideoPath) {
+        return wx.showToast({ title: '请上传故障视频', icon: 'none' });
+      }
+      // 检查地址：优先使用 detailAddress，如果没有则使用 orderInfo.address
+      const address = this.data.detailAddress || orderInfo.address;
+      if (!orderInfo.name || !orderInfo.phone || !address) {
+        return wx.showToast({ title: '请完善联系信息', icon: 'none' });
+      }
+
+      // 调用故障报修提交函数
+      this.submitRepairTicket();
+      return;
+    }
+
+    // 配件购买模式（原有逻辑）
     // 校验
     if (cart.length === 0) return wx.showToast({ title: '清单为空', icon: 'none' });
     if (!orderInfo.name || !orderInfo.phone) return wx.showToast({ title: '请填写联系人', icon: 'none' });
@@ -2073,7 +2239,12 @@ Page({
   onVideoMetadataLoaded() {
     // 等待一小段时间确保视频帧已准备好
     setTimeout(() => {
-      this.captureVideoFrame();
+      // 判断是管理员上传教程还是故障报修
+      if (this.data.modalMode === 'video') {
+        this.captureVideoFrame();
+      } else if (this.data.serviceType === 'repair') {
+        this.captureRepairVideoFrame();
+      }
     }, 300);
   },
 
@@ -2156,6 +2327,106 @@ Page({
 
           wx.showToast({ title: '已清空', icon: 'none' });
         }
+      }
+    });
+  },
+
+  // [新增] 提交维修工单
+  submitRepairTicket() {
+    const { 
+      currentModelName, repairDescription, videoFileName, tempVideoPath, 
+      orderInfo // 复用收货信息
+    } = this.data;
+
+    // 1. 校验
+    if (!repairDescription || repairDescription.trim() === '') {
+      return wx.showToast({ title: '请填写故障描述', icon: 'none' });
+    }
+    if (!tempVideoPath) {
+      return wx.showToast({ title: '请上传故障视频', icon: 'none' });
+    }
+    // 检查地址：优先使用 detailAddress，如果没有则使用 orderInfo.address
+    const address = this.data.detailAddress || orderInfo.address;
+    if (!orderInfo.name || !orderInfo.phone || !address) {
+      return wx.showToast({ title: '请完善联系信息', icon: 'none' });
+    }
+
+    wx.showLoading({ title: '上传视频...', mask: true });
+
+    // 2. 上传视频
+    const cloudPath = `repair_video/${Date.now()}_${Math.floor(Math.random()*1000)}.mp4`;
+    wx.cloud.uploadFile({
+      cloudPath: cloudPath,
+      filePath: tempVideoPath,
+      success: res => {
+        const fileID = res.fileID;
+        
+        // 3. 写入数据库
+        const db = wx.cloud.database();
+        // 确保地址字段正确（优先使用 detailAddress）
+        const finalAddress = this.data.detailAddress || orderInfo.address || '';
+        const finalContact = {
+          ...orderInfo,
+          address: finalAddress,
+          shippingMethod: this.data.shippingMethod || 'zto' // 让维修工单也记录快递方式
+        };
+        // 先检查集合是否存在，如果不存在则先创建一条记录
+        db.collection('shouhou_repair').add({
+          data: {
+            type: 'repair', // 类型标记
+            model: currentModelName,
+            description: repairDescription.trim(),
+            videoFileID: fileID,
+            contact: finalContact, // 存入联系人信息（包含完整地址）
+            status: 'PENDING',  // 初始状态
+            createTime: db.serverDate()
+          },
+          success: () => {
+            wx.hideLoading();
+            
+            // 成功弹窗
+            wx.showModal({
+              title: '提交成功',
+              content: '售后工程师将在后台查看您的视频并进行评估。',
+              confirmText: '好的',
+              showCancel: false,
+              success: () => {
+                // 清空表单并跳转
+                this.setData({ 
+                  repairDescription: '', 
+                  videoFileName: '', 
+                  tempVideoPath: '',
+                  tempVideoThumb: '',
+                  orderInfo: { name: '', phone: '', address: '' },
+                  detailAddress: ''
+                });
+                // 不自动跳转到个人页，停留在当前页面
+                this.setData({ showOrderModal: false });
+              }
+            });
+          },
+          fail: err => {
+            wx.hideLoading();
+            console.error('提交失败:', err);
+            
+            // 如果是集合不存在错误，提示用户
+            if (err.errCode === -502005 || err.errMsg.includes('collection not exists')) {
+              wx.showModal({
+                title: '提示',
+                content: '数据库集合不存在，请联系管理员创建 shouhou_repair 集合',
+                showCancel: false,
+                confirmText: '知道了'
+              });
+            } else {
+              wx.showToast({ title: '提交失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+            }
+          }
+        });
+      },
+      fail: err => {
+        wx.hideLoading();
+        console.error('视频上传失败:', err);
+        wx.showToast({ title: '视频上传失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
       }
     });
   },

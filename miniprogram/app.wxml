@@ -1,0 +1,58 @@
+<!-- app.wxml -->
+
+<view>
+  <!-- 页面容器 -->
+  <slot />
+
+  <!-- ================= 全局 Loading ================= -->
+  <view class="g-loading-mask" wx:if="{{ui.loading.show}}">
+    <view class="g-loading-box">
+      <view class="g-spinner"></view>
+      <text class="g-loading-text">{{ui.loading.text}}</text>
+    </view>
+  </view>
+
+  <!-- ================= 全局 Dialog ================= -->
+  <view class="g-dialog-mask" wx:if="{{ui.dialog.show}}" bindtap="onGlobalDialogMaskTap">
+    <view class="g-dialog-box" catchtap="noop">
+      <view class="g-dialog-title">{{ui.dialog.title}}</view>
+      <view class="g-dialog-content">{{ui.dialog.content}}</view>
+      <view class="g-dialog-btn-row">
+        <view class="g-dialog-btn cancel" wx:if="{{ui.dialog.showCancel}}" bindtap="onGlobalDialogCancel">{{ui.dialog.cancelText}}</view>
+        <view class="g-dialog-btn confirm" bindtap="onGlobalDialogConfirm">{{ui.dialog.confirmText}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ================= 全局 ActionSheet ================= -->
+  <view class="g-sheet-mask" wx:if="{{ui.sheet.show}}" bindtap="onGlobalSheetCancel">
+    <view class="g-sheet-box" catchtap="noop">
+      <view class="g-sheet-title" wx:if="{{ui.sheet.title}}">{{ui.sheet.title}}</view>
+      <view class="g-sheet-item" wx:for="{{ui.sheet.items}}" wx:key="index" bindtap="onGlobalSheetSelect" data-index="{{index}}">
+        {{item}}
+      </view>
+      <view class="g-sheet-cancel" bindtap="onGlobalSheetCancel">取消</view>
+    </view>
+  </view>
+
+  <!-- ================= 全局 InputDialog ================= -->
+  <view class="g-dialog-mask" wx:if="{{ui.input.show}}" bindtap="onGlobalInputMaskTap">
+    <view class="g-dialog-box" catchtap="noop">
+      <view class="g-dialog-title">{{ui.input.title}}</view>
+      <input 
+        class="g-input"
+        type="text"
+        placeholder="{{ui.input.placeholder}}"
+        value="{{ui.input.value}}"
+        bindinput="onGlobalInputChange"
+        confirm-type="done"
+        bindconfirm="onGlobalInputConfirm"
+      />
+      <view class="g-dialog-btn-row">
+        <view class="g-dialog-btn cancel" bindtap="onGlobalInputCancel">取消</view>
+        <view class="g-dialog-btn confirm" bindtap="onGlobalInputConfirm">确定</view>
+      </view>
+    </view>
+  </view>
+</view>
+
