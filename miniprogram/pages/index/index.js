@@ -433,14 +433,14 @@ Page({
     if (cb) cb({ confirm: true });
   },
 
-  // 显示 Loading
+  // 显示 Loading（统一走全局自定义动画）
   showMyLoading(title = '加载中...') {
-    this.setData({ isLoading: true, loadingText: title });
+    getApp().showLoading(title);
   },
 
-  // 隐藏 Loading
+  // 隐藏 Loading（统一走全局自定义动画）
   hideMyLoading() {
-    this.setData({ isLoading: false });
+    getApp().hideLoading();
   },
 
   handleDeny() { 

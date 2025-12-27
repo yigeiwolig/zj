@@ -86,10 +86,10 @@ Page({
   // 1. 新增
   handleAddNew: function() {
     var _this = this;
-    wx.showLoading({ title: '创建中' });
+    getApp().showLoading({ title: '创建中' });
     const newProduct = { title: 'New Product', price: '0', cover: '' }; // 不再需要 details 字段
     this.db.collection('products').add({ data: newProduct }).then(() => {
-      wx.hideLoading();
+      getApp().hideLoading();
       wx.showToast({ title: '已创建' });
       _this.fetchProducts();
     });

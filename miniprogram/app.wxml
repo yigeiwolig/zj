@@ -4,11 +4,11 @@
   <!-- 页面容器 -->
   <slot />
 
-  <!-- ================= 全局 Loading ================= -->
+  <!-- ================= 全局 Loading（自定义白色模糊 + 你的 loader 动画） ================= -->
   <view class="g-loading-mask" wx:if="{{ui.loading.show}}">
-    <view class="g-loading-box">
-      <view class="g-spinner"></view>
-      <text class="g-loading-text">{{ui.loading.text}}</text>
+    <view class="g-loader">
+      <text class="g-loader-label">{{ui.loading.text}}</text>
+      <view class="g-loading-bar"></view>
     </view>
   </view>
 

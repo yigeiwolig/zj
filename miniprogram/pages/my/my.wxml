@@ -600,15 +600,8 @@
     </view>
   </view>
 
-  <!-- ================= 全局自定义 Loading (极简黑) ================= -->
-  <view class="custom-loading-mask" wx:if="{{isLoading}}">
-    <view class="loading-box">
-      <!-- 纯CSS画的高清黑色Loading圈 -->
-      <view class="spinner"></view>
-      <text class="loading-text">{{loadingText}}</text>
-    </view>
-  </view>
 
+  <!-- ================= 输入弹窗 (替代 editable modal) ================= -->
   <!-- ================= 输入弹窗 (替代 editable modal) ================= -->
   <view class="custom-dialog-mask" wx:if="{{inputDialog.show}}">
     <view class="custom-dialog-box">
@@ -626,6 +619,14 @@
         <view class="cd-btn cancel" bindtap="closeInputDialog">取消</view>
         <view class="cd-btn confirm" bindtap="onInputDialogConfirm">确定</view>
       </view>
+    </view>
+  </view>
+
+  <!-- 本页自定义 Loading（白色虚化 + 你的 loader） -->
+  <view class="loading-mask" wx:if="{{showLoadingAnimation}}">
+    <view class="loader">
+      <text class="loader-label">{{loadingText}}</text>
+      <view class="loading-bar"></view>
     </view>
   </view>
 

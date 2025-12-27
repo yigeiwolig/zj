@@ -473,7 +473,7 @@ Page({
               const title = resModal.content || '未命名步骤';
               
               // 显示上传进度
-              wx.showLoading({ title: '上传中...', mask: true });
+              getApp().showLoading({ title: '上传中...', mask: true });
               
               // 生成云存储路径
               const suffix = mediaType === 'video' ? '.mp4' : '.jpg';
@@ -502,11 +502,11 @@ Page({
                   // 弹出设置匹配码的弹窗
                   this.showMatchCodeModal(mediaType, fileID, title, data);
               // 关闭上传中的 loading，等待用户选择匹配码
-              wx.hideLoading();
+              getApp().hideLoading();
                 },
                 fail: (err) => {
                   console.error('上传文件失败:', err);
-                  wx.hideLoading();
+                  getApp().hideLoading();
                   wx.showToast({ title: '上传失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
                 }
               });
@@ -621,7 +621,7 @@ Page({
     // 如果确实没有任何数据，才提示
     if (availableProducts.length === 0 || availableTypes.length === 0) {
       wx.showToast({ title: '请先创建产品和车型', icon: 'none', duration: 2000 });
-      wx.hideLoading();
+      getApp().hideLoading();
       return;
     }
     
@@ -736,7 +736,7 @@ Page({
     data.order = maxOrder + 1; // 新上传的排在最后
     
     console.log('保存到数据库，数据:', data);
-    wx.showLoading({ title: '保存中...', mask: true });
+    getApp().showLoading({ title: '保存中...', mask: true });
     
     db.collection('azjc').add({
       data: data,
@@ -785,7 +785,7 @@ Page({
             
             this.filterContent(); // 重新过滤内容
             this.hideMatchCodePicker(); // 关闭弹窗
-            wx.hideLoading();
+            getApp().hideLoading();
             wx.showToast({ title: '上传成功', icon: 'success' });
           },
           fail: (err) => {
@@ -810,14 +810,14 @@ Page({
             }
             this.filterContent();
             this.hideMatchCodePicker();
-            wx.hideLoading();
+            getApp().hideLoading();
             wx.showToast({ title: '上传成功', icon: 'success' });
           }
         });
       },
       fail: (err) => {
         console.error('保存到数据库失败:', err);
-        wx.hideLoading();
+        getApp().hideLoading();
         wx.showToast({ title: '保存失败', icon: 'none' });
       }
     });
@@ -995,7 +995,7 @@ Page({
           }
           
           // 显示删除进度
-          wx.showLoading({ title: '删除中...', mask: true });
+          getApp().showLoading({ title: '删除中...', mask: true });
           
           // 删除云数据库记录
           db.collection('azjc').doc(item._id).remove({
@@ -1020,12 +1020,12 @@ Page({
               list.splice(index, 1);
               this.setData({ [type]: list });
               
-              wx.hideLoading();
+              getApp().hideLoading();
               wx.showToast({ title: '已删除', icon: 'success' });
             },
             fail: (err) => {
               console.error('删除数据库记录失败:', err);
-              wx.hideLoading();
+              getApp().hideLoading();
               wx.showToast({ title: '删除失败', icon: 'none' });
             }
           });
@@ -1392,7 +1392,7 @@ Page({
     
     // 如果播放失败，尝试重新获取临时链接
     if (fileid && fileid.startsWith('cloud://')) {
-      wx.showLoading({ title: '重新加载...', mask: true });
+      getApp().showLoading({ title: '重新加载...', mask: true });
       
       wx.cloud.getTempFileURL({
         fileList: [fileid],
@@ -1404,17 +1404,17 @@ Page({
               chapters[index].url = tempURL;
               chapters[index].needRefresh = false;
               this.setData({ chapters: chapters });
-              wx.hideLoading();
+              getApp().hideLoading();
               wx.showToast({ title: '视频已重新加载', icon: 'success', duration: 1500 });
             }
           } else {
-            wx.hideLoading();
+            getApp().hideLoading();
             wx.showToast({ title: '视频加载失败，请稍后重试', icon: 'none' });
           }
         },
         fail: (err) => {
           console.error('重新获取临时链接失败:', err);
-          wx.hideLoading();
+          getApp().hideLoading();
           wx.showToast({ title: '视频加载失败', icon: 'none' });
         }
       });

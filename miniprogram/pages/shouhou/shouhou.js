@@ -153,7 +153,10 @@ Page({
     detailAddress: '',    // 详细地址，如 '广东省 佛山市 南海区 某某街道101号'
 
     shippingMethod: 'zto',// 默认中通
-    shippingFee: 0
+    shippingFee: 0,
+
+    // [新增] 自定义加载动画
+    showLoadingAnimation: false
   },
 
   // 页面加载时初始化
@@ -463,7 +466,7 @@ Page({
       confirmText: '继续',
       cancelText: '取消',
       onConfirm: () => {
-          getApp().showDialog({ title: '同步中', content: '正在同步，请稍候...', showCancel: false, maskClosable: false });
+          getApp().showLoading('同步中...');
           
           // 先检查云端是否已有数据（6个独立型号）
           const allModels = ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 PRO Long', 'F2 MAX Long'];
@@ -612,7 +615,7 @@ Page({
 
   // [新增] 执行数据库更新
   updatePartData(part, type, value) {
-    wx.showLoading({ title: '保存中...' });
+    getApp().showLoading({ title: '保存中...' });
     const db = wx.cloud.database();
     
     // 准备要更新的数据
@@ -630,7 +633,7 @@ Page({
       }).then(() => {
         this.afterUpdateSuccess();
       }).catch(err => {
-        wx.hideLoading();
+        getApp().hideLoading();
         wx.showToast({ title: '更新失败', icon: 'none' });
         console.error(err);
       });
@@ -649,7 +652,7 @@ Page({
       }).then(() => {
         this.afterUpdateSuccess();
       }).catch(err => {
-        wx.hideLoading();
+        getApp().hideLoading();
         wx.showToast({ title: '新建失败', icon: 'none' });
         console.error(err);
       });
@@ -658,7 +661,7 @@ Page({
 
   // [新增] 更新成功后的刷新
   afterUpdateSuccess() {
-    wx.hideLoading();
+    getApp().hideLoading();
     wx.showToast({ title: '修改成功', icon: 'success' });
     this.loadParts(this.data.currentModelName); // 重新拉取列表
   },
@@ -1349,7 +1352,7 @@ Page({
 
   // 统一的云函数调用
   doCloudSubmit(action, goods, addr, total, fee, method) {
-    wx.showLoading({ title: '处理中...' });
+    getApp().showLoading({ title: '处理中...' });
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
@@ -1361,7 +1364,7 @@ Page({
         shippingMethod: method
       },
       success: res => {
-        wx.hideLoading();
+        getApp().hideLoading();
         const payment = res.result;
 
         if (action === 'pay' && payment && payment.paySign) {
@@ -1386,7 +1389,7 @@ Page({
         }
       },
       fail: () => {
-        wx.hideLoading();
+        getApp().hideLoading();
         wx.showToast({ title: '下单失败', icon: 'none' });
       }
     });
@@ -1412,7 +1415,7 @@ Page({
       }
       
       // 提交到 shouhou_read 集合（故障报修逻辑）
-      wx.showLoading({ title: '提交中...', mask: true });
+      getApp().showLoading({ title: '提交中...', mask: true });
       const db = wx.cloud.database();
       db.collection('shouhou_read').add({
         data: {
@@ -1428,7 +1431,7 @@ Page({
           status: 'pending'
         },
         success: () => {
-          wx.hideLoading();
+          getApp().hideLoading();
           wx.showToast({ title: '提交成功', icon: 'success' });
           setTimeout(() => {
             this.setData({
@@ -1438,7 +1441,7 @@ Page({
           }, 1500);
         },
         fail: (err) => {
-          wx.hideLoading();
+          getApp().hideLoading();
           console.error('提交失败:', err);
           wx.showToast({ title: '提交失败，请重试', icon: 'none' });
         }
@@ -1483,7 +1486,7 @@ Page({
 
   // [修改] 支付执行函数 (适配新的参数结构)
   doPayment(goodsList, totalPrice, addressData) {
-    wx.showLoading({ title: '正在下单...', mask: true });
+    getApp().showLoading({ title: '正在下单...', mask: true });
 
     wx.cloud.callFunction({
       name: 'createOrder',
@@ -1493,7 +1496,7 @@ Page({
         addressData: addressData
       },
       success: res => {
-        wx.hideLoading();
+        getApp().hideLoading();
         const payment = res.result;
         
         if (!payment || !payment.paySign) {
@@ -1524,7 +1527,7 @@ Page({
         });
       },
       fail: err => {
-        wx.hideLoading();
+        getApp().hideLoading();
         wx.showToast({ title: '下单失败', icon: 'none' });
       }
     });
@@ -2071,7 +2074,7 @@ Page({
       }
 
       // 上传视频到云存储并写入 shouhouvideo 集合（按型号独立）
-      wx.showLoading({ title: '上传中...', mask: true });
+      getApp().showLoading({ title: '上传中...', mask: true });
       
       const modelName = this.data.currentModelName;
       const timestamp = Date.now();
@@ -2106,7 +2109,7 @@ Page({
               }
         },
         fail: (err) => {
-          wx.hideLoading();
+          getApp().hideLoading();
           console.error('视频上传失败:', err);
           wx.showToast({ title: '视频上传失败', icon: 'none' });
         }
@@ -2117,7 +2120,7 @@ Page({
   // 保存视频信息到数据库（按组同步，同组型号共享视频）
   saveVideoToDB(title, modelName, videoFileID, thumbFileID) {
     if (!this.db) {
-      wx.hideLoading();
+      getApp().hideLoading();
       wx.showToast({ title: '云服务未初始化', icon: 'none' });
       return;
     }
@@ -2125,7 +2128,7 @@ Page({
     // 获取当前型号所属的组
     const groupName = MODEL_TO_GROUP[modelName];
     if (!groupName) {
-      wx.hideLoading();
+      getApp().hideLoading();
       wx.showToast({ title: '型号分组错误', icon: 'none' });
       return;
     }
@@ -2153,14 +2156,14 @@ Page({
             order: maxOrder + 1 // 用于排序，管理员可以调整
           },
           success: () => {
-            wx.hideLoading();
+            getApp().hideLoading();
             wx.showToast({ title: '教程发布成功', icon: 'success' });
             this.closeModal();
             // 重新加载视频列表
             this.renderVideos();
           },
           fail: (err) => {
-            wx.hideLoading();
+            getApp().hideLoading();
             console.error('保存失败:', err);
             wx.showToast({ title: '保存失败，请重试', icon: 'none' });
           }
@@ -2180,13 +2183,13 @@ Page({
             order: 0
           },
           success: () => {
-            wx.hideLoading();
+            getApp().hideLoading();
             wx.showToast({ title: '教程发布成功', icon: 'success' });
             this.closeModal();
             this.renderVideos();
           },
           fail: (err2) => {
-            wx.hideLoading();
+            getApp().hideLoading();
             console.error('保存失败:', err2);
             wx.showToast({ title: '保存失败，请重试', icon: 'none' });
           }
@@ -2229,7 +2232,7 @@ Page({
           if (!this.data.modalInputVal) {
             this.setData({ modalInputVal: "新上传教程" });
           }
-          wx.showLoading({ title: '正在提取封面...', mask: true });
+          getApp().showLoading({ title: '正在提取封面...', mask: true });
         }
       }
     });
@@ -2270,7 +2273,7 @@ Page({
             tempVideoThumb: res.tempImagePath,
             extractingThumb: false
           });
-          wx.hideLoading();
+          getApp().hideLoading();
           wx.showToast({ title: '视频已选择', icon: 'success' });
         },
         fail: (err) => {
@@ -2279,7 +2282,7 @@ Page({
           this.setData({
             extractingThumb: false
           });
-          wx.hideLoading();
+          getApp().hideLoading();
           wx.showToast({ 
             title: '视频已选择（封面提取失败）', 
             icon: 'none',
@@ -2351,11 +2354,15 @@ Page({
       return wx.showToast({ title: '请完善联系信息', icon: 'none' });
     }
 
-    wx.showLoading({ title: '上传视频...', mask: true });
-
-    // 2. 上传视频
-    const cloudPath = `repair_video/${Date.now()}_${Math.floor(Math.random()*1000)}.mp4`;
-    wx.cloud.uploadFile({
+    // 显示自定义加载动画（立即显示，确保在系统提示之前）
+    this.setData({ showLoadingAnimation: true });
+    
+    // 使用很短的延迟确保动画已经渲染，然后再开始上传（避免微信原生提示覆盖）
+    // 注意：如果微信系统提示仍然出现，可能需要使用其他上传方式
+    setTimeout(() => {
+      // 2. 上传视频
+      const cloudPath = `repair_video/${Date.now()}_${Math.floor(Math.random()*1000)}.mp4`;
+      wx.cloud.uploadFile({
       cloudPath: cloudPath,
       filePath: tempVideoPath,
       success: res => {
@@ -2382,7 +2389,8 @@ Page({
             createTime: db.serverDate()
           },
           success: () => {
-            wx.hideLoading();
+            // 隐藏自定义加载动画
+            this.setData({ showLoadingAnimation: false });
             
             // 成功弹窗
             wx.showModal({
@@ -2406,7 +2414,8 @@ Page({
             });
           },
           fail: err => {
-            wx.hideLoading();
+            // 隐藏自定义加载动画
+            this.setData({ showLoadingAnimation: false });
             console.error('提交失败:', err);
             
             // 如果是集合不存在错误，提示用户
@@ -2424,10 +2433,12 @@ Page({
         });
       },
       fail: err => {
-        wx.hideLoading();
+        // 隐藏自定义加载动画
+        this.setData({ showLoadingAnimation: false });
         console.error('视频上传失败:', err);
         wx.showToast({ title: '视频上传失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
       }
+      });
     });
   },
 })

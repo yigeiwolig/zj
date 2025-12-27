@@ -62,15 +62,15 @@ Page({
     // Swiper 动态高度
     swiperHeight: 900, // 默认高度，单位 px
     
-    // Loading 状态
-    isLoading: false,
-    loadingText: '加载中...',
-    
     // 【新增】我的申请记录
     myActivityList: [], // 存放所有的审核记录
     
     // 【新增】维修工单列表（管理员用）
     repairList: [], // 管理员用的维修列表
+
+    // 自定义 Loading（本页兜底，不依赖 app.wxml）
+    showLoadingAnimation: false,
+    loadingText: '请稍候...'
   },
 
   onLoad() {
@@ -102,15 +102,33 @@ Page({
     if (savedNickname) {
       this.setData({ userName: savedNickname });
     }
-    
-    // 🔴 先检查权限获取 openid，然后再加载数据
+
+    // 先确保不会残留上一次的 loading
+    if (this._loadingTimer) {
+      clearTimeout(this._loadingTimer);
+      this._loadingTimer = null;
+    }
+    this.setData({ showLoadingAnimation: false });
+
+    // 🔴 先检查权限获取 openid（页面内容稳定后，再弹出 loading，避免遮挡切换动画）
     this.checkAdminPrivilege().then(() => {
-      // 确保 myOpenid 已获取后再加载数据
+      // 权限判断完成后再显示 loading
+      this._loadingTimer = setTimeout(() => {
+        this._loadingStartTs = Date.now();
+        this.setData({ showLoadingAnimation: true, loadingText: '同步中...' });
+      }, 500);
+
+      // 开始加载数据
       this.loadMyOrders();
       this.loadMyActivities();
     }).catch(() => {
       // 如果权限检查失败，也尝试加载（可能只是普通用户）
       if (this.data.myOpenid) {
+        this._loadingTimer = setTimeout(() => {
+          this._loadingStartTs = Date.now();
+          this.setData({ showLoadingAnimation: true, loadingText: '同步中...' });
+        }, 500);
+
         this.loadMyOrders();
         this.loadMyActivities();
       }
@@ -166,7 +184,7 @@ Page({
             this.showMyDialog({ title: '提示', content: '请输入单号' });
             return;
           }
-          this.showMyLoading('正在提交...');
+          this.showMyLoadingDeprecated('正在提交...');
 
           // 【核心修改】调用云函数去修改，而不是直接 db.update
           wx.cloud.callFunction({
@@ -177,7 +195,7 @@ Page({
               trackingId: sn
             },
             success: r => {
-              this.hideMyLoading();
+              this.hideMyLoadingDeprecated();
               
               // ✅ [替换]
               this.showMyDialog({
@@ -189,7 +207,7 @@ Page({
               });
             },
             fail: err => {
-              this.hideMyLoading();
+              this.hideMyLoadingDeprecated();
               this.showMyDialog({ title: '失败', content: err.toString() });
             }
           })
@@ -212,7 +230,7 @@ Page({
 
   // --- 2. 从云数据库拉取订单 ---
   loadMyOrders() {
-    this.showMyLoading('同步中...');
+    this.showMyLoadingDeprecated('同步中...');
 
     const getAction = this.data.isAdmin 
       ? wx.cloud.callFunction({ name: 'adminGetOrders' }) 
@@ -227,7 +245,7 @@ Page({
     const promise = this.data.isAdmin ? getAction.then(res => res.result) : getAction;
 
     promise.then(res => {
-      this.hideMyLoading();
+      this.hideMyLoadingDeprecated();
       
       // [修复] 管理员：同时加载维修工单（兼容云函数未返回 repairs 的情况）
       if (this.data.isAdmin) {
@@ -289,7 +307,7 @@ Page({
       }
 
     }).catch(err => {
-      this.hideMyLoading();
+      this.hideMyLoadingDeprecated();
       console.error(err);
     });
   },
@@ -341,7 +359,7 @@ Page({
   // 1. [调试] 模拟支付成功 (直接改数据库状态)
   debugSimulatePay(e) {
     const id = e.currentTarget.dataset.id;
-    this.showMyLoading('模拟支付中...');
+    this.showMyLoadingDeprecated('模拟支付中...');
 
     // 直接调用云函数强行改状态
     wx.cloud.callFunction({
@@ -351,12 +369,12 @@ Page({
         action: 'simulate_pay' // 需要去云函数里加这个 case
       },
       success: res => {
-        this.hideMyLoading();
+        this.hideMyLoadingDeprecated();
         this.showMyDialog({ title: '模拟成功', content: '订单状态已更新' });
         this.loadMyOrders(); // 刷新列表
       },
       fail: err => {
-        this.hideMyLoading();
+        this.hideMyLoadingDeprecated();
         // 【修改】把错误打印在控制台，截图给我看
         console.error("模拟支付失败，详细报错:", err); 
         
@@ -504,19 +522,19 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          this.showMyLoading('处理中...');
+          this.showMyLoadingDeprecated('处理中...');
           
           // 调用云函数删除订单
           wx.cloud.callFunction({
             name: 'adminUpdateOrder',
             data: { id: id, action: 'delete' },
             success: () => {
-              this.hideMyLoading();
+              this.hideMyLoadingDeprecated();
               this.showMyDialog({ title: '已取消', content: '订单已删除' });
               this.loadMyOrders(); // 刷新列表，订单消失
             },
             fail: err => {
-              this.hideMyLoading();
+              this.hideMyLoadingDeprecated();
               console.error(err);
               this.showMyDialog({ title: '失败', content: err.errMsg || '操作失败' });
             }
@@ -560,7 +578,7 @@ Page({
 
   // 更新数据库状态
   updateRepairStatus(id, status, trackingId = '') {
-    wx.showLoading({ title: '处理中...' });
+    getApp().showLoading({ title: '处理中...' });
     const db = wx.cloud.database();
     db.collection('shouhou_repair').doc(id).update({
       data: {
@@ -569,7 +587,7 @@ Page({
         solveTime: db.serverDate()
       }
     }).then(() => {
-      wx.hideLoading();
+      getApp().hideLoading();
       wx.showToast({ title: '处理完成', icon: 'success' });
       this.loadMyOrders(); // 刷新订单列表
       // 如果是用户模式，也刷新申请进度
@@ -577,7 +595,7 @@ Page({
         this.loadMyActivities();
       }
     }).catch(err => {
-      wx.hideLoading();
+      getApp().hideLoading();
       console.error('更新失败:', err);
       wx.showToast({ title: '处理失败', icon: 'none' });
     });
@@ -690,14 +708,30 @@ Page({
     this.setData({ 'dialog.show': false });
   },
 
-  // 显示 Loading
-  showMyLoading(title = '加载中...') {
-    this.setData({ isLoading: true, loadingText: title });
+  // 显示 Loading（统一走全局自定义动画）
+  showMyLoadingDeprecated(title = '加载中...') {
+    // 记录开始时间，用于确保最少显示一段时间
+    this._loadingStartTs = Date.now();
+    this.setData({ showLoadingAnimation: true, loadingText: title });
   },
 
   // 隐藏 Loading
-  hideMyLoading() {
-    this.setData({ isLoading: false });
+  hideMyLoadingDeprecated() {
+    // 为了不遮挡页面切换：最少显示 3.5 秒
+    const minShowMs = 3500;
+    const start = this._loadingStartTs || 0;
+    const elapsed = start ? (Date.now() - start) : minShowMs;
+    const wait = Math.max(0, minShowMs - elapsed);
+
+    if (this._loadingHideTimer) {
+      clearTimeout(this._loadingHideTimer);
+      this._loadingHideTimer = null;
+    }
+
+    this._loadingHideTimer = setTimeout(() => {
+      this.setData({ showLoadingAnimation: false });
+      this._loadingStartTs = 0;
+    }, wait);
   },
 
   // 显示输入弹窗
@@ -756,7 +790,7 @@ Page({
 
     // 状态：错误
     this.ble.onError = (err) => {
-      this.hideMyLoading();
+      this.hideMyLoadingDeprecated();
       this.setData({ 
         isScanning: false, 
         connectStatusText: '蓝牙错误，请检查权限' 
@@ -885,7 +919,7 @@ Page({
       mediaType: ['image'],
       success: async (res) => {
         const tempPath = res.tempFiles[0].tempFilePath;
-        this.showMyLoading('上传中...');
+        this.showMyLoadingDeprecated('上传中...');
         
         // 上传到云存储
         const cloudPath = `proofs/${Date.now()}-${Math.floor(Math.random()*1000)}.png`;
@@ -894,7 +928,7 @@ Page({
           cloudPath: cloudPath,
           filePath: tempPath,
           success: uploadRes => {
-            this.hideMyLoading();
+            this.hideMyLoadingDeprecated();
             // 更新页面显示
             if (type === 'receipt') {
               this.setData({ imgReceipt: uploadRes.fileID });
@@ -903,7 +937,7 @@ Page({
             }
           },
           fail: err => {
-            this.hideMyLoading();
+            this.hideMyLoadingDeprecated();
             this.showMyDialog({ title: '上传失败', content: err.errMsg || '请重试' });
           }
         });
@@ -938,7 +972,7 @@ Page({
       return;
     }
 
-    this.showMyLoading('提交中...');
+    this.showMyLoadingDeprecated('提交中...');
 
     // D. 存入数据库 my_read
     const db = wx.cloud.database();
@@ -960,7 +994,7 @@ Page({
         createTime: db.serverDate()
       }
     }).then(res => {
-      this.hideMyLoading();
+      this.hideMyLoadingDeprecated();
       
       // 使用自定义弹窗
       this.showMyDialog({
@@ -972,7 +1006,7 @@ Page({
         }
       });
     }).catch(err => {
-      this.hideMyLoading();
+      this.hideMyLoadingDeprecated();
       console.error(err);
       this.showMyDialog({ title: '提交失败', content: err.errMsg || '网络错误，请重试' });
     });
@@ -1003,13 +1037,13 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          this.showMyLoading('正在解绑...');
+          this.showMyLoadingDeprecated('正在解绑...');
           
           wx.cloud.callFunction({
             name: 'unbindDevice',
             data: { sn: rawSn },
             success: res => {
-              this.hideMyLoading();
+              this.hideMyLoadingDeprecated();
               if (res.result.success) {
                 
                 // ✅ [替换]
@@ -1025,7 +1059,7 @@ Page({
               }
             },
             fail: err => {
-              this.hideMyLoading();
+              this.hideMyLoadingDeprecated();
               this.showMyDialog({ title: '错误', content: '网络异常' });
             }
           });
@@ -1139,7 +1173,7 @@ Page({
     const { currentAuditItem, adminSetDate, adminSetDaysIndex, warrantyValues } = this.data;
     const days = warrantyValues[adminSetDaysIndex];
 
-    this.showMyLoading('正在同步...');
+    this.showMyLoadingDeprecated('正在同步...');
 
     wx.cloud.callFunction({
       name: 'adminAuditDevice',
@@ -1150,7 +1184,7 @@ Page({
         customDays: days          // 传选择的天数
       },
       success: res => {
-        this.hideMyLoading();
+        this.hideMyLoadingDeprecated();
         if (res.result.success) {
           
           // ✅ [替换为自定义弹窗]
@@ -1170,7 +1204,7 @@ Page({
         }
       },
       fail: err => {
-        this.hideMyLoading();
+        this.hideMyLoadingDeprecated();
         console.error(err);
         this.showMyDialog({ title: '操作失败', content: err.errMsg || '网络错误，请重试' });
       }
@@ -1356,18 +1390,18 @@ Page({
       success: (res) => {
         // 只有点击确定才执行
         if (res.confirm) {
-          this.showMyLoading('处理中...');
+          this.showMyLoadingDeprecated('处理中...');
           wx.cloud.callFunction({
             name: 'adminAuditDevice',
             data: { id: id, action: 'reject' },
             success: () => {
-              this.hideMyLoading();
+              this.hideMyLoadingDeprecated();
               // 操作完成后也提示一下
               this.showMyDialog({ title: '已拒绝', content: '该申请已被驳回。' });
               this.loadAuditList();
             },
             fail: err => {
-              this.hideMyLoading();
+              this.hideMyLoadingDeprecated();
               console.error(err);
               this.showMyDialog({ title: '操作失败', content: '网络错误，请重试' });
             }

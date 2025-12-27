@@ -138,13 +138,13 @@ Page({
   // ==========================================
   fetchCloudData() {
     // 稍微延迟一下loading，防止动画冲突
-    if(this.data.list.length === 0) wx.showLoading({ title: '加载中...' });
+    if(this.data.list.length === 0) getApp().showLoading({ title: '加载中...' });
     
     db.collection('video_go')
       .orderBy('createTime', 'desc')
       .get()
       .then(res => {
-        wx.hideLoading();
+        getApp().hideLoading();
         const cloudList = res.data.map(item => {
           return {
             _id: item._id,
@@ -163,7 +163,7 @@ Page({
         setTimeout(() => this.initTabPosition(), 200);
       })
       .catch(err => {
-        wx.hideLoading();
+        getApp().hideLoading();
         console.error(err);
       });
     
@@ -272,7 +272,7 @@ Page({
       content: '该视频将发布到公开案例列表，并自动赠送30天延保',
       success: (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '处理中...' });
+          getApp().showLoading({ title: '处理中...' });
           
           // 调用云函数处理审核和延保
           wx.cloud.callFunction({
@@ -282,7 +282,7 @@ Page({
               action: 'approve'
             }
           }).then(result => {
-            wx.hideLoading();
+            getApp().hideLoading();
             if (result.result.success) {
               wx.showToast({ title: result.result.msg || '已发布', icon: 'success' });
               
@@ -293,7 +293,7 @@ Page({
               wx.showToast({ title: result.result.errMsg || '操作失败', icon: 'none' });
             }
           }).catch(err => {
-            wx.hideLoading();
+            getApp().hideLoading();
             console.error('审核失败:', err);
             wx.showToast({ title: '操作失败', icon: 'none' });
           });
@@ -322,7 +322,7 @@ Page({
             return;
           }
           
-          wx.showLoading({ title: '处理中...' });
+          getApp().showLoading({ title: '处理中...' });
           
           // 调用云函数处理，传递拒绝理由
           wx.cloud.callFunction({
@@ -333,7 +333,7 @@ Page({
               rejectReason: rejectReason // 传递拒绝理由
             }
           }).then(result => {
-            wx.hideLoading();
+            getApp().hideLoading();
             if (result.result.success) {
               wx.showToast({ title: result.result.msg || '已驳回', icon: 'none' });
               this.fetchPendingVideos(); // 刷新列表
@@ -341,7 +341,7 @@ Page({
               wx.showToast({ title: result.result.errMsg || '操作失败', icon: 'none' });
             }
           }).catch(err => {
-            wx.hideLoading();
+            getApp().hideLoading();
             console.error('拒绝失败:', err);
             wx.showToast({ title: '操作失败', icon: 'none' });
           });
@@ -361,7 +361,7 @@ Page({
       content: '将通知用户审核通过并发放奖励，但不会直接发布此视频（需您手动打码后上传）。',
       success: (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '处理中...' });
+          getApp().showLoading({ title: '处理中...' });
           // 调用云函数，只改状态，不搬运数据
           // 必须是 item: { _id: ..., sn: ... } 这种结构，因为云函数里需要 item._id 和 item.sn
           wx.cloud.callFunction({
@@ -374,7 +374,7 @@ Page({
               action: 'mark_pass'
             },
             success: (result) => {
-              wx.hideLoading();
+              getApp().hideLoading();
               if (result.result && result.result.success) {
                 wx.showToast({ title: result.result.msg || '已标记', icon: 'success' });
                 this.fetchPendingVideos(); // 刷新列表
@@ -388,7 +388,7 @@ Page({
               }
             },
             fail: (err) => {
-              wx.hideLoading();
+              getApp().hideLoading();
               console.error('标记失败:', err);
               wx.showModal({ 
                 title: '调用失败', 
@@ -407,7 +407,7 @@ Page({
     const fileID = e.currentTarget.dataset.fileid;
     if (!fileID) return;
 
-    wx.showLoading({ title: '下载中...', mask: true });
+    getApp().showLoading({ title: '下载中...', mask: true });
 
     // 1. 先下载临时文件
     wx.cloud.downloadFile({
@@ -417,11 +417,11 @@ Page({
         wx.saveVideoToPhotosAlbum({
           filePath: res.tempFilePath,
           success: () => {
-            wx.hideLoading();
+            getApp().hideLoading();
             wx.showToast({ title: '已保存到相册', icon: 'success' });
           },
           fail: (err) => {
-            wx.hideLoading();
+            getApp().hideLoading();
             // 如果用户拒绝授权，提示去设置
             if (err.errMsg.indexOf('auth') > -1) {
               wx.showModal({
@@ -439,7 +439,7 @@ Page({
         });
       },
       fail: err => {
-        wx.hideLoading();
+        getApp().hideLoading();
         console.error(err);
         wx.showToast({ title: '下载文件失败', icon: 'none' });
       }
@@ -738,7 +738,7 @@ Page({
     if (modelIndex === null) return wx.showToast({ title: '请选型号', icon: 'none' });
 
     this.setData({ isSubmitting: true });
-    wx.showLoading({ title: isEditing ? '修改中...' : '上传中...', mask: true });
+    getApp().showLoading({ title: isEditing ? '修改中...' : '上传中...', mask: true });
 
     // 如果是网络图片(回显的)，不需要重新上传；如果是临时文件(新选的)，需要上传
     const isNewVideo = adminVideoPath.startsWith('wxfile') || adminVideoPath.startsWith('http://tmp');
@@ -792,14 +792,14 @@ Page({
       }
     }).catch(err => {
       console.error(err);
-      wx.hideLoading();
+      getApp().hideLoading();
       this.setData({ isSubmitting: false });
       wx.showToast({ title: '操作失败', icon: 'none' });
     });
   },
 
   finishSubmit(msg) {
-    wx.hideLoading();
+    getApp().hideLoading();
     wx.showToast({ title: msg, icon: 'success' });
     this.setData({ 
       isSubmitting: false, showAdminForm: false, 
@@ -906,7 +906,7 @@ Page({
     }
   },
   startRecordLogic() { 
-    // 这里的 startRecord 不需要改动太多，只要确保不调用 wx.hideLoading 即可
+    // 这里的 startRecord 不需要改动太多，只要确保不调用 getApp().hideLoading 即可
     this.ctx.startRecord({ 
       timeoutCallback: { duration: 60 },
       success:()=>{
@@ -1012,7 +1012,7 @@ Page({
     const targetSn = myDevices[selectedSnIndex].sn; // 获取选中的 SN
     
     this.setData({ isSubmitting: true });
-    wx.showLoading({ title: '上传中...', mask: true });
+    getApp().showLoading({ title: '上传中...', mask: true });
     const cloudPath = `video/${Date.now()}_user.mp4`;
     wx.cloud.uploadFile({
       cloudPath: cloudPath, filePath: videoPath,
@@ -1029,7 +1029,7 @@ Page({
             sn: targetSn // 【新增】关联 SN
           },
           success: () => { 
-             wx.hideLoading(); 
+             getApp().hideLoading(); 
              this.setData({ isSubmitting: false, showForm: false, showSuccess: true, videoPath: null }); 
           }
         });

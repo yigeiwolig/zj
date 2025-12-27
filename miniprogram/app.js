@@ -23,9 +23,10 @@ App({
   },
 
   // ======================== 全局 UI API（替代 wx.showToast/showModal/showLoading/showActionSheet） ========================
-  showLoading(text = '加载中...') {
+  // 统一 Loading：既支持字符串，也支持对象({ title:'...', mask:true })
+  showLoading(option = '加载中...') {
+    const text = typeof option === 'string' ? option : (option.title || '加载中...');
     this.globalData.ui.loading = { show: true, text };
-    // 通知所有页面更新（任何页面 setData 到 app 实例都不可行，走事件）
     this._emitUI();
   },
   hideLoading() {
@@ -81,12 +82,15 @@ App({
 
   // 事件派发：通知当前页面刷新 ui
   _emitUI() {
-    // 用 getCurrentPages() 通知当前可见页面 setData
+    // 用 getCurrentPages() 通知所有已挂载页面刷新 ui（避免进入新页面时 ui 未同步导致 loading 不显示）
     try {
       const pages = getCurrentPages();
-      const current = pages && pages.length ? pages[pages.length - 1] : null;
-      if (current && typeof current.setData === 'function') {
-        current.setData({ ui: this.globalData.ui });
+      if (pages && pages.length) {
+        pages.forEach(p => {
+          if (p && typeof p.setData === 'function') {
+            try { p.setData({ ui: this.globalData.ui }); } catch (e) {}
+          }
+        });
       }
     } catch (e) {
       // ignore
