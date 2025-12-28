@@ -345,6 +345,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 /* 1. Swiper 容器 */
 .order-swiper {
   width: 100%;
+  margin-top: 40rpx; /* 增加顶部间距，与标题栏保持距离 */
   margin-bottom: 20rpx;
   
   /* ⚠️⚠️⚠️【重点检查】⚠️⚠️⚠️ */
@@ -3025,19 +3026,49 @@ page { background: #F7F7F7; color: #1D1D1F; }
 
 .modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
 /* 申请记录列表 */
-.activity-list {
-  padding: 0 40rpx 40rpx;
-  display: flex; flex-direction: column; gap: 20rpx;
+/* (旧版申请记录样式已弃用，避免覆盖新版居中布局) */
+.activity-list--legacy-disabled { }
+.act-card--legacy-disabled { }
+.act-left--legacy-disabled { }
+.act-title--legacy-disabled { }
+.act-time--legacy-disabled { }
+.act-right--legacy-disabled { }
+
+/* ✅ 右侧按钮：以上下堆叠方式，围绕卡片横向中心线排列 */
+.act-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12rpx;
 }
-.act-card {
-  background: #fff; border-radius: 20rpx; padding: 24rpx;
-  display: flex; justify-content: space-between; align-items: center;
-  box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.03);
+
+
+.act-cancel-btn {
+  /* 强制与 .status-pill 尺寸一致 */
+  height: 44rpx;
+  line-height: 44rpx;
+  padding: 0 20rpx;
+  border-radius: 30rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  box-sizing: border-box;
+
+  /* 统一宽度（和状态 pill 一致） */
+  min-width: 124rpx;
+
+  color: #FF3B30;
+  border: 2rpx solid rgba(255, 59, 48, 0.35);
+  background: rgba(255, 59, 48, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.act-left { flex: 1; }
-.act-title { font-size: 28rpx; font-weight: 600; margin-bottom: 8rpx; }
-.act-time { font-size: 22rpx; color: #999; }
-.act-right { display: flex; align-items: center; }
+
+.act-cancel-btn:active {
+  opacity: 0.8;
+  transform: scale(0.98);
+}
 
 /* 状态标签复用之前的样式，微调颜色 */
 .status-tag.processing { background: #FFF9E6; color: #F5A623; border: none; padding: 8rpx 16rpx; border-radius: 20rpx; font-size: 24rpx; }
@@ -3070,16 +3101,23 @@ page { background: #F7F7F7; color: #1D1D1F; }
 }
 
 .act-card {
-  background: #fff; border-radius: 24rpx; padding: 30rpx;
-  display: flex; 
-  flex-direction: column; /* 🔴 改为纵向布局 */
+  background: #fff; border-radius: 24rpx;
+  /* 允许内容自适应高度，避免维修备注被裁剪 */
+  min-height: 170rpx;
+  padding: 26rpx 30rpx 24rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* 左侧文字整体垂直居中 */
   box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.03);
+  position: relative;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 /* 🔴 主要内容行：保持横向布局，不受拒绝理由影响 */
 .act-main-row {
-  display: flex; 
-  justify-content: space-between; 
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   width: 100%;
 }
@@ -3099,8 +3137,21 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .act-time { font-size: 22rpx; color: #999; }
 
 .status-pill {
-  display: flex; align-items: center; font-size: 22rpx; font-weight: 600;
-  padding: 8rpx 20rpx; border-radius: 30rpx;
+  /* 固定 pill 高度，保证与“撤销”完全一致 */
+  height: 44rpx;
+  line-height: 44rpx;
+  box-sizing: border-box;
+
+  /* 统一宽度（和撤销一致） */
+  min-width: 124rpx;
+  justify-content: center;
+
+  display: flex;
+  align-items: center;
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 0 20rpx;
+  border-radius: 30rpx;
 }
 .status-pill.processing { background: #FFF8E1; color: #FFA000; }
 .status-pill.success { background: #E8F5E9; color: #34C759; }
@@ -3195,6 +3246,8 @@ page { background: #F7F7F7; color: #1D1D1F; }
 }
 
 .repair-actions { 
+  position: relative;
+  z-index: 10; /* ✅ 避免 video 控件层覆盖按钮点击 */
   display: flex; 
   border-top: 1rpx solid #eee; 
 }

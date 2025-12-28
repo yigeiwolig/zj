@@ -47,12 +47,19 @@ exports.main = async (event, context) => {
     // 🔴 场景 A: 全局 AUTO 开关开启 => 最高优先级，立即解除所有封禁
     // ==========================================================
     if (globalAutoMode) {
+      // 🔴 关键修复：如果是截图封禁（通过 banReason 判断），不允许通过 AUTO 模式自动解封
+      if (record.banReason === '截图违规' || record.isScreenshotBanned === true) {
+        console.log('[checkUnlockStatus] 🔒 检测到截图封禁，不允许通过 AUTO 模式自动解封')
+        return { action: 'WAIT', msg: '截图封禁，需管理员手动解封' }
+      }
+      
       console.log('[checkUnlockStatus] 🚀 开始执行 AUTO 模式解封流程...')
       console.log('[checkUnlockStatus] 📋 当前记录状态:', JSON.stringify({
         recordId: record._id,
         nickname: nickname,
         isBanned: record.isBanned,
-        failCount: record.failCount
+        failCount: record.failCount,
+        isScreenshotBanned: record.isScreenshotBanned
       }))
       
       // 🔴 关键：无论是否有 nickname，只要 AUTO 开启，就立即更新所有 isBanned = false
@@ -162,6 +169,15 @@ exports.main = async (event, context) => {
     // 🔴 场景 B: 检查白名单（valid_users）
     // ==========================================================
     if (nickname) {
+      // 🔴 关键修复：如果是截图封禁（通过 banReason 判断），不允许通过白名单自动解封
+      if (record.banReason === '截图违规' || record.isScreenshotBanned === true) {
+        console.log('[checkUnlockStatus] 🔒 检测到截图封禁，不允许通过白名单自动解封')
+        // 即使被封禁，也要检查白名单，但如果是截图封禁，直接返回 WAIT
+        if (record.isBanned === true) {
+          return { action: 'WAIT', msg: '截图封禁，需管理员手动解封' }
+        }
+      }
+      
       try {
         const validCheck = await db
           .collection('valid_users')
@@ -170,6 +186,12 @@ exports.main = async (event, context) => {
           .get()
 
         if (validCheck.data && validCheck.data.length > 0) {
+          // 🔴 关键修复：如果是截图封禁（通过 banReason 判断），即使在白名单中，也不允许自动解封
+          if (record.banReason === '截图违规' || record.isScreenshotBanned === true) {
+            console.log('[checkUnlockStatus] 🔒 检测到截图封禁，即使在白名单中也不允许自动解封')
+            return { action: 'WAIT', msg: '截图封禁，需管理员手动解封' }
+          }
+          
           // 如果 valid_users 中存在该昵称，则放行
           // 更新 login_logs：解除封禁
           try {
@@ -228,6 +250,10 @@ exports.main = async (event, context) => {
     
     // 🔴 核心：检查 login_logs 中的 isBanned 状态
     if (record.isBanned === true) {
+      // 🔴 关键修复：如果是截图封禁（通过 banReason 判断），明确提示需要管理员手动解封
+      if (record.banReason === '截图违规' || record.isScreenshotBanned === true) {
+        return { action: 'WAIT', msg: '截图封禁，需管理员手动解封' };
+      }
       // 如果被封禁，直接让前端等待，除非管理员手动解封或开启 AUTO
       return { action: 'WAIT', msg: '全局封禁中' };
     }

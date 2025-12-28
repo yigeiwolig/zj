@@ -41,7 +41,7 @@ input, textarea { text-align: left; }
 
 .brand {
   font-size: 64rpx;
-  font-weight: 800;
+  font-weight: 700; /* 从 800 调低到 700 */
   color: #1d1d1f;
 }
 

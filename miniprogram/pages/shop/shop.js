@@ -111,6 +111,9 @@ Page({
     // 新增：中间弹窗数据
     centerToast: { show: false, text: '' },
 
+    // 与 my 页同款自定义对话框（用于替换 wx.showModal）
+    dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+
     // 新增：底部按钮栏是否显示 (默认false，滑下去才出来)
     showFooterBar: false,
 
@@ -321,16 +324,16 @@ Page({
   // 管理员模式手动切换开关
   toggleAdminMode() {
     if (!this.data.isAuthorized) {
-      wx.showToast({ title: '无权限', icon: 'none' });
+      this.showCenterToast('无权限');
       return;
     }
     
     const nextState = !this.data.isAdmin;
     this.setData({ isAdmin: nextState });
     
-    wx.showToast({
-      title: nextState ? '管理模式开启' : '已回到用户模式',
-      icon: 'none'
+    this.showShopDialog({
+      title: '提示',
+      content: nextState ? '管理模式开启' : '已回到用户模式'
     });
   },
 
@@ -829,7 +832,7 @@ Page({
         this.setData({ topMediaList: this.data.topMediaList });
         this.saveTopMediaToCloud();
       } catch (err) {
-        wx.showToast({ title: '上传失败', icon: 'none' });
+        this.showShopDialog({ title: '提示', content: '上传失败' });
       } finally {
         getApp().hideLoading();
       }
@@ -942,10 +945,11 @@ Page({
     const idx = e.currentTarget.dataset.index;
     const series = this.data.seriesList[idx];
 
-    wx.showModal({
+    this.showShopDialog({
       title: '删除警告',
       content: `确定要彻底删除产品 "${series.name}" 吗？此操作不可恢复。`,
-      confirmColor: '#FF3B30', // 红色确认键
+      showCancel: true,
+      confirmText: '删除',
       success: (res) => {
         if (res.confirm) {
           getApp().showLoading({ title: '删除中...' });
@@ -971,7 +975,7 @@ Page({
           }
 
           getApp().hideLoading();
-          wx.showToast({ title: '已删除', icon: 'none' });
+          this.showShopDialog({ title: '提示', content: '已删除' });
       }
       }
     });
@@ -1009,7 +1013,7 @@ Page({
           });
         }
 
-        wx.showToast({ title: '上传成功', icon: 'success' });
+        this.showShopDialog({ title: '提示', content: '上传成功' });
       } catch (err) {
         console.error('[shop.js] adminUploadCover 上传失败:', err);
         wx.showToast({ title: '上传失败', icon: 'none' });
@@ -1042,7 +1046,7 @@ Page({
       // 校验：必须是纯数字
       const numValue = v.trim();
       if (numValue && !/^\d+$/.test(numValue)) {
-        wx.showToast({ title: '号码必须是纯数字', icon: 'none' });
+        this.showShopDialog({ title: '提示', content: '号码必须是纯数字' });
         return;
       }
       
@@ -1052,7 +1056,7 @@ Page({
           i !== idx && item.jumpNumber && item.jumpNumber.toString() === numValue
         );
         if (duplicate) {
-          wx.showToast({ title: '号码已存在，请使用其他号码', icon: 'none' });
+          this.showShopDialog({ title: '提示', content: '号码已存在，请使用其他号码' });
           return;
         }
       }
@@ -1061,7 +1065,7 @@ Page({
       series.jumpNumber = numValue ? parseInt(numValue) : null;
       this.setData({ [`seriesList[${idx}].jumpNumber`]: series.jumpNumber });
       this.saveSeriesToCloud(series);
-      wx.showToast({ title: '号码已更新', icon: 'success' });
+      this.showShopDialog({ title: '提示', content: '号码已更新' });
     });
   },
   
@@ -2363,14 +2367,37 @@ Page({
   },
 
   // ========================================================
-  // [修改] 错误提示改为微信原生样式 (去掉红色横幅)
+  // 自定义弹窗（替换 wx.showModal）
+  // ========================================================
+  showShopDialog(options) {
+    this.setData({
+      'dialog.show': true,
+      'dialog.title': options.title || '提示',
+      'dialog.content': options.content || '',
+      'dialog.showCancel': !!options.showCancel,
+      'dialog.confirmText': options.confirmText || '确定',
+      'dialog.cancelText': options.cancelText || '取消',
+      'dialog.callback': options.success || null
+    });
+  },
+  onDialogConfirm() {
+    const cb = this.data.dialog.callback;
+    this.setData({ 'dialog.show': false });
+    if (cb) cb({ confirm: true });
+  },
+  closeCustomDialog() {
+    const cb = this.data.dialog.callback;
+    this.setData({ 'dialog.show': false });
+    if (cb) cb({ confirm: false, cancel: true });
+  },
+
+  // ========================================================
+  // 统一错误提示：全部走自定义中间提示（替换 wx.showToast）
   // ========================================================
   showError(msg) {
-    // 使用微信自带的黑色气泡，不显示那个红条了
-    wx.showToast({
-      title: msg,
-      icon: 'none',
-      duration: 2000
+    this.showShopDialog({
+      title: '提示',
+      content: msg
     });
   },
 
@@ -2579,8 +2606,24 @@ Page({
       return this.showError('请完善地址信息以计算运费');
     }
 
-    // F. 唤起支付 (复用之前的逻辑)
-    this.doRealPayment(cart, finalOrderInfo, finalTotalPrice);
+    // F. 增加定制产品确认弹窗
+    // 将markdown格式的**转换为HTML加粗标签
+    const content = '本订单属于**专属定制方案**。下单后即锁定物料并开始制作，**非质量问题不支持退换**。点击支付即代表您同意此条款。';
+    const htmlContent = content.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    
+    this.showShopDialog({
+      title: '定制协议确认',
+      content: htmlContent,
+      showCancel: true,
+      confirmText: '同意并支付',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) {
+          // 用户确认，唤起支付
+          this.doRealPayment(cart, finalOrderInfo, finalTotalPrice);
+        }
+      }
+    });
   },
 
   // ========================================================
@@ -2593,7 +2636,7 @@ Page({
     console.log('正在支付，金额为:', finalTotalPrice); // 检查控制台，这里绝对不能是 0 或 undefined
     
     if (!finalTotalPrice || finalTotalPrice <= 0) {
-      wx.showToast({ title: '金额异常', icon: 'none' });
+      this.showCenterToast('金额异常');
       return;
     }
 
@@ -2615,17 +2658,18 @@ Page({
 
         // 【新增检测】检查云函数返回的错误
         if (payment && payment.error) {
-          wx.showModal({ 
-            title: '支付失败', 
-            content: payment.msg || '支付系统异常，请稍后再试', 
-            showCancel: false 
+          this.showShopDialog({
+            title: '支付失败',
+            content: payment.msg || '支付系统异常，请稍后再试',
+            showCancel: false,
+            confirmText: '知道了'
           });
       return;
     }
 
         if (!payment || !payment.paySign) {
           // 如果这里报错，通常是商户号审核还没过
-          wx.showModal({ title: '提示', content: '支付系统对接中，请稍后再试', showCancel: false });
+          this.showShopDialog({ title: '提示', content: '支付系统对接中，请稍后再试', showCancel: false, confirmText: '知道了' });
       return;
     }
 
@@ -2634,7 +2678,7 @@ Page({
           ...payment,
           success: (payRes) => {
             // 支付成功处理
-            wx.showToast({ title: '支付成功', icon: 'success' });
+            this.showCenterToast('支付成功');
             this.closeOrderModal();
             
             // 清理购物车
@@ -2647,14 +2691,14 @@ Page({
           },
           fail: (err) => {
             console.error('用户取消或支付失败', err);
-            wx.showToast({ title: '支付已取消', icon: 'none' });
+            this.showCenterToast('支付已取消');
           }
         });
       },
       fail: err => {
         getApp().hideLoading();
         console.error('创建订单失败', err);
-        wx.showToast({ title: '创建订单失败', icon: 'none' });
+        this.showCenterToast('创建订单失败');
       }
     });
   },
@@ -2663,23 +2707,22 @@ Page({
   // [新增] 清空购物车
   // ========================================================
   clearCart() {
-    wx.showModal({
+    this.showShopDialog({
       title: '确认清空',
       content: '确定要清空购物车吗？',
+      showCancel: true,
       confirmText: '清空',
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          // 清空购物车数据
-          this.setData({ 
-            cart: [], 
+          this.setData({
+            cart: [],
             cartTotalPrice: 0,
             finalTotalPrice: 0,
             shippingFee: 0
           });
-          // 清空本地存储
           wx.removeStorageSync('my_cart');
-          wx.showToast({ title: '已清空', icon: 'success' });
+          this.showCenterToast('已清空');
         }
       }
     });

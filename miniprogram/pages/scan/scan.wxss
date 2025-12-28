@@ -39,7 +39,15 @@ page {
 .back-icon::before {
   display: none;
 }
-.nav-logo { font-size: 34rpx; font-weight: 800; letter-spacing: 4rpx; color: #1c1c1e; }
+.nav-logo {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 34rpx;
+  font-weight: 800;
+  letter-spacing: 4rpx;
+  color: #1c1c1e;
+}
 
 /* ================================================================= */
 /* 2. 主卡片容器 (Integrated Card) - 父容器 */

@@ -69,16 +69,11 @@ Page({
     // 检查管理员权限
     this.checkAdminPrivilege();
 
-    // 读取数据
-    const cache = wx.getStorageSync('moto_records');
-    if (cache && cache.length > 0) {
-      this.setData({ allRecords: cache });
-    } else {
-      this.initMockData();
-    }
-    
-    this.calculateStats(); // 计算个人统计
-    this.computeRankings(); // 计算排名
+    // 读取数据：优先云端，其次本地缓存，最后 mock
+    this.fetchRankFromCloud().finally(() => {
+      this.calculateStats(); // 计算个人统计
+      this.computeRankings(); // 计算排名
+    });
   },
 
   // 🔴 返回按钮点击事件
@@ -122,16 +117,6 @@ Page({
     });
   },
 
-  // 1. 初始化假数据
-  initMockData() {
-    const mocks = [
-      { id: 1, type: 'gas', name: 'Street_King', bike: 'DUCATI V4S', angle: 89.5, dist: 2.1, score: 98, avatar: 'https://api.dicebear.com/9.x/adventurer/svg?seed=King' },
-      { id: 2, type: 'gas', name: 'Ghost', bike: 'KTM 390', angle: 85.2, dist: 1.8, score: 90, avatar: 'https://api.dicebear.com/9.x/adventurer/svg?seed=Ghost' },
-      { id: 3, type: 'ev', name: 'E-Rider', bike: 'Sur-Ron', angle: 88.0, dist: 1.5, score: 95, avatar: 'https://api.dicebear.com/9.x/adventurer/svg?seed=Elec' }
-    ];
-    this.setData({ allRecords: mocks });
-    wx.setStorageSync('moto_records', mocks);
-  },
 
   // 2. 核心：计算排名
   computeRankings() {
@@ -234,6 +219,55 @@ Page({
     const gap = menuButton.top - statusBarHeight;
     const navBarHeight = (gap * 2) + menuButton.height;
     this.setData({ statusBarHeight, navBarHeight });
+  },
+
+  // ================= 云端榜单同步 =================
+  fetchRankFromCloud() {
+    return new Promise((resolve) => {
+      wx.cloud.callFunction({
+        name: 'getMotoRank',
+        data: {},
+        success: (res) => {
+          const list = (res.result && res.result.success) ? (res.result.data || []) : [];
+          if (list.length > 0) {
+            // 云端数据统一转换为页面需要的结构：使用 _id 作为唯一标识
+            const mapped = list.map((i) => ({
+              id: i._id, // 兼容旧渲染逻辑
+              _id: i._id,
+              type: i.type,
+              name: i.name,
+              bike: i.bike,
+              angle: i.angle,
+              dist: i.dist,
+              score: i.score,
+              avatar: i.avatar
+            }));
+            this.setData({ allRecords: mapped });
+            wx.setStorageSync('moto_records', mapped);
+          } else {
+            // 云端没数据：回退本地缓存或 mock
+            const cache = wx.getStorageSync('moto_records');
+            if (cache && cache.length > 0) {
+              this.setData({ allRecords: cache });
+            } else {
+              // 云端和缓存都为空：保持空榜单
+              this.setData({ allRecords: [] });
+            }
+          }
+          resolve();
+        },
+        fail: () => {
+          const cache = wx.getStorageSync('moto_records');
+          if (cache && cache.length > 0) {
+            this.setData({ allRecords: cache });
+          } else {
+            // 云端失败且本地缓存也无：保持空榜单
+            this.setData({ allRecords: [] });
+          }
+          resolve();
+        }
+      });
+    });
   },
 
   // 图片加载错误兜底
@@ -355,14 +389,32 @@ Page({
   deleteRecord(e) {
     const id = e.currentTarget.dataset.id;
     wx.showModal({
-      title: '警告', content: '确定删除?',
+      title: '警告',
+      content: '确定删除?',
       success: (res) => {
-        if(res.confirm) {
-          const newList = this.data.allRecords.filter(i => i.id !== id);
-          this.setData({ allRecords: newList });
-          wx.setStorageSync('moto_records', newList);
-          this.computeRankings();
-        }
+        if (!res.confirm) return;
+
+        wx.showLoading({ title: '删除中...' });
+        wx.cloud.callFunction({
+          name: 'adminUpdateMotoRank',
+          data: { action: 'delete', record: { _id: id } },
+          success: (r) => {
+            wx.hideLoading();
+            if (r.result && r.result.success) {
+              this.fetchRankFromCloud().then(() => {
+                this.computeRankings();
+                wx.showToast({ title: '已删除', icon: 'success' });
+              });
+            } else {
+              wx.showToast({ title: (r.result && r.result.errMsg) ? r.result.errMsg : '删除失败', icon: 'none' });
+            }
+          },
+          fail: (err) => {
+            wx.hideLoading();
+            console.error('adminUpdateMotoRank delete fail', err);
+            wx.showToast({ title: '删除失败', icon: 'none' });
+          }
+        });
       }
     })
   },
@@ -392,30 +444,49 @@ Page({
       wx.showToast({ title: '提交成功', icon: 'success' });
 
     } else {
-      // --- 管理员操作流程 ---
+      // --- 管理员操作流程（写入云端） ---
       const f = this.data.form;
       if (!f.name || !f.bike) return wx.showToast({ title: '信息不全', icon: 'none' });
 
-      let newList = [...this.data.allRecords];
-      let finalScore = f.score || (parseFloat(f.angle||0) + parseFloat(f.dist||0)).toFixed(1);
-      let finalAvatar = f.avatar || `https://api.dicebear.com/9.x/adventurer/svg?seed=${f.name}`;
+      const finalScore = f.score || (parseFloat(f.angle||0) + parseFloat(f.dist||0)).toFixed(1);
+      const finalAvatar = f.avatar || `https://api.dicebear.com/9.x/adventurer/svg?seed=${f.name}`;
 
-      const recordData = {
-        ...f, angle: parseFloat(f.angle), dist: parseFloat(f.dist), score: parseFloat(finalScore), avatar: finalAvatar
+      // 云端 record：update 需要 _id；add 不需要
+      const record = {
+        _id: f._id || f.id || null,
+        type: f.type || this.data.rankType,
+        name: f.name,
+        bike: f.bike,
+        angle: parseFloat(f.angle || 0),
+        dist: parseFloat(f.dist || 0),
+        score: parseFloat(finalScore || 0),
+        avatar: finalAvatar
       };
 
-      if (this.data.isEdit) {
-        const index = newList.findIndex(i => i.id === f.id);
-        if (index > -1) newList[index] = recordData;
-      } else {
-        recordData.id = Date.now();
-        newList.unshift(recordData);
-      }
-
-      this.setData({ allRecords: newList, showEditModal: false });
-      wx.setStorageSync('moto_records', newList);
-      this.computeRankings();
-      wx.showToast({ title: '已发布', icon: 'success' });
+      const action = this.data.isEdit ? 'update' : 'add';
+      wx.showLoading({ title: '同步中...' });
+      wx.cloud.callFunction({
+        name: 'adminUpdateMotoRank',
+        data: { action, record },
+        success: (res) => {
+          wx.hideLoading();
+          if (res.result && res.result.success) {
+            this.setData({ showEditModal: false });
+            // 重新拉取云端数据，保证所有人同步
+            this.fetchRankFromCloud().then(() => {
+              this.computeRankings();
+              wx.showToast({ title: '已发布', icon: 'success' });
+            });
+          } else {
+            wx.showToast({ title: (res.result && res.result.errMsg) ? res.result.errMsg : '同步失败', icon: 'none' });
+          }
+        },
+        fail: (err) => {
+          wx.hideLoading();
+          console.error('adminUpdateMotoRank fail', err);
+          wx.showToast({ title: '同步失败', icon: 'none' });
+        }
+      });
     }
   }
 })

@@ -211,6 +211,16 @@ Page({
   // === 点击进入逻辑 ===
   handleAccess() {
     console.log('[handleAccess] 点击事件触发');
+
+    // ✅ 兜底跳转：从点击开始计时，防止任意链路卡住（预览环境常见）
+    if (this._jumpFallbackTimer) {
+      clearTimeout(this._jumpFallbackTimer);
+      this._jumpFallbackTimer = null;
+    }
+    this._jumpFallbackTimer = setTimeout(() => {
+      console.warn('[handleAccess] 兜底跳转触发');
+      wx.reLaunch({ url: '/pages/products/products' });
+    }, 5400);
     console.log('[handleAccess] step:', this.data.step);
     console.log('[handleAccess] isAuthorized:', this.data.isAuthorized);
     
@@ -241,10 +251,14 @@ Page({
       },
       fail: (err) => {
         console.error('[handleAccess] 位置获取失败:', err);
+        // 预览环境/部分机型可能拿不到定位：直接给出提示并兜底跳转（不阻塞用户进入）
         this.setData({ 
           showAuthForceModal: true, 
           authMissingType: 'location' 
         });
+        setTimeout(() => {
+          wx.reLaunch({ url: '/pages/products/products' });
+        }, 300);
       }
     });
   },
@@ -262,6 +276,15 @@ Page({
 
   doFallAndSwitch() {
     this.setData({ step: 5 });
+
+    // ✅ 小齿轮掉落动画结束后立即跳转（0.8s + 少量缓冲）
+    setTimeout(() => {
+      if (this._jumpFallbackTimer) {
+        clearTimeout(this._jumpFallbackTimer);
+        this._jumpFallbackTimer = null;
+      }
+      wx.reLaunch({ url: '/pages/products/products' });
+    }, 900);
   },
 
   async loadBlockingConfig() {
@@ -402,8 +425,32 @@ Page({
           createTime: db.serverDate(),
           updateTime: db.serverDate()
         };
-        db.collection(collectionName).add({ data: newData });
-          setTimeout(() => { wx.reLaunch({ url: targetPage }); }, 2200); 
+        // ✅ 等写入完成再跳转，失败也兜底跳转，避免预览/网络问题卡死
+        const jump = () => {
+          // 成功/失败跳转时，清掉点击兜底计时器
+          if (this._jumpFallbackTimer) {
+            clearTimeout(this._jumpFallbackTimer);
+            this._jumpFallbackTimer = null;
+          }
+          wx.reLaunch({ url: targetPage });
+        };
+
+        // 3 秒兜底：无论如何都跳
+        const fallbackTimer = setTimeout(() => {
+          console.warn('[index] 写入超时，兜底跳转');
+          jump();
+        }, 3000);
+
+        db.collection(collectionName).add({ data: newData })
+          .then(() => {
+            clearTimeout(fallbackTimer);
+            setTimeout(jump, 200); // 稍微给动画收尾一点时间
+          })
+          .catch(err => {
+            console.error('[index] 写入失败，兜底跳转', err);
+            clearTimeout(fallbackTimer);
+            setTimeout(jump, 200);
+          }); 
       });
     });
   },
@@ -480,11 +527,7 @@ Page({
       });
     }
   },
-  setMockLocation(e) {
-    const city = e.currentTarget.dataset.city;
-    app.globalData.mockLocation = city;
-    this.showMyDialog({ title: '提示', content: '已切换模拟定位' });
-  },
+
 
   // 管理员入口
   onAdminTap: function(e) {

@@ -1,7 +1,6 @@
 // app.js
 App({
   globalData: {
-    mockLocation: null, // 模拟定位：'shenzhen' 或 'hangzhou'
     blockedLocation: null, // 被拦截的位置信息
 
     // 全局 UI 弹窗状态（由 app.wxml 渲染）
@@ -11,6 +10,9 @@ App({
       sheet: { show: false, title: '', items: [] },
       input: { show: false, title: '请输入', placeholder: '', value: '', maskClosable: true }
     },
+
+    // Toast 专用计时器
+    _toastTimer: null,
 
     // 回调暂存
     _uiCb: {
@@ -99,6 +101,53 @@ App({
 
   // ======================== 生命周期 ========================
   onLaunch: function () {
+    // ======================== 方案A：全局拦截微信官方弹窗 ========================
+    // 将 wx.showModal / wx.showToast / wx.showLoading / wx.hideLoading 统一替换为自定义白底黑字 UI
+    // 不改业务逻辑，只改 UI 展现
+    try {
+      // 1) showModal
+      if (!wx.__mt_oldShowModal) wx.__mt_oldShowModal = wx.showModal;
+      wx.showModal = (opt = {}) => {
+        this.showDialog({
+          title: opt.title || '提示',
+          content: opt.content || '',
+          showCancel: opt.showCancel !== false && !!opt.showCancel,
+          confirmText: opt.confirmText || '确定',
+          cancelText: opt.cancelText || '取消',
+          maskClosable: opt.showCancel === false ? false : true,
+          onConfirm: () => opt.success && opt.success({ confirm: true, cancel: false }),
+          onCancel: () => opt.success && opt.success({ confirm: false, cancel: true })
+        });
+      };
+
+      // 2) showToast
+      if (!wx.__mt_oldShowToast) wx.__mt_oldShowToast = wx.showToast;
+      wx.showToast = (opt = {}) => {
+        const msg = (typeof opt === 'string') ? opt : (opt.title || '');
+        const duration = (opt && opt.duration) ? opt.duration : 1500;
+        // 用全局 dialog 的轻提示也可以，但这里复用 dialog 可能太频繁；
+        // 直接用 dialog 作为白底提示：无取消按钮，自动关闭
+        this.showDialog({ title: '提示', content: msg, showCancel: false, confirmText: '知道了' });
+        if (this.globalData._toastTimer) clearTimeout(this.globalData._toastTimer);
+        this.globalData._toastTimer = setTimeout(() => {
+          this.hideDialog();
+        }, duration);
+      };
+
+      // 3) showLoading/hideLoading
+      if (!wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = wx.showLoading;
+      if (!wx.__mt_oldHideLoading) wx.__mt_oldHideLoading = wx.hideLoading;
+      wx.showLoading = (opt = {}) => {
+        const title = (typeof opt === 'string') ? opt : (opt.title || '加载中...');
+        this.showLoading(title);
+      };
+      wx.hideLoading = () => {
+        this.hideLoading();
+      };
+    } catch (e) {
+      // ignore
+    }
+
     if (!wx.cloud) {
       console.error('请使用 2.2.3 或以上的基础库以使用云能力');
     } else {

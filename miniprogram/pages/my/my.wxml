@@ -13,7 +13,6 @@
   <view class="profile-header" wx:if="{{!isAdmin}}">
     <view class="header-content">
       <view class="user-identity">
-        <text class="rank-tag">PLATINUM MEMBER</text>
         <text class="user-name">{{userName}}</text>
       </view>
       <view class="header-stats">
@@ -31,7 +30,8 @@
   </view>
 
   <!-- === 【核心修改区域：管理员界面】 === -->
-  <block wx:if="{{isAdmin}}">
+  <!-- 只有在“已判定是管理员”后才渲染管理员界面，避免刚进入闪现 -->
+  <block wx:if="{{isAdminReady && isAdmin}}">
     
     <!-- 1. 标题栏 + 切换按钮 -->
     <view class="admin-header-row">
@@ -127,7 +127,7 @@
       <block wx:for="{{repairList}}" wx:key="_id">
         <view class="repair-admin-card">
           <!-- 视频预览 -->
-          <video src="{{item.videoFileID}}" class="repair-video" controls></video>
+          <video src="{{item.videoFileID}}" class="repair-video" controls="{{false}}" show-center-play-btn="{{false}}" enable-play-gesture object-fit="contain"></video>
           
           <!-- 信息 -->
           <view class="repair-info">
@@ -182,7 +182,7 @@
 
   </block>
 
-  <!-- 普通用户视图 (保持不变，还是用原来的 swiper orders) -->
+  <!-- 普通用户视图：默认先显示用户视图；如果最终判定为管理员，再切换到管理员视图 -->
   <block wx:if="{{!isAdmin}}">
     <!-- 情况 A: 有订单，显示滑动列表 -->
     <swiper 
@@ -428,8 +428,8 @@
                 已发货 {{item.trackingId}}
               </view>
               
-              <!-- 看教程 (蓝色) -->
-              <view class="status-pill info" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'TUTORIAL') && !item.trackingId}}">
+              <!-- 看教程可修复（只看状态，不再依赖 trackingId，避免残留单号导致不显示） -->
+              <view class="status-pill info" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'TUTORIAL')}}">
                 查看教程可修复
               </view>
               
@@ -437,9 +437,21 @@
               <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 0 || item.status === 'PENDING')}}">
                 <view class="dot-p"></view>审核中
               </view>
+
+              <!-- ✅ 审核中：显示撤销按钮（仅审核中） -->
+              <view class="act-cancel-btn" wx:if="{{item.status === 0 || item.status === 'PENDING'}}" catchtap="cancelMyActivity" data-item="{{item}}">撤销</view>
             </view>
           </view>
           
+
+          <!-- ✅ 维修工单：显示管理员处理备注 -->
+          <view class="reject-reason-wrapper" wx:if="{{item.type === 'repair' && item.solveNote}}">
+            <view class="reject-reason" style="background:#F2F7FF; border-left-color:#0071E3;">
+              <text class="reason-label" style="color:#0071E3;">备注：</text>
+              <text class="reason-text">{{item.solveNote}}</text>
+            </view>
+          </view>
+
           <!-- 🔴 拒绝理由独立显示在下方，完全不影响上面的布局 -->
           <view class="reject-reason-wrapper" wx:if="{{(item.status === -1 || item.status === 'REJECTED') && item.rejectReason}}">
             <view class="reject-reason">
@@ -455,7 +467,7 @@
 
     <!-- 4. 底部服务按钮 -->
     <view class="footer-bar">
-      <view class="f-btn">预约维修服务</view>
+      <view class="f-btn" bindtap="goToRepairCenter">预约维修服务</view>
       <view class="f-btn dark">联系在线客服</view>
     </view>
   </block>

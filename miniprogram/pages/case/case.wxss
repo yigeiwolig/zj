@@ -99,6 +99,31 @@ page {
   border-color: #000;
 }
 
+/* 管理员子模式切换按钮 */
+.admin-submode-toggle {
+  display: flex;
+  gap: 10rpx;
+  margin-top: 20rpx;
+  justify-content: center;
+}
+
+.submode-btn {
+  padding: 8rpx 24rpx;
+  font-size: 24rpx;
+  border-radius: 20rpx;
+  background: #F2F2F7;
+  color: #8E8E93;
+  border: 1rpx solid #E5E5EA;
+  transition: all 0.3s;
+  font-weight: 500;
+}
+
+.submode-btn.active {
+  background: #007AFF;
+  color: #fff;
+  border-color: #007AFF;
+}
+
 .header-title {
   font-size: 36rpx;
   font-weight: 800;
@@ -390,6 +415,17 @@ page {
   transition: transform 0.3s;
 }
 
+/* 🔴 新增：抖动动画 */
+@keyframes shake {
+  0%, 100% { transform: translateX(0) scale(0.95); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-10rpx) scale(0.95); }
+  20%, 40%, 60%, 80% { transform: translateX(10rpx) scale(0.95); }
+}
+
+.ios-dialog.shake {
+  animation: shake 0.3s ease-in-out;
+}
+
 .modal-overlay.active .ios-dialog {
   transform: scale(1);
 }
@@ -402,7 +438,9 @@ page {
 .dialog-desc { font-size: 28rpx; color: #666; line-height: 1.6; margin-bottom: 40rpx; }
 .highlight { color: #007AFF; font-weight: 700; }
 
-.form-group { margin-bottom: 40rpx; }
+.form-group { 
+  margin-bottom: 40rpx; 
+}
 .form-label { display: block; font-size: 26rpx; font-weight: 600; color: #333; margin-bottom: 16rpx; }
 
 .ios-input {
@@ -425,6 +463,154 @@ page {
   font-size: 30rpx;
   color: #000;
   box-sizing: border-box;
+}
+
+/* 🔴 新增：iOS 风格自定义选择器样式（用于模拟器） */
+.custom-picker-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8rpx);
+  z-index: 10001; /* 🔴 确保在 modal-overlay (2000) 之上 */
+  display: flex;
+  align-items: flex-end;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.custom-picker-content {
+  width: 100%;
+  background: #F2F2F7;
+  border-radius: 40rpx 40rpx 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 -8rpx 32rpx rgba(0, 0, 0, 0.1);
+}
+
+.picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 32rpx;
+  background: #F2F2F7;
+  border-bottom: 1rpx solid rgba(0, 0, 0, 0.05);
+  position: relative;
+}
+
+.picker-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 1rpx;
+  background: linear-gradient(to right, transparent, rgba(0, 0, 0, 0.1), transparent);
+}
+
+.picker-cancel,
+.picker-confirm {
+  font-size: 34rpx;
+  color: #007AFF;
+  padding: 12rpx 24rpx;
+  font-weight: 500;
+  border-radius: 12rpx;
+  transition: background 0.2s;
+}
+
+.picker-cancel:active,
+.picker-confirm:active {
+  background: rgba(0, 122, 255, 0.1);
+}
+
+.picker-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #000;
+  letter-spacing: -0.5rpx;
+}
+
+.picker-view {
+  height: 360rpx;
+  width: 100%;
+  background: #fff;
+  position: relative;
+}
+
+/* 顶部和底部渐变遮罩 */
+.picker-view::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 120rpx;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
+  pointer-events: none;
+  z-index: 2;
+}
+
+.picker-view::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 120rpx;
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0));
+  pointer-events: none;
+  z-index: 2;
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 72rpx;
+  font-size: 34rpx;
+  color: #000;
+  font-weight: 400;
+  transition: all 0.2s;
+  position: relative;
+}
+
+/* 选中项指示器 - 使用额外的元素 */
+.custom-picker-content::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 72rpx;
+  transform: translateY(-50%);
+  margin-top: 120rpx; /* 调整位置，避开 header */
+  background: rgba(0, 122, 255, 0.06);
+  border-top: 1rpx solid rgba(0, 122, 255, 0.2);
+  border-bottom: 1rpx solid rgba(0, 122, 255, 0.2);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .dialog-btn {
@@ -859,7 +1045,7 @@ page {
   top: 0; left: 0;
   width: 100vw; height: 100vh;
   background: #000;
-  z-index: 9999;
+  z-index: 10001; /* 🔴 修复：确保在 header (10000) 之上 */
 }
 .fullscreen-video { width: 100%; height: 100%; }
 
@@ -875,6 +1061,18 @@ page {
   z-index: 2000;
   white-space: nowrap;
 }
+
+/* 🔴 新增：视频保护层（用于加密防护） */
+.video-protection-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: transparent;
+  pointer-events: none; /* 不阻止视频播放，但可以防止某些操作 */
+  z-index: 1999;
+}
 .wm-text {
   font-size: 60rpx;
   font-weight: 900;
@@ -885,16 +1083,18 @@ page {
 /* 关闭按钮 & 底部信息 */
 .close-video-btn {
   position: absolute;
-  top: 100rpx;
+  top: 80rpx; /* 🔴 修复：下移，避免太高 */
   left: 30rpx;
   width: 70rpx;
   height: 70rpx;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0,0,0,0.6);
   border-radius: 50%;
   color: #fff;
   text-align: center;
-  line-height: 65rpx;
+  line-height: 70rpx;
   font-size: 50rpx;
+  z-index: 10002; /* 🔴 修复：确保在最上层 */
+  backdrop-filter: blur(10rpx);
 }
 .video-bottom-info {
   position: absolute;
@@ -1026,7 +1226,7 @@ page {
   line-height: 1;
   font-weight: 300;
   padding: 10rpx; /* 增加一点点击区域 */
-  z-index: 10;
+  z-index: 1; /* 🔴 修复：降低 z-index，避免遮挡 picker */
 }
 
 /* =========================================================================

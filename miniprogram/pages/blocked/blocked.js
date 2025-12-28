@@ -47,6 +47,43 @@ Page({
     // 🔴 修改：允许截图封禁也调用云函数，以便响应管理员在后台的解封操作
     // 管理员可以在后台将 login_logs 中的 isBanned 改为 false 来解封
     
+    // 🔴 关键修复：如果是截图封禁，先直接检查云端状态，不依赖云函数返回
+    const isScreenshotBanned = wx.getStorageSync('is_screenshot_banned');
+    if (isScreenshotBanned && this.data.type === 'screenshot') {
+      // 直接查询 login_logs，确认云端状态
+      wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
+        const openid = loginRes.result.openid;
+        const db = wx.cloud.database();
+        
+        db.collection('login_logs')
+          .where({ _openid: openid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get()
+          .then(res => {
+            if (res.data.length > 0 && res.data[0].isBanned === true) {
+              // 云端确认仍然是封禁状态，继续等待
+              console.log('🔒 [截图封禁] 云端确认仍为封禁状态，继续等待管理员解封');
+              return;
+            } else if (res.data.length > 0 && res.data[0].isBanned === false) {
+              // 管理员已在后台解封，清除标记并放行
+              console.log('✅ [截图封禁] 管理员已解封，清除封禁标记');
+              this.stopAutoCheck();
+              wx.removeStorageSync('is_user_banned');
+              wx.removeStorageSync('is_screenshot_banned');
+              wx.showToast({ title: '已解封', icon: 'success' });
+              setTimeout(() => {
+                wx.reLaunch({ url: '/pages/index/index' });
+              }, 1500);
+            }
+          })
+          .catch(err => {
+            console.error('❌ [截图封禁] 查询 login_logs 失败:', err);
+          });
+      });
+      return; // 截图封禁不调用云函数，直接返回
+    }
+    
     wx.cloud.callFunction({
       name: 'checkUnlockStatus' // 调用刚才新建的云函数
     }).then(res => {
@@ -57,6 +94,13 @@ Page({
 
       // --- 指令 A: PASS (自动录入，直接放行) ---
       if (action === 'PASS') {
+        // 🔴 关键修复：即使是 PASS，也要检查是否是截图封禁
+        const isScreenshotBanned = wx.getStorageSync('is_screenshot_banned');
+        if (isScreenshotBanned && this.data.type === 'screenshot') {
+          console.log('🔒 [截图封禁] 检测到截图封禁，不允许通过 PASS 自动解封');
+          return;
+        }
+        
         this.stopAutoCheck();
         const nickname = result.nickname || '';
         
@@ -79,6 +123,15 @@ Page({
       
       // --- 指令 B: RETRY (允许重试) ---
       else if (action === 'RETRY') {
+        // 🔴 关键修复：如果是截图封禁，不允许通过 RETRY 自动解封
+        // 截图封禁必须由管理员在后台明确解封（将 isBanned 改为 false）
+        const isScreenshotBanned = wx.getStorageSync('is_screenshot_banned');
+        if (isScreenshotBanned && this.data.type === 'screenshot') {
+          console.log('🔒 [截图封禁] 检测到截图封禁，不允许通过 RETRY 自动解封，继续等待管理员解封');
+          // 继续等待，不执行解封逻辑
+          return;
+        }
+        
         this.stopAutoCheck();
         wx.showToast({ title: '请重新验证', icon: 'none' });
 

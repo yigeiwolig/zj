@@ -59,7 +59,7 @@ page {
   padding-top: calc(env(safe-area-inset-top) + 88rpx);
   padding-left: 40rpx;
   padding-right: 40rpx;
-  padding-bottom: 20rpx;
+  padding-bottom: 0rpx; /* 去掉底部间距 */
   background-color: #F2F2F7;
   position: sticky;
   top: 0;
@@ -67,6 +67,7 @@ page {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  min-height: 100rpx; /* 进一步减少导航栏高度，去掉空白 */
 }
 
 /* 统一返回按钮样式 - 与 azjc 页面一致 */
@@ -104,15 +105,20 @@ page {
 }
 
 .header-title-row {
+  position: absolute;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) + 88rpx + 30rpx); /* 往下移，靠近导航栏底部 */
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  width: 100%;
+  pointer-events: none; /* 让点击事件穿透，避免挡住其他元素 */
 }
 
 .large-title {
-  font-size: 60rpx;
+  font-size: 38rpx;
   font-weight: 800;
   color: #1D1D1F;
   text-align: center;
@@ -226,7 +232,7 @@ page {
 }
 
 .section-title {
-  padding: 40rpx 40rpx 20rpx 40rpx;
+  padding: 0rpx 40rpx 20rpx 40rpx; /* 去掉顶部间距，紧贴标题 */
   font-size: 24rpx;
   font-weight: 700;
   color: #86868B;
@@ -237,7 +243,7 @@ page {
   display: flex;
   justify-content: space-between;
   padding: 0 40rpx;
-  margin-bottom: 20rpx;
+  margin-bottom: 60rpx; /* 增大卡片组之间的间距 */
 }
 
 /* === 卡片核心样式修复 === */

@@ -2,7 +2,7 @@
 <view class="brand-bg-watermark">MT-摩改社</view>
 
 <!-- 顶部导航 -->
-<view class="header">
+<view class="header" wx:if="{{!showVideoPlayer}}">
   <view class="back-icon" catchtap="goBack">
     <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
   </view>
@@ -17,6 +17,23 @@
         class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
         catchtap="toggleAdminMode">
         {{isAdmin ? 'EXIT' : 'EDIT'}}
+      </view>
+      <!-- 管理员模式下的子模式切换 -->
+      <view 
+        wx:if="{{isAdmin}}" 
+        class="admin-submode-toggle">
+        <view 
+          class="submode-btn {{adminSubMode === 'edit' ? 'active' : ''}}" 
+          catchtap="switchAdminSubMode" 
+          data-mode="edit">
+          视频编辑
+        </view>
+        <view 
+          class="submode-btn {{adminSubMode === 'manage' ? 'active' : ''}}" 
+          catchtap="switchAdminSubMode" 
+          data-mode="manage">
+          管理现有视频
+        </view>
       </view>
     </view>
   </view>
@@ -66,7 +83,7 @@
 </view>
 
 <!-- 管理员待审核区域 (竖向大卡片版) -->
-<view class="pending-section" wx:if="{{isAdmin && pendingList.length > 0}}">
+<view class="pending-section" wx:if="{{isAdmin && adminSubMode === 'edit' && pendingList.length > 0}}">
   <view class="section-header">
     <text>待处理素材 ({{pendingList.length}})</text>
     <text style="font-size:22rpx; font-weight:400; color:#666; margin-left:20rpx;">需下载处理后重新上传</text>
@@ -108,7 +125,7 @@
             <view class="act-btn-lg pass" bindtap="markAsProcessed" data-id="{{item._id}}">已采纳</view>
             
             <!-- 下载 (必须保留，你要打马赛克) -->
-            <view class="act-btn-lg download" bindtap="downloadPending" data-fileid="{{item.videoFileID}}">⬇ 下载</view>
+            <view class="act-btn-lg download" bindtap="downloadPending" data-fileid="{{item.videoFileID}}" data-id="{{item._id}}">⬇ 下载</view>
           </view>
 
         </view>
@@ -144,10 +161,18 @@
           <view class="card-watermark-overlay">MT</view>
           
           <!-- 🔴 修改：删除了 class="play-icon-overlay" 那个播放按钮 -->
-          <!-- 只保留编辑图标（管理员用） -->
-          <view class="edit-icon-overlay" wx:if="{{isAdminUnlocked}}">🔧</view>
+          <!-- 编辑图标（管理员用，两种模式都显示） -->
+          <view 
+            wx:if="{{isAdmin}}" 
+            class="edit-icon-overlay" 
+            catchtap="onEditIconTap" 
+            data-id="{{item._id}}"
+            data-stop-propagation="true">
+            🔧
+          </view>
 
-          <view wx:if="{{isAdminUnlocked}}" class="delete-btn" catchtap="deleteCase" data-id="{{item._id}}">
+          <!-- 删除按钮（仅在管理现有视频模式下显示） -->
+          <view wx:if="{{isAdmin && adminSubMode === 'manage'}}" class="delete-btn" catchtap="deleteCase" data-id="{{item._id}}">
             <view class="delete-x">×</view>
           </view>
         </view>
@@ -164,8 +189,8 @@
   </view>
 </scroll-view>
 
-<!-- 底部发布按钮 (通用：录制或上传) -->
-<view class="fab-center">
+<!-- 底部发布按钮 (通用：录制或上传，管理员编辑模式下显示) -->
+<view class="fab-center" wx:if="{{!isAdmin || adminSubMode === 'edit'}}">
   <button class="publish-btn" bindtap="handleFabTap">
     <!-- 纯 CSS 绘制的加号图标 -->
     <view class="icon-plus"></view>
@@ -186,7 +211,7 @@
 
 <!-- 6. 用户表单 -->
 <view class="modal-overlay active" wx:if="{{showForm}}">
-  <view class="ios-dialog left-align">
+  <view class="ios-dialog left-align {{formShake ? 'shake' : ''}}">
     
     <!-- 🆕 新增：左上角关闭按钮 -->
     <view class="dialog-close-x" bindtap="closeForm">×</view>
@@ -198,21 +223,97 @@
     </view>
     <view class="form-group">
       <text class="form-label">车型分类</text>
-      <picker bindchange="bindCategoryChange" value="{{categoryIndex}}" range="{{categoryArray}}"><view class="ios-select">{{categoryIndex!==null?categoryArray[categoryIndex]:'请选择'}}</view></picker>
+      <!-- 真机：使用原生 picker -->
+      <picker wx:if="{{!useCustomPicker}}" bindchange="bindCategoryChange" value="{{categoryIndex !== null ? categoryIndex : 0}}" range="{{categoryArray}}" style="width: 100%;">
+        <view class="ios-select">{{categoryIndex!==null?categoryArray[categoryIndex]:'请选择'}}</view>
+      </picker>
+      <!-- 模拟器：使用自定义选择器 -->
+      <view wx:else>
+        <view class="ios-select" bindtap="showCategoryPicker">
+          {{categoryIndex!==null?categoryArray[categoryIndex]:'请选择'}}
+        </view>
+        <view class="custom-picker-modal" wx:if="{{showCategoryPickerModal}}" catchtap="closeCategoryPicker">
+          <view class="custom-picker-content" catchtap="preventBubble">
+            <view class="picker-header">
+              <text class="picker-cancel" bindtap="closeCategoryPicker">取消</text>
+              <text class="picker-title">选择车型分类</text>
+              <text class="picker-confirm" bindtap="confirmCategoryPicker">确定</text>
+            </view>
+            <picker-view class="picker-view" value="{{categoryPickerValue}}" bindchange="onCategoryPickerChange">
+              <picker-view-column>
+                <view wx:for="{{categoryArray}}" wx:key="index" class="picker-item">{{item}}</view>
+              </picker-view-column>
+            </picker-view>
+          </view>
+        </view>
+      </view>
     </view>
     <view class="form-group">
       <text class="form-label">产品型号</text>
-      <picker bindchange="bindPickerChange" value="{{modelIndex}}" range="{{modelArray}}"><view class="ios-select">{{modelIndex!==null?modelArray[modelIndex]:'请选择'}}</view></picker>
+      <!-- 真机：使用原生 picker -->
+      <picker wx:if="{{!useCustomPicker}}" bindchange="bindPickerChange" value="{{modelIndex !== null ? modelIndex : 0}}" range="{{modelArray}}" style="width: 100%;">
+        <view class="ios-select">{{modelIndex!==null?modelArray[modelIndex]:'请选择'}}</view>
+      </picker>
+      <!-- 模拟器：使用自定义选择器 -->
+      <view wx:else>
+        <view class="ios-select" bindtap="showModelPicker">
+          {{modelIndex!==null?modelArray[modelIndex]:'请选择'}}
+        </view>
+        <view class="custom-picker-modal" wx:if="{{showModelPickerModal}}" catchtap="closeModelPicker">
+          <view class="custom-picker-content" catchtap="preventBubble">
+            <view class="picker-header">
+              <text class="picker-cancel" bindtap="closeModelPicker">取消</text>
+              <text class="picker-title">选择产品型号</text>
+              <text class="picker-confirm" bindtap="confirmModelPicker">确定</text>
+            </view>
+            <picker-view class="picker-view" value="{{modelPickerValue}}" bindchange="onModelPickerChange">
+              <picker-view-column>
+                <view wx:for="{{modelArray}}" wx:key="index" class="picker-item">{{item}}</view>
+              </picker-view-column>
+            </picker-view>
+          </view>
+        </view>
+      </view>
     </view>
     <view class="form-group">
       <text class="form-label">关联设备 (审核通过赠送延保)</text>
-      <picker bindchange="bindSnChange" value="{{selectedSnIndex}}" range="{{myDevices}}" range-key="sn">
+      <!-- 真机：使用原生 picker -->
+      <picker wx:if="{{!useCustomPicker}}" bindchange="bindSnChange" value="{{selectedSnIndex !== null ? selectedSnIndex : 0}}" range="{{myDevices}}" range-key="displaySn" style="width: 100%;">
         <view class="ios-select">
-          {{selectedSnIndex !== null ? ('MT'+myDevices[selectedSnIndex].sn) : '请选择设备'}}
+          {{selectedSnIndex !== null ? myDevices[selectedSnIndex].displaySn : '请选择设备'}}
         </view>
       </picker>
+      <!-- 模拟器：使用自定义选择器 -->
+      <view wx:else>
+        <view class="ios-select" bindtap="showDevicePicker">
+          {{selectedSnIndex !== null ? myDevices[selectedSnIndex].displaySn : '请选择设备'}}
+        </view>
+        <view class="custom-picker-modal" wx:if="{{showDevicePickerModal}}" catchtap="closeDevicePicker">
+          <view class="custom-picker-content" catchtap="preventBubble">
+            <view class="picker-header">
+              <text class="picker-cancel" bindtap="closeDevicePicker">取消</text>
+              <text class="picker-title">选择关联设备</text>
+              <text class="picker-confirm" bindtap="confirmDevicePicker">确定</text>
+            </view>
+            <picker-view class="picker-view" value="{{devicePickerValue}}" bindchange="onDevicePickerChange">
+              <picker-view-column>
+                <view wx:for="{{myDevices}}" wx:key="index" class="picker-item">{{item.displaySn}}</view>
+              </picker-view-column>
+            </picker-view>
+          </view>
+        </view>
+      </view>
     </view>
     <button class="dialog-btn" bindtap="submitForm">{{isSubmitting ? '提交中...' : '提交'}}</button>
+  </view>
+</view>
+
+<!-- 🔴 自定义提示框 -->
+<view class="modal-overlay active" wx:if="{{showFormError}}" bindtap="closeFormError">
+  <view class="ios-dialog" catchtap="preventBubble">
+    <view class="dialog-title center">提示</view>
+    <view class="dialog-desc">{{formErrorMsg}}</view>
+    <button class="dialog-btn" bindtap="closeFormError">我知道了</button>
   </view>
 </view>
 
@@ -248,8 +349,60 @@
     </view>
 
     <view class="form-group"><text class="form-label">车型名称</text><input class="ios-input" placeholder="例如：杜卡迪 V4" bindinput="onInputVehicle" value="{{vehicleName}}" /></view>
-    <view class="form-group"><text class="form-label">车型分类</text><picker bindchange="bindCategoryChange" value="{{categoryIndex}}" range="{{categoryArray}}"><view class="ios-select">{{categoryIndex!==null?categoryArray[categoryIndex]:'分类'}}</view></picker></view>
-    <view class="form-group"><text class="form-label">产品型号</text><picker bindchange="bindPickerChange" value="{{modelIndex}}" range="{{modelArray}}"><view class="ios-select">{{modelIndex!==null?modelArray[modelIndex]:'型号'}}</view></picker></view>
+    <view class="form-group">
+      <text class="form-label">车型分类</text>
+      <!-- 真机：使用原生 picker -->
+      <picker wx:if="{{!useCustomPicker}}" bindchange="bindCategoryChange" value="{{categoryIndex !== null ? categoryIndex : 0}}" range="{{categoryArray}}" style="width: 100%;">
+        <view class="ios-select">{{categoryIndex!==null?categoryArray[categoryIndex]:'请选择'}}</view>
+      </picker>
+      <!-- 模拟器：使用自定义选择器 -->
+      <view wx:else>
+        <view class="ios-select" bindtap="showCategoryPicker">
+          {{categoryIndex!==null?categoryArray[categoryIndex]:'请选择'}}
+        </view>
+        <view class="custom-picker-modal" wx:if="{{showCategoryPickerModal}}" catchtap="closeCategoryPicker">
+          <view class="custom-picker-content" catchtap="preventBubble">
+            <view class="picker-header">
+              <text class="picker-cancel" bindtap="closeCategoryPicker">取消</text>
+              <text class="picker-title">选择车型分类</text>
+              <text class="picker-confirm" bindtap="confirmCategoryPicker">确定</text>
+            </view>
+            <picker-view class="picker-view" value="{{categoryPickerValue}}" bindchange="onCategoryPickerChange">
+              <picker-view-column>
+                <view wx:for="{{categoryArray}}" wx:key="index" class="picker-item">{{item}}</view>
+              </picker-view-column>
+            </picker-view>
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="form-group">
+      <text class="form-label">产品型号</text>
+      <!-- 真机：使用原生 picker -->
+      <picker wx:if="{{!useCustomPicker}}" bindchange="bindPickerChange" value="{{modelIndex !== null ? modelIndex : 0}}" range="{{modelArray}}" style="width: 100%;">
+        <view class="ios-select">{{modelIndex!==null?modelArray[modelIndex]:'请选择'}}</view>
+      </picker>
+      <!-- 模拟器：使用自定义选择器 -->
+      <view wx:else>
+        <view class="ios-select" bindtap="showModelPicker">
+          {{modelIndex!==null?modelArray[modelIndex]:'请选择'}}
+        </view>
+        <view class="custom-picker-modal" wx:if="{{showModelPickerModal}}" catchtap="closeModelPicker">
+          <view class="custom-picker-content" catchtap="preventBubble">
+            <view class="picker-header">
+              <text class="picker-cancel" bindtap="closeModelPicker">取消</text>
+              <text class="picker-title">选择产品型号</text>
+              <text class="picker-confirm" bindtap="confirmModelPicker">确定</text>
+            </view>
+            <picker-view class="picker-view" value="{{modelPickerValue}}" bindchange="onModelPickerChange">
+              <picker-view-column>
+                <view wx:for="{{modelArray}}" wx:key="index" class="picker-item">{{item}}</view>
+              </picker-view-column>
+            </picker-view>
+          </view>
+        </view>
+      </view>
+    </view>
     
     <view style="display: flex; gap: 20rpx;">
       <button class="dialog-btn" style="background:#eee; color:#000" bindtap="closeAdminForm">取消</button>
@@ -263,11 +416,11 @@
   <view class="ios-dialog" catchtap="preventBubble">
     <view class="dialog-title center">选择上传方式</view>
     <view class="upload-options">
-      <view class="option-item" bindtap="chooseVideoFromAlbum">
+      <view class="option-item" bindtap="chooseVideoFromAlbum" data-action="album">
         <view class="option-icon">📷</view>
         <view class="option-text">从相册选择</view>
       </view>
-      <view class="option-item" bindtap="chooseRecord">
+      <view class="option-item" bindtap="chooseRecord" data-action="record">
         <view class="option-icon">🎥</view>
         <view class="option-text">录制视频</view>
       </view>
@@ -276,18 +429,42 @@
   </view>
 </view>
 
-<!-- 10. 全屏播放器 -->
-<view class="fullscreen-player-container" wx:if="{{showVideoPlayer}}">
+<!-- 10. 绑定设备提示弹窗 -->
+<view class="modal-overlay active" wx:if="{{showBindDeviceTip}}" bindtap="closeBindDeviceTip">
+  <view class="ios-dialog" catchtap="preventBubble">
+    <view class="dialog-title center">需要绑定设备</view>
+    <view class="dialog-desc">您尚未绑定任何 MT 设备，无法参与延保活动。请先去"我的"页面绑定设备。</view>
+    <view style="display: flex; gap: 20rpx; margin-top: 40rpx;">
+      <button class="dialog-btn" style="background:#eee; color:#000; flex: 1;" bindtap="closeBindDeviceTip">取消</button>
+      <button class="dialog-btn" style="flex: 1;" bindtap="goToBindDevice">去绑定</button>
+    </view>
+  </view>
+</view>
+
+<!-- 11. 全屏播放器 -->
+<view 
+  class="fullscreen-player-container" 
+  wx:if="{{showVideoPlayer}}"
+  bindtouchstart="onVideoTouchStart"
+  bindtouchmove="onVideoTouchMove"
+  bindtouchend="onVideoTouchEnd"
+>
   <video 
     src="{{currentVideo.videoUrl}}" 
     class="fullscreen-video" 
     autoplay="{{true}}" 
     controls="{{true}}"
     show-fullscreen-btn="{{false}}"
+    enable-play-gesture="{{false}}"
     object-fit="contain" 
     bindended="closeVideoPlayer"
+    show-center-play-btn="{{false}}"
+    enable-metadata="{{false}}"
+    show-mute-btn="{{false}}"
   >
+    <!-- 🔴 视频加密：使用多层 cover-view 覆盖，防止直接访问 -->
     <cover-view class="auto-watermark"><cover-view class="wm-text">MT-摩改社</cover-view></cover-view>
+    <cover-view class="video-protection-layer"></cover-view>
     <cover-view class="close-video-btn" bindtap="closeVideoPlayer">×</cover-view>
     <cover-view class="video-bottom-info">
       <cover-view class="v-title">{{currentVideo.title}}</cover-view>
@@ -299,7 +476,7 @@
   </video>
 </view>
 
-<!-- 11. 录制全屏页 -->
+<!-- 12. 录制全屏页 -->
 <view class="camera-full-screen {{cameraAnimating ? 'animating' : 'animated'}}" wx:if="{{showCamera}}" catchtouchmove="preventScroll">
   <camera device-position="back" flash="off" style="width: 100%; height: 100%;">
     <cover-view class="cam-overlay">

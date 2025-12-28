@@ -4,7 +4,7 @@
   <!-- 顶部导航 -->
   <view class="header">
     <view class="back-icon" catchtap="goBack">
-      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+      <text>‹</text>
     </view>
   </view>
   <view class="custom-nav-container" style="padding-top: {{statusBarHeight}}px;">
