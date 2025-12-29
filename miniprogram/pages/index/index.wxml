@@ -1,8 +1,8 @@
 <!-- 强制授权弹窗 (蓝牙/定位失败时显示) - 黑白风格 -->
 <view class="custom-modal-mask" wx:if="{{showAuthForceModal}}">
   <view class="custom-modal-box">
-    <!-- 图标：定位图标 -->
-    <image class="modal-icon-new" src="https://img.icons8.com/ios-filled/120/000000/marker.png" mode="aspectFit"></image>
+    <!-- 图标：使用 Unicode 字符，无需加载图片 -->
+    <view class="modal-icon-new">📍</view>
     
     <!-- 标题 -->
     <view class="modal-title-new">需要必要权限</view>
@@ -96,8 +96,8 @@
 <!-- 【新增】强制授权弹窗 - 黑白风格 -->
 <view class="custom-modal-mask" wx:if="{{showAuthModal}}">
   <view class="custom-modal-box">
-    <!-- 图标 -->
-    <image class="modal-icon-new" src="https://img.icons8.com/ios-filled/120/000000/location--v1.png" mode="aspectFit"></image>
+    <!-- 图标：使用 Unicode 字符，无需加载图片 -->
+    <view class="modal-icon-new">📍</view>
     
     <!-- 标题 -->
     <view class="modal-title-new">需要位置权限</view>
@@ -118,8 +118,10 @@
 <view class="custom-modal-mask" wx:if="{{showCustomErrorModal}}">
   <view class="custom-modal-box">
     
-    <!-- 1. 图标：黑色实心感叹号盾牌 -->
-    <image class="modal-icon-new" src="https://img.icons8.com/ios-filled/120/000000/box-important--v1.png" mode="aspectFit"></image>
+    <!-- 1. 图标：使用 CSS 绘制的圆形图标，无需加载图片 -->
+    <view class="modal-icon-new error-icon">
+      <view class="error-circle">!</view>
+    </view>
     
     <!-- 2. 标题 -->
     <view class="modal-title-new">验证未通过</view>
@@ -141,8 +143,8 @@
 <view class="custom-modal-mask" wx:if="{{showCustomSuccessModal}}">
   <view class="custom-modal-box success-modal">
     
-    <!-- 1. 图标：黑色勾选图标 -->
-    <image class="modal-icon-new success-icon" src="https://img.icons8.com/ios-filled/120/000000/checkmark.png" mode="aspectFit"></image>
+    <!-- 1. 图标：使用 Unicode 字符，无需加载图片 -->
+    <view class="modal-icon-new success-icon">✓</view>
     
     <!-- 2. 标题 -->
     <view class="modal-title-new">{{successModalTitle}}</view>
@@ -151,5 +153,23 @@
     <view class="modal-content-new" wx:if="{{successModalContent}}">
       <view class="content-main">{{successModalContent}}</view>
     </view>
+  </view>
+</view>
+
+<!-- 【新增】自定义"内容已复制"弹窗 - 白色，大一点 -->
+<view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}">
+  <view class="custom-modal-box copy-success-modal">
+    <!-- 图标：使用 Unicode 字符 -->
+    <view class="modal-icon-new success-icon">✓</view>
+    <!-- 标题 -->
+    <view class="modal-title-new">内容已复制</view>
+  </view>
+</view>
+
+<!-- 自定义加载中动画（使用 my 页面的样式） -->
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
+  <view class="loader">
+    <text class="loader-label">{{loadingText}}</text>
+    <view class="loading-bar"></view>
   </view>
 </view>

@@ -25,6 +25,8 @@ Page({
     dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
     // 输入弹窗（用于需要输入的场景）
     inputDialog: { show: false, title: '', placeholder: '', value: '', callback: null },
+    // 【新增】控制"内容已复制"弹窗
+    showCopySuccessModal: false,
     
     // 图片路径
     imgReceipt: '', // 购买截图
@@ -719,9 +721,26 @@ Page({
   copyData(e) {
     const text = e.currentTarget.dataset.text;
     if(!text) return;
+    
+    // 🔴 确保拦截微信官方的 toast（如果存在）
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
+    
     wx.setClipboardData({
       data: text,
-      success: () => this.showMyDialog({ title: '提示', content: '已复制' })
+      success: () => {
+        // 🔴 再次确保关闭微信官方 toast（如果被触发）
+        if (wx.__mt_oldHideLoading) {
+          wx.__mt_oldHideLoading();
+        }
+        // 显示自定义"内容已复制"弹窗（白色，大一点）
+        this.setData({ showCopySuccessModal: true });
+        // 2秒后自动关闭
+        setTimeout(() => {
+          this.setData({ showCopySuccessModal: false });
+        }, 2000);
+      }
     });
   },
 

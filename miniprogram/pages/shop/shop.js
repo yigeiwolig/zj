@@ -142,6 +142,27 @@ Page({
 
   onLoad(options) {
     console.log('[shop.js] onLoad 开始', options);
+    
+    // 🔴 物理防线：确保录屏、截屏出来的全是黑屏 (这是最稳的)
+    if (wx.setVisualEffectOnCapture) {
+      wx.setVisualEffectOnCapture({
+        visualEffect: 'hidden',
+        success: () => console.log('🛡️ 硬件级防偷拍锁定')
+      });
+    }
+
+    // 🔴 截屏监听：安卓和iOS通常都很灵敏
+    wx.onUserCaptureScreen(() => {
+      this.handleIntercept('screenshot');
+    });
+
+    // 🔴 录屏监听：尽力而为，抓到信号就跳
+    if (wx.onUserScreenRecord) {
+      wx.onUserScreenRecord(() => {
+        this.handleIntercept('record');
+      });
+    }
+
     // 使用 app.js 中已初始化的云开发（不需要重复初始化）
     if (wx.cloud) {
       // 直接获取数据库实例（app.js 中已初始化）
@@ -166,9 +187,19 @@ Page({
     this.loadDataFromCloud();
     this.calcTotal();
   },
-
-  // 1. 页面每次显示时，读取本地缓存的购物车
+  
   onShow() {
+    // 针对进入页面前就在录屏的情况，尝试抓一次
+    if (wx.getScreenRecordingState) {
+      wx.getScreenRecordingState({
+        success: (res) => {
+          if (res.state === 'on' || res.recording) {
+            this.handleIntercept('record');
+          }
+        }
+      });
+    }
+    
     // 读取本地存储的购物车数据
     const cachedCart = wx.getStorageSync('my_cart') || [];
     
@@ -183,6 +214,7 @@ Page({
       });
     }
   },
+
   
   onReady() {
     // 页面渲染完成后执行
@@ -2915,5 +2947,20 @@ Page({
   // ========================================================
   startCompare() {
     this.openSpecsModal();
+  },
+
+  // 🔴 截图和录屏拦截处理
+  handleIntercept(type) {
+    // 1. 标记封禁
+    wx.setStorageSync('is_user_banned', true);
+
+    // 2. 强制跳转拦截页
+    wx.reLaunch({
+      url: `/pages/blocked/blocked?type=${type}`,
+      fail: () => {
+        // 路径万一错了，直接退出
+        wx.exitMiniProgram();
+      }
+    });
   },
 })

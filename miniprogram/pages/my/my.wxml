@@ -642,4 +642,14 @@
     </view>
   </view>
 
+  <!-- 【新增】自定义"内容已复制"弹窗 - 白色，大一点 -->
+  <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}">
+    <view class="custom-modal-box copy-success-modal">
+      <!-- 图标：使用 Unicode 字符 -->
+      <view class="modal-icon-new success-icon">✓</view>
+      <!-- 标题 -->
+      <view class="modal-title-new">内容已复制</view>
+    </view>
+  </view>
+
 </view>

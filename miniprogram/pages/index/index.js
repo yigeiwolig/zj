@@ -28,15 +28,30 @@ Page({
     successModalTitle: '',
     successModalContent: '',
     
+    // 【新增】控制"内容已复制"弹窗
+    showCopySuccessModal: false,
+    
     // Loading 状态（合并重复定义）
     isLoading: false,
     loadingText: '加载中...',
+    // 自定义加载中动画（使用 my 页面的样式）
+    showLoadingAnimation: false,
     
     // 自定义弹窗
     dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' }
   },
 
   onLoad(options) {
+    // 🔴 关键：确保页面加载时隐藏全局 UI 的 loading（如果存在）
+    if (app && app.hideLoading) {
+      app.hideLoading();
+    }
+    
+    // 🔴 强制拦截微信官方 loading：确保拦截生效
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading(); // 调用原始 hideLoading 确保关闭任何官方弹窗
+    }
+    
     // 1. 先检查缓存（不立即跳转，等异步检查完成）
     const hasAuth = wx.getStorageSync('has_permanent_auth');
     if (hasAuth) {
@@ -52,6 +67,10 @@ Page({
 
   // === 全局封号检查 ===
   checkGlobalBanStatus() {
+    // 🔴 确保在云函数调用前关闭任何官方 loading
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
     // 添加超时和错误处理，避免卡死
     wx.cloud.callFunction({ 
       name: 'login',
@@ -113,6 +132,11 @@ Page({
 
     this.setData({ isLoading: true });
     this.showMyLoading('验证身份...');
+    
+    // 🔴 确保在云函数调用前关闭任何官方 loading
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
 
     wx.cloud.callFunction({
       name: 'verifyNickname',
@@ -127,6 +151,10 @@ Page({
         // --- 成功 ---
         // 🔴 关键修复：验证成功后，需要再次检查全局封禁状态（只检查 login_logs）
         // 如果数据库里还是封禁状态，不应该清除黑名单标记
+        // 🔴 确保在云函数调用前关闭任何官方 loading
+        if (wx.__mt_oldHideLoading) {
+          wx.__mt_oldHideLoading();
+        }
         wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
           const openid = loginRes.result.openid;
           
@@ -149,14 +177,7 @@ Page({
                 return;
               }
               
-              // 🔴 关键修复：如果是截图封禁，不允许通过验证解封
-              const isScreenshotBanned = wx.getStorageSync('is_screenshot_banned');
-              if (isScreenshotBanned) {
-                wx.setStorageSync('is_user_banned', true);
-                wx.reLaunch({ url: '/pages/blocked/blocked?type=screenshot' });
-                return;
-              }
-              
+              // 🔴 统一封禁逻辑：所有封禁都通过 isBanned 字段控制
               // 只有确认全局没有封禁时，才清除标记并放行
               wx.setStorageSync('has_permanent_auth', true);
               wx.setStorageSync('user_nickname', name);
@@ -175,6 +196,9 @@ Page({
         });
       } else {
         // --- 失败 ---
+        // 🔴 关键修复：验证失败时也要隐藏加载弹窗
+        this.hideMyLoading();
+        
         if (result.isBlocked === true || result.type === 'banned') {
           wx.setStorageSync('is_user_banned', true);
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
@@ -194,11 +218,26 @@ Page({
 
   // 【新增】处理自定义弹窗的按钮点击 (复制微信号)
   handleCopyFromModal() {
+    // 🔴 确保拦截微信官方的 toast（如果存在）
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
+    
     wx.setClipboardData({
       data: 'MT-mogaishe',
       success: () => {
-        // 复制成功后关闭弹窗
+        // 复制成功后关闭错误弹窗
         this.setData({ showCustomErrorModal: false });
+        // 🔴 再次确保关闭微信官方 toast（如果被触发）
+        if (wx.__mt_oldHideLoading) {
+          wx.__mt_oldHideLoading();
+        }
+        // 显示自定义"内容已复制"弹窗（白色，大一点）
+        this.setData({ showCopySuccessModal: true });
+        // 2秒后自动关闭
+        setTimeout(() => {
+          this.setData({ showCopySuccessModal: false });
+        }, 2000);
       }
     });
   },
@@ -376,6 +415,11 @@ Page({
   appendDataAndJump(collectionName, locData, targetPage) {
     const nickName = wx.getStorageSync('user_nickname') || '未知用户';
     
+    // 🔴 确保在云函数调用前关闭任何官方 loading
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
+    
     wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
       const openid = loginRes.result.openid;
 
@@ -480,14 +524,38 @@ Page({
     if (cb) cb({ confirm: true });
   },
 
-  // 显示 Loading（统一走全局自定义动画）
+  // 显示 Loading（使用自定义动画，不使用微信官方弹窗和全局 UI）
   showMyLoading(title = '加载中...') {
-    getApp().showLoading(title);
+    // 🔴 关键：先隐藏全局 UI 的 loading（如果存在）
+    if (app && app.hideLoading) {
+      app.hideLoading();
+    }
+    // 🔴 强制关闭微信官方 loading（如果存在）
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
+    // 记录开始时间，用于确保最少显示一段时间
+    this._loadingStartTs = Date.now();
+    this.setData({ showLoadingAnimation: true, loadingText: title });
   },
 
-  // 隐藏 Loading（统一走全局自定义动画）
+  // 隐藏 Loading（使用自定义动画）
   hideMyLoading() {
-    getApp().hideLoading();
+    // 为了不遮挡页面切换：最少显示 1.5 秒（加载中显示久一点，避免一闪而过）
+    const minShowMs = 1500;
+    const start = this._loadingStartTs || 0;
+    const elapsed = start ? (Date.now() - start) : minShowMs;
+    const wait = Math.max(0, minShowMs - elapsed);
+
+    if (this._loadingHideTimer) {
+      clearTimeout(this._loadingHideTimer);
+      this._loadingHideTimer = null;
+    }
+
+    this._loadingHideTimer = setTimeout(() => {
+      this.setData({ showLoadingAnimation: false });
+      this._loadingStartTs = 0;
+    }, wait);
   },
 
   handleDeny() { 

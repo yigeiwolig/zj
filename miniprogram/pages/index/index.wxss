@@ -512,6 +512,47 @@ input, textarea { text-align: left; }
   width: 110rpx; height: 110rpx;
   margin-bottom: 40rpx;
   /* 纯黑图标，不需要透明度，强调警示 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 88rpx;
+  font-weight: 900;
+  color: #000000;
+  line-height: 1;
+  /* 立即显示，无需等待图片加载 */
+  opacity: 1;
+  animation: errorIconPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* 错误图标样式：圆形图标 */
+.error-icon {
+  animation: errorIconPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  background: #000000;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.error-icon .error-circle {
+  color: #ffffff;
+  font-size: 70rpx;
+  font-weight: 900;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes errorIconPop {
+  from {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
 }
 
 /* 4. 标题：特粗黑体 */
@@ -573,6 +614,27 @@ input, textarea { text-align: left; }
   width: 60rpx !important;
   height: 60rpx !important;
   margin-bottom: 20rpx !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 48rpx !important;
+  font-weight: 900 !important;
+  color: #000000 !important;
+  line-height: 1 !important;
+  /* 立即显示，无需等待图片加载 */
+  opacity: 1 !important;
+  animation: checkmarkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+}
+
+@keyframes checkmarkPop {
+  from {
+    transform: scale(0) rotate(-180deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
 }
 
 .success-modal .modal-title-new {
@@ -584,4 +646,107 @@ input, textarea { text-align: left; }
 .success-modal .modal-content-new {
   margin-bottom: 0 !important;
   display: none; /* 成功提示不需要内容区域 */
+}
+
+/* ================= 自定义"内容已复制"弹窗 - 白色，大一点 ================= */
+.copy-success-modal {
+  width: 400rpx !important; /* 比 success-modal 更大 */
+  padding: 60rpx 40rpx !important; /* 更大的内边距 */
+  min-height: auto;
+}
+
+.copy-success-modal .modal-icon-new {
+  width: 80rpx !important; /* 更大的图标 */
+  height: 80rpx !important;
+  margin-bottom: 30rpx !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 60rpx !important; /* 更大的字体 */
+  font-weight: 900 !important;
+  color: #000000 !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  animation: checkmarkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+}
+
+.copy-success-modal .modal-title-new {
+  font-size: 36rpx !important; /* 更大的标题字体 */
+  margin-bottom: 0 !important;
+  letter-spacing: 0 !important;
+  font-weight: 600 !important;
+}
+
+.copy-success-modal .modal-content-new {
+  margin-bottom: 0 !important;
+  display: none; /* 不需要内容区域 */
+}
+
+/* ================= 自定义加载中动画（使用 my 页面的样式） ================= */
+.loading-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loader {
+  width: 600rpx;
+  height: 260rpx;
+  border-radius: 20rpx;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  padding: 40rpx;
+  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.12);
+  box-sizing: border-box;
+}
+
+.loading-bar {
+  width: 100%;
+  height: 20rpx;
+  background: #E5E5EA;
+  border-radius: 20rpx;
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: #1c1c1e;
+  border-radius: 20rpx;
+  z-index: 1;
+  animation: loadingBar 0.6s alternate infinite ease-in-out;
+}
+
+.loader-label {
+  color: #1c1c1e;
+  font-size: 28rpx;
+  font-weight: 700;
+  animation: labelBlink 0.6s alternate infinite;
+}
+
+@keyframes labelBlink {
+  from { opacity: 0.35; }
+  to   { opacity: 1; }
+}
+
+@keyframes loadingBar {
+  0%   { left: 0%; }
+  50%  { left: 25%; }
+  100% { left: 50%; }
 }

@@ -142,10 +142,18 @@ App({
       if (!wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = wx.showLoading;
       if (!wx.__mt_oldHideLoading) wx.__mt_oldHideLoading = wx.hideLoading;
       wx.showLoading = (opt = {}) => {
+        // 🔴 关键：先调用原始 hideLoading 确保关闭任何已存在的官方弹窗
+        if (wx.__mt_oldHideLoading) {
+          wx.__mt_oldHideLoading();
+        }
         const title = (typeof opt === 'string') ? opt : (opt.title || '加载中...');
         this.showLoading(title);
       };
       wx.hideLoading = () => {
+        // 🔴 关键：调用原始 hideLoading 确保关闭官方弹窗
+        if (wx.__mt_oldHideLoading) {
+          wx.__mt_oldHideLoading();
+        }
         this.hideLoading();
       };
     } catch (e) {
