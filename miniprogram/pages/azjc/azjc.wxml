@@ -1,12 +1,12 @@
 <view class="app-container">
   <!-- 顶部导航 -->
-  <view class="header">
+  <view class="header" wx:if="{{!isVideoFullScreen}}">
     <view class="back-icon" catchtap="handleBack">
       <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
     </view>
   </view>
   <!-- 顶部标题保持固定 -->
-  <view class="fixed-nav">
+  <view class="fixed-nav" wx:if="{{!isVideoFullScreen}}">
     <view class="back-btn" bindtap="handleBack" style="display: none;">
       <text class="back-icon">‹</text>
     </view>
@@ -25,7 +25,7 @@
   <!-- 核心：舞台容器，通过 translate 控制位移 -->
   <view 
     class="stage-wrapper" 
-    style="transform: translateY(-{{stepIndex * 100}}vh);"
+    style="transform: translateY(-{{stepIndex * winHeight}}px); height: {{winHeight}}px;"
     bindtouchstart="touchStart"
     bindtouchend="touchEnd">
     
@@ -94,11 +94,23 @@
         </view>
         
         <!-- 第三级页面内部滚动，防止教程太长 -->
-        <scroll-view scroll-y class="tutorial-scroll">
+        <scroll-view 
+  id="tutorialScroll" 
+  scroll-y 
+  class="tutorial-scroll" 
+  bindscroll="onScroll" 
+  scroll-top="{{scrollTopValue}}"
+  enhanced="{{true}}"
+  fast-deceleration="{{true}}"
+  scroll-anchoring="{{true}}"
+  scroll-with-animation="{{false}}">
           <!-- 视频模式 -->
           <view class="tutorial-body" wx:if="{{mode === 'v'}}">
             <view 
               class="v-card {{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'dragging' : ''}}"
+              catchtap="doNothing"
+              catchtouchstart="videoTouchStart"
+              catchtouchend="videoTouchEnd"
               wx:for="{{filteredChapters}}" 
               wx:key="index"
               style="{{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
@@ -111,8 +123,13 @@
                 class="v-player-real" 
                 src="{{item.url}}" 
                 wx:if="{{item.url}}" 
-                controls
-                binderror="onVideoError"
+                direction="0" 
+                show-fullscreen-btn="{{true}}"
+                enable-play-gesture="{{true}}"
+                vslide-gesture="{{true}}"
+                vslide-gesture-in-fullscreen="{{true}}"
+                binderror="onVideoError" 
+                bindfullscreenchange="onVideoFullScreen"
                 data-index="{{index}}"
                 data-fileid="{{item.fileID}}"></video>
               <view class="v-player" wx:else>

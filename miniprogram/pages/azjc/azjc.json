@@ -1,5 +1,6 @@
 {
+  "usingComponents": {},
+  "navigationBarTitleText": "MT安装教学",
   "navigationStyle": "custom",
-  "usingComponents": {}
+  "pageOrientation": "portrait"
 }
-

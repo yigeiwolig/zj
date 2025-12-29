@@ -91,6 +91,10 @@ Page({
     tempCategoryIndex: null,
     tempModelIndex: null,
     tempDeviceIndex: null,
+
+    // 🆕 复用 my 页同款 Loading
+    showLoadingAnimation: false,
+    loadingText: '请稍候...'
   },
 
   onLoad() {
@@ -98,11 +102,23 @@ Page({
     this.setData({ statusBarHeight: sysInfo.statusBarHeight });
     this.ctx = wx.createCameraContext();
 
-    // 🔴 物理层拦截：截屏/录屏全黑
+    // 🔴 物理防线：确保录屏、截屏出来的全是黑屏 (这是最稳的)
     if (wx.setVisualEffectOnCapture) {
       wx.setVisualEffectOnCapture({
         visualEffect: 'hidden',
-        success: () => console.log('🛡️ 物理黑屏已开启')
+        success: () => console.log('🛡️ 硬件级防偷拍锁定')
+      });
+    }
+
+    // 🔴 截屏监听：安卓和iOS通常都很灵敏
+    wx.onUserCaptureScreen(() => {
+      this.handleIntercept('screenshot');
+    });
+
+    // 🔴 录屏监听：尽力而为，抓到信号就跳
+    if (wx.onUserScreenRecord) {
+      wx.onUserScreenRecord(() => {
+        this.handleIntercept('record');
       });
     }
 
@@ -115,33 +131,16 @@ Page({
   },
   
   onShow() {
-    // 🔴 安卓端拦截增强：每次页面显示都重新绑定
-    // 先尝试取消之前的监听，防止重复触发
-    if (wx.offUserCaptureScreen) wx.offUserCaptureScreen();
-    
-    // 重新绑定截屏监听
-    wx.onUserCaptureScreen(() => {
-      console.log('🛡️ 捕获到安卓截屏信号');
-      this.forceInterception('screenshot');
-    });
-
-    // 录屏轮询逻辑（保持不变）
-    this.securityTimer = setInterval(() => {
-      if (wx.getScreenRecordingState) {
-        wx.getScreenRecordingState({
-          success: (res) => {
-            if (res.recording || res.state === 'on') {
-              this.forceInterception('record');
-            }
+    // 针对进入页面前就在录屏的情况，尝试抓一次
+    if (wx.getScreenRecordingState) {
+      wx.getScreenRecordingState({
+        success: (res) => {
+          if (res.state === 'on' || res.recording) {
+            this.handleIntercept('record');
           }
-        });
-      }
-    }, 1000);
-  },
-
-  onHide() {
-    // 离开页面必须清理，否则会一直拦截
-    if (this.securityTimer) clearInterval(this.securityTimer);
+        }
+      });
+    }
   },
   
   // 🔴 新增：检测运行环境
@@ -162,8 +161,6 @@ Page({
   },
 
   onUnload() {
-    if (this.securityTimer) clearInterval(this.securityTimer);
-    
     // 清理定时器
     if (this.data.timer) {
       clearInterval(this.data.timer);
@@ -336,11 +333,56 @@ Page({
           };
         });
         
-        // 🔴 新增：转换云存储路径为临时 URL（用于预览）
-        this.convertVideoUrls(formattedList);
+        // 🆕 先把统计信息（通过/拒绝次数等）合并进每条记录，再转换视频 URL
+        this.enrichPendingStats(formattedList).then((listWithStats) => {
+          // 🔴 新增：转换云存储路径为临时 URL（用于预览）
+          this.convertVideoUrls(listWithStats);
+        });
       });
   },
   
+  // 🆕 为待审核列表补充统计信息：同 SN 的通过次数/拒绝次数/总投稿次数
+  // 返回 Promise<list>
+  enrichPendingStats(list) {
+    const sns = Array.from(new Set((list || []).map(i => i.sn).filter(Boolean)));
+    if (sns.length === 0) return Promise.resolve(list);
+
+    const tasks = sns.map(sn => {
+      // 通过：status = 1；拒绝：status = -1；总投稿：全部（包含审核中/通过/拒绝）
+      return Promise.all([
+        db.collection('video').where({ sn, status: 1 }).count(),
+        db.collection('video').where({ sn, status: -1 }).count(),
+        db.collection('video').where({ sn }).count(),
+      ]).then(([passRes, rejectRes, totalRes]) => {
+        return {
+          sn,
+          passCount: passRes.total || 0,
+          rejectCount: rejectRes.total || 0,
+          totalCount: totalRes.total || 0,
+        };
+      }).catch(err => {
+        console.error('❌ [enrichPendingStats] 统计失败 sn=', sn, err);
+        return { sn, passCount: 0, rejectCount: 0, totalCount: 0 };
+      });
+    });
+
+    return Promise.all(tasks).then(statArr => {
+      const statMap = {};
+      statArr.forEach(s => { statMap[s.sn] = s; });
+
+      return (list || []).map(item => {
+        const s = statMap[item.sn];
+        if (!s) return item;
+        return {
+          ...item,
+          passCount: s.passCount,
+          rejectCount: s.rejectCount,
+          totalCount: s.totalCount,
+        };
+      });
+    });
+  },
+
   // 🔴 新增：转换云存储路径为临时 URL
   convertVideoUrls(list) {
     const fileIDs = list.map(item => item.videoFileID).filter(id => id && id.startsWith('cloud://'));
@@ -354,7 +396,7 @@ Page({
     // 批量获取临时 URL
     wx.cloud.getTempFileURL({
       fileList: fileIDs,
-      success: res => {
+      success: async (res) => {
         // 创建 fileID 到 tempURL 的映射
         const urlMap = {};
         res.fileList.forEach(file => {
@@ -414,7 +456,7 @@ Page({
               action: 'approve'
             }
           }).then(result => {
-            getApp().hideLoading();
+            this.hideMyLoading();
             if (result.result.success) {
               wx.showToast({ title: result.result.msg || '已发布', icon: 'success' });
               
@@ -551,7 +593,7 @@ Page({
       // 云存储路径：使用 wx.cloud.downloadFile
       wx.cloud.downloadFile({
         fileID: originalFileID,
-        success: res => {
+        success: async (res) => {
           this.saveVideoToAlbum(res.tempFilePath);
         },
         fail: err => {
@@ -1139,6 +1181,9 @@ Page({
         videoFileID: videoID,
         coverFileID: coverID,
         type: 'admin_upload',
+        // 🆕 管理员后台发布/编辑也打上次数标记：用于后台区分“第几次发布/编辑记录”
+        // 这里的次数是按管理员(openid)维度统计 video_go 的 admin_upload 记录数
+        // （如果你想统计“某个用户投稿被采纳后管理员发布”的次数，需要另加 userOpenid/userId 维度字段）
         // 如果是新增，加时间；如果是修改，更新时间可选
         ...(isEditing ? { updateTime: db.serverDate() } : { createTime: db.serverDate() })
       };
@@ -1151,10 +1196,25 @@ Page({
           });
       } else {
         // --- 新增逻辑 ---
-        db.collection('video_go').add({ data: docData })
-          .then(() => {
-             this.finishSubmit('发布成功');
-          });
+        // 🆕 记录管理员在 video_go 发布次数（后台可见）
+        // 注意：这里统计的是“管理员发布官方案例”的次数，不等同于“用户投稿次数”
+        wx.cloud.callFunction({ name: 'login' }).then(async (loginRes) => {
+          const openid = loginRes.result.openid;
+          const countRes = await db.collection('video_go').where({ _openid: openid, type: 'admin_upload' }).count();
+          const applyCount = (countRes.total || 0) + 1;
+
+          db.collection('video_go').add({ data: { ...docData, applyCount } })
+            .then(() => {
+               this.finishSubmit('发布成功');
+            });
+        }).catch(err => {
+          console.error('❌ [admin] 获取 openid / 统计次数失败:', err);
+          // 兜底：即使统计失败也允许发布
+          db.collection('video_go').add({ data: docData })
+            .then(() => {
+              this.finishSubmit('发布成功');
+            });
+        });
       }
     }).catch(err => {
       console.error(err);
@@ -1385,7 +1445,7 @@ Page({
     }, 300); // 抖动动画时长
   },
   
-  submitForm() {
+  async submitForm() {
     console.log('🔵 [提交] submitForm 被调用');
     const { vehicleName, categoryIndex, modelIndex, videoPath, categoryValueArray, categoryArray, modelArray, myDevices, selectedSnIndex } = this.data;
     
@@ -1446,15 +1506,25 @@ Page({
     }
     
     this.setData({ isSubmitting: true });
-    getApp().showLoading({ title: '上传中...', mask: true });
+    this.showMyLoading('上传中...');
     const cloudPath = `video/${Date.now()}_user.mp4`;
     
     console.log('🔵 [提交] 开始上传视频，cloudPath:', cloudPath);
     wx.cloud.uploadFile({
       cloudPath: cloudPath, 
       filePath: videoPath,
-      success: res => {
+      success: async (res) => {
         console.log('🔵 [提交] 视频上传成功，fileID:', res.fileID);
+        // 🆕 记录用户投稿次数：每次提交自增 1（管理员后台可见）
+        // 方案：先查询该 openid 历史投稿次数 count，再写入本次的 applyCount = count + 1
+        // 注意：这里用云函数 login 获取 openid（与项目现有逻辑保持一致）
+        // 🆕 按设备 SN 统计投稿次数（口径A：只按 sn 计数）
+        // 同一个 sn 无论哪个用户投稿，次数都累加
+        // 只统计“仍存在的投稿记录”。用户在 my 页撤销会直接 remove 掉记录，因此天然不计入。
+        // 为了避免把旧的已删除记录算进去，这里按 sn 维度 count 当前集合中仍存在的记录即可。
+        const countRes = await db.collection('video').where({ sn: targetSn }).count();
+        const applyCount = (countRes.total || 0) + 1;
+
         const submitData = {
           vehicleName, 
           category: categoryValueArray[categoryIndex], 
@@ -1463,7 +1533,8 @@ Page({
           videoFileID: res.fileID, 
           createTime: db.serverDate(), 
           status: 0, // 0:审核中
-          sn: targetSn // 【新增】关联 SN
+          sn: targetSn, // 【新增】关联 SN
+          applyCount: applyCount // 🆕 第几次申请/投稿
         };
         console.log('🔵 [提交] 准备写入数据库，data:', submitData);
         
@@ -1471,7 +1542,7 @@ Page({
           data: submitData,
           success: (dbRes) => {
             console.log('🔵 [提交] 数据库写入成功，_id:', dbRes._id);
-            getApp().hideLoading(); 
+            this.hideMyLoading(); 
             this.setData({ 
               isSubmitting: false, 
               showForm: false, 
@@ -1687,17 +1758,43 @@ Page({
       showDevicePickerModal: false
     });
   },
-  forceInterception(type) {
-    if (this.securityTimer) clearInterval(this.securityTimer);
+  // ==========================
+  // 🆕 本页自定义 Loading（复用 my 页样式）
+  // ==========================
+  showMyLoading(title = '上传中...') {
+    this._loadingStartTs = Date.now();
+    this.setData({ showLoadingAnimation: true, loadingText: title });
+  },
+
+  hideMyLoading() {
+    const minShowMs = 600; // case 页不需要像 my 页那样 2s，避免拖沓
+    const start = this._loadingStartTs || 0;
+    const elapsed = start ? (Date.now() - start) : minShowMs;
+    const wait = Math.max(0, minShowMs - elapsed);
+
+    if (this._loadingHideTimer) {
+      clearTimeout(this._loadingHideTimer);
+      this._loadingHideTimer = null;
+    }
+
+    this._loadingHideTimer = setTimeout(() => {
+      this.setData({ showLoadingAnimation: false });
+      this._loadingStartTs = 0;
+    }, wait);
+  },
+
+  handleIntercept(type) {
+    // 1. 停止视频播放
+    this.setData({ showVideoPlayer: false, currentVideo: null });
     
-    // 标记封禁
+    // 2. 标记封禁
     wx.setStorageSync('is_user_banned', true);
 
-    // 🔴 强制跳转
+    // 3. 强制跳转拦截页
     wx.reLaunch({
       url: `/pages/blocked/blocked?type=${type}`,
       fail: () => {
-        // 若跳转失败（如路径不对），直接关闭小程序
+        // 路径万一错了，直接退出
         wx.exitMiniProgram();
       }
     });

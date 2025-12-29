@@ -15,8 +15,17 @@ const ICONS = {
 };
 
 Page({
+  // ================= 开发中弹窗（本页专属） =================
+  closeDevDialog() {
+    this.setData({ showDevDialog: false });
+  },
+  noop() {},
+
   data: {
     icons: ICONS,
+
+    // 🆕 开发中弹窗
+    showDevDialog: false,
     
     // 布局适配
     statusBarHeight: 20,
@@ -37,7 +46,8 @@ Page({
     // 我的数据
     myInfo: { 
       rank: 24, 
-      name: 'User_99', 
+      name: 'User_99', // 将在 onLoad 中从缓存昵称覆盖
+
       type: 'gas', // 个人身份
       bike: 'DUCATI V4',
       deviceId: 'MOTO-8821',
@@ -62,6 +72,23 @@ Page({
   onLoad() {
     // 调试用：清除旧缓存防止图片黑框 (发布时删除)
     // wx.clearStorageSync(); 
+
+    // 🆕 读取小程序启动时保存的昵称（与 my 页一致：user_nickname）
+    const savedNickname = wx.getStorageSync('user_nickname');
+    if (savedNickname) {
+      this.setData({ 'myInfo.name': savedNickname });
+    }
+
+    // 🆕 产品开发中提示（使用全局自定义 Dialog）
+    // 进入页面就提示一次，避免每次 tab 切换都弹
+    if (!this._devTipShown) {
+      this._devTipShown = true;
+      // 延迟一帧，避免阻塞页面初始渲染
+      setTimeout(() => {
+        // 用本页的弹窗（更好看，且不依赖全局 UI 注入）
+        this.setData({ showDevDialog: true });
+      }, 200);
+    }
 
     this.calcNavBarInfo();
     this.updateTheme(); // 初始化主题

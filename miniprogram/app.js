@@ -108,6 +108,10 @@ App({
       // 1) showModal
       if (!wx.__mt_oldShowModal) wx.__mt_oldShowModal = wx.showModal;
       wx.showModal = (opt = {}) => {
+        // 如果使用了 editable 等高级特性，直接调用官方原方法
+        if (opt && opt.editable) {
+          return wx.__mt_oldShowModal ? wx.__mt_oldShowModal(opt) : undefined;
+        }
         this.showDialog({
           title: opt.title || '提示',
           content: opt.content || '',

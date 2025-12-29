@@ -12,7 +12,7 @@
     <view class="back-btn" bindtap="goBack" style="top: {{statusBarHeight + 10}}px; display: none;">
       <text class="back-icon">‹</text>
     </view>
-    
+
     <view class="nav-bar-row" style="height: {{navBarHeight}}px; line-height: {{navBarHeight}}px;">
       <view class="brand-title">
         <text class="brand-sub">{{isAdminMode ? 'ADMIN MODE' : 'LIVE STANDINGS'}}</text>
@@ -48,7 +48,7 @@
 
   <!-- 内容区域 -->
   <view class="content-area top-spacing">
-    
+
     <!-- PAGE 1: 榜单 -->
     <scroll-view scroll-y class="scroll-view" wx:if="{{currentTab === 'rank'}}">
       
@@ -273,7 +273,7 @@
             </view>
             <view class="status-light {{isBluetoothConnected ? 'on' : ''}}"></view>
           </button>
-          
+
           <view class="data-display-screen">
             <view class="data-row">
               <view class="data-cell"><text class="label">距离</text><text class="value">{{userForm.dist}} <text class="unit">KM</text></text></view>
@@ -292,7 +292,6 @@
       </button>
     </view>
   </view>
-
 
   <!-- 管理员编辑弹窗 -->
   <view class="modal-mask" wx:if="{{showEditModal}}">
@@ -324,4 +323,23 @@
       <button class="modal-btn save-btn" bindtap="saveRecord" hover-class="btn-hover">保存发布</button>
     </view>
   </view>
+
+  <!-- ================= 更好看的自定义弹窗（复用 my 页风格） ================= -->
+  <view class="custom-dialog-mask" wx:if="{{showDevDialog}}" bindtap="closeDevDialog">
+    <view class="custom-dialog-box" catchtap="noop">
+      <view class="cd-title">提示</view>
+      <view class="cd-content">产品正在开发中，敬请期待</view>
+      <view class="cd-btn-row">
+        <view class="cd-btn confirm" bindtap="closeDevDialog">我知道了</view>
+      </view>
+    </view>
+  </view>
 </view>
+
+
+
+
+
+
+
+

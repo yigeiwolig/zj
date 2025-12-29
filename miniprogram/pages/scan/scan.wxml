@@ -5,7 +5,7 @@
     <view class="back-icon" catchtap="goBack">
       <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
     </view>
-    <view class="nav-logo">MT CONTROL</view>
+    <view class="nav-logo">MT控制中心</view>
   </view>
 
   <!-- ======================= -->

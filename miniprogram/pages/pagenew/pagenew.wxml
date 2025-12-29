@@ -9,7 +9,7 @@
 
   <view class="brand-box">
     <text class="brand-main">MT</text>
-    <text class="brand-sub">COLLECTION</text>
+    <text class="brand-sub">新品展示</text>
     <!-- 只有白名单用户能看到的切换开关 -->
     <view 
       wx:if="{{isAuthorized}}" 

@@ -3,6 +3,7 @@ const db = wx.cloud.database();
 Page({
   data: {
     // 基础交互数据
+    isVideoFullScreen: false,
     stepIndex: 0,
     pIndex: -1,
     tIndex: -1,
@@ -55,11 +56,30 @@ Page({
     showEditModal: false,
     editItemData: null,  // 正在编辑的项目数据
     editItemType: '',    // 编辑类型：'chapters' 或 'graphics'
-    editItemIndex: -1
+    editItemIndex: -1,
+    // 新增：用于布局的精确高度变量
+    winHeight: 0,
+    scrollViewHeight: 0,
+
+    // 滚动控制
+    scrollTopValue: 0,
+    locked: false
   },
 
   // 页面加载时从云数据库读取数据
   onLoad: function() {
+    // 1. 获取系统屏幕高度（px）
+    const sys = wx.getSystemInfoSync();
+    const winHeight = sys.windowHeight;
+
+    // 2. 计算滚动区域高度（按你页面结构预留顶部区域）
+    const scrollViewHeight = winHeight - 90;
+
+    this.setData({
+      winHeight,
+      scrollViewHeight
+    });
+
     // 检查管理员权限
     this.checkAdminPrivilege();
     this.loadDataFromCloud();
@@ -71,7 +91,11 @@ Page({
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
       const db = wx.cloud.database();
-      const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      let adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      if (adminCheck.data.length === 0) {
+        adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
+      }
       if (adminCheck.data.length > 0) {
         this.setData({ isAuthorized: true });
         console.log('[azjc.js] 身份验证成功：合法管理员');
@@ -544,8 +568,10 @@ Page({
           const number = parseInt(numRes.content) || 1;
           
           // 准备数据
+          // 将前端用的 "products" / "types" 转换为数据库字段 "product" / "type"
+          const typeField = (type === 'products') ? 'product' : (type === 'types' ? 'type' : type);
           let data = {
-            type: type,
+            type: typeField,
             createTime: db.serverDate(),
             order: number // 用于排序
           };
@@ -978,7 +1004,7 @@ Page({
   // 原地删除数据
   deleteItem: function(e) {
     const { type, index } = e.currentTarget.dataset;
-    wx.showModal({
+    (wx.__mt_oldShowModal || wx.showModal)({
       title: '确认删除',
       content: '删除后无法撤销',
       success: (res) => {
@@ -1019,6 +1045,8 @@ Page({
               // 更新本地数据
               list.splice(index, 1);
               this.setData({ [type]: list });
+              // 重新过滤以刷新显示
+              this.filterContent();
               
               getApp().hideLoading();
               wx.showToast({ title: '已删除', icon: 'success' });
@@ -1354,10 +1382,17 @@ Page({
 
   // 手势监听（滑回重置）
   touchStart: function(e) {
+    // 如果正在全屏或已锁定，不记录起始位置，防止误触发翻页
+    if (this.data.isVideoFullScreen || this.data.locked) {
+      return;
+    }
     this.setData({ startY: e.touches[0].pageY });
   },
 
   touchEnd: function(e) {
+    // 如果是管理员模式，或者正在全屏，或者刚才摸了视频区域 -> 都不准翻页
+    if (this.data.isAdmin || this.data.isVideoFullScreen || this.data.locked) return;
+
     let endY = e.changedTouches[0].pageY;
     let distance = endY - this.data.startY;
     
@@ -1377,12 +1412,66 @@ Page({
 
     // --- 以下是普通用户逻辑 (保持原有的锁定逻辑) ---
     if (distance > 80) { // 向下滑动
-      if (this.data.stepIndex === 2) {
-        this.setData({ stepIndex: 1, tIndex: -1 }); // 车型重置
-      } else if (this.data.stepIndex === 1) {
+      // 仅在非视频列表页（stepIndex不为2）时才允许向下滑动返回
+      if (this.data.stepIndex === 1) {
         this.setData({ stepIndex: 0 }); // 产品保持记录
       }
     }
+  },
+
+  // 1. 新增：拦截视频区域的触摸，防止翻页
+  doNothing: function() {},
+  videoTouchStart: function() { 
+    // 立即锁定，防止点击全屏按钮时触发翻页
+    this.setData({ locked: true }); 
+  },
+  videoTouchEnd: function() { 
+    // 延迟释放，防止误触
+    // 注意：如果正在全屏，锁定会由 onVideoFullScreen 管理，这里不释放
+    setTimeout(() => { 
+      if (!this.data.isVideoFullScreen) {
+        this.setData({ locked: false }); 
+      }
+    }, 150); 
+  },
+
+// 3. 修改：滚动监听 (只记录不渲染)
+
+  onScroll(e) {
+    if (!this.data.isVideoFullScreen) {
+      this.privateScrollTop = e.detail.scrollTop;
+    this.scrollTopValue = e.detail.scrollTop;
+    }
+  },
+
+  // 视频进入/退出全屏
+  onVideoFullScreen(e) {
+    const isFull = e.detail.fullScreen;
+    const currentPos = this.privateScrollTop || 0;
+
+    if (isFull) {
+      // 进入全屏：立即锁定翻页，防止点击全屏按钮时触发 touchEnd 翻页
+      this.setData({
+        isVideoFullScreen: true,
+        locked: true, // 立即锁定，防止翻页
+        scrollTopValue: currentPos
+      });
+      this._savedPos = currentPos;
+      
+    } else {
+      // 退出全屏
+      this.setData({ isVideoFullScreen: false });
+      
+      // 延迟恢复位置和释放锁定
+      setTimeout(() => {
+        this.setData({ 
+          scrollTopValue: this._savedPos,
+          locked: false // 延迟释放锁定，防止退出时误触发翻页
+        });
+      }, 300);
+      
+    } // <--- 【注意】这里是 else 的结束，绝对不能加逗号！
+    
   },
 
   // 视频播放错误处理

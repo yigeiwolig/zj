@@ -1,3 +1,44 @@
+/* ================= 开发中弹窗（复用 my 页风格） ================= */
+.custom-dialog-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(5px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-dialog-box {
+  width: 600rpx;
+  background: #fff;
+  border-radius: 40rpx;
+  padding: 50rpx 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
+  animation: devPopIn 0.2s ease-out;
+}
+
+@keyframes devPopIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
+.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+
+.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
+.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
+.cd-btn.confirm { background: #000; color: #fff; }
+.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+
 /* 主题变量 (包含领奖台动态色) */
 .theme-gas {
   --bg-color: #000000;

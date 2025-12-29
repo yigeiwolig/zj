@@ -109,7 +109,17 @@
           <view class="pending-info">
             <view class="p-row">
               <!-- 👇👇👇 [修改] 强制加上 MT 前缀 👇👇👇 -->
-              <text class="p-model-tag">{{item.model}} | MT{{item.sn}}</text>
+              <view class="p-meta">
+                <view class="p-badges">
+                  <text class="badge badge-blue">{{item.model}}</text>
+                  <text class="badge badge-black">MT{{item.sn}}</text>
+                  <text class="badge badge-orange">第{{item.applyCount || 1}}次申请</text>
+                </view>
+                <view class="p-stats">
+                  <text class="stat-pill stat-pass">通过 {{item.passCount || 0}}</text>
+                  <text class="stat-pill stat-reject">拒绝 {{item.rejectCount || 0}}</text>
+                </view>
+              </view>
               
               <text class="p-date">{{item.displayTime}}</text>
             </view>
@@ -324,6 +334,7 @@
       <view class="emoji-icon">🎉</view>
       <view class="user-name">提交成功</view>
       <view class="status-badge">等待审核</view>
+      <view class="dialog-desc" style="margin-top: 20rpx; font-size: 24rpx; color:#666;">可在「个人中心-我的申请记录」查看申请进度</view>
       <button class="dialog-btn" bindtap="closeSuccess">好的</button>
     </view>
   </view>
@@ -474,6 +485,14 @@
       </cover-view>
     </cover-view>
   </video>
+</view>
+
+<!-- 本页自定义 Loading（白色虚化 + loader，同 my 页） -->
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
+  <view class="loader">
+    <text class="loader-label">{{loadingText}}</text>
+    <view class="loading-bar"></view>
+  </view>
 </view>
 
 <!-- 12. 录制全屏页 -->
