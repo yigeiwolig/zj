@@ -9,9 +9,6 @@ Page({
     modelIndex: null,
     buyDate: '',
     userName: 'Alexander', // 用户昵称，从存储中读取
-
-    // 调试开关：需要时改成 true（会打印管理员处理维修单/用户侧拉取的关键日志）
-    debug: false,
     
     // 蓝牙相关状态
     isScanning: false,      // 是否正在扫描(控制动画)
@@ -25,8 +22,6 @@ Page({
     dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
     // 输入弹窗（用于需要输入的场景）
     inputDialog: { show: false, title: '', placeholder: '', value: '', callback: null },
-    // 【新增】控制"内容已复制"弹窗
-    showCopySuccessModal: false,
     
     // 图片路径
     imgReceipt: '', // 购买截图
@@ -56,7 +51,6 @@ Page({
 
     isAuthorized: false, // 是否是授权管理员
     isAdmin: false,      // 是否开启了管理模式
-    isAdminReady: false, // 【新增】管理员权限是否已判定完成（避免刚进入先闪管理员界面）
     
     // 【新增】控制视图模式
     showShippedMode: false, // false=显示待发货(横滑), true=显示已发货(竖滑)
@@ -68,15 +62,18 @@ Page({
     // Swiper 动态高度
     swiperHeight: 900, // 默认高度，单位 px
     
+    // Loading 状态
+    isLoading: false,
+    loadingText: '加载中...',
+    
     // 【新增】我的申请记录
     myActivityList: [], // 存放所有的审核记录
     
     // 【新增】维修工单列表（管理员用）
     repairList: [], // 管理员用的维修列表
 
-    // 自定义 Loading（本页兜底，不依赖 app.wxml）
-    showLoadingAnimation: false,
-    loadingText: '请稍候...'
+    // 统一的“内容已复制”弹窗（和首页一致）
+    showCopySuccessModal: false,
   },
 
   onLoad() {
@@ -93,20 +90,7 @@ Page({
     this.setupBleCallbacks();
   },
 
-  // 简易调试输出（受 data.debug 控制）
-  dlog(...args) {
-    if (this.data && this.data.debug) {
-      console.log('[my]', ...args);
-    }
-  },
-
   onUnload() {
-    // 页面销毁：停止轮询
-    this._pageVisible = false;
-    if (this._adminRefreshTimer) {
-      clearInterval(this._adminRefreshTimer);
-      this._adminRefreshTimer = null;
-    }
     // 页面销毁时断开蓝牙，释放资源
     if (this.ble) {
       this.ble.stopScan();
@@ -116,76 +100,24 @@ Page({
 
   // --- 1. 页面显示时，加载云端数据 ---
   onShow() {
-    // 标记页面可见（用于轮询）
-    this._pageVisible = true;
     // 每次显示时重新读取昵称（可能在其他页面修改了）
     const savedNickname = wx.getStorageSync('user_nickname');
     if (savedNickname) {
       this.setData({ userName: savedNickname });
     }
-
-    // 先确保不会残留上一次的 loading
-    if (this._loadingTimer) {
-      clearTimeout(this._loadingTimer);
-      this._loadingTimer = null;
-    }
-    // 进入页面立刻显示 loading（避免“等一会才出现”的空窗期）
-    this._loadingStartTs = Date.now();
-    this.setData({ showLoadingAnimation: true, loadingText: '同步中...' });
-
-    // 🔴 先检查权限获取 openid
+    
+    // 🔴 先检查权限获取 openid，然后再加载数据
     this.checkAdminPrivilege().then(() => {
-      // 开始加载数据
+      // 确保 myOpenid 已获取后再加载数据
       this.loadMyOrders();
       this.loadMyActivities();
-
-      // ✅ 管理员端：开启轻量轮询刷新（用户撤销后管理员无需手动刷新）
-      this.startAdminAutoRefresh();
     }).catch(() => {
       // 如果权限检查失败，也尝试加载（可能只是普通用户）
-      this.loadMyOrders();
-      this.loadMyActivities();
-      this.startAdminAutoRefresh();
+      if (this.data.myOpenid) {
+        this.loadMyOrders();
+        this.loadMyActivities();
+      }
     });
-  },
-
-  // ================== 下拉刷新（管理员端/用户端都可用） ==================
-  onPullDownRefresh() {
-    // 不弹超长 loading，只做轻量刷新
-    const tasks = [];
-
-    // 用户侧：刷新申请进度/订单
-    tasks.push(Promise.resolve().then(() => this.loadMyActivities()));
-    tasks.push(Promise.resolve().then(() => this.loadMyOrders()));
-
-    // 管理员侧：刷新待审核/待处理
-    if (this.data.isAdmin) {
-      tasks.push(Promise.resolve().then(() => this.loadAuditList()));
-      tasks.push(Promise.resolve().then(() => this.loadPendingRepairs()));
-    }
-
-    Promise.allSettled(tasks).finally(() => {
-      wx.stopPullDownRefresh();
-    });
-  },
-
-  // ================== 管理员端自动刷新（轮询） ==================
-  startAdminAutoRefresh() {
-    // 只在管理员模式下开启
-    if (!this.data.isAdmin) return;
-
-    // 避免重复开启
-    if (this._adminRefreshTimer) return;
-
-    // 每 6 秒轻量刷新一次（只刷新管理员关心的数据）
-    this._adminRefreshTimer = setInterval(() => {
-      if (!this._pageVisible) return;
-      if (!this.data.isAdmin) return;
-
-      // 不显示 loading，静默刷新
-      this.loadAuditList();
-      this.loadPendingRepairs();
-    }, 6000);
   },
 
   // ================== 权限检查逻辑 ==================
@@ -204,14 +136,10 @@ Page({
       if (adminCheck.data.length > 0) {
         this.setData({ 
           isAuthorized: true, 
-          isAdmin: true,
-          isAdminReady: true
+          isAdmin: true 
         });
         // 权限确认后，如果是管理员，加载审核列表
         this.loadAuditList();
-      } else {
-        // 明确标记：不是管理员（判定完成）
-        this.setData({ isAuthorized: false, isAdmin: false, isAdminReady: true });
       }
       
       // 不管是不是管理员，都要加载我的设备
@@ -222,8 +150,6 @@ Page({
 
     } catch (err) {
       console.error('[my.js] 权限检查失败', err);
-      // 失败时也标记“判定完成”，防止界面逻辑卡在未判定状态
-      this.setData({ isAdminReady: true });
       return Promise.reject(err); // 🔴 返回 rejected Promise
     }
   },
@@ -243,7 +169,7 @@ Page({
             this.showMyDialog({ title: '提示', content: '请输入单号' });
             return;
           }
-          this.showMyLoadingDeprecated('正在提交...');
+          this.showMyLoading('正在提交...');
 
           // 【核心修改】调用云函数去修改，而不是直接 db.update
           wx.cloud.callFunction({
@@ -254,7 +180,7 @@ Page({
               trackingId: sn
             },
             success: r => {
-              this.hideMyLoadingDeprecated();
+              this.hideMyLoading();
               
               // ✅ [替换]
               this.showMyDialog({
@@ -266,7 +192,7 @@ Page({
               });
             },
             fail: err => {
-              this.hideMyLoadingDeprecated();
+              this.hideMyLoading();
               this.showMyDialog({ title: '失败', content: err.toString() });
             }
           })
@@ -289,7 +215,7 @@ Page({
 
   // --- 2. 从云数据库拉取订单 ---
   loadMyOrders() {
-    this.showMyLoadingDeprecated('同步中...');
+    this.showMyLoading('同步中...');
 
     const getAction = this.data.isAdmin 
       ? wx.cloud.callFunction({ name: 'adminGetOrders' }) 
@@ -304,7 +230,7 @@ Page({
     const promise = this.data.isAdmin ? getAction.then(res => res.result) : getAction;
 
     promise.then(res => {
-      this.hideMyLoadingDeprecated();
+      this.hideMyLoading();
       
       // [修复] 管理员：同时加载维修工单（兼容云函数未返回 repairs 的情况）
       if (this.data.isAdmin) {
@@ -366,7 +292,7 @@ Page({
       }
 
     }).catch(err => {
-      this.hideMyLoadingDeprecated();
+      this.hideMyLoading();
       console.error(err);
     });
   },
@@ -418,7 +344,7 @@ Page({
   // 1. [调试] 模拟支付成功 (直接改数据库状态)
   debugSimulatePay(e) {
     const id = e.currentTarget.dataset.id;
-    this.showMyLoadingDeprecated('模拟支付中...');
+    this.showMyLoading('模拟支付中...');
 
     // 直接调用云函数强行改状态
     wx.cloud.callFunction({
@@ -428,12 +354,12 @@ Page({
         action: 'simulate_pay' // 需要去云函数里加这个 case
       },
       success: res => {
-        this.hideMyLoadingDeprecated();
+        this.hideMyLoading();
         this.showMyDialog({ title: '模拟成功', content: '订单状态已更新' });
         this.loadMyOrders(); // 刷新列表
       },
       fail: err => {
-        this.hideMyLoadingDeprecated();
+        this.hideMyLoading();
         // 【修改】把错误打印在控制台，截图给我看
         console.error("模拟支付失败，详细报错:", err); 
         
@@ -581,19 +507,19 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          this.showMyLoadingDeprecated('处理中...');
+          this.showMyLoading('处理中...');
           
           // 调用云函数删除订单
           wx.cloud.callFunction({
             name: 'adminUpdateOrder',
             data: { id: id, action: 'delete' },
             success: () => {
-              this.hideMyLoadingDeprecated();
+              this.hideMyLoading();
               this.showMyDialog({ title: '已取消', content: '订单已删除' });
               this.loadMyOrders(); // 刷新列表，订单消失
             },
             fail: err => {
-              this.hideMyLoadingDeprecated();
+              this.hideMyLoading();
               console.error(err);
               this.showMyDialog({ title: '失败', content: err.errMsg || '操作失败' });
             }
@@ -608,10 +534,6 @@ Page({
   resolveRepair(e) {
     const id = e.currentTarget.dataset.id;
     const type = e.currentTarget.dataset.type; // 'ship' 或 'tutorial'
-
-    // console.log('resolveRepair trigger', { id, type });
-
-    this.dlog('🛠️ [resolveRepair] 点击处理维修单', { id, type });
     
     if (type === 'ship') {
        // 录入单号逻辑
@@ -621,19 +543,7 @@ Page({
          placeholderText: '输入快递单号',
          success: (res) => {
            if (res.confirm && res.content) {
-             wx.cloud.callFunction({
-               name: 'adminUpdateRepair',
-               data: { id: id, action: 'ship', trackingId: res.content },
-               success: () => {
-                 wx.showToast({ title: '已录入', icon: 'success' });
-                 this.loadPendingRepairs();
-                 this.loadMyActivities();
-               },
-               fail: err => {
-                 console.error('adminUpdateRepair ship fail', err);
-                 wx.showToast({ title: '提交失败', icon: 'none' });
-               }
-             });
+             this.updateRepairStatus(id, 'SHIPPED', res.content);
            }
          }
        });
@@ -644,8 +554,7 @@ Page({
          content: '将通知用户"查看维修教程可修复"，确定吗？',
          success: (res) => {
            if (res.confirm) {
-             // 给用户侧一个明确的“备注/处理结果”
-          this.updateRepairStatus(id, 'TUTORIAL', '', '请查看维修教程，可自行修复。如仍无法解决，请联系客服。');
+             this.updateRepairStatus(id, 'TUTORIAL');
            }
          }
        });
@@ -653,46 +562,25 @@ Page({
   },
 
   // 更新数据库状态
-  updateRepairStatus(id, status, trackingId = '', note = '') {
-    this.dlog('🛠️ [updateRepairStatus] 准备更新维修单', { id, status, trackingId, note });
-
-    getApp().showLoading({ title: '处理中...' });
+  updateRepairStatus(id, status, trackingId = '') {
+    wx.showLoading({ title: '处理中...' });
     const db = wx.cloud.database();
-
-    // ✅ 如果是“看教程可修复”，强制清空 trackingId，避免用户端因为残留单号不显示教程状态
-    const finalTrackingId = (status === 'TUTORIAL') ? '' : (trackingId || '');
-
-    this.dlog('🛠️ [updateRepairStatus] 写入字段', { status, trackingId: finalTrackingId, solveNote: note });
-
-    // console.log('updateRepairStatus write', { id, status, finalTrackingId, note });
     db.collection('shouhou_repair').doc(id).update({
       data: {
         status: status,
-        trackingId: finalTrackingId,
-        solveNote: note, // ✅ 给用户侧展示的处理备注
+        trackingId: trackingId,
         solveTime: db.serverDate()
       }
-    }).then(async () => {
-      getApp().hideLoading();
+    }).then(() => {
+      wx.hideLoading();
       wx.showToast({ title: '处理完成', icon: 'success' });
-
-      // ✅ 回读一次，确认云端真实写入结果（强制打印，便于排查是否真的写入）
-      try {
-        const docRes = await db.collection('shouhou_repair').doc(id).get();
-        // console.log('回读结果', docRes.data);
-        this.dlog('✅ [updateRepairStatus] 云端回读结果', docRes.data);
-      } catch (e) {
-        console.error('❌ 回读失败', e);
-        this.dlog('⚠️ [updateRepairStatus] 回读失败', e);
-      }
-
       this.loadMyOrders(); // 刷新订单列表
       // 如果是用户模式，也刷新申请进度
       if (!this.data.isAdmin) {
         this.loadMyActivities();
       }
     }).catch(err => {
-      getApp().hideLoading();
+      wx.hideLoading();
       console.error('更新失败:', err);
       wx.showToast({ title: '处理失败', icon: 'none' });
     });
@@ -721,22 +609,14 @@ Page({
   copyData(e) {
     const text = e.currentTarget.dataset.text;
     if(!text) return;
-    
-    // 🔴 确保拦截微信官方的 toast（如果存在）
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
-    
     wx.setClipboardData({
       data: text,
       success: () => {
-        // 🔴 再次确保关闭微信官方 toast（如果被触发）
-        if (wx.__mt_oldHideLoading) {
-          wx.__mt_oldHideLoading();
-        }
-        // 显示自定义"内容已复制"弹窗（白色，大一点）
+        // 先干掉系统“已复制”toast，避免和自定义弹窗打架
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 60);
+        // 使用统一的“内容已复制”大弹窗
         this.setData({ showCopySuccessModal: true });
-        // 2秒后自动关闭
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
         }, 2000);
@@ -822,30 +702,14 @@ Page({
     this.setData({ 'dialog.show': false });
   },
 
-  // 显示 Loading（统一走全局自定义动画）
-  showMyLoadingDeprecated(title = '加载中...') {
-    // 记录开始时间，用于确保最少显示一段时间
-    this._loadingStartTs = Date.now();
-    this.setData({ showLoadingAnimation: true, loadingText: title });
+  // 显示 Loading
+  showMyLoading(title = '加载中...') {
+    this.setData({ isLoading: true, loadingText: title });
   },
 
   // 隐藏 Loading
-  hideMyLoadingDeprecated() {
-    // 为了不遮挡页面切换：最少显示 2.0 秒（加载中显示久一点，避免一闪而过）
-    const minShowMs = 2000;
-    const start = this._loadingStartTs || 0;
-    const elapsed = start ? (Date.now() - start) : minShowMs;
-    const wait = Math.max(0, minShowMs - elapsed);
-
-    if (this._loadingHideTimer) {
-      clearTimeout(this._loadingHideTimer);
-      this._loadingHideTimer = null;
-    }
-
-    this._loadingHideTimer = setTimeout(() => {
-      this.setData({ showLoadingAnimation: false });
-      this._loadingStartTs = 0;
-    }, wait);
+  hideMyLoading() {
+    this.setData({ isLoading: false });
   },
 
   // 显示输入弹窗
@@ -904,7 +768,7 @@ Page({
 
     // 状态：错误
     this.ble.onError = (err) => {
-      this.hideMyLoadingDeprecated();
+      this.hideMyLoading();
       this.setData({ 
         isScanning: false, 
         connectStatusText: '蓝牙错误，请检查权限' 
@@ -1033,7 +897,7 @@ Page({
       mediaType: ['image'],
       success: async (res) => {
         const tempPath = res.tempFiles[0].tempFilePath;
-        this.showMyLoadingDeprecated('上传中...');
+        this.showMyLoading('上传中...');
         
         // 上传到云存储
         const cloudPath = `proofs/${Date.now()}-${Math.floor(Math.random()*1000)}.png`;
@@ -1042,7 +906,7 @@ Page({
           cloudPath: cloudPath,
           filePath: tempPath,
           success: uploadRes => {
-            this.hideMyLoadingDeprecated();
+            this.hideMyLoading();
             // 更新页面显示
             if (type === 'receipt') {
               this.setData({ imgReceipt: uploadRes.fileID });
@@ -1051,7 +915,7 @@ Page({
             }
           },
           fail: err => {
-            this.hideMyLoadingDeprecated();
+            this.hideMyLoading();
             this.showMyDialog({ title: '上传失败', content: err.errMsg || '请重试' });
           }
         });
@@ -1086,7 +950,7 @@ Page({
       return;
     }
 
-    this.showMyLoadingDeprecated('提交中...');
+    this.showMyLoading('提交中...');
 
     // D. 存入数据库 my_read
     const db = wx.cloud.database();
@@ -1108,7 +972,7 @@ Page({
         createTime: db.serverDate()
       }
     }).then(res => {
-      this.hideMyLoadingDeprecated();
+      this.hideMyLoading();
       
       // 使用自定义弹窗
       this.showMyDialog({
@@ -1120,7 +984,7 @@ Page({
         }
       });
     }).catch(err => {
-      this.hideMyLoadingDeprecated();
+      this.hideMyLoading();
       console.error(err);
       this.showMyDialog({ title: '提交失败', content: err.errMsg || '网络错误，请重试' });
     });
@@ -1151,13 +1015,13 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          this.showMyLoadingDeprecated('正在解绑...');
+          this.showMyLoading('正在解绑...');
           
           wx.cloud.callFunction({
             name: 'unbindDevice',
             data: { sn: rawSn },
             success: res => {
-              this.hideMyLoadingDeprecated();
+              this.hideMyLoading();
               if (res.result.success) {
                 
                 // ✅ [替换]
@@ -1173,7 +1037,7 @@ Page({
               }
             },
             fail: err => {
-              this.hideMyLoadingDeprecated();
+              this.hideMyLoading();
               this.showMyDialog({ title: '错误', content: '网络异常' });
             }
           });
@@ -1287,7 +1151,7 @@ Page({
     const { currentAuditItem, adminSetDate, adminSetDaysIndex, warrantyValues } = this.data;
     const days = warrantyValues[adminSetDaysIndex];
 
-    this.showMyLoadingDeprecated('正在同步...');
+    this.showMyLoading('正在同步...');
 
     wx.cloud.callFunction({
       name: 'adminAuditDevice',
@@ -1298,7 +1162,7 @@ Page({
         customDays: days          // 传选择的天数
       },
       success: res => {
-        this.hideMyLoadingDeprecated();
+        this.hideMyLoading();
         if (res.result.success) {
           
           // ✅ [替换为自定义弹窗]
@@ -1318,7 +1182,7 @@ Page({
         }
       },
       fail: err => {
-        this.hideMyLoadingDeprecated();
+        this.hideMyLoading();
         console.error(err);
         this.showMyDialog({ title: '操作失败', content: err.errMsg || '网络错误，请重试' });
       }
@@ -1366,16 +1230,6 @@ Page({
       console.log('📋 [loadMyActivities] 查询结果 - 设备申请:', res[0].data.length, '条, 视频申请:', res[1].data.length, '条');
       console.log('📋 [loadMyActivities] 设备申请详情:', res[0].data);
       console.log('📋 [loadMyActivities] 视频申请详情:', res[1].data);
-
-      // ✅ 维修工单调试：打印 _id/status/trackingId/solveNote
-      this.dlog('🧾 [loadMyActivities] repair raw list:', (res[2].data || []).map(x => ({
-        _id: x._id,
-        status: x.status,
-        trackingId: x.trackingId,
-        solveNote: x.solveNote,
-        solveTime: x.solveTime,
-        createTime: x.createTime
-      })));
       
       // 处理设备数据
       const deviceApps = res[0].data.map(i => {
@@ -1440,8 +1294,7 @@ Page({
           status: statusNum, // 统一状态值
           originalCreateTime: i.createTime,
           createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚',
-          trackingId: i.trackingId || '', // 确保有 trackingId 字段
-          solveNote: i.solveNote || '' // ✅ 管理员处理备注（如：看教程可修复）
+          trackingId: i.trackingId || '' // 确保有 trackingId 字段
         };
       });
       
@@ -1454,16 +1307,14 @@ Page({
       });
       
       // 🔴 过滤规则：
-      // - 设备 / 视频申请：显示「审核中 / 已通过 / 已驳回」（已通过也要显示，让用户知道结果）
+      // - 设备 / 视频申请：只显示「审核中 / 已驳回」
       // - 维修工单：全部展示（含 SHIPPED / TUTORIAL），因为用户需要看到处理结果
       const filtered = all.filter(i => {
         // 维修工单始终保留
         if (i.type === 'repair') return true;
         const status = i.status;
-        // 🔴 修复：设备 / 视频：保留 审核中(0/PENDING)、已通过(1/APPROVED) 和 已驳回(-1/REJECTED)
-        return status === 0 || status === 'PENDING' || 
-               status === 1 || status === 'APPROVED' || 
-               status === -1 || status === 'REJECTED';
+        // 设备 / 视频：只保留 审核中(0/PENDING) 和 已驳回(-1/REJECTED)
+        return status === 0 || status === 'PENDING' || status === -1 || status === 'REJECTED';
       });
       
       console.log('📋 [loadMyActivities] 过滤后的申请记录（已通过已排除）:', filtered);
@@ -1475,67 +1326,6 @@ Page({
     }).catch(err => {
       console.error('❌ [loadMyActivities] 加载申请记录失败:', err);
       wx.showToast({ title: '加载失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
-    });
-  },
-
-  // ✅ 撤销审核中的申请（从云端删除，并从列表移除）
-  cancelMyActivity(e) {
-    const item = e.currentTarget.dataset.item;
-    if (!item || !item._id) return;
-
-    // 审核中才允许撤销
-    const isPending = (item.status === 0 || item.status === 'PENDING');
-    if (!isPending) return;
-
-    this.showMyDialog({
-      title: '撤销申请',
-      content: '撤销后将从后台删除，管理员将看不到该提交。确定撤销吗？',
-      showCancel: true,
-      confirmText: '确定撤销',
-      cancelText: '取消',
-      success: (res) => {
-        if (!res.confirm) return;
-
-        this.showMyLoadingDeprecated('撤销中...');
-
-        // 根据类型选择集合
-        let collectionName = '';
-        if (item.type === 'device') collectionName = 'my_read';
-        else if (item.type === 'video') collectionName = 'video';
-        else if (item.type === 'repair') collectionName = 'shouhou_repair';
-        else collectionName = '';
-
-        if (!collectionName) {
-          this.hideMyLoadingDeprecated();
-          this.showMyDialog({ title: '失败', content: '未知类型，无法撤销' });
-          return;
-        }
-
-        const db = wx.cloud.database();
-        db.collection(collectionName).doc(item._id).remove()
-          .then(() => {
-            // 先隐藏 loading，等隐藏完成后再弹“已撤销”
-            this.hideMyLoadingDeprecated();
-
-            // 前端立即移除该条
-            const next = (this.data.myActivityList || []).filter(x => x._id !== item._id);
-            this.setData({ myActivityList: next });
-
-            const minShowMs = 2000;
-            const start = this._loadingStartTs || 0;
-            const elapsed = start ? (Date.now() - start) : minShowMs;
-            const wait = Math.max(0, minShowMs - elapsed);
-
-            setTimeout(() => {
-              this.showMyDialog({ title: '已撤销', content: '该申请已删除。' });
-            }, wait);
-          })
-          .catch(err => {
-            this.hideMyLoadingDeprecated();
-            console.error('撤销失败:', err);
-            this.showMyDialog({ title: '撤销失败', content: err.errMsg || '网络错误，请重试' });
-          });
-      }
     });
   },
 
@@ -1578,18 +1368,18 @@ Page({
       success: (res) => {
         // 只有点击确定才执行
         if (res.confirm) {
-          this.showMyLoadingDeprecated('处理中...');
+          this.showMyLoading('处理中...');
           wx.cloud.callFunction({
             name: 'adminAuditDevice',
             data: { id: id, action: 'reject' },
             success: () => {
-              this.hideMyLoadingDeprecated();
+              this.hideMyLoading();
               // 操作完成后也提示一下
               this.showMyDialog({ title: '已拒绝', content: '该申请已被驳回。' });
               this.loadAuditList();
             },
             fail: err => {
-              this.hideMyLoadingDeprecated();
+              this.hideMyLoading();
               console.error(err);
               this.showMyDialog({ title: '操作失败', content: '网络错误，请重试' });
             }
@@ -1612,11 +1402,11 @@ Page({
 
   // [新增] 跳转去商城
   goToShop() {
-    // 跳转到 shop 页面
-    wx.navigateTo({
-      url: '/pages/shop/shop',
+    // 使用 reLaunch 确保跳转成功，并清除页面栈
+    wx.reLaunch({
+      url: '/pages/products/products',
       success: () => {
-        console.log('跳转到 shop 页面成功');
+        console.log('跳转到产品列表页成功');
       },
       fail: (err) => {
         console.error('跳转失败:', err);
@@ -1629,23 +1419,6 @@ Page({
               content: '请手动返回首页' 
             });
           }
-        });
-      }
-    });
-  },
-
-  goToRepairCenter() {
-    // 跳转到维修中心页面
-    wx.navigateTo({
-      url: '/pages/shouhou/shouhou',
-      success: () => {
-        console.log('跳转到维修中心页面成功');
-      },
-      fail: (err) => {
-        console.error('跳转失败:', err);
-        this.showMyDialog({ 
-          title: '跳转失败', 
-          content: '无法打开维修中心页面' 
         });
       }
     });

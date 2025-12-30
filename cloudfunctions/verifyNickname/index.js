@@ -112,7 +112,6 @@ exports.main = async (event, context) => {
         }
 
         // 🔴 关键：更新 login_logs（同一 openid 只保留一条记录）
-        // 🔴 重要：统一使用 isBanned 字段，不要创建 isScreenshotBanned 或 banReason 字段
         if (lastLog && lastLog._id) {
           // 如果已存在记录，则更新而不是新增
           await db.collection('login_logs').doc(lastLog._id).update({
@@ -209,7 +208,6 @@ exports.main = async (event, context) => {
     if (isWhitelisted) {
       try {
         // 🔴 关键：更新 login_logs（同一 openid 只保留一条记录）
-        // 🔴 重要：统一使用 isBanned 字段，不要创建 isScreenshotBanned 或 banReason 字段
         if (lastLog && lastLog._id) {
           await db.collection('login_logs').doc(lastLog._id).update({
             data: {
@@ -266,7 +264,6 @@ exports.main = async (event, context) => {
 
     try {
       // 🔴 关键：更新 login_logs（同一 openid 只保留一条记录）
-      // 🔴 重要：统一使用 isBanned 字段，不要创建 isScreenshotBanned 或 banReason 字段
       if (lastLog && lastLog._id) {
         await db.collection('login_logs').doc(lastLog._id).update({
           data: {

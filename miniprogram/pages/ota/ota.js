@@ -127,42 +127,9 @@ Page({
   },
 
   onLoad() {
-    // 🔴 物理防线：确保录屏、截屏出来的全是黑屏 (这是最稳的)
-    if (wx.setVisualEffectOnCapture) {
-      wx.setVisualEffectOnCapture({
-        visualEffect: 'hidden',
-        success: () => console.log('🛡️ 硬件级防偷拍锁定')
-      });
-    }
-
-    // 🔴 截屏监听：安卓和iOS通常都很灵敏
-    wx.onUserCaptureScreen(() => {
-      this.handleIntercept('screenshot');
-    });
-
-    // 🔴 录屏监听：尽力而为，抓到信号就跳
-    if (wx.onUserScreenRecord) {
-      wx.onUserScreenRecord(() => {
-        this.handleIntercept('record');
-      });
-    }
-
     this.initCanvas();
     this.initBLE();
     this.initAudio();
-  },
-  
-  onShow() {
-    // 针对进入页面前就在录屏的情况，尝试抓一次
-    if (wx.getScreenRecordingState) {
-      wx.getScreenRecordingState({
-        success: (res) => {
-          if (res.state === 'on' || res.recording) {
-            this.handleIntercept('record');
-          }
-        }
-      });
-    }
   },
   
   // ================= 音效和震动 =================
@@ -671,20 +638,5 @@ Page({
         life: 1.5, type: 'explode'
       });
     }
-  },
-
-  // 🔴 截图和录屏拦截处理
-  handleIntercept(type) {
-    // 1. 标记封禁
-    wx.setStorageSync('is_user_banned', true);
-
-    // 2. 强制跳转拦截页
-    wx.reLaunch({
-      url: `/pages/blocked/blocked?type=${type}`,
-      fail: () => {
-        // 路径万一错了，直接退出
-        wx.exitMiniProgram();
-      }
-    });
   }
 });

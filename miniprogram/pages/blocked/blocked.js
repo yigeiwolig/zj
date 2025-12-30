@@ -3,7 +3,8 @@ Page({
   data: {
     checkTimer: null,
     type: '', // 封禁类型：'banned' 或其他
-    showCopySuccessModal: false // 控制"内容已复制"弹窗
+    // 自定义“内容已复制”弹窗
+    showCopySuccessModal: false
   },
 
   onLoad(options) {
@@ -45,11 +46,11 @@ Page({
 
   // === 核心：呼叫云函数查询指令 ===
   callCheckCloud() {
-    // 🔴 统一封禁逻辑：所有封禁都通过 isBanned 字段控制
+    // 🔴 修改：允许截图封禁也调用云函数，以便响应管理员在后台的解封操作
     // 管理员可以在后台将 login_logs 中的 isBanned 改为 false 来解封
     
     wx.cloud.callFunction({
-      name: 'checkUnlockStatus' // 调用云函数检查解封状态
+      name: 'checkUnlockStatus' // 调用刚才新建的云函数
     }).then(res => {
       const result = res.result || {};
       const action = result.action;
@@ -61,9 +62,9 @@ Page({
         this.stopAutoCheck();
         const nickname = result.nickname || '';
         
-        // 🔴 关键：清除所有封禁标记
+        // 🔴 关键：清除所有封禁标记（包括截图封禁标记）
         wx.removeStorageSync('is_user_banned');
-        wx.removeStorageSync('is_screenshot_banned'); // 清除旧的截图封禁标记（兼容旧数据）
+        wx.removeStorageSync('is_screenshot_banned'); // 清除截图封禁标记
         // 设置永久授权和昵称，直接放行
         wx.setStorageSync('has_permanent_auth', true);
         if (nickname) {
@@ -83,10 +84,10 @@ Page({
         this.stopAutoCheck();
         wx.showToast({ title: '请重新验证', icon: 'none' });
 
-        // 🔴 关键：RETRY 表示云函数已确认 login_logs 中的 isBanned 为 false
+        // 🔴 关键修复：RETRY 表示云函数已确认 login_logs 中的 isBanned 为 false
         // 说明管理员已经在后台解封，可以清除所有封禁标记
         wx.removeStorageSync('is_user_banned');
-        wx.removeStorageSync('is_screenshot_banned'); // 清除旧的截图封禁标记（兼容旧数据）
+        wx.removeStorageSync('is_screenshot_banned'); // 清除截图封禁标记
         wx.removeStorageSync('has_permanent_auth'); 
         
         setTimeout(() => {
@@ -106,21 +107,16 @@ Page({
   },
 
   handleCopyWechat() {
-    // 🔴 确保拦截微信官方的 toast（如果存在）
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
-    
-    wx.setClipboardData({ 
+    wx.setClipboardData({
       data: 'MT-mogaishe',
       success: () => {
-        // 🔴 再次确保关闭微信官方 toast（如果被触发）
-        if (wx.__mt_oldHideLoading) {
-          wx.__mt_oldHideLoading();
-        }
-        // 显示自定义"内容已复制"弹窗（白色，大一点）
+        // 1）立刻关闭系统“已复制”toast（有些版本会自动弹出）
+        wx.hideToast();
+        // 2）再保险：稍微延时再关一次，防止漏网之鱼
+        setTimeout(() => { wx.hideToast(); }, 60);
+        // 3）显示我们自己的黑白弹窗
         this.setData({ showCopySuccessModal: true });
-        // 2秒后自动关闭
+        // 4）2 秒后自动关闭
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
         }, 2000);

@@ -56,7 +56,6 @@ exports.main = async (event, context) => {
       }))
       
       // 🔴 关键：无论是否有 nickname，只要 AUTO 开启，就立即更新所有 isBanned = false
-      // 🔴 重要：统一使用 isBanned 字段，不要创建 isScreenshotBanned 或 banReason 字段
       let loginLogsUpdated = false
       try {
         // 更新 login_logs：解除封禁
@@ -171,9 +170,7 @@ exports.main = async (event, context) => {
           .get()
 
         if (validCheck.data && validCheck.data.length > 0) {
-          
           // 如果 valid_users 中存在该昵称，则放行
-          // 🔴 重要：统一使用 isBanned 字段，不要创建 isScreenshotBanned 或 banReason 字段
           // 更新 login_logs：解除封禁
           try {
             await db.collection('login_logs').doc(record._id).update({
@@ -232,7 +229,7 @@ exports.main = async (event, context) => {
     // 🔴 核心：检查 login_logs 中的 isBanned 状态
     if (record.isBanned === true) {
       // 如果被封禁，直接让前端等待，除非管理员手动解封或开启 AUTO
-      return { action: 'WAIT', msg: '账号已被封禁' };
+      return { action: 'WAIT', msg: '全局封禁中' };
     }
 
     // --- 场景 B: login_logs 记录中的 auto 字段为 true（之前自动录入产生的记录） ---
@@ -259,7 +256,6 @@ exports.main = async (event, context) => {
     }
 
     // --- 场景 C: 管理员开启【允许重试】 ---
-    // 🔴 重要：统一使用 isBanned 字段，不要创建 isScreenshotBanned 或 banReason 字段
     if (record.allowRetry === true) {
       await db.collection('login_logs').doc(record._id).update({
         data: { isBanned: false, failCount: 0, allowRetry: false, updateTime: db.serverDate() }

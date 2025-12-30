@@ -14,12 +14,12 @@ Page({
     emailContent: '',
     step: 1, // 1:输入, 2:成功
 
-    // 自定义 Toast 状态（保留用于其他提示）
+    // 自定义 Toast 状态（保留，用于错误提示）
     toastVisible: false,
     toastMsg: '',
     toastIcon: 'success', // success 或 none
 
-    // 【新增】控制"内容已复制"弹窗
+    // 统一的“内容已复制”弹窗（和首页一致样式）
     showCopySuccessModal: false,
 
     iconTop: iconWechat,   
@@ -30,24 +30,18 @@ Page({
     qrCodeUrl: "/images/qrcode.jpg" 
   },
 
-  // 1. 微信点击逻辑 (统一使用自定义弹窗)
+  // 1. 微信点击逻辑 (极速消灭系统弹窗版)
   handleWechatTap() {
     if (this.data.showQr) {
-      // 🔴 确保拦截微信官方的 toast（如果存在）
-      if (wx.__mt_oldHideLoading) {
-        wx.__mt_oldHideLoading();
-      }
-      
       wx.setClipboardData({
         data: 'MT-mogaishe',
         success: () => {
-          // 🔴 再次确保关闭微信官方 toast（如果被触发）
-          if (wx.__mt_oldHideLoading) {
-            wx.__mt_oldHideLoading();
-          }
-          // 显示自定义"内容已复制"弹窗（白色，大一点）
+          // 1）干掉系统 toast
+          wx.hideToast();
+          setTimeout(() => { wx.hideToast() }, 60);
+
+          // 2）显示统一的居中大弹窗
           this.setData({ showCopySuccessModal: true });
-          // 2秒后自动关闭
           setTimeout(() => {
             this.setData({ showCopySuccessModal: false });
           }, 2000);
@@ -63,62 +57,43 @@ Page({
   closeModal() { this.setData({ showModal: false }) },
   handleInput(e) { this.setData({ emailContent: e.detail.value }) },
 
-  // 3. 发送邮件逻辑 (统一使用自定义弹窗)
+  // 3. 发送邮件逻辑 (极速消灭系统弹窗版)
   handleSendEmail() {
     const content = this.data.emailContent;
     if (!content) {
+      // 无内容时仍用顶部自定义 toast 提示
       this.showCustomToast('请输入内容', 'none'); 
       return;
-    }
-
-    // 🔴 确保拦截微信官方的 toast（如果存在）
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
     }
 
     wx.setClipboardData({
       data: content,
       success: () => {
-        // 🔴 再次确保关闭微信官方 toast（如果被触发）
-        if (wx.__mt_oldHideLoading) {
-          wx.__mt_oldHideLoading();
-        }
-        // 显示自定义"内容已复制"弹窗（白色，大一点）
+        // 1）干掉系统 toast
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast() }, 60);
+
+        // 2）显示统一“内容已复制”弹窗
         this.setData({ showCopySuccessModal: true });
-        // 2秒后自动关闭
         setTimeout(() => {
-          this.setData({ showCopySuccessModal: false });
+          this.setData({ showCopySuccessModal: false, step: 2 });
         }, 2000);
-        
-        // 再过0.5秒切换到下一步界面
-        setTimeout(() => {
-          this.setData({ step: 2 });
-        }, 500);
       }
     })
   },
 
-  // 复制邮箱 (第二步) - 统一使用自定义弹窗
+  // 复制邮箱 (第二步) - 极速消灭系统弹窗版
   handleCopyEmail() {
     const targetEmail = "3252955872@qq.com";
-    
-    // 🔴 确保拦截微信官方的 toast（如果存在）
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
-    
     wx.setClipboardData({
       data: targetEmail,
       success: () => {
-        // 🔴 再次确保关闭微信官方 toast（如果被触发）
-        if (wx.__mt_oldHideLoading) {
-          wx.__mt_oldHideLoading();
-        }
-        // 关闭弹窗并重置状态
-        this.setData({ showModal: false, emailContent: '', step: 1 });
-        // 显示自定义"内容已复制"弹窗（白色，大一点）
-        this.setData({ showCopySuccessModal: true });
-        // 2秒后自动关闭
+        // 1）干掉系统 toast
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast() }, 60);
+
+        // 2）显示统一“内容已复制”弹窗
+        this.setData({ showCopySuccessModal: true, showModal: false, emailContent: '', step: 1 });
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
         }, 2000);

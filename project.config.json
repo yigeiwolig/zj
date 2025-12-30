@@ -33,6 +33,7 @@
   "cloudfunctionTemplateRoot": "cloudfunctionTemplate/",
   "cloudfunctionRoot": "cloudfunctions/",
   "appid": "wxf1a81dd77d810edf",
+  "envName": "cloudbase-4gn1heip7c38ec6c",
   "editorSetting": {},
   "simulatorPluginLibVersion": {}
 }

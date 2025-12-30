@@ -218,23 +218,18 @@ Page({
 
   // 【新增】处理自定义弹窗的按钮点击 (复制微信号)
   handleCopyFromModal() {
-    // 🔴 确保拦截微信官方的 toast（如果存在）
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
-    
     wx.setClipboardData({
       data: 'MT-mogaishe',
       success: () => {
         // 复制成功后关闭错误弹窗
         this.setData({ showCustomErrorModal: false });
-        // 🔴 再次确保关闭微信官方 toast（如果被触发）
-        if (wx.__mt_oldHideLoading) {
-          wx.__mt_oldHideLoading();
-        }
-        // 显示自定义"内容已复制"弹窗（白色，大一点）
+
+        // 1）干掉系统“内容已复制”的小 toast（微信内部会自动弹）
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 60);
+
+        // 2）显示首页统一样式的“内容已复制”大弹窗
         this.setData({ showCopySuccessModal: true });
-        // 2秒后自动关闭
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
         }, 2000);
@@ -276,29 +271,61 @@ Page({
       return; 
     }
 
-    console.log('[handleAccess] 开始获取位置...');
-    const sysInfo = wx.getSystemInfoSync();
-    const phoneModel = sysInfo.model || '未知机型';
-
-    wx.getLocation({
-      type: 'gcj02',
-      isHighAccuracy: true,
-      success: (res) => {
-        console.log('[handleAccess] 位置获取成功:', res);
-        this.runAnimation();
-        this.analyzeRegion(res.latitude, res.longitude, phoneModel);
-      },
-      fail: (err) => {
-        console.error('[handleAccess] 位置获取失败:', err);
-        // 预览环境/部分机型可能拿不到定位：直接给出提示并兜底跳转（不阻塞用户进入）
-        this.setData({ 
-          showAuthForceModal: true, 
-          authMissingType: 'location' 
-        });
-        setTimeout(() => {
-          wx.reLaunch({ url: '/pages/products/products' });
-        }, 300);
+    // 🔴 关键修复：先读取配置，判断是否需要位置权限
+    this.loadBlockingConfig().then(config => {
+      console.log('[handleAccess] 拦截配置:', config);
+      
+      // 如果 is_active 为 false，直接放行，不需要位置权限
+      if (!config.is_active) {
+        console.log('[handleAccess] is_active=false，直接放行，无需位置权限');
+        // 清除兜底计时器
+        if (this._jumpFallbackTimer) {
+          clearTimeout(this._jumpFallbackTimer);
+          this._jumpFallbackTimer = null;
+        }
+        // 直接跳转，不需要动画
+        wx.reLaunch({ url: '/pages/products/products' });
+        return;
       }
+      
+      // 如果 is_active 为 true，才需要获取位置权限
+      console.log('[handleAccess] is_active=true，需要位置权限，开始获取位置...');
+      const sysInfo = wx.getSystemInfoSync();
+      const phoneModel = sysInfo.model || '未知机型';
+
+      wx.getLocation({
+        type: 'gcj02',
+        isHighAccuracy: true,
+        success: (res) => {
+          console.log('[handleAccess] 位置获取成功:', res);
+          this.runAnimation();
+          this.analyzeRegion(res.latitude, res.longitude, phoneModel);
+        },
+        fail: (err) => {
+          console.error('[handleAccess] 位置获取失败:', err);
+          // 🔴 关键修复：如果 is_active 为 true 但位置获取失败，显示权限弹窗并阻止跳转
+          // 清除兜底计时器，不要自动跳转
+          if (this._jumpFallbackTimer) {
+            clearTimeout(this._jumpFallbackTimer);
+            this._jumpFallbackTimer = null;
+          }
+          // 显示权限弹窗，要求用户开启位置权限
+          this.setData({ 
+            showAuthForceModal: true, 
+            authMissingType: 'location' 
+          });
+          // 不要自动跳转，等待用户开启权限后重新点击
+        }
+      });
+    }).catch(err => {
+      console.error('[handleAccess] 加载拦截配置失败:', err);
+      // 配置加载失败，默认作为 is_active=false 处理，直接放行
+      console.log('[handleAccess] 配置加载失败，默认直接放行');
+      if (this._jumpFallbackTimer) {
+        clearTimeout(this._jumpFallbackTimer);
+        this._jumpFallbackTimer = null;
+      }
+      wx.reLaunch({ url: '/pages/products/products' });
     });
   },
 
@@ -353,19 +380,74 @@ Page({
   },
 
   checkIsBlockedRegion(province, city, config) {
-    if (!config || !config.is_active) return false;
-    const blockedCities = config.blocked_cities || [];
+    console.log('[checkIsBlockedRegion] 检查城市:', { 
+      province, 
+      city, 
+      config: { 
+        is_active: config?.is_active, 
+        blocked_cities: config?.blocked_cities 
+      } 
+    });
 
-    // 🔴 高危地址判断：只以市为准，不检查省份
-    if (blockedCities.length > 0) {
-      // 检查城市是否在拦截列表中
-      if (blockedCities.some(c => city.indexOf(c) !== -1 || c.indexOf(city) !== -1)) {
-        return true; // 城市匹配，视为高危地址
+    if (!config || !config.is_active) {
+      console.log('[checkIsBlockedRegion] 拦截未启用或配置无效');
+      return false;
     }
+
+    const blockedCities = Array.isArray(config.blocked_cities) ? config.blocked_cities : [];
+    if (blockedCities.length === 0) {
+      console.log('[checkIsBlockedRegion] 拦截城市列表为空');
+      return false;
     }
-    
-    // 🔴 不再检查省份，高危地址只以市为准
-    return false;
+
+    // 标准化城市名称（移除"市"、"县"、"区"等后缀）
+    const normalizeCity = (name) => {
+      if (!name) return '';
+      return String(name).replace(/[市县区]$/, '');
+    };
+
+    const normalizedCity = normalizeCity(city);
+    console.log('[checkIsBlockedRegion] 标准化后的城市名:', normalizedCity);
+
+    // 检查城市是否在拦截列表中
+    const isBlocked = blockedCities.some(c => {
+      const normalizedBlockedCity = normalizeCity(c);
+      // 进行双向包含匹配，更可靠
+      const isMatch = normalizedCity.includes(normalizedBlockedCity) || normalizedBlockedCity.includes(normalizedCity);
+      if (isMatch) {
+        console.log(`[checkIsBlockedRegion] 匹配到拦截城市: ${c} (原始: ${city})`);
+      }
+      return isMatch;
+    });
+
+    console.log(`[checkIsBlockedRegion] 城市 ${city} 是否被拦截:`, isBlocked);
+    return isBlocked;
+  },
+
+  // 【更新】通过云函数更新 login_logs 的 isBanned 字段为 true
+  async updateLoginLogsBanned() {
+    try {
+      console.log('[updateLoginLogsBanned] 开始调用云函数 banUserByLocation');
+      const res = await wx.cloud.callFunction({ 
+        name: 'banUserByLocation',
+        config: {
+          env: 'cloudbase-4gn1heip7c38ec6c' // 确保环境ID正确
+        }
+      });
+      
+      console.log('[updateLoginLogsBanned] 云函数调用结果:', res);
+      
+      if (res.result && res.result.success) {
+        console.log('[updateLoginLogsBanned] ✅ 已通过云函数更新 login_logs.isBanned = true', res.result);
+        return true;
+      } else {
+        console.error('[updateLoginLogsBanned] ❌ 云函数返回失败:', res.result);
+        return false;
+      }
+    } catch (err) {
+      console.error('[updateLoginLogsBanned] ❌ 调用云函数 banUserByLocation 失败:', err);
+      return false;
+    }
   },
 
   analyzeRegion(lat, lng, phoneModel) {
@@ -395,11 +477,23 @@ Page({
           const isBlocked = this.checkIsBlockedRegion(locData.province, locData.city, config);
 
           if (isBlocked) {
-            // 🔴 高危地址用户（地址在 app_config.blocking_rules 拦截列表中）→ 写入 blocked_logs
-            console.log('[index] 高危地址用户，写入 blocked_logs:', locData.province, locData.city);
-            this.appendDataAndJump('blocked_logs', locData, '/pages/products/products'); 
+            // 匹配拦截城市：更新 login_logs.isBanned = true，然后跳转拦截页
+            console.log('[index] 🚫 拦截城市匹配，准备封禁:', locData.province, locData.city);
+            
+            // 清除兜底计时器
+            if (this._jumpFallbackTimer) {
+              clearTimeout(this._jumpFallbackTimer);
+              this._jumpFallbackTimer = null;
+            }
+            
+            this.updateLoginLogsBanned().finally(() => {
+              // 无论云函数成功与否，都执行封禁跳转
+              wx.setStorageSync('is_user_banned', true);
+              wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+            });
+
           } else {
-            // 🔴 普通地址用户（地址不在拦截列表中）→ 写入 user_list
+            // 普通地址用户（地址不在拦截列表中）→ 写入 user_list
             console.log('[index] 普通地址用户，写入 user_list:', locData.province, locData.city);
             this.appendDataAndJump('user_list', locData, '/pages/products/products');
           }
@@ -563,6 +657,7 @@ Page({
   },
   onOpenSettingResult(e) {
     if (e.detail.authSetting && e.detail.authSetting['scope.userLocation']) {
+      // 用户开启了位置权限，关闭权限弹窗
       this.setData({ showAuthForceModal: false });
       // 显示自定义成功弹窗
       this.setData({ 
@@ -572,12 +667,21 @@ Page({
       });
       setTimeout(() => {
         this.setData({ showCustomSuccessModal: false });
+        // 🔴 关键修复：权限开启后，重新触发位置获取和判断流程
+        // 延迟一下，确保弹窗关闭后再执行
+        setTimeout(() => {
+          this.handleAccess();
+        }, 300);
       }, 2000);
+    } else {
+      // 用户没有开启位置权限，继续显示权限弹窗
+      console.log('[onOpenSettingResult] 用户未开启位置权限');
     }
   },
   retryBluetooth() { this.setData({ showAuthForceModal: false }); },
   onOpenSetting(e) {
      if (e.detail.authSetting && e.detail.authSetting['scope.userLocation']) {
+      // 用户开启了位置权限，关闭权限弹窗
       this.setData({ showAuthModal: false });
       // 显示自定义成功弹窗
       this.setData({ 
@@ -587,9 +691,13 @@ Page({
       });
       setTimeout(() => {
         this.setData({ showCustomSuccessModal: false });
+        // 🔴 关键修复：权限开启后，重新触发位置获取和判断流程
+        setTimeout(() => {
+          this.handleAccess();
+        }, 300);
       }, 2000);
     } else {
-      // 显示自定义错误弹窗
+      // 用户没有开启位置权限，显示错误弹窗
       this.setData({ 
         showCustomErrorModal: true
       });
