@@ -609,17 +609,26 @@ Page({
   copyData(e) {
     const text = e.currentTarget.dataset.text;
     if(!text) return;
+    // 🔴 提前隐藏可能的 toast
+    wx.hideToast();
+    
     wx.setClipboardData({
       data: text,
       success: () => {
-        // 先干掉系统“已复制”toast，避免和自定义弹窗打架
+        // 立即干掉系统"已复制"toast，多次尝试确保隐藏
         wx.hideToast();
-        setTimeout(() => { wx.hideToast(); }, 60);
-        // 使用统一的“内容已复制”大弹窗
+        setTimeout(() => { wx.hideToast(); }, 50);
+        setTimeout(() => { wx.hideToast(); }, 100);
+        setTimeout(() => { wx.hideToast(); }, 150);
+        // 使用统一的"内容已复制"大弹窗
         this.setData({ showCopySuccessModal: true });
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
         }, 2000);
+      },
+      fail: () => {
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
       }
     });
   },

@@ -1,10 +1,11 @@
 {
   "name": "banUserByLocation",
   "version": "1.0.0",
-  "description": "根据位置拦截用户，更新 login_logs.isBanned = true",
+  "description": "根据位置拦截用户，更新 login_logbutton.isBanned = true",
   "main": "index.js",
   "dependencies": {
     "wx-server-sdk": "~2.6.3"
   }
 }
+
 

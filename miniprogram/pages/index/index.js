@@ -46,6 +46,10 @@ Page({
     if (app && app.hideLoading) {
       app.hideLoading();
     }
+    // 🔴 初始化跳转标志，防止重复跳转
+    this._hasJumped = false;
+    this._hasBypassLocationCheck = false; // 初始化免死金牌标志
+    this._bypassLocationData = null; // 初始化位置数据
     
     // 🔴 强制拦截微信官方 loading：确保拦截生效
     if (wx.__mt_oldHideLoading) {
@@ -83,8 +87,8 @@ Page({
       
       const openid = res.result.openid;
       
-      // 🔴 统一只检查 login_logs
-      db.collection('login_logs')
+      // 🔴 统一检查 login_logbutton（新的封禁控制方式）
+      db.collection('login_logbutton')
         .where({ _openid: openid })
         .orderBy('updateTime', 'desc')
         .limit(1)
@@ -93,6 +97,7 @@ Page({
           let isBanned = false;
           if (result.data && result.data.length > 0 && result.data[0].isBanned === true) {
             isBanned = true;
+            console.log('[checkGlobalBanStatus] 用户被封禁（login_logbutton），原因:', result.data[0].banReason);
           }
 
           if (isBanned) {
@@ -218,21 +223,32 @@ Page({
 
   // 【新增】处理自定义弹窗的按钮点击 (复制微信号)
   handleCopyFromModal() {
+    // 🔴 提前隐藏可能的 toast
+    wx.hideToast();
+    
     wx.setClipboardData({
       data: 'MT-mogaishe',
       success: () => {
         // 复制成功后关闭错误弹窗
         this.setData({ showCustomErrorModal: false });
 
-        // 1）干掉系统“内容已复制”的小 toast（微信内部会自动弹）
+        // 1）立即干掉系统"内容已复制"的小 toast（微信内部会自动弹）
         wx.hideToast();
-        setTimeout(() => { wx.hideToast(); }, 60);
+        // 多次尝试隐藏，确保干掉
+        setTimeout(() => { wx.hideToast(); }, 50);
+        setTimeout(() => { wx.hideToast(); }, 100);
+        setTimeout(() => { wx.hideToast(); }, 150);
 
-        // 2）显示首页统一样式的“内容已复制”大弹窗
+        // 2）显示首页统一样式的"内容已复制"大弹窗
         this.setData({ showCopySuccessModal: true });
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
         }, 2000);
+      },
+      fail: () => {
+        // 即使失败也尝试隐藏 toast
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
       }
     });
   },
@@ -252,8 +268,17 @@ Page({
       this._jumpFallbackTimer = null;
     }
     this._jumpFallbackTimer = setTimeout(() => {
-      console.warn('[handleAccess] 兜底跳转触发');
-      wx.reLaunch({ url: '/pages/products/products' });
+      console.warn('[handleAccess] 兜底跳转触发，检查封禁状态');
+      // 🔴 关键：兜底跳转也要检查封禁状态
+      this.checkBanStatus().then(banStatus => {
+        if (banStatus.isBanned) {
+          console.warn('[handleAccess] 兜底跳转：用户被封禁，跳转到拦截页面');
+          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+        } else {
+          console.warn('[handleAccess] 兜底跳转：用户未封禁，跳转到二级页面');
+          wx.reLaunch({ url: '/pages/products/products' });
+        }
+      });
     }, 5400);
     console.log('[handleAccess] step:', this.data.step);
     console.log('[handleAccess] isAuthorized:', this.data.isAuthorized);
@@ -275,16 +300,24 @@ Page({
     this.loadBlockingConfig().then(config => {
       console.log('[handleAccess] 拦截配置:', config);
       
-      // 如果 is_active 为 false，直接放行，不需要位置权限
+      // 如果 is_active 为 false，先检查封禁状态，再决定是否放行
       if (!config.is_active) {
-        console.log('[handleAccess] is_active=false，直接放行，无需位置权限');
+        console.log('[handleAccess] is_active=false，检查封禁状态后决定是否放行');
         // 清除兜底计时器
         if (this._jumpFallbackTimer) {
           clearTimeout(this._jumpFallbackTimer);
           this._jumpFallbackTimer = null;
         }
-        // 直接跳转，不需要动画
-        wx.reLaunch({ url: '/pages/products/products' });
+        // 🔴 关键：先检查封禁状态
+        this.checkBanStatus().then(banStatus => {
+          if (banStatus.isBanned) {
+            console.log('[handleAccess] 用户被封禁，跳转到拦截页面');
+            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          } else {
+            console.log('[handleAccess] 用户未封禁，直接放行');
+            wx.reLaunch({ url: '/pages/products/products' });
+          }
+        });
         return;
       }
       
@@ -298,6 +331,7 @@ Page({
         isHighAccuracy: true,
         success: (res) => {
           console.log('[handleAccess] 位置获取成功:', res);
+          // 🔴 无论是否有免死金牌，都执行动画（免死金牌只跳过地域检测，不影响动画）
           this.runAnimation();
           this.analyzeRegion(res.latitude, res.longitude, phoneModel);
         },
@@ -319,13 +353,22 @@ Page({
       });
     }).catch(err => {
       console.error('[handleAccess] 加载拦截配置失败:', err);
-      // 配置加载失败，默认作为 is_active=false 处理，直接放行
-      console.log('[handleAccess] 配置加载失败，默认直接放行');
+      // 配置加载失败，先检查封禁状态，再决定是否放行
+      console.log('[handleAccess] 配置加载失败，检查封禁状态后决定是否放行');
       if (this._jumpFallbackTimer) {
         clearTimeout(this._jumpFallbackTimer);
         this._jumpFallbackTimer = null;
       }
-      wx.reLaunch({ url: '/pages/products/products' });
+      // 🔴 关键：先检查封禁状态
+      this.checkBanStatus().then(banStatus => {
+        if (banStatus.isBanned) {
+          console.log('[handleAccess] 用户被封禁，跳转到拦截页面');
+          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+        } else {
+          console.log('[handleAccess] 用户未封禁，默认放行');
+          wx.reLaunch({ url: '/pages/products/products' });
+        }
+      });
     });
   },
 
@@ -343,91 +386,177 @@ Page({
   doFallAndSwitch() {
     this.setData({ step: 5 });
 
-    // ✅ 小齿轮掉落动画结束后立即跳转（0.8s + 少量缓冲）
+    // ✅ 小齿轮掉落动画结束后检查封禁状态再跳转（0.8s + 少量缓冲）
     setTimeout(() => {
+      // 🔴 关键：检查是否已经跳转（避免重复跳转）
+      if (this._hasJumped) {
+        console.log('[doFallAndSwitch] 已经跳转，跳过重复跳转');
+        return;
+      }
+      
       if (this._jumpFallbackTimer) {
         clearTimeout(this._jumpFallbackTimer);
         this._jumpFallbackTimer = null;
       }
-      wx.reLaunch({ url: '/pages/products/products' });
+      
+      // 🔴 关键：如果免死金牌开启，直接跳转（已跳过地域检测）
+      if (this._hasBypassLocationCheck && this._bypassLocationData) {
+        console.log('[doFallAndSwitch] 免死金牌已开启，直接写入 user_list 并跳转');
+        this._hasJumped = true; // 标记已跳转
+        this.appendDataAndJump('user_list', this._bypassLocationData, '/pages/products/products');
+        // 清除标志
+        this._hasBypassLocationCheck = false;
+        this._bypassLocationData = null;
+        return;
+      }
+      
+      // 🔴 关键：先检查封禁状态
+      this.checkBanStatus().then(banStatus => {
+        if (banStatus.isBanned) {
+          console.log('[doFallAndSwitch] 用户被封禁，跳转到拦截页面');
+          this._hasJumped = true; // 标记已跳转
+          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+        } else {
+          console.log('[doFallAndSwitch] 用户未封禁，跳转到二级页面');
+          this._hasJumped = true; // 标记已跳转
+          wx.reLaunch({ url: '/pages/products/products' });
+        }
+      });
     }, 900);
   },
 
   async loadBlockingConfig() {
     try {
+      console.log('[loadBlockingConfig] 开始加载拦截配置...');
       const configRes = await db.collection('app_config').doc('blocking_rules').get();
+      console.log('[loadBlockingConfig] 直接查询结果:', configRes);
+      
       if (configRes.data) {
-        return {
+        const config = {
           is_active: configRes.data.is_active !== undefined ? configRes.data.is_active : false,
           blocked_provinces: Array.isArray(configRes.data.blocked_provinces) ? configRes.data.blocked_provinces : [],
           blocked_cities: Array.isArray(configRes.data.blocked_cities) ? configRes.data.blocked_cities : []
         };
+        console.log('[loadBlockingConfig] ✅ 配置加载成功（直接查询）:', JSON.stringify(config));
+        return config;
       }
     } catch (e) {
+      console.warn('[loadBlockingConfig] 直接查询失败，尝试 where 查询:', e);
       try {
         const queryRes = await db.collection('app_config').where({ _id: 'blocking_rules' }).get();
+        console.log('[loadBlockingConfig] where 查询结果:', queryRes);
+        
         if (queryRes.data && queryRes.data.length > 0) {
           const config = queryRes.data[0];
-          return {
+          const result = {
             is_active: config.is_active !== undefined ? config.is_active : false,
             blocked_provinces: Array.isArray(config.blocked_provinces) ? config.blocked_provinces : [],
             blocked_cities: Array.isArray(config.blocked_cities) ? config.blocked_cities : []
           };
+          console.log('[loadBlockingConfig] ✅ 配置加载成功（where查询）:', JSON.stringify(result));
+          return result;
         }
-      } catch (e2) {}
+      } catch (e2) {
+        console.error('[loadBlockingConfig] ❌ where 查询也失败:', e2);
+      }
     }
+    console.warn('[loadBlockingConfig] ⚠️ 配置加载失败，返回默认配置');
     return { is_active: false, blocked_provinces: [], blocked_cities: [] };
   },
 
   checkIsBlockedRegion(province, city, config) {
-    console.log('[checkIsBlockedRegion] 检查城市:', { 
+    console.log('[checkIsBlockedRegion] ========== 开始检查城市拦截 ==========');
+    console.log('[checkIsBlockedRegion] 输入参数:', { 
       province, 
       city, 
       config: { 
         is_active: config?.is_active, 
-        blocked_cities: config?.blocked_cities 
+        blocked_cities: config?.blocked_cities,
+        blocked_provinces: config?.blocked_provinces
       } 
     });
 
-    if (!config || !config.is_active) {
-      console.log('[checkIsBlockedRegion] 拦截未启用或配置无效');
+    if (!config) {
+      console.log('[checkIsBlockedRegion] ❌ 配置对象为空');
+      return false;
+    }
+
+    if (!config.is_active) {
+      console.log('[checkIsBlockedRegion] ❌ 拦截功能未启用 (is_active = false)');
       return false;
     }
 
     const blockedCities = Array.isArray(config.blocked_cities) ? config.blocked_cities : [];
     if (blockedCities.length === 0) {
-      console.log('[checkIsBlockedRegion] 拦截城市列表为空');
+      console.log('[checkIsBlockedRegion] ❌ 拦截城市列表为空');
       return false;
     }
+
+    console.log('[checkIsBlockedRegion] 拦截城市列表:', blockedCities);
 
     // 标准化城市名称（移除"市"、"县"、"区"等后缀）
     const normalizeCity = (name) => {
       if (!name) return '';
-      return String(name).replace(/[市县区]$/, '');
+      const normalized = String(name).trim().replace(/[市县区]$/, '');
+      console.log(`[checkIsBlockedRegion] 标准化: "${name}" -> "${normalized}"`);
+      return normalized;
     };
 
     const normalizedCity = normalizeCity(city);
-    console.log('[checkIsBlockedRegion] 标准化后的城市名:', normalizedCity);
+    console.log('[checkIsBlockedRegion] 当前城市标准化后:', normalizedCity);
 
     // 检查城市是否在拦截列表中
+    let matchedCity = null;
     const isBlocked = blockedCities.some(c => {
       const normalizedBlockedCity = normalizeCity(c);
       // 进行双向包含匹配，更可靠
-      const isMatch = normalizedCity.includes(normalizedBlockedCity) || normalizedBlockedCity.includes(normalizedCity);
+      const isMatch = normalizedCity === normalizedBlockedCity || 
+                     normalizedCity.includes(normalizedBlockedCity) || 
+                     normalizedBlockedCity.includes(normalizedCity);
+      
       if (isMatch) {
-        console.log(`[checkIsBlockedRegion] 匹配到拦截城市: ${c} (原始: ${city})`);
+        matchedCity = c;
+        console.log(`[checkIsBlockedRegion] ✅ 匹配到拦截城市: "${c}" (原始城市: "${city}")`);
+        console.log(`[checkIsBlockedRegion] 匹配详情: "${normalizedCity}" <-> "${normalizedBlockedCity}"`);
       }
       return isMatch;
     });
 
-    console.log(`[checkIsBlockedRegion] 城市 ${city} 是否被拦截:`, isBlocked);
+    if (isBlocked) {
+      console.log(`[checkIsBlockedRegion] ✅✅✅ 城市 "${city}" 被拦截！匹配的城市: "${matchedCity}"`);
+    } else {
+      console.log(`[checkIsBlockedRegion] ❌ 城市 "${city}" 不在拦截列表中`);
+    }
+    console.log('[checkIsBlockedRegion] ========== 检查结束 ==========');
     return isBlocked;
   },
 
   // 【更新】通过云函数更新 login_logs 的 isBanned 字段为 true
   async updateLoginLogsBanned() {
+    // #region agent log
+    try {
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: { location: 'index.js:463', message: 'updateLoginLogsBanned 函数被调用', data: {}, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' },
+        fail: () => {}
+      });
+    } catch (e) {}
+    // #endregion
     try {
       console.log('[updateLoginLogsBanned] 开始调用云函数 banUserByLocation');
+      // #region agent log
+      try {
+        wx.request({
+          url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          data: { location: 'index.js:467', message: '准备调用云函数', data: { env: 'cloudbase-4gn1heip7c38ec6c' }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H5' },
+          fail: () => {}
+        });
+      } catch (e) {}
+      // #endregion
       const res = await wx.cloud.callFunction({ 
         name: 'banUserByLocation',
         config: {
@@ -436,16 +565,60 @@ Page({
       });
       
       console.log('[updateLoginLogsBanned] 云函数调用结果:', res);
+      // #region agent log
+      try {
+        wx.request({
+          url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          data: { location: 'index.js:476', message: '云函数调用返回', data: { success: res.result?.success, result: res.result }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H5' },
+          fail: () => {}
+        });
+      } catch (e) {}
+      // #endregion
       
       if (res.result && res.result.success) {
         console.log('[updateLoginLogsBanned] ✅ 已通过云函数更新 login_logs.isBanned = true', res.result);
+        // #region agent log
+        try {
+          wx.request({
+            url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            data: { location: 'index.js:479', message: '云函数调用成功', data: { result: res.result }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H5' },
+            fail: () => {}
+          });
+        } catch (e) {}
+        // #endregion
         return true;
       } else {
         console.error('[updateLoginLogsBanned] ❌ 云函数返回失败:', res.result);
+        // #region agent log
+        try {
+          wx.request({
+            url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            data: { location: 'index.js:483', message: '云函数返回失败', data: { result: res.result }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H5' },
+            fail: () => {}
+          });
+        } catch (e) {}
+        // #endregion
         return false;
       }
     } catch (err) {
       console.error('[updateLoginLogsBanned] ❌ 调用云函数 banUserByLocation 失败:', err);
+      // #region agent log
+      try {
+        wx.request({
+          url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          data: { location: 'index.js:487', message: '云函数调用异常', data: { error: err.message || String(err) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H5' },
+          fail: () => {}
+        });
+      } catch (e) {}
+      // #endregion
       return false;
     }
   },
@@ -472,38 +645,245 @@ Page({
           phoneModel: phoneModel
         };
 
-        // 🔴 根据 app_config.blocking_rules 判断：高危地址用户写入 blocked_logs，普通地址用户写入 user_list
-        this.loadBlockingConfig().then(config => {
-          const isBlocked = this.checkIsBlockedRegion(locData.province, locData.city, config);
+        // 🔴 优先检查 login_logbutton 的免死金牌（bypassLocationCheck）
+        // 如果免死金牌开启，直接跳过地域检测
+        wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
+          const openid = loginRes.result.openid;
+          
+          // 查询 login_logbutton 检查免死金牌
+          db.collection('login_logbutton')
+            .where({ _openid: openid })
+            .orderBy('updateTime', 'desc')
+            .limit(1)
+            .get()
+            .then(buttonRes => {
+              let hasBypassLocationCheck = false;
+              let isBanned = false;
+              
+              if (buttonRes.data && buttonRes.data.length > 0) {
+                const buttonRecord = buttonRes.data[0];
+                hasBypassLocationCheck = buttonRecord.bypassLocationCheck === true;
+                isBanned = buttonRecord.isBanned === true;
+                console.log('[analyzeRegion] login_logbutton 状态:', {
+                  bypassLocationCheck: hasBypassLocationCheck,
+                  isBanned: isBanned
+                });
+              }
+              
+              // 🔴 关键：如果用户被封禁（isBanned = true），即使有免死金牌也要封禁
+              if (isBanned) {
+                console.log('[analyzeRegion] 🚫 用户被封禁（isBanned = true），即使有免死金牌也要封禁');
+                // 清除兜底计时器
+                if (this._jumpFallbackTimer) {
+                  clearTimeout(this._jumpFallbackTimer);
+                  this._jumpFallbackTimer = null;
+                }
+                wx.setStorageSync('is_user_banned', true);
+                wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+                return;
+              }
+              
+              // 🔴 关键：如果免死金牌开启，跳过地域检测，但让动画正常播放完
+              if (hasBypassLocationCheck) {
+                console.log('[analyzeRegion] ✅ 免死金牌已开启，跳过地域检测，等待动画播放完后跳转');
+                // 设置免死金牌标志，让 doFallAndSwitch 在动画结束后直接跳转
+                this._hasBypassLocationCheck = true;
+                this._bypassLocationData = locData; // 保存位置数据，用于写入 user_list
+                // 不清除兜底计时器，让动画正常播放
+                // 不立即跳转，等待动画播放完后在 doFallAndSwitch 中跳转
+                return;
+              }
+              
+              // 如果没有免死金牌，继续正常的地域检测流程
+              this.loadBlockingConfig().then(config => {
+                console.log('[analyzeRegion] 加载拦截配置成功:', JSON.stringify(config));
+                console.log('[analyzeRegion] 位置信息:', { province: locData.province, city: locData.city });
+                
+                const isBlocked = this.checkIsBlockedRegion(locData.province, locData.city, config);
+                console.log('[analyzeRegion] 拦截检查结果:', isBlocked);
 
-          if (isBlocked) {
-            // 匹配拦截城市：更新 login_logs.isBanned = true，然后跳转拦截页
-            console.log('[index] 🚫 拦截城市匹配，准备封禁:', locData.province, locData.city);
-            
-            // 清除兜底计时器
-            if (this._jumpFallbackTimer) {
-              clearTimeout(this._jumpFallbackTimer);
-              this._jumpFallbackTimer = null;
-            }
-            
-            this.updateLoginLogsBanned().finally(() => {
-              // 无论云函数成功与否，都执行封禁跳转
-              wx.setStorageSync('is_user_banned', true);
-              wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-            });
+                if (isBlocked) {
+                  // 匹配拦截城市：更新 login_logbutton.isBanned = true，然后跳转拦截页
+                  console.log('[analyzeRegion] 🚫 拦截城市匹配，准备封禁:', locData.province, locData.city);
+                  // #region agent log
+                  try {
+                    wx.request({
+                      url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+                      method: 'POST',
+                      header: { 'Content-Type': 'application/json' },
+                      data: { location: 'index.js:520', message: '城市被拦截，准备调用 updateLoginLogsBanned', data: { province: locData.province, city: locData.city }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' },
+                      fail: () => {}
+                    });
+                  } catch (e) {}
+                  // #endregion
+                  
+                  // 清除兜底计时器
+                  if (this._jumpFallbackTimer) {
+                    clearTimeout(this._jumpFallbackTimer);
+                    this._jumpFallbackTimer = null;
+                  }
+                  
+                  // 🔴 关键：确保云函数调用完成后再跳转
+                  this.updateLoginLogsBanned().then(success => {
+                    console.log('[analyzeRegion] 云函数调用完成，success:', success);
+                    // #region agent log
+                    try {
+                      wx.request({
+                        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+                        method: 'POST',
+                        header: { 'Content-Type': 'application/json' },
+                        data: { location: 'index.js:532', message: 'updateLoginLogsBanned 完成', data: { success: success }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' },
+                        fail: () => {}
+                      });
+                    } catch (e) {}
+                    // #endregion
+                    // 设置本地封禁标记
+                    wx.setStorageSync('is_user_banned', true);
+                    // 跳转到拦截页面
+                    console.log('[analyzeRegion] 准备跳转到拦截页面');
+                    wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+                  }).catch(err => {
+                    console.error('[analyzeRegion] ❌ 更新封禁状态失败:', err);
+                    // #region agent log
+                    try {
+                      wx.request({
+                        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+                        method: 'POST',
+                        header: { 'Content-Type': 'application/json' },
+                        data: { location: 'index.js:539', message: 'updateLoginLogsBanned 失败', data: { error: err.message || String(err) }, timestamp: Date.now(), sessionId: 'debug-session', runId: 'run1', hypothesisId: 'H4' },
+                        fail: () => {}
+                      });
+                    } catch (e) {}
+                    // #endregion
+                    // 即使更新失败，也跳转拦截页
+                    wx.setStorageSync('is_user_banned', true);
+                    wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+                  });
 
           } else {
             // 普通地址用户（地址不在拦截列表中）→ 写入 user_list
-            console.log('[index] 普通地址用户，写入 user_list:', locData.province, locData.city);
+            console.log('[analyzeRegion] 普通地址用户，写入 user_list:', locData.province, locData.city);
             this.appendDataAndJump('user_list', locData, '/pages/products/products');
           }
         }).catch(err => {
           // 🔴 配置加载失败，默认作为普通地址用户写入 user_list
-          console.error('[index] 加载拦截配置失败，默认写入 user_list:', err);
+          console.error('[analyzeRegion] 加载拦截配置失败，默认写入 user_list:', err);
           this.appendDataAndJump('user_list', locData, '/pages/products/products');
         });
+            }).catch(err => {
+              console.error('[analyzeRegion] 查询 login_logbutton 失败:', err);
+              // 查询失败时，继续正常的地域检测流程
+              this.loadBlockingConfig().then(config => {
+                console.log('[analyzeRegion] 加载拦截配置成功:', JSON.stringify(config));
+                console.log('[analyzeRegion] 位置信息:', { province: locData.province, city: locData.city });
+                
+                const isBlocked = this.checkIsBlockedRegion(locData.province, locData.city, config);
+                console.log('[analyzeRegion] 拦截检查结果:', isBlocked);
+
+                if (isBlocked) {
+                  // 匹配拦截城市：更新 login_logbutton.isBanned = true，然后跳转拦截页
+                  console.log('[analyzeRegion] 🚫 拦截城市匹配，准备封禁:', locData.province, locData.city);
+                  
+                  // 清除兜底计时器
+                  if (this._jumpFallbackTimer) {
+                    clearTimeout(this._jumpFallbackTimer);
+                    this._jumpFallbackTimer = null;
+                  }
+                  
+                  // 🔴 关键：确保云函数调用完成后再跳转
+                  this.updateLoginLogsBanned().then(success => {
+                    console.log('[analyzeRegion] 云函数调用完成，success:', success);
+                    // 设置本地封禁标记
+                    wx.setStorageSync('is_user_banned', true);
+                    // 跳转到拦截页面
+                    console.log('[analyzeRegion] 准备跳转到拦截页面');
+                    wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+                  }).catch(err => {
+                    console.error('[analyzeRegion] ❌ 更新封禁状态失败:', err);
+                    // 即使更新失败，也跳转拦截页
+                    wx.setStorageSync('is_user_banned', true);
+                    wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+                  });
+                } else {
+                  // 普通地址用户（地址不在拦截列表中）→ 写入 user_list
+                  console.log('[analyzeRegion] 普通地址用户，写入 user_list:', locData.province, locData.city);
+                  this.appendDataAndJump('user_list', locData, '/pages/products/products');
+                }
+              }).catch(err2 => {
+                console.error('[analyzeRegion] 加载拦截配置失败，默认写入 user_list:', err2);
+                this.appendDataAndJump('user_list', locData, '/pages/products/products');
+              });
+            });
+          }).catch(loginErr => {
+            console.error('[analyzeRegion] 获取 openid 失败:', loginErr);
+            // 获取 openid 失败时，继续正常的地域检测流程
+            this.loadBlockingConfig().then(config => {
+              console.log('[analyzeRegion] 加载拦截配置成功:', JSON.stringify(config));
+              console.log('[analyzeRegion] 位置信息:', { province: locData.province, city: locData.city });
+              
+              const isBlocked = this.checkIsBlockedRegion(locData.province, locData.city, config);
+              console.log('[analyzeRegion] 拦截检查结果:', isBlocked);
+
+              if (isBlocked) {
+                // 匹配拦截城市：更新 login_logbutton.isBanned = true，然后跳转拦截页
+                console.log('[analyzeRegion] 🚫 拦截城市匹配，准备封禁:', locData.province, locData.city);
+                
+                // 清除兜底计时器
+                if (this._jumpFallbackTimer) {
+                  clearTimeout(this._jumpFallbackTimer);
+                  this._jumpFallbackTimer = null;
+                }
+                
+                // 🔴 关键：确保云函数调用完成后再跳转
+                this.updateLoginLogsBanned().then(success => {
+                  console.log('[analyzeRegion] 云函数调用完成，success:', success);
+                  // 设置本地封禁标记
+                  wx.setStorageSync('is_user_banned', true);
+                  // 跳转到拦截页面
+                  console.log('[analyzeRegion] 准备跳转到拦截页面');
+                  wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+                }).catch(err => {
+                  console.error('[analyzeRegion] ❌ 更新封禁状态失败:', err);
+                  // 即使更新失败，也跳转拦截页
+                  wx.setStorageSync('is_user_banned', true);
+                  wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+                });
+              } else {
+                // 普通地址用户（地址不在拦截列表中）→ 写入 user_list
+                console.log('[analyzeRegion] 普通地址用户，写入 user_list:', locData.province, locData.city);
+                this.appendDataAndJump('user_list', locData, '/pages/products/products');
+              }
+            }).catch(err2 => {
+              console.error('[analyzeRegion] 加载拦截配置失败，默认写入 user_list:', err2);
+              this.appendDataAndJump('user_list', locData, '/pages/products/products');
+            });
+          });
       }
     });
+  },
+
+  // 🔴 新增：检查 login_logbutton 封禁状态
+  async checkBanStatus() {
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'checkUnlockStatus'
+      });
+      const result = res.result || {};
+      const action = result.action;
+      
+      // 如果返回 WAIT，说明用户被封禁
+      if (action === 'WAIT') {
+        console.log('[checkBanStatus] 用户被封禁，跳转到拦截页面');
+        return { isBanned: true, action: action };
+      }
+      
+      // 如果返回 PASS 或 RETRY，说明用户未被封禁
+      return { isBanned: false, action: action };
+    } catch (err) {
+      console.error('[checkBanStatus] 检查封禁状态失败:', err);
+      // 检查失败时，为了安全起见，默认认为未封禁（避免误封）
+      return { isBanned: false, action: 'UNKNOWN' };
+    }
   },
 
   appendDataAndJump(collectionName, locData, targetPage) {
@@ -517,8 +897,8 @@ Page({
     wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
       const openid = loginRes.result.openid;
 
-      // 🔴 统一只检查 login_logs 的封禁状态
-      const p1 = db.collection('login_logs')
+      // 🔴 统一检查 login_logbutton 的封禁状态（新的封禁控制方式）
+      const p1 = db.collection('login_logbutton')
         .where({ _openid: openid })
         .orderBy('updateTime', 'desc')
         .limit(1)
@@ -531,14 +911,16 @@ Page({
         .get();
 
       Promise.all([p1, p2]).then(results => {
-        // 检查 login_logs 的封禁状态
+        // 检查 login_logbutton 的封禁状态
         let isBanned = false;
         if (results[0].data.length > 0 && results[0].data[0].isBanned === true) {
           isBanned = true;
+          console.log('[appendDataAndJump] 用户被封禁（login_logbutton），原因:', results[0].data[0].banReason);
         }
         
         if (isBanned) {
           wx.setStorageSync('is_user_banned', true);
+          this._hasJumped = true; // 🔴 标记已跳转，防止 doFallAndSwitch 重复跳转
           setTimeout(() => {
             wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           }, 2000);
@@ -570,6 +952,8 @@ Page({
             clearTimeout(this._jumpFallbackTimer);
             this._jumpFallbackTimer = null;
           }
+          // 🔴 标记已跳转，防止 doFallAndSwitch 重复跳转
+          this._hasJumped = true;
           wx.reLaunch({ url: targetPage });
         };
 

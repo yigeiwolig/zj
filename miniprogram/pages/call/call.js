@@ -33,18 +33,27 @@ Page({
   // 1. 微信点击逻辑 (极速消灭系统弹窗版)
   handleWechatTap() {
     if (this.data.showQr) {
+      // 🔴 提前隐藏可能的 toast
+      wx.hideToast();
+      
       wx.setClipboardData({
         data: 'MT-mogaishe',
         success: () => {
-          // 1）干掉系统 toast
+          // 1）立即干掉系统 toast，多次尝试确保隐藏
           wx.hideToast();
-          setTimeout(() => { wx.hideToast() }, 60);
+          setTimeout(() => { wx.hideToast(); }, 50);
+          setTimeout(() => { wx.hideToast(); }, 100);
+          setTimeout(() => { wx.hideToast(); }, 150);
 
           // 2）显示统一的居中大弹窗
           this.setData({ showCopySuccessModal: true });
           setTimeout(() => {
             this.setData({ showCopySuccessModal: false });
           }, 2000);
+        },
+        fail: () => {
+          wx.hideToast();
+          setTimeout(() => { wx.hideToast(); }, 50);
         }
       })
     } else {
@@ -66,18 +75,27 @@ Page({
       return;
     }
 
+    // 🔴 提前隐藏可能的 toast
+    wx.hideToast();
+    
     wx.setClipboardData({
       data: content,
       success: () => {
-        // 1）干掉系统 toast
+        // 1）立即干掉系统 toast，多次尝试确保隐藏
         wx.hideToast();
-        setTimeout(() => { wx.hideToast() }, 60);
+        setTimeout(() => { wx.hideToast(); }, 50);
+        setTimeout(() => { wx.hideToast(); }, 100);
+        setTimeout(() => { wx.hideToast(); }, 150);
 
-        // 2）显示统一“内容已复制”弹窗
+        // 2）显示统一"内容已复制"弹窗
         this.setData({ showCopySuccessModal: true });
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false, step: 2 });
         }, 2000);
+      },
+      fail: () => {
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
       }
     })
   },
@@ -85,18 +103,27 @@ Page({
   // 复制邮箱 (第二步) - 极速消灭系统弹窗版
   handleCopyEmail() {
     const targetEmail = "3252955872@qq.com";
+    // 🔴 提前隐藏可能的 toast
+    wx.hideToast();
+    
     wx.setClipboardData({
       data: targetEmail,
       success: () => {
-        // 1）干掉系统 toast
+        // 1）立即干掉系统 toast，多次尝试确保隐藏
         wx.hideToast();
-        setTimeout(() => { wx.hideToast() }, 60);
+        setTimeout(() => { wx.hideToast(); }, 50);
+        setTimeout(() => { wx.hideToast(); }, 100);
+        setTimeout(() => { wx.hideToast(); }, 150);
 
-        // 2）显示统一“内容已复制”弹窗
+        // 2）显示统一"内容已复制"弹窗
         this.setData({ showCopySuccessModal: true, showModal: false, emailContent: '', step: 1 });
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
         }, 2000);
+      },
+      fail: () => {
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
       }
     })
   },
