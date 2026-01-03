@@ -2,8 +2,7 @@
 Page({
   data: {
     checkTimer: null,
-    type: '', // 封禁类型：'banned' 或其他
-    showCopySuccessModal: false // 统一的"内容已复制"弹窗（和首页一致）
+    type: '' // 封禁类型：'banned' 或其他
   },
 
   onLoad(options) {
@@ -106,30 +105,6 @@ Page({
   },
 
   handleCopyWechat() {
-    // 🔴 提前隐藏可能的 toast
-    wx.hideToast();
-    
-    wx.setClipboardData({
-      data: 'MT-mogaishe',
-      success: () => {
-        // 1）立即干掉系统"内容已复制"的小 toast（微信内部会自动弹）
-        wx.hideToast();
-        // 多次尝试隐藏，确保干掉
-        setTimeout(() => { wx.hideToast(); }, 50);
-        setTimeout(() => { wx.hideToast(); }, 100);
-        setTimeout(() => { wx.hideToast(); }, 150);
-        
-        // 2）显示首页统一样式的"内容已复制"大弹窗
-        this.setData({ showCopySuccessModal: true });
-        setTimeout(() => {
-          this.setData({ showCopySuccessModal: false });
-        }, 2000);
-      },
-      fail: () => {
-        // 即使失败也尝试隐藏 toast
-        wx.hideToast();
-        setTimeout(() => { wx.hideToast(); }, 50);
-      }
-    });
+    wx.setClipboardData({ data: 'MT-mogaishe' });
   }
 });

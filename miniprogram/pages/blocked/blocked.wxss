@@ -119,62 +119,6 @@ page {
   animation: breathe 2s infinite ease-in-out;
 }
 
-/* 统一采用首页的自定义弹窗样式（只复制必要部分） */
-.custom-modal-mask {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
-  z-index: 12000;
-  display: flex; align-items: center; justify-content: center;
-}
-
-.custom-modal-box {
-  width: 620rpx;
-  background: #ffffff;
-  border-radius: 48rpx;
-  padding: 70rpx 50rpx;
-  display: flex; flex-direction: column; align-items: center;
-  box-shadow: 0 40rpx 80rpx rgba(0, 0, 0, 0.2);
-  transform: scale(0.8); opacity: 0;
-  animation: blockedSpringPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-@keyframes blockedSpringPop {
-  to { transform: scale(1); opacity: 1; }
-}
-
-.modal-icon-new {
-  width: 110rpx; height: 110rpx;
-  margin-bottom: 40rpx;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 88rpx; font-weight: 900; color: #000000; line-height: 1;
-}
-
-.modal-title-new {
-  font-size: 40rpx;
-  font-weight: 900;
-  color: #000000;
-}
-
-.copy-success-modal {
-  width: 400rpx !important;
-  padding: 60rpx 40rpx !important;
-  min-height: auto;
-}
-
-.copy-success-modal .modal-icon-new {
-  width: 80rpx !important;
-  height: 80rpx !important;
-  margin-bottom: 30rpx !important;
-  font-size: 60rpx !important;
-}
-
-.copy-success-modal .modal-title-new {
-  font-size: 36rpx !important;
-  margin-bottom: 0 !important;
-  font-weight: 600 !important;
-}
-
 @keyframes breathe {
   0% { opacity: 0.3; }
   50% { opacity: 1; }

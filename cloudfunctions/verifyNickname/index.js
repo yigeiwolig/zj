@@ -73,24 +73,11 @@ exports.main = async (event, context) => {
     let lastFailCount = 0;
     let alreadyBanned = false;
 
-    // 🔴 检查 login_logbutton 中的封禁状态（新的封禁控制方式）
-    try {
-      const buttonCheck = await db.collection('login_logbutton')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get()
-      
-      if (buttonCheck.data && buttonCheck.data.length > 0 && buttonCheck.data[0].isBanned === true) {
-        alreadyBanned = true
-        console.log('[verifyNickname] 用户已被封禁（login_logbutton），原因:', buttonCheck.data[0].banReason)
-      }
-    } catch (e) {
-      console.warn('[verifyNickname] 查询 login_logbutton 失败:', e.message || e)
-    }
-
     if (lastLog) {
       lastFailCount = Number(lastLog.failCount || 0) || 0;
+      if (lastLog.isBanned === true) {
+        alreadyBanned = true;
+      }
     }
 
     // 如果之前已经被标记为封号，则直接返回封号状态
@@ -168,8 +155,20 @@ exports.main = async (event, context) => {
           console.error('[verifyNickname] autoMode update user_list unban error:', e);
         }
 
-        // 🔴 blocked_logs 仅作为历史记录，不再更新 isBanned（封禁控制已由 login_logbutton 管理）
-        // 移除对 blocked_logs.isBanned 的更新
+        // 🔴 关键：同步更新 blocked_logs 中的封禁记录（如果存在）
+        try {
+          await db
+            .collection('blocked_logs')
+            .where({ _openid: openid })
+            .update({
+              data: {
+                isBanned: false,
+                updateTime: db.serverDate(),
+              },
+            });
+        } catch (e) {
+          console.error('[verifyNickname] autoMode update blocked_logs unban error:', e);
+        }
 
         return {
           success: true,
@@ -265,12 +264,12 @@ exports.main = async (event, context) => {
 
     try {
       // 🔴 关键：更新 login_logs（同一 openid 只保留一条记录）
-      // 注意：不再更新 isBanned 字段，封禁控制由 login_logbutton 管理
       if (lastLog && lastLog._id) {
         await db.collection('login_logs').doc(lastLog._id).update({
           data: {
             nickname,
             success: false,
+            isBanned: willBan,
             failCount: newFailCount,
             auto: false, // 失败记录，非自动模式
             updateTime: db.serverDate(),
@@ -282,6 +281,7 @@ exports.main = async (event, context) => {
             _openid: openid,
             nickname,
             success: false,
+            isBanned: willBan,
             failCount: newFailCount,
             auto: false, // 失败记录，非自动模式
             createTime: db.serverDate(),
@@ -293,55 +293,15 @@ exports.main = async (event, context) => {
       console.error('[verifyNickname] update failed login_logs error:', e);
           }
 
-    // 如果达到封号阈值，写入 login_logbutton 集合（新的封禁控制）
+    // 如果达到封号阈值，写入 blocked_logs，并同步 user_list 为封号
     if (willBan) {
-      try {
-        // 🔴 关键：在 login_logbutton 中设置封禁状态
-        const buttonCheck = await db.collection('login_logbutton')
-          .where({ _openid: openid })
-          .get()
-        
-        if (buttonCheck.data && buttonCheck.data.length > 0) {
-          // 如果已存在记录，更新它
-          await db.collection('login_logbutton').doc(buttonCheck.data[0]._id).update({
-            data: {
-              isBanned: true,
-              banReason: 'nickname_verify_fail',
-              nickname: nickname,
-              failCount: newFailCount,
-              bypassLocationCheck: buttonCheck.data[0].bypassLocationCheck !== undefined ? buttonCheck.data[0].bypassLocationCheck : false, // 保留现有值，如果不存在则默认为 false
-              updateTime: db.serverDate()
-            }
-          })
-          console.log('[verifyNickname] ✅ 已更新 login_logbutton 封禁状态（昵称验证失败）')
-        } else {
-          // 如果不存在，创建新记录
-          await db.collection('login_logbutton').add({
-            data: {
-              _openid: openid,
-              isBanned: true,
-              banReason: 'nickname_verify_fail',
-              nickname: nickname,
-              failCount: newFailCount,
-              bypassLocationCheck: false, // 🔴 自动添加免死金牌字段，默认为 false
-              createTime: db.serverDate(),
-              updateTime: db.serverDate()
-            }
-          })
-          console.log('[verifyNickname] ✅ 已创建 login_logbutton 封禁记录（昵称验证失败）')
-        }
-      } catch (e) {
-        console.error('[verifyNickname] ❌ 更新 login_logbutton 失败:', e);
-      }
-
-      // 🔴 保留 blocked_logs 作为历史记录（不更新 isBanned，因为封禁控制已由 login_logbutton 管理）
       try {
         await db.collection('blocked_logs').add({
           data: {
             _openid: openid,
             nickname,
             reason: 'nickname_verify_fail',
-            // 🔴 移除 isBanned 字段，封禁控制已由 login_logbutton 管理
+            isBanned: true,
             failCount: newFailCount,
             createTime: db.serverDate(),
             updateTime: db.serverDate(),

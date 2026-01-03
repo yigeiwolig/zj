@@ -40,8 +40,8 @@ Page({
       },
       { 
         id: 4, 
-        title: '产品选购', 
-        en: 'SHOPPING', 
+        title: '配件选购', 
+        en: 'PARTS', 
         iconSvg: iconShop, 
         iconSize: '72rpx'  // <---【在这里改】实心购物车，稍微改小显得精致
       },
@@ -223,7 +223,7 @@ Page({
     if (target) {
       wx.navigateTo({ url: target });
     } else {
-      wx.showToast({ title: '功能开发中', icon: 'none' });
+      wx.showToast({ title: '该功能暂未开放', icon: 'none' });
     }
   },
   

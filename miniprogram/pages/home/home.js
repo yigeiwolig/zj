@@ -279,8 +279,9 @@ Page({
           try {
             console.log('从云数据库加载店铺数据:', res.data);
             
-            // 先加载测试模式开关
-            const isTestMode = await this.loadTestModeConfig();
+            // 先加载测试模式开关（仅管理员可用）
+            const isAdmin = this.data.isAdmin || false;
+            const isTestMode = isAdmin ? await this.loadTestModeConfig() : false;
             
             // 过滤掉开关文档本身，只保留店铺数据
             let shops = res.data

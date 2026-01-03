@@ -64,6 +64,7 @@ Page({
     inDetail: false,
     isAuthorized: false, // 是否是白名单里的管理员
     isAdmin: false,      // 当前是否开启了管理员模式
+    myOpenid: '',        // 🔴 当前用户的 openid（用于数据隔离）
 
     // 当前页面状态
     currentModelName: '',
@@ -188,6 +189,9 @@ Page({
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
 
+      // 🔴 保存 openid 到 data，供后续使用（提交维修工单时需要）
+      this.setData({ myOpenid: myOpenid });
+
       // 2. 去数据库比对白名单
       const db = wx.cloud.database();
       const adminCheck = await db.collection('guanliyuan').where({
@@ -226,21 +230,30 @@ Page({
 
   // ================= 自定义弹窗工具 =================
   showMyDialog({ title = '提示', content = '', showCancel = false, confirmText = '确定', cancelText = '取消', callback = null, maskClosable = true } = {}) {
+    console.log('[showMyDialog] 显示弹窗:', { title, content, showCancel, confirmText });
     this.setData({
       dialog: { show: true, title, content, showCancel, confirmText, cancelText, callback, maskClosable }
     });
+    console.log('[showMyDialog] 弹窗状态已更新，dialog.show:', this.data.dialog.show);
   },
   closeCustomDialog() {
     this.setData({ dialog: { ...this.data.dialog, show: false, callback: null } });
   },
   onDialogConfirm() {
+    console.log('[onDialogConfirm] 用户点击了确定按钮');
     const cb = this.data.dialog && this.data.dialog.callback;
-    getApp().hideDialog();
-    if (typeof cb === 'function') cb();
+    this.closeCustomDialog();
+    if (typeof cb === 'function') {
+      console.log('[onDialogConfirm] 执行回调函数');
+      // 延迟执行回调，确保弹窗关闭动画完成后再跳转
+      setTimeout(() => {
+        cb();
+      }, 300);
+    }
   },
   onDialogMaskTap() {
     if (this.data.dialog && this.data.dialog.maskClosable) {
-      getApp().hideDialog();
+      this.closeCustomDialog();
     }
   },
   noop() {},
@@ -361,7 +374,63 @@ Page({
   },
 
   toggleService(e) {
-    this.setData({ serviceType: e.currentTarget.dataset.type });
+    const type = e.currentTarget.dataset.type;
+    
+    // 如果切换到故障报修，先检查是否有未完成的寄回订单
+    if (type === 'repair') {
+      this.checkUnfinishedReturn();
+    } else {
+      this.setData({ serviceType: type });
+    }
+  },
+
+  // 【新增】检查是否有未完成的寄回订单
+  checkUnfinishedReturn() {
+    const db = wx.cloud.database();
+    db.collection('shouhou_repair')
+      .where({
+        needReturn: true
+      })
+      .get()
+      .then(checkRes => {
+        // 过滤出未完成且用户未录入运单号的订单
+        const unfinishedReturns = (checkRes.data || []).filter(item => 
+          !item.returnCompleted && !item.returnTrackingId
+        );
+        
+        if (unfinishedReturns.length > 0) {
+          // 有未完成的寄回订单，显示提示并阻止切换
+          this.showMyDialog({
+            title: '提示',
+            content: '检测到您有一笔未完成的售后，未寄回维修配件，请先处理完成',
+            showCancel: false,
+            confirmText: '去处理',
+            callback: () => {
+              // 跳转到个人中心
+              console.log('[checkUnfinishedReturn] 准备跳转到 my 页面');
+              wx.navigateTo({ 
+                url: '/pages/my/my',
+                success: () => {
+                  console.log('[checkUnfinishedReturn] 跳转成功');
+                },
+                fail: (err) => {
+                  console.error('[checkUnfinishedReturn] 跳转失败:', err);
+                  wx.showToast({ title: '跳转失败，请手动进入个人中心', icon: 'none' });
+                }
+              });
+            }
+          });
+          return; // 不切换服务类型
+        }
+        
+        // 没有未完成的寄回订单，正常切换
+        this.setData({ serviceType: 'repair' });
+      })
+      .catch(err => {
+        console.error('检查寄回订单失败:', err);
+        // 检查失败也允许切换，避免阻塞用户
+        this.setData({ serviceType: 'repair' });
+      });
   },
 
   // 3. 加载配件 (支持云端价格) - 新版本
@@ -1049,7 +1118,7 @@ Page({
     if (selectedCount === 0) {
       // 提示用户选择配件，并显示所有可用配件
       const partNames = currentPartsList.map(p => p.name).join('、');
-      wx.showModal({
+      this.showMyDialog({
         title: '请选择配件',
         content: `请先点击配件进行选择。\n可用配件：${partNames.substring(0, 50)}${partNames.length > 50 ? '...' : ''}`,
         showCancel: false
@@ -1239,7 +1308,10 @@ Page({
 
     // 没选新配件 -> 尝试直接结算购物车
     if (selectedCount === 0) {
-      if (cart.length === 0) return wx.showToast({ title: '请选择配件', icon: 'none' });
+      if (cart.length === 0) {
+        this.showMyDialog({ title: '提示', content: '请选择配件', showCancel: false });
+        return;
+      }
       this.reCalcFinalPrice(cart);
       this.setData({ cart, showOrderModal: true }); // 打开弹窗
       return;
@@ -1266,10 +1338,12 @@ Page({
     
     // 校验
     if (!repairDescription || repairDescription.trim() === '') {
-      return wx.showToast({ title: '请填写故障描述', icon: 'none' });
+      this.showMyDialog({ title: '提示', content: '请填写故障描述', showCancel: false });
+      return;
     }
     if (!tempVideoPath) {
-      return wx.showToast({ title: '请上传故障视频', icon: 'none' });
+      this.showMyDialog({ title: '提示', content: '请上传故障视频', showCancel: false });
+      return;
     }
     
     // 打开订单弹窗
@@ -1294,15 +1368,18 @@ Page({
     if (serviceType === 'repair') {
       // 校验
       if (!repairDescription || repairDescription.trim() === '') {
-        return wx.showToast({ title: '请填写故障描述', icon: 'none' });
+        this.showMyDialog({ title: '提示', content: '请填写故障描述', showCancel: false });
+        return;
       }
       if (!tempVideoPath) {
-        return wx.showToast({ title: '请上传故障视频', icon: 'none' });
+        this.showMyDialog({ title: '提示', content: '请上传故障视频', showCancel: false });
+        return;
       }
       // 检查地址：优先使用 detailAddress，如果没有则使用 orderInfo.address
       const address = this.data.detailAddress || orderInfo.address;
       if (!orderInfo.name || !orderInfo.phone || !address) {
-        return wx.showToast({ title: '请完善联系信息', icon: 'none' });
+        this.showMyDialog({ title: '提示', content: '请完善联系信息', showCancel: false });
+        return;
       }
 
       // 调用故障报修提交函数
@@ -1312,25 +1389,34 @@ Page({
 
     // 配件购买模式（原有逻辑）
     // 校验
-    if (cart.length === 0) return wx.showToast({ title: '清单为空', icon: 'none' });
-    if (!orderInfo.name || !orderInfo.phone) return wx.showToast({ title: '请填写联系人', icon: 'none' });
+    if (cart.length === 0) {
+      this.showMyDialog({ title: '提示', content: '清单为空', showCancel: false });
+      return;
+    }
+    if (!orderInfo.name || !orderInfo.phone) {
+      this.showMyDialog({ title: '提示', content: '请填写联系人', showCancel: false });
+      return;
+    }
     if (!detailAddress || !detailAddress.trim()) {
-      return wx.showToast({ title: '请填写详细地址', icon: 'none' });
+      this.showMyDialog({ title: '提示', content: '请填写详细地址', showCancel: false });
+      return;
     }
 
     // 解析地址，验证是否包含省市区信息
     const parsed = this.parseAddressForShipping(detailAddress);
     if (!parsed.province && !parsed.city) {
-      return wx.showToast({ 
-        title: '地址格式不正确，请包含省市区信息，如：广东省 佛山市 南海区 某某街道101号', 
-        icon: 'none',
-        duration: 3000
+      this.showMyDialog({ 
+        title: '提示', 
+        content: '地址格式不正确，请包含省市区信息，如：广东省 佛山市 南海区 某某街道101号', 
+        showCancel: false 
       });
+      return;
     }
 
     // 顺丰运费校验
     if (shippingMethod === 'sf' && shippingFee === 0) {
-      return wx.showToast({ title: '请完善地址信息以计算运费', icon: 'none' });
+      this.showMyDialog({ title: '提示', content: '请完善地址信息以计算运费', showCancel: false });
+      return;
     }
 
     // 拼装地址
@@ -1338,14 +1424,14 @@ Page({
     const finalInfo = { ...orderInfo, address: fullAddressString };
 
     // 调支付
-    wx.showModal({
+    this.showMyDialog({
       title: '确认支付',
       content: '定制服务不支持退款。',
+      showCancel: true,
       confirmText: '支付',
-      success: (res) => {
-        if (res.confirm) {
-          this.doCloudSubmit('pay', cart, finalInfo, finalTotalPrice, shippingFee, shippingMethod);
-        }
+      cancelText: '取消',
+      callback: () => {
+        this.doCloudSubmit('pay', cart, finalInfo, finalTotalPrice, shippingFee, shippingMethod);
       }
     });
   },
@@ -1456,7 +1542,7 @@ Page({
       return;
     }
     if (!orderInfo.name || !orderInfo.phone || !orderInfo.address) {
-      wx.showToast({ title: '请完善收货信息', icon: 'none' });
+      this.showMyDialog({ title: '提示', content: '请完善收货信息', showCancel: false });
       return;
     }
 
@@ -1472,14 +1558,14 @@ Page({
       }));
 
     // 弹出免责声明
-    wx.showModal({
+    this.showMyDialog({
       title: '维修服务确认',
       content: '此为定制维修配件服务，下单后不支持退款。',
+      showCancel: true,
       confirmText: '支付',
-      success: (res) => {
-        if (res.confirm) {
-          this.doPayment(goods, totalPrice, orderInfo);
-        }
+      cancelText: '取消',
+      callback: () => {
+        this.doPayment(goods, totalPrice, orderInfo);
       }
     });
   },
@@ -2336,36 +2422,69 @@ Page({
 
   // [新增] 提交维修工单
   submitRepairTicket() {
+    console.log('[submitRepairTicket] ========== 开始提交维修工单 ==========');
     const { 
       currentModelName, repairDescription, videoFileName, tempVideoPath, 
       orderInfo // 复用收货信息
     } = this.data;
 
+    console.log('[submitRepairTicket] 当前数据:', {
+      currentModelName,
+      repairDescription: repairDescription ? repairDescription.substring(0, 20) + '...' : '',
+      tempVideoPath: tempVideoPath ? '已设置' : '未设置',
+      orderInfo,
+      detailAddress: this.data.detailAddress ? this.data.detailAddress.substring(0, 20) + '...' : ''
+    });
+
+    // 直接提交，不再检查（检查已在 toggleService 中完成）
+    this.doSubmitRepairTicket();
+  },
+
+  // 【新增】实际提交维修工单的方法（从 submitRepairTicket 中分离出来）
+  doSubmitRepairTicket() {
+    const { 
+      currentModelName, repairDescription, videoFileName, tempVideoPath, 
+      orderInfo
+    } = this.data;
+
     // 1. 校验
     if (!repairDescription || repairDescription.trim() === '') {
-      return wx.showToast({ title: '请填写故障描述', icon: 'none' });
+      console.warn('[submitRepairTicket] 校验失败：故障描述为空');
+      this.showMyDialog({ title: '提示', content: '请填写故障描述', showCancel: false });
+      return;
     }
     if (!tempVideoPath) {
-      return wx.showToast({ title: '请上传故障视频', icon: 'none' });
+      console.warn('[submitRepairTicket] 校验失败：视频路径为空');
+      this.showMyDialog({ title: '提示', content: '请上传故障视频', showCancel: false });
+      return;
     }
     // 检查地址：优先使用 detailAddress，如果没有则使用 orderInfo.address
     const address = this.data.detailAddress || orderInfo.address;
     if (!orderInfo.name || !orderInfo.phone || !address) {
-      return wx.showToast({ title: '请完善联系信息', icon: 'none' });
+      console.warn('[submitRepairTicket] 校验失败：联系信息不完整', {
+        name: orderInfo.name,
+        phone: orderInfo.phone,
+        address: address ? '已设置' : '未设置'
+      });
+      this.showMyDialog({ title: '提示', content: '请完善联系信息', showCancel: false });
+      return;
     }
 
+    console.log('[doSubmitRepairTicket] 所有校验通过，开始上传流程');
     // 显示自定义加载动画（立即显示，确保在系统提示之前）
     this.setData({ showLoadingAnimation: true });
     
     // 使用很短的延迟确保动画已经渲染，然后再开始上传（避免微信原生提示覆盖）
     // 注意：如果微信系统提示仍然出现，可能需要使用其他上传方式
     setTimeout(() => {
+      console.log('[submitRepairTicket] 开始上传视频，路径:', tempVideoPath);
       // 2. 上传视频
       const cloudPath = `repair_video/${Date.now()}_${Math.floor(Math.random()*1000)}.mp4`;
       wx.cloud.uploadFile({
       cloudPath: cloudPath,
       filePath: tempVideoPath,
       success: res => {
+        console.log('[submitRepairTicket] 视频上传成功，fileID:', res.fileID);
         const fileID = res.fileID;
         
         // 3. 写入数据库
@@ -2377,9 +2496,31 @@ Page({
           address: finalAddress,
           shippingMethod: this.data.shippingMethod || 'zto' // 让维修工单也记录快递方式
         };
+        
+        console.log('[submitRepairTicket] 准备写入数据库，数据:', {
+          model: currentModelName,
+          description: repairDescription.trim(),
+          contact: finalContact
+        });
+        
+        // 🔴 安全：显式设置 _openid，确保数据归属正确
+        const myOpenid = this.data.myOpenid;
+        if (!myOpenid) {
+          console.error('[submitRepairTicket] 未获取到 openid，无法提交');
+          this.setData({ showLoadingAnimation: false });
+          this.showMyDialog({
+            title: '提交失败',
+            content: '用户身份验证失败，请重新进入页面',
+            showCancel: false,
+            confirmText: '知道了'
+          });
+          return;
+        }
+        
         // 先检查集合是否存在，如果不存在则先创建一条记录
         db.collection('shouhou_repair').add({
           data: {
+            _openid: myOpenid, // 🔴 显式设置当前用户的 openid
             type: 'repair', // 类型标记
             model: currentModelName,
             description: repairDescription.trim(),
@@ -2388,17 +2529,25 @@ Page({
             status: 'PENDING',  // 初始状态
             createTime: db.serverDate()
           },
-          success: () => {
+          success: (addRes) => {
+            console.log('[submitRepairTicket] 数据库写入成功，_id:', addRes._id);
             // 隐藏自定义加载动画
             this.setData({ showLoadingAnimation: false });
             
-            // 成功弹窗
-            wx.showModal({
+            // 先关闭订单弹窗，避免遮挡成功提示
+            this.setData({ showOrderModal: false });
+            
+            // 等待订单弹窗关闭动画完成后再显示成功弹窗
+            setTimeout(() => {
+              console.log('[submitRepairTicket] 准备显示成功弹窗');
+              // 成功弹窗（使用自定义弹窗）
+              this.showMyDialog({
               title: '提交成功',
               content: '售后工程师将在后台查看您的视频并进行评估。',
               confirmText: '好的',
               showCancel: false,
-              success: () => {
+              callback: () => {
+                console.log('[submitRepairTicket] 用户点击了确定按钮');
                 // 清空表单并跳转
                 this.setData({ 
                   repairDescription: '', 
@@ -2408,26 +2557,31 @@ Page({
                   orderInfo: { name: '', phone: '', address: '' },
                   detailAddress: ''
                 });
-                // 不自动跳转到个人页，停留在当前页面
-                this.setData({ showOrderModal: false });
+                // 不自动跳转到个人页，停留在当前页面（订单弹窗已经在上面关闭了）
               }
             });
+            }, 300); // 等待订单弹窗关闭动画完成
           },
           fail: err => {
             // 隐藏自定义加载动画
             this.setData({ showLoadingAnimation: false });
             console.error('提交失败:', err);
             
-            // 如果是集合不存在错误，提示用户
+            // 如果是集合不存在错误，提示用户（使用自定义弹窗）
             if (err.errCode === -502005 || err.errMsg.includes('collection not exists')) {
-              wx.showModal({
+              this.showMyDialog({
                 title: '提示',
                 content: '数据库集合不存在，请联系管理员创建 shouhou_repair 集合',
                 showCancel: false,
                 confirmText: '知道了'
               });
             } else {
-              wx.showToast({ title: '提交失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+              this.showMyDialog({
+                title: '提交失败',
+                content: err.errMsg || '未知错误',
+                showCancel: false,
+                confirmText: '知道了'
+              });
             }
           }
         });
@@ -2435,8 +2589,13 @@ Page({
       fail: err => {
         // 隐藏自定义加载动画
         this.setData({ showLoadingAnimation: false });
-        console.error('视频上传失败:', err);
-        wx.showToast({ title: '视频上传失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+        console.error('[submitRepairTicket] 视频上传失败:', err);
+        this.showMyDialog({
+          title: '上传失败',
+          content: err.errMsg || '视频上传失败，请检查网络后重试',
+          showCancel: false,
+          confirmText: '知道了'
+        });
       }
       });
     });

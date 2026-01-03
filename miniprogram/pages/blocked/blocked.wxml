@@ -31,11 +31,3 @@
     <text>正在云端校验权限...</text>
   </view>
 </view>
-
-<!-- 自定义“内容已复制”弹窗：统一使用首页样式 -->
-<view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}">
-  <view class="custom-modal-box copy-success-modal">
-    <view class="modal-icon-new success-icon">✓</view>
-    <view class="modal-title-new">内容已复制</view>
-  </view>
-</view>
