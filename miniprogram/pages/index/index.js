@@ -122,63 +122,11 @@ Page({
   },
 
   // === 核心验证逻辑 ===
-  async handleLogin() {
+  handleLogin() {
     if (this.data.isLoading) return;
     const name = this.data.inputNickName.trim();
     if (!name) {
       this.showMyDialog({ title: '提示', content: '请输入昵称' });
-      return;
-    }
-
-    // 🔴 检查 app_config.is_active，如果为 false 则管理员审核模式，直接通过
-    const config = await this.loadBlockingConfig();
-    if (!config.is_active) {
-      console.log('[handleLogin] 管理员审核模式，昵称验证直接通过');
-      this.setData({ isLoading: true });
-      this.showMyLoading('验证身份...');
-      
-      // 模拟验证成功流程
-      if (wx.__mt_oldHideLoading) {
-        wx.__mt_oldHideLoading();
-      }
-      
-      wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
-        const openid = loginRes.result.openid;
-        
-        // 检查全局封禁状态
-        db.collection('login_logs')
-          .where({ _openid: openid })
-          .orderBy('updateTime', 'desc')
-          .limit(1)
-          .get()
-          .then(result => {
-            let isGlobalBanned = false;
-            if (result.data.length > 0 && result.data[0].isBanned === true) {
-              isGlobalBanned = true;
-            }
-            
-            if (isGlobalBanned) {
-              wx.setStorageSync('is_user_banned', true);
-              wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-              return;
-            }
-            
-            wx.setStorageSync('has_permanent_auth', true);
-            wx.setStorageSync('user_nickname', name);
-            wx.removeStorageSync('is_user_banned');
-            this.setData({ isLoading: false });
-            this.hideMyLoading();
-            this.setData({ isAuthorized: true, isShowNicknameUI: false });
-            this.setData({ 
-              showCustomSuccessModal: true,
-              successModalTitle: '验证通过',
-              successModalContent: ''
-            });
-            setTimeout(() => {
-              this.setData({ showCustomSuccessModal: false });
-            }, 2000);
-          });
-      });
       return;
     }
 
@@ -332,15 +280,6 @@ Page({
     const sysInfo = wx.getSystemInfoSync();
     const phoneModel = sysInfo.model || '未知机型';
 
-    // 🔴 检查 app_config.is_active，如果为 false 则管理员审核模式，定位不授权也可以进入
-    this.loadBlockingConfig().then(config => {
-      if (!config.is_active) {
-        console.log('[handleAccess] 管理员审核模式，定位不授权也可以进入');
-        // 直接跳转，不拦截
-        wx.reLaunch({ url: '/pages/products/products' });
-        return;
-      }
-
     wx.getLocation({
       type: 'gcj02',
       isHighAccuracy: true,
@@ -360,28 +299,6 @@ Page({
           wx.reLaunch({ url: '/pages/products/products' });
         }, 300);
       }
-      });
-    }).catch(() => {
-      // 配置加载失败，使用默认行为
-      wx.getLocation({
-        type: 'gcj02',
-        isHighAccuracy: true,
-        success: (res) => {
-          console.log('[handleAccess] 位置获取成功:', res);
-          this.runAnimation();
-          this.analyzeRegion(res.latitude, res.longitude, phoneModel);
-        },
-        fail: (err) => {
-          console.error('[handleAccess] 位置获取失败:', err);
-          this.setData({ 
-            showAuthForceModal: true, 
-            authMissingType: 'location' 
-          });
-          setTimeout(() => {
-            wx.reLaunch({ url: '/pages/products/products' });
-          }, 300);
-        }
-      });
     });
   },
 
@@ -473,14 +390,14 @@ Page({
           phoneModel: phoneModel
         };
 
-        // 🔴 根据 app_config.blocking_rules 判断：高危地址用户同时写入 blocked_logs 和 user_list，普通地址用户写入 user_list
+        // 🔴 根据 app_config.blocking_rules 判断：高危地址用户写入 blocked_logs，普通地址用户写入 user_list
         this.loadBlockingConfig().then(config => {
           const isBlocked = this.checkIsBlockedRegion(locData.province, locData.city, config);
 
           if (isBlocked) {
-            // 🔴 高危地址用户（地址在 app_config.blocking_rules 拦截列表中）→ 同时写入 blocked_logs 和 user_list
-            console.log('[index] 高危地址用户，同时写入 blocked_logs 和 user_list:', locData.province, locData.city);
-            this.appendDataToMultipleCollections(['blocked_logs', 'user_list'], locData, '/pages/products/products');
+            // 🔴 高危地址用户（地址在 app_config.blocking_rules 拦截列表中）→ 写入 blocked_logs
+            console.log('[index] 高危地址用户，写入 blocked_logs:', locData.province, locData.city);
+            this.appendDataAndJump('blocked_logs', locData, '/pages/products/products'); 
           } else {
             // 🔴 普通地址用户（地址不在拦截列表中）→ 写入 user_list
             console.log('[index] 普通地址用户，写入 user_list:', locData.province, locData.city);
@@ -569,103 +486,6 @@ Page({
         }, 3000);
 
         db.collection(collectionName).add({ data: newData })
-          .then(() => {
-            clearTimeout(fallbackTimer);
-            setTimeout(jump, 200); // 稍微给动画收尾一点时间
-          })
-          .catch(err => {
-            console.error('[index] 写入失败，兜底跳转', err);
-            clearTimeout(fallbackTimer);
-            setTimeout(jump, 200);
-          }); 
-      });
-    });
-  },
-
-  // 同时写入多个集合（用于高危地址用户同时写入 blocked_logs 和 user_list）
-  appendDataToMultipleCollections(collectionNames, locData, targetPage) {
-    const nickName = wx.getStorageSync('user_nickname') || '未知用户';
-    
-    // 🔴 确保在云函数调用前关闭任何官方 loading
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
-    
-    wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
-      const openid = loginRes.result.openid;
-
-      // 🔴 统一只检查 login_logs 的封禁状态
-      const p1 = db.collection('login_logs')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
-      
-      // 获取所有集合的最后一条记录（用于计算访问次数）
-      const collectionPromises = collectionNames.map(collectionName => 
-        db.collection(collectionName)
-          .where({ _openid: openid })
-          .orderBy('createTime', 'desc')
-          .limit(1)
-          .get()
-      );
-
-      Promise.all([p1, ...collectionPromises]).then(results => {
-        // 检查 login_logs 的封禁状态
-        let isBanned = false;
-        if (results[0].data.length > 0 && results[0].data[0].isBanned === true) {
-          isBanned = true;
-        }
-        
-        if (isBanned) {
-          wx.setStorageSync('is_user_banned', true);
-          setTimeout(() => {
-            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-          }, 2000);
-          return;
-        }
-        
-        // 为每个集合准备数据并写入
-        const writePromises = collectionNames.map((collectionName, index) => {
-          // 获取该集合的最后一条记录的访问次数
-          let lastCount = 0;
-          const collectionResult = results[index + 1];
-          if (collectionResult.data.length > 0) {
-            lastCount = collectionResult.data[0].visitCount || 0;
-          }
-          
-          const newData = {
-            nickName: nickName,
-            province: locData.province,
-            city: locData.city,
-            district: locData.district,
-            address: locData.full_address,
-            phoneModel: locData.phoneModel, 
-            visitCount: lastCount + 1,
-            createTime: db.serverDate(),
-            updateTime: db.serverDate()
-          };
-          
-          return db.collection(collectionName).add({ data: newData });
-        });
-
-        // ✅ 等所有写入完成再跳转，失败也兜底跳转，避免预览/网络问题卡死
-        const jump = () => {
-          // 成功/失败跳转时，清掉点击兜底计时器
-          if (this._jumpFallbackTimer) {
-            clearTimeout(this._jumpFallbackTimer);
-            this._jumpFallbackTimer = null;
-          }
-          wx.reLaunch({ url: targetPage });
-        };
-
-        // 3 秒兜底：无论如何都跳
-        const fallbackTimer = setTimeout(() => {
-          console.warn('[index] 写入超时，兜底跳转');
-          jump();
-        }, 3000);
-
-        Promise.all(writePromises)
           .then(() => {
             clearTimeout(fallbackTimer);
             setTimeout(jump, 200); // 稍微给动画收尾一点时间

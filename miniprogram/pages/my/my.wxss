@@ -75,8 +75,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 /* --- 头部优化：居中对齐版 --- */
 .profile-header { 
   background: #fff; 
-  padding: 40rpx 40rpx 30rpx; /* 减小底部padding，为下方订单列表留出间距 */
-  margin-bottom: 20rpx; /* 🔴 添加底部间距，与订单卡片分开 */
+  padding: 40rpx 40rpx 40rpx; /* 减小一点底部padding */
   display: flex;
   flex-direction: column; 
   align-items: center; /* 【核心】让所有子元素水平居中 */
@@ -190,37 +189,9 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .admin-header-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start; /* 改为顶部对齐 */
+  align-items: flex-end; /* 底部对齐 */
+  /* 给原来的 padding 改一下，适应新布局 */
   padding: 180rpx 40rpx 20rpx; 
-  margin-bottom: 20rpx;
-  flex-wrap: wrap; /* 允许换行 */
-  gap: 20rpx; /* 添加间距 */
-}
-
-/* 管理员头部右侧按钮组 */
-.admin-header-right {
-  display: flex;
-  flex-direction: column; /* 改为垂直排列 */
-  align-items: flex-end;
-  gap: 12rpx;
-  flex-shrink: 0;
-}
-
-/* 需寄回订单确认按钮 */
-.return-required-btn {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #007AFF;
-  background: rgba(0, 122, 255, 0.1);
-  padding: 12rpx 24rpx;
-  border-radius: 24rpx;
-  white-space: nowrap;
-  border: 1rpx solid rgba(0, 122, 255, 0.2);
-}
-
-.return-required-btn:active {
-  opacity: 0.7;
-  background: rgba(0, 122, 255, 0.15);
 }
 
 /* 标题样式微调 */
@@ -240,18 +211,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
   padding: 12rpx 24rpx;
   border-radius: 30rpx;
   transition: all 0.2s;
-  white-space: nowrap;
-  border: 1rpx solid rgba(0, 113, 227, 0.2);
 }
 .switch-view-btn.active {
   background: #000;
   color: #fff;
-  border-color: #000;
 }
-.switch-view-btn:active { 
-  opacity: 0.7; 
-  transform: scale(0.98);
-}
+.switch-view-btn:active { opacity: 0.7; }
 
 /* --- 空状态提示 --- */
 .empty-card {
@@ -380,7 +345,6 @@ page { background: #F7F7F7; color: #1D1D1F; }
 /* 1. Swiper 容器 */
 .order-swiper {
   width: 100%;
-  margin-top: 20rpx; /* 🔴 添加上边距，与标题栏分开 */
   margin-bottom: 20rpx;
   
   /* ⚠️⚠️⚠️【重点检查】⚠️⚠️⚠️ */
@@ -491,7 +455,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 /* 2. 修复按钮：加高 + 胶囊形状 */
 /* ========================================= */
 
-/* 管理员物料发出按钮 & 用户物料追踪按钮 (通用设置) */
+/* 管理员发货按钮 & 用户查看物流按钮 (通用设置) */
 .admin-ship-btn,
 .btn-logistics-action,
 .logistics-btn {
@@ -509,14 +473,14 @@ page { background: #F7F7F7; color: #1D1D1F; }
   box-sizing: border-box; /* 防止边框撑大 */
 }
 
-/* 黑色物料发出按钮 */
+/* 黑色发货按钮 */
 .admin-ship-btn {
   background: #000;
   color: #fff;
   box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.2);
 }
 
-/* 白色物料追踪按钮 */
+/* 白色查看物流按钮 */
 .btn-logistics-action,
 .logistics-btn {
   background: #fff;
@@ -798,396 +762,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .custom-dialog-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
-  position: relative;
-  z-index: 99999999;
-}
-@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
-
-.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
-
-.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
-.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
-.cd-btn.cancel { background: #F5F5F7; color: #666; }
-.cd-btn.confirm { background: #000; color: #fff; }
-.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
-
-/* 统一的“内容已复制”弹窗样式（和首页一致） */
-.custom-modal-mask {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
-  z-index: 12000;
-  display: flex; align-items: center; justify-content: center;
-}
-
-.custom-modal-box {
-  width: 620rpx;
-  background: #ffffff;
-  border-radius: 48rpx;
-  padding: 70rpx 50rpx;
-  display: flex; flex-direction: column; align-items: center;
-  box-shadow: 0 40rpx 80rpx rgba(0, 0, 0, 0.2);
-  transform: scale(0.8); opacity: 0;
-  animation: mySpringPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-@keyframes mySpringPop {
-  to { transform: scale(1); opacity: 1; }
-}
-
-.modal-icon-new {
-  width: 110rpx; height: 110rpx;
-  margin-bottom: 40rpx;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 88rpx; font-weight: 900; color: #000000; line-height: 1;
-}
-
-.modal-title-new {
-  font-size: 40rpx;
-  font-weight: 900;
-  color: #000000;
-}
-
-.copy-success-modal {
-  width: 400rpx !important;
-  padding: 60rpx 40rpx !important;
-  min-height: auto;
-}
-
-.copy-success-modal .modal-icon-new {
-  width: 80rpx !important;
-  height: 80rpx !important;
-  margin-bottom: 30rpx !important;
-  font-size: 60rpx !important;
-}
-
-.copy-success-modal .modal-title-new {
-  font-size: 36rpx !important;
-  margin-bottom: 0 !important;
-  font-weight: 600 !important;
-}
-
-/* ========================================= */
-/* 蓝牙雷达按钮：Apple AirDrop 风格 */
-/* ========================================= */
-
-.bt-scan-container {
-  display: flex; flex-direction: column; align-items: center;
-  margin: 80rpx 0; /* 上下留白加大 */
-}
-
-/* 1. 外层容器 */
-.radar-circle {
-  width: 200rpx; height: 200rpx; /* 整体加大，显得大气 */
-  position: relative;
-  display: flex; align-items: center; justify-content: center;
-}
-
-/* 2. 核心黑球 */
-.radar-core {
-  width: 120rpx; height: 120rpx; 
-  background: #000; /* 纯黑 */
-  border-radius: 50%; 
-  z-index: 20; /* 确保在波纹上面 */
-  display: flex; align-items: center; justify-content: center;
-  
-  /* 加一个高级的投影 */
-  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25);
-  transition: transform 0.2s;
-}
-/* 按下去的时候稍微缩一下，有反馈感 */
-.radar-circle:active .radar-core {
-  transform: scale(0.95);
-}
-
-/* 3. 蓝牙图标 (Base64图片) */
-.bt-icon-img {
-  width: 50rpx; height: 50rpx;
-}
-
-/* 4. 波纹圈 (极细线条) */
-.radar-ring {
-  position: absolute; 
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%); /* 物理居中 */
-  width: 120rpx; height: 120rpx;    /* 初始大小和黑球一样 */
-  
-  border-radius: 50%; 
-  border: 1px solid rgba(0, 0, 0, 0.1); /* 极细的淡灰色线条 */
-  background: transparent;
-  box-sizing: border-box;
-  opacity: 0;
-  z-index: 10;
-}
-
-/* 5. 动画逻辑 (只有 isScanning 时才动) */
-.radar-ring.anim { 
-  animation: airDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite; 
-}
-
-/* 错开时间，制造连贯感 */
-.r1 { animation-delay: 0s; }
-.r2 { animation-delay: 0.8s; }
-.r3 { animation-delay: 1.6s; }
-
-/* 动画关键帧：像水波一样扩散 */
-@keyframes airDropRipple {
-  0% {
-    width: 120rpx; height: 120rpx;
-    opacity: 0.6;
-    border-color: rgba(0, 0, 0, 0.3);
-  }
-  100% {
-    width: 300rpx; height: 300rpx; /* 扩散得更远 */
-    opacity: 0;
-    border-color: rgba(0, 0, 0, 0);
-  }
-}
-
-/* 底部提示文字 */
-.radar-tip {
-  margin-top: 50rpx; 
-  color: #888; 
-  font-size: 26rpx; 
-  font-weight: 500;
-  letter-spacing: 2rpx;
-}
-
-/* ================= 全局自定义 Loading (极简黑) ================= */
-.custom-loading-mask {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: transparent; /* 背景完全透明 */
-  z-index: 10000;
-  display: flex; align-items: center; justify-content: center;
-}
-
-.loading-box {
-  background: rgba(0, 0, 0, 0.75); /* 黑色半透明底 */
-  padding: 40rpx 60rpx;
-  border-radius: 24rpx;
-  display: flex; flex-direction: column; align-items: center;
-  backdrop-filter: blur(10px); /* 磨砂玻璃效果 */
-}
-
-.spinner {
-  width: 60rpx; height: 60rpx;
-  border: 6rpx solid rgba(255, 255, 255, 0.2); /* 轨道颜色 */
-  border-top-color: #fff; /* 转动部分纯白 */
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  margin-bottom: 20rpx;
-}
-
-.loading-text {
-  color: #fff; 
-  font-size: 26rpx; 
-  letter-spacing: 2rpx;
-}
-
-@keyframes spin { 
-  to { transform: rotate(360deg); } 
-}
-
-/* ================= 空状态卡片 ================= */
-.empty-order-card {
-  /* 左右留边距，和下面的设备卡片对齐 */
-  margin: 0 40rpx 40rpx; 
-  /* 给一个合适的高度，占住位置 */
-  height: 400rpx; 
-  
-  background: #fff;
-  border-radius: 40rpx;
-  /* 关键：用虚线边框，暗示"这里缺东西" */
-  border: 4rpx dashed #E5E5E5; 
-  
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-}
-
-/* 按压反馈 */
-.empty-order-card:active {
-  background: #FAFAFA;
-  border-color: #CCC;
-  transform: scale(0.99);
-}
-
-.empty-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 60rpx;
-  margin-bottom: 20rpx;
-  opacity: 0.8;
-}
-
-.empty-title {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #1D1D1F;
-  margin-bottom: 8rpx;
-}
-
-.empty-desc {
-  font-size: 22rpx;
-  color: #8E8E93;
-  margin-bottom: 40rpx;
-}
-
-/* 黑色引流按钮 */
-.go-shop-btn {
-  background: #000;
-  color: #fff;
-  font-size: 26rpx;
-  font-weight: 600;
-  padding: 16rpx 40rpx;
-  border-radius: 40rpx;
-  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
-}
-
-/* ================= 输入弹窗样式 ================= */
-.cd-input {
-  width: 100%;
-  height: 80rpx;
-  background: #F5F5F7;
-  border-radius: 12rpx;
-  padding: 0 24rpx;
-  font-size: 28rpx;
-  color: #000;
-  margin: 30rpx 0;
-  box-sizing: border-box;
-}
-
-/* === 2. 连接成功状态条 (黑白风) === */
-.bt-connected-bar {
-  background: #F7F7F7; /* 浅灰底 */
-  border: 2rpx solid #000; /* 【修改】黑边框 */
-  border-radius: 20rpx;
-  padding: 30rpx; display: flex; align-items: center; margin-bottom: 40rpx;
-}
-.bt-c-icon { font-size: 40rpx; margin-right: 20rpx; }
-.bt-c-info { flex: 1; display: flex; flex-direction: column; }
-.bt-c-name { font-size: 22rpx; color: #666; font-weight: 700; }
-.bt-c-sn { font-size: 32rpx; font-weight: 800; color: #000; letter-spacing: 2rpx; } /* SN码加粗变黑 */
-
-.bt-disconnect-btn {
-  font-size: 24rpx; 
-  color: #fff; background: #000; /* 【修改】黑色按钮 */
-  padding: 12rpx 30rpx;
-  border-radius: 30rpx; 
-  font-weight: 600;
-}
-.bt-disconnect-btn:active { opacity: 0.8; }
-
-/* === 被锁状态 UI (红色禁止) === */
-.locked-view {
-  display: flex; flex-direction: column; align-items: center; 
-  padding: 60rpx 0; background: #FFF0F0; border-radius: 20rpx;
-}
-.locked-icon { font-size: 80rpx; margin-bottom: 20rpx; }
-.locked-title { font-size: 36rpx; font-weight: 800; color: #FF3B30; margin-bottom: 10rpx; }
-.locked-desc { font-size: 24rpx; color: #666; width: 80%; text-align: center; }
-.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
-.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
-
-.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
-
-.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
-.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
-.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
-
-/* 蓝牙按钮基础样式 */
-.bt-btn { 
-  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
-  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
-  background: #fff; box-sizing: border-box;
-  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
-  transition: all 0.3s;
-}
-
-/* 连接成功状态 */
-.bt-btn.ready { 
-  background: #34C759; border-color: #34C759; color: #fff; 
-}
-
-/* === 修复后的柔和波纹动画 === */
-.scan-radar {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-  display: flex; align-items: center; justify-content: center;
-  pointer-events: none;
-  overflow: visible; /* 允许波纹扩散出去 */
-}
-
-.ripple {
-  position: absolute;
-  width: 100rpx; height: 100rpx; /* 初始小圆 */
-  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
-  border-radius: 50%;
-  opacity: 0;
-  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-}
-
-/* 错开动画时间 */
-.r1 { animation-delay: 0s; }
-.r2 { animation-delay: 0.6s; }
-.r3 { animation-delay: 1.2s; }
-
-@keyframes rippleSmooth {
-  0% {
-    transform: scale(0.1);
-    opacity: 0;
-  }
-  5% {
-    opacity: 0.5; /* 出现 */
-  }
-  100% {
-    transform: scale(4); /* 放大4倍 */
-    opacity: 0; /* 慢慢消失 */
-  }
-}
-
-.form-item { margin-bottom: 30rpx; }
-.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
-.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
-
-.upload-group { display: flex; gap: 20rpx; }
-.upload-box { 
-  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
-  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
-  justify-content: center; font-size: 22rpx; color: #999; 
-  position: relative;
-  overflow: hidden;
-}
-.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
-.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
-
-.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
-.submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
-
-/* === 自定义弹窗样式 === */
-.custom-dialog-mask {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 99999999; display: flex; align-items: center; justify-content: center;
-}
-.custom-dialog-box {
-  width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
-  display: flex; flex-direction: column; align-items: center; text-align: center;
-  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
-  position: relative;
-  z-index: 99999999;
 }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
@@ -1506,14 +1086,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .custom-dialog-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
-  position: relative;
-  z-index: 99999999;
 }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
@@ -1832,14 +1410,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .custom-dialog-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
-  position: relative;
-  z-index: 99999999;
 }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
@@ -2158,14 +1734,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .custom-dialog-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
-  position: relative;
-  z-index: 99999999;
 }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
@@ -2484,14 +2058,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .custom-dialog-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
-  position: relative;
-  z-index: 99999999;
 }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
@@ -2810,14 +2382,336 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .custom-dialog-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+}
+@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
+.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+
+.cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
+.cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
+.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.confirm { background: #000; color: #fff; }
+.cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ========================================= */
+/* 蓝牙雷达按钮：Apple AirDrop 风格 */
+/* ========================================= */
+
+.bt-scan-container {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 80rpx 0; /* 上下留白加大 */
+}
+
+/* 1. 外层容器 */
+.radar-circle {
+  width: 200rpx; height: 200rpx; /* 整体加大，显得大气 */
   position: relative;
-  z-index: 99999999;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 2. 核心黑球 */
+.radar-core {
+  width: 120rpx; height: 120rpx; 
+  background: #000; /* 纯黑 */
+  border-radius: 50%; 
+  z-index: 20; /* 确保在波纹上面 */
+  display: flex; align-items: center; justify-content: center;
+  
+  /* 加一个高级的投影 */
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s;
+}
+/* 按下去的时候稍微缩一下，有反馈感 */
+.radar-circle:active .radar-core {
+  transform: scale(0.95);
+}
+
+/* 3. 蓝牙图标 (Base64图片) */
+.bt-icon-img {
+  width: 50rpx; height: 50rpx;
+}
+
+/* 4. 波纹圈 (极细线条) */
+.radar-ring {
+  position: absolute; 
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%); /* 物理居中 */
+  width: 120rpx; height: 120rpx;    /* 初始大小和黑球一样 */
+  
+  border-radius: 50%; 
+  border: 1px solid rgba(0, 0, 0, 0.1); /* 极细的淡灰色线条 */
+  background: transparent;
+  box-sizing: border-box;
+  opacity: 0;
+  z-index: 10;
+}
+
+/* 5. 动画逻辑 (只有 isScanning 时才动) */
+.radar-ring.anim { 
+  animation: airDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite; 
+}
+
+/* 错开时间，制造连贯感 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.8s; }
+.r3 { animation-delay: 1.6s; }
+
+/* 动画关键帧：像水波一样扩散 */
+@keyframes airDropRipple {
+  0% {
+    width: 120rpx; height: 120rpx;
+    opacity: 0.6;
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    width: 300rpx; height: 300rpx; /* 扩散得更远 */
+    opacity: 0;
+    border-color: rgba(0, 0, 0, 0);
+  }
+}
+
+/* 底部提示文字 */
+.radar-tip {
+  margin-top: 50rpx; 
+  color: #888; 
+  font-size: 26rpx; 
+  font-weight: 500;
+  letter-spacing: 2rpx;
+}
+
+/* ================= 全局自定义 Loading (极简黑) ================= */
+.custom-loading-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: transparent; /* 背景完全透明 */
+  z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.loading-box {
+  background: rgba(0, 0, 0, 0.75); /* 黑色半透明底 */
+  padding: 40rpx 60rpx;
+  border-radius: 24rpx;
+  display: flex; flex-direction: column; align-items: center;
+  backdrop-filter: blur(10px); /* 磨砂玻璃效果 */
+}
+
+.spinner {
+  width: 60rpx; height: 60rpx;
+  border: 6rpx solid rgba(255, 255, 255, 0.2); /* 轨道颜色 */
+  border-top-color: #fff; /* 转动部分纯白 */
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 20rpx;
+}
+
+.loading-text {
+  color: #fff; 
+  font-size: 26rpx; 
+  letter-spacing: 2rpx;
+}
+
+@keyframes spin { 
+  to { transform: rotate(360deg); } 
+}
+
+/* ================= 空状态卡片 ================= */
+.empty-order-card {
+  /* 左右留边距，和下面的设备卡片对齐 */
+  margin: 0 40rpx 40rpx; 
+  /* 给一个合适的高度，占住位置 */
+  height: 400rpx; 
+  
+  background: #fff;
+  border-radius: 40rpx;
+  /* 关键：用虚线边框，暗示"这里缺东西" */
+  border: 4rpx dashed #E5E5E5; 
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+/* 按压反馈 */
+.empty-order-card:active {
+  background: #FAFAFA;
+  border-color: #CCC;
+  transform: scale(0.99);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 60rpx;
+  margin-bottom: 20rpx;
+  opacity: 0.8;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  margin-bottom: 8rpx;
+}
+
+.empty-desc {
+  font-size: 22rpx;
+  color: #8E8E93;
+  margin-bottom: 40rpx;
+}
+
+/* 黑色引流按钮 */
+.go-shop-btn {
+  background: #000;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  padding: 16rpx 40rpx;
+  border-radius: 40rpx;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+}
+
+/* ================= 输入弹窗样式 ================= */
+.cd-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F5F5F7;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #000;
+  margin: 30rpx 0;
+  box-sizing: border-box;
+}
+
+/* === 2. 连接成功状态条 (黑白风) === */
+.bt-connected-bar {
+  background: #F7F7F7; /* 浅灰底 */
+  border: 2rpx solid #000; /* 【修改】黑边框 */
+  border-radius: 20rpx;
+  padding: 30rpx; display: flex; align-items: center; margin-bottom: 40rpx;
+}
+.bt-c-icon { font-size: 40rpx; margin-right: 20rpx; }
+.bt-c-info { flex: 1; display: flex; flex-direction: column; }
+.bt-c-name { font-size: 22rpx; color: #666; font-weight: 700; }
+.bt-c-sn { font-size: 32rpx; font-weight: 800; color: #000; letter-spacing: 2rpx; } /* SN码加粗变黑 */
+
+.bt-disconnect-btn {
+  font-size: 24rpx; 
+  color: #fff; background: #000; /* 【修改】黑色按钮 */
+  padding: 12rpx 30rpx;
+  border-radius: 30rpx; 
+  font-weight: 600;
+}
+.bt-disconnect-btn:active { opacity: 0.8; }
+
+/* === 被锁状态 UI (红色禁止) === */
+.locked-view {
+  display: flex; flex-direction: column; align-items: center; 
+  padding: 60rpx 0; background: #FFF0F0; border-radius: 20rpx;
+}
+.locked-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+.locked-title { font-size: 36rpx; font-weight: 800; color: #FF3B30; margin-bottom: 10rpx; }
+.locked-desc { font-size: 24rpx; color: #666; width: 80%; text-align: center; }
+.modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
+.close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+
+.type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
+.tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
+.tab-item.active { background: #fff; color: #000; box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.05); }
+
+/* 蓝牙按钮基础样式 */
+.bt-btn { 
+  width: 100%; padding: 30rpx; border: 1px solid #007AFF; color: #007AFF; 
+  border-radius: 24rpx; text-align: center; margin-bottom: 40rpx; font-weight: 600; 
+  background: #fff; box-sizing: border-box;
+  position: relative; overflow: hidden; /* 关键：限制波纹溢出 */
+  transition: all 0.3s;
+}
+
+/* 连接成功状态 */
+.bt-btn.ready { 
+  background: #34C759; border-color: #34C759; color: #fff; 
+}
+
+/* === 修复后的柔和波纹动画 === */
+.scan-radar {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+  overflow: visible; /* 允许波纹扩散出去 */
+}
+
+.ripple {
+  position: absolute;
+  width: 100rpx; height: 100rpx; /* 初始小圆 */
+  background: rgba(0, 0, 0, 0.1); /* 【修改】改成淡黑色 */
+  border-radius: 50%;
+  opacity: 0;
+  animation: rippleSmooth 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* 错开动画时间 */
+.r1 { animation-delay: 0s; }
+.r2 { animation-delay: 0.6s; }
+.r3 { animation-delay: 1.2s; }
+
+@keyframes rippleSmooth {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  5% {
+    opacity: 0.5; /* 出现 */
+  }
+  100% {
+    transform: scale(4); /* 放大4倍 */
+    opacity: 0; /* 慢慢消失 */
+  }
+}
+
+.form-item { margin-bottom: 30rpx; }
+.form-label { font-size: 22rpx; font-weight: 700; color: #8E8E93; margin-bottom: 20rpx; display: block; }
+.picker-val { background: #fff; padding: 24rpx; border-radius: 16rpx; border: 1px solid #E5E5E5; font-size: 28rpx; }
+
+.upload-group { display: flex; gap: 20rpx; }
+.upload-box { 
+  flex: 1; height: 180rpx; background: #F9F9F9; border: 1px dashed #D1D1D1; 
+  border-radius: 20rpx; display: flex; flex-direction: column; align-items: center; 
+  justify-content: center; font-size: 22rpx; color: #999; 
+  position: relative;
+  overflow: hidden;
+}
+.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
+.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
+
+.modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
+.submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+/* === 自定义弹窗样式 === */
+.custom-dialog-mask {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
+  z-index: 9999; display: flex; align-items: center; justify-content: center;
+}
+.custom-dialog-box {
+  width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
 }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
@@ -3144,10 +3038,8 @@ page { background: #F7F7F7; color: #1D1D1F; }
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: flex-start; /* 🔴 改为顶部对齐 */
+  justify-content: center;
   gap: 12rpx;
-  flex-shrink: 0; /* 🔴 防止被压缩 */
-  min-width: 0; /* 🔴 允许内容自适应 */
 }
 
 
@@ -3203,15 +3095,15 @@ page { background: #F7F7F7; color: #1D1D1F; }
 /* === 申请记录卡片样式 === */
 .activity-list {
   padding: 0 40rpx;
-  display: flex; flex-direction: column; gap: 24rpx; /* 🔴 增加卡片间距从 20rpx 到 24rpx */
+  display: flex; flex-direction: column; gap: 20rpx;
   margin-bottom: 40rpx;
 }
 
 .act-card {
   background: #fff; border-radius: 24rpx;
   /* 允许内容自适应高度，避免维修备注被裁剪 */
-  min-height: 180rpx; /* 🔴 增加最小高度从 170rpx 到 180rpx */
-  padding: 32rpx 36rpx 28rpx; /* 🔴 增加内边距，让内容更宽松 */
+  min-height: 170rpx;
+  padding: 26rpx 30rpx 24rpx;
   display: flex;
   flex-direction: column;
   justify-content: center; /* 左侧文字整体垂直居中 */
@@ -3225,14 +3117,13 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .act-main-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start; /* 🔴 改为顶部对齐，避免状态标签过长时挤压 */
+  align-items: center;
   width: 100%;
-  gap: 20rpx; /* 🔴 添加间距，避免左右内容挤压 */
 }
 
-.act-left { flex: 1; display: flex; flex-direction: column; gap: 12rpx; margin-right: 20rpx; } /* 🔴 增加左侧内容间距，添加右边距避免与状态标签挤压 */
+.act-left { flex: 1; display: flex; flex-direction: column; gap: 8rpx; }
 
-.act-title { display: flex; align-items: center; gap: 12rpx; } /* 🔴 确保标签和标题之间有间距 */
+.act-title { display: flex; align-items: center; }
 
 .act-tag {
   font-size: 18rpx; padding: 4rpx 10rpx; border-radius: 8rpx; margin-right: 12rpx; font-weight: 700;
@@ -3245,14 +3136,13 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .act-time { font-size: 22rpx; color: #999; }
 
 .status-pill {
-  /* 固定 pill 高度，保证与"撤销"完全一致 */
+  /* 固定 pill 高度，保证与“撤销”完全一致 */
   height: 44rpx;
   line-height: 44rpx;
   box-sizing: border-box;
 
   /* 统一宽度（和撤销一致） */
   min-width: 124rpx;
-  max-width: 200rpx; /* 🔴 限制最大宽度，避免状态标签过长 */
   justify-content: center;
 
   display: flex;
@@ -3261,9 +3151,6 @@ page { background: #F7F7F7; color: #1D1D1F; }
   font-weight: 600;
   padding: 0 20rpx;
   border-radius: 30rpx;
-  white-space: nowrap; /* 🔴 状态标签不换行，保持简洁 */
-  overflow: hidden;
-  text-overflow: ellipsis; /* 🔴 超出部分显示省略号 */
 }
 .status-pill.processing { background: #FFF8E1; color: #FFA000; }
 .status-pill.success { background: #E8F5E9; color: #34C759; }
@@ -3304,478 +3191,6 @@ page { background: #F7F7F7; color: #1D1D1F; }
   margin-right: 8rpx;
   /* 🔴 确保标签不换行 */
   white-space: nowrap;
-}
-
-/* 🔴 查看物流按钮包装器（申请进度列表中使用） */
-.logistics-btn-wrapper {
-  width: 100%;
-  margin-top: 24rpx;
-  padding-top: 24rpx;
-  border-top: 1rpx solid #F0F0F0;
-}
-
-.logistics-btn-wrapper .btn-logistics-action {
-  margin-top: 0;
-  width: 100%;
-  height: 88rpx !important;
-  line-height: 88rpx !important;
-  border-radius: 44rpx !important;
-  font-size: 28rpx !important;
-  font-weight: 600;
-  background: #fff;
-  color: #000;
-  border: 2rpx solid #000;
-  text-align: center;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-}
-
-.logistics-btn-wrapper .btn-logistics-action:active {
-  background: #F5F5F5;
-  opacity: 0.9;
-  transform: scale(0.98);
-}
-
-/* ================= 需寄回订单确认弹窗样式 ================= */
-.return-required-mask {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 9999998; display: flex; align-items: center; justify-content: center;
-}
-
-.return-required-modal {
-  width: 90%;
-  max-width: 680rpx;
-  max-height: 88vh;
-  background: #fff;
-  border-radius: 32rpx;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.15);
-  box-sizing: border-box;
-  position: relative;
-  z-index: 1;
-}
-
-/* 需寄回订单确认弹窗的 mask 层级 */
-.custom-dialog-mask:has(.return-required-modal) {
-  z-index: 9999999;
-}
-
-.rr-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 40rpx 40rpx 30rpx;
-  border-bottom: 1rpx solid #F5F5F5;
-  flex-shrink: 0;
-}
-
-.rr-title {
-  font-size: 34rpx;
-  font-weight: 700;
-  color: #000;
-  letter-spacing: 0.5rpx;
-}
-
-.rr-close {
-  font-size: 36rpx;
-  color: #999;
-  width: 56rpx;
-  height: 56rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  border-radius: 50%;
-  transition: all 0.2s;
-}
-
-.rr-close:active {
-  background: #F5F5F5;
-  opacity: 0.8;
-}
-
-.rr-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 30rpx 30rpx 40rpx;
-  -webkit-overflow-scrolling: touch;
-  min-height: 0;
-  box-sizing: border-box;
-}
-
-.rr-item {
-  border-radius: 24rpx;
-  padding: 32rpx;
-  margin-bottom: 24rpx;
-  border: 1rpx solid;
-  transition: all 0.3s;
-  background: #fff;
-}
-
-/* 用户未寄回：深红色边框 */
-.rr-item.pending {
-  border-color: #FF5252;
-  box-shadow: 0 4rpx 12rpx rgba(255, 59, 48, 0.12);
-}
-
-/* 用户已寄回：深绿色边框 */
-.rr-item.returned {
-  border-color: #4CAF50;
-  box-shadow: 0 4rpx 12rpx rgba(76, 175, 80, 0.12);
-}
-
-/* 用户寄回维修中：黄色边框 */
-.rr-item.user-sent {
-  border-color: #FFB300;
-  box-shadow: 0 4rpx 12rpx rgba(255, 179, 0, 0.12);
-}
-
-.rr-item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24rpx;
-  padding-bottom: 20rpx;
-  border-bottom: 1rpx solid #F5F5F5;
-}
-
-.rr-model {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #000;
-  letter-spacing: 0.5rpx;
-  display: flex;
-  align-items: center;
-  line-height: 1.2;
-}
-
-.rr-status-badge {
-  font-size: 20rpx;
-  font-weight: 600;
-  padding: 0rpx 16rpx 6rpx;
-  border-radius: 20rpx;
-  letter-spacing: 0.5rpx;
-  display: inline-block;
-  text-align: center;
-  line-height: 0.7;
-  height: auto;
-  vertical-align: middle;
-}
-
-.rr-status-badge.pending {
-  background: #FFEBEE;
-  color: #D32F2F;
-}
-
-.rr-status-badge.returned {
-  background: #E8F5E9;
-  color: #2E7D32;
-}
-
-.rr-status-badge.user-sent {
-  background: #FFF8E1;
-  color: #F57C00;
-}
-
-.rr-item-info {
-  margin-bottom: 28rpx;
-}
-
-.rr-info-row {
-  display: flex;
-  margin-bottom: 20rpx;
-  line-height: 1.7;
-  align-items: flex-start;
-}
-
-.rr-info-row:last-child {
-  margin-bottom: 0;
-}
-
-.rr-info-label {
-  font-size: 26rpx;
-  color: #999;
-  min-width: 130rpx;
-  flex-shrink: 0;
-  font-weight: 400;
-}
-
-.rr-info-value {
-  font-size: 26rpx;
-  color: #000;
-  flex: 1;
-  word-break: break-all;
-  line-height: 1.7;
-  font-weight: 400;
-}
-
-.rr-tracking {
-  display: flex;
-  align-items: center;
-  padding: 16rpx;
-  background: #fff;
-  border-radius: 12rpx;
-  margin-bottom: 16rpx;
-}
-
-.rr-tracking.empty {
-  background: #FFF5F5;
-}
-
-.rr-tracking-label {
-  font-size: 24rpx;
-  color: #666;
-  margin-right: 12rpx;
-}
-
-.rr-tracking-value {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: #000;
-}
-
-.rr-tracking.empty .rr-tracking-value {
-  color: #999;
-}
-
-.rr-actions {
-  display: flex;
-  gap: 12rpx;
-  margin-top: 24rpx;
-  padding-top: 24rpx;
-  border-top: 1rpx solid #F5F5F5;
-}
-
-.rr-btn {
-  height: 88rpx;
-  line-height: 88rpx;
-  text-align: center;
-  border-radius: 44rpx;
-  font-size: 28rpx;
-  font-weight: 600;
-  transition: all 0.2s;
-  flex: 1;
-  letter-spacing: 0.5rpx;
-  min-width: 0;
-}
-
-.rr-btn.cancel {
-  background: #fff;
-  color: #000;
-  border: 1rpx solid #000;
-}
-
-.rr-btn.cancel:active {
-  background: #F5F5F5;
-  transform: scale(0.98);
-}
-
-.rr-btn.logistics {
-  background: #fff;
-  color: #007AFF;
-  border: 1rpx solid #007AFF;
-}
-
-.rr-btn.logistics:active {
-  background: #F0F8FF;
-  transform: scale(0.98);
-}
-
-.rr-btn.complete {
-  background: #000;
-  color: #fff;
-  border: none;
-}
-
-.rr-btn.complete:active {
-  opacity: 0.85;
-  transform: scale(0.98);
-}
-
-.rr-btn.ship-out {
-  background: #000;
-  color: #fff;
-  border: none;
-  flex: 1;
-}
-
-.rr-btn.ship-out:active {
-  opacity: 0.85;
-  transform: scale(0.98);
-}
-
-.rr-btn:active {
-  opacity: 0.8;
-  transform: scale(0.98);
-}
-
-.rr-empty {
-  text-align: center;
-  padding: 100rpx 0;
-  color: #999;
-  font-size: 28rpx;
-}
-
-/* ================= 用户页面需寄回提示卡片样式 ================= */
-.return-required-card {
-  background: #FFF5F5;
-  border-radius: 24rpx;
-  margin: 0 40rpx 30rpx;
-  padding: 32rpx;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 4rpx 20rpx rgba(255, 59, 48, 0.15);
-  border: 2rpx solid #FFCDD2;
-}
-
-.rr-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16rpx;
-}
-
-.rr-card-title {
-  font-size: 32rpx;
-  font-weight: 800;
-  color: #D32F2F;
-  letter-spacing: 0.5rpx;
-}
-
-.rr-card-badge {
-  background: #FF3B30;
-  color: #fff;
-  font-size: 22rpx;
-  font-weight: 700;
-  padding: 6rpx 16rpx;
-  border-radius: 16rpx;
-  flex-shrink: 0;
-}
-
-.rr-card-desc {
-  font-size: 28rpx;
-  color: #D32F2F;
-  line-height: 1.6;
-  margin-bottom: 24rpx;
-  font-weight: 500;
-}
-
-.rr-card-info {
-  background: #fff;
-  border-radius: 16rpx;
-  padding: 20rpx;
-  margin-bottom: 24rpx;
-  border: 1rpx solid #FFCDD2;
-}
-
-.rr-card-info-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12rpx;
-}
-
-.rr-card-info-item:last-child {
-  margin-bottom: 0;
-}
-
-.rr-card-info-label {
-  font-size: 26rpx;
-  color: #999;
-}
-
-.rr-card-model {
-  font-size: 28rpx;
-  font-weight: 700;
-  color: #000;
-}
-
-.rr-card-time {
-  font-size: 26rpx;
-  color: #333;
-  font-weight: 500;
-}
-
-.rr-card-note {
-  padding: 24rpx;
-  background: #fff;
-  border-radius: 16rpx;
-  margin-bottom: 24rpx;
-  border: 1rpx solid #E5E5E5;
-}
-
-.rr-card-note-label {
-  font-size: 24rpx;
-  font-weight: 600;
-  color: #999;
-  margin-bottom: 8rpx;
-  display: block;
-}
-
-.rr-card-note-text {
-  font-size: 28rpx;
-  color: #000;
-  line-height: 1.7;
-  word-break: break-all;
-}
-
-.rr-card-status {
-  padding: 24rpx;
-  background: #F0F8FF;
-  border-radius: 16rpx;
-  margin-bottom: 24rpx;
-  border: 1rpx solid #007AFF;
-  text-align: center;
-}
-
-.rr-card-status-text {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #007AFF;
-  margin-bottom: 12rpx;
-}
-
-.rr-card-tracking-id {
-  font-size: 24rpx;
-  color: #666;
-}
-
-.rr-card-btn {
-  width: 100%;
-  height: 88rpx;
-  line-height: 88rpx;
-  text-align: center;
-  background: #fff;
-  color: #FF3B30;
-  border: 2rpx solid #FF3B30;
-  border-radius: 44rpx;
-  font-size: 30rpx;
-  font-weight: 700;
-  transition: all 0.2s;
-  margin-top: 24rpx;
-}
-
-.rr-card-btn.copy-address {
-  background: #fff;
-  color: #007AFF;
-  border: 2rpx solid #007AFF;
-  pointer-events: auto;
-  position: relative;
-  z-index: 10;
-}
-
-.rr-card-btn:active {
-  background: #FFF5F5;
-  transform: scale(0.98);
-}
-
-.rr-card-btn.copy-address:active {
-  background: #F0F8FF;
 }
 
 .reason-text {
@@ -3829,44 +3244,6 @@ page { background: #F7F7F7; color: #1D1D1F; }
   color: #999; 
 }
 
-/* 需要寄回开关 */
-.repair-return-switch {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20rpx 30rpx;
-  border-top: 1rpx solid #F0F0F0;
-  border-bottom: 1rpx solid #F0F0F0;
-  margin: 20rpx 0;
-}
-
-.repair-return-switch .switch-label {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #333;
-}
-
-.repair-status-info {
-  padding: 20rpx;
-  background: #F5F5F7;
-  border-radius: 12rpx;
-  margin-bottom: 20rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.repair-status-text {
-  font-size: 28rpx;
-  font-weight: 600;
-  color: #000;
-}
-
-.repair-tracking-id {
-  font-size: 24rpx;
-  color: #666;
-}
-
 .repair-actions { 
   position: relative;
   z-index: 10; /* ✅ 避免 video 控件层覆盖按钮点击 */
@@ -3889,17 +3266,6 @@ page { background: #F7F7F7; color: #1D1D1F; }
 
 .r-btn.ship { 
   color: #000; 
-}
-
-.r-btn.return { 
-  background: #FF9500; 
-  color: #fff; 
-  border-right: 1rpx solid rgba(255, 255, 255, 0.3);
-}
-
-.r-btn.complete { 
-  background: #34C759; 
-  color: #fff; 
 }
 
 .r-btn:active { 

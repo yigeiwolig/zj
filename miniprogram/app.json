@@ -28,7 +28,7 @@
   "renderer": "webview",
   "permission": {
     "scope.userLocation": {
-      "desc": "用于展示附近维修门店和计算配送距离"
+      "desc": "我们需要您的位置来获取店铺的真实定位"
     },
     "scope.bluetooth": {
       "desc": "我们需要蓝牙权限来连接和控制您的设备"

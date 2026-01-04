@@ -15,7 +15,7 @@
   
   <!-- 中间区域：标题和管理员切换按钮 -->
   <view class="brand-title" bindtap="handleTitleClick">
-    <text>{{shopTitle || 'MT 配件中心'}}</text>
+    <text>{{shopTitle || 'MT STORE'}}</text>
     <!-- 只有白名单用户能看到的切换开关 -->
     <view 
       wx:if="{{isAuthorized}}" 
@@ -428,7 +428,7 @@
 
   <!-- 底部单按钮 (立即支付) -->
   <view class="checkout-footer-single">
-    <view class="btn-black full" catchtap="submitOrder">
+    <view class="btn-black full" bindtap="submitOrder">
       <text class="btn-main">立即支付 ¥{{finalTotalPrice}}</text>
     </view>
   </view>
@@ -496,14 +496,6 @@
     show-fullscreen-btn="{{false}}" 
     object-fit="contain"
   ></video>
-</view>
-
-<!-- ================= 自定义加载动画（白色背景进度条） ================= -->
-<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
-  <view class="loader">
-    <text class="loader-label">{{loadingText}}</text>
-    <view class="loading-bar"></view>
-  </view>
 </view>
 
 </view>
