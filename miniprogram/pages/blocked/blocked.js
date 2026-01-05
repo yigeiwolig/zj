@@ -2,19 +2,26 @@
 Page({
   data: {
     checkTimer: null,
-    type: '' // 封禁类型：'banned' 或其他
+    type: '', // 封禁类型
+    canCheck: false // 冷却期间禁止检查
   },
 
   onLoad(options) {
-    // 接收封禁类型参数
     const type = options.type || '';
-    this.setData({ type: type });
+    this.setData({ type });
     
-    wx.hideHomeButton(); // 锁死
-    
-    // 🔴 修改：截图封禁也启动自动检查，以便响应管理员在后台的解封操作
-    // 管理员可以在后台将 login_logs 中的 isBanned 改为 false 来解封
-    this.startAutoCheck();
+    wx.hideHomeButton();
+
+    const initialDelay = type === 'location' ? 3000 : 0;
+    if (initialDelay > 0) {
+      console.log(`🛡️ 地址拦截模式：启动 ${initialDelay}ms 写入保护期...`);
+    }
+
+    setTimeout(() => {
+      this.setData({ canCheck: true });
+      console.log('🛡️ 写入保护期结束，开始检测');
+      this.startAutoCheck();
+    }, initialDelay);
   },
 
   onUnload() {
@@ -23,15 +30,18 @@ Page({
 
   startAutoCheck() {
     this.stopAutoCheck();
-    console.log('⏳ 开启云端状态检测 (5秒/次)...');
+    console.log('⏳ 开启云端状态检测 (4秒/次)...');
     
-    // 立即执行一次
-    this.callCheckCloud();
+    if (this.data.canCheck) {
+      this.callCheckCloud();
+    }
 
     this.setData({
       checkTimer: setInterval(() => {
-        this.callCheckCloud();
-      }, 5000)
+        if (this.data.canCheck) {
+          this.callCheckCloud();
+        }
+      }, 4000)
     });
   },
 
@@ -44,11 +54,13 @@ Page({
 
   // === 核心：呼叫云函数查询指令 ===
   callCheckCloud() {
-    // 🔴 修改：允许截图封禁也调用云函数，以便响应管理员在后台的解封操作
-    // 管理员可以在后台将 login_logs 中的 isBanned 改为 false 来解封
-    
+    if (!this.data.canCheck) {
+      console.log('⌛ 写入保护期内，跳过检测');
+      return;
+    }
+
     wx.cloud.callFunction({
-      name: 'checkUnlockStatus' // 调用刚才新建的云函数
+      name: 'checkUnlockStatus'
     }).then(res => {
       const result = res.result || {};
       const action = result.action;

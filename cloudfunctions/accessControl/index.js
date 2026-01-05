@@ -31,20 +31,60 @@ exports.main = async (event, context) => {
     const isValidGPS = Number.isFinite(latNum) && Number.isFinite(lngNum) && latNum !== 0;
 
     // --- 权限判定 ---
-    // 🔴 统一只检查 login_logs 的封禁状态
-    const logPromise = db.collection('login_logs').where({ _openid: openid }).orderBy('updateTime', 'desc').limit(1).get();
-    const blockedLogPromise = db.collection('blocked_logs').where({ _openid: openid }).orderBy('updateTime', 'desc').limit(1).get();
-    const userPromise = db.collection('user_list').where({ _openid: openid }).limit(1).get();
-    const [logRecord, blockedLogRecord, userRecord] = await Promise.all([logPromise, blockedLogPromise, userPromise]);
+    // 1. blocked_logs：历史放行记录（VIP 特权）
+    // 2. user_list：用户资料
+    // 3. login_logbutton：唯一的封禁控制源 (昵称封禁 + 地址拦截)
+    // 🔴 移除 login_logs 查询，它不控制封禁
+    
+    const blockedLogPromise = db.collection('blocked_logs')
+      .where({ _openid: openid })
+      .orderBy('updateTime', 'desc')
+      .limit(1)
+      .get();
+    const userPromise = db.collection('user_list')
+      .where({ _openid: openid })
+      .limit(1)
+      .get();
+    const buttonPromise = db.collection('login_logbutton')
+      .where({ _openid: openid })
+      .orderBy('updateTime', 'desc')
+      .limit(1)
+      .get();
 
-    let historyIsAllowed = false, historyIsBanned = false, globalBan = false;
-    // 从 login_logs 检查封禁状态
-    if (logRecord.data.length > 0) { 
-      globalBan = logRecord.data[0].isBanned === true; 
-    }
-    // 从 blocked_logs 检查允许状态（用于 VIP 特权）
+    const [blockedLogRecord, userRecord, buttonRecordRes] =
+      await Promise.all([blockedLogPromise, userPromise, buttonPromise]);
+
+    let historyIsAllowed = false;
+    let globalBan = false;               // 对应 nickname_verify_fail
+    let bypassLocationCheck = false;     // 免死金牌
+    let locationBannedByButton = false;  // 对应 location_blocked
+
+    // 1. 从 blocked_logs 检查允许状态（VIP 特权）
     if (blockedLogRecord.data.length > 0) { 
       historyIsAllowed = blockedLogRecord.data[0].isAllowed; 
+    }
+
+    // 2. 🔴 核心：从 login_logbutton 检查所有封禁状态
+    if (buttonRecordRes.data && buttonRecordRes.data.length > 0) {
+      const btn = buttonRecordRes.data[0];
+      const rawFlag = btn.isBanned;
+      const isBannedFlag = rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
+
+      const existingBypass = btn.bypassLocationCheck === true;
+      bypassLocationCheck = existingBypass;
+
+      if (isBannedFlag) {
+        if (btn.banReason === 'location_blocked') {
+          if (existingBypass) {
+            locationBannedByButton = false;
+            console.log('[accessControl] 🛡️ 免死金牌用户，跳过地址封禁');
+          } else {
+            locationBannedByButton = true;
+          }
+        } else {
+          globalBan = true;
+        }
+      }
     }
 
     // --- 拦截逻辑 ---
@@ -58,13 +98,92 @@ exports.main = async (event, context) => {
       isChina = checkIsChina(latNum, lngNum);
     }
 
+    // 1. 账号层面全局封禁（例如昵称封禁），最高优先级
     if (globalBan) { 
       finalIsBlocked = true; 
       finalMsg = "🚫 账号已被永久封禁"; 
-    } else if (historyIsAllowed) { 
+    }
+    // 2. login_logbutton 标记的地址封禁（且没有免死金牌）
+    else if (locationBannedByButton) {
+      finalIsBlocked = true;
+      finalMsg = "⚠️ 当前区域暂无法访问";
+    }
+    // 3. 历史允许记录（VIP 特权）
+    else if (historyIsAllowed || bypassLocationCheck) { 
       finalIsBlocked = false; 
       finalMsg = "✅ VIP特权放行"; 
-    } else {
+    } 
+    // 4. 检查 app_config.blocking_rules.blocked_cities（如果传了省市信息）
+    else if (city) {
+      try {
+        const configRes = await db.collection('app_config').doc('blocking_rules').get();
+        const config = configRes.data || { 
+          is_active: false, 
+          blocked_cities: [] 
+        };
+        
+        // 检查拦截开关是否开启
+        if (!config.is_active) {
+          finalIsBlocked = false;
+          finalMsg = "📍 访问通过";
+        } else {
+          const blockedCities = Array.isArray(config.blocked_cities) ? config.blocked_cities : [];
+          const isBlockedCity = blockedCities.some(blockedCity => 
+            city && blockedCity && (city.indexOf(blockedCity) !== -1 || blockedCity.indexOf(city) !== -1)
+          );
+
+          if (isBlockedCity && !bypassLocationCheck) {
+          // 城市被拦截，更新 login_logbutton
+          if (buttonRecordRes.data && buttonRecordRes.data.length > 0) {
+            await db.collection('login_logbutton').doc(buttonRecordRes.data[0]._id).update({
+              data: {
+                isBanned: true,
+                banReason: 'location_blocked',
+                updateTime: db.serverDate()
+              }
+            });
+          } else {
+            await db.collection('login_logbutton').add({
+              data: {
+                _openid: openid,
+                isBanned: true,
+                banReason: 'location_blocked',
+                bypassLocationCheck: false,
+                createTime: db.serverDate(),
+                updateTime: db.serverDate()
+              }
+            });
+          }
+          
+            finalIsBlocked = true;
+            finalMsg = "⚠️ 当前区域暂无法访问";
+          } else {
+            finalIsBlocked = false;
+            finalMsg = "📍 访问通过";
+          }
+        }
+      } catch (e) {
+        console.error('[accessControl] 检查拦截配置失败:', e);
+        // 配置检查失败，使用旧的经纬度判断作为兜底
+        if (isValidGPS) {
+          if (!isChina) { 
+            finalIsBlocked = true; 
+            finalMsg = "⚠️ 海外IP访问受限"; 
+          } else if (isZhejiang) { 
+            finalIsBlocked = true; 
+            finalMsg = "⚠️ 当前区域暂无法访问"; 
+          } else { 
+            finalIsBlocked = false; 
+            finalMsg = "📍 访问通过"; 
+          }
+        } else {
+          finalIsBlocked = false; 
+          finalMsg = "⚠️ 未获取定位"; 
+        }
+      }
+    } 
+    // 5. 兜底：使用旧的经纬度判断（如果没有传省市信息）
+    else {
       if (isValidGPS) {
         if (!isChina) { 
           finalIsBlocked = true; 
