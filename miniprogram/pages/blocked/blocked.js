@@ -10,6 +10,10 @@ Page({
     const type = options.type || '';
     this.setData({ type });
     
+    // 🔴 重置跳转标志，允许后续跳转
+    const app = getApp();
+    app.globalData._isJumpingToBlocked = false;
+    
     wx.hideHomeButton();
 
     const initialDelay = type === 'location' ? 3000 : 0;

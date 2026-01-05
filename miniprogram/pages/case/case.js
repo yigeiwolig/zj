@@ -104,22 +104,43 @@ Page({
 
     // 🔴 物理防线：确保录屏、截屏出来的全是黑屏 (这是最稳的)
     if (wx.setVisualEffectOnCapture) {
-      wx.setVisualEffectOnCapture({
-        visualEffect: 'hidden',
-        success: () => console.log('🛡️ 硬件级防偷拍锁定')
-      });
+      try {
+        wx.setVisualEffectOnCapture({
+          visualEffect: 'hidden',
+          success: () => console.log('🛡️ 硬件级防偷拍锁定'),
+          fail: (err) => {
+            console.warn('⚠️ setVisualEffectOnCapture 失败（可能是预览模式）:', err);
+          }
+        });
+      } catch (e) {
+        console.warn('⚠️ setVisualEffectOnCapture 不支持（可能是预览模式）:', e);
+      }
+    } else {
+      console.warn('⚠️ setVisualEffectOnCapture API 不存在（可能是预览模式）');
     }
 
     // 🔴 截屏监听：安卓和iOS通常都很灵敏
-    wx.onUserCaptureScreen(() => {
-      this.handleIntercept('screenshot');
-    });
+    try {
+      wx.onUserCaptureScreen(() => {
+        console.log('🛡️ [case] 检测到截屏');
+        this.handleIntercept('screenshot');
+      });
+    } catch (e) {
+      console.warn('⚠️ onUserCaptureScreen 不支持（可能是预览模式）:', e);
+    }
 
     // 🔴 录屏监听：尽力而为，抓到信号就跳
     if (wx.onUserScreenRecord) {
-      wx.onUserScreenRecord(() => {
-        this.handleIntercept('record');
-      });
+      try {
+        wx.onUserScreenRecord(() => {
+          console.log('🛡️ [case] 检测到录屏');
+          this.handleIntercept('record');
+        });
+      } catch (e) {
+        console.warn('⚠️ onUserScreenRecord 不支持（可能是预览模式）:', e);
+      }
+    } else {
+      console.warn('⚠️ onUserScreenRecord API 不存在（可能是预览模式）');
     }
 
     this.fetchCloudData();
@@ -133,13 +154,23 @@ Page({
   onShow() {
     // 针对进入页面前就在录屏的情况，尝试抓一次
     if (wx.getScreenRecordingState) {
-      wx.getScreenRecordingState({
-        success: (res) => {
-          if (res.state === 'on' || res.recording) {
-            this.handleIntercept('record');
+      try {
+        wx.getScreenRecordingState({
+          success: (res) => {
+            if (res.state === 'on' || res.recording) {
+              console.log('🛡️ [case] onShow 检测到录屏');
+              this.handleIntercept('record');
+            }
+          },
+          fail: (err) => {
+            console.warn('⚠️ getScreenRecordingState 失败（可能是预览模式）:', err);
           }
-        }
-      });
+        });
+      } catch (e) {
+        console.warn('⚠️ getScreenRecordingState 不支持（可能是预览模式）:', e);
+      }
+    } else {
+      console.warn('⚠️ getScreenRecordingState API 不存在（可能是预览模式）');
     }
   },
   
@@ -152,12 +183,23 @@ Page({
                         !sysInfo.brand || // 模拟器可能没有品牌信息
                         sysInfo.model === 'devtools';
     
+    // 🔴 检测预览模式（通过二维码扫描进入）
+    // 预览模式通常没有完整的 API 支持，特别是截屏/录屏检测
+    const isPreview = sysInfo.platform !== 'devtools' && 
+                      !sysInfo.brand && 
+                      !sysInfo.model;
+    
     this.setData({ 
       isSimulator: isSimulator,
-      useCustomPicker: isSimulator // 模拟器使用自定义选择器
+      useCustomPicker: isSimulator, // 模拟器使用自定义选择器
+      isPreview: isPreview
     });
     
-    console.log('🔵 [环境检测] 运行环境:', isSimulator ? '模拟器' : '真机');
+    console.log('🔵 [环境检测] 运行环境:', isSimulator ? '模拟器' : (isPreview ? '预览模式' : '真机'));
+    
+    if (isPreview) {
+      console.warn('⚠️ [环境检测] 预览模式可能不支持截屏/录屏检测 API');
+    }
   },
 
   onUnload() {
@@ -1787,13 +1829,60 @@ Page({
     // 1. 停止视频播放
     this.setData({ showVideoPlayer: false, currentVideo: null });
     
-    // 2. 标记封禁
+    // 2. 标记封禁（本地存储）
     wx.setStorageSync('is_user_banned', true);
+    if (type === 'screenshot') {
+      wx.setStorageSync('is_screenshot_banned', true);
+    }
 
-    // 3. 强制跳转拦截页
+    // 3. 🔴 立即跳转到封禁页（不等待云函数）
+    console.log('[case] 🔴 截屏/录屏检测，立即跳转到封禁页');
+    this._jumpToBlocked(type);
+
+    // 4. 异步调用云函数写入数据库封禁状态（不阻塞跳转）
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: { type: type },
+      success: (res) => {
+        console.log('[case] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
+      },
+      fail: (err) => {
+        console.error('[case] banUserByScreenshot 调用失败:', err);
+      }
+    });
+  },
+
+  _jumpToBlocked(type) {
+    // 🔴 防止重复跳转
+    const app = getApp();
+    if (app.globalData._isJumpingToBlocked) {
+      console.log('[case] 正在跳转中，忽略重复跳转请求');
+      return;
+    }
+
+    // 检查当前页面是否已经是 blocked 页面
+    const pages = getCurrentPages();
+    const currentPage = pages[pages.length - 1];
+    if (currentPage && currentPage.route === 'pages/blocked/blocked') {
+      console.log('[case] 已在 blocked 页面，无需重复跳转');
+      return;
+    }
+
+    app.globalData._isJumpingToBlocked = true;
+
+    // 强制跳转拦截页
     wx.reLaunch({
       url: `/pages/blocked/blocked?type=${type}`,
-      fail: () => {
+      success: () => {
+        console.log('[case] 跳转到 blocked 页面成功');
+        // 2秒后重置标志，防止卡死
+        setTimeout(() => {
+          app.globalData._isJumpingToBlocked = false;
+        }, 2000);
+      },
+      fail: (err) => {
+        console.error('[case] 跳转失败:', err);
+        app.globalData._isJumpingToBlocked = false;
         // 路径万一错了，直接退出
         wx.exitMiniProgram();
       }

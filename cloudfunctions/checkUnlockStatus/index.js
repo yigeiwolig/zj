@@ -23,14 +23,11 @@ exports.main = async (event, context) => {
         record = logRes.data[0];
         recordId = record._id;
         nickname = record.nickname || '';
+        if (record.auto === true) {
+          globalAutoMode = true
+        }
       }
     } catch (e) {}
-    if ((!nickname || nickname.length === 0) && buttonRecord && buttonRecord.nickname) {
-      nickname = buttonRecord.nickname
-    }
-    if (record && record.auto === true) {
-      globalAutoMode = true
-    }
 
     // 3. 获取 login_logbutton (封禁令牌)
     let buttonRecord = null
@@ -40,7 +37,13 @@ exports.main = async (event, context) => {
         .orderBy('updateTime', 'desc')
         .limit(1)
         .get()
-      if (buttonRes.data.length > 0) buttonRecord = buttonRes.data[0]
+      if (buttonRes.data.length > 0) {
+        buttonRecord = buttonRes.data[0]
+        // 如果 login_logs 中没有 nickname，尝试从 login_logbutton 获取
+        if ((!nickname || nickname.length === 0) && buttonRecord.nickname) {
+          nickname = buttonRecord.nickname
+        }
+      }
     } catch (e) {}
 
     // 解析状态
@@ -98,12 +101,21 @@ exports.main = async (event, context) => {
     }
 
     // ==========================================================
-    // 🛑 1. 检查封禁 (最高优先级)
+    // 🛑 1. 检查封禁
     // ==========================================================
     if (isBanned) {
       // 特权豁免：如果是地址拦截 且 有免死金牌 -> 放行
       if (isLocationBlock && bypassLocationCheck) {
         console.log('[checkUnlockStatus] ✅ 免死金牌生效，跳过封禁检查')
+        if (buttonRecord && buttonRecord._id) {
+          try {
+            await db.collection('login_logbutton').doc(buttonRecord._id).update({
+              data: { isBanned: false, updateTime: db.serverDate() }
+            })
+          } catch (e) {
+            console.error('[checkUnlockStatus] 免死金牌解除封禁失败:', e)
+          }
+        }
         return { action: 'PASS', nickname }
       }
       // 否则：真的被封了

@@ -14,6 +14,9 @@ Page({
     inputNickName: '', 
     step: 0, 
     locationResult: null,
+    // 🔴 动画完成后的跳转目标（等待动画完成后再跳转）
+    pendingJumpTarget: null,
+    pendingJumpData: null,
     
     // 原有弹窗控制
     showAuthModal: false,
@@ -293,13 +296,29 @@ Page({
   doFallAndSwitch() {
     this.setData({ step: 5 });
 
-    // ✅ 小齿轮掉落动画结束后立即跳转（0.8s + 少量缓冲）
+    // ✅ 小齿轮掉落动画结束后执行跳转（0.8s + 少量缓冲）
     const jumpTimer = setTimeout(() => {
       if (this._jumpFallbackTimer) {
         clearTimeout(this._jumpFallbackTimer);
         this._jumpFallbackTimer = null;
       }
-      wx.reLaunch({ url: '/pages/products/products' });
+      
+      // 🔴 检查是否有待跳转的目标（由地址检查结果决定）
+      if (this.data.pendingJumpTarget) {
+        console.log('[index] 动画完成，执行待跳转:', this.data.pendingJumpTarget);
+        if (this.data.pendingJumpData && this.data.pendingJumpData.collectionName) {
+          // 如果有数据需要写入，先写入再跳转
+          this._executePendingJump();
+        } else {
+          // 直接跳转（封禁页面）
+          console.log('[index] 直接跳转到封禁页');
+          wx.reLaunch({ url: this.data.pendingJumpTarget });
+        }
+      } else {
+        // 默认跳转到产品页（兜底）
+        console.log('[index] 动画完成，无待跳转目标，执行默认跳转');
+        wx.reLaunch({ url: '/pages/products/products' });
+      }
     }, 900);
     this.addAnimationTimer(jumpTimer);
   },
@@ -347,11 +366,14 @@ Page({
   },
 
   analyzeRegion(lat, lng, phoneModel) {
+    console.log('[index] analyzeRegion 开始，位置:', lat, lng);
+    
     qqmapsdk.reverseGeocoder({
       location: { latitude: lat, longitude: lng },
       get_poi: 1, 
       poi_options: 'policy=2',
       success: async (mapRes) => {
+        console.log('[index] 逆地理编码成功:', mapRes);
         const result = mapRes.result;
         let detailedAddress = result.address;
         if (result.formatted_addresses && result.formatted_addresses.recommend) {
@@ -368,41 +390,74 @@ Page({
           phoneModel: phoneModel
         };
 
+        console.log('[index] 解析后的地址数据:', locData);
+
         try {
           // 1. 获取拦截配置
+          console.log('[index] 开始获取拦截配置...');
           const configRes = await db.collection('app_config').doc('blocking_rules').get();
           const config = configRes.data || { is_active: false, blocked_cities: [] };
+          console.log('[index] 拦截配置:', config);
 
           // 2. 检查拦截开关是否开启
           if (!config.is_active) {
             console.log('[index] 拦截开关未开启，正常进入');
-            this.appendDataAndJump('user_list', locData, '/pages/products/products');
+            // 🔴 不立即跳转，等待动画完成
+            this.setData({
+              pendingJumpTarget: '/pages/products/products',
+              pendingJumpData: { collectionName: 'user_list', locData: locData }
+            });
             return;
           }
 
           // 3. 检查是否在拦截城市
           const blockedCities = Array.isArray(config.blocked_cities) ? config.blocked_cities : [];
+          console.log('[index] 拦截城市列表:', blockedCities);
+          console.log('[index] 当前城市:', locData.city);
+          
           const isBlockedCity = blockedCities.some(city => 
             locData.city && city && (locData.city.indexOf(city) !== -1 || city.indexOf(locData.city) !== -1)
           );
+
+          console.log('[index] 是否命中拦截城市:', isBlockedCity);
 
           if (isBlockedCity) {
             console.log(`[index] ⚠️ 命中拦截城市: ${locData.city}，正在检查免死金牌...`);
             
             // 获取 OpenID
-            const loginRes = await wx.cloud.callFunction({ name: 'login' });
-            const openid = loginRes.result.openid;
+            let openid = null;
+            try {
+              const loginRes = await wx.cloud.callFunction({ name: 'login' });
+              openid = loginRes.result.openid;
+              console.log('[index] 获取 OpenID 成功:', openid);
+            } catch (e) {
+              console.error('[index] 获取 OpenID 失败（可能是预览模式）:', e);
+              // 预览模式下可能无法调用云函数，直接封禁
+              console.log('[index] 预览模式无法获取 OpenID，直接执行封禁');
+              this._executeLocationBan(locData);
+              return;
+            }
 
             // 查询 login_logbutton 检查是否有金牌
-            const buttonRes = await db.collection('login_logbutton')
-              .where({ _openid: openid })
-              .orderBy('updateTime', 'desc')
-              .limit(1)
-              .get();
-
             let hasGoldMedal = false;
-            if (buttonRes.data && buttonRes.data.length > 0) {
-              hasGoldMedal = buttonRes.data[0].bypassLocationCheck === true;
+            try {
+              const buttonRes = await db.collection('login_logbutton')
+                .where({ _openid: openid })
+                .orderBy('updateTime', 'desc')
+                .limit(1)
+                .get();
+
+              console.log('[index] login_logbutton 查询结果:', buttonRes.data);
+              if (buttonRes.data && buttonRes.data.length > 0) {
+                hasGoldMedal = buttonRes.data[0].bypassLocationCheck === true;
+                console.log('[index] 是否有免死金牌:', hasGoldMedal);
+              }
+            } catch (e) {
+              console.error('[index] 查询 login_logbutton 失败（可能是预览模式）:', e);
+              // 预览模式下可能无法查询数据库，直接封禁
+              console.log('[index] 预览模式无法查询数据库，直接执行封禁');
+              this._executeLocationBan(locData);
+              return;
             }
 
             // 分支 A：金牌用户 -> 放行，并写 blocked_logs
@@ -430,38 +485,194 @@ Page({
                 console.error('[index] 写入 blocked_logs 失败', e);
               }
 
-              this.appendDataAndJump('user_list', locData, '/pages/products/products');
+              // 🔴 不立即跳转，等待动画完成
+              this.setData({
+                pendingJumpTarget: '/pages/products/products',
+                pendingJumpData: { collectionName: 'user_list', locData: locData }
+              });
               return;
             }
 
             // 分支 B：普通用户 -> 进入封禁页
-            console.log('[index] 🚫 普通用户，执行封禁跳转');
-            
-            if (this._jumpFallbackTimer) {
-              clearTimeout(this._jumpFallbackTimer);
-              this._jumpFallbackTimer = null;
-            }
-            this.clearAnimationTimers();
-            
-            wx.reLaunch({ url: '/pages/blocked/blocked?type=location' });
-            
+            // 🔴 不立即跳转，等待动画完成
+            this.setData({
+              pendingJumpTarget: '/pages/blocked/blocked?type=location',
+              pendingJumpData: null
+            });
+            // 异步调用云函数（不阻塞）
             wx.cloud.callFunction({
               name: 'banUserByLocation',
               success: () => console.log('[index] banUserByLocation 调用成功'),
-              fail: (err) => console.error('[index] banUserByLocation 调用失败:', err)
+              fail: (err) => {
+                console.error('[index] banUserByLocation 调用失败:', err);
+                console.warn('[index] 预览模式可能无法调用云函数，但已跳转到封禁页');
+              }
             });
             return;
           }
 
           // 非拦截城市，正常进入
           console.log('[index] 非拦截城市，正常进入');
-          this.appendDataAndJump('user_list', locData, '/pages/products/products');
+          // 🔴 不立即跳转，等待动画完成
+          this.setData({
+            pendingJumpTarget: '/pages/products/products',
+            pendingJumpData: { collectionName: 'user_list', locData: locData }
+          });
 
         } catch (err) {
           console.error('[index] 地址检查异常:', err);
-          this.appendDataAndJump('user_list', locData, '/pages/products/products');
+          console.error('[index] 错误详情:', err.message, err.stack);
+          // 预览模式下如果出错，也尝试执行封禁（保守策略）
+          if (locData.city) {
+            console.log('[index] 预览模式异常，尝试执行封禁检查');
+            // 🔴 不立即跳转，等待动画完成
+            this.setData({
+              pendingJumpTarget: '/pages/blocked/blocked?type=location',
+              pendingJumpData: null
+            });
+            wx.cloud.callFunction({
+              name: 'banUserByLocation',
+              success: () => console.log('[index] banUserByLocation 调用成功'),
+              fail: (err) => console.error('[index] banUserByLocation 调用失败:', err)
+            });
+          } else {
+            // 🔴 不立即跳转，等待动画完成
+            this.setData({
+              pendingJumpTarget: '/pages/products/products',
+              pendingJumpData: { collectionName: 'user_list', locData: locData }
+            });
+          }
         }
+      },
+      fail: (err) => {
+        console.error('[index] 逆地理编码失败:', err);
+        console.error('[index] 错误详情:', err.message || err);
+        // 预览模式下可能无法调用地图 API，直接进入（不阻塞）
+        console.warn('[index] 预览模式可能无法调用地图 API，直接进入');
+        const locData = {
+          province: '未知',
+          city: '未知',
+          district: '未知',
+          full_address: '位置解析失败',
+          latitude: lat,
+          longitude: lng,
+          phoneModel: phoneModel
+        };
+        // 🔴 不立即跳转，等待动画完成
+        this.setData({
+          pendingJumpTarget: '/pages/products/products',
+          pendingJumpData: { collectionName: 'user_list', locData: locData }
+        });
       }
+    });
+  },
+
+  // 🔴 执行待跳转（动画完成后调用）
+  _executePendingJump() {
+    const { collectionName, locData } = this.data.pendingJumpData;
+    const targetPage = this.data.pendingJumpTarget;
+    
+    console.log('[index] 执行待跳转，写入数据到:', collectionName, '目标页面:', targetPage);
+    
+    const nickName = wx.getStorageSync('user_nickname') || '未知用户';
+    
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
+    
+    wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
+      const openid = loginRes.result.openid;
+
+      // 🔴 并行查询：登录日志、用户集合、封禁令牌
+      const p1 = db.collection('login_logs')
+        .where({ _openid: openid })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+      const p2 = db.collection(collectionName)
+        .where({ _openid: openid })
+        .orderBy('createTime', 'desc')
+        .limit(1)
+        .get();
+      const p3 = db.collection('login_logbutton')
+        .where({ _openid: openid })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+
+      Promise.all([p1, p2, p3]).then(results => {
+        const userRes = results[1];
+        const buttonRes = results[2];
+
+        // 🔴 最终安检：检查 login_logbutton，确保没有封禁
+        if (buttonRes.data && buttonRes.data.length > 0) {
+          const btn = buttonRes.data[0];
+          const rawFlag = btn.isBanned;
+          const isBanned =
+            rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
+          const bypassLocationCheck = btn.bypassLocationCheck === true;
+
+          if (isBanned) {
+            // 🔴 截屏/录屏封禁：最高优先级，不允许任何方式绕过
+            if (btn.banReason === 'screenshot' || btn.banReason === 'screen_record') {
+              console.log('[index] 最终安检：检测到截屏/录屏封禁，跳转到封禁页');
+              wx.reLaunch({ url: '/pages/blocked/blocked?type=screenshot' });
+              return;
+            } else if (!bypassLocationCheck) {
+              console.log('[index] 最终安检：检测到封禁，跳转到封禁页');
+              const banType = btn.banReason === 'location_blocked' ? 'location' : 'banned';
+              wx.reLaunch({ url: `/pages/blocked/blocked?type=${banType}` });
+              return;
+            }
+          }
+        }
+
+        // 更新或创建用户位置记录
+        if (userRes.data && userRes.data.length > 0) {
+          db.collection(collectionName)
+            .doc(userRes.data[0]._id)
+            .update({
+              data: {
+                ...locData,
+                nickName: nickName,
+                updateTime: db.serverDate()
+              }
+            })
+            .then(() => {
+              console.log('[index] 用户位置已更新');
+              wx.reLaunch({ url: targetPage });
+            })
+            .catch(err => {
+              console.error('[index] 更新用户位置失败:', err);
+              wx.reLaunch({ url: targetPage });
+            });
+        } else {
+          db.collection(collectionName)
+            .add({
+              data: {
+                ...locData,
+                nickName: nickName,
+                _openid: openid,
+                createTime: db.serverDate(),
+                updateTime: db.serverDate()
+              }
+            })
+            .then(() => {
+              console.log('[index] 用户位置已创建');
+              wx.reLaunch({ url: targetPage });
+            })
+            .catch(err => {
+              console.error('[index] 创建用户位置失败:', err);
+              wx.reLaunch({ url: targetPage });
+            });
+        }
+      }).catch(err => {
+        console.error('[index] 查询失败:', err);
+        wx.reLaunch({ url: targetPage });
+      });
+    }).catch(err => {
+      console.error('[index] 获取 OpenID 失败:', err);
+      wx.reLaunch({ url: targetPage });
     });
   },
 
@@ -505,7 +716,16 @@ Page({
           const hasGoldMedal = btn.bypassLocationCheck === true;
 
           if (isBanned) {
-            if (btn.banReason === 'location_blocked' && hasGoldMedal) {
+            // 🔴 截屏/录屏封禁：最高优先级，不允许任何方式绕过
+            if (btn.banReason === 'screenshot' || btn.banReason === 'screen_record') {
+              console.warn('[index] 最终检查：检测到截屏/录屏封禁，立即拦截！', btn);
+              if (this._jumpFallbackTimer) {
+                clearTimeout(this._jumpFallbackTimer);
+                this._jumpFallbackTimer = null;
+              }
+              wx.reLaunch({ url: '/pages/blocked/blocked?type=screenshot' });
+              return;
+            } else if (btn.banReason === 'location_blocked' && hasGoldMedal) {
               console.log('[index] 最终检查：地址拦截但有金牌，放行');
             } else {
               console.warn('[index] 最终检查：发现封禁记录，拦截跳转！', btn);
@@ -513,7 +733,8 @@ Page({
                 clearTimeout(this._jumpFallbackTimer);
                 this._jumpFallbackTimer = null;
               }
-              wx.reLaunch({ url: '/pages/blocked/blocked?type=location' });
+              const banType = btn.banReason === 'location_blocked' ? 'location' : 'banned';
+              wx.reLaunch({ url: `/pages/blocked/blocked?type=${banType}` });
               return;
             }
           }

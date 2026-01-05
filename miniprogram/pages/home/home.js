@@ -34,6 +34,9 @@ Page({
   },
 
   onLoad() {
+    // 🔴 截屏/录屏封禁
+    this.initScreenshotProtection();
+    
     this.startY = 0;
     this.startScroll = 0;
     this.isDragging = false;
@@ -1521,5 +1524,98 @@ Page({
   
   makeCall() { 
     if(this.data.activeItem.phone) wx.makePhoneCall({ phoneNumber: this.data.activeItem.phone }); 
-  }
+  },
+
+  onShow() {
+    // 🔴 检查录屏状态
+    if (wx.getScreenRecordingState) {
+      wx.getScreenRecordingState({
+        success: (res) => {
+          if (res.state === 'on' || res.recording) {
+            this.handleIntercept('record');
+          }
+        }
+      });
+    }
+  },
+
+  // 🔴 初始化截屏/录屏保护
+  initScreenshotProtection() {
+    // 物理防线：确保录屏、截屏出来的全是黑屏
+    if (wx.setVisualEffectOnCapture) {
+      wx.setVisualEffectOnCapture({
+        visualEffect: 'hidden',
+        success: () => console.log('[home] 🛡️ 硬件级防偷拍锁定')
+      });
+    }
+
+    // 截屏监听
+    wx.onUserCaptureScreen(() => {
+      this.handleIntercept('screenshot');
+    });
+
+    // 录屏监听
+    if (wx.onUserScreenRecord) {
+      wx.onUserScreenRecord(() => {
+        this.handleIntercept('record');
+      });
+    }
+  },
+
+  // 🔴 处理截屏/录屏拦截
+  handleIntercept(type) {
+    // 标记封禁（本地存储）
+    wx.setStorageSync('is_user_banned', true);
+    if (type === 'screenshot') {
+      wx.setStorageSync('is_screenshot_banned', true);
+    }
+
+    // 调用云函数写入数据库封禁状态，等待完成后再跳转
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: { type: type },
+      success: (res) => {
+        console.log('[home] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
+        this._jumpToBlocked(type);
+      },
+      fail: (err) => {
+        console.error('[home] banUserByScreenshot 调用失败:', err);
+        this._jumpToBlocked(type);
+      }
+    });
+  },
+
+  _jumpToBlocked(type) {
+    // 🔴 防止重复跳转
+    const app = getApp();
+    if (app.globalData._isJumpingToBlocked) {
+      console.log('[home] 正在跳转中，忽略重复跳转请求');
+      return;
+    }
+
+    // 检查当前页面是否已经是 blocked 页面
+    const pages = getCurrentPages();
+    const currentPage = pages[pages.length - 1];
+    if (currentPage && currentPage.route === 'pages/blocked/blocked') {
+      console.log('[home] 已在 blocked 页面，无需重复跳转');
+      return;
+    }
+
+    app.globalData._isJumpingToBlocked = true;
+
+    wx.reLaunch({
+      url: `/pages/blocked/blocked?type=${type}`,
+      success: () => {
+        console.log('[home] 跳转到 blocked 页面成功');
+        setTimeout(() => {
+          app.globalData._isJumpingToBlocked = false;
+        }, 2000);
+      },
+      fail: (err) => {
+        console.error('[home] 跳转失败:', err);
+        app.globalData._isJumpingToBlocked = false;
+        wx.exitMiniProgram();
+      }
+    });
+  },
 })

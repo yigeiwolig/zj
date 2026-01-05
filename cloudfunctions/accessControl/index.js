@@ -74,7 +74,11 @@ exports.main = async (event, context) => {
       bypassLocationCheck = existingBypass;
 
       if (isBannedFlag) {
-        if (btn.banReason === 'location_blocked') {
+        // 🔴 截屏/录屏封禁：最高优先级，不允许任何方式绕过
+        if (btn.banReason === 'screenshot' || btn.banReason === 'screen_record') {
+          globalBan = true;
+          console.log('[accessControl] 🔒 检测到截屏/录屏封禁，全局封禁');
+        } else if (btn.banReason === 'location_blocked') {
           if (existingBypass) {
             locationBannedByButton = false;
             console.log('[accessControl] 🛡️ 免死金牌用户，跳过地址封禁');
@@ -82,6 +86,7 @@ exports.main = async (event, context) => {
             locationBannedByButton = true;
           }
         } else {
+          // 其他封禁原因（如 nickname_verify_fail）
           globalBan = true;
         }
       }

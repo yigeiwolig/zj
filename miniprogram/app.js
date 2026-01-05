@@ -21,7 +21,10 @@ App({
       sheetSelect: null,
       inputConfirm: null,
       inputCancel: null
-    }
+    },
+
+    // 🔴 防止重复跳转到 blocked 页面的标志
+    _isJumpingToBlocked: false
   },
 
   // ======================== 全局 UI API（替代 wx.showToast/showModal/showLoading/showActionSheet） ========================
@@ -160,6 +163,45 @@ App({
         traceUser: true,
       });
       console.log('✅ 云开发已在 app.js 初始化，环境ID: cloudbase-4gn1heip7c38ec6c');
+      
+      // 🔴 应用启动时检查封禁状态（确保重启后也能拦截）
+      this.checkBanStatusOnLaunch();
+    }
+  },
+
+  // 🔴 应用启动时检查封禁状态
+  async checkBanStatusOnLaunch() {
+    try {
+      const loginRes = await wx.cloud.callFunction({ name: 'login' });
+      const openid = loginRes.result.openid;
+      const db = wx.cloud.database();
+      
+      const buttonRes = await db.collection('login_logbutton')
+        .where({ _openid: openid })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+      
+      if (buttonRes.data && buttonRes.data.length > 0) {
+        const btn = buttonRes.data[0];
+        const rawFlag = btn.isBanned;
+        const isBanned = rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
+        
+        if (isBanned) {
+          console.log('[app] 应用启动时检测到封禁状态，跳转到封禁页');
+          const banType = btn.banReason === 'screenshot' || btn.banReason === 'screen_record' 
+            ? 'screenshot' 
+            : (btn.banReason === 'location_blocked' ? 'location' : 'banned');
+          
+          // 延迟一下，确保页面加载完成
+          setTimeout(() => {
+            wx.reLaunch({ url: `/pages/blocked/blocked?type=${banType}` });
+          }, 500);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('[app] 启动时检查封禁状态失败:', err);
     }
   },
 
