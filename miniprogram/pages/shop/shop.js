@@ -33,7 +33,10 @@ Page({
     topMediaList: [],
 
     // 商店标题
-    shopTitle: 'MT STORE',
+    shopTitle: 'MT 配件中心',
+
+    // 【新增】自动消失提示（无按钮，2秒后自动消失）
+    autoToast: { show: false, title: '', content: '' },
 
 
     // ============ 核心产品数据 ============
@@ -134,7 +137,14 @@ Page({
     currentVideoUrl: '',
 
     // 新增：媒体区域的实际高度
-    mediaHeight: 0
+    mediaHeight: 0,
+
+    // 自定义弹窗
+    dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+
+    // Loading 状态（使用和 index.js 一样的白色背景进度条动画）
+    showLoadingAnimation: false,
+    loadingText: '加载中...'
   },
 
   onLoad(options) {
@@ -257,7 +267,7 @@ Page({
   // 编辑商店标题
   // ========================================================
   adminEditShopTitle() {
-    this._input(this.data.shopTitle || 'MT STORE', (val) => {
+    this._input(this.data.shopTitle || 'MT 配件中心', (val) => {
       this.setData({ shopTitle: val });
       this.saveShopTitleToCloud(val);
     });
@@ -942,10 +952,12 @@ Page({
     const idx = e.currentTarget.dataset.index;
     const series = this.data.seriesList[idx];
 
-    wx.showModal({
+    this.showMyDialog({
       title: '删除警告',
       content: `确定要彻底删除产品 "${series.name}" 吗？此操作不可恢复。`,
-      confirmColor: '#FF3B30', // 红色确认键
+      showCancel: true,
+      confirmText: '删除',
+      cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
           wx.showLoading({ title: '删除中...' });
@@ -2363,15 +2375,11 @@ Page({
   },
 
   // ========================================================
-  // [修改] 错误提示改为微信原生样式 (去掉红色横幅)
+  // [修改] 错误提示使用自定义弹窗
   // ========================================================
   showError(msg) {
-    // 使用微信自带的黑色气泡，不显示那个红条了
-    wx.showToast({
-      title: msg,
-      icon: 'none',
-      duration: 2000
-    });
+    // 使用自动消失提示显示错误信息
+    this.showAutoToast('提示', msg);
   },
 
   // ========================================================
@@ -2385,6 +2393,64 @@ Page({
     setTimeout(() => {
       this.setData({ 'centerToast.show': false });
     }, 1500);
+  },
+
+  // ========================================================
+  // 自定义加载动画方法
+  // ========================================================
+  // 显示 Loading（使用和 index.js 一样的白色背景进度条动画）
+  showMyLoading(title = '加载中...') {
+    // 🔴 关键：先隐藏微信官方的 loading（如果存在），避免覆盖自定义 loading
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
+    this.setData({ showLoadingAnimation: true, loadingText: title });
+  },
+
+  // 隐藏 Loading
+  hideMyLoading() {
+    this.setData({ showLoadingAnimation: false });
+  },
+
+  // ========================================================
+  // 自定义弹窗方法
+  // ========================================================
+  // 显示自定义弹窗
+  showMyDialog(options) {
+    this.setData({
+      'dialog.show': true,
+      'dialog.title': options.title || '提示',
+      'dialog.content': options.content || '',
+      'dialog.showCancel': options.showCancel || false,
+      'dialog.confirmText': options.confirmText || '确定',
+      'dialog.cancelText': options.cancelText || '取消',
+      'dialog.callback': options.success || null
+    });
+  },
+
+  // 关闭自定义弹窗
+  closeCustomDialog() {
+    this.setData({ 'dialog.show': false });
+  },
+
+  // 点击弹窗确定
+  onDialogConfirm() {
+    const cb = this.data.dialog.callback;
+    this.setData({ 'dialog.show': false });
+    if (cb) cb({ confirm: true });
+  },
+
+  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  showAutoToast(title = '提示', content = '') {
+    this.setData({
+      'autoToast.show': true,
+      'autoToast.title': title,
+      'autoToast.content': content
+    });
+    // 2秒后自动消失
+    setTimeout(() => {
+      this.setData({ 'autoToast.show': false });
+    }, 2000);
   },
 
 
@@ -2541,27 +2607,44 @@ Page({
   // 6. [核心] 提交校验与组装
   // ========================================================
   submitOrder() {
+    console.log('[submitOrder] 按钮被点击');
     const { cart, orderInfo, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
 
+    console.log('[submitOrder] 当前数据:', { 
+      cartLength: cart.length, 
+      orderInfo, 
+      detailAddress, 
+      finalTotalPrice 
+    });
+
     // A. 购物车校验
-    if (cart.length === 0) return this.showError('购物车为空');
+    if (cart.length === 0) {
+      console.log('[submitOrder] 购物车为空');
+      return this.showError('购物车为空');
+    }
 
     // B. 信息校验
-    if (!orderInfo.name) return this.showError('请填写收货人姓名');
+    if (!orderInfo.name) {
+      console.log('[submitOrder] 校验失败：收货人姓名为空');
+      return this.showError('请填写收货人姓名');
+    }
 
     // 手机号 11 位校验
     if (!orderInfo.phone || !/^1[3-9]\d{9}$/.test(orderInfo.phone)) {
+      console.log('[submitOrder] 校验失败：手机号格式错误', orderInfo.phone);
       return this.showError('请输入正确的11位手机号');
     }
 
     // 地址校验
     if (!detailAddress || !detailAddress.trim()) {
+      console.log('[submitOrder] 校验失败：详细地址为空');
       return this.showError('请填写详细地址');
     }
 
     // C. 解析地址，验证是否包含省市区信息
     const parsed = this.parseAddress(detailAddress);
     if (!parsed.province && !parsed.city) {
+      console.log('[submitOrder] 校验失败：地址格式不正确', parsed);
       return this.showError('地址格式不正确，请包含省市区信息，如：广东省 佛山市 南海区 某某街道101号');
     }
 
@@ -2576,28 +2659,62 @@ Page({
 
     // E. 顺丰运费校验
     if (shippingMethod === 'sf' && shippingFee === 0) {
+      console.log('[submitOrder] 校验失败：顺丰运费未计算');
       return this.showError('请完善地址信息以计算运费');
     }
 
+    // 【修复】在调用支付前，重新计算最终价格，确保金额准确
+    this.reCalcFinalPrice();
+    const currentFinalTotalPrice = this.data.finalTotalPrice;
+    const currentShippingFee = this.data.shippingFee;
+
+    console.log('[submitOrder] 所有校验通过，准备调用支付');
+    console.log('[submitOrder] 重新计算后的价格:', {
+      finalTotalPrice: currentFinalTotalPrice,
+      shippingFee: currentShippingFee,
+      cartTotalPrice: this.data.cartTotalPrice
+    });
+
     // F. 唤起支付 (复用之前的逻辑)
-    this.doRealPayment(cart, finalOrderInfo, finalTotalPrice);
+    this.doRealPayment(cart, finalOrderInfo, currentFinalTotalPrice, currentShippingFee, shippingMethod);
   },
 
   // ========================================================
   // 真实支付流程
   // ========================================================
-  doRealPayment() {
-    const { cart, orderInfo, finalTotalPrice, shippingFee, shippingMethod } = this.data;
+  doRealPayment(cart, orderInfo, finalTotalPrice, shippingFee, shippingMethod) {
+    console.log('[doRealPayment] 开始执行支付流程');
+    
+    // 如果没有传入参数，则从 this.data 读取（兼容旧调用）
+    if (!cart) {
+      console.log('[doRealPayment] 参数为空，从 this.data 读取');
+      const data = this.data;
+      cart = data.cart;
+      orderInfo = data.orderInfo;
+      finalTotalPrice = data.finalTotalPrice;
+      shippingFee = data.shippingFee;
+      shippingMethod = data.shippingMethod;
+    }
+
+    console.log('[doRealPayment] 支付参数:', {
+      cartLength: cart ? cart.length : 0,
+      orderInfo,
+      finalTotalPrice,
+      shippingFee,
+      shippingMethod
+    });
 
     // 【新增】检查支付金额
-    console.log('正在支付，金额为:', finalTotalPrice); // 检查控制台，这里绝对不能是 0 或 undefined
+    console.log('[doRealPayment] 正在支付，金额为:', finalTotalPrice);
     
-    if (!finalTotalPrice || finalTotalPrice <= 0) {
-      wx.showToast({ title: '金额异常', icon: 'none' });
+    if (!finalTotalPrice || finalTotalPrice <= 0 || isNaN(finalTotalPrice)) {
+      console.error('[doRealPayment] 金额异常:', finalTotalPrice);
+      this.showAutoToast('支付失败', `订单金额异常（${finalTotalPrice}），请重新选择商品`);
       return;
     }
 
-    wx.showLoading({ title: '唤起收银台...', mask: true });
+    console.log('[doRealPayment] 准备调用云函数 createOrder');
+    this.showMyLoading('唤起收银台...');
 
     // 3. 调用云函数获取支付参数
     wx.cloud.callFunction({
@@ -2610,29 +2727,31 @@ Page({
         shippingMethod: shippingMethod
       },
       success: res => {
-        wx.hideLoading();
+        console.log('[doRealPayment] 云函数调用成功，返回结果:', res);
+        this.hideMyLoading();
         const payment = res.result;
+        console.log('[doRealPayment] 支付参数:', payment);
 
         // 【新增检测】检查云函数返回的错误
         if (payment && payment.error) {
-          wx.showModal({ 
-            title: '支付失败', 
-            content: payment.msg || '支付系统异常，请稍后再试', 
-            showCancel: false 
-          });
-      return;
-    }
+          console.error('[doRealPayment] 云函数返回错误:', payment);
+          this.showAutoToast('支付失败', payment.msg || '支付系统异常，请稍后再试');
+          return;
+        }
 
         if (!payment || !payment.paySign) {
+          console.error('[doRealPayment] 支付参数缺失:', payment);
           // 如果这里报错，通常是商户号审核还没过
-          wx.showModal({ title: '提示', content: '支付系统对接中，请稍后再试', showCancel: false });
-      return;
-    }
+          this.showAutoToast('提示', '支付系统对接中，请稍后再试');
+          return;
+        }
 
+        console.log('[doRealPayment] 准备调用 wx.requestPayment');
         // 4. 唤起微信原生支付界面
         wx.requestPayment({
           ...payment,
           success: (payRes) => {
+            console.log('[doRealPayment] 支付成功:', payRes);
             // 支付成功处理
             wx.showToast({ title: '支付成功', icon: 'success' });
             this.closeOrderModal();
@@ -2646,15 +2765,30 @@ Page({
             wx.navigateTo({ url: '/pages/my/my' });
           },
           fail: (err) => {
-            console.error('用户取消或支付失败', err);
-            wx.showToast({ title: '支付已取消', icon: 'none' });
+            console.error('[doRealPayment] 支付失败:', err);
+            // 根据错误类型显示不同的提示
+            let errorMsg = '支付已取消';
+            if (err.errMsg) {
+              if (err.errMsg.indexOf('cancel') > -1 || err.errMsg.indexOf('取消') > -1) {
+                errorMsg = '支付已取消';
+              } else if (err.errMsg.indexOf('fail') > -1 || err.errMsg.indexOf('失败') > -1) {
+                errorMsg = '支付失败，请重试';
+              } else {
+                errorMsg = err.errMsg;
+              }
+            }
+            this.showMyDialog({ 
+              title: '支付提示', 
+              content: errorMsg, 
+              showCancel: false 
+            });
           }
         });
       },
       fail: err => {
-        wx.hideLoading();
-        console.error('创建订单失败', err);
-        wx.showToast({ title: '创建订单失败', icon: 'none' });
+        console.error('[doRealPayment] 云函数调用失败:', err);
+        this.hideMyLoading();
+        this.showAutoToast('创建订单失败', err.errMsg || '网络错误，请重试');
       }
     });
   },
@@ -2663,9 +2797,10 @@ Page({
   // [新增] 清空购物车
   // ========================================================
   clearCart() {
-    wx.showModal({
+    this.showMyDialog({
       title: '确认清空',
       content: '确定要清空购物车吗？',
+      showCancel: true,
       confirmText: '清空',
       cancelText: '取消',
       success: (res) => {
@@ -2749,10 +2884,12 @@ Page({
     const fullAddressString = parsed.fullAddress || detailAddress;
     const finalOrderInfo = { ...orderInfo, address: fullAddressString };
 
-    wx.showModal({
+    this.showMyDialog({
       title: '提交定制需求',
       content: '订单将提交给管理员进行核价。',
+      showCancel: true,
       confirmText: '提交',
+      cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
           wx.showLoading({ title: '提交中...' });

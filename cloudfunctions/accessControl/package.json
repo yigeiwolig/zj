@@ -1,27 +1,9 @@
 {
-  "name": "getMotoRank",
+  "name": "accessControl",
   "version": "1.0.0",
-  "description": "get moto rank records",
+  "description": "",
   "main": "index.js",
   "dependencies": {
     "wx-server-sdk": "latest"
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -279,8 +279,9 @@ Page({
           try {
             console.log('从云数据库加载店铺数据:', res.data);
             
-            // 先加载测试模式开关
-            const isTestMode = await this.loadTestModeConfig();
+            // 先加载测试模式开关（仅管理员可用）
+            const isAdmin = this.data.isAdmin || false;
+            const isTestMode = isAdmin ? await this.loadTestModeConfig() : false;
             
             // 过滤掉开关文档本身，只保留店铺数据
             let shops = res.data
@@ -779,7 +780,7 @@ Page({
         }
         
         // 上传到云存储
-        wx.showLoading({ title: '上传图片中...', mask: true });
+        getApp().showLoading({ title: '上传图片中...', mask: true });
         const cloudPath = `home/images/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
         
         wx.cloud.uploadFile({
@@ -796,7 +797,7 @@ Page({
                 that.setData({
                   'editData.img': cloudFileID
                 });
-                wx.hideLoading();
+                getApp().hideLoading();
                 wx.showToast({ title: '图片已更新', icon: 'success', duration: 1500 });
               } else if (that.data.isAdmin) {
                 // 管理员浏览模式下，直接更新并保存到云数据库
@@ -817,25 +818,25 @@ Page({
                   });
                   that.setData({ shops });
                   
-                  wx.hideLoading();
+                  getApp().hideLoading();
                   wx.showToast({ title: '图片已更新', icon: 'success', duration: 1500 });
                 } else {
-                  wx.hideLoading();
+                  getApp().hideLoading();
                   wx.showToast({ title: '图片上传成功', icon: 'success', duration: 1500 });
                 }
               } else {
                 // 其他情况，确保隐藏 loading
-                wx.hideLoading();
+                getApp().hideLoading();
               }
             } catch (err) {
               console.error('处理图片更新失败:', err);
-              wx.hideLoading();
+              getApp().hideLoading();
               wx.showToast({ title: '保存失败，请重试', icon: 'none' });
             }
           },
           fail: (err) => {
             console.error('图片上传失败:', err);
-            wx.hideLoading();
+            getApp().hideLoading();
             wx.showToast({ title: '图片上传失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 2000 });
           }
         });

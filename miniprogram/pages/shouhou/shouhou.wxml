@@ -16,18 +16,17 @@
     </view>
     <view class="header-title-row">
       <view class="large-title">
-        MT
+        MT维修中心
         <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
           {{isAdmin ? 'EXIT' : 'EDIT'}}
         </view>
       </view>
-      <view class="subtitle">请选择你的设备</view>
     </view>
     <view class="nav-right-placeholder"></view>
   </view>
   
   <!-- F1 系列 -->
-  <view class="section-title">F1 SERIES</view>
+  <view class="section-title">F1 系列</view>
   <view class="card-grid">
     <view class="i-card style-white" bindtap="enterModel" data-name="F1 PRO" data-series="F1">
       <view class="card-top"><text class="badge">标准版</text></view>
@@ -42,7 +41,7 @@
   </view>
 
   <!-- F2 系列 -->
-  <view class="section-title">F2 SERIES</view>
+  <view class="section-title">F2 系列</view>
   <view class="card-grid">
     <view class="i-card style-white" bindtap="enterModel" data-name="F2 PRO" data-series="F2">
       <view class="card-top"><text class="badge">普通版</text></view>
@@ -57,7 +56,7 @@
   </view>
 
   <!-- F2 Long 系列 -->
-  <view class="section-title">F2 LONG SERIES</view>
+  <view class="section-title">F2 LONG 系列</view>
   <view class="card-grid" style="padding-bottom: 50px;">
     <view class="i-card style-white" bindtap="enterModel" data-name="F2 PRO Long" data-series="F2">
       <view class="card-top"><text class="badge">加长版</text></view>
@@ -448,6 +447,14 @@
     </view>
   </view>
 
+  <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
+  <view class="auto-toast-mask" wx:if="{{autoToast.show}}">
+    <view class="auto-toast-box">
+      <view class="at-title">{{autoToast.title}}</view>
+      <view class="at-content">{{autoToast.content}}</view>
+    </view>
+  </view>
+
   <!-- 隐藏视频组件 (提取封面用 - 管理员上传教程) -->
   <video 
     wx:if="{{tempVideoPath && !tempVideoThumb && extractingThumb && modalMode === 'video'}}"
@@ -467,5 +474,13 @@
     bindloadedmetadata="onVideoMetadataLoaded"
     bindtimeupdate="onVideoTimeUpdate"
   ></video>
+
+  <!-- 自定义加载动画 -->
+  <view class="loading-mask" wx:if="{{showLoadingAnimation}}">
+    <view class="loader">
+      <text class="loader-label">请稍候...</text>
+      <view class="loading-bar"></view>
+    </view>
+  </view>
 
 </view>

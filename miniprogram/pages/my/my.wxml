@@ -36,18 +36,19 @@
     <!-- 1. 标题栏 + 切换按钮 -->
     <view class="admin-header-row">
       <view class="admin-page-title">
-        {{showShippedMode ? '发货记录' : '待处理订单'}}
+        待处理订单
       </view>
       
-      <!-- 右侧切换按钮 -->
-      <view class="switch-view-btn {{showShippedMode ? 'active' : ''}}" bindtap="toggleViewMode">
-        {{showShippedMode ? '← 返回待处理' : '查看已发货 ➔'}}
+      <view class="admin-header-right">
+        <!-- 需寄回订单确认按钮 -->
+        <view class="return-required-btn" bindtap="openReturnRequiredModal">
+          需寄回订单确认
+        </view>
       </view>
     </view>
 
-    <!-- 2. 模式A：待发货 (横向 Swiper) -->
+    <!-- 2. 待物料发出 (横向 Swiper) -->
     <swiper 
-      wx:if="{{!showShippedMode}}"
       class="order-swiper" 
       bindchange="onOrderChange" 
       circular 
@@ -55,9 +56,9 @@
       next-margin="60rpx"
       style="height: {{swiperHeight}}px; transition: height 0.3s ease;"
     >
-      <!-- 如果没有待发货订单 -->
+      <!-- 如果没有待物料发出订单 -->
       <swiper-item wx:if="{{pendingList.length === 0}}">
-        <view class="empty-card">🎉 太棒了，所有订单都已发货！</view>
+        <view class="empty-card">🎉 太棒了，所有订单都已物料发出！</view>
       </swiper-item>
 
       <!-- 循环 pendingList -->
@@ -103,7 +104,7 @@
               <text class="time-text">{{item.createTime}}</text>
               <view class="price-box">
                 <text>实付</text> 
-                <!-- 【修改】给金额加上点击事件（管理员待发货也可以改价） -->
+                <!-- 【修改】给金额加上点击事件（管理员待物料发出也可以改价） -->
                 <text 
                   class="price-num {{isAdmin && item.realStatus === 'PAID' ? 'editable-price' : ''}}" 
                   catchtap="adminModifyPrice" 
@@ -114,7 +115,7 @@
                 </text>
               </view>
             </view>
-            <view class="admin-ship-btn" catchtap="adminShipOrder" data-id="{{item.id}}">录入单号并发货</view>
+            <view class="admin-ship-btn" catchtap="adminShipOrder" data-id="{{item.id}}">录入运单号并物料发出</view>
           </view>
         </view>
       </swiper-item>
@@ -136,49 +137,43 @@
             <view class="r-addr">{{item.contact.address}}</view>
           </view>
           
-          <!-- 两个按钮 -->
+          <!-- 需要寄回开关 -->
+          <view class="repair-return-switch">
+            <text class="switch-label">需要寄回</text>
+            <switch 
+              checked="{{item.needReturn}}" 
+              bindchange="toggleReturnRequired" 
+              data-id="{{item._id}}"
+              color="#007AFF"
+            />
+          </view>
+          
+          <!-- 状态显示 -->
+          <view class="repair-status-info" wx:if="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT'}}">
+            <text class="repair-status-text">用户已寄出快递</text>
+            <text class="repair-tracking-id" wx:if="{{item.returnTrackingId}}">运单号：{{item.returnTrackingId}}</text>
+          </view>
+          
+          <!-- 操作按钮 -->
           <view class="repair-actions">
-            <view class="r-btn tutorial" bindtap="resolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
-            <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单发货</view>
+            <!-- 如果用户已寄出，显示维修完成按钮 -->
+            <view class="r-btn complete" wx:if="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT'}}" bindtap="adminCompleteRepair" data-id="{{item._id}}">维修完成</view>
+            <!-- 如果维修完成已寄出，显示状态 -->
+            <view class="repair-status-info" wx:if="{{item.status === 'REPAIR_COMPLETED_SENT'}}">
+              <text class="repair-status-text">维修完成已寄出</text>
+              <text class="repair-tracking-id" wx:if="{{item.trackingId}}">运单号：{{item.trackingId}}</text>
+            </view>
+            <!-- 其他状态显示原有按钮 -->
+            <block wx:if="{{item.returnStatus !== 'USER_SENT' && item.status !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+              <view class="r-btn return" bindtap="requestUserReturn" data-id="{{item._id}}">需要用户寄回</view>
+              <view class="r-btn tutorial" bindtap="resolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
+              <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单备件寄出</view>
+            </block>
           </view>
         </view>
       </block>
     </view>
 
-    <!-- 3. 模式B：已发货 (纵向 ScrollView) -->
-    <scroll-view 
-      wx:if="{{showShippedMode}}" 
-      scroll-y 
-      class="history-scroll-view"
-    >
-      <view class="history-list-container">
-        <block wx:for="{{shippedList}}" wx:key="id">
-          <!-- 历史订单卡片 (稍微简化一点，不需要大按钮) -->
-          <view class="order-card detail-mode history-item">
-             <!-- 头部 -->
-             <view class="card-header">
-                <text class="order-val">{{item.orderId}}</text>
-                <view class="status-tag {{item.realStatus}}">{{item.statusText}}</view>
-             </view>
-             <!-- 买家 (精简显示) -->
-             <view class="buyer-info-box small">
-                <text class="b-name">{{item.userName}}</text>
-                <text style="margin:0 10rpx; color:#ddd;">|</text>
-                <text class="b-addr">{{item.userAddr}}</text>
-             </view>
-             <!-- 底部 -->
-             <view class="card-footer-new">
-                <text class="time-text">{{item.createTime}}</text>
-                <!-- 查看物流按钮 -->
-                <view class="btn-logistics-action small" catchtap="viewLogisticsDetail" data-sn="{{item.trackingId}}">
-                  查看物流
-                </view>
-             </view>
-          </view>
-        </block>
-        <view class="end-tip">- 仅显示最近历史记录 -</view>
-      </view>
-    </scroll-view>
 
   </block>
 
@@ -257,11 +252,6 @@
                 取消订单
               </view>
 
-              <!-- 中间的占位（如果有模拟支付） -->
-              <view class="btn-mini gray" catchtap="debugSimulatePay" data-id="{{item.id}}">
-                ⚡️ 模拟
-              </view>
-
               <!-- 右侧的支付按钮 -->
               <view class="btn-mini black" catchtap="repayOrder" data-item="{{item}}">
                 立即支付
@@ -269,13 +259,32 @@
               
             </view>
 
-            <!-- 3. 运输中：所有人都能看物流 -->
+            <!-- 3. 运输中：查看安装教程并确认收货 -->
+            <view wx:if="{{item.realStatus === 'SHIPPED'}}" class="action-row-right">
+              <!-- 物料追踪按钮 -->
             <view 
-              wx:if="{{item.realStatus === 'SHIPPED'}}" 
-              class="logistics-btn" 
+                class="btn-mini outline" 
               catchtap="viewLogisticsDetail" 
               data-sn="{{item.trackingId}}">
-              查看物流 ({{item.trackingId}})
+                物料追踪
+              </view>
+              <!-- 查看安装教程按钮 -->
+              <view 
+                class="btn-mini black" 
+                catchtap="viewTutorialAndSign" 
+                data-id="{{item.id}}" 
+                data-model="{{item.goodsList && item.goodsList[0] ? item.goodsList[0].name : ''}}">
+                ▶ 查看安装教程
+              </view>
+            </view>
+
+            <!-- 4. 已完成：回顾教程 -->
+            <view wx:if="{{item.realStatus === 'SIGNED'}}" class="action-row-right">
+              <view 
+                class="btn-mini outline" 
+                catchtap="viewTutorialOnly">
+                回顾教程
+              </view>
             </view>
 
           </view>
@@ -292,7 +301,7 @@
       <view class="empty-content">
         <view class="empty-icon">📦</view>
         <view class="empty-title">开启您的改装之旅</view>
-        <view class="empty-desc">下单后，此处将实时追踪您的物流进度</view>
+        <view class="empty-desc">下单后，此处将实时追踪您的物料进度</view>
         
         <view class="go-shop-btn">去选购配件 ➔</view>
       </view>
@@ -388,6 +397,109 @@
     </view>
 
     <!-- 👇👇👇【核心补全】在这里插入申请记录列表 👇👇👇 -->
+    <!-- 【新增】需寄回配件维修卡片（仅当未录入单号时显示） -->
+    <view class="return-required-card" wx:if="{{myReturnRequiredRepair && !isAdmin && !myReturnRequiredRepair.returnTrackingId}}">
+      <view class="rr-card-header">
+        <view class="rr-card-title">需寄回配件维修</view>
+        <view class="rr-card-badge">待处理</view>
+      </view>
+      <!-- 显示备注 -->
+      <view class="rr-card-note" wx:if="{{myReturnRequiredRepair.returnNote}}">
+        <text class="rr-card-note-label">备注：</text>
+        <text class="rr-card-note-text">{{myReturnRequiredRepair.returnNote}}</text>
+      </view>
+      <view class="rr-card-info">
+        <view class="rr-card-info-item">
+          <text class="rr-card-info-label">产品型号</text>
+          <text class="rr-card-model">{{myReturnRequiredRepair.model}}</text>
+        </view>
+        <view class="rr-card-info-item">
+          <text class="rr-card-info-label">报修时间</text>
+          <text class="rr-card-time">{{myReturnRequiredRepair.createTime}}</text>
+        </view>
+      </view>
+      
+      <!-- 如果已录入单号，显示状态 -->
+      <view class="rr-card-status" wx:if="{{myReturnRequiredRepair.returnTrackingId}}">
+        <view class="rr-card-status-text">已寄出，维修中，请等候</view>
+        <view class="rr-card-tracking-id">运单号：{{myReturnRequiredRepair.returnTrackingId}}</view>
+      </view>
+      
+      <!-- 如果未录入单号，显示按钮 -->
+      <block wx:if="{{!myReturnRequiredRepair.returnTrackingId}}">
+        <!-- 录入单号按钮 -->
+        <view class="rr-card-btn" bindtap="openReturnTrackingInput" data-id="{{myReturnRequiredRepair._id}}">
+          录入单号
+        </view>
+        <!-- 一键复制地址按钮 -->
+        <view class="rr-card-btn copy-address" bindtap="copyReturnAddress">
+          一键复制地址
+        </view>
+      </block>
+      
+      <!-- 【新增】地址信息填写表单（如果还没有填写地址信息） -->
+      <view class="rr-card-address-form" wx:if="{{!myReturnRequiredRepair.returnAddress && !myReturnRequiredRepair.returnTrackingId}}">
+        <view class="ra-form-header">
+          <view class="ra-form-title">填写修好后寄回地址</view>
+          <view class="ra-form-smart-paste" bindtap="smartPasteAddress">
+            <text class="ra-smart-paste-icon">📋</text>
+            <text class="ra-smart-paste-text">智能粘贴</text>
+          </view>
+        </view>
+        
+        <view class="ra-form-item">
+          <text class="ra-label">收件人姓名</text>
+          <input 
+            class="ra-input" 
+            type="text" 
+            placeholder="请输入收件人姓名"
+            value="{{userReturnAddress.name}}"
+            data-key="name"
+            bindinput="onUserReturnAddressInput"
+          />
+        </view>
+        
+        <view class="ra-form-item">
+          <text class="ra-label">收件人手机号</text>
+          <input 
+            class="ra-input" 
+            type="number" 
+            placeholder="请输入11位手机号"
+            value="{{userReturnAddress.phone}}"
+            data-key="phone"
+            bindinput="onUserReturnAddressInput"
+            maxlength="11"
+          />
+        </view>
+        
+        <view class="ra-form-item">
+          <text class="ra-label">详细地址</text>
+          <textarea 
+            class="ra-textarea" 
+            placeholder="请输入详细地址，包含省市区信息，如：广东省 佛山市 南海区 某某街道101号"
+            value="{{userReturnAddress.address}}"
+            data-key="address"
+            bindinput="onUserReturnAddressInput"
+            auto-height
+            maxlength="200"
+          />
+        </view>
+        
+        <view class="ra-form-btn" bindtap="submitUserReturnAddress">
+          提交地址信息
+        </view>
+      </view>
+      
+      <!-- 如果已填写地址信息，显示地址 -->
+      <view class="rr-card-address-info" wx:if="{{myReturnRequiredRepair.returnAddress}}">
+        <view class="ra-info-title">修好后寄回地址：</view>
+        <view class="ra-info-content">
+          <text>{{myReturnRequiredRepair.returnAddress.name}} {{myReturnRequiredRepair.returnAddress.phone}}</text>
+          <text>{{myReturnRequiredRepair.returnAddress.address}}</text>
+        </view>
+      </view>
+    </view>
+
     <view class="section-label" wx:if="{{myActivityList.length > 0}}">MY ACTIVITIES / 申请进度</view>
     
     <view class="activity-list" wx:if="{{myActivityList.length > 0}}">
@@ -423,20 +535,37 @@
               
               <!-- [新增] 维修单特殊状态 -->
               
-              <!-- 已发货（使用 statusNum 判断） -->
-              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'SHIPPED') && item.trackingId}}">
-                已发货 {{item.trackingId}}
+              <!-- 已维修完成（需要用户寄回的流程，管理员寄出快递后，绿色） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && item.status === 'REPAIR_COMPLETED_SENT' && item.needReturn}}">
+                <view class="dot-s"></view>已维修完成
+              </view>
+              
+              <!-- 已备件寄出（不显示运单号，运单号在查看物流按钮中） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'SHIPPED') && item.trackingId && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+                配件已寄出
               </view>
               
               <!-- 看教程 (蓝色) -->
-              <view class="status-pill info" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'TUTORIAL') && !item.trackingId}}">
+              <view class="status-pill info" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'TUTORIAL') && !item.trackingId && item.status !== 'REPAIR_COMPLETED_SENT'}}">
                 查看教程可修复
               </view>
               
               <!-- 维修单审核中 -->
-              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 0 || item.status === 'PENDING')}}">
-                <view class="dot-p"></view>审核中
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 0 || item.status === 'PENDING') && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+                <view class="dot-p"></view>工程师审核中
               </view>
+              
+              <!-- 正在维修中（用户已寄出快递后） -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+                <view class="dot-p"></view>正在维修中
+              </view>
+            </view>
+          </view>
+          
+          <!-- 🔴 查看物流按钮（显示在已备件寄出或已维修完成状态） -->
+          <view class="logistics-btn-wrapper" wx:if="{{item.type === 'repair' && ((item.status === 1 || item.status === 'SHIPPED' || item.status === 'REPAIR_COMPLETED_SENT') && item.trackingId)}}">
+            <view class="btn-logistics-action" catchtap="viewLogisticsDetail" data-sn="{{item.trackingId}}">
+              查看物流
             </view>
           </view>
           
@@ -600,12 +729,19 @@
     </view>
   </view>
 
-  <!-- ================= 全局自定义 Loading (极简黑) ================= -->
-  <view class="custom-loading-mask" wx:if="{{isLoading}}">
-    <view class="loading-box">
-      <!-- 纯CSS画的高清黑色Loading圈 -->
-      <view class="spinner"></view>
-      <text class="loading-text">{{loadingText}}</text>
+  <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
+  <view class="auto-toast-mask" wx:if="{{autoToast.show}}">
+    <view class="auto-toast-box">
+      <view class="at-title">{{autoToast.title}}</view>
+      <view class="at-content">{{autoToast.content}}</view>
+    </view>
+  </view>
+
+  <!-- ================= 全局自定义 Loading (白色背景进度条) ================= -->
+  <view class="loading-mask" wx:if="{{showLoadingAnimation}}">
+    <view class="loader">
+      <text class="loader-label">{{loadingText}}</text>
+      <view class="loading-bar"></view>
     </view>
   </view>
 
@@ -625,6 +761,146 @@
       <view class="cd-btn-row">
         <view class="cd-btn cancel" bindtap="closeInputDialog">取消</view>
         <view class="cd-btn confirm" bindtap="onInputDialogConfirm">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 统一的"内容已复制"弹窗（样式和首页一致） -->
+  <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}">
+    <view class="custom-modal-box copy-success-modal">
+      <view class="modal-icon-new success-icon">✓</view>
+      <view class="modal-title-new">内容已复制</view>
+    </view>
+  </view>
+
+  <!-- ================= 需寄回订单确认弹窗 ================= -->
+  <view class="return-required-mask" wx:if="{{showReturnRequiredModal}}" bindtap="closeReturnRequiredModal">
+    <view class="return-required-modal" catchtap="noop">
+      <view class="rr-header">
+        <text class="rr-title">需寄回订单确认</text>
+        <text class="rr-close" bindtap="closeReturnRequiredModal">✕</text>
+      </view>
+      
+      <scroll-view scroll-y class="rr-content">
+        <block wx:for="{{returnRequiredList}}" wx:key="_id">
+          <view class="rr-item {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? 'user-sent' : (item.returnTrackingId ? 'returned' : 'pending')}}">
+            <view class="rr-item-header">
+              <text class="rr-model">{{item.model}}</text>
+              <text class="rr-status-badge {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? 'user-sent' : (item.returnTrackingId ? 'returned' : 'pending')}}">
+                {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? '用户寄回维修' : (item.returnTrackingId ? '已寄回' : '待寄回')}}
+              </text>
+            </view>
+            
+            <view class="rr-item-info">
+              <view class="rr-info-row">
+                <text class="rr-info-label">用户信息：</text>
+                <text class="rr-info-value">{{item.contact.name}} {{item.contact.phone}}</text>
+              </view>
+              <view class="rr-info-row">
+                <text class="rr-info-label">用户地址：</text>
+                <view class="rr-info-value-wrapper">
+                  <text class="rr-info-value">{{item.contact.address}}</text>
+                  <view class="rr-copy-user-address-btn" bindtap="copyUserAddress" data-index="{{index}}">
+                    <text class="rr-copy-text">复制</text>
+                  </view>
+                </view>
+              </view>
+              <!-- 如果已填写修好后寄回地址，显示该地址 -->
+              <view class="rr-info-row" wx:if="{{item.returnAddress}}">
+                <text class="rr-info-label">修好后寄回地址：</text>
+                <text class="rr-info-value">{{item.returnAddress.name}} {{item.returnAddress.phone}} {{item.returnAddress.address}}</text>
+              </view>
+              <view class="rr-info-row">
+                <text class="rr-info-label">故障描述：</text>
+                <text class="rr-info-value">{{item.description}}</text>
+              </view>
+              <view class="rr-info-row">
+                <text class="rr-info-label">配件发出时间：</text>
+                <text class="rr-info-value">{{item.shipTime}}</text>
+              </view>
+              
+              <!-- 用户录入的运单号 -->
+              <view class="rr-info-row" wx:if="{{item.returnTrackingId}}">
+                <text class="rr-info-label">寄回运单号：</text>
+                <text class="rr-info-value">{{item.returnTrackingId}}</text>
+              </view>
+            </view>
+            
+            <!-- 操作按钮 -->
+            <view class="rr-actions">
+              <!-- 用户寄回维修中：显示查看物流和寄出快递 -->
+              <block wx:if="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT')}}">
+                <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}">查看物流</view>
+                <view class="rr-btn ship-out" bindtap="adminShipOutAfterRepair" data-id="{{item._id}}">寄出快递</view>
+              </block>
+              <!-- 其他状态：显示取消和已完成 -->
+              <block wx:else>
+                <view class="rr-btn cancel" bindtap="cancelReturnRequired" data-id="{{item._id}}">取消</view>
+                <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}">查看物流</view>
+                <view class="rr-btn complete" bindtap="completeReturnRequired" data-id="{{item._id}}">已完成</view>
+              </block>
+            </view>
+          </view>
+        </block>
+        
+        <view class="rr-empty" wx:if="{{returnRequiredList.length === 0}}">
+          <text>暂无需寄回的订单</text>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- ================= 地址信息填写弹窗（管理员填写用户地址） ================= -->
+  <view class="custom-dialog-mask" wx:if="{{showReturnAddressDialog}}" bindtap="closeReturnAddressDialog">
+    <view class="custom-dialog-box" catchtap="noop" style="max-width: 680rpx; padding: 50rpx 40rpx;">
+      <view class="cd-title">填写用户地址信息</view>
+      <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
+        修好后将按此地址寄回给用户
+      </view>
+      
+      <view class="return-address-form">
+        <view class="ra-form-item">
+          <text class="ra-label">收件人姓名</text>
+          <input 
+            class="ra-input" 
+            type="text" 
+            placeholder="请输入收件人姓名"
+            value="{{tempReturnAddress.name}}"
+            data-key="name"
+            bindinput="onReturnAddressInput"
+          />
+        </view>
+        
+        <view class="ra-form-item">
+          <text class="ra-label">收件人手机号</text>
+          <input 
+            class="ra-input" 
+            type="number" 
+            placeholder="请输入11位手机号"
+            value="{{tempReturnAddress.phone}}"
+            data-key="phone"
+            bindinput="onReturnAddressInput"
+            maxlength="11"
+          />
+        </view>
+        
+        <view class="ra-form-item">
+          <text class="ra-label">详细地址</text>
+          <textarea 
+            class="ra-textarea" 
+            placeholder="请输入详细地址，包含省市区信息，如：广东省 佛山市 南海区 某某街道101号"
+            value="{{tempReturnAddress.address}}"
+            data-key="address"
+            bindinput="onReturnAddressInput"
+            auto-height
+            maxlength="200"
+          />
+        </view>
+      </view>
+      
+      <view class="cd-btn-row">
+        <view class="cd-btn cancel" bindtap="closeReturnAddressDialog">取消</view>
+        <view class="cd-btn confirm" bindtap="confirmReturnAddress">确定</view>
       </view>
     </view>
   </view>

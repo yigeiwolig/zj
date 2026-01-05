@@ -3,12 +3,7 @@
   
   <!-- 图标区域 -->
   <view class="icon-box">
-    <view class="icon-wrapper">
-      <!-- 黑色盾牌底图 -->
-      <image class="blocked-icon" src="https://img.icons8.com/ios-filled/100/1a1a1a/shield.png" mode="aspectFit"></image>
-      <!-- 中间的白色感叹号 -->
-      <text class="symbol">!</text>
-    </view>
+    <image class="shield-icon" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgMjJDMTIgMjIgMjAgMTggMjAgMTJWNUwxMiAyTDQgNVYxMkM0IDE4IDEyIDIyIDEyIDIyWiIgZmlsbD0iYmxhY2siLz48cGF0aCBkPSJNMTIgNkMxMi41NSA2IDEzIDYuNDUgMTMgN1YxM0MxMyAxMy41NSAxMi41NSAxNCAxMiAxNEMxMS40NSAxNCAxMSAxMy41NSAxMSAxM1Y3QzExIDYuNDUgMTEuNDUgNiAxMiA2WiIgZmlsbD0id2hpdGUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjE3IiByPSIxIiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPgo=" mode="aspectFit"></image>
   </view>
   
   <view class="title">访问受限</view>

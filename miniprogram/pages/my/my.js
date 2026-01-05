@@ -53,17 +53,15 @@ Page({
     isAdmin: false,      // 是否开启了管理模式
     
     // 【新增】控制视图模式
-    showShippedMode: false, // false=显示待发货(横滑), true=显示已发货(竖滑)
     
     // 【新增】拆分数据源
-    pendingList: [], // 待发货 (PAID)
-    shippedList: [], // 已发货 + 已完成 (SHIPPED + SIGNED)
+    pendingList: [], // 待物料发出 (PAID)
     
     // Swiper 动态高度
     swiperHeight: 900, // 默认高度，单位 px
     
-    // Loading 状态
-    isLoading: false,
+    // Loading 状态（使用和 index.js 一样的白色背景进度条动画）
+    showLoadingAnimation: false,
     loadingText: '加载中...',
     
     // 【新增】我的申请记录
@@ -71,6 +69,20 @@ Page({
     
     // 【新增】维修工单列表（管理员用）
     repairList: [], // 管理员用的维修列表
+
+    // 【新增】需寄回订单相关
+    showReturnRequiredModal: false, // 是否显示需寄回订单确认弹窗
+    returnRequiredList: [], // 需寄回订单列表
+    myReturnRequiredRepair: null, // 用户当前需要寄回的维修单
+
+    // 统一的"内容已复制"弹窗（和首页一致）
+    showCopySuccessModal: false,
+    
+    // 【新增】自动消失提示（无按钮，2秒后自动消失）
+    autoToast: { show: false, title: '', content: '' },
+    
+    // 【新增】用户填写地址信息（在用户端的卡片中）
+    userReturnAddress: { name: '', phone: '', address: '' },
   },
 
   onLoad() {
@@ -97,6 +109,9 @@ Page({
 
   // --- 1. 页面显示时，加载云端数据 ---
   onShow() {
+    // 🔴 立即显示 loading，提升用户体验
+    this.showMyLoading('同步中...');
+    
     // 每次显示时重新读取昵称（可能在其他页面修改了）
     const savedNickname = wx.getStorageSync('user_nickname');
     if (savedNickname) {
@@ -105,14 +120,29 @@ Page({
     
     // 🔴 先检查权限获取 openid，然后再加载数据
     this.checkAdminPrivilege().then(() => {
-      // 确保 myOpenid 已获取后再加载数据
-      this.loadMyOrders();
-      this.loadMyActivities();
+      // 确保 myOpenid 已获取后再加载数据，等待所有数据加载完成后再隐藏 loading
+      Promise.all([
+        this.loadMyOrdersPromise(),
+        this.loadMyActivitiesPromise()
+      ]).then(() => {
+        this.hideMyLoading();
+      }).catch(() => {
+        this.hideMyLoading();
+      });
     }).catch(() => {
       // 如果权限检查失败，也尝试加载（可能只是普通用户）
       if (this.data.myOpenid) {
-        this.loadMyOrders();
-        this.loadMyActivities();
+        Promise.all([
+          this.loadMyOrdersPromise(),
+          this.loadMyActivitiesPromise()
+        ]).then(() => {
+          this.hideMyLoading();
+        }).catch(() => {
+          this.hideMyLoading();
+        });
+      } else {
+        // 如果连 openid 都没有，隐藏 loading
+        this.hideMyLoading();
       }
     });
   },
@@ -151,19 +181,19 @@ Page({
     }
   },
 
-  // ================== 管理员发货功能 ==================
-  // 1. 修复：发货逻辑改用云函数 (之前是前端直连，没权限改别人的)
+  // ================== 管理员物料发出功能 ==================
+  // 1. 修复：物料发出逻辑改用云函数 (之前是前端直连，没权限改别人的)
   adminShipOrder(e) {
     const orderId = e.currentTarget.dataset.id; // 数据库 _id
     
     this.showInputDialog({
-      title: '录入快递单号',
-      placeholder: '请输入顺丰/圆通单号',
+      title: '录入物料运单号',
+      placeholder: '请输入顺丰/圆通运单号',
       success: (res) => {
         if (res.confirm && res.content) {
           const sn = res.content.trim();
           if (!sn) {
-            this.showMyDialog({ title: '提示', content: '请输入单号' });
+            this.showAutoToast('提示', '请输入运单号');
             return;
           }
           this.showMyLoading('正在提交...');
@@ -181,8 +211,8 @@ Page({
               
               // ✅ [替换]
               this.showMyDialog({
-                title: '发货成功',
-                content: '物流单号已录入，用户端已同步。',
+                title: '物料发出成功',
+                content: '物料运单号已录入，用户端已同步。',
                 success: () => {
                   this.loadMyOrders(); // 刷新订单列表
                 }
@@ -190,7 +220,7 @@ Page({
             },
             fail: err => {
               this.hideMyLoading();
-              this.showMyDialog({ title: '失败', content: err.toString() });
+              this.showAutoToast('失败', err.toString());
             }
           })
         }
@@ -198,107 +228,98 @@ Page({
     });
   },
 
-  // 1. 切换视图模式的按钮函数
-  toggleViewMode() {
-    this.setData({
-      showShippedMode: !this.data.showShippedMode
-    }, () => {
-      // 如果切回了"待处理"Swiper 视图，重新计算高度
-      if (!this.data.showShippedMode) {
-        this.calcSwiperHeight(0);
-      }
+
+  // --- 2. 从云数据库拉取订单 ---
+  // 🔴 将 loadMyOrders 改为返回 Promise 的版本
+  loadMyOrdersPromise() {
+    return new Promise((resolve, reject) => {
+      const getAction = this.data.isAdmin 
+        ? wx.cloud.callFunction({ name: 'adminGetOrders' }) 
+        : // 🔴 普通用户：确保只查询当前用户的订单（系统会自动注入 _openid，但为了保险，我们确保 myOpenid 已获取）
+          (this.data.myOpenid 
+            ? wx.cloud.database().collection('shop_orders')
+                .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
+                .orderBy('createTime', 'desc')
+                .get()
+            : Promise.resolve({ data: [] })); // 如果还没获取到 openid，返回空数组
+
+      const promise = this.data.isAdmin ? getAction.then(res => res.result) : getAction;
+
+      promise.then(res => {
+        // 🔴 loading 统一在 onShow 中管理，这里不隐藏
+      
+        // 数据清洗 (保持之前的逻辑不变)
+        // 注意：管理员模式下 res.data 是数组，普通用户模式下 res.data 也是数组
+        const orderData = Array.isArray(res.data) ? res.data : (res.data || []);
+        const formatted = orderData.map(item => {
+          return {
+            id: item._id,
+            orderId: item.orderId,
+            realStatus: item.status, 
+            statusText: this.getStatusText(item.status),
+            amount: item.totalFee,
+            userName: item.address ? item.address.name : '匿名',
+            userPhone: item.address ? item.address.phone : '',
+            userAddr: item.address ? item.address.address : '',
+            goodsList: item.goodsList || [],
+            createTime: this.formatTime(item.createTime),
+            trackingId: item.trackingId || ""
+          };
+        });
+
+        // === 【核心修改：管理员数据分流】 ===
+        if (this.data.isAdmin) {
+          // [修复] 管理员：同时加载维修工单（兼容云函数未返回 repairs 的情况）
+          if (res && Array.isArray(res.repairs)) {
+            // 🔴 只显示 PENDING 状态的维修单（待处理），排除已标记为需要寄回的
+            const pendingRepairs = res.repairs.filter(i => i.status === 'PENDING' && !i.needReturn);
+            this.setData({ repairList: pendingRepairs });
+          } else {
+            // 云函数没返回 repairs，就直接从数据库拉取（只拉取PENDING）
+            this.loadPendingRepairs();
+          }
+          
+          // 1. 待物料发出列表 (只看 PAID)
+          const pending = formatted.filter(i => i.realStatus === 'PAID');
+
+          this.setData({ 
+            pendingList: pending,
+            orders: [] // 管理员不使用这个混杂的数组了
+          }, () => {
+            // 【修改】数据存完了，界面画完了，再算高度
+            this.calcSwiperHeight(0);
+            resolve(); // 🔴 Promise 完成
+          });
+          
+          console.log('待物料发出:', pending.length);
+        } else {
+          // 普通用户看所有
+          this.setData({ orders: formatted }, () => {
+             // 【修改】
+             this.calcSwiperHeight(0);
+             resolve(); // 🔴 Promise 完成
+          });
+        }
+      }).catch(err => {
+        console.error(err);
+        reject(err); // 🔴 Promise 失败
+      });
     });
   },
 
-  // --- 2. 从云数据库拉取订单 ---
+  // 🔴 保留原方法以兼容其他地方的调用
   loadMyOrders() {
-    this.showMyLoading('同步中...');
-
-    const getAction = this.data.isAdmin 
-      ? wx.cloud.callFunction({ name: 'adminGetOrders' }) 
-      : // 🔴 普通用户：确保只查询当前用户的订单（系统会自动注入 _openid，但为了保险，我们确保 myOpenid 已获取）
-        (this.data.myOpenid 
-          ? wx.cloud.database().collection('shop_orders')
-              .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
-              .orderBy('createTime', 'desc')
-              .get()
-          : Promise.resolve({ data: [] })); // 如果还没获取到 openid，返回空数组
-
-    const promise = this.data.isAdmin ? getAction.then(res => res.result) : getAction;
-
-    promise.then(res => {
-      this.hideMyLoading();
-      
-      // [修复] 管理员：同时加载维修工单（兼容云函数未返回 repairs 的情况）
-      if (this.data.isAdmin) {
-        if (res && Array.isArray(res.repairs)) {
-          const pendingRepairs = res.repairs.filter(i => i.status === 'PENDING');
-          this.setData({ repairList: pendingRepairs });
-        } else {
-          // 云函数没返回 repairs，就直接从数据库拉取
-          this.loadPendingRepairs();
-        }
-      }
-      
-      // 数据清洗 (保持之前的逻辑不变)
-      // 注意：管理员模式下 res.data 是数组，普通用户模式下 res.data 也是数组
-      const orderData = Array.isArray(res.data) ? res.data : (res.data || []);
-      const formatted = orderData.map(item => {
-        return {
-          id: item._id,
-          orderId: item.orderId,
-          realStatus: item.status, 
-          statusText: this.getStatusText(item.status),
-          amount: item.totalFee,
-          userName: item.address ? item.address.name : '匿名',
-          userPhone: item.address ? item.address.phone : '',
-          userAddr: item.address ? item.address.address : '',
-          goodsList: item.goodsList || [],
-          createTime: this.formatTime(item.createTime),
-          trackingId: item.trackingId || ""
-        };
-      });
-
-      // === 【核心修改：管理员数据分流】 ===
-      if (this.data.isAdmin) {
-        // 1. 待发货列表 (只看 PAID)
-        const pending = formatted.filter(i => i.realStatus === 'PAID');
-        
-        // 2. 已发货列表 (看 SHIPPED 和 SIGNED)，UNPAID 直接丢弃不看
-        const shipped = formatted.filter(i => i.realStatus === 'SHIPPED' || i.realStatus === 'SIGNED');
-
-        this.setData({ 
-          pendingList: pending,
-          shippedList: shipped,
-          orders: [] // 管理员不使用这个混杂的数组了
-        }, () => {
-          // 【修改】数据存完了，界面画完了，再算高度
-          // 只有在"待处理"视图下才算
-          if (!this.data.showShippedMode) {
-             this.calcSwiperHeight(0);
-          }
-        });
-        
-        console.log('待发货:', pending.length, '已发货:', shipped.length);
-      } else {
-        // 普通用户看所有
-        this.setData({ orders: formatted }, () => {
-           // 【修改】
-           this.calcSwiperHeight(0);
-        });
-      }
-
-    }).catch(err => {
-      this.hideMyLoading();
-      console.error(err);
-    });
+    this.loadMyOrdersPromise().catch(() => {});
   },
 
   // [新增] 管理员：加载待处理维修工单
   loadPendingRepairs() {
     const db = wx.cloud.database();
     db.collection('shouhou_repair')
-      .where({ status: 'PENDING' })
+      .where({ 
+        status: 'PENDING',
+        needReturn: db.command.neq(true) // 🔴 排除已标记为需要寄回的订单
+      })
       .orderBy('createTime', 'desc')
       .get()
       .then(res => {
@@ -312,17 +333,17 @@ Page({
   // 状态映射辅助
   mapStatus(status) {
     if (status === 'UNPAID') return 0; // 待支付
-    if (status === 'PAID') return 0;   // 已支付(待发货)
-    if (status === 'SHIPPED') return 1; // 已发货
+    if (status === 'PAID') return 0;   // 已支付(待物料发出)
+    if (status === 'SHIPPED') return 1; // 已物料发出
     return 2; // 已签收
   },
 
   // 辅助：状态转中文 (确保这里的对应关系正确)
   getStatusText(status) {
     if (status === 'UNPAID') return '待付款';
-    if (status === 'PAID') return '待发货';   // 只有这个状态才显示"录入单号"
+    if (status === 'PAID') return '待物料发出';   // 只有这个状态才显示"录入运单号"
     if (status === 'SHIPPED') return '运输中';
-    if (status === 'SIGNED') return '已完成';
+    if (status === 'SIGNED') return '确认件齐';
     return '状态未知'; // 调试用
   },
 
@@ -338,59 +359,204 @@ Page({
     return `${y}-${m}-${d} ${h}:${min}`;
   },
 
-  // 1. [调试] 模拟支付成功 (直接改数据库状态)
-  debugSimulatePay(e) {
-    const id = e.currentTarget.dataset.id;
-    this.showMyLoading('模拟支付中...');
 
-    // 直接调用云函数强行改状态
+  // 2. [真实] 重新发起支付
+  repayOrder(e) {
+    const item = e.currentTarget.dataset.item;
+    
+    if (!item || !item.id) {
+      this.showAutoToast('提示', '订单信息异常');
+      return;
+    }
+
+    // 从订单中获取支付所需信息
+    const goods = item.goodsList || [];
+    const addressData = {
+      name: item.userName || '',
+      phone: item.userPhone || '',
+      address: item.userAddr || ''
+    };
+    const totalPrice = item.amount || 0;
+    const shippingFee = 0; // 从订单中获取，如果有的话
+    const shippingMethod = 'zto'; // 默认中通
+
+    if (totalPrice <= 0) {
+      this.showAutoToast('提示', '订单金额异常');
+      return;
+    }
+
+    console.log('[repayOrder] 准备重新支付，订单信息:', {
+      orderId: item.orderId,
+      totalPrice,
+      goodsCount: goods.length
+    });
+
+    this.showMyLoading('唤起收银台...');
+
+    // 调用云函数获取支付参数（使用原订单信息）
     wx.cloud.callFunction({
-      name: 'adminUpdateOrder', // 复用之前的更新函数
+      name: 'createOrder',
       data: {
-        id: id,
-        action: 'simulate_pay' // 需要去云函数里加这个 case
+        totalPrice: totalPrice,
+        goods: goods,
+        addressData: addressData,
+        shippingFee: shippingFee,
+        shippingMethod: shippingMethod
       },
       success: res => {
+        console.log('[repayOrder] 云函数调用成功，返回结果:', res);
         this.hideMyLoading();
-        this.showMyDialog({ title: '模拟成功', content: '订单状态已更新' });
-        this.loadMyOrders(); // 刷新列表
+        const payment = res.result;
+        console.log('[repayOrder] 支付参数:', payment);
+
+        // 检查云函数返回的错误
+        if (payment && payment.error) {
+          console.error('[repayOrder] 云函数返回错误:', payment);
+          this.showMyDialog({ 
+            title: '支付失败', 
+            content: payment.msg || '支付系统异常，请稍后再试', 
+            showCancel: false 
+          });
+          return;
+        }
+
+        if (!payment || !payment.paySign) {
+          console.error('[repayOrder] 支付参数缺失:', payment);
+          this.showMyDialog({ 
+            title: '提示', 
+            content: '支付系统对接中，请稍后再试', 
+            showCancel: false 
+          });
+          return;
+        }
+
+        console.log('[repayOrder] 准备调用 wx.requestPayment');
+        // 唤起微信原生支付界面
+        wx.requestPayment({
+          ...payment,
+          success: (payRes) => {
+            console.log('[repayOrder] 支付成功:', payRes);
+            wx.showToast({ title: '支付成功', icon: 'success' });
+            
+            // 刷新订单列表
+            setTimeout(() => {
+              this.loadMyOrders();
+            }, 1000);
+          },
+          fail: (err) => {
+            console.error('[repayOrder] 支付失败:', err);
+            // 根据错误类型显示不同的提示
+            let errorMsg = '支付已取消';
+            if (err.errMsg) {
+              if (err.errMsg.indexOf('cancel') > -1 || err.errMsg.indexOf('取消') > -1) {
+                errorMsg = '支付已取消';
+              } else if (err.errMsg.indexOf('fail') > -1 || err.errMsg.indexOf('失败') > -1) {
+                errorMsg = '支付失败，请重试';
+              } else {
+                errorMsg = err.errMsg;
+              }
+            }
+            this.showMyDialog({ 
+              title: '支付提示', 
+              content: errorMsg, 
+              showCancel: false 
+            });
+          }
+        });
       },
       fail: err => {
+        console.error('[repayOrder] 云函数调用失败:', err);
         this.hideMyLoading();
-        // 【修改】把错误打印在控制台，截图给我看
-        console.error("模拟支付失败，详细报错:", err); 
-        
-        // 把 err.errMsg 弹出来，这样我就知道具体错哪了
         this.showMyDialog({ 
-          title: '调用失败', 
-          content: err.errMsg || JSON.stringify(err),
-          showCancel: false
+          title: '创建订单失败', 
+          content: err.errMsg || '网络错误，请重试', 
+          showCancel: false 
         });
       }
     });
   },
 
-  // 2. [真实] 重新发起支付
-  repayOrder(e) {
-    const item = e.currentTarget.dataset.item;
-    const { cart, orderInfo, cartTotalPrice } = getApp().globalData; // 这里其实应该传参
-    
-    // 简单起见，提示用户去首页重拍，或者重新调用 createOrder
-    // 真正的"重新支付"需要后端支持原单号支付，比较复杂。
-    // 建议这里简单处理：
-    
+  // 3. 【核心功能】查看安装教程并确认收货
+  viewTutorialAndSign(e) {
+    const id = e.currentTarget.dataset.id; // 订单ID
+    const modelName = e.currentTarget.dataset.model || ''; // 产品型号（可选）
+
     this.showMyDialog({
-      title: '重新支付',
-      content: '是否重新发起支付请求？',
+      title: '开启安装指导',
+      content: '请确认您已收到维修配件且包装完好。\n\n确认后将为您解锁详细安装视频教程。',
+      confirmText: '确认并观看',
+      cancelText: '还没收到',
       showCancel: true,
       success: (res) => {
-        if(res.confirm) {
-           // 这里调用和 shop.js 一样的支付逻辑
-           // 由于代码复用问题，建议引导用户重新下单，或者把 shop.js 的支付逻辑抽离到 app.js
-           this.showMyDialog({ title: '提示', content: '功能开发中' });
+        if (res.confirm) {
+          this.showMyLoading('解锁教程中...');
+          
+          // 1. 调用云函数，执行"确认收货"逻辑
+          wx.cloud.callFunction({
+            name: 'adminUpdateOrder',
+            data: {
+              id: id,
+              action: 'sign' // 确认收货，将状态改为 SIGNED
+            },
+            success: (r) => {
+              this.hideMyLoading();
+              
+              if (r.result && r.result.success !== false) {
+                // 2. 成功后，跳转到教程页面
+                wx.navigateTo({
+                  url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : ''),
+                  success: () => {
+                    wx.showToast({ 
+                      title: '教程已解锁', 
+                      icon: 'success',
+                      duration: 2000
+                    });
+                  }
+                });
+                
+                // 3. 刷新列表，让按钮状态变成"回顾教程"
+                setTimeout(() => {
+                  this.loadMyOrders();
+                }, 500);
+              } else {
+                this.showMyDialog({ 
+                  title: '操作失败', 
+                  content: r.result.errMsg || '网络异常，请稍后重试',
+                  showCancel: false
+                });
+              }
+            },
+            fail: (err) => {
+              this.hideMyLoading();
+              console.error('[viewTutorialAndSign] 云函数调用失败:', err);
+              this.showMyDialog({ 
+                title: '网络异常', 
+                content: err.errMsg || '请稍后重试',
+                showCancel: false
+              });
+            }
+          });
         }
       }
-    })
+    });
+  },
+
+  // 4. 仅查看教程（已签收状态）
+  viewTutorialOnly(e) {
+    const modelName = e.currentTarget.dataset.model || ''; // 产品型号（可选）
+    
+    // 显示提示后跳转
+    this.showMyDialog({
+      title: '查看教程',
+      content: '即将跳转到安装教程页面',
+      showCancel: false,
+      confirmText: '好的',
+      success: () => {
+        wx.navigateTo({
+          url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '')
+        });
+      }
+    });
   },
 
   // [修改] 调试状态切换
@@ -430,7 +596,7 @@ Page({
   // 【核心函数】测量高度 (防报错增强版)
   calcSwiperHeight(index) {
     // 1. 先判断当前应该查哪个列表
-    // 如果是管理员，查待发货(pendingList)；如果是用户，查全部(orders)
+    // 如果是管理员，查待物料发出(pendingList)；如果是用户，查全部(orders)
     const currentList = this.data.isAdmin ? this.data.pendingList : this.data.orders;
 
     // 2. 如果列表是空的，或者是管理员且切到了历史视图，就不需要计算高度
@@ -462,13 +628,13 @@ Page({
     }, 200); // 延迟加大到 200ms，更稳
   },
   
-  // 跳转快递100查询（服务类物流说明）
+  // 跳转快递100查询（服务类进度说明）
   viewLogisticsDetail(e) {
     const sn = e.currentTarget.dataset.sn;
-    console.log("尝试跳转查单号:", sn);
+    console.log("尝试跳转查运单号:", sn);
 
     if (!sn) {
-      this.showMyDialog({ title: '提示', content: '无单号' });
+      this.showAutoToast('提示', '无运单号');
       return;
     }
 
@@ -482,6 +648,15 @@ Page({
       },
       fail: (err) => {
         console.error('跳转失败', err);
+        
+        // 🔴 如果是用户取消，不显示错误弹窗
+        const errMsg = err.errMsg || '';
+        if (errMsg.includes('cancel') || errMsg.includes('取消') || errMsg.includes('user cancel')) {
+          console.log('用户取消了跳转');
+          return; // 静默处理，不显示任何提示
+        }
+        
+        // 其他错误才显示弹窗
         this.showMyDialog({
           title: '跳转失败',
           // 把错误打印出来看，通常是因为 app.json 没生效
@@ -518,7 +693,7 @@ Page({
             fail: err => {
               this.hideMyLoading();
               console.error(err);
-              this.showMyDialog({ title: '失败', content: err.errMsg || '操作失败' });
+              this.showAutoToast('失败', err.errMsg || '操作失败');
             }
           });
         }
@@ -533,24 +708,35 @@ Page({
     const type = e.currentTarget.dataset.type; // 'ship' 或 'tutorial'
     
     if (type === 'ship') {
-       // 录入单号逻辑
-       wx.showModal({
-         title: '发货维修件',
-         editable: true,
-         placeholderText: '输入快递单号',
+       // 录入单号逻辑（使用自定义输入弹窗）
+       this.showInputDialog({
+         title: '备件寄出',
+         placeholder: '请输入物料运单号',
          success: (res) => {
            if (res.confirm && res.content) {
-             this.updateRepairStatus(id, 'SHIPPED', res.content);
+             const trackingId = res.content.trim();
+             if (!trackingId) {
+               this.showMyDialog({ 
+                 title: '提示', 
+                 content: '请输入运单号', 
+                 showCancel: false 
+               });
+               return;
+             }
+             this.updateRepairStatus(id, 'SHIPPED', trackingId);
            }
          }
        });
     } else {
-       // 无需录入
-       wx.showModal({
-         title: '确认',
+       // 无需录入（使用自定义弹窗）
+       this.showMyDialog({
+         title: '确认操作',
          content: '将通知用户"查看维修教程可修复"，确定吗？',
+         showCancel: true,
+         confirmText: '确定',
+         cancelText: '取消',
          success: (res) => {
-           if (res.confirm) {
+           if (res && res.confirm) {
              this.updateRepairStatus(id, 'TUTORIAL');
            }
          }
@@ -558,9 +744,439 @@ Page({
     }
   },
 
+  // 【新增】管理员点击"需要用户寄回"按钮，只填写备注
+  requestUserReturn(e) {
+    const id = e.currentTarget.dataset.id;
+    
+    // 弹出输入框，让管理员填写备注
+    this.showInputDialog({
+      title: '需要用户寄回',
+      placeholder: '请输入备注信息（选填）',
+      success: (res) => {
+        if (res.confirm) {
+          const returnNote = res.content ? res.content.trim() : '';
+          this.showMyLoading('处理中...');
+          const db = wx.cloud.database();
+          db.collection('shouhou_repair').doc(id).update({
+            data: {
+              needReturn: true,
+              returnNote: returnNote,
+              returnStatus: 'PENDING_RETURN' // 待用户寄回
+            }
+          }).then(() => {
+            this.hideMyLoading();
+            this.showMyDialog({
+              title: '操作成功',
+              content: '已标记为需要用户寄回\n用户端将显示寄回提示',
+              showCancel: false,
+              confirmText: '好的',
+              callback: () => {
+                this.loadMyOrders(); // 刷新订单列表
+                this.loadPendingRepairs(); // 🔴 刷新待处理列表（卡片会消失）
+                this.loadReturnRequiredList(); // 刷新需寄回列表
+              }
+            });
+          }).catch(err => {
+            this.hideMyLoading();
+            console.error('更新失败:', err);
+            this.showMyDialog({
+              title: '操作失败',
+              content: err.errMsg || '请稍后重试',
+              showCancel: false,
+              confirmText: '知道了'
+            });
+          });
+        }
+      }
+    });
+  },
+
+  // 【新增】用户填写地址信息（在用户端的卡片中）
+  onUserReturnAddressInput(e) {
+    const key = e.currentTarget.dataset.key;
+    const val = e.detail.value;
+    this.setData({
+      [`userReturnAddress.${key}`]: val
+    });
+  },
+
+  // 【新增】用户提交地址信息
+  submitUserReturnAddress() {
+    const { userReturnAddress, myReturnRequiredRepair } = this.data;
+    
+    if (!myReturnRequiredRepair || !myReturnRequiredRepair._id) {
+      this.showAutoToast('提示', '订单信息异常');
+      return;
+    }
+    
+    // 验证必填项
+    if (!userReturnAddress.name || !userReturnAddress.name.trim()) {
+      this.showAutoToast('提示', '请填写收件人姓名');
+      return;
+    }
+    if (!userReturnAddress.phone || !userReturnAddress.phone.trim()) {
+      this.showAutoToast('提示', '请填写收件人手机号');
+      return;
+    }
+    // 手机号格式验证
+    if (!/^1[3-9]\d{9}$/.test(userReturnAddress.phone)) {
+      this.showAutoToast('提示', '请输入正确的11位手机号');
+      return;
+    }
+    if (!userReturnAddress.address || !userReturnAddress.address.trim()) {
+      this.showAutoToast('提示', '请填写详细地址');
+      return;
+    }
+    
+    // 地址格式验证
+    const parsed = this.parseAddressForShipping(userReturnAddress.address);
+    if (!parsed.province && !parsed.city) {
+      this.showAutoToast('提示', '地址格式不正确，请包含省市区信息，如：广东省 佛山市 南海区 某某街道101号');
+      return;
+    }
+    
+    // 保存到数据库
+    this.showMyLoading('提交中...');
+    const db = wx.cloud.database();
+    const fullAddress = parsed.fullAddress || userReturnAddress.address;
+    
+    db.collection('shouhou_repair').doc(myReturnRequiredRepair._id).update({
+      data: {
+        returnAddress: {
+          name: userReturnAddress.name.trim(),
+          phone: userReturnAddress.phone.trim(),
+          address: fullAddress
+        }
+      }
+    }).then(() => {
+      this.hideMyLoading();
+      this.showMyDialog({
+        title: '提交成功',
+        content: '地址信息已保存\n管理员修好后将按此地址寄回',
+        showCancel: false,
+        confirmText: '好的',
+        callback: () => {
+          // 清空表单
+          this.setData({
+            userReturnAddress: { name: '', phone: '', address: '' },
+            showUserReturnAddressForm: false
+          });
+          // 刷新数据
+          this.loadMyActivitiesPromise().catch(() => {});
+        }
+      });
+    }).catch(err => {
+      this.hideMyLoading();
+      console.error('提交失败:', err);
+      this.showAutoToast('提交失败', err.errMsg || '请稍后重试');
+    });
+  },
+
+  // 【新增】切换需要寄回开关
+  toggleReturnRequired(e) {
+    const id = e.currentTarget.dataset.id;
+    const checked = e.detail.value;
+    
+    // 静默更新，不显示任何提示
+    const db = wx.cloud.database();
+    db.collection('shouhou_repair').doc(id).update({
+      data: {
+        needReturn: checked
+      }
+    }).then(() => {
+      // 更新本地数据
+      const repairList = this.data.repairList.map(item => {
+        if (item._id === id) {
+          return { ...item, needReturn: checked };
+        }
+        return item;
+      });
+      this.setData({ repairList });
+      console.log('✅ [toggleReturnRequired] 开关已更新:', checked);
+    }).catch(err => {
+      console.error('❌ [toggleReturnRequired] 更新失败:', err);
+      // 更新失败时也不显示弹窗，静默处理
+      // 如果失败，恢复开关状态
+      const repairList = this.data.repairList.map(item => {
+        if (item._id === id) {
+          return { ...item, needReturn: !checked };
+        }
+        return item;
+      });
+      this.setData({ repairList });
+    });
+  },
+
+  // 【新增】一键复制地址（管理员地址）
+  copyReturnAddress() {
+    console.log('[copyReturnAddress] 点击复制地址');
+    const address = `收件人: MT
+手机号码: 13527692427
+所在地区: 广东省佛山市南海区桂城街道
+详细地址: 创智路2号保利心语花园三期（驿站）（到付直接拒收，无需派送）`;
+    
+    wx.setClipboardData({
+      data: address,
+      success: (res) => {
+        console.log('[copyReturnAddress] 复制成功', res);
+        // 立即隐藏官方的"内容已复制" Toast
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
+        // 使用统一的"内容已复制"自定义弹窗
+        this.setData({ showCopySuccessModal: true });
+        setTimeout(() => {
+          this.setData({ showCopySuccessModal: false });
+        }, 2000);
+      },
+      fail: (err) => {
+        console.error('[copyReturnAddress] 复制失败', err);
+        wx.hideToast();
+        this.showMyDialog({
+          title: '复制失败',
+          content: '请手动复制地址',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+      }
+    });
+  },
+
+  // 【新增】一键复制用户地址（在需寄回订单确认弹窗中）
+  copyUserAddress(e) {
+    const index = e.currentTarget.dataset.index;
+    const item = this.data.returnRequiredList[index];
+    
+    if (!item || !item.contact) {
+      this.showAutoToast('提示', '地址信息不存在');
+      return;
+    }
+    
+    // 组装用户地址信息
+    const addressText = `${item.contact.name || ''} ${item.contact.phone || ''} ${item.contact.address || ''}`.trim();
+    
+    if (!addressText) {
+      this.showAutoToast('提示', '地址信息为空');
+      return;
+    }
+    
+    wx.setClipboardData({
+      data: addressText,
+      success: (res) => {
+        console.log('[copyUserAddress] 复制成功', res);
+        // 立即隐藏官方的"内容已复制" Toast
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
+        // 使用统一的"内容已复制"自定义弹窗
+        this.setData({ showCopySuccessModal: true });
+        setTimeout(() => {
+          this.setData({ showCopySuccessModal: false });
+        }, 2000);
+      },
+      fail: (err) => {
+        console.error('[copyUserAddress] 复制失败', err);
+        wx.hideToast();
+        this.showAutoToast('提示', '复制失败，请手动复制');
+      }
+    });
+  },
+
+  // 【新增】打开需寄回订单确认弹窗
+  openReturnRequiredModal() {
+    this.loadReturnRequiredList();
+    this.setData({ showReturnRequiredModal: true });
+  },
+
+  // 【新增】关闭需寄回订单确认弹窗
+  closeReturnRequiredModal() {
+    this.setData({ showReturnRequiredModal: false });
+  },
+
+  // 【新增】加载需寄回订单列表（只显示维修单，不显示普通订单）
+  loadReturnRequiredList() {
+    this.showMyLoading('加载中...');
+    const db = wx.cloud.database();
+    // 查询需要寄回且未完成的维修单（只查 shouhou_repair，不查 shop_orders）
+    db.collection('shouhou_repair')
+      .where({
+        needReturn: true,
+        returnCompleted: db.command.neq(true), // 未完成的
+        status: db.command.neq('COMPLETED') // 排除已完成的
+      })
+      .orderBy('createTime', 'desc')
+      .get()
+      .then(res => {
+        this.hideMyLoading();
+        // 格式化数据，添加配件发出时间
+        const filtered = (res.data || []).map(item => {
+          return {
+            ...item,
+            shipTime: item.solveTime ? this.formatTime(item.solveTime) : (item.createTime ? this.formatTime(item.createTime) : '未知')
+          };
+        });
+        this.setData({ returnRequiredList: filtered });
+        console.log('✅ [loadReturnRequiredList] 加载需寄回维修单:', filtered.length, '条');
+      })
+      .catch(err => {
+        this.hideMyLoading();
+        console.error('加载需寄回订单失败:', err);
+        this.showMyDialog({
+          title: '加载失败',
+          content: err.errMsg || '请稍后重试',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+      });
+  },
+
+  // 【新增】管理员维修完成后寄出快递
+  adminShipOutAfterRepair(e) {
+    const id = e.currentTarget.dataset.id;
+    
+    this.showInputDialog({
+      title: '寄出快递',
+      placeholder: '请输入寄回给用户的运单号',
+      success: (res) => {
+        if (res.confirm && res.content) {
+          const trackingId = res.content.trim();
+          if (!trackingId) {
+            this.showMyDialog({ 
+              title: '提示', 
+              content: '请输入运单号', 
+              showCancel: false 
+            });
+            return;
+          }
+          this.showMyLoading('处理中...');
+          const db = wx.cloud.database();
+          db.collection('shouhou_repair').doc(id).update({
+            data: {
+              status: 'REPAIR_COMPLETED_SENT',
+              trackingId: trackingId, // 寄回给用户的单号
+              repairCompleteTime: db.serverDate(),
+              returnCompleted: true // 标记为已完成，卡片会消失
+            }
+          }).then(() => {
+            this.hideMyLoading();
+            this.showMyDialog({
+              title: '操作成功',
+              content: '维修完成，已寄出快递\n用户端已更新状态',
+              showCancel: false,
+              confirmText: '好的',
+              callback: () => {
+                this.loadReturnRequiredList(); // 刷新列表，卡片会消失
+                this.loadMyOrders(); // 刷新订单列表
+              }
+            });
+          }).catch(err => {
+            this.hideMyLoading();
+            console.error('更新失败:', err);
+            this.showMyDialog({
+              title: '操作失败',
+              content: err.errMsg || '请稍后重试',
+              showCancel: false,
+              confirmText: '知道了'
+            });
+          });
+        }
+      }
+    });
+  },
+
+  // 【新增】管理员标记需寄回订单为已完成（删除订单）
+  completeReturnRequired(e) {
+    const id = e.currentTarget.dataset.id;
+    
+    this.showMyDialog({
+      title: '确认完成',
+      content: '确认该订单已完成？完成后将删除该订单记录。',
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      callback: () => {
+        this.showMyLoading('处理中...');
+        const db = wx.cloud.database();
+        // 标记为已完成（会从列表中移除）
+        db.collection('shouhou_repair').doc(id).update({
+          data: {
+            returnCompleted: true,
+            returnCompleteTime: db.serverDate(),
+            status: 'COMPLETED' // 标记为已完成状态
+          }
+        }).then(() => {
+          this.hideMyLoading();
+          this.showMyDialog({
+            title: '操作成功',
+            content: '订单已完成，已从列表中移除',
+            showCancel: false,
+            confirmText: '好的',
+            callback: () => {
+              this.loadReturnRequiredList(); // 刷新列表
+              this.loadMyActivitiesPromise().catch(() => {}); // 刷新用户端数据，移除用户端的卡片
+              this.loadPendingRepairs(); // 刷新待处理列表
+            }
+          });
+        }).catch(err => {
+          this.hideMyLoading();
+          console.error('操作失败:', err);
+          this.showMyDialog({
+            title: '操作失败',
+            content: err.errMsg || '请稍后重试',
+            showCancel: false,
+            confirmText: '知道了'
+          });
+        });
+      }
+    });
+  },
+
+  // 【新增】管理员取消需寄回订单
+  cancelReturnRequired(e) {
+    const id = e.currentTarget.dataset.id;
+    
+    this.showMyDialog({
+      title: '确认取消',
+      content: '确定要取消该订单的寄回要求吗？',
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      success: (res) => {
+        if (res && res.confirm) {
+          this.showMyLoading('处理中...');
+          const db = wx.cloud.database();
+          db.collection('shouhou_repair').doc(id).update({
+            data: {
+              needReturn: false
+            }
+          }).then(() => {
+            this.hideMyLoading();
+            this.showMyDialog({
+              title: '操作成功',
+              content: '已取消寄回要求',
+              showCancel: false,
+              confirmText: '好的',
+              success: () => {
+                this.loadReturnRequiredList(); // 刷新列表
+                this.loadPendingRepairs(); // 刷新待处理列表
+              }
+            });
+          }).catch(err => {
+            this.hideMyLoading();
+            console.error('更新失败:', err);
+            this.showMyDialog({
+              title: '操作失败',
+              content: err.errMsg || '请稍后重试',
+              showCancel: false,
+              confirmText: '知道了'
+            });
+          });
+        }
+      }
+    });
+  },
+
   // 更新数据库状态
   updateRepairStatus(id, status, trackingId = '') {
-    wx.showLoading({ title: '处理中...' });
+    this.showMyLoading('处理中...');
     const db = wx.cloud.database();
     db.collection('shouhou_repair').doc(id).update({
       data: {
@@ -569,22 +1185,43 @@ Page({
         solveTime: db.serverDate()
       }
     }).then(() => {
-      wx.hideLoading();
-      wx.showToast({ title: '处理完成', icon: 'success' });
-      this.loadMyOrders(); // 刷新订单列表
-      // 如果是用户模式，也刷新申请进度
-      if (!this.data.isAdmin) {
-        this.loadMyActivities();
+      this.hideMyLoading();
+      
+      // 根据状态显示不同的成功提示
+      let successMsg = '处理完成';
+      if (status === 'SHIPPED') {
+        successMsg = '备件寄出成功\n运单号已录入，用户端已同步';
+      } else if (status === 'TUTORIAL') {
+        successMsg = '已通知用户查看维修教程\n用户可在个人中心查看教程进行修复';
       }
+      
+      this.showMyDialog({
+        title: '操作成功',
+        content: successMsg,
+        showCancel: false,
+        confirmText: '好的',
+        success: () => {
+          this.loadMyOrders(); // 刷新订单列表
+          // 如果是用户模式，也刷新申请进度
+          if (!this.data.isAdmin) {
+            this.loadMyActivities();
+          }
+        }
+      });
     }).catch(err => {
-      wx.hideLoading();
+      this.hideMyLoading();
       console.error('更新失败:', err);
-      wx.showToast({ title: '处理失败', icon: 'none' });
+      this.showMyDialog({
+        title: '处理失败',
+        content: err.errMsg || '操作失败，请稍后重试',
+        showCancel: false,
+        confirmText: '知道了'
+      });
     });
   },
 
   adminModifyPrice(e) {
-    // 如果不是管理员，或者订单不是"待付款"或"待发货"状态，不让改
+    // 如果不是管理员，或者订单不是"待付款"或"待物料发出"状态，不让改
     const status = e.currentTarget.dataset.status;
     if (!this.data.isAdmin || (status !== 'UNPAID' && status !== 'PAID')) return;
 
@@ -606,9 +1243,27 @@ Page({
   copyData(e) {
     const text = e.currentTarget.dataset.text;
     if(!text) return;
+    // 🔴 提前隐藏可能的 toast
+    wx.hideToast();
+    
     wx.setClipboardData({
       data: text,
-      success: () => this.showMyDialog({ title: '提示', content: '已复制' })
+      success: () => {
+        // 立即干掉系统"已复制"toast，多次尝试确保隐藏
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
+        setTimeout(() => { wx.hideToast(); }, 100);
+        setTimeout(() => { wx.hideToast(); }, 150);
+        // 使用统一的"内容已复制"大弹窗
+        this.setData({ showCopySuccessModal: true });
+        setTimeout(() => {
+          this.setData({ showCopySuccessModal: false });
+        }, 2000);
+      },
+      fail: () => {
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
+      }
     });
   },
 
@@ -690,14 +1345,32 @@ Page({
     this.setData({ 'dialog.show': false });
   },
 
+  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  showAutoToast(title = '提示', content = '') {
+    this.setData({
+      'autoToast.show': true,
+      'autoToast.title': title,
+      'autoToast.content': content
+    });
+    // 2秒后自动消失
+    setTimeout(() => {
+      this.setData({ 'autoToast.show': false });
+    }, 2000);
+  },
+
   // 显示 Loading
+  // 显示 Loading（使用和 index.js 一样的白色背景进度条动画）
   showMyLoading(title = '加载中...') {
-    this.setData({ isLoading: true, loadingText: title });
+    // 🔴 关键：先隐藏微信官方的 loading（如果存在），避免覆盖自定义 loading
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
+    this.setData({ showLoadingAnimation: true, loadingText: title });
   },
 
   // 隐藏 Loading
   hideMyLoading() {
-    this.setData({ isLoading: false });
+    this.setData({ showLoadingAnimation: false });
   },
 
   // 显示输入弹窗
@@ -766,8 +1439,35 @@ Page({
   },
 
   // --- 点击按钮：开始扫描 ---
-  startConnect() {
+  async startConnect() {
     if (this.data.bluetoothReady) return; // 已连接就不点了
+
+    // 🔴 检查 app_config.is_active，如果为 false 则管理员审核模式，模拟蓝牙连接成功
+    const db = wx.cloud.database();
+    try {
+      const configRes = await db.collection('app_config').doc('blocking_rules').get();
+      if (configRes.data && configRes.data.is_active === false) {
+        console.log('[startConnect] 管理员审核模式，模拟蓝牙连接成功');
+        // 模拟连接成功
+        this.setData({ 
+          isScanning: false,
+          bluetoothReady: true,
+          connectStatusText: '设备已连接（模拟）',
+          connectedDeviceName: 'NB-TEST-DEVICE'
+        });
+        // 模拟设备对象
+        const mockDevice = {
+          deviceId: 'mock-device-id',
+          name: 'NB-TEST-DEVICE',
+          localName: 'NB-TEST-DEVICE'
+        };
+        this.handleDeviceBound(mockDevice);
+        return;
+      }
+    } catch (e) {
+      // 配置加载失败，继续正常流程
+      console.log('[startConnect] 配置加载失败，使用正常流程');
+    }
 
     this.setData({ 
       isScanning: true, 
@@ -782,7 +1482,7 @@ Page({
         this.ble.startScan(); 
       })
       .catch(() => {
-        this.showMyDialog({ title: '提示', content: '请开启手机蓝牙' });
+        this.showAutoToast('提示', '请开启手机蓝牙');
         this.setData({ isScanning: false, connectStatusText: '请开启蓝牙后重试' });
       });
   },
@@ -801,7 +1501,7 @@ Page({
     const sn = rawName.replace(/^NB/i, '').trim(); 
 
     if (!sn) {
-      this.showMyDialog({ title: '错误', content: '无法识别SN码' });
+      this.showAutoToast('错误', '无法识别SN码');
       this.ble.disconnect();
       return;
     }
@@ -851,7 +1551,7 @@ Page({
             // 这里不需要弹窗，只需要 Toast 提示一下让用户填表，或者直接静默
             // 如果非要弹窗，可以用 showMyDialog
             // 但建议这里用这一行轻提示即可，否则太打断流程
-            this.showMyDialog({ title: '提示', content: '验证通过，请填表' });
+            this.showAutoToast('提示', '验证通过，请填表');
             
             this.setData({ 
               currentSn: sn,
@@ -868,7 +1568,7 @@ Page({
         }
       },
       fail: () => {
-        this.showMyDialog({ title: '错误', content: '网络校验失败' });
+        this.showAutoToast('错误', '网络校验失败');
         this.resetBluetoothState();
       }
     });
@@ -904,7 +1604,7 @@ Page({
           },
           fail: err => {
             this.hideMyLoading();
-            this.showMyDialog({ title: '上传失败', content: err.errMsg || '请重试' });
+            this.showAutoToast('上传失败', err.errMsg || '请重试');
           }
         });
       }
@@ -917,24 +1617,24 @@ Page({
   submitAudit() {
     // A. 校验蓝牙是否连接 (必须有 SN)
     if (!this.data.bluetoothReady || !this.data.currentSn) {
-      this.showMyDialog({ title: '提示', content: '请先连接MT设备' });
+      this.showAutoToast('提示', '请先连接MT设备');
       return;
     }
 
     // B. 校验型号
     if (this.data.modelIndex === null) {
-      this.showMyDialog({ title: '提示', content: '请选择型号' });
+      this.showAutoToast('提示', '请选择型号');
       return;
     }
 
     // C. 校验图片 (购买截图必传)
     if (!this.data.imgReceipt) {
-      this.showMyDialog({ title: '提示', content: '请上传购买截图' });
+      this.showAutoToast('提示', '请上传购买截图');
       return;
     }
     // 如果是二手，校验聊天记录
     if (this.data.bindType === 'used' && !this.data.imgChat) {
-      this.showMyDialog({ title: '提示', content: '请上传聊天记录' });
+      this.showAutoToast('提示', '请上传聊天记录');
       return;
     }
 
@@ -974,7 +1674,7 @@ Page({
     }).catch(err => {
       this.hideMyLoading();
       console.error(err);
-      this.showMyDialog({ title: '提交失败', content: err.errMsg || '网络错误，请重试' });
+      this.showAutoToast('提交失败', err.errMsg || '网络错误，请重试');
     });
   },
 
@@ -1021,12 +1721,12 @@ Page({
                   }
                 });
               } else {
-                this.showMyDialog({ title: '失败', content: res.result.msg });
+                this.showAutoToast('失败', res.result.msg);
               }
             },
             fail: err => {
               this.hideMyLoading();
-              this.showMyDialog({ title: '错误', content: '网络异常' });
+              this.showAutoToast('错误', '网络异常');
             }
           });
         }
@@ -1166,55 +1866,69 @@ Page({
           });
         } else {
           // ✅ 替换
-          this.showMyDialog({ title: '失败', content: res.result.errMsg });
+          this.showAutoToast('失败', res.result.errMsg);
         }
       },
       fail: err => {
         this.hideMyLoading();
         console.error(err);
-        this.showMyDialog({ title: '操作失败', content: err.errMsg || '网络错误，请重试' });
+        this.showAutoToast('操作失败', err.errMsg || '网络错误，请重试');
       }
     });
   },
 
-  // 加载审核记录
-  loadMyActivities() {
-    console.log('🔍 [loadMyActivities] 开始加载申请记录');
-    
-    // 🔴 确保已获取 openid
-    if (!this.data.myOpenid) {
-      console.warn('⚠️ [loadMyActivities] myOpenid 未获取，等待获取后再查询');
-      // 如果还没获取到，延迟一下再试
-      setTimeout(() => {
-        if (this.data.myOpenid) {
-          this.loadMyActivities();
-        }
-      }, 500);
-      return;
-    }
-    
-    const db = wx.cloud.database();
-    
-    // 🔴 修复：明确指定当前用户的 _openid，确保只查询当前用户的数据
-    // 1. 查设备绑定申请
-    const p1 = db.collection('my_read')
-      .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
-      .orderBy('createTime', 'desc')
-      .get();
-    
-    // 2. 查视频投稿申请
-    const p2 = db.collection('video')
-      .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
-      .orderBy('createTime', 'desc')
-      .get();
+  // 🔴 将 loadMyActivities 改为返回 Promise 的版本
+  loadMyActivitiesPromise() {
+    return new Promise((resolve, reject) => {
+      console.log('🔍 [loadMyActivities] 开始加载申请记录');
+      
+      // 🔴 确保已获取 openid
+      if (!this.data.myOpenid) {
+        console.warn('⚠️ [loadMyActivities] myOpenid 未获取，等待获取后再查询');
+        // 如果还没获取到，延迟一下再试
+        setTimeout(() => {
+          if (this.data.myOpenid) {
+            this.loadMyActivitiesPromise().then(resolve).catch(reject);
+          } else {
+            resolve(); // 如果还是没有，直接 resolve，避免卡住
+          }
+        }, 500);
+        return;
+      }
+      
+      const db = wx.cloud.database();
+      
+      // 🔴 修复：明确指定当前用户的 _openid，确保只查询当前用户的数据
+      // 1. 查设备绑定申请
+      const p1 = db.collection('my_read')
+        .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
+        .orderBy('createTime', 'desc')
+        .get();
+      
+      // 2. 查视频投稿申请
+      const p2 = db.collection('video')
+        .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
+        .orderBy('createTime', 'desc')
+        .get();
 
-    // 3. 查维修工单 (新增)
-    const p3 = db.collection('shouhou_repair')
-      .where({ _openid: this.data.myOpenid })
-      .orderBy('createTime', 'desc')
-      .get();
+      // 3. 查维修工单 (新增)
+      const p3 = db.collection('shouhou_repair')
+        .where({ _openid: this.data.myOpenid })
+        .orderBy('createTime', 'desc')
+        .get();
 
-    Promise.all([p1, p2, p3]).then(res => {
+      // 4. 【新增】查用户需寄回的维修单
+      const p4 = db.collection('shouhou_repair')
+        .where({
+          _openid: this.data.myOpenid,
+          needReturn: true,
+          returnCompleted: db.command.neq(true) // 未完成的
+        })
+        .orderBy('createTime', 'desc')
+        .limit(1) // 只取最新的一个
+        .get();
+
+      Promise.all([p1, p2, p3, p4]).then(res => {
       console.log('📋 [loadMyActivities] 查询结果 - 设备申请:', res[0].data.length, '条, 视频申请:', res[1].data.length, '条');
       console.log('📋 [loadMyActivities] 设备申请详情:', res[0].data);
       console.log('📋 [loadMyActivities] 视频申请详情:', res[1].data);
@@ -1259,8 +1973,17 @@ Page({
         let statusClass = 'processing';
         let statusNum = 0; // 统一状态值，用于过滤逻辑
         
-        if (i.status === 'SHIPPED') {
-          statusText = '维修件已发货';
+        // 处理各种状态
+        if (i.status === 'REPAIR_COMPLETED_SENT') {
+          statusText = '已维修完成';
+          statusClass = 'success';
+          statusNum = 1; // 已处理
+        } else if (i.status === 'USER_SENT' || i.returnStatus === 'USER_SENT') {
+          statusText = '正在维修中';
+          statusClass = 'processing';
+          statusNum = 0; // 维修中
+        } else if (i.status === 'SHIPPED') {
+          statusText = '配件已寄出';
           statusClass = 'success';
           statusNum = 1; // 已处理
         } else if (i.status === 'TUTORIAL') {
@@ -1268,7 +1991,7 @@ Page({
           statusClass = 'info'; // 蓝色
           statusNum = 1; // 已处理
         } else if (i.status === 'PENDING') {
-          statusText = '审核中';
+          statusText = '工程师审核中';
           statusClass = 'processing';
           statusNum = 0; // 审核中
         }
@@ -1279,10 +2002,12 @@ Page({
           title: '故障报修: ' + (i.model || '未知型号'),
           statusText: statusText, // 自定义显示文本
           statusClass: statusClass,
-          status: statusNum, // 统一状态值
+          status: i.status, // 保留原始状态字符串，用于判断
           originalCreateTime: i.createTime,
           createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚',
-          trackingId: i.trackingId || '' // 确保有 trackingId 字段
+          trackingId: i.trackingId || '', // 确保有 trackingId 字段
+          needReturn: i.needReturn || false, // 确保有 needReturn 字段
+          returnStatus: i.returnStatus || '' // 确保有 returnStatus 字段
         };
       });
       
@@ -1308,12 +2033,104 @@ Page({
       console.log('📋 [loadMyActivities] 过滤后的申请记录（已通过已排除）:', filtered);
       console.log('📋 [loadMyActivities] 记录数量:', filtered.length);
       
-      this.setData({ myActivityList: filtered }, () => {
+      // 【新增】设置用户需寄回的维修单（取最新的一个未完成的，且未标记为COMPLETED）
+      const returnRequiredRepairs = (res[3].data || []).filter(item => 
+        !item.returnCompleted && item.status !== 'COMPLETED'
+      );
+      let myReturnRequiredRepair = returnRequiredRepairs.length > 0 ? returnRequiredRepairs[0] : null;
+      
+      // 格式化时间用于显示
+      if (myReturnRequiredRepair && myReturnRequiredRepair.createTime) {
+        myReturnRequiredRepair = {
+          ...myReturnRequiredRepair,
+          createTime: this.formatTimeSimple(myReturnRequiredRepair.createTime)
+        };
+      }
+      
+      this.setData({ 
+        myActivityList: filtered,
+        myReturnRequiredRepair: myReturnRequiredRepair
+      }, () => {
         console.log('✅ [loadMyActivities] 数据已更新到页面，当前 myActivityList 长度:', this.data.myActivityList.length);
+        if (myReturnRequiredRepair) {
+          console.log('✅ [loadMyActivities] 检测到需寄回维修单:', myReturnRequiredRepair._id);
+        }
+        resolve(); // 🔴 Promise 完成
+      });
+      }).catch(err => {
+        console.error('❌ [loadMyActivities] 加载申请记录失败:', err);
+        reject(err); // 🔴 Promise 失败
+      });
+    });
+  },
+
+  // 🔴 保留原方法以兼容其他地方的调用
+  loadMyActivities() {
+    this.loadMyActivitiesPromise().catch(() => {});
+  },
+
+  // 【新增】打开寄回运单号录入
+  openReturnTrackingInput(e) {
+    const id = e.currentTarget.dataset.id;
+    const repair = this.data.myReturnRequiredRepair;
+    
+    // 🔴 先检查是否有地址信息
+    if (!repair || !repair.returnAddress) {
+      this.showAutoToast('提示', '请先填写修好后寄回地址信息');
+      return;
+    }
+    
+    const currentTrackingId = repair ? repair.returnTrackingId || '' : '';
+    
+    this.showInputDialog({
+      title: '录入寄回运单号',
+      placeholder: '请输入寄回运单号',
+      value: currentTrackingId,
+      success: (res) => {
+        if (res.confirm && res.content) {
+          const trackingId = res.content.trim();
+          if (!trackingId) {
+            this.showAutoToast('提示', '请输入运单号');
+            return;
+          }
+          this.submitReturnTrackingId(id, trackingId);
+        }
+      }
+    });
+  },
+
+  // 【新增】提交寄回运单号
+  submitReturnTrackingId(id, trackingId) {
+    this.showMyLoading('提交中...');
+    const db = wx.cloud.database();
+    db.collection('shouhou_repair').doc(id).update({
+      data: {
+        returnTrackingId: trackingId,
+        returnTrackingTime: db.serverDate(),
+        returnStatus: 'USER_SENT', // 用户已寄出
+        status: 'USER_SENT' // 更新主状态
+      }
+    }).then(() => {
+      this.hideMyLoading();
+      this.showMyDialog({
+        title: '提交成功',
+        content: '运单号已录入，管理员可查看物流信息',
+        showCancel: false,
+        confirmText: '好的',
+        callback: () => {
+          // 刷新数据
+          this.loadMyActivitiesPromise().catch(() => {});
+        }
       });
     }).catch(err => {
-      console.error('❌ [loadMyActivities] 加载申请记录失败:', err);
-      wx.showToast({ title: '加载失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+      this.hideMyLoading();
+      console.error('提交失败:', err);
+      this.showMyDialog({
+        title: '提交失败',
+        content: err.errMsg || '请稍后重试',
+        showCancel: false,
+        confirmText: '知道了'
+      });
     });
   },
 
@@ -1340,6 +2157,99 @@ Page({
     const h = d.getHours().toString().padStart(2, '0');
     const min = d.getMinutes().toString().padStart(2, '0');
     return `${m}-${day} ${h}:${min}`;
+  },
+
+  // 【新增】地址解析方法（用于验证地址格式）
+  parseAddressForShipping(addressText) {
+    if (!addressText || !addressText.trim()) {
+      return { province: '', city: '', district: '', street: '', fullAddress: addressText };
+    }
+    
+    let text = addressText.trim();
+    let province = '';
+    let city = '';
+    let district = '';
+    let detail = '';
+    
+    // 移除常见的分隔符，统一处理
+    text = text.replace(/[\/、]/g, ' ').replace(/[,，]/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
+    let remaining = text;
+    
+    // 识别省（必须包含"省"字）
+    const provincePattern = /([^省\s]+省)/;
+    const provinceMatch = remaining.match(provincePattern);
+    if (provinceMatch) {
+      province = provinceMatch[1].trim();
+      remaining = remaining.replace(province, '').trim();
+    }
+    
+    // 识别市（必须包含"市"字，排除"省"字）
+    const cityPattern = /([^省市\s]+市)/;
+    const cityMatch = remaining.match(cityPattern);
+    if (cityMatch) {
+      city = cityMatch[1].trim();
+      remaining = remaining.replace(city, '').trim();
+    }
+    
+    // 识别区/县（必须包含"区"或"县"字）
+    const districtPattern = /([^省市区县\s]+[区县])/;
+    const districtMatch = remaining.match(districtPattern);
+    if (districtMatch) {
+      district = districtMatch[1].trim();
+      remaining = remaining.replace(district, '').trim();
+    }
+    
+    // 剩余部分作为详细地址
+    detail = remaining.trim();
+    
+    // 方法2: 如果没识别到，尝试识别特殊格式（如：北京市朝阳区）
+    if (!province && !city && !district) {
+      // 直辖市特殊处理：北京、上海、天津、重庆
+      const directCityPattern = /(北京市|上海市|天津市|重庆市)/;
+      const directCityMatch = text.match(directCityPattern);
+      if (directCityMatch) {
+        city = directCityMatch[1];
+        remaining = text.replace(city, '').trim();
+        
+        // 继续识别区
+        const districtMatch2 = remaining.match(districtPattern);
+        if (districtMatch2) {
+          district = districtMatch2[1].trim();
+          remaining = remaining.replace(district, '').trim();
+        }
+        detail = remaining;
+      }
+    }
+    
+    // 组装完整地址（格式化输出）
+    let fullAddress = '';
+    const parts = [];
+    if (province) parts.push(province);
+    if (city) parts.push(city);
+    if (district) parts.push(district);
+    if (detail) parts.push(detail);
+    
+    fullAddress = parts.join(' ');
+    
+    // 如果解析失败，使用原始文本
+    if (!fullAddress) {
+      fullAddress = addressText;
+    }
+    
+    return {
+      province,
+      city,
+      district,
+      detail,
+      fullAddress
+    };
+  },
+
+  // 【新增】空操作函数（用于阻止事件冒泡）
+  noop() {
+    // 空函数，用于阻止事件冒泡
   },
 
   // 7. 拒绝操作
@@ -1369,7 +2279,7 @@ Page({
             fail: err => {
               this.hideMyLoading();
               console.error(err);
-              this.showMyDialog({ title: '操作失败', content: '网络错误，请重试' });
+              this.showAutoToast('操作失败', '网络错误，请重试');
             }
           });
         }

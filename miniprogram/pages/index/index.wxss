@@ -750,3 +750,23 @@ input, textarea { text-align: left; }
   50%  { left: 25%; }
   100% { left: 50%; }
 }
+/* ================= 【新增】管理员切换按钮样式 ================= */
+.admin-toggle-btn {
+  display: inline-block;
+  margin-left: 20rpx;
+  font-size: 20rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  background: #F2F2F7;
+  color: #8E8E93;
+  border: 1rpx solid #E5E5EA;
+  vertical-align: middle;
+  transition: all 0.3s;
+  font-weight: 600;
+}
+
+.admin-toggle-btn.on {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
