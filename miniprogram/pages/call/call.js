@@ -19,7 +19,7 @@ Page({
     toastMsg: '',
     toastIcon: 'success', // success 或 none
 
-    // 统一的“内容已复制”弹窗（和首页一致样式）
+    // 统一的"内容已复制"弹窗（和首页一致样式）
     showCopySuccessModal: false,
 
     iconTop: iconWechat,   
@@ -28,6 +28,14 @@ Page({
     
     // 你的二维码
     qrCodeUrl: "/images/qrcode.jpg" 
+  },
+
+  onLoad() {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('call');
+    }
   },
 
   // 1. 微信点击逻辑 (极速消灭系统弹窗版)

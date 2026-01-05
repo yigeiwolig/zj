@@ -464,6 +464,12 @@ Page({
   },
 
   onLoad() {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('scan');
+    }
+    
     // 初始化当前模型
     const currentModel = this.data.models[0];
     this.setData({ currentModel });

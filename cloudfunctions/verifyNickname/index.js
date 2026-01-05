@@ -7,10 +7,37 @@ exports.main = async (event, context) => {
   const openid = wxContext.OPENID;
   const nickname = (event && event.nickname ? String(event.nickname) : '').trim();
 
+  // 🔴 接收前端传递的地址信息、设备信息
+  const {
+    province,          // 省份
+    city,              // 城市
+    district,           // 区/县
+    address,            // 详细地址
+    latitude,           // 纬度
+    longitude,          // 经度
+    deviceInfo,         // 设备信息
+    phoneModel          // 手机型号
+  } = event;
+
   // 0. 基本校验
   if (!nickname) {
     return { success: false, isBlocked: false, error: 'EMPTY_NICKNAME' };
   }
+
+  // 🔴 构建地址和设备信息对象
+  const locationInfo = {
+    province: province || '',
+    city: city || '',
+    district: district || '',
+    address: address || '',
+    latitude: latitude ? Number(latitude) : undefined,
+    longitude: longitude ? Number(longitude) : undefined
+  };
+  
+  const deviceInfoObj = {
+    device: deviceInfo || '',
+    phoneModel: phoneModel || ''
+  };
 
   try {
     // 1. 读取配置 (auto 模式)
@@ -97,12 +124,12 @@ exports.main = async (event, context) => {
     // 如果开启了自动模式，且没在白名单，自动加白
     if (autoMode && !isWhitelisted) {
       try {
-        await db.collection('valid_users').add({
-          data: {
-            nickname,
-            _openid: openid,
-            desc: 'auto 模式自动录入',
-            createTime: db.serverDate(),
+          await db.collection('valid_users').add({
+            data: {
+              nickname,
+              _openid: openid,
+              desc: 'auto 模式自动录入',
+              createTime: db.serverDate(),
             updateTime: db.serverDate()
           }
         });
@@ -119,24 +146,26 @@ exports.main = async (event, context) => {
     if (isWhitelisted) {
       // 更新 login_logs 为成功状态，重置 failCount
       const successData = {
-        nickname,
-        success: true,
+              nickname,
+              success: true,
         failCount: 0, // 重置计数
         auto: autoMode,
+        ...locationInfo,  // 地址信息
+        ...deviceInfoObj, // 设备信息
         updateTime: db.serverDate()
       };
 
       if (lastLog) {
         await db.collection('login_logs').doc(lastLog._id).update({ data: successData });
-      } else {
+        } else {
         await db.collection('login_logs').add({ data: { ...successData, _openid: openid, createTime: db.serverDate() } });
-      }
+        }
 
       // 尝试解除 login_logbutton 的昵称封禁（如果存在）
       // 注意：我们不解除地址封禁，只解除昵称封禁
       try {
          const btnRes = await db.collection('login_logbutton')
-            .where({ _openid: openid })
+          .where({ _openid: openid })
             .orderBy('updateTime', 'desc')
             .limit(1)
             .get();
@@ -147,7 +176,7 @@ exports.main = async (event, context) => {
              if (btn.banReason === 'nickname_verify_fail') {
                  await db.collection('login_logbutton').doc(btn._id).update({
                      data: { isBanned: false, updateTime: db.serverDate() }
-                 });
+          });
              }
          }
       } catch(e) {}
@@ -163,18 +192,20 @@ exports.main = async (event, context) => {
 
     // 更新 login_logs
     const failData = {
-      nickname,
-      success: false,
-      failCount: newFailCount,
+            nickname,
+            success: false,
+            failCount: newFailCount,
       auto: false,
+      ...locationInfo,  // 地址信息
+      ...deviceInfoObj, // 设备信息
       updateTime: db.serverDate()
     };
 
     if (lastLog) {
       await db.collection('login_logs').doc(lastLog._id).update({ data: failData });
-    } else {
+          } else {
       await db.collection('login_logs').add({ data: { ...failData, _openid: openid, createTime: db.serverDate() } });
-    }
+          }
 
     // 触发封号
     if (willBan) {
@@ -184,23 +215,29 @@ exports.main = async (event, context) => {
           .orderBy('updateTime', 'desc')
           .limit(1)
           .get();
-
+        
       if (latestBtnRes.data.length > 0) {
         await db.collection('login_logbutton').doc(latestBtnRes.data[0]._id).update({
-          data: {
-            isBanned: true,
+            data: {
+              isBanned: true,
             banReason: 'nickname_verify_fail', // 明确是昵称封禁
-            failCount: newFailCount,
-            updateTime: db.serverDate()
-          }
+            banPage: 'index', // 昵称验证发生在 index 页面
+              failCount: newFailCount,
+            ...locationInfo,  // 地址信息
+            ...deviceInfoObj, // 设备信息
+              updateTime: db.serverDate()
+            }
         });
-      } else {
-        await db.collection('login_logbutton').add({
-          data: {
-            _openid: openid,
-            isBanned: true,
-            banReason: 'nickname_verify_fail',
+        } else {
+          await db.collection('login_logbutton').add({
+            data: {
+              _openid: openid,
+              isBanned: true,
+              banReason: 'nickname_verify_fail',
+            banPage: 'index', // 昵称验证发生在 index 页面
             failCount: newFailCount,
+            ...locationInfo,  // 地址信息
+            ...deviceInfoObj, // 设备信息
             bypassLocationCheck: false, // 默认没金牌
             createTime: db.serverDate(),
             updateTime: db.serverDate()

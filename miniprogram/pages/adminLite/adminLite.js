@@ -34,6 +34,12 @@ Page({
   },
 
   onLoad() {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('adminLite');
+    }
+    
     // 初始化云数据库
     if (wx.cloud) {
       this.db = wx.cloud.database();

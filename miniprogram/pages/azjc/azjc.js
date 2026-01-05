@@ -68,6 +68,12 @@ Page({
 
   // 页面加载时从云数据库读取数据
   onLoad: function() {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('azjc');
+    }
+    
     // 1. 获取系统屏幕高度（px）
     const sys = wx.getSystemInfoSync();
     const winHeight = sys.windowHeight;
@@ -474,10 +480,6 @@ Page({
     this.filterContent(); // 重新过滤内容
   },
 
-  // 标题点击逻辑（已废弃点击计数逻辑）
-  onAdminTap: function() {
-    // 废弃旧逻辑，不再使用
-  },
 
   // 真实媒体上传
   uploadMedia: function(e) {

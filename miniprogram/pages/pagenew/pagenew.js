@@ -17,6 +17,12 @@ Page({
   },
 
   onLoad: function() {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('pagenew');
+    }
+    
     if (wx.cloud) {
       wx.cloud.init({ traceUser: true });
       this.db = wx.cloud.database();

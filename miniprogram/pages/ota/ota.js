@@ -127,6 +127,12 @@ Page({
   },
 
   onLoad() {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('ota');
+    }
+    
     this.initCanvas();
     this.initBLE();
     this.initAudio();

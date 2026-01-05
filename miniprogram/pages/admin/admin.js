@@ -11,6 +11,14 @@ Page({
     chapters: ['章节 01：支架固定', '章节 02：走线连接']
   },
 
+  onLoad() {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('admin');
+    }
+  },
+
   // 添加数据
   addItem: function(e) {
     const type = e.currentTarget.dataset.type;

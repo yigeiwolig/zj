@@ -31,7 +31,7 @@
   </view>
 
   <view class="reveal-box {{isInjecting ? 'shaking' : ''}}" wx:if="{{isInjecting && !exploded}}">
-    <view class="reveal-mask" style="height: {{revealProgress}}%">
+    <view class="reveal-mask" style="height: {{revealProgress}}">
       <image src="{{currentSvg}}" class="device-svg force-white" mode="aspectFit"></image>
     </view>
   </view>

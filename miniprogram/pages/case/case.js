@@ -1,5 +1,9 @@
 const app = getApp();
 const db = wx.cloud.database();
+var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
+var qqmapsdk = new QQMapWX({
+    key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
+});
 
 Page({
   data: {
@@ -98,6 +102,12 @@ Page({
   },
 
   onLoad() {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('case');
+    }
+    
     const sysInfo = wx.getSystemInfoSync();
     this.setData({ statusBarHeight: sysInfo.statusBarHeight });
     this.ctx = wx.createCameraContext();
@@ -105,13 +115,13 @@ Page({
     // 🔴 物理防线：确保录屏、截屏出来的全是黑屏 (这是最稳的)
     if (wx.setVisualEffectOnCapture) {
       try {
-        wx.setVisualEffectOnCapture({
-          visualEffect: 'hidden',
+      wx.setVisualEffectOnCapture({
+        visualEffect: 'hidden',
           success: () => console.log('🛡️ 硬件级防偷拍锁定'),
           fail: (err) => {
             console.warn('⚠️ setVisualEffectOnCapture 失败（可能是预览模式）:', err);
           }
-        });
+      });
       } catch (e) {
         console.warn('⚠️ setVisualEffectOnCapture 不支持（可能是预览模式）:', e);
       }
@@ -121,10 +131,10 @@ Page({
 
     // 🔴 截屏监听：安卓和iOS通常都很灵敏
     try {
-      wx.onUserCaptureScreen(() => {
+    wx.onUserCaptureScreen(() => {
         console.log('🛡️ [case] 检测到截屏');
-        this.handleIntercept('screenshot');
-      });
+      this.handleIntercept('screenshot');
+    });
     } catch (e) {
       console.warn('⚠️ onUserCaptureScreen 不支持（可能是预览模式）:', e);
     }
@@ -132,10 +142,10 @@ Page({
     // 🔴 录屏监听：尽力而为，抓到信号就跳
     if (wx.onUserScreenRecord) {
       try {
-        wx.onUserScreenRecord(() => {
+      wx.onUserScreenRecord(() => {
           console.log('🛡️ [case] 检测到录屏');
-          this.handleIntercept('record');
-        });
+        this.handleIntercept('record');
+      });
       } catch (e) {
         console.warn('⚠️ onUserScreenRecord 不支持（可能是预览模式）:', e);
       }
@@ -155,17 +165,17 @@ Page({
     // 针对进入页面前就在录屏的情况，尝试抓一次
     if (wx.getScreenRecordingState) {
       try {
-        wx.getScreenRecordingState({
-          success: (res) => {
-            if (res.state === 'on' || res.recording) {
+      wx.getScreenRecordingState({
+        success: (res) => {
+          if (res.state === 'on' || res.recording) {
               console.log('🛡️ [case] onShow 检测到录屏');
-              this.handleIntercept('record');
-            }
+            this.handleIntercept('record');
+          }
           },
           fail: (err) => {
             console.warn('⚠️ getScreenRecordingState 失败（可能是预览模式）:', err);
-          }
-        });
+        }
+      });
       } catch (e) {
         console.warn('⚠️ getScreenRecordingState 不支持（可能是预览模式）:', e);
       }
@@ -1825,6 +1835,64 @@ Page({
     }, wait);
   },
 
+  // 🔴 获取位置和设备信息的辅助函数
+  async _getLocationAndDeviceInfo() {
+    const sysInfo = wx.getSystemInfoSync();
+    const deviceInfo = {
+      deviceInfo: sysInfo.system || '',
+      phoneModel: sysInfo.model || ''
+    };
+    
+    // 尝试从缓存获取位置信息
+    const cachedLocation = wx.getStorageSync('last_location');
+    if (cachedLocation && cachedLocation.province && cachedLocation.city) {
+      // 如果缓存中有完整的地址信息，直接使用
+      return {
+        ...cachedLocation,
+        ...deviceInfo
+      };
+    }
+    
+    try {
+      // 获取当前位置
+      const locationRes = await new Promise((resolve, reject) => {
+        wx.getLocation({
+          type: 'gcj02',
+          success: resolve,
+          fail: reject
+        });
+      });
+
+      const lat = locationRes.latitude;
+      const lng = locationRes.longitude;
+      
+      // 🔴 使用带重试机制的逆地理编码获取详细地址
+      const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
+      const addressData = await reverseGeocodeWithRetry(lat, lng, {
+        maxRetries: 3,
+        timeout: 10000,
+        retryDelay: 1000
+      });
+
+      return {
+        ...addressData,
+        ...deviceInfo
+      };
+    } catch (err) {
+      console.error('[case] 获取位置信息失败:', err);
+      // 获取定位失败，尝试使用缓存的位置信息
+      if (cachedLocation) {
+        return {
+          ...cachedLocation,
+          ...deviceInfo
+        };
+      } else {
+        // 完全失败，只返回设备信息
+        return deviceInfo;
+      }
+    }
+  },
+
   handleIntercept(type) {
     // 1. 停止视频播放
     this.setData({ showVideoPlayer: false, currentVideo: null });
@@ -1840,15 +1908,40 @@ Page({
     this._jumpToBlocked(type);
 
     // 4. 异步调用云函数写入数据库封禁状态（不阻塞跳转）
-    wx.cloud.callFunction({
-      name: 'banUserByScreenshot',
-      data: { type: type },
-      success: (res) => {
-        console.log('[case] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
-      },
-      fail: (err) => {
-        console.error('[case] banUserByScreenshot 调用失败:', err);
-      }
+    // 🔴 获取地址和设备信息
+    this._getLocationAndDeviceInfo().then(locationData => {
+      wx.cloud.callFunction({
+        name: 'banUserByScreenshot',
+        data: {
+          type: type,
+          banPage: 'case', // 封禁页面
+          ...locationData
+        },
+        success: (res) => {
+          console.log('[case] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
+        },
+        fail: (err) => {
+          console.error('[case] banUserByScreenshot 调用失败:', err);
+        }
+      });
+    }).catch(() => {
+      // 如果获取位置失败，仍然调用云函数（不带位置信息）
+      const sysInfo = wx.getSystemInfoSync();
+      wx.cloud.callFunction({
+        name: 'banUserByScreenshot',
+        data: {
+          type: type,
+          banPage: 'case',
+          deviceInfo: sysInfo.system || '',
+          phoneModel: sysInfo.model || ''
+        },
+        success: (res) => {
+          console.log('[case] banUserByScreenshot 调用成功（无位置信息）');
+        },
+        fail: (err) => {
+          console.error('[case] banUserByScreenshot 调用失败:', err);
+        }
+      });
     });
   },
 

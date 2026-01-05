@@ -231,19 +231,33 @@
   </view>
 </view>
 
-<!-- ================= 4. 对比表格弹窗 ================= -->
-<view class="overlay {{showSpecsModal ? 'active' : ''}}" style="z-index: 600;">
-  <view class="overlay-head"><view bindtap="closeSpecsModal">✕</view><view>参数对比</view><view></view></view>
-  <scroll-view scroll-y class="modal-scroll" style="max-height: 80vh;">
-    <view class="specs-table">
-       
-       <view class="sp-row header">
-          <view class="sp-cell label">参数项</view>
-          <block wx:for="{{compareData.headers}}" wx:key="*this">
-             <view class="sp-cell">{{item}}</view>
-          </block>
-          <view wx:if="{{isAdmin}}" class="sp-cell admin-w"></view>
-       </view>
+<!-- ================= 4. 对比表格弹窗 (最终修正版) ================= -->
+<!-- 遮罩层 -->
+<view class="dark-mask" wx:if="{{showSpecsModal}}" bindtap="closeSpecsModal" style="z-index: 998;"></view>
+
+<!-- 弹窗主体 -->
+<view class="overlay {{showSpecsModal ? 'active' : ''}}" catchtap="stopPropagation">
+  
+  <!-- 1. 标题栏 (白色背景) -->
+  <view class="overlay-head">
+    <text>对比详情</text>
+    <view catchtap="closeSpecsModal" class="close">✕</view>
+  </view>
+  
+  <!-- 2. 灰色胶囊表头 (固定不动，位于标题栏下方) -->
+  <view class="specs-header-container">
+    <view class="capsule-header">
+      <view class="sp-cell label">参数项</view>
+      <block wx:for="{{compareData.headers}}" wx:key="*this">
+        <view class="sp-cell">{{item}}</view>
+      </block>
+      <view wx:if="{{isAdmin}}" class="sp-cell admin-w"></view>
+    </view>
+  </view>
+  
+  <!-- 3. 滚动内容区 -->
+  <scroll-view scroll-y class="specs-scroll-body" enable-back-to-top="{{true}}">
+    <view class="specs-table-content">
        
        <block wx:for="{{compareData.rows}}" wx:key="label" wx:for-index="rowIdx">
          <view class="sp-row">
@@ -254,28 +268,28 @@
             <view wx:if="{{isAdmin}}" class="sp-cell admin-w" catchtap="adminDelSpecRow" data-index="{{rowIdx}}">✕</view>
          </view>
        </block>
+       
        <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddSpecRow">+ 添加参数行</view>
        
-       <!-- 底部全局视频区域 -->
-       <view class="spec-video-footer" 
+       <!-- 底部视频按钮 -->
+       <view class="compare-btn-area" 
              wx:if="{{isAdmin || (currentSeries.compareVideo && currentSeries.showCompareVideo)}}">
-         
          <view class="btn-watch-compare" bindtap="watchCompareVideo">
-           <text class="icon-play">▶</text> 查看对比演示视频
+           <text class="icon-play" style="margin-right: 10rpx;">▶</text> 查看对比演示视频
          </view>
 
          <view class="admin-video-controls" wx:if="{{isAdmin}}">
            <view class="admin-v-btn upload" bindtap="adminUploadCompareVideo">
              {{currentSeries.compareVideo ? '更换视频' : '上传视频'}}
            </view>
-           
            <view class="admin-v-btn toggle {{currentSeries.showCompareVideo ? 'on' : 'off'}}" 
                  bindtap="adminToggleVideoVis">
-             状态: {{currentSeries.showCompareVideo ? '已显示' : '已隐藏'}}
+             {{currentSeries.showCompareVideo ? '显示中' : '已隐藏'}}
            </view>
          </view>
 
        </view>
+
     </view>
   </scroll-view>
 </view>

@@ -1,4 +1,8 @@
 const app = getApp();
+var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
+var qqmapsdk = new QQMapWX({
+    key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
+});
 
 Page({
   data: {
@@ -86,6 +90,12 @@ Page({
   },
 
   onLoad() {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('my');
+    }
+    
     // 🔴 截屏/录屏封禁
     this.initScreenshotProtection();
     
@@ -138,6 +148,64 @@ Page({
     }
   },
 
+  // 🔴 获取位置和设备信息的辅助函数（必须解析出详细地址）
+  async _getLocationAndDeviceInfo() {
+    const sysInfo = wx.getSystemInfoSync();
+    const deviceInfo = {
+      deviceInfo: sysInfo.system || '',
+      phoneModel: sysInfo.model || ''
+    };
+    
+    // 尝试从缓存获取位置信息
+    const cachedLocation = wx.getStorageSync('last_location');
+    if (cachedLocation && cachedLocation.province && cachedLocation.city) {
+      // 如果缓存中有完整的地址信息，直接使用
+      return {
+        ...cachedLocation,
+        ...deviceInfo
+      };
+    }
+    
+    try {
+      // 获取当前位置
+      const locationRes = await new Promise((resolve, reject) => {
+        wx.getLocation({
+          type: 'gcj02',
+          success: resolve,
+          fail: reject
+        });
+      });
+
+      const lat = locationRes.latitude;
+      const lng = locationRes.longitude;
+      
+      // 🔴 使用带重试机制的逆地理编码获取详细地址
+      const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
+      const addressData = await reverseGeocodeWithRetry(lat, lng, {
+        maxRetries: 3,
+        timeout: 10000,
+        retryDelay: 1000
+      });
+
+      return {
+        ...addressData,
+        ...deviceInfo
+      };
+    } catch (err) {
+      console.error('[my] 获取位置信息失败:', err);
+      // 获取定位失败，尝试使用缓存的位置信息
+      if (cachedLocation) {
+        return {
+          ...cachedLocation,
+          ...deviceInfo
+        };
+      } else {
+        // 完全失败，只返回设备信息
+        return deviceInfo;
+      }
+    }
+  },
+
   // 🔴 处理截屏/录屏拦截
   handleIntercept(type) {
     // 标记封禁（本地存储）
@@ -146,18 +214,44 @@ Page({
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    // 调用云函数写入数据库封禁状态，等待完成后再跳转
-    wx.cloud.callFunction({
-      name: 'banUserByScreenshot',
-      data: { type: type },
-      success: (res) => {
-        console.log('[my] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
-        this._jumpToBlocked(type);
-      },
-      fail: (err) => {
-        console.error('[my] banUserByScreenshot 调用失败:', err);
-        this._jumpToBlocked(type);
-      }
+    // 🔴 关键优化：立即跳转到 blocked 页面，不等待位置信息获取和云函数调用
+    console.log('[my] 🔴 截屏/录屏检测，立即跳转到封禁页');
+    this._jumpToBlocked(type);
+
+    // 🔴 异步调用云函数写入数据库封禁状态（不阻塞跳转）
+    this._getLocationAndDeviceInfo().then(locationData => {
+      wx.cloud.callFunction({
+        name: 'banUserByScreenshot',
+        data: {
+          type: type,
+          banPage: 'my', // 封禁页面
+          ...locationData
+        },
+        success: (res) => {
+          console.log('[my] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
+        },
+        fail: (err) => {
+          console.error('[my] banUserByScreenshot 调用失败:', err);
+        }
+      });
+    }).catch(() => {
+      // 如果获取位置失败，仍然调用云函数（不带位置信息）
+      const sysInfo = wx.getSystemInfoSync();
+      wx.cloud.callFunction({
+        name: 'banUserByScreenshot',
+        data: {
+          type: type,
+          banPage: 'my',
+          deviceInfo: sysInfo.system || '',
+          phoneModel: sysInfo.model || ''
+        },
+        success: (res) => {
+          console.log('[my] banUserByScreenshot 调用成功（无位置信息）');
+        },
+        fail: (err) => {
+          console.error('[my] banUserByScreenshot 调用失败:', err);
+        }
+      });
     });
   },
 

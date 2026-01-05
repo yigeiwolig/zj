@@ -139,11 +139,29 @@ exports.main = async (event, context) => {
 
           if (isBlockedCity && !bypassLocationCheck) {
           // 城市被拦截，更新 login_logbutton
+          // 🔴 构建地址和设备信息对象
+          const locationInfo = {
+            province: province || '',
+            city: city || '',
+            district: district || '',
+            address: addressDetail || '',
+            latitude: isValidGPS ? latNum : undefined,
+            longitude: isValidGPS ? lngNum : undefined
+          };
+          
+          const deviceInfoObj = {
+            device: deviceInfo || '',
+            phoneModel: deviceInfo || ''
+          };
+          
           if (buttonRecordRes.data && buttonRecordRes.data.length > 0) {
             await db.collection('login_logbutton').doc(buttonRecordRes.data[0]._id).update({
               data: {
                 isBanned: true,
                 banReason: 'location_blocked',
+                banPage: 'index', // 地址拦截发生在 index 页面
+                ...locationInfo,   // 地址信息
+                ...deviceInfoObj,  // 设备信息
                 updateTime: db.serverDate()
               }
             });
@@ -153,6 +171,9 @@ exports.main = async (event, context) => {
                 _openid: openid,
                 isBanned: true,
                 banReason: 'location_blocked',
+                banPage: 'index', // 地址拦截发生在 index 页面
+                ...locationInfo,   // 地址信息
+                ...deviceInfoObj,  // 设备信息
                 bypassLocationCheck: false,
                 createTime: db.serverDate(),
                 updateTime: db.serverDate()
@@ -181,7 +202,7 @@ exports.main = async (event, context) => {
             finalIsBlocked = false; 
             finalMsg = "📍 访问通过"; 
           }
-        } else {
+    } else {
           finalIsBlocked = false; 
           finalMsg = "⚠️ 未获取定位"; 
         }

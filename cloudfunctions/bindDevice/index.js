@@ -86,9 +86,7 @@ exports.main = async (event, context) => {
     else {
       await db.collection('sn').doc(device._id).update({ data: { openid: myOpenid } })
       return { success: true, status: 'NEED_AUDIT', msg: '请提交审核' }
-    }
-
-  } catch (err) {
+    }  } catch (err) {
     return { success: false, msg: err.errMsg }
   }
 }

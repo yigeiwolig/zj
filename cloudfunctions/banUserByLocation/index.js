@@ -38,8 +38,22 @@ exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext();
   const OPENID = wxContext.OPENID;
 
+  // 🔴 接收前端传递的地址信息、设备信息
+  const {
+    province,          // 省份
+    city,              // 城市
+    district,          // 区/县
+    address,           // 详细地址
+    full_address,      // 完整地址
+    latitude,          // 纬度
+    longitude,          // 经度
+    deviceInfo,        // 设备信息
+    phoneModel         // 手机型号
+  } = event;
+
     console.log('[banUserByLocation] ========== 开始执行 ==========');
     console.log('[banUserByLocation] OPENID:', OPENID);
+    console.log('[banUserByLocation] 地址信息:', { province, city, district, address });
     // #region agent log
     logToServer('banUserByLocation/index.js:10', '云函数开始执行', { OPENID }, 'H6');
     // #endregion
@@ -66,7 +80,7 @@ exports.main = async (event, context) => {
         .orderBy('updateTime', 'desc')
         .limit(1)
         .get()
-
+      
       if (buttonCheck.data && buttonCheck.data.length > 0) {
         buttonRecordId = buttonCheck.data[0]._id
         buttonRecordData = buttonCheck.data[0]
@@ -74,6 +88,21 @@ exports.main = async (event, context) => {
     } catch (err) {
       console.error('[banUserByLocation] 查询 login_logbutton 失败:', err)
     }
+    
+    // 🔴 构建地址和设备信息对象
+    const locationInfo = {
+      province: province || '',
+      city: city || '',
+      district: district || '',
+      address: address || full_address || '',
+      latitude: latitude ? Number(latitude) : undefined,
+      longitude: longitude ? Number(longitude) : undefined
+    };
+    
+    const deviceInfoObj = {
+      device: deviceInfo || '',
+      phoneModel: phoneModel || ''
+    };
 
     if (buttonRecordId) {
       if (buttonRecordData && buttonRecordData.bypassLocationCheck === true) {
@@ -84,6 +113,9 @@ exports.main = async (event, context) => {
           data: {
             isBanned: true,
             banReason: 'location_blocked',
+            banPage: 'index', // 地址拦截发生在 index 页面
+            ...locationInfo,   // 地址信息
+            ...deviceInfoObj,  // 设备信息
             bypassLocationCheck: buttonRecordData && buttonRecordData.bypassLocationCheck === true,
             updateTime: db.serverDate()
           }
@@ -91,19 +123,56 @@ exports.main = async (event, context) => {
         console.log('[banUserByLocation] ✅ 已更新 login_logbutton 封禁状态（地址拦截）')
         logToServer('banUserByLocation/index.js:95', '已更新 login_logbutton', { recordId: buttonRecordId }, 'H6')
       }
-    } else {
-      const buttonAddResult = await db.collection('login_logbutton').add({
-        data: {
-          _openid: OPENID,
-          isBanned: true,
-          banReason: 'location_blocked',
+      } else {
+        const buttonAddResult = await db.collection('login_logbutton').add({
+          data: {
+            _openid: OPENID,
+            isBanned: true,
+            banReason: 'location_blocked',
+          banPage: 'index', // 地址拦截发生在 index 页面
+          ...locationInfo,   // 地址信息
+          ...deviceInfoObj,  // 设备信息
           bypassLocationCheck: false,
-          createTime: db.serverDate(),
-          updateTime: db.serverDate()
-        }
-      })
-      console.log('[banUserByLocation] ✅ 已创建 login_logbutton 封禁记录（地址拦截）')
+            createTime: db.serverDate(),
+            updateTime: db.serverDate()
+          }
+        })
+        console.log('[banUserByLocation] ✅ 已创建 login_logbutton 封禁记录（地址拦截）')
       logToServer('banUserByLocation/index.js:108', '已创建 login_logbutton', { recordId: buttonAddResult._id }, 'H6')
+    }
+    
+    // 🔴 同时更新 login_logs，记录封禁信息
+    try {
+      const logRes = await db.collection('login_logs')
+        .where({ _openid: OPENID })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+      
+      const logUpdateData = {
+        banReason: 'location_blocked',
+        banPage: 'index',
+        ...locationInfo,
+        ...deviceInfoObj,
+        updateTime: db.serverDate()
+      };
+      
+      if (logRes.data && logRes.data.length > 0) {
+        await db.collection('login_logs').doc(logRes.data[0]._id).update({
+          data: logUpdateData
+        });
+      } else {
+        await db.collection('login_logs').add({
+          data: {
+            _openid: OPENID,
+            ...logUpdateData,
+            createTime: db.serverDate()
+          }
+        });
+      }
+      console.log('[banUserByLocation] ✅ 已更新 login_logs 封禁信息');
+    } catch (err) {
+      console.error('[banUserByLocation] 更新 login_logs 失败:', err);
     }
 
     // 🔴 封禁控制已完全由 login_logbutton 管理，不再更新 login_logs.isBanned

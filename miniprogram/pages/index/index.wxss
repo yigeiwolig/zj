@@ -750,6 +750,165 @@ input, textarea { text-align: left; }
   50%  { left: 25%; }
   100% { left: 50%; }
 }
+/* ================= 【新增】管理员模式样式 ================= */
+.admin-mode-container {
+  width: 100%;
+  height: 100%;
+  background: #F9F9F9;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  padding-top: env(safe-area-inset-top);
+}
+
+/* 顶部标题栏 */
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 40rpx 40rpx 30rpx;
+  background: #ffffff;
+  border-bottom: 1rpx solid #E5E5EA;
+}
+
+.admin-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+}
+
+.admin-exit-btn-small {
+  padding: 12rpx 32rpx;
+  background: #000000;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-exit-text-small {
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+/* 用户列表容器 */
+.admin-user-list {
+  flex: 1;
+  height: 0; /* 触发 flex 计算 */
+}
+
+/* 加载中/空状态 */
+.admin-loading,
+.admin-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 0;
+  color: #86868b;
+  font-size: 28rpx;
+}
+
+/* 用户卡片列表 */
+.admin-user-cards {
+  padding: 30rpx 40rpx;
+}
+
+.admin-user-card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 40rpx;
+  margin-bottom: 30rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.08);
+}
+
+/* 用户卡片头部 */
+.user-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 30rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid #F2F2F7;
+}
+
+.user-nickname {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+}
+
+.user-ban-reason {
+  font-size: 24rpx;
+  padding: 8rpx 20rpx;
+  background: #FF3B30;
+  color: #ffffff;
+  border-radius: 20rpx;
+  font-weight: 600;
+}
+
+/* 用户信息区域 */
+.user-card-info {
+  margin-bottom: 30rpx;
+}
+
+.info-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 16rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
+}
+
+.info-label {
+  color: #86868b;
+  min-width: 160rpx;
+  flex-shrink: 0;
+}
+
+.info-value {
+  color: #1d1d1f;
+  flex: 1;
+  word-break: break-all;
+}
+
+/* 操作按钮区域 */
+.user-card-actions {
+  display: flex;
+  gap: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #F2F2F7;
+}
+
+.action-btn {
+  flex: 1;
+  height: 88rpx;
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  transition: transform 0.2s ease;
+}
+
+.action-btn:active {
+  transform: scale(0.96);
+}
+
+.unban-btn {
+  background: #34C759;
+}
+
+.ignore-btn {
+  background: #FF3B30;
+}
+
+.action-btn-text {
+  color: #ffffff;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
 /* ================= 【新增】管理员切换按钮样式 ================= */
 .admin-toggle-btn {
   display: inline-block;

@@ -1,5 +1,9 @@
 // pages/shop/shop.js
 const app = getApp();
+var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
+var qqmapsdk = new QQMapWX({
+    key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
+});
 
 Page({
   data: {
@@ -149,6 +153,13 @@ Page({
 
   onLoad(options) {
     console.log('[shop.js] onLoad 开始', options);
+    
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('shop');
+    }
+    
     // 🔴 截屏/录屏封禁
     this.initScreenshotProtection();
     
@@ -182,6 +193,20 @@ Page({
 
   // 1. 页面每次显示时，读取本地缓存的购物车
   onShow() {
+    // 🔴 重新检查管理员权限（确保从其他页面返回时也能显示开关）
+    this.checkAdminPrivilege();
+    
+    // 🔴 检查录屏状态
+    if (wx.getScreenRecordingState) {
+      wx.getScreenRecordingState({
+        success: (res) => {
+          if (res.state === 'on' || res.recording) {
+            this.handleIntercept('record');
+          }
+        }
+      });
+    }
+    
     // 读取本地存储的购物车数据
     const cachedCart = wx.getStorageSync('my_cart') || [];
     
@@ -315,6 +340,7 @@ Page({
       // 1. 获取当前用户的 OpenID (利用云函数)
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
+      console.log('[shop.js] 当前用户 OpenID:', myOpenid);
 
       // 2. 去数据库比对白名单
       const db = wx.cloud.database();
@@ -322,15 +348,20 @@ Page({
         openid: myOpenid
       }).get();
 
+      console.log('[shop.js] 管理员查询结果:', adminCheck.data);
+
       // 3. 如果找到了记录，说明你是受信任的管理员
       if (adminCheck.data.length > 0) {
         this.setData({ isAuthorized: true });
-        console.log('[shop.js] 身份验证成功：合法管理员');
+        console.log('[shop.js] ✅ 身份验证成功：合法管理员，EDIT 开关已显示');
     } else {
-        console.log('[shop.js] 未在管理员白名单中');
+        this.setData({ isAuthorized: false });
+        console.log('[shop.js] ❌ 未在管理员白名单中，EDIT 开关已隐藏');
       }
     } catch (err) {
-      console.error('[shop.js] 权限检查失败', err);
+      console.error('[shop.js] ❌ 权限检查失败:', err);
+      // 即使失败，也确保状态正确
+      this.setData({ isAuthorized: false });
     }
   },
 
@@ -1523,7 +1554,15 @@ Page({
       compareData: { headers, rows }
     });
   },
-  closeSpecsModal() { this.setData({ showSpecsModal: false }); },
+  closeSpecsModal() { 
+    console.log('[shop] 关闭参数对比弹窗');
+    this.setData({ showSpecsModal: false }); 
+  },
+  
+  // 阻止事件冒泡（防止点击弹窗内容时关闭弹窗）
+  stopPropagation() {
+    // 空函数，仅用于阻止事件冒泡
+  },
   
   // ========================================================
   // [新增] 底部全局对比视频逻辑 (请复制这段代码到 shop.js)
@@ -3017,6 +3056,38 @@ Page({
     this.openSpecsModal();
   },
 
+  // 🔴 检查封禁状态
+  async checkBanStatus() {
+    try {
+      const loginRes = await wx.cloud.callFunction({ name: 'login' });
+      const openid = loginRes.result.openid;
+      const db = wx.cloud.database();
+      
+      const buttonRes = await db.collection('login_logbutton')
+        .where({ _openid: openid })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+      
+      if (buttonRes.data && buttonRes.data.length > 0) {
+        const btn = buttonRes.data[0];
+        const rawFlag = btn.isBanned;
+        const isBanned = rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
+        
+        if (isBanned) {
+          console.log('[shop] 检测到封禁状态，跳转到封禁页');
+          const banType = btn.banReason === 'screenshot' || btn.banReason === 'screen_record' 
+            ? 'screenshot' 
+            : (btn.banReason === 'location_blocked' ? 'location' : 'banned');
+          wx.reLaunch({ url: `/pages/blocked/blocked?type=${banType}` });
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('[shop] 检查封禁状态失败:', err);
+    }
+  },
+
   // 🔴 初始化截屏/录屏保护
   initScreenshotProtection() {
     // 物理防线：确保录屏、截屏出来的全是黑屏
@@ -3040,16 +3111,63 @@ Page({
     }
   },
 
-  onShow() {
-    // 🔴 检查录屏状态
-    if (wx.getScreenRecordingState) {
-      wx.getScreenRecordingState({
-        success: (res) => {
-          if (res.state === 'on' || res.recording) {
-            this.handleIntercept('record');
-          }
-        }
+  // 注意：onShow 方法已在上面定义，这里删除重复定义
+
+  // 🔴 获取位置和设备信息的辅助函数
+  async _getLocationAndDeviceInfo() {
+    const sysInfo = wx.getSystemInfoSync();
+    const deviceInfo = {
+      deviceInfo: sysInfo.system || '',
+      phoneModel: sysInfo.model || ''
+    };
+    
+    // 尝试从缓存获取位置信息
+    const cachedLocation = wx.getStorageSync('last_location');
+    if (cachedLocation && cachedLocation.province && cachedLocation.city) {
+      // 如果缓存中有完整的地址信息，直接使用
+      return {
+        ...cachedLocation,
+        ...deviceInfo
+      };
+    }
+    
+    try {
+      // 获取当前位置
+      const locationRes = await new Promise((resolve, reject) => {
+        wx.getLocation({
+          type: 'gcj02',
+          success: resolve,
+          fail: reject
+        });
       });
+
+      const lat = locationRes.latitude;
+      const lng = locationRes.longitude;
+      
+      // 🔴 使用带重试机制的逆地理编码获取详细地址
+      const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
+      const addressData = await reverseGeocodeWithRetry(lat, lng, {
+        maxRetries: 3,
+        timeout: 10000,
+        retryDelay: 1000
+      });
+
+      return {
+        ...addressData,
+        ...deviceInfo
+      };
+    } catch (err) {
+      console.error('[shop] 获取位置信息失败:', err);
+      // 获取定位失败，尝试使用缓存的位置信息
+      if (cachedLocation) {
+        return {
+          ...cachedLocation,
+          ...deviceInfo
+        };
+      } else {
+        // 完全失败，只返回设备信息
+        return deviceInfo;
+      }
     }
   },
 
@@ -3061,18 +3179,44 @@ Page({
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    // 调用云函数写入数据库封禁状态，等待完成后再跳转
-    wx.cloud.callFunction({
-      name: 'banUserByScreenshot',
-      data: { type: type },
-      success: (res) => {
-        console.log('[shop] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
-        this._jumpToBlocked(type);
-      },
-      fail: (err) => {
-        console.error('[shop] banUserByScreenshot 调用失败:', err);
-        this._jumpToBlocked(type);
-      }
+    // 🔴 关键优化：立即跳转到 blocked 页面，不等待位置信息获取和云函数调用
+    console.log('[shop] 🔴 截屏/录屏检测，立即跳转到封禁页');
+    this._jumpToBlocked(type);
+
+    // 🔴 异步调用云函数写入数据库封禁状态（不阻塞跳转）
+    this._getLocationAndDeviceInfo().then(locationData => {
+      wx.cloud.callFunction({
+        name: 'banUserByScreenshot',
+        data: {
+          type: type,
+          banPage: 'shop', // 封禁页面
+          ...locationData
+        },
+        success: (res) => {
+          console.log('[shop] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
+        },
+        fail: (err) => {
+          console.error('[shop] banUserByScreenshot 调用失败:', err);
+        }
+      });
+    }).catch(() => {
+      // 如果获取位置失败，仍然调用云函数（不带位置信息）
+      const sysInfo = wx.getSystemInfoSync();
+      wx.cloud.callFunction({
+        name: 'banUserByScreenshot',
+        data: {
+          type: type,
+          banPage: 'shop',
+          deviceInfo: sysInfo.system || '',
+          phoneModel: sysInfo.model || ''
+        },
+        success: (res) => {
+          console.log('[shop] banUserByScreenshot 调用成功（无位置信息）');
+        },
+        fail: (err) => {
+          console.error('[shop] banUserByScreenshot 调用失败:', err);
+        }
+      });
     });
   },
 

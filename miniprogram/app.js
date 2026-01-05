@@ -24,7 +24,22 @@ App({
     },
 
     // 🔴 防止重复跳转到 blocked 页面的标志
-    _isJumpingToBlocked: false
+    _isJumpingToBlocked: false,
+    
+    // 🔴 更新页面访问统计的辅助函数
+    updatePageVisit: function(pageRoute) {
+      // 异步调用，不阻塞页面加载
+      wx.cloud.callFunction({
+        name: 'updatePageVisit',
+        data: { pageRoute: pageRoute },
+        success: (res) => {
+          console.log('[app] 页面访问统计更新成功:', pageRoute, res);
+        },
+        fail: (err) => {
+          console.error('[app] 页面访问统计更新失败:', pageRoute, err);
+        }
+      });
+    }
   },
 
   // ======================== 全局 UI API（替代 wx.showToast/showModal/showLoading/showActionSheet） ========================

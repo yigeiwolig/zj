@@ -388,27 +388,163 @@ page {
 .modal-footer { height: 160rpx; border-top: 1rpx solid #eee; background: rgba(255,255,255,0.9); backdrop-filter: blur(20px); padding: 0 40rpx; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .f-price { font-size: 44rpx; font-weight: 800; }
 
-/* ============ 4. 对比表格 ============ */
-.overlay { position: fixed; bottom: 0; left: 0; width: 100%; background: #fff; border-radius: 40rpx 40rpx 0 0; transform: translateY(110%); transition: 0.3s; padding-bottom: 60rpx; box-shadow: 0 -10rpx 40rpx rgba(0,0,0,0.1); }
+/* ============ 4. 对比表格 (高屏占比 + 底部舒适间距) ============ */
+
+/* 1. 弹窗容器 */
+.overlay { 
+  position: fixed; 
+  bottom: 0; 
+  left: 0; 
+  width: 100%; 
+  background: #fff; 
+  border-radius: 40rpx 40rpx 0 0; 
+  
+  transform: translateY(110%); 
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  box-shadow: 0 -10rpx 40rpx rgba(0,0,0,0.1);
+  
+  display: flex;
+  flex-direction: column;
+  
+  height: auto;       
+  /* 🔴 改动1：由 85vh 改为 88vh，让它几乎能顶到胶囊按钮下面 */
+  max-height: 88vh;   
+  
+  z-index: 999;
+  padding-bottom: 0; 
+}
+
 .overlay.active { transform: translateY(0); }
-.overlay-head { display: flex; justify-content: space-between; padding: 30rpx; border-bottom: 1rpx solid #eee; font-weight: 700; }
-.specs-table { padding: 30rpx; }
-.sp-row { display: flex; border-bottom: 1rpx solid #eee; }
-.sp-row.header { background: #F9F9F9; font-weight: 700; border-radius: 10rpx; border: none; }
-/* ========================================= */
-/* 3. 对比表格样式微调 (适配动态列) */
-/* ========================================= */
+
+/* 2. 标题栏 */
+.overlay-head { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  padding: 30rpx 40rpx 10rpx 40rpx;
+  flex-shrink: 0;
+}
+.overlay-head text { font-size: 34rpx; font-weight: 700; color: #000; }
+.overlay-head .close { font-size: 44rpx; color: #999; padding: 10rpx; line-height: 1; }
+
+/* 3. 灰色胶囊表头 (固定) */
+.specs-header-container {
+  flex-shrink: 0;
+  padding: 10rpx 30rpx; 
+  background: #fff;
+  z-index: 10;
+}
+
+.capsule-header { 
+  display: flex;
+  align-items: center;
+  background: #F5F5F7; 
+  border-radius: 16rpx; 
+  height: 88rpx;        
+  padding: 0 10rpx;
+}
+
+.capsule-header .sp-cell {
+  font-weight: 700; 
+  font-size: 26rpx; 
+  color: #333;
+}
+
+/* 4. 滚动区域 */
+.specs-scroll-body {
+  flex: none;         
+  height: auto;       
+  
+  /* 🔴 改动2：放松内部高度限制，从 60vh 增加到 80vh */
+  /* 这样内容多的时候，它就会乖乖往上长，填满上面的空间 */
+  max-height: 80vh;   
+  width: 100%;
+}
+
+.specs-table-content { 
+  padding: 0 30rpx; 
+}
+
+/* 5. 通用行样式 */
+.sp-row { 
+  display: flex; 
+  align-items: center; 
+  border-bottom: 1rpx solid #eee; 
+  min-height: 100rpx; 
+}
+
 .sp-cell { 
   flex: 1; 
-  padding: 20rpx 10rpx; 
   text-align: center; 
-  font-size: 26rpx; 
-  /* 允许文字换行，防止列太多挤爆 */
-  word-wrap: break-word; 
-  word-break: break-all; 
+  font-size: 28rpx; 
+  color: #333;
+  word-break: break-all;
+  padding: 10rpx;
 }
-.sp-cell.label { width: 120rpx; flex: none; text-align: left; font-weight: 600; color: #333; }
+
+.sp-cell.label { 
+  width: 150rpx; 
+  flex: none; 
+  text-align: left; 
+  font-weight: 600; 
+  color: #111; 
+  padding-left: 20rpx; 
+}
 .sp-cell.admin-w { width: 50rpx; flex: none; color: red; }
+
+/* ============ 6. 底部按钮区域 (超薄极简版) ============ */
+.compare-btn-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  
+  margin-top: 30rpx; 
+  padding-bottom: 30rpx; 
+  padding-bottom: calc(30rpx + env(safe-area-inset-bottom)); 
+}
+
+/* 🖤 黑色超薄按钮 */
+.btn-watch-compare {
+  /* 1. 尺寸：大幅压缩高度，做到原来的 60% 左右 */
+  height: 52rpx;          /* 只有 52rpx，非常纤细 */
+  line-height: 52rpx;     /* 确保垂直居中 */
+  border-radius: 26rpx;   /* 圆角 = 高度的一半 */
+  padding: 0 60rpx;       /* 左右留白，保持修长感 */
+  
+  /* 2. 视觉：纯黑背景，阴影微弱 */
+  background: #000;
+  color: #fff;
+  box-shadow: 0 6rpx 16rpx rgba(0,0,0,0.1); /* 阴影也变小，不臃肿 */
+  
+  /* 3. 布局 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+}
+
+/* 按钮内的文字 */
+.btn-watch-compare text {
+  font-size: 22rpx;      /* 字体必须变小，否则会撑满按钮不好看 */
+  font-weight: 600;
+  letter-spacing: 2rpx;  /* 字间距拉大，增加透气感 */
+  opacity: 0.95;
+}
+
+/* 按钮内的图标 (三角形) */
+.icon-play {
+  font-size: 16rpx;      /* 图标极小化 */
+  margin-right: 12rpx;
+  margin-top: 2rpx;      /* 微调位置 */
+  opacity: 0.9;
+}
+
+/* 点击反馈 */
+.btn-watch-compare:active {
+  transform: scale(0.92);
+  opacity: 0.8;
+}
 
 /* ============ 5. 配件详情 ============ */
 .acc-detail-hero { width: 100%; min-height: 400rpx; background: #fff; display: flex; flex-direction: column; align-items: center; }

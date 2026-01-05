@@ -1,0 +1,9 @@
+{
+  "name": "unbanUser",
+  "version": "1.0.0",
+  "description": "解封用户（设置 isBanned = false）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

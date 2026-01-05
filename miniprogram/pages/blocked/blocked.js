@@ -7,11 +7,16 @@ Page({
   },
 
   onLoad(options) {
+    // 🔴 更新页面访问统计
+    const app = getApp();
+    if (app && app.globalData && app.globalData.updatePageVisit) {
+      app.globalData.updatePageVisit('blocked');
+    }
+    
     const type = options.type || '';
     this.setData({ type });
     
     // 🔴 重置跳转标志，允许后续跳转
-    const app = getApp();
     app.globalData._isJumpingToBlocked = false;
     
     wx.hideHomeButton();
@@ -24,7 +29,7 @@ Page({
     setTimeout(() => {
       this.setData({ canCheck: true });
       console.log('🛡️ 写入保护期结束，开始检测');
-      this.startAutoCheck();
+    this.startAutoCheck();
     }, initialDelay);
   },
 
@@ -37,13 +42,13 @@ Page({
     console.log('⏳ 开启云端状态检测 (4秒/次)...');
     
     if (this.data.canCheck) {
-      this.callCheckCloud();
+    this.callCheckCloud();
     }
 
     this.setData({
       checkTimer: setInterval(() => {
         if (this.data.canCheck) {
-          this.callCheckCloud();
+        this.callCheckCloud();
         }
       }, 4000)
     });
@@ -62,7 +67,7 @@ Page({
       console.log('⌛ 写入保护期内，跳过检测');
       return;
     }
-
+    
     wx.cloud.callFunction({
       name: 'checkUnlockStatus'
     }).then(res => {
@@ -75,11 +80,21 @@ Page({
       if (action === 'PASS') {
         this.stopAutoCheck();
         const nickname = result.nickname || '';
+        const returnToIndex = result.returnToIndex === true; // 地址拦截解封标记
         
         // 🔴 关键：清除所有封禁标记（包括截图封禁标记）
         wx.removeStorageSync('is_user_banned');
         wx.removeStorageSync('is_screenshot_banned'); // 清除截图封禁标记
-        // 设置永久授权和昵称，直接放行
+        
+        if (returnToIndex) {
+          // 🔴 地址拦截解封：直接返回 index 页面，不设置永久授权（让用户重新走流程）
+          console.log('[blocked] 地址拦截解封，返回 index 页面');
+          wx.showToast({ title: '已解封', icon: 'success' });
+          setTimeout(() => {
+            wx.reLaunch({ url: '/pages/index/index' });
+          }, 1500);
+        } else {
+          // 其他情况：设置永久授权和昵称，直接放行
         wx.setStorageSync('has_permanent_auth', true);
         if (nickname) {
           wx.setStorageSync('user_nickname', nickname);
@@ -91,22 +106,43 @@ Page({
           // 直接跳回首页，用户已通过验证，不需要重新输入昵称
           wx.reLaunch({ url: '/pages/index/index' });
         }, 1500);
+        }
       } 
       
       // --- 指令 B: RETRY (允许重试) ---
       else if (action === 'RETRY') {
         this.stopAutoCheck();
+        
+        // 🔴 关键修复：检查是否是截屏封禁类型
+        // 如果是截屏封禁被解封，且用户之前已经通过验证，应该保持授权状态
+        const wasScreenshotBan = this.data.type === 'screenshot' || this.data.type === 'record';
+        const hadAuth = wx.getStorageSync('has_permanent_auth');
+        const hadNickname = wx.getStorageSync('user_nickname');
+        
+        if (wasScreenshotBan && hadAuth && hadNickname) {
+          // 截屏封禁解封，且用户之前已通过验证，直接放行到产品页
+          console.log('[blocked] 截屏封禁解封，用户之前已通过验证，直接放行');
+          wx.removeStorageSync('is_user_banned');
+          wx.removeStorageSync('is_screenshot_banned');
+          // 保持 has_permanent_auth 和 user_nickname，不清除
+          
+          wx.showToast({ title: '已解封', icon: 'success' });
+          setTimeout(() => {
+            wx.reLaunch({ url: '/pages/products/products' });
+          }, 1500);
+        } else {
+          // 其他情况：需要重新验证昵称
         wx.showToast({ title: '请重新验证', icon: 'none' });
 
-        // 🔴 关键修复：RETRY 表示云函数已确认 login_logs 中的 isBanned 为 false
-        // 说明管理员已经在后台解封，可以清除所有封禁标记
+          // 清除所有封禁标记和授权状态
         wx.removeStorageSync('is_user_banned');
-        wx.removeStorageSync('is_screenshot_banned'); // 清除截图封禁标记
+          wx.removeStorageSync('is_screenshot_banned');
         wx.removeStorageSync('has_permanent_auth'); 
         
         setTimeout(() => {
           wx.reLaunch({ url: '/pages/index/index' });
         }, 1500);
+        }
       }
 
       // --- 指令 C: WAIT (继续等) ---
