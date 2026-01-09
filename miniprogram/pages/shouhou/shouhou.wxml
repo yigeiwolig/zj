@@ -110,12 +110,25 @@
         <view class="section-label">配件清单</view>
         <view class="parts-container">
           <block wx:for="{{currentPartsList}}" wx:key="index">
-            <view class="part-tag {{item.selected ? 'active' : ''}}" bindtap="togglePart" data-index="{{index}}">
-              <text>{{item.name}}</text>
-              <!-- 显示价格 -->
-              <text class="part-price" style="color: #007AFF !important;">¥{{item.price || 0}}</text>
-              <!-- 管理员改价/改名/删除按钮 (右下角) -->
-              <view wx:if="{{isAdmin}}" class="admin-edit-price" catchtap="adminEditPartPrice" data-index="{{index}}">✎</view>
+            <view class="part-tag-wrapper" 
+                  data-index="{{index}}">
+              <view class="part-tag {{item.selected ? 'active' : ''}} {{isDragging && dragIndex === index ? 'dragging' : ''}}" 
+                    bindtap="togglePart" 
+                    bindlongpress="handleLongPress"
+                    bindtouchmove="handleTouchMove"
+                    bindtouchend="handleTouchEnd"
+                    data-index="{{index}}"
+                    style="{{isDragging && dragIndex === index ? 'position: fixed; left: ' + dragX + 'px; top: ' + dragY + 'px; width: ' + cardWidth + 'px; opacity: 0.9; z-index: 9999; transition: none;' : ''}}">
+                <text>{{item.name}}</text>
+                <!-- 显示价格 -->
+                <text class="part-price" style="color: #007AFF !important;">¥{{item.price || 0}}</text>
+                <!-- 管理员改价/改名/删除按钮 (右下角) -->
+                <view wx:if="{{isAdmin && !isDragging}}" class="admin-edit-price" catchtap="adminEditPartPrice" data-index="{{index}}">✎</view>
+                <!-- 管理员排序标识（左上角） -->
+                <view wx:if="{{isAdmin}}" class="sort-indicator">☰</view>
+              </view>
+              <!-- 占位符（拖动时显示） -->
+              <view wx:if="{{isDragging && dragIndex === index}}" class="part-tag-placeholder"></view>
             </view>
           </block>
           <!-- 管理员添加配件按钮 -->

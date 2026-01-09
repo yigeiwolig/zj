@@ -82,6 +82,18 @@ Page({
     
     // 动态占位高度
     partsPlaceholderHeight: '180rpx',
+    
+    // 拖拽相关
+    isDragging: false,
+    dragIndex: -1,
+    dragX: 0,
+    dragY: 0,
+    touchStartX: 0,
+    touchStartY: 0,
+    cardWidth: 0,
+    cardHeight: 0,
+    cardInitX: 0,
+    cardInitY: 0,
 
     // 选中状态
     selectedCount: 0,
@@ -473,6 +485,8 @@ Page({
     }
     
     console.log('[loadParts] 开始加载配件，型号:', modelName);
+    console.log('[loadParts] 当前管理员状态 - isAdmin:', this.data.isAdmin);
+    console.log('[loadParts] 当前管理员状态 - isAuthorized:', this.data.isAuthorized);
     const db = wx.cloud.database();
     
     // 从 shouhou 集合读取，如果没有就用本地默认
@@ -734,9 +748,15 @@ Page({
 
   // 4. 选择配件 & 计算总价
   togglePart(e) {
+    console.log('[togglePart] 点击配件卡片，event:', e);
+    console.log('[togglePart] target:', e.target);
+    console.log('[togglePart] currentTarget:', e.currentTarget);
+    
     if (e.target.dataset.type === 'del') return;
     const idx = e.currentTarget.dataset.index;
     const list = this.data.currentPartsList;
+    
+    console.log('[togglePart] 索引:', idx, '配件:', list[idx]);
     
     list[idx].selected = !list[idx].selected;
     
@@ -759,25 +779,303 @@ Page({
 
   // [修改] 管理员编辑配件（点击铅笔触发）
   adminEditPartPrice(e) {
-    if (!this.data.isAdmin) return;
+    console.log('[adminEditPartPrice] ========== 点击编辑按钮 ==========');
+    console.log('[adminEditPartPrice] isAdmin:', this.data.isAdmin);
+    console.log('[adminEditPartPrice] event:', e);
+    
+    if (!this.data.isAdmin) {
+      console.warn('[adminEditPartPrice] 非管理员，退出');
+      wx.showToast({ title: '需要管理员权限', icon: 'none' });
+      return;
+    }
 
     const idx = e.currentTarget.dataset.index;
     const part = this.data.currentPartsList[idx];
+    
+    console.log('[adminEditPartPrice] 索引:', idx);
+    console.log('[adminEditPartPrice] 配件:', part);
 
     // 1. 弹出菜单让选
+    console.log('[adminEditPartPrice] 准备弹出菜单');
     wx.showActionSheet({
       itemList: ['修改名称', '修改价格', '删除配件'],
       itemColor: '#000000',
       success: (res) => {
+        console.log('[adminEditPartPrice] 菜单选择结果:', res.tapIndex);
         if (res.tapIndex === 0) {
+          console.log('[adminEditPartPrice] 选择：修改名称');
           this.showEditModal('name', part, idx);  // 改名，传递索引
         } else if (res.tapIndex === 1) {
+          console.log('[adminEditPartPrice] 选择：修改价格');
           this.showEditModal('price', part, idx); // 改价，传递索引
         } else if (res.tapIndex === 2) {
+          console.log('[adminEditPartPrice] 选择：删除配件');
           this.adminDeletePart(part, idx); // 删除配件
         }
+      },
+      fail: (err) => {
+        console.error('[adminEditPartPrice] 菜单弹出失败:', err);
       }
     });
+  },
+
+  // [新增] 长按开始拖拽
+  handleLongPress(e) {
+    if (!this.data.isAdmin) {
+      console.log('[handleLongPress] 非管理员模式');
+      return;
+    }
+    
+    const idx = e.currentTarget.dataset.index;
+    console.log('[handleLongPress] 长按触发，索引:', idx);
+    
+    // 震动反馈
+    wx.vibrateShort({ type: 'heavy' });
+    
+    // 获取卡片信息
+    const query = wx.createSelectorQuery().in(this);
+    query.selectAll('.part-tag').boundingClientRect();
+    query.exec((res) => {
+      if (res && res[0] && res[0][idx]) {
+        const rect = res[0][idx];
+        console.log('[handleLongPress] 卡片位置:', rect);
+        
+        this.setData({
+          isDragging: true,
+          dragIndex: idx,
+          cardWidth: rect.width,
+          cardHeight: rect.height,
+          cardInitX: rect.left,
+          cardInitY: rect.top,
+          dragX: rect.left,
+          dragY: rect.top,
+          touchStartX: 0,
+          touchStartY: 0
+        });
+      }
+    });
+  },
+
+  // [新增] 触摸移动
+  handleTouchMove(e) {
+    if (!this.data.isAdmin || !this.data.isDragging) return;
+    
+    const touch = e.touches[0];
+    
+    // 记录初始位置（如果还没记录）
+    if (this.data.touchStartX === 0 && this.data.touchStartY === 0) {
+      this.setData({
+        touchStartX: touch.pageX,
+        touchStartY: touch.pageY
+      });
+    }
+    
+    // 计算新位置（卡片中心跟随手指）
+    // 使用 pageX/pageY 相对于页面的位置
+    const newX = touch.pageX - this.data.cardWidth / 2;
+    const newY = touch.pageY - this.data.cardHeight / 2;
+    
+    // 限制在屏幕范围内
+    const systemInfo = wx.getSystemInfoSync();
+    const minX = 0;
+    const maxX = systemInfo.windowWidth - this.data.cardWidth;
+    const minY = 0;
+    const maxY = systemInfo.windowHeight - this.data.cardHeight;
+    
+    const clampedX = Math.max(minX, Math.min(maxX, newX));
+    const clampedY = Math.max(minY, Math.min(maxY, newY));
+    
+    this.setData({
+      dragX: clampedX,
+      dragY: clampedY
+    });
+    
+    // 检测是否需要交换位置（使用 clientY，相对于视口）
+    this.checkSwap(touch.clientY || touch.pageY);
+  },
+
+  // [新增] 触摸结束
+  handleTouchEnd(e) {
+    if (!this.data.isAdmin) return;
+    
+    if (!this.data.isDragging) {
+      return; // 如果不在拖动状态，直接返回
+    }
+    
+    const dragIndex = this.data.dragIndex;
+    console.log('[handleTouchEnd] 触摸结束，当前 dragIndex:', dragIndex);
+    
+    // 直接重置状态，让卡片回到正常流式布局（因为顺序已经更新了）
+    // 保存到云端
+    this.updatePartsOrderToCloud(this.data.currentPartsList);
+    
+    // 重置状态
+    this.setData({
+      isDragging: false,
+      dragIndex: -1,
+      dragX: 0,
+      dragY: 0,
+      touchStartX: 0,
+      touchStartY: 0
+    });
+    
+    console.log('[handleTouchEnd] 拖动完成，状态已重置');
+  },
+
+  // [新增] 检测交换位置
+  checkSwap(touchY) {
+    const list = this.data.currentPartsList;
+    const dragIndex = this.data.dragIndex;
+    
+    if (dragIndex === -1 || !list || list.length === 0) return;
+    
+    // 使用查询获取所有卡片的实际位置
+    const query = wx.createSelectorQuery().in(this);
+    query.selectAll('.part-tag-wrapper').boundingClientRect();
+    query.exec((res) => {
+      if (!res || !res[0]) return;
+      
+      const rects = res[0];
+      let targetIndex = dragIndex;
+      
+      // 找到手指位置对应的卡片索引
+      for (let i = 0; i < rects.length; i++) {
+        if (i === dragIndex) continue; // 跳过自己
+        const rect = rects[i];
+        if (rect && touchY >= rect.top && touchY <= rect.bottom) {
+          targetIndex = i;
+          break;
+        }
+      }
+      
+      // 如果没找到，根据Y坐标判断是向上还是向下
+      if (targetIndex === dragIndex && rects.length > 0) {
+        const currentRect = rects[dragIndex];
+        if (currentRect) {
+          if (touchY < currentRect.top && dragIndex > 0) {
+            // 向上移动
+            targetIndex = dragIndex - 1;
+          } else if (touchY > currentRect.bottom && dragIndex < list.length - 1) {
+            // 向下移动
+            targetIndex = dragIndex + 1;
+          }
+        }
+      }
+      
+      // 如果需要交换
+      if (targetIndex !== dragIndex && targetIndex >= 0 && targetIndex < list.length) {
+        console.log('[checkSwap] 交换位置:', dragIndex, '→', targetIndex);
+        
+        const newList = [...list];
+        const [movedItem] = newList.splice(dragIndex, 1);
+        newList.splice(targetIndex, 0, movedItem);
+        
+        // 更新 order
+        newList.forEach((item, index) => {
+          item.order = index;
+        });
+        
+        // 更新初始位置（使用实际位置）
+        if (rects[targetIndex]) {
+          this.setData({
+            currentPartsList: newList,
+            dragIndex: targetIndex,
+            cardInitY: rects[targetIndex].top
+          });
+        } else {
+          this.setData({
+            currentPartsList: newList,
+            dragIndex: targetIndex
+          });
+        }
+        
+        // 震动反馈
+        wx.vibrateShort({ type: 'light' });
+      }
+    });
+  },
+
+  // [新增] 移动配件位置
+  movePart(fromIndex, toIndex) {
+    console.log('[movePart] 移动配件，从', fromIndex, '到', toIndex);
+    
+    const list = [...this.data.currentPartsList];
+    
+    // 移除原位置的元素
+    const [movedItem] = list.splice(fromIndex, 1);
+    // 插入到新位置
+    list.splice(toIndex, 0, movedItem);
+    
+    // 更新 order 字段
+    list.forEach((item, index) => {
+      item.order = index;
+    });
+    
+    console.log('[movePart] 新顺序:', list.map((p, i) => `${i}: ${p.name}`));
+    
+    // 更新本地显示
+    this.setData({ currentPartsList: list });
+    
+    // 保存到云端
+    this.updatePartsOrderToCloud(list);
+    
+    wx.showToast({ title: '排序已更新', icon: 'success' });
+  },
+
+  // [新增] 更新配件顺序到云端
+  updatePartsOrderToCloud(list) {
+    console.log('[updatePartsOrderToCloud] 开始更新云端顺序');
+    
+    wx.showLoading({ title: '保存中...', mask: true });
+    
+    // 批量更新：只更新有 _id 的配件
+    const updatePromises = list
+      .filter(item => item._id)
+      .map(item => {
+        console.log('[updatePartsOrderToCloud] 更新配件:', item.name, 'order:', item.order);
+        return wx.cloud.callFunction({
+          name: 'updateShouhouPart',
+          data: {
+            _id: item._id,
+            updateData: {
+              order: item.order
+            }
+          }
+        });
+      });
+    
+    if (updatePromises.length === 0) {
+      wx.hideLoading();
+      console.log('[updatePartsOrderToCloud] 没有需要更新的配件（都没有 _id）');
+      return;
+    }
+    
+    Promise.all(updatePromises)
+      .then((results) => {
+        wx.hideLoading();
+        console.log('[updatePartsOrderToCloud] 所有配件顺序更新完成，结果:', results);
+        
+        const failedCount = results.filter(r => !r.result || !r.result.success).length;
+        if (failedCount > 0) {
+          console.warn('[updatePartsOrderToCloud] 有', failedCount, '个配件更新失败');
+          wx.showToast({ 
+            title: `排序已保存（${failedCount}个失败）`, 
+            icon: 'none',
+            duration: 2000
+          });
+        } else {
+          console.log('[updatePartsOrderToCloud] ✅ 所有配件顺序更新成功');
+        }
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        console.error('[updatePartsOrderToCloud] 更新顺序失败:', err);
+        wx.showToast({ 
+          title: '保存失败: ' + (err.errMsg || '未知错误'), 
+          icon: 'none',
+          duration: 3000
+        });
+      });
   },
 
   // [新增] 管理员添加配件
@@ -854,35 +1152,76 @@ Page({
 
   // [新增] 管理员删除配件
   adminDeletePart(part, idx) {
-    if (!this.data.isAdmin) return;
+    console.log('[adminDeletePart] ========== 进入删除确认 ==========');
+    console.log('[adminDeletePart] isAdmin:', this.data.isAdmin);
+    console.log('[adminDeletePart] part:', part);
+    console.log('[adminDeletePart] idx:', idx);
     
-    wx.showModal({
-      title: '确认删除',
-      content: `确定要删除配件"${part.name}"吗？`,
-      confirmText: '删除',
-      confirmColor: '#FF3B30',
-      success: (res) => {
-        if (res.confirm) {
-          this.deletePartFromCloud(part, idx);
+    if (!this.data.isAdmin) {
+      console.warn('[adminDeletePart] 非管理员，退出');
+      return;
+    }
+    
+    console.log('[adminDeletePart] 准备弹出确认对话框');
+    
+    // 延迟一下，确保前一个 ActionSheet 已关闭
+    setTimeout(() => {
+      console.log('[adminDeletePart] 延迟后开始弹出确认对话框');
+      wx.showModal({
+        title: '确认删除',
+        content: `确定要删除配件"${part.name}"吗？`,
+        confirmText: '删除',
+        cancelText: '取消',
+        confirmColor: '#FF3B30',
+        success: (res) => {
+          console.log('[adminDeletePart] 对话框返回结果:', res);
+          console.log('[adminDeletePart] res.confirm:', res.confirm);
+          if (res.confirm) {
+            console.log('[adminDeletePart] 用户确认删除，调用 deletePartFromCloud');
+            this.deletePartFromCloud(part, idx);
+          } else {
+            console.log('[adminDeletePart] 用户取消删除');
+          }
+        },
+        fail: (err) => {
+          console.error('[adminDeletePart] 对话框弹出失败:', err);
+        },
+        complete: () => {
+          console.log('[adminDeletePart] 对话框 complete 回调');
         }
-      }
-    });
+      });
+    }, 300); // 延迟 300ms
   },
 
   // [新增] 从云端和本地删除配件
   deletePartFromCloud(part, idx) {
-    wx.showLoading({ title: '删除中...' });
+    console.log('[deletePartFromCloud] ========== 开始删除配件 ==========');
+    console.log('[deletePartFromCloud] 配件名称:', part.name);
+    console.log('[deletePartFromCloud] 配件索引:', idx);
+    console.log('[deletePartFromCloud] 配件_id:', part._id);
+    console.log('[deletePartFromCloud] 配件完整数据:', JSON.stringify(part));
+    
+    wx.showLoading({ title: '删除中...', mask: true });
     
     // 如果有 _id，从云端删除
     if (part._id) {
+      console.log('[deletePartFromCloud] 配件有 _id，准备调用云函数删除');
+      console.log('[deletePartFromCloud] 调用参数:', { _id: part._id });
+      
       wx.cloud.callFunction({
         name: 'deleteShouhouPart',
         data: {
           _id: part._id
         }
       }).then((res) => {
-        console.log('[deletePartFromCloud] 云函数返回结果:', res);
+        console.log('[deletePartFromCloud] 云函数调用返回 - 完整结果:', JSON.stringify(res));
+        console.log('[deletePartFromCloud] res.result:', res.result);
+        console.log('[deletePartFromCloud] res.errMsg:', res.errMsg);
+        
         const result = res.result || {};
+        console.log('[deletePartFromCloud] result.success:', result.success);
+        console.log('[deletePartFromCloud] result.error:', result.error);
+        console.log('[deletePartFromCloud] result.message:', result.message);
         
         if (result.success) {
           console.log('[deletePartFromCloud] ✅ 云端删除成功');
@@ -891,23 +1230,62 @@ Page({
           
           // 从本地列表中删除
           const list = [...this.data.currentPartsList];
+          console.log('[deletePartFromCloud] 删除前列表长度:', list.length);
           list.splice(idx, 1);
+          console.log('[deletePartFromCloud] 删除后列表长度:', list.length);
+          console.log('[deletePartFromCloud] 删除后列表内容:', list.map(p => p.name));
+          
           this.setData({ currentPartsList: list });
+          
+          // 重新计算动态高度
+          const rows = Math.ceil(list.length / 3);
+          const calculatedHeight = rows <= 3 ? 80 : Math.min(120, (rows - 3) * 20 + 80);
+          this.setData({ partsPlaceholderHeight: calculatedHeight + 'rpx' });
+          
+          console.log('[deletePartFromCloud] ========== 删除完成 ==========');
         } else {
-          throw new Error(result.error || '云函数删除失败');
+          console.error('[deletePartFromCloud] 云函数返回 success = false');
+          throw new Error(result.error || result.message || '云函数删除失败');
         }
       }).catch(err => {
         wx.hideLoading();
-        console.error('[deletePartFromCloud] ❌ 删除失败:', err);
-        wx.showToast({ title: '删除失败: ' + (err.errMsg || err.message || '未知错误'), icon: 'none', duration: 3000 });
+        console.error('[deletePartFromCloud] ❌ 删除失败 - 捕获到错误');
+        console.error('[deletePartFromCloud] 错误对象:', err);
+        console.error('[deletePartFromCloud] err.errMsg:', err.errMsg);
+        console.error('[deletePartFromCloud] err.message:', err.message);
+        console.error('[deletePartFromCloud] err.stack:', err.stack);
+        
+        // 检查是否是云函数未部署的问题
+        const errMsg = err.errMsg || err.message || '未知错误';
+        if (errMsg.includes('FunctionName') || errMsg.includes('not found')) {
+          wx.showModal({
+            title: '删除失败',
+            content: '云函数未部署或未找到，请检查：\n1. 云函数是否已上传\n2. 云函数名称是否为 deleteShouhouPart',
+            showCancel: false
+          });
+        } else {
+          wx.showModal({
+            title: '删除失败',
+            content: '错误信息：' + errMsg + '\n\n请查看控制台日志获取详细信息',
+            showCancel: false
+          });
+        }
       });
     } else {
       // 如果没有 _id，只从本地删除
+      console.log('[deletePartFromCloud] 配件无 _id，仅删除本地数据');
       wx.hideLoading();
       const list = [...this.data.currentPartsList];
       list.splice(idx, 1);
       this.setData({ currentPartsList: list });
+      
+      // 重新计算动态高度
+      const rows = Math.ceil(list.length / 3);
+      const calculatedHeight = rows <= 3 ? 80 : Math.min(120, (rows - 3) * 20 + 80);
+      this.setData({ partsPlaceholderHeight: calculatedHeight + 'rpx' });
+      
       wx.showToast({ title: '删除成功', icon: 'success' });
+      console.log('[deletePartFromCloud] ========== 本地删除完成 ==========');
     }
   },
 
