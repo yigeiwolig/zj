@@ -1,0 +1,10 @@
+{
+  "name": "syncOrderInfo",
+  "version": "1.0.0",
+  "description": "同步订单信息到小程序订单系统",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3",
+    "node-forge": "^1.3.1"
+  }
+}

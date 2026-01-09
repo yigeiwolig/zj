@@ -156,7 +156,10 @@
                   <text class="m-desc {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelDesc':''}}" data-midx="{{index}}">{{item.desc || (isAdmin ? '点击添加描述' : '')}}</text>
               </view>
               
-              <text class="m-price {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelPrice':''}}" data-midx="{{index}}">¥{{item.price}}</text>
+              <!-- 🔴 优化：把价格包装在 view 中，根据管理员模式设置不同的 class -->
+              <view class="m-price-wrapper {{isAdmin ? 'm-price-wrapper-admin' : 'm-price-wrapper-normal'}}" catchtap="adminEditModelPrice" data-midx="{{index}}">
+                <text class="m-price {{isAdmin?'editable':''}}">¥{{item.price}}</text>
+              </view>
               
               <view wx:if="{{isAdmin}}" class="admin-del-mini" catchtap="adminDelModel" data-midx="{{index}}">✕</view>
             </view>

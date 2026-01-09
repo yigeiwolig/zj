@@ -1513,6 +1513,53 @@ Page({
                 finalTotalPrice: 0,
                 shippingFee: 0
               });
+              
+              // 🔴 支付成功后，延迟同步订单信息（等待支付回调先处理，获得交易单号）
+              const orderId = payment.outTradeNo;
+              if (orderId) {
+                // 🔴 延迟 5 秒后调用，等待支付回调先处理并获得交易单号（增加到5秒，因为支付回调可能需要更长时间）
+                setTimeout(() => {
+                  wx.cloud.callFunction({
+                    name: 'syncOrderInfo',
+                    data: { orderId: orderId },
+                    success: (res) => {
+                      console.log('[shouhou] 订单信息同步成功:', res);
+                      if (res.result && !res.result.success) {
+                        // 如果同步失败，5 秒后重试一次
+                        setTimeout(() => {
+                          wx.cloud.callFunction({
+                            name: 'syncOrderInfo',
+                            data: { orderId: orderId },
+                            success: (retryRes) => {
+                              console.log('[shouhou] 重试同步成功:', retryRes);
+                            },
+                            fail: (retryErr) => {
+                              console.error('[shouhou] 重试同步也失败:', retryErr);
+                            }
+                          });
+                        }, 5000);
+                      }
+                    },
+                    fail: (err) => {
+                      console.error('[shouhou] 订单信息同步失败:', err);
+                      // 5 秒后重试一次
+                      setTimeout(() => {
+                        wx.cloud.callFunction({
+                          name: 'syncOrderInfo',
+                          data: { orderId: orderId },
+                          success: (retryRes) => {
+                            console.log('[shouhou] 重试同步成功:', retryRes);
+                          },
+                          fail: (retryErr) => {
+                            console.error('[shouhou] 重试同步也失败:', retryErr);
+                          }
+                        });
+                      }, 5000);
+                    }
+                  });
+                }, 5000); // 延迟 5 秒，等待支付回调处理（支付回调可能需要更长时间）
+              }
+              
               wx.navigateTo({ url: '/pages/my/my' });
             },
             fail: () => {

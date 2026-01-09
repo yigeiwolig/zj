@@ -1089,7 +1089,31 @@ page {
 
 .m-info .name { font-size: 36rpx; font-weight: 700; color: #000; }
 .m-info .desc { font-size: 24rpx; color: #888; margin-top: 8rpx; }
-.m-price { font-size: 36rpx; font-weight: 700; color: #0071E3; }
+
+/* 🔴 优化：价格包装器基础样式 */
+.m-price-wrapper {
+  padding: 20rpx 30rpx; /* 增加内边距，扩大点击区域 */
+  min-width: 120rpx; /* 确保有足够的点击区域 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 普通模式：价格在右边（原位置） */
+.m-price-wrapper-normal {
+  margin-right: 0; /* 普通模式下不需要额外间距 */
+}
+
+/* 管理员模式：价格左移，远离删除按钮 */
+.m-price-wrapper-admin {
+  margin-right: 40rpx; /* 增加右边距，与删除按钮保持距离 */
+}
+
+.m-price { 
+  font-size: 36rpx; 
+  font-weight: 700; 
+  color: #0071E3; 
+}
 
 /* 兼容旧样式 */
 .model-item {
@@ -1129,6 +1153,9 @@ page {
 /* 这里做一个简单的层级处理，删除按钮层级更高 */
 .admin-del-mini {
   z-index: 20;
+  /* 🔴 优化：调整位置，更靠上靠右，远离价格区域 */
+  top: -10rpx !important;
+  right: -10rpx !important;
 }
 
 /* ============================================================== */

@@ -89,7 +89,7 @@ Page({
     userReturnAddress: { name: '', phone: '', address: '' },
   },
 
-  onLoad() {
+  onLoad(options) {
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -110,6 +110,12 @@ Page({
     // 1. 初始化蓝牙助手
     this.ble = new BLEHelper(wx);
     this.setupBleCallbacks();
+    
+    // 🔴 【新增】电商模式：根据 orderId 参数跳转到对应订单
+    if (options && options.orderId) {
+      this.pendingOrderId = options.orderId; // 保存待跳转的订单号
+      console.log('[my] 收到订单号参数，等待订单列表加载后跳转:', options.orderId);
+    }
   },
 
   onShow() {
@@ -422,7 +428,21 @@ Page({
   // --- 2. 从云数据库拉取订单 ---
   // 🔴 将 loadMyOrders 改为返回 Promise 的版本
   loadMyOrdersPromise() {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+      // 🔴 如果是普通用户且还没有 myOpenid，先获取 openid
+      if (!this.data.isAdmin && !this.data.myOpenid) {
+        try {
+          const res = await wx.cloud.callFunction({ name: 'login' });
+          const myOpenid = res.result.openid;
+          this.setData({ myOpenid: myOpenid });
+          console.log('[loadMyOrdersPromise] 已获取 openid:', myOpenid);
+        } catch (err) {
+          console.error('[loadMyOrdersPromise] 获取 openid 失败:', err);
+          resolve({ data: [] }); // 获取失败，返回空数组
+          return;
+        }
+      }
+
       const getAction = this.data.isAdmin 
         ? wx.cloud.callFunction({ name: 'adminGetOrders' }) 
         : // 🔴 普通用户：确保只查询当前用户的订单（系统会自动注入 _openid，但为了保险，我们确保 myOpenid 已获取）
@@ -478,6 +498,20 @@ Page({
           }, () => {
             // 【修改】数据存完了，界面画完了，再算高度
             this.calcSwiperHeight(0);
+            
+            // 🔴 【新增】电商模式：管理员模式下，如果有待跳转的订单号，自动跳转到对应订单
+            if (this.pendingOrderId) {
+              const targetIndex = pending.findIndex(item => item.orderId === this.pendingOrderId);
+              if (targetIndex !== -1) {
+                console.log('[my] 管理员模式：找到订单，跳转到索引:', targetIndex);
+                this.setData({ currentOrderIndex: targetIndex });
+                this.pendingOrderId = null; // 清除待跳转标记
+              } else {
+                console.warn('[my] 管理员模式：未找到订单号:', this.pendingOrderId);
+                this.pendingOrderId = null;
+              }
+            }
+            
             resolve(); // 🔴 Promise 完成
           });
           
@@ -487,6 +521,20 @@ Page({
           this.setData({ orders: formatted }, () => {
              // 【修改】
              this.calcSwiperHeight(0);
+             
+             // 🔴 【新增】电商模式：如果有待跳转的订单号，自动跳转到对应订单
+             if (this.pendingOrderId) {
+               const targetIndex = formatted.findIndex(item => item.orderId === this.pendingOrderId);
+               if (targetIndex !== -1) {
+                 console.log('[my] 找到订单，跳转到索引:', targetIndex);
+                 this.setData({ currentOrderIndex: targetIndex });
+                 this.pendingOrderId = null; // 清除待跳转标记
+               } else {
+                 console.warn('[my] 未找到订单号:', this.pendingOrderId);
+                 this.pendingOrderId = null;
+               }
+             }
+             
              resolve(); // 🔴 Promise 完成
           });
         }

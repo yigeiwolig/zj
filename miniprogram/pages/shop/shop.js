@@ -1370,13 +1370,37 @@ Page({
     });
   },
   adminEditModelPrice(e) {
+      // 🔴 检查管理员权限
+      if (!this.data.isAdmin) {
+        console.warn('[shop.js] adminEditModelPrice: 非管理员模式，忽略操作');
+        return;
+      }
+      
       const idx = e.currentTarget.dataset.midx;
       const s = this.data.currentSeries;
+      
+      if (!s || !s.models || !s.models[idx]) {
+        console.error('[shop.js] adminEditModelPrice: 数据不存在');
+        return;
+      }
+      
+      console.log('[shop.js] adminEditModelPrice: 开始编辑价格, idx:', idx, '当前价格:', s.models[idx].price);
+      
       this._input(s.models[idx].price+'', (v)=>{
-          s.models[idx].price = Number(v);
-          this.setData({ [`seriesList[${this.data.currentSeriesIdx}].models[${idx}].price`]: Number(v), [`currentSeries.models[${idx}].price`]: Number(v) });
+          const newPrice = Number(v);
+          if (isNaN(newPrice)) {
+            wx.showToast({ title: '请输入有效数字', icon: 'none' });
+            return;
+          }
+          
+          s.models[idx].price = newPrice;
+          this.setData({ 
+            [`seriesList[${this.data.currentSeriesIdx}].models[${idx}].price`]: newPrice, 
+            [`currentSeries.models[${idx}].price`]: newPrice 
+          });
           this.calcTotal();
           this.saveSeriesToCloud(s);
+          console.log('[shop.js] adminEditModelPrice: 价格已更新为:', newPrice);
       });
   },
 
@@ -2806,8 +2830,74 @@ Page({
             wx.removeStorageSync('my_cart');
             wx.setStorageSync('last_address', this.data.orderInfo);
             
-            // 跳转到我的页面查看订单
-            wx.navigateTo({ url: '/pages/my/my' });
+            // 🔴 支付成功后，延迟同步订单信息（等待支付回调先处理，获得交易单号）
+            const orderId = payment.outTradeNo;
+            console.log('[doRealPayment] 支付成功，订单号:', orderId);
+            
+            if (orderId) {
+              // 🔴 延迟 5 秒后调用，等待支付回调先处理并获得交易单号（增加到5秒，因为支付回调可能需要更长时间）
+              setTimeout(() => {
+                // 调用 syncOrderInfo 同步订单信息（会更新订单状态为 PAID）
+                wx.cloud.callFunction({
+                  name: 'syncOrderInfo',
+                  data: { orderId: orderId },
+                  success: (syncRes) => {
+                    console.log('[doRealPayment] 订单信息同步成功:', syncRes);
+                    if (syncRes.result && !syncRes.result.success) {
+                      // 如果同步失败，5 秒后重试一次
+                      console.warn('[doRealPayment] 订单信息同步失败，5秒后重试:', syncRes.result.msg);
+                      setTimeout(() => {
+                        wx.cloud.callFunction({
+                          name: 'syncOrderInfo',
+                          data: { orderId: orderId },
+                          success: (retryRes) => {
+                            console.log('[doRealPayment] 重试同步成功:', retryRes);
+                          },
+                          fail: (retryErr) => {
+                            console.error('[doRealPayment] 重试同步也失败:', retryErr);
+                          }
+                        });
+                      }, 5000);
+                    }
+                  },
+                  fail: (syncErr) => {
+                    console.error('[doRealPayment] 订单信息同步失败:', syncErr);
+                    // 5 秒后重试一次
+                    setTimeout(() => {
+                      wx.cloud.callFunction({
+                        name: 'syncOrderInfo',
+                        data: { orderId: orderId },
+                        success: (retryRes) => {
+                          console.log('[doRealPayment] 重试同步成功:', retryRes);
+                        },
+                        fail: (retryErr) => {
+                          console.error('[doRealPayment] 重试同步也失败:', retryErr);
+                        }
+                      });
+                    }, 5000);
+                    }
+                  });
+                }, 5000); // 延迟 5 秒，等待支付回调处理（支付回调可能需要更长时间）
+            }
+            
+            // 延迟一下，然后跳转
+            setTimeout(() => {
+              // 跳转到我的页面查看订单
+              wx.redirectTo({ 
+                url: '/pages/my/my',
+                success: () => {
+                  // 通知 my 页面刷新订单列表
+                  setTimeout(() => {
+                    const pages = getCurrentPages();
+                    const myPage = pages[pages.length - 1];
+                    if (myPage && typeof myPage.loadMyOrders === 'function') {
+                      console.log('[doRealPayment] 刷新 my 页面订单列表');
+                      myPage.loadMyOrders();
+                    }
+                  }, 500);
+                }
+              });
+            }, 500);
           },
           fail: (err) => {
             console.error('[doRealPayment] 支付失败:', err);

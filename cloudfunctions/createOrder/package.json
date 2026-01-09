@@ -4,7 +4,8 @@
   "description": "创建订单并获取微信支付参数",
   "main": "index.js",
   "dependencies": {
-    "wx-server-sdk": "~2.6.3"
+    "wx-server-sdk": "~2.6.3",
+    "node-forge": "^1.3.1"
   }
 }
 
