@@ -7,6 +7,11 @@
     <view class="back-icon" catchtap="goBack">
       <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
     </view>
+    <view class="admin-toggle-wrapper" wx:if="{{isAuthorized}}">
+      <view class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
+        {{isAdmin ? 'ADMIN' : 'EDIT'}}
+      </view>
+    </view>
   </view>
 
   <!-- 2. 用户个人信息 - 【管理员模式下隐藏】 -->

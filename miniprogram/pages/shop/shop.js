@@ -2839,49 +2839,7 @@ Page({
             console.log('[doRealPayment] 支付成功，订单号:', orderId);
             
             if (orderId) {
-              // 🔴 延迟 5 秒后调用，等待支付回调先处理并获得交易单号（增加到5秒，因为支付回调可能需要更长时间）
-              setTimeout(() => {
-                // 调用 syncOrderInfo 同步订单信息（会更新订单状态为 PAID）
-                wx.cloud.callFunction({
-                  name: 'syncOrderInfo',
-                  data: { orderId: orderId },
-                  success: (syncRes) => {
-                    console.log('[doRealPayment] 订单信息同步成功:', syncRes);
-                    if (syncRes.result && !syncRes.result.success) {
-                      // 如果同步失败，5 秒后重试一次
-                      console.warn('[doRealPayment] 订单信息同步失败，5秒后重试:', syncRes.result.msg);
-                      setTimeout(() => {
-                        wx.cloud.callFunction({
-                          name: 'syncOrderInfo',
-                          data: { orderId: orderId },
-                          success: (retryRes) => {
-                            console.log('[doRealPayment] 重试同步成功:', retryRes);
-                          },
-                          fail: (retryErr) => {
-                            console.error('[doRealPayment] 重试同步也失败:', retryErr);
-                          }
-                        });
-                      }, 5000);
-                    }
-                  },
-                  fail: (syncErr) => {
-                    console.error('[doRealPayment] 订单信息同步失败:', syncErr);
-                    // 5 秒后重试一次
-                    setTimeout(() => {
-                      wx.cloud.callFunction({
-                        name: 'syncOrderInfo',
-                        data: { orderId: orderId },
-                        success: (retryRes) => {
-                          console.log('[doRealPayment] 重试同步成功:', retryRes);
-                        },
-                        fail: (retryErr) => {
-                          console.error('[doRealPayment] 重试同步也失败:', retryErr);
-                        }
-                      });
-                    }, 5000);
-                    }
-                  });
-                }, 5000); // 延迟 5 秒，等待支付回调处理（支付回调可能需要更长时间）
+              this.callCheckPayResult(orderId);
             }
             
             // 延迟一下，然后跳转
@@ -2928,6 +2886,49 @@ Page({
         console.error('[doRealPayment] 云函数调用失败:', err);
         this.hideMyLoading();
         this.showAutoToast('创建订单失败', err.errMsg || '网络错误，请重试');
+      }
+    });
+  },
+
+  callCheckPayResult(orderId, attempt = 1) {
+    if (!orderId) return;
+    const maxAttempts = 3;
+    if (attempt === 1) {
+      wx.showLoading({ title: '确认订单中...', mask: true });
+    } else {
+      wx.showLoading({ title: '再次确认...', mask: true });
+    }
+
+    wx.cloud.callFunction({
+      name: 'checkPayResult',
+      data: { orderId },
+      success: (res) => {
+        const result = res.result || {};
+        console.log('[callCheckPayResult] 云函数返回:', result);
+        if (result.success) {
+          wx.showToast({ title: '订单已确认', icon: 'success' });
+        } else if (attempt < maxAttempts) {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
+        } else {
+          wx.showToast({
+            title: result.msg || '支付状态待确认，请稍后在“我的订单”查看',
+            icon: 'none'
+          });
+        }
+      },
+      fail: (err) => {
+        console.error('[callCheckPayResult] 调用失败:', err);
+        if (attempt < maxAttempts) {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
+        } else {
+          wx.showToast({
+            title: '网络异常，请稍后在“我的订单”查看',
+            icon: 'none'
+          });
+        }
+      },
+      complete: () => {
+        wx.hideLoading();
       }
     });
   },

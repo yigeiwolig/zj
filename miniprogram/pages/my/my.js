@@ -381,6 +381,19 @@ Page({
     }
   },
 
+  toggleAdminMode() {
+    if (!this.data.isAuthorized) {
+      wx.showToast({ title: '无权限', icon: 'none' });
+      return;
+    }
+    const nextState = !this.data.isAdmin;
+    this.setData({ isAdmin: nextState });
+    wx.showToast({
+      title: nextState ? '管理模式开启' : '已回到用户模式',
+      icon: 'none'
+    });
+  },
+
   // ================== 管理员物料发出功能 ==================
   // 1. 修复：物料发出逻辑改用云函数 (之前是前端直连，没权限改别人的)
   adminShipOrder(e) {
@@ -686,6 +699,10 @@ Page({
           success: (payRes) => {
             console.log('[repayOrder] 支付成功:', payRes);
             wx.showToast({ title: '支付成功', icon: 'success' });
+            const orderId = payment.outTradeNo;
+            if (orderId) {
+              this.callCheckPayResult(orderId);
+            }
             
             // 刷新订单列表
             setTimeout(() => {
@@ -721,6 +738,48 @@ Page({
           content: err.errMsg || '网络错误，请重试', 
           showCancel: false 
         });
+      }
+    });
+  },
+
+  callCheckPayResult(orderId, attempt = 1) {
+    if (!orderId) return;
+    const maxAttempts = 3;
+    wx.showLoading({
+      title: attempt === 1 ? '确认订单中...' : '再次确认...',
+      mask: true
+    });
+
+    wx.cloud.callFunction({
+      name: 'checkPayResult',
+      data: { orderId },
+      success: (res) => {
+        const result = res.result || {};
+        console.log('[my] checkPayResult 返回:', result);
+        if (result.success) {
+          wx.showToast({ title: '订单已确认', icon: 'success' });
+        } else if (attempt < maxAttempts) {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
+        } else {
+          wx.showToast({
+            title: result.msg || '支付状态待确认，请稍候刷新订单',
+            icon: 'none'
+          });
+        }
+      },
+      fail: (err) => {
+        console.error('[my] checkPayResult 调用失败:', err);
+        if (attempt < maxAttempts) {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
+        } else {
+          wx.showToast({
+            title: '网络异常，请稍后再试',
+            icon: 'none'
+          });
+        }
+      },
+      complete: () => {
+        wx.hideLoading();
       }
     });
   },

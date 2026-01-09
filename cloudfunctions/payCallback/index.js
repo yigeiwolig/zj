@@ -1,6 +1,5 @@
 const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
-const https = require('https')
 const fs = require('fs')
 const path = require('path')
 
@@ -99,96 +98,6 @@ function generateWxPaySignature(method, url, timestamp, nonce, body) {
     console.error('[payCallback] 签名生成失败:', err)
     throw err
   }
-}
-
-// 🔴 调用订单信息录入接口（同步订单到小程序订单系统）
-function syncOrderInfoToMiniProgram(outTradeNo, transactionId, orderData) {
-  return new Promise((resolve, reject) => {
-    const { mchId, appId, serialNo } = WX_PAY_CONFIG
-    const url = '/v3/ecommerce/order/order-info'
-    const method = 'POST'
-    const timestamp = Math.floor(Date.now() / 1000).toString()
-    const nonce = crypto.randomBytes(16).toString('hex')
-    
-    // 构建请求体
-    const requestBody = {
-      out_trade_no: outTradeNo, // 商户订单号
-      transaction_id: transactionId, // 微信支付订单号
-      appid: appId, // 小程序 AppID
-      order_detail: {
-        product_infos: orderData.goodsList ? orderData.goodsList.map(goods => ({
-          product_name: goods.name || '商品',
-          product_price: Math.round((goods.total || 0) * 100), // 转为分
-          product_quantity: goods.quantity || 1
-        })) : [{
-          product_name: 'MT摩改社-车辆定制改装与维修服务费',
-          product_price: Math.round((orderData.totalFee || 0) * 100),
-          product_quantity: 1
-        }]
-      }
-    }
-    
-    const bodyStr = JSON.stringify(requestBody)
-    
-    // 生成签名
-    const signature = generateWxPaySignature(method, url, timestamp, nonce, bodyStr)
-    
-    // 构建 Authorization 头
-    const authHeader = `WECHATPAY2-SHA256-RSA2048 mchid="${mchId}",nonce_str="${nonce}",signature="${signature}",timestamp="${timestamp}",serial_no="${serialNo}"`
-    
-    // 发送请求
-    const options = {
-      hostname: 'api.mch.weixin.qq.com',
-      port: 443,
-      path: url,
-      method: method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'Authorization': authHeader,
-        'User-Agent': 'WeChatPay-APIv3-NodeJS'
-      }
-    }
-    
-    console.log('[payCallback] 订单信息录入 - 请求 URL:', url)
-    console.log('[payCallback] 订单信息录入 - 请求方法:', method)
-    console.log('[payCallback] 订单信息录入 - 商户号:', mchId)
-    console.log('[payCallback] 订单信息录入 - 证书序列号:', serialNo)
-    console.log('[payCallback] 订单信息录入 - 请求体:', bodyStr)
-    
-    const req = https.request(options, (res) => {
-      let data = ''
-      res.on('data', (chunk) => {
-        data += chunk
-      })
-      res.on('end', () => {
-        try {
-          console.log('[payCallback] 订单信息录入响应状态码:', res.statusCode)
-          console.log('[payCallback] 订单信息录入响应头:', JSON.stringify(res.headers, null, 2))
-          console.log('[payCallback] 订单信息录入响应数据:', data)
-          
-          if (res.statusCode === 200) {
-            const result = JSON.parse(data)
-            console.log('[payCallback] ✅ 订单信息录入成功:', JSON.stringify(result, null, 2))
-            resolve(result)
-          } else {
-            console.error('[payCallback] ❌ 订单信息录入失败，状态码:', res.statusCode, '响应:', data)
-            reject(new Error(`HTTP ${res.statusCode}: ${data}`))
-          }
-        } catch (e) {
-          console.error('[payCallback] 解析响应失败:', e)
-          reject(new Error(`解析响应失败: ${e.message}`))
-        }
-      })
-    })
-    
-    req.on('error', (err) => {
-      console.error('[payCallback] 请求错误:', err)
-      reject(err)
-    })
-    req.write(bodyStr)
-    req.end()
-  })
 }
 
 // 🔴 解密回调数据（API v3 使用 AES-256-GCM 加密）
@@ -367,20 +276,14 @@ exports.main = async (event, context) => {
             
             console.log('[payCallback] 订单状态更新结果:', updateRes)
             
-            // 3. 🔴 同步订单信息到小程序订单系统
+            // 3. 调用新的主动查单云函数，复用统一逻辑同步订单中心
             try {
-              const orderInfoRes = await syncOrderInfoToMiniProgram(
-                outTradeNo,
-                transactionId,
-                {
-                  goodsList: order.goodsList || [],
-                  totalFee: order.totalFee || 0
-                }
-              )
-              console.log('[payCallback] 订单信息录入成功:', orderInfoRes)
+              await cloud.callFunction({
+                name: 'checkPayResult',
+                data: { orderId: outTradeNo }
+              })
             } catch (orderInfoErr) {
-              console.error('[payCallback] 订单信息录入失败:', orderInfoErr)
-              // 即使录入失败，也不影响订单状态更新
+              console.error('[payCallback] 调用 checkPayResult 失败:', orderInfoErr)
             }
             
             console.log('[payCallback] 订单', outTradeNo, '状态已更新为 PAID')

@@ -91,6 +91,29 @@ page { background: #F7F7F7; color: #1D1D1F; }
   z-index: 10000; pointer-events: none;
   background: transparent; 
 }
+.admin-toggle-wrapper {
+  pointer-events: auto;
+}
+.admin-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  padding: 6rpx 28rpx;
+  border-radius: 999rpx;
+  background: #F2F2F7;
+  color: #8E8E93;
+  border: 1rpx solid #E5E5EA;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  transition: all .3s;
+  pointer-events: auto;
+}
+.admin-toggle-btn.on {
+  background: #000;
+  color: #fff;
+  border-color: #000;
+}
 .back-icon {
   width: 70rpx;
   height: 70rpx;

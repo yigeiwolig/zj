@@ -57,7 +57,7 @@
 
   <!-- F2 Long 系列 -->
   <view class="section-title">F2 LONG 系列</view>
-  <view class="card-grid" style="padding-bottom: 50px;">
+  <view class="card-grid">
     <view class="i-card style-white" bindtap="enterModel" data-name="F2 PRO Long" data-series="F2">
       <view class="card-top"><text class="badge">加长版</text></view>
       <view class="card-btm"><view class="p-name">F2 PRO Long</view><view class="p-desc">加长普通</view></view>
@@ -67,6 +67,13 @@
       <view class="card-top"><text class="badge">性能版</text></view>
       <view class="card-btm"><view class="p-name">F2 MAX Long</view><view class="p-desc">加长高级</view></view>
       <view class="circle-decor"></view>
+    </view>
+  </view>
+
+  <!-- 管理员一键同步数据按钮 -->
+  <view wx:if="{{isAdmin}}" class="sync-all-container" style="padding: 40rpx 40rpx 50px;">
+    <view class="sync-all-btn" catchtap="syncAllPartsToCloud">
+      一键同步所有数据到云端
     </view>
   </view>
 </view>
@@ -106,11 +113,16 @@
             <view class="part-tag {{item.selected ? 'active' : ''}}" bindtap="togglePart" data-index="{{index}}">
               <text>{{item.name}}</text>
               <!-- 显示价格 -->
-              <text class="part-price">¥{{item.price || 0}}</text>
-              <!-- 管理员改价/改名按钮 (右下角) -->
+              <text class="part-price" style="color: #007AFF !important;">¥{{item.price || 0}}</text>
+              <!-- 管理员改价/改名/删除按钮 (右下角) -->
               <view wx:if="{{isAdmin}}" class="admin-edit-price" catchtap="adminEditPartPrice" data-index="{{index}}">✎</view>
             </view>
           </block>
+          <!-- 管理员添加配件按钮 -->
+          <view wx:if="{{isAdmin}}" class="part-tag add-part-btn" bindtap="adminAddPart">
+            <text style="font-size: 40rpx; color: #007AFF;">+</text>
+            <text style="font-size: 24rpx; color: #666;">添加配件</text>
+          </view>
         </view>
       </view>
 
@@ -138,8 +150,8 @@
         </view>
       </view>
 
-      <!-- 购买配件模式下的占位 -->
-      <view wx:if="{{serviceType === 'parts'}}" style="height: 200px;"></view> 
+      <!-- 购买配件模式下的占位 - 根据内容动态调整 -->
+      <view wx:if="{{serviceType === 'parts'}}" style="height: {{partsPlaceholderHeight}};"></view> 
     </view>
 
     <!-- TAB 2: 维修教程 -->

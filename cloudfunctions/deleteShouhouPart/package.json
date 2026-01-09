@@ -1,0 +1,9 @@
+{
+  "name": "deleteShouhouPart",
+  "version": "1.0.0",
+  "description": "删除售后配件数据",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

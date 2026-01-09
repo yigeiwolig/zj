@@ -10,7 +10,7 @@ const TEST_VIDEO_URL = "https://wxsnsdy.tc.qq.com/105/20210/snsdyvideodownload?f
 // 配件数据 - 按型号独立存储
 const DB_PARTS = {
   'F1 PRO': ["主板外壳", "下面板", "上面板", "合页", "合页螺丝", "90度连接件", "连杆", "摇臂", "摇臂螺丝", "电机", "固定电机件", "固定电机螺丝", "装牌螺丝包", "螺母", "主板", "按钮", "遥控", "链接线束"],
-  'F1 MAX': ["主板外壳", "下面板", "上面板", "合页", "合页螺丝", "90度连接件", "连杆", "摇臂", "摇臂螺丝", "电机", "固定电机件", "固定电机螺丝", "装牌螺丝包", "螺母", "主板", "按钮", "遥控", "链接线束"],
+  'F1 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
   'F2 PRO': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
   'F2 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
   'F2 PRO Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
@@ -79,6 +79,9 @@ Page({
     // 数据列表
     currentPartsList: [],
     currentVideoList: [],
+    
+    // 动态占位高度
+    partsPlaceholderHeight: '180rpx',
 
     // 选中状态
     selectedCount: 0,
@@ -465,14 +468,16 @@ Page({
   // 3. 加载配件 (支持云端价格) - 新版本
   loadParts(modelName) {
     if (!modelName) {
-      console.error('型号名称未设置');
+      console.error('[loadParts] 型号名称未设置');
       return;
     }
     
+    console.log('[loadParts] 开始加载配件，型号:', modelName);
     const db = wx.cloud.database();
     
     // 从 shouhou 集合读取，如果没有就用本地默认
     db.collection('shouhou').where({ modelName: modelName }).get().then(res => {
+      console.log(`[loadParts] ${modelName} 从云端读取到 ${res.data.length} 条数据`);
       let parts = [];
       
       if (res.data.length > 0) {
@@ -487,9 +492,11 @@ Page({
         }));
         // 按 order 排序
         parts.sort((a, b) => (a.order || 0) - (b.order || 0));
+        console.log(`[loadParts] ${modelName} 使用云端数据，共 ${parts.length} 个配件`);
       } else {
         // 云端没数据，加载本地默认，价格默认为 0
         const defaultNames = DB_PARTS[modelName] || [];
+        console.log(`[loadParts] ${modelName} 云端无数据，使用本地默认，共 ${defaultNames.length} 个配件`);
         parts = defaultNames.map((name, index) => ({
           name: name,
           price: 0, // 默认价格
@@ -499,11 +506,20 @@ Page({
         }));
       }
 
+      console.log(`[loadParts] ${modelName} 最终加载 ${parts.length} 个配件:`, parts.map(p => p.name));
       this.setData({ currentPartsList: parts });
+      
+      // 动态计算占位高度：最小化空白
+      // 底部按钮高度约120rpx，只需要少量缓冲即可
+      const rows = Math.ceil(parts.length / 3);
+      // 配件较少时只留少量空间，配件多时稍微增加
+      const calculatedHeight = rows <= 3 ? 80 : Math.min(120, (rows - 3) * 20 + 80);
+      this.setData({ partsPlaceholderHeight: calculatedHeight + 'rpx' });
     }).catch(err => {
-      console.error('读取配件失败:', err);
+      console.error('[loadParts] 读取配件失败:', err);
       // 失败时使用本地数据
       const defaultNames = DB_PARTS[modelName] || [];
+      console.log(`[loadParts] ${modelName} 读取失败，使用本地数据，共 ${defaultNames.length} 个配件`);
       const parts = defaultNames.map((name, index) => ({
         name: name,
         price: 0,
@@ -512,6 +528,11 @@ Page({
         selected: false
       }));
       this.setData({ currentPartsList: parts });
+      
+      // 动态计算占位高度
+      const rows = Math.ceil(parts.length / 3);
+      const calculatedHeight = rows <= 3 ? 80 : Math.min(120, (rows - 3) * 20 + 80);
+      this.setData({ partsPlaceholderHeight: calculatedHeight + 'rpx' });
     });
   },
 
@@ -545,103 +566,168 @@ Page({
       });
   },
 
-  // 一键同步所有本地配件数据到云端（管理员功能）
+  // 一键同步所有本地配件数据到云端（管理员功能）- 强制覆盖旧数据
   syncAllPartsToCloud() {
+    console.log('[syncAllPartsToCloud] 开始执行，isAdmin:', this.data.isAdmin, 'db:', !!this.db);
+    
     if (!this.data.isAdmin) {
-      getApp().showDialog({ title: '提示', content: '需要管理员权限', showCancel: false });
+      wx.showToast({ title: '需要管理员权限', icon: 'none' });
       return;
     }
 
     if (!this.db) {
-      getApp().showDialog({ title: '提示', content: '云服务未初始化', showCancel: false });
-      return;
+      // 如果 db 未初始化，尝试重新初始化
+      this.db = wx.cloud.database();
+      if (!this.db) {
+        wx.showToast({ title: '云服务未初始化', icon: 'none' });
+        return;
+      }
     }
 
-    getApp().showDialog({
+    wx.showModal({
       title: '确认同步',
-      content: '将同步所有6个型号（F1 PRO、F1 MAX、F2 PRO、F2 MAX、F2 PRO Long、F2 MAX Long）的配件数据到云端，是否继续？',
+      content: '将强制覆盖所有6个型号（F1 PRO、F1 MAX、F2 PRO、F2 MAX、F2 PRO Long、F2 MAX Long）的配件数据到云端，云端旧数据将被删除并替换为本地数据，是否继续？',
       showCancel: true,
       confirmText: '继续',
       cancelText: '取消',
-      onConfirm: () => {
-          getApp().showLoading('同步中...');
+      success: (res) => {
+        if (res.confirm) {
+          console.log('[syncAllPartsToCloud] 用户确认，开始同步');
+          wx.showLoading({ title: '同步中...', mask: true });
           
-          // 先检查云端是否已有数据（6个独立型号）
+          // 所有型号列表
           const allModels = ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 PRO Long', 'F2 MAX Long'];
           let totalParts = 0;
-          let syncedCount = 0;
+          let successCount = 0;
+          let failCount = 0;
           
           // 统计需要同步的配件数量
           allModels.forEach(modelName => {
             totalParts += (DB_PARTS[modelName] || []).length;
           });
 
-          // 逐个型号同步（6个独立型号）
+          console.log('[syncAllPartsToCloud] 总计需要同步', totalParts, '个配件');
+
+          // 逐个型号同步（6个独立型号）- 强制覆盖旧数据
           const syncPromises = allModels.map(modelName => {
             const partsList = DB_PARTS[modelName] || [];
             if (partsList.length === 0) {
-              return Promise.resolve();
+              console.log(`[syncAllPartsToCloud] ${modelName} 没有配件数据，跳过`);
+              return Promise.resolve({ modelName, success: true, count: 0 });
             }
 
-            // 先检查云端是否已有该型号的数据
+            console.log(`[syncAllPartsToCloud] 开始处理 ${modelName}，共 ${partsList.length} 个配件`);
+
+            // 先查询并删除该型号的所有旧数据
+            console.log(`[syncAllPartsToCloud] 准备查询 ${modelName} 的旧数据...`);
             return this.db.collection('shouhou')
-              .where({ modelName: modelName }) // 使用 modelName 查询
-              .count()
-              .then(countRes => {
-                if (countRes.total > 0) {
-                  // 已有数据，跳过
-                  console.log(`${modelName} 已有 ${countRes.total} 个配件，跳过同步`);
-                  syncedCount += partsList.length;
-                  return Promise.resolve();
-                } else {
-                  // 没有数据，开始同步（使用循环单个添加，避免 batch 问题）
-                  const addPromises = partsList.map((name, index) => {
-                    return this.db.collection('shouhou').add({
-                      data: {
-                        modelName: modelName, // 使用 modelName 作为标识
-                        name: name,
-                        order: index,
-                        createTime: this.db.serverDate()
-                      }
-                    });
+              .where({ modelName: modelName })
+              .get()
+              .then(queryRes => {
+                console.log(`[syncAllPartsToCloud] ${modelName} 查询成功，共 ${queryRes.data.length} 条旧数据`);
+                // 如果有旧数据，先删除
+                if (queryRes.data.length > 0) {
+                  console.log(`[syncAllPartsToCloud] ${modelName} 发现 ${queryRes.data.length} 个旧配件，正在删除...`);
+                  const deletePromises = queryRes.data.map(item => {
+                    return this.db.collection('shouhou').doc(item._id).remove();
                   });
-                  
-                  return Promise.all(addPromises)
-                    .then(() => {
-                      syncedCount += partsList.length;
-                      console.log(`${modelName} 同步完成，共 ${partsList.length} 个配件`);
-                    })
-                    .catch(err => {
-                      console.error(`${modelName} 同步失败:`, err);
-                    });
+                  return Promise.all(deletePromises).then(() => {
+                    console.log(`[syncAllPartsToCloud] ${modelName} 旧数据已删除`);
+                    return Promise.resolve();
+                  }).catch(err => {
+                    console.error(`[syncAllPartsToCloud] ${modelName} 删除旧数据失败:`, err);
+                    // 删除失败也继续，尝试添加新数据
+                    return Promise.resolve();
+                  });
+                } else {
+                  console.log(`[syncAllPartsToCloud] ${modelName} 没有旧数据，直接添加`);
+                  return Promise.resolve();
                 }
               })
+              .then(() => {
+                // 删除完成后，添加新数据
+                console.log(`[syncAllPartsToCloud] ${modelName} 开始添加新数据，共 ${partsList.length} 个配件:`, partsList);
+                const addPromises = partsList.map((name, index) => {
+                  const dataToAdd = {
+                    modelName: modelName,
+                    name: name,
+                    order: index,
+                    price: 0, // 初始价格设为0
+                    createTime: this.db.serverDate()
+                  };
+                  console.log(`[syncAllPartsToCloud] ${modelName} 准备添加配件 ${index + 1}/${partsList.length}: ${name}`, dataToAdd);
+                  return this.db.collection('shouhou').add({
+                    data: dataToAdd
+                  }).then(res => {
+                    console.log(`[syncAllPartsToCloud] ${modelName} 配件 "${name}" 添加成功，ID:`, res._id);
+                    return res;
+                  }).catch(err => {
+                    console.error(`[syncAllPartsToCloud] ${modelName} 配件 "${name}" 添加失败:`, err);
+                    throw err;
+                  });
+                });
+                
+                return Promise.all(addPromises)
+                  .then((results) => {
+                    console.log(`[syncAllPartsToCloud] ${modelName} 所有配件添加完成，共 ${results.length} 个，结果:`, results);
+                    successCount += partsList.length;
+                    return { modelName, success: true, count: partsList.length };
+                  })
+                  .catch(err => {
+                    console.error(`[syncAllPartsToCloud] ${modelName} 添加数据失败:`, err);
+                    console.error(`[syncAllPartsToCloud] ${modelName} 错误详情:`, JSON.stringify(err));
+                    failCount += partsList.length;
+                    return { modelName, success: false, count: partsList.length, error: err.message || JSON.stringify(err) };
+                  });
+              })
               .catch(err => {
-                console.error(`检查 ${modelName} 失败:`, err);
+                console.error(`[syncAllPartsToCloud] ${modelName} 同步过程出错:`, err);
+                failCount += (partsList.length || 0);
+                return { modelName, success: false, count: 0, error: err.message };
               });
           });
 
           // 等待所有同步完成
           Promise.all(syncPromises)
-            .then(() => {
-              getApp().hideDialog();
-              if (syncedCount > 0) {
-                getApp().showDialog({ title: '完成', content: `同步完成！共 ${syncedCount} 个配件`, showCancel: false });
-                // 如果当前在详情页，重新加载配件列表
-                if (this.data.inDetail && this.data.currentSeries) {
-                  setTimeout(() => {
-                    this.renderParts();
-                  }, 500);
-                }
+            .then((results) => {
+              console.log('[syncAllPartsToCloud] 所有型号同步完成，结果:', results);
+              wx.hideLoading();
+              
+              const successModels = results.filter(r => r.success).map(r => r.modelName);
+              const failModels = results.filter(r => !r.success);
+              
+              if (failModels.length === 0) {
+                wx.showToast({ 
+                  title: `同步完成！共 ${totalParts} 个配件`, 
+                  icon: 'success',
+                  duration: 3000
+                });
               } else {
-                getApp().showDialog({ title: '提示', content: '所有数据已存在，无需同步', showCancel: false });
+                wx.showModal({
+                  title: '部分同步失败',
+                  content: `成功：${successModels.join('、')}\n失败：${failModels.map(r => r.modelName).join('、')}`,
+                  showCancel: false
+                });
+              }
+              
+              // 如果当前在详情页，重新加载配件列表
+              if (this.data.inDetail && this.data.currentModelName) {
+                setTimeout(() => {
+                  console.log('[syncAllPartsToCloud] 重新加载配件列表:', this.data.currentModelName);
+                  this.loadParts(this.data.currentModelName);
+                }, 1000);
               }
             })
             .catch(err => {
-              getApp().hideDialog();
-              console.error('同步过程出错:', err);
-              getApp().showDialog({ title: '提示', content: '同步失败，请重试', showCancel: false });
+              wx.hideLoading();
+              console.error('[syncAllPartsToCloud] 同步过程出错:', err);
+              wx.showModal({
+                title: '同步失败',
+                content: err.message || '请检查网络连接后重试',
+                showCancel: false
+              });
             });
+        }
       }
     });
   },
@@ -680,19 +766,153 @@ Page({
 
     // 1. 弹出菜单让选
     wx.showActionSheet({
-      itemList: ['修改名称', '修改价格'],
+      itemList: ['修改名称', '修改价格', '删除配件'],
+      itemColor: '#000000',
       success: (res) => {
         if (res.tapIndex === 0) {
-          this.showEditModal('name', part);  // 改名
+          this.showEditModal('name', part, idx);  // 改名，传递索引
         } else if (res.tapIndex === 1) {
-          this.showEditModal('price', part); // 改价
+          this.showEditModal('price', part, idx); // 改价，传递索引
+        } else if (res.tapIndex === 2) {
+          this.adminDeletePart(part, idx); // 删除配件
         }
       }
     });
   },
 
+  // [新增] 管理员添加配件
+  adminAddPart() {
+    if (!this.data.isAdmin) return;
+    
+    // 先输入名称
+    wx.showModal({
+      title: '添加配件',
+      editable: true,
+      placeholderText: '请输入配件名称',
+      success: (res) => {
+        if (res.confirm && res.content) {
+          const partName = res.content.trim();
+          if (!partName) {
+            wx.showToast({ title: '名称不能为空', icon: 'none' });
+            return;
+          }
+          
+          // 再输入价格
+          wx.showModal({
+            title: '设置价格',
+            editable: true,
+            placeholderText: '请输入价格（元）',
+            content: '0',
+            success: (priceRes) => {
+              if (priceRes.confirm) {
+                const price = Number(priceRes.content) || 0;
+                this.addPartToCloud(partName, price);
+              }
+            }
+          });
+        }
+      }
+    });
+  },
+
+  // [新增] 添加配件到云端和本地
+  addPartToCloud(name, price) {
+    wx.showLoading({ title: '添加中...' });
+    const db = wx.cloud.database();
+    
+    // 获取当前配件列表的最大 order 值
+    const currentList = this.data.currentPartsList || [];
+    const maxOrder = currentList.length > 0 
+      ? Math.max(...currentList.map(p => p.order || 0))
+      : -1;
+    
+    const newPart = {
+      modelName: this.data.currentModelName,
+      name: name,
+      price: price,
+      order: maxOrder + 1,
+      createTime: db.serverDate()
+    };
+    
+    console.log('[addPartToCloud] 添加新配件:', newPart);
+    
+    db.collection('shouhou').add({
+      data: newPart
+    }).then((res) => {
+      console.log('[addPartToCloud] ✅ 添加成功，_id:', res._id);
+      wx.hideLoading();
+      wx.showToast({ title: '添加成功', icon: 'success' });
+      
+      // 重新加载配件列表
+      this.loadParts(this.data.currentModelName);
+    }).catch(err => {
+      wx.hideLoading();
+      console.error('[addPartToCloud] ❌ 添加失败:', err);
+      wx.showToast({ title: '添加失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+    });
+  },
+
+  // [新增] 管理员删除配件
+  adminDeletePart(part, idx) {
+    if (!this.data.isAdmin) return;
+    
+    wx.showModal({
+      title: '确认删除',
+      content: `确定要删除配件"${part.name}"吗？`,
+      confirmText: '删除',
+      confirmColor: '#FF3B30',
+      success: (res) => {
+        if (res.confirm) {
+          this.deletePartFromCloud(part, idx);
+        }
+      }
+    });
+  },
+
+  // [新增] 从云端和本地删除配件
+  deletePartFromCloud(part, idx) {
+    wx.showLoading({ title: '删除中...' });
+    
+    // 如果有 _id，从云端删除
+    if (part._id) {
+      wx.cloud.callFunction({
+        name: 'deleteShouhouPart',
+        data: {
+          _id: part._id
+        }
+      }).then((res) => {
+        console.log('[deletePartFromCloud] 云函数返回结果:', res);
+        const result = res.result || {};
+        
+        if (result.success) {
+          console.log('[deletePartFromCloud] ✅ 云端删除成功');
+          wx.hideLoading();
+          wx.showToast({ title: '删除成功', icon: 'success' });
+          
+          // 从本地列表中删除
+          const list = [...this.data.currentPartsList];
+          list.splice(idx, 1);
+          this.setData({ currentPartsList: list });
+        } else {
+          throw new Error(result.error || '云函数删除失败');
+        }
+      }).catch(err => {
+        wx.hideLoading();
+        console.error('[deletePartFromCloud] ❌ 删除失败:', err);
+        wx.showToast({ title: '删除失败: ' + (err.errMsg || err.message || '未知错误'), icon: 'none', duration: 3000 });
+      });
+    } else {
+      // 如果没有 _id，只从本地删除
+      wx.hideLoading();
+      const list = [...this.data.currentPartsList];
+      list.splice(idx, 1);
+      this.setData({ currentPartsList: list });
+      wx.showToast({ title: '删除成功', icon: 'success' });
+    }
+  },
+
   // [新增] 显示输入弹窗
-  showEditModal(type, part) {
+  showEditModal(type, part, idx) {
     const title = type === 'name' ? '修改配件名称' : '修改价格';
     // 如果是改名，填入旧名字；如果是改价，填入旧价格
     const defaultVal = type === 'name' ? part.name : String(part.price || 0);
@@ -704,15 +924,15 @@ Page({
       content: defaultVal, // 预填旧值
       success: (res) => {
         if (res.confirm && res.content) {
-          // 执行更新
-          this.updatePartData(part, type, res.content);
+          // 执行更新，传递索引
+          this.updatePartData(part, type, res.content, idx);
         }
       }
     });
   },
 
   // [新增] 执行数据库更新
-  updatePartData(part, type, value) {
+  updatePartData(part, type, value, idx) {
     getApp().showLoading({ title: '保存中...' });
     const db = wx.cloud.database();
     
@@ -724,36 +944,86 @@ Page({
       dataToUpdate.name = value; // 名字保持字符串
     }
 
-    // A. 如果是云端已有数据 (有 _id)，直接更新
+    // A. 如果是云端已有数据 (有 _id)，直接调用云函数更新（避免权限问题）
     if (part._id) {
-      db.collection('shouhou').doc(part._id).update({
-        data: dataToUpdate
-      }).then(() => {
-        this.afterUpdateSuccess();
+      console.log('[updatePartData] 通过云函数更新云端数据，_id:', part._id, '数据:', dataToUpdate);
+      
+      // 调用云函数来更新数据（云函数有管理员权限）
+      wx.cloud.callFunction({
+        name: 'updateShouhouPart',
+        data: {
+          _id: part._id,
+          updateData: dataToUpdate
+        }
+      }).then((res) => {
+        console.log('[updatePartData] 云函数返回结果:', res);
+        const result = res.result || {};
+        
+        if (result.success) {
+          console.log('[updatePartData] ✅ 云端更新成功');
+          // 更新本地列表显示
+          this.updateLocalPartList(idx, type, value);
+          this.afterUpdateSuccess();
+        } else {
+          throw new Error(result.error || '云函数更新失败');
+        }
       }).catch(err => {
         getApp().hideLoading();
-        wx.showToast({ title: '更新失败', icon: 'none' });
-        console.error(err);
+        console.error('[updatePartData] ❌ 云端更新失败:', err);
+        wx.showToast({ title: '更新失败: ' + (err.errMsg || err.message || '未知错误'), icon: 'none', duration: 3000 });
       });
     } 
-    // B. 如果是本地默认数据 (还没存过云端)
+    // B. 如果是本地默认数据 (还没存过云端)，先添加到云端
     else {
-      // 需要先新建一条完整的记录
+      const newData = {
+        modelName: this.data.currentModelName,
+        name: type === 'name' ? value : part.name, // 如果改名就用新名
+        price: type === 'price' ? Number(value) : (part.price || 0), // 如果改价就用新价
+        order: part.order || 0,
+        createTime: db.serverDate()
+      };
+      console.log('[updatePartData] 新建云端数据:', newData);
       db.collection('shouhou').add({
-        data: {
-          modelName: this.data.currentModelName,
-          name: type === 'name' ? value : part.name, // 如果改名就用新名
-          price: type === 'price' ? Number(value) : (part.price || 0), // 如果改价就用新价
-          order: part.order || 0,
-          createTime: db.serverDate()
+        data: newData
+      }).then((res) => {
+        console.log('[updatePartData] 云端新建返回结果:', res);
+        if (res._id) {
+          console.log('[updatePartData] ✅ 云端新建成功，_id:', res._id);
+          // 云端新建成功后，更新本地列表显示，并保存新的 _id
+          this.updateLocalPartList(idx, type, value, res._id);
+          this.afterUpdateSuccess();
+        } else {
+          console.error('[updatePartData] ❌ 云端新建失败：未返回 _id');
+          getApp().hideLoading();
+          wx.showToast({ title: '新建失败：未返回ID', icon: 'none' });
         }
-      }).then(() => {
-        this.afterUpdateSuccess();
       }).catch(err => {
         getApp().hideLoading();
-        wx.showToast({ title: '新建失败', icon: 'none' });
-        console.error(err);
+        console.error('[updatePartData] ❌ 云端新建失败:', err);
+        wx.showToast({ title: '新建失败: ' + (err.errMsg || err.message || '未知错误'), icon: 'none', duration: 3000 });
       });
+    }
+  },
+
+  // [新增] 更新本地配件列表（不重新从云端读取）
+  updateLocalPartList(idx, type, value, newId = null) {
+    const list = [...this.data.currentPartsList];
+    
+    if (idx >= 0 && idx < list.length) {
+      // 直接通过索引更新
+      if (type === 'price') {
+        list[idx].price = Number(value);
+      } else {
+        list[idx].name = value;
+      }
+      // 如果是新建的，更新 _id
+      if (newId) {
+        list[idx]._id = newId;
+      }
+      this.setData({ currentPartsList: list });
+      console.log('[updateLocalPartList] 本地列表已更新，索引:', idx, '无需重新从云端读取');
+    } else {
+      console.warn('[updateLocalPartList] 索引无效:', idx);
     }
   },
 
@@ -761,7 +1031,7 @@ Page({
   afterUpdateSuccess() {
     getApp().hideLoading();
     wx.showToast({ title: '修改成功', icon: 'success' });
-    this.loadParts(this.data.currentModelName); // 重新拉取列表
+    // 不再重新从云端读取，直接使用已更新的本地列表
   },
 
   // 管理员删除配件
@@ -1517,47 +1787,7 @@ Page({
               // 🔴 支付成功后，延迟同步订单信息（等待支付回调先处理，获得交易单号）
               const orderId = payment.outTradeNo;
               if (orderId) {
-                // 🔴 延迟 5 秒后调用，等待支付回调先处理并获得交易单号（增加到5秒，因为支付回调可能需要更长时间）
-                setTimeout(() => {
-                  wx.cloud.callFunction({
-                    name: 'syncOrderInfo',
-                    data: { orderId: orderId },
-                    success: (res) => {
-                      console.log('[shouhou] 订单信息同步成功:', res);
-                      if (res.result && !res.result.success) {
-                        // 如果同步失败，5 秒后重试一次
-                        setTimeout(() => {
-                          wx.cloud.callFunction({
-                            name: 'syncOrderInfo',
-                            data: { orderId: orderId },
-                            success: (retryRes) => {
-                              console.log('[shouhou] 重试同步成功:', retryRes);
-                            },
-                            fail: (retryErr) => {
-                              console.error('[shouhou] 重试同步也失败:', retryErr);
-                            }
-                          });
-                        }, 5000);
-                      }
-                    },
-                    fail: (err) => {
-                      console.error('[shouhou] 订单信息同步失败:', err);
-                      // 5 秒后重试一次
-                      setTimeout(() => {
-                        wx.cloud.callFunction({
-                          name: 'syncOrderInfo',
-                          data: { orderId: orderId },
-                          success: (retryRes) => {
-                            console.log('[shouhou] 重试同步成功:', retryRes);
-                          },
-                          fail: (retryErr) => {
-                            console.error('[shouhou] 重试同步也失败:', retryErr);
-                          }
-                        });
-                      }, 5000);
-                    }
-                  });
-                }, 5000); // 延迟 5 秒，等待支付回调处理（支付回调可能需要更长时间）
+                this.callCheckPayResult(orderId);
               }
               
               wx.navigateTo({ url: '/pages/my/my' });
@@ -1697,6 +1927,11 @@ Page({
               totalPrice: 0
             });
             
+            const orderId = payment.outTradeNo;
+            if (orderId) {
+              this.callCheckPayResult(orderId);
+            }
+
             setTimeout(() => {
               wx.navigateTo({ url: '/pages/my/my' });
             }, 1000);
@@ -1709,6 +1944,48 @@ Page({
       fail: err => {
         getApp().hideLoading();
         wx.showToast({ title: '下单失败', icon: 'none' });
+      }
+    });
+  },
+
+  callCheckPayResult(orderId, attempt = 1) {
+    if (!orderId) return;
+    const maxAttempts = 3;
+    wx.showLoading({
+      title: attempt === 1 ? '确认订单中...' : '再次确认...',
+      mask: true
+    });
+
+    wx.cloud.callFunction({
+      name: 'checkPayResult',
+      data: { orderId },
+      success: (res) => {
+        const result = res.result || {};
+        console.log('[shouhou] checkPayResult 返回:', result);
+        if (result.success) {
+          wx.showToast({ title: '订单已确认', icon: 'success' });
+        } else if (attempt < maxAttempts) {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
+        } else {
+          wx.showToast({
+            title: result.msg || '支付状态待确认，请稍后查看“我的订单”',
+            icon: 'none'
+          });
+        }
+      },
+      fail: (err) => {
+        console.error('[shouhou] checkPayResult 调用失败:', err);
+        if (attempt < maxAttempts) {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
+        } else {
+          wx.showToast({
+            title: '网络异常，请稍后在“我的订单”查看',
+            icon: 'none'
+          });
+        }
+      },
+      complete: () => {
+        wx.hideLoading();
       }
     });
   },

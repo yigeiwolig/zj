@@ -114,7 +114,6 @@ page {
   align-items: center;
   justify-content: center;
   width: 100%;
-  pointer-events: none; /* 让点击事件穿透，避免挡住其他元素 */
 }
 
 .large-title {
@@ -141,6 +140,7 @@ page {
   vertical-align: middle;
   transition: all 0.3s;
   font-weight: 600;
+  pointer-events: auto;
 }
 
 /* 开启状态的颜色 */
@@ -399,7 +399,7 @@ page {
   flex: 1;
   overflow-y: scroll;
   padding: 30rpx;
-  padding-bottom: 200rpx; /* 为底部提交栏留出空间 */
+  padding-bottom: 180rpx; /* 为底部提交栏留出空间，减少空白 */
   -webkit-overflow-scrolling: touch; /* iOS 平滑滚动 */
   height: 0; /* 关键：配合 flex: 1 使用，确保正确计算高度 */
   min-height: 0; /* 防止 flex 子元素溢出 */
@@ -457,6 +457,29 @@ page {
   font-weight: 700;
   margin-bottom: 20rpx;
 }
+
+/* 首页一键同步数据按钮容器 */
+.sync-all-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 首页一键同步数据按钮 */
+.sync-all-btn {
+  background: #000;
+  color: #fff;
+  padding: 24rpx 48rpx;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.2s;
+}
+.sync-all-btn:active {
+  opacity: 0.7;
+  transform: scale(0.98);
+}
 .parts-container {
   display: flex;
   flex-wrap: wrap;
@@ -467,41 +490,70 @@ page {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 20rpx;
-  background: #fff;
-  border: 2rpx solid #eee;
-  border-radius: 16rpx;
+  padding: 24rpx 12rpx; /* 增加上下padding */
+  background: #FFFFFF; /* 纯白背景，干净 */
+  border: 2rpx solid #F0F0F0; /* 非常浅的边框 */
+  border-radius: 12rpx;
   width: 30%; /* 三列布局 */
+  min-height: 140rpx; /* 最小高度，确保文字有足够空间 */
   box-sizing: border-box;
   position: relative;
   margin-bottom: 20rpx;
   text-align: center;
   transition: all 0.2s ease;
   transform: scale(1);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04); /* 更轻的阴影，不会脏 */
 }
 .part-tag text {
   text-align: center;
   width: 100%;
+  font-size: 26rpx;
+  font-weight: 600; /* 加粗，更明显 */
+  line-height: 1.5; /* 行高，允许换行 */
+  color: #333333; /* 柔和的深灰色，不脏 */
+  word-break: break-all; /* 允许长单词换行 */
+  word-wrap: break-word; /* 允许在单词内换行 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2; /* 最多显示2行 */
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.part-tag.active text {
+  color: #007AFF; /* 选中时文字颜色 */
+  font-weight: 700; /* 选中时更粗 */
 }
 .part-tag:active {
   transform: scale(0.95);
   opacity: 0.8;
 }
 .part-tag.active {
-  background: #F0F8FF;
+  background: #F0F8FF; /* 非常浅的蓝色背景，干净明亮 */
   border-color: #007AFF;
+  border-width: 3rpx; /* 选中时边框更粗 */
   color: #007AFF;
-  transform: scale(1.05);
+  transform: scale(1.02);
+  box-shadow: 0 4rpx 12rpx rgba(0, 122, 255, 0.15); /* 柔和的蓝色阴影，不脏 */
+}
+/* 管理员添加配件按钮 */
+.add-part-btn {
+  border: 2rpx dashed #007AFF !important;
+  background: #F5FAFF !important;
+  cursor: pointer;
+}
+.add-part-btn:active {
+  transform: scale(0.95);
+  opacity: 0.8;
 }
 .part-price {
-  font-size: 24rpx;
+  font-size: 26rpx; /* 稍微增大价格字体 */
   font-weight: 700;
-  margin-top: 8rpx;
-  color: #007AFF;
+  margin-top: 10rpx;
+  color: #007AFF !important; /* 强制蓝色，防止被覆盖 */
   text-align: center;
 }
 .part-tag.active .part-price { 
-  color: #007AFF; 
+  color: #007AFF !important; /* 选中时也是蓝色 */
+  font-weight: 800; /* 选中时价格更粗 */
 }
 
 /* 管理员改价/改名图标 - 移到右下角 */
@@ -513,7 +565,7 @@ page {
   right: 10rpx;
   
   font-size: 20rpx;
-  background: #000; 
+  background: #007AFF; /* 改成蓝色，更协调 */
   color: #fff;
   width: 36rpx;       /* 稍微加大一点，好点 */
   height: 36rpx;
@@ -521,7 +573,7 @@ page {
   text-align: center; 
   line-height: 36rpx;
   z-index: 5;         /* 确保在最上层 */
-  opacity: 0.8;
+  opacity: 0.9;
 }
 .del-btn {
   position: absolute;
