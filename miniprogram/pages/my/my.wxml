@@ -115,7 +115,14 @@
                 </text>
               </view>
             </view>
-            <view class="admin-ship-btn" catchtap="adminShipOrder" data-id="{{item.id}}">录入运单号并物料发出</view>
+            <view 
+              class="admin-ship-btn" 
+              catchtap="adminShipOrder" 
+              data-id="{{item.id}}" 
+              data-orderid="{{item.orderId}}" 
+              data-express="{{item.shippingMethod}}">
+              录入运单号并物料发出
+            </view>
           </view>
         </view>
       </swiper-item>
@@ -427,8 +434,8 @@
       
       <!-- 如果未录入单号，显示按钮 -->
       <block wx:if="{{!myReturnRequiredRepair.returnTrackingId}}">
-        <!-- 录入单号按钮 -->
-        <view class="rr-card-btn" bindtap="openReturnTrackingInput" data-id="{{myReturnRequiredRepair._id}}">
+        <!-- 录入单号按钮 - 点击后打开底部弹窗 -->
+        <view class="rr-card-btn" bindtap="openReturnAddressModal" data-id="{{myReturnRequiredRepair._id}}">
           录入单号
         </view>
         <!-- 一键复制地址按钮 -->
@@ -436,59 +443,6 @@
           一键复制地址
         </view>
       </block>
-      
-      <!-- 【新增】地址信息填写表单（如果还没有填写地址信息） -->
-      <view class="rr-card-address-form" wx:if="{{!myReturnRequiredRepair.returnAddress && !myReturnRequiredRepair.returnTrackingId}}">
-        <view class="ra-form-header">
-          <view class="ra-form-title">填写修好后寄回地址</view>
-          <view class="ra-form-smart-paste" bindtap="smartPasteAddress">
-            <text class="ra-smart-paste-icon">📋</text>
-            <text class="ra-smart-paste-text">智能粘贴</text>
-          </view>
-        </view>
-        
-        <view class="ra-form-item">
-          <text class="ra-label">收件人姓名</text>
-          <input 
-            class="ra-input" 
-            type="text" 
-            placeholder="请输入收件人姓名"
-            value="{{userReturnAddress.name}}"
-            data-key="name"
-            bindinput="onUserReturnAddressInput"
-          />
-        </view>
-        
-        <view class="ra-form-item">
-          <text class="ra-label">收件人手机号</text>
-          <input 
-            class="ra-input" 
-            type="number" 
-            placeholder="请输入11位手机号"
-            value="{{userReturnAddress.phone}}"
-            data-key="phone"
-            bindinput="onUserReturnAddressInput"
-            maxlength="11"
-          />
-        </view>
-        
-        <view class="ra-form-item">
-          <text class="ra-label">详细地址</text>
-          <textarea 
-            class="ra-textarea" 
-            placeholder="请输入详细地址，包含省市区信息，如：广东省 佛山市 南海区 某某街道101号"
-            value="{{userReturnAddress.address}}"
-            data-key="address"
-            bindinput="onUserReturnAddressInput"
-            auto-height
-            maxlength="200"
-          />
-        </view>
-        
-        <view class="ra-form-btn" bindtap="submitUserReturnAddress">
-          提交地址信息
-        </view>
-      </view>
       
       <!-- 如果已填写地址信息，显示地址 -->
       <view class="rr-card-address-info" wx:if="{{myReturnRequiredRepair.returnAddress}}">
@@ -902,6 +856,106 @@
         <view class="cd-btn cancel" bindtap="closeReturnAddressDialog">取消</view>
         <view class="cd-btn confirm" bindtap="confirmReturnAddress">确定</view>
       </view>
+    </view>
+  </view>
+
+  <!-- ================= 底部半屏弹窗：录入单号和填写地址 ================= -->
+  <view class="bottom-modal-mask {{showReturnAddressModal ? 'show' : ''}}" bindtap="closeReturnAddressModal">
+    <view class="bottom-modal-content" catchtap="noop">
+      <!-- 弹窗头部 -->
+      <view class="bottom-modal-header">
+        <view class="bottom-modal-title">填写修好后寄回地址</view>
+        <view class="bottom-modal-close" bindtap="closeReturnAddressModal">✕</view>
+      </view>
+      
+      <!-- 弹窗内容区 -->
+      <scroll-view class="bottom-modal-body" scroll-y>
+        <view class="bottom-modal-form">
+          <!-- 如果未填写地址，显示地址填写表单 -->
+          <view wx:if="{{!myReturnRequiredRepair.returnAddress}}">
+            <view class="ra-form-smart-paste-wrapper">
+              <view class="ra-form-smart-paste" bindtap="smartPasteAddress">
+                <text class="ra-smart-paste-icon">📋</text>
+                <text class="ra-smart-paste-text">智能粘贴</text>
+              </view>
+            </view>
+            
+            <view class="ra-form-item">
+              <text class="ra-label">收件人姓名</text>
+              <input 
+                class="ra-input" 
+                type="text" 
+                placeholder="请输入收件人姓名"
+                value="{{userReturnAddress.name}}"
+                data-key="name"
+                bindinput="onUserReturnAddressInput"
+              />
+            </view>
+            
+            <view class="ra-form-item">
+              <text class="ra-label">收件人手机号</text>
+              <input 
+                class="ra-input" 
+                type="number" 
+                placeholder="请输入11位手机号"
+                value="{{userReturnAddress.phone}}"
+                data-key="phone"
+                bindinput="onUserReturnAddressInput"
+                maxlength="11"
+              />
+            </view>
+            
+            <view class="ra-form-item">
+              <text class="ra-label">详细地址</text>
+              <textarea 
+                class="ra-textarea" 
+                placeholder="请输入详细地址，包含省市区信息，如：广东省 佛山市 南海区 某某街道101号"
+                value="{{userReturnAddress.address}}"
+                data-key="address"
+                bindinput="onUserReturnAddressInput"
+                auto-height
+                maxlength="200"
+              />
+            </view>
+          </view>
+          
+          <!-- 如果已填写地址，显示地址信息 -->
+          <view wx:else>
+            <view class="ra-info-section">
+              <view class="ra-info-title">已填写地址信息：</view>
+              <view class="ra-info-content">
+                <text>{{myReturnRequiredRepair.returnAddress.name}} {{myReturnRequiredRepair.returnAddress.phone}}</text>
+                <text>{{myReturnRequiredRepair.returnAddress.address}}</text>
+              </view>
+            </view>
+          </view>
+          
+          <!-- 运单号输入（始终显示，无论是否填写地址） -->
+          <view class="ra-form-item" style="margin-top: 40rpx;" wx:if="{{!myReturnRequiredRepair.returnTrackingId}}">
+            <text class="ra-label">录入寄回运单号</text>
+            <input 
+              class="ra-input" 
+              type="text" 
+              placeholder="请输入寄回运单号"
+              value="{{returnTrackingIdInput}}"
+              bindinput="onReturnTrackingIdInput"
+            />
+          </view>
+          
+          <!-- 如果已录入运单号，显示运单号信息 -->
+          <view class="ra-info-section" style="margin-top: 40rpx;" wx:if="{{myReturnRequiredRepair.returnTrackingId}}">
+            <view class="ra-info-title">已录入运单号：</view>
+            <view class="ra-info-content">
+              <text>{{myReturnRequiredRepair.returnTrackingId}}</text>
+            </view>
+          </view>
+          
+          <!-- 统一的提交按钮（提交地址和运单号） -->
+          <view class="ra-form-btn" bindtap="submitAddressAndTrackingId" wx:if="{{!myReturnRequiredRepair.returnTrackingId}}">
+            提交单号
+          </view>
+        </view>
+      </scroll-view>
     </view>
   </view>
 

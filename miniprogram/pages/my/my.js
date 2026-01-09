@@ -87,6 +87,10 @@ Page({
     
     // 【新增】用户填写地址信息（在用户端的卡片中）
     userReturnAddress: { name: '', phone: '', address: '' },
+    
+    // 【新增】底部弹窗控制
+    showReturnAddressModal: false,
+    returnTrackingIdInput: '', // 运单号输入
   },
 
   onLoad(options) {
@@ -380,7 +384,10 @@ Page({
   // ================== 管理员物料发出功能 ==================
   // 1. 修复：物料发出逻辑改用云函数 (之前是前端直连，没权限改别人的)
   adminShipOrder(e) {
-    const orderId = e.currentTarget.dataset.id; // 数据库 _id
+    const orderDocId = e.currentTarget.dataset.id; // 数据库 _id
+    const orderNumber = e.currentTarget.dataset.orderid || '';
+    const expressRaw = e.currentTarget.dataset.express || '';
+    const expressCompany = expressRaw ? expressRaw.toUpperCase() : '';
     
     this.showInputDialog({
       title: '录入物料运单号',
@@ -398,9 +405,11 @@ Page({
           wx.cloud.callFunction({
             name: 'adminUpdateOrder',
             data: {
-              id: orderId,
+              id: orderDocId,
+              orderId: orderNumber,
               action: 'ship',
-              trackingId: sn
+              trackingId: sn,
+              expressCompany: expressCompany
             },
             success: r => {
               this.hideMyLoading();
@@ -465,6 +474,7 @@ Page({
           return {
             id: item._id,
             orderId: item.orderId,
+            transactionId: item.transactionId || '', // 🔴 【必须加上】确认收货组件必填字段
             realStatus: item.status, 
             statusText: this.getStatusText(item.status),
             amount: item.totalFee,
@@ -473,7 +483,8 @@ Page({
             userAddr: item.address ? item.address.address : '',
             goodsList: item.goodsList || [],
             createTime: this.formatTime(item.createTime),
-            trackingId: item.trackingId || ""
+            trackingId: item.trackingId || "",
+            shippingMethod: item.shipping && item.shipping.method ? item.shipping.method : ''
           };
         });
 
@@ -489,7 +500,7 @@ Page({
             this.loadPendingRepairs();
           }
           
-          // 1. 待物料发出列表 (只看 PAID)
+          // 1. 待物料发出列表 (只保留 PAID，发货后自动消失)
           const pending = formatted.filter(i => i.realStatus === 'PAID');
 
           this.setData({ 
@@ -714,69 +725,138 @@ Page({
     });
   },
 
-  // 3. 【核心功能】查看安装教程并确认收货
+  // 3. 【核心修复】查看教程并唤起官方收货组件
   viewTutorialAndSign(e) {
-    const id = e.currentTarget.dataset.id; // 订单ID
-    const modelName = e.currentTarget.dataset.model || ''; // 产品型号（可选）
+    const id = e.currentTarget.dataset.id
+    const modelName = e.currentTarget.dataset.model || ''
+    
+    console.log('[viewTutorialAndSign] 开始执行，订单ID:', id)
+    
+    // 1. 查找订单
+    const order = this.data.orders.find(item => item.id === id)
+    if (!order) {
+      console.error('[viewTutorialAndSign] 订单不存在')
+      return wx.showToast({ title: '订单数据异常', icon: 'none' })
+    }
 
-    this.showMyDialog({
-      title: '开启安装指导',
-      content: '请确认您已收到维修配件且包装完好。\n\n确认后将为您解锁详细安装视频教程。',
-      confirmText: '确认并观看',
-      cancelText: '还没收到',
-      showCancel: true,
+    console.log('[viewTutorialAndSign] 订单信息:', order)
+
+    // 2. 如果已经是"已签收"或"已完成"，直接看教程，不弹窗
+    if (order.realStatus === 'SIGNED' || order.realStatus === 'COMPLETED') {
+      console.log('[viewTutorialAndSign] 订单已签收，直接跳转教程')
+      wx.navigateTo({
+        url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '')
+      })
+      return
+    }
+
+    // 3. 校验必要参数
+    if (!order.transactionId) {
+      console.error('[viewTutorialAndSign] 缺少 transactionId:', order)
+      wx.showToast({ title: '缺少支付单号，无法确认', icon: 'none' })
+      return
+    }
+
+    console.log('[viewTutorialAndSign] 准备唤起确认收货组件，参数:', {
+      orderId: order.orderId,
+      transactionId: order.transactionId
+    })
+
+    // 4. 唤起微信官方确认收货组件 (半屏弹窗)
+    wx.openBusinessView({
+      businessType: 'weappOrderConfirm', // 🔴 必须是这个
+      extraData: {
+        merchant_trade_no: order.orderId,
+        transaction_id: order.transactionId // 🔴 必填
+      },
       success: (res) => {
-        if (res.confirm) {
-          this.showMyLoading('解锁教程中...');
-          
-          // 1. 调用云函数，执行"确认收货"逻辑
-          wx.cloud.callFunction({
-            name: 'adminUpdateOrder',
-            data: {
-              id: id,
-              action: 'sign' // 确认收货，将状态改为 SIGNED
-            },
-            success: (r) => {
-              this.hideMyLoading();
-              
-              if (r.result && r.result.success !== false) {
-                // 2. 成功后，跳转到教程页面
-                wx.navigateTo({
-                  url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : ''),
-                  success: () => {
-                    wx.showToast({ 
-                      title: '教程已解锁', 
-                      icon: 'success',
-                      duration: 2000
-                    });
-                  }
-                });
-                
-                // 3. 刷新列表，让按钮状态变成"回顾教程"
-                setTimeout(() => {
-                  this.loadMyOrders();
-                }, 500);
-              } else {
-                this.showMyDialog({ 
-                  title: '操作失败', 
-                  content: r.result.errMsg || '网络异常，请稍后重试',
-                  showCancel: false
-                });
-              }
-            },
-            fail: (err) => {
-              this.hideMyLoading();
-              console.error('[viewTutorialAndSign] 云函数调用失败:', err);
-              this.showMyDialog({ 
-                title: '网络异常', 
-                content: err.errMsg || '请稍后重试',
-                showCancel: false
-              });
-            }
-          });
+        console.log('[viewTutorialAndSign] ✅ 组件返回:', res)
+        
+        // extraData.status === 'success' 代表用户点击了确认收货
+        if (res.extraData && res.extraData.status === 'success') {
+          console.log('[viewTutorialAndSign] ✅ 用户已确认收货')
+          // 执行后续逻辑：改数据库状态 -> 跳转
+          this.confirmReceiptAndViewTutorial(id, modelName)
+        } else {
+          console.log('[viewTutorialAndSign] 用户取消或关闭')
+          // 用户点了取消或关闭，不做操作
+          wx.showToast({ title: '需要确认收货才能观看哦', icon: 'none' })
         }
+      },
+      fail: (err) => {
+        console.error('[viewTutorialAndSign] ❌ 组件唤起失败:', err)
+        console.error('[viewTutorialAndSign] 错误详情:', JSON.stringify(err))
+        // 常见错误：订单未发货(shipped)，或者 transaction_id 错误
+        wx.showToast({ title: '无法唤起确认组件(请检查是否已发货)', icon: 'none' })
       }
-    });
+    })
+  },
+
+  // 🔴 新增：确认收货并查看教程的统一处理函数
+  // 确认收货并跳转的实际执行逻辑
+  confirmReceiptAndViewTutorial(id, modelName) {
+    this.showMyLoading('解锁教程中...')
+    
+    console.log('[confirmReceiptAndViewTutorial] 开始调用云函数，订单ID:', id)
+    
+    // 1. 调用云函数，更新订单状态为"已签收/已完成"
+    wx.cloud.callFunction({
+      name: 'adminUpdateOrder',
+      data: {
+        id: id,
+        action: 'sign' // 你的云函数里要有处理 'sign' 的逻辑
+      },
+      success: (r) => {
+        this.hideMyLoading()
+        
+        console.log('[confirmReceiptAndViewTutorial] 云函数返回:', r)
+        
+        // 只要云函数不报错，就认为成功
+        if (r.result && r.result.success !== false) {
+          
+          // 2. 更新本地列表状态 (避免返回后按钮状态没变)
+          const newOrders = this.data.orders.map(item => {
+             if(item.id === id) {
+                item.realStatus = 'SIGNED'; 
+                item.statusText = '确认件齐';
+             }
+             return item;
+          });
+          this.setData({ orders: newOrders });
+
+          // 3. 跳转到教程页面
+          wx.navigateTo({
+            url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : ''),
+            success: () => {
+              wx.showToast({ 
+                title: '教程已解锁', 
+                icon: 'success',
+                duration: 2000
+              })
+            }
+          })
+          
+        } else {
+          console.error('[confirmReceiptAndViewTutorial] 云函数返回失败:', r)
+          this.showMyDialog({ 
+            title: '操作失败', 
+            content: r.result.errMsg || '同步状态失败',
+            showCancel: false
+          })
+        }
+      },
+      fail: (err) => {
+        this.hideMyLoading()
+        console.error('[confirmReceiptAndViewTutorial] 云函数调用失败:', err)
+        // 即使同步失败，如果用户已经在微信组件里确认了，也可以考虑让他跳转
+        // 这里偏向严格，失败就不跳
+        this.showMyDialog({ 
+          title: '网络异常', 
+          content: err.errMsg || '请稍后重试',
+          showCancel: false
+        })
+      }
+    })
   },
 
   // 4. 仅查看教程（已签收状态）
@@ -1094,12 +1174,11 @@ Page({
         showCancel: false,
         confirmText: '好的',
         callback: () => {
-          // 清空表单
+          // 关闭弹窗
           this.setData({
-            userReturnAddress: { name: '', phone: '', address: '' },
-            showUserReturnAddressForm: false
+            showReturnAddressModal: false
           });
-          // 刷新数据
+          // 刷新数据（会更新弹窗内容，显示运单号输入框）
           this.loadMyActivitiesPromise().catch(() => {});
         }
       });
@@ -2308,37 +2387,39 @@ Page({
   },
 
   // 【新增】打开寄回运单号录入
-  openReturnTrackingInput(e) {
-    const id = e.currentTarget.dataset.id;
+  // 【修改】打开底部弹窗（录入单号/填写地址）
+  openReturnAddressModal(e) {
     const repair = this.data.myReturnRequiredRepair;
     
-    // 🔴 先检查是否有地址信息
-    if (!repair || !repair.returnAddress) {
-      this.showAutoToast('提示', '请先填写修好后寄回地址信息');
+    if (!repair) {
+      this.showAutoToast('提示', '订单信息异常');
       return;
     }
     
-    const currentTrackingId = repair ? repair.returnTrackingId || '' : '';
-    
-    this.showInputDialog({
-      title: '录入寄回运单号',
-      placeholder: '请输入寄回运单号',
-      value: currentTrackingId,
-      success: (res) => {
-        if (res.confirm && res.content) {
-          const trackingId = res.content.trim();
-          if (!trackingId) {
-            this.showAutoToast('提示', '请输入运单号');
-            return;
-          }
-          this.submitReturnTrackingId(id, trackingId);
-        }
-      }
+    // 设置当前运单号（如果有）
+    this.setData({
+      returnTrackingIdInput: repair.returnTrackingId || '',
+      showReturnAddressModal: true
+    });
+  },
+  
+  // 关闭底部弹窗
+  closeReturnAddressModal() {
+    this.setData({
+      showReturnAddressModal: false,
+      returnTrackingIdInput: ''
+    });
+  },
+  
+  // 运单号输入
+  onReturnTrackingIdInput(e) {
+    this.setData({
+      returnTrackingIdInput: e.detail.value
     });
   },
 
-  // 【新增】提交寄回运单号
-  submitReturnTrackingId(id, trackingId) {
+  // 【新增】提交寄回运单号（保留原来的逻辑，支持可选回调）
+  submitReturnTrackingId(id, trackingId, onSuccessCallback) {
     this.showMyLoading('提交中...');
     const db = wx.cloud.database();
     db.collection('shouhou_repair').doc(id).update({
@@ -2356,6 +2437,10 @@ Page({
         showCancel: false,
         confirmText: '好的',
         callback: () => {
+          // 如果有回调函数，执行回调（比如关闭弹窗）
+          if (onSuccessCallback && typeof onSuccessCallback === 'function') {
+            onSuccessCallback();
+          }
           // 刷新数据
           this.loadMyActivitiesPromise().catch(() => {});
         }
@@ -2369,6 +2454,146 @@ Page({
         showCancel: false,
         confirmText: '知道了'
       });
+    });
+  },
+  
+  // 【新增】在弹窗中提交运单号（调用原来的逻辑）
+  submitReturnTrackingIdInModal() {
+    const { returnTrackingIdInput, myReturnRequiredRepair } = this.data;
+    
+    if (!myReturnRequiredRepair || !myReturnRequiredRepair._id) {
+      this.showAutoToast('提示', '订单信息异常');
+      return;
+    }
+    
+    const trackingId = returnTrackingIdInput.trim();
+    if (!trackingId) {
+      this.showAutoToast('提示', '请输入运单号');
+      return;
+    }
+    
+    // 🔴 调用原来的 submitReturnTrackingId 函数（保留原来的逻辑）
+    this.submitReturnTrackingId(myReturnRequiredRepair._id, trackingId, () => {
+      // 提交成功后的回调：关闭弹窗
+      this.setData({
+        showReturnAddressModal: false,
+        returnTrackingIdInput: ''
+      });
+    });
+  },
+  
+  // 【新增】统一提交地址和运单号
+  submitAddressAndTrackingId() {
+    const { userReturnAddress, returnTrackingIdInput, myReturnRequiredRepair } = this.data;
+    
+    if (!myReturnRequiredRepair || !myReturnRequiredRepair._id) {
+      this.showAutoToast('提示', '订单信息异常');
+      return;
+    }
+    
+    const repair = myReturnRequiredRepair;
+    const needsAddress = !repair.returnAddress;
+    const trackingId = returnTrackingIdInput.trim();
+    const needsTrackingId = !repair.returnTrackingId && trackingId;
+    
+    // 如果既没有地址也没有运单号，提示至少填写一项
+    if (needsAddress && !needsTrackingId) {
+      // 检查地址是否完整
+      if (!userReturnAddress.name || !userReturnAddress.name.trim()) {
+        this.showAutoToast('提示', '请填写收件人姓名');
+        return;
+      }
+      if (!userReturnAddress.phone || !userReturnAddress.phone.trim()) {
+        this.showAutoToast('提示', '请填写收件人手机号');
+        return;
+      }
+      if (!/^1[3-9]\d{9}$/.test(userReturnAddress.phone)) {
+        this.showAutoToast('提示', '请输入正确的11位手机号');
+        return;
+      }
+      if (!userReturnAddress.address || !userReturnAddress.address.trim()) {
+        this.showAutoToast('提示', '请填写详细地址');
+        return;
+      }
+    }
+    
+    if (!needsAddress && !needsTrackingId) {
+      this.showAutoToast('提示', '请至少填写地址或运单号');
+      return;
+    }
+    
+    if (needsTrackingId && !trackingId) {
+      this.showAutoToast('提示', '请输入运单号');
+      return;
+    }
+    
+    // 先提交地址（如果需要），然后提交运单号（如果需要）
+    this.showMyLoading('提交中...');
+    const db = wx.cloud.database();
+    
+    // 构建更新数据
+    const updateData = {};
+    
+    // 如果需要更新地址
+    if (needsAddress) {
+      const parsed = this.parseAddressForShipping(userReturnAddress.address);
+      const fullAddress = parsed.fullAddress || userReturnAddress.address;
+      
+      if (!parsed.province && !parsed.city) {
+        this.hideMyLoading();
+        this.showAutoToast('提示', '地址格式不正确，请包含省市区信息');
+        return;
+      }
+      
+      updateData.returnAddress = {
+        name: userReturnAddress.name.trim(),
+        phone: userReturnAddress.phone.trim(),
+        address: fullAddress
+      };
+    }
+    
+    // 如果需要更新运单号
+    if (needsTrackingId) {
+      updateData.returnTrackingId = trackingId;
+      updateData.returnTrackingTime = db.serverDate();
+      updateData.returnStatus = 'USER_SENT';
+      updateData.status = 'USER_SENT';
+    }
+    
+    // 执行更新
+    db.collection('shouhou_repair').doc(repair._id).update({
+      data: updateData
+    }).then(() => {
+      this.hideMyLoading();
+      
+      let successMsg = '';
+      if (needsAddress && needsTrackingId) {
+        successMsg = '地址和运单号已提交成功';
+      } else if (needsAddress) {
+        successMsg = '地址信息已保存\n管理员修好后将按此地址寄回';
+      } else {
+        successMsg = '运单号已录入，管理员可查看物流信息';
+      }
+      
+      this.showMyDialog({
+        title: '提交成功',
+        content: successMsg,
+        showCancel: false,
+        confirmText: '好的',
+        callback: () => {
+          // 关闭弹窗
+          this.setData({
+            showReturnAddressModal: false,
+            returnTrackingIdInput: ''
+          });
+          // 刷新数据
+          this.loadMyActivitiesPromise().catch(() => {});
+        }
+      });
+    }).catch(err => {
+      this.hideMyLoading();
+      console.error('提交失败:', err);
+      this.showAutoToast('提交失败', err.errMsg || '请稍后重试');
     });
   },
 

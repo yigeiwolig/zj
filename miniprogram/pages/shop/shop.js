@@ -1,4 +1,8 @@
 // pages/shop/shop.js
+// 🔴 性能优化：关闭调试日志（生产环境）
+const DEBUG = false; // 设为 false 关闭所有 console.log，设为 true 开启调试
+const log = DEBUG ? console.log.bind(console) : () => {};
+
 const app = getApp();
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
 var qqmapsdk = new QQMapWX({
