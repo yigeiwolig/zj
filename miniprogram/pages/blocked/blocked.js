@@ -21,9 +21,16 @@ Page({
     
     wx.hideHomeButton();
 
-    const initialDelay = type === 'location' ? 3000 : 0;
+    // 🔴 关键修复：截屏/录屏封禁需要延迟更长时间，等待 banUserByScreenshot 云函数执行完成
+    const isScreenshotType = type === 'screenshot' || type === 'record';
+    const initialDelay = type === 'location' ? 3000 : (isScreenshotType ? 3000 : 0);
+    
     if (initialDelay > 0) {
-      console.log(`🛡️ 地址拦截模式：启动 ${initialDelay}ms 写入保护期...`);
+      if (isScreenshotType) {
+        console.log(`🛡️ 截屏/录屏封禁模式：启动 ${initialDelay}ms 延迟，等待数据库更新完成...`);
+      } else {
+        console.log(`🛡️ 地址拦截模式：启动 ${initialDelay}ms 写入保护期...`);
+      }
     }
 
     setTimeout(() => {

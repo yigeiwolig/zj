@@ -1,0 +1,27 @@
+<view class="modal-mask" wx:if="{{visible && (type === 'modal' || type === 'confirm')}}">
+  <view class="modal-box {{type}}">
+    <view class="modal-title" wx:if="{{title}}">{{title}}</view>
+    <view class="modal-content">
+      <view class="content-text">{{content}}</view>
+    </view>
+    <view class="modal-actions">
+      <view class="modal-btn cancel" bindtap="handleCancel" wx:if="{{showCancel}}">{{cancelText}}</view>
+      <view class="modal-btn confirm" bindtap="handleConfirm" style="color: {{confirmColor}}">{{confirmText}}</view>
+    </view>
+  </view>
+</view>
+
+<view class="toast-mask" wx:if="{{visible && type === 'toast'}}">
+  <view class="toast-box">
+    <view class="toast-icon" wx:if="{{icon === 'success'}}">✓</view>
+    <view class="toast-icon error" wx:if="{{icon === 'error' || icon === 'fail' || icon === 'none'}}">!</view>
+    <view class="toast-text">{{title}}</view>
+  </view>
+</view>
+
+<view class="loading-mask" wx:if="{{visible && type === 'loading'}}">
+  <view class="loading-box">
+    <view class="loading-spinner"></view>
+    <view class="loading-text" wx:if="{{title}}">{{title}}</view>
+  </view>
+</view>

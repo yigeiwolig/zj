@@ -890,8 +890,8 @@ Page({
       dragY: clampedY
     });
     
-    // 检测是否需要交换位置（使用 clientY，相对于视口）
-    this.checkSwap(touch.clientY || touch.pageY);
+    // 检测是否需要交换位置（同时传递 X 和 Y 坐标）
+    this.checkSwap(touch.clientX || touch.pageX, touch.clientY || touch.pageY);
   },
 
   // [新增] 触摸结束
@@ -922,12 +922,49 @@ Page({
     console.log('[handleTouchEnd] 拖动完成，状态已重置');
   },
 
-  // [新增] 检测交换位置
-  checkSwap(touchY) {
+  // [新增] 检测交换位置（优化版：稳定检测 + 防弹跳 + 左右列识别）
+  checkSwap(touchX, touchY) {
     const list = this.data.currentPartsList;
     const dragIndex = this.data.dragIndex;
     
     if (dragIndex === -1 || !list || list.length === 0) return;
+    
+    // 🔴 稳定检测：需要手指在目标位置停留一段时间才交换
+    const MIN_MOVE_THRESHOLD = 15; // 最小移动阈值（px）
+    const STABLE_TIME = 150; // 稳定时间（ms）
+    const LOCK_TIME = 400; // 锁定时间（ms），防止频繁交换
+    
+    // 初始化稳定检测相关变量
+    if (!this._stableTarget) {
+      this._stableTarget = { index: -1, time: 0, touchX: 0, touchY: 0 };
+    }
+    if (!this._lastSwapTime) {
+      this._lastSwapTime = 0;
+    }
+    if (!this._lastTouchX) {
+      this._lastTouchX = touchX;
+    }
+    if (!this._lastTouchY) {
+      this._lastTouchY = touchY;
+    }
+    
+    // 检查移动距离是否超过阈值（同时考虑 X 和 Y）
+    const moveDistanceX = Math.abs(touchX - this._lastTouchX);
+    const moveDistanceY = Math.abs(touchY - this._lastTouchY);
+    const moveDistance = Math.sqrt(moveDistanceX * moveDistanceX + moveDistanceY * moveDistanceY);
+    
+    if (moveDistance < MIN_MOVE_THRESHOLD) {
+      // 移动距离太小，不处理
+      return;
+    }
+    this._lastTouchX = touchX;
+    this._lastTouchY = touchY;
+    
+    // 检查是否在锁定期内
+    const now = Date.now();
+    if (now - this._lastSwapTime < LOCK_TIME) {
+      return; // 还在锁定期内，不处理
+    }
     
     // 使用查询获取所有卡片的实际位置
     const query = wx.createSelectorQuery().in(this);
@@ -936,63 +973,120 @@ Page({
       if (!res || !res[0]) return;
       
       const rects = res[0];
-      let targetIndex = dragIndex;
+      let targetIndex = -1;
+      let minDistance = Infinity;
       
-      // 找到手指位置对应的卡片索引
+      // 🔴 关键修复：同时考虑 X 和 Y 坐标，计算到卡片中心的欧几里得距离
       for (let i = 0; i < rects.length; i++) {
         if (i === dragIndex) continue; // 跳过自己
+        
         const rect = rects[i];
-        if (rect && touchY >= rect.top && touchY <= rect.bottom) {
-          targetIndex = i;
-          break;
+        if (!rect) continue;
+        
+        // 计算卡片中心点
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        
+        // 计算手指到卡片中心的欧几里得距离
+        const deltaX = touchX - centerX;
+        const deltaY = touchY - centerY;
+        const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+        
+        // 检查手指是否在卡片范围内（增加 padding，同时考虑 X 和 Y）
+        const paddingX = 30; // X 方向容错范围（更大，因为左右列）
+        const paddingY = 20; // Y 方向容错范围
+        const isInCardX = touchX >= rect.left - paddingX && touchX <= rect.right + paddingX;
+        const isInCardY = touchY >= rect.top - paddingY && touchY <= rect.bottom + paddingY;
+        const isInCard = isInCardX && isInCardY;
+        
+        // 🔴 关键优化：优先考虑同一列（X 坐标接近），然后再考虑距离
+        const currentRect = rects[dragIndex];
+        if (currentRect) {
+          const currentCenterX = currentRect.left + currentRect.width / 2;
+          const isSameColumn = Math.abs(centerX - currentCenterX) < rect.width; // 判断是否在同一列
+          
+          // 如果在同一列，降低距离权重（优先同列）
+          // 如果不在同一列，增加距离权重（允许跨列，但需要更精确）
+          const distanceWeight = isSameColumn ? distance * 0.8 : distance * 1.2;
+          
+          if (isInCard && distanceWeight < minDistance) {
+            minDistance = distanceWeight;
+            targetIndex = i;
+          }
+        } else {
+          // 如果无法获取当前卡片位置，直接使用距离
+          if (isInCard && distance < minDistance) {
+            minDistance = distance;
+            targetIndex = i;
+          }
         }
       }
       
-      // 如果没找到，根据Y坐标判断是向上还是向下
-      if (targetIndex === dragIndex && rects.length > 0) {
+      // 如果没找到，根据Y坐标判断是向上还是向下（保持原有逻辑作为后备）
+      if (targetIndex === -1 && rects.length > 0) {
         const currentRect = rects[dragIndex];
         if (currentRect) {
           if (touchY < currentRect.top && dragIndex > 0) {
-            // 向上移动
             targetIndex = dragIndex - 1;
           } else if (touchY > currentRect.bottom && dragIndex < list.length - 1) {
-            // 向下移动
             targetIndex = dragIndex + 1;
           }
         }
       }
       
-      // 如果需要交换
-      if (targetIndex !== dragIndex && targetIndex >= 0 && targetIndex < list.length) {
-        console.log('[checkSwap] 交换位置:', dragIndex, '→', targetIndex);
-        
-        const newList = [...list];
-        const [movedItem] = newList.splice(dragIndex, 1);
-        newList.splice(targetIndex, 0, movedItem);
-        
-        // 更新 order
-        newList.forEach((item, index) => {
-          item.order = index;
-        });
-        
-        // 更新初始位置（使用实际位置）
-        if (rects[targetIndex]) {
-          this.setData({
-            currentPartsList: newList,
-            dragIndex: targetIndex,
-            cardInitY: rects[targetIndex].top
-          });
+      // 🔴 稳定检测：检查目标是否稳定
+      if (targetIndex !== -1 && targetIndex !== dragIndex) {
+        if (this._stableTarget.index === targetIndex) {
+          // 目标相同，检查是否稳定足够长时间
+          const stableDuration = now - this._stableTarget.time;
+          if (stableDuration >= STABLE_TIME) {
+            // 稳定时间足够，执行交换
+            this._performSwap(dragIndex, targetIndex, list, rects);
+            this._stableTarget = { index: -1, time: 0, touchX: 0, touchY: 0 }; // 重置
+            this._lastSwapTime = now;
+          }
         } else {
-          this.setData({
-            currentPartsList: newList,
-            dragIndex: targetIndex
-          });
+          // 目标改变，重新开始计时
+          this._stableTarget = { index: targetIndex, time: now, touchX: touchX, touchY: touchY };
         }
-        
-        // 震动反馈
-        wx.vibrateShort({ type: 'light' });
+      } else {
+        // 没有有效目标，重置稳定检测
+        this._stableTarget = { index: -1, time: 0, touchX: 0, touchY: 0 };
       }
     });
+  },
+  
+  // 🔴 执行交换操作（抽离出来）
+  _performSwap(dragIndex, targetIndex, list, rects) {
+    if (targetIndex < 0 || targetIndex >= list.length) return;
+    
+    console.log('[checkSwap] 交换位置:', dragIndex, '→', targetIndex);
+    
+    const newList = [...list];
+    const [movedItem] = newList.splice(dragIndex, 1);
+    newList.splice(targetIndex, 0, movedItem);
+    
+    // 更新 order
+    newList.forEach((item, index) => {
+      item.order = index;
+    });
+    
+    // 更新初始位置（使用实际位置）
+    if (rects[targetIndex]) {
+      this.setData({
+        currentPartsList: newList,
+        dragIndex: targetIndex,
+        cardInitY: rects[targetIndex].top
+      });
+    } else {
+      this.setData({
+        currentPartsList: newList,
+        dragIndex: targetIndex
+      });
+    }
+    
+    // 震动反馈
+    wx.vibrateShort({ type: 'light' });
   },
 
   // [新增] 移动配件位置
@@ -3449,51 +3543,57 @@ Page({
   },
 
   // 🔴 处理截屏/录屏拦截
-  handleIntercept(type) {
+  async handleIntercept(type) {
+    // 🔴 关键修复：立即清除本地授权状态，防止第二次截屏时被自动放行
+    wx.removeStorageSync('has_permanent_auth');
+    
     // 标记封禁（本地存储）
     wx.setStorageSync('is_user_banned', true);
     if (type === 'screenshot') {
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    // 🔴 关键优化：立即跳转到 blocked 页面，不等待位置信息获取和云函数调用
-    console.log('[shouhou] 🔴 截屏/录屏检测，立即跳转到封禁页');
-    this._jumpToBlocked(type);
-
-    // 🔴 异步调用云函数写入数据库封禁状态（不阻塞跳转）
-    this._getLocationAndDeviceInfo().then(locationData => {
-      wx.cloud.callFunction({
-        name: 'banUserByScreenshot',
-        data: {
-          type: type,
-          banPage: 'shouhou', // 封禁页面
-          ...locationData
-        },
-        success: (res) => {
-          console.log('[shouhou] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
-        },
-        fail: (err) => {
-          console.error('[shouhou] banUserByScreenshot 调用失败:', err);
-        }
-      });
-    }).catch(() => {
-      // 如果获取位置失败，仍然调用云函数（不带位置信息）
+    console.log('[shouhou] 🔴 截屏/录屏检测，立即设置封禁状态');
+    
+    // 🔴 关键修复：立即调用云函数设置 isBanned = true，不等待位置信息
+    try {
       const sysInfo = wx.getSystemInfoSync();
-      wx.cloud.callFunction({
+      const immediateRes = await wx.cloud.callFunction({
         name: 'banUserByScreenshot',
         data: {
           type: type,
           banPage: 'shouhou',
           deviceInfo: sysInfo.system || '',
           phoneModel: sysInfo.model || ''
-        },
-        success: (res) => {
-          console.log('[shouhou] banUserByScreenshot 调用成功（无位置信息）');
-        },
-        fail: (err) => {
-          console.error('[shouhou] banUserByScreenshot 调用失败:', err);
         }
       });
+      console.log('[shouhou] ✅ 立即设置封禁状态成功:', immediateRes);
+    } catch (err) {
+      console.error('[shouhou] ⚠️ 立即设置封禁状态失败:', err);
+    }
+
+    // 🔴 跳转到封禁页面
+    console.log('[shouhou] 🔴 跳转到封禁页');
+    this._jumpToBlocked(type);
+
+    // 🔴 异步补充位置信息（不阻塞，可选）
+    this._getLocationAndDeviceInfo().then(locationData => {
+      wx.cloud.callFunction({
+        name: 'banUserByScreenshot',
+        data: {
+          type: type,
+          banPage: 'shouhou',
+          ...locationData
+        },
+        success: (res) => {
+          console.log('[shouhou] 补充位置信息成功，类型:', type, '结果:', res);
+        },
+        fail: (err) => {
+          console.error('[shouhou] 补充位置信息失败:', err);
+        }
+      });
+    }).catch(() => {
+      console.log('[shouhou] 位置信息获取失败，但封禁状态已设置');
     });
   },
 

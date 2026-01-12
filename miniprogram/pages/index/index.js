@@ -34,6 +34,11 @@ Page({
     // 【新增】控制"内容已复制"弹窗
     showCopySuccessModal: false,
     
+    // 【新增】控制二次确认弹窗
+    showConfirmModal: false,
+    confirmModalContent: '',
+    _pendingUnbanData: null, // 存储待执行的放行数据
+    
     // Loading 状态（合并重复定义）
     isLoading: false,
     loadingText: '加载中...',
@@ -999,42 +1004,125 @@ Page({
     }
   },
 
-  // 🔴 放行用户
-  async unbanUser(e) {
+  // 🔴 放行用户（根据封禁类型执行不同逻辑）
+  unbanUser(e) {
     const buttonId = e.currentTarget.dataset.buttonId;
     const userIndex = e.currentTarget.dataset.index;
+    const banReason = e.currentTarget.dataset.banReason;
+    const openid = e.currentTarget.dataset.openid;
+    const nickname = e.currentTarget.dataset.nickname || '该用户';
+
+    console.log('[unbanUser] 点击放行，参数:', { buttonId, userIndex, banReason, openid });
+
+    if (!buttonId) {
+      this.showMyDialog({ title: '错误', content: '缺少必要参数 buttonId' });
+      return;
+    }
+
+    // 🔴 1. 显示二次确认弹窗
+    this.setData({
+      showConfirmModal: true,
+      confirmModalContent: `确定要解除对"${nickname}"的封禁吗？`,
+      _pendingUnbanData: { buttonId, userIndex, banReason, openid, nickname }
+    });
+  },
+
+  // 🔴 隐藏确认弹窗
+  hideConfirmModal() {
+    this.setData({
+      showConfirmModal: false,
+      confirmModalContent: '',
+      _pendingUnbanData: null
+    });
+  },
+
+  // 🔴 确认执行放行
+  async handleConfirmAction() {
+    const { buttonId, userIndex, banReason, openid } = this.data._pendingUnbanData || {};
     
     if (!buttonId) {
+      this.hideConfirmModal();
       this.showMyDialog({ title: '错误', content: '缺少必要参数' });
       return;
     }
 
+    // 隐藏确认弹窗
+    this.hideConfirmModal();
+
     try {
       wx.showLoading({ title: '处理中...', mask: true });
-      const res = await wx.cloud.callFunction({
-        name: 'unbanUser',
-        data: { buttonId: buttonId }
-      });
+
+      // 根据不同的封禁类型执行不同的逻辑
+      if (banReason === 'screenshot' || banReason === 'screen_record') {
+        // 截图封禁：只把 isBanned 设置为 false
+        console.log('[unbanUser] 截图封禁，更新 isBanned 为 false');
+        const res = await wx.cloud.callFunction({
+          name: 'unbanUser',
+          data: { buttonId: buttonId, updateData: { isBanned: false } }
+        });
+        if (!res.result || !res.result.success) {
+          throw new Error(res.result?.error || '更新失败');
+        }
+      } else if (banReason === 'nickname_verify_fail' || banReason === 'banned') {
+        // 昵称封禁：只把 login_logs 里面的 auto 设置为 true（不修改 isBanned）
+        console.log('[unbanUser] 昵称封禁，只更新 login_logs 的 auto 为 true');
+        if (!openid) {
+          throw new Error('openid 为空，无法更新 login_logs');
+        }
+        const res = await wx.cloud.callFunction({
+          name: 'unbanUser',
+          data: { buttonId: buttonId, openid: openid, updateLoginLogsAuto: true }
+        });
+        if (!res.result || !res.result.success) {
+          throw new Error(res.result?.error || '更新 login_logs 失败');
+        }
+      } else if (banReason === 'location_blocked') {
+        // 地址拦截：把 isBanned 设置为 false，然后 bypassLocationCheck 设置为 true
+        console.log('[unbanUser] 地址拦截，更新 isBanned 和 bypassLocationCheck');
+        const res = await wx.cloud.callFunction({
+          name: 'unbanUser',
+          data: { buttonId: buttonId, updateData: { isBanned: false, bypassLocationCheck: true } }
+        });
+        if (!res.result || !res.result.success) {
+          throw new Error(res.result?.error || '更新失败');
+        }
+      } else {
+        // 其他类型：只把 isBanned 设置为 false
+        console.log('[unbanUser] 其他类型，更新 isBanned 为 false');
+        const res = await wx.cloud.callFunction({
+          name: 'unbanUser',
+          data: { buttonId: buttonId, updateData: { isBanned: false } }
+        });
+        if (!res.result || !res.result.success) {
+          throw new Error(res.result?.error || '更新失败');
+        }
+      }
+
+      // 从列表中移除该用户（立即更新UI）
+      const users = this.data.bannedUsers;
+      users.splice(userIndex, 1);
+      this.setData({ bannedUsers: users });
+
+      console.log('[unbanUser] 操作成功，已从列表中移除');
 
       wx.hideLoading();
 
-      if (res.result && res.result.success) {
-        // 从列表中移除该用户
-        const users = this.data.bannedUsers;
-        users.splice(userIndex, 1);
-        this.setData({ bannedUsers: users });
-        
-      this.showMyDialog({ 
-          title: '成功', 
-          content: '用户已解封',
-          success: () => {}
-        });
-      } else {
-        this.showMyDialog({ 
-          title: '失败', 
-          content: res.result?.error || '解封失败，请重试' 
-        });
-      }
+      // 🔴 2. 使用自定义白底黑字弹窗显示成功
+      this.setData({
+        showCustomSuccessModal: true,
+        successModalTitle: '已解除封禁',
+        successModalContent: '用户现在可以正常访问了'
+      });
+
+      // 2秒后自动关闭弹窗并刷新列表
+      setTimeout(() => {
+        this.setData({ showCustomSuccessModal: false });
+        // 延迟重新加载封禁用户列表，等待数据库更新生效
+        setTimeout(() => {
+          this.loadBannedUsers();
+        }, 500);
+      }, 2000);
+
     } catch (err) {
       wx.hideLoading();
       console.error('[index] 解封用户失败:', err);

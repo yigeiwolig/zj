@@ -52,6 +52,39 @@ exports.main = async (event, context) => {
     const isExplicitlyUnbanned = buttonRecord && (rawFlag === false || rawFlag === 0 || rawFlag === 'false' || rawFlag === '0')
     const isLocationBlock = buttonRecord && buttonRecord.banReason === 'location_blocked'
     const bypassLocationCheck = buttonRecord && buttonRecord.bypassLocationCheck === true
+    
+    // 🔴 关键修复：如果是截屏/录屏封禁，但 isBanned = false，可能是数据库还没更新完成
+    // 检查 updateTime，如果是在最近3秒内更新的，可能是刚封禁，需要等待
+    const isScreenshotBanCheck = buttonRecord && (buttonRecord.banReason === 'screenshot' || buttonRecord.banReason === 'screen_record');
+    if (isScreenshotBanCheck && buttonRecord && buttonRecord.updateTime && !isBanned) {
+      try {
+        let updateTime = buttonRecord.updateTime;
+        if (updateTime && typeof updateTime.getTime === 'function') {
+          updateTime = updateTime;
+        } else if (typeof updateTime === 'number') {
+          updateTime = new Date(updateTime);
+        } else if (typeof updateTime === 'string') {
+          updateTime = new Date(updateTime);
+        } else {
+          updateTime = null;
+        }
+        
+        if (updateTime && !isNaN(updateTime.getTime())) {
+          const now = new Date();
+          const timeDiff = now.getTime() - updateTime.getTime();
+          const recentUpdate = timeDiff < 3000 && timeDiff >= 0; // 3秒内更新的
+          
+          // 如果是截屏封禁，但 isBanned = false 且是最近更新的，可能是数据库还没更新完成，返回 WAIT
+          if (recentUpdate) {
+            console.log('[checkUnlockStatus] ⏳ 截屏封禁可能还在更新中（最近3秒内更新），等待数据库同步...');
+            console.log('[checkUnlockStatus] ⏳ 时间差:', timeDiff, 'ms, isBanned:', isBanned);
+            return { action: 'WAIT', msg: '等待封禁状态更新...' };
+          }
+        }
+      } catch (e) {
+        console.warn('[checkUnlockStatus] 检查更新时间失败:', e);
+      }
+    }
 
     // ==========================================================
     // 🚀 2. 检查 Auto 模式 (超级绿灯)

@@ -217,51 +217,57 @@ Page({
   },
 
   // 🔴 处理截屏/录屏拦截
-  handleIntercept(type) {
+  async handleIntercept(type) {
+    // 🔴 关键修复：立即清除本地授权状态，防止第二次截屏时被自动放行
+    wx.removeStorageSync('has_permanent_auth');
+    
     // 标记封禁（本地存储）
     wx.setStorageSync('is_user_banned', true);
     if (type === 'screenshot') {
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    // 🔴 关键优化：立即跳转到 blocked 页面，不等待位置信息获取和云函数调用
-    console.log('[my] 🔴 截屏/录屏检测，立即跳转到封禁页');
-    this._jumpToBlocked(type);
-
-    // 🔴 异步调用云函数写入数据库封禁状态（不阻塞跳转）
-    this._getLocationAndDeviceInfo().then(locationData => {
-      wx.cloud.callFunction({
-        name: 'banUserByScreenshot',
-        data: {
-          type: type,
-          banPage: 'my', // 封禁页面
-          ...locationData
-        },
-        success: (res) => {
-          console.log('[my] banUserByScreenshot 调用成功，类型:', type, '结果:', res);
-        },
-        fail: (err) => {
-          console.error('[my] banUserByScreenshot 调用失败:', err);
-        }
-      });
-    }).catch(() => {
-      // 如果获取位置失败，仍然调用云函数（不带位置信息）
+    console.log('[my] 🔴 截屏/录屏检测，立即设置封禁状态');
+    
+    // 🔴 关键修复：立即调用云函数设置 isBanned = true，不等待位置信息
+    try {
       const sysInfo = wx.getSystemInfoSync();
-      wx.cloud.callFunction({
+      const immediateRes = await wx.cloud.callFunction({
         name: 'banUserByScreenshot',
         data: {
           type: type,
           banPage: 'my',
           deviceInfo: sysInfo.system || '',
           phoneModel: sysInfo.model || ''
-        },
-        success: (res) => {
-          console.log('[my] banUserByScreenshot 调用成功（无位置信息）');
-        },
-        fail: (err) => {
-          console.error('[my] banUserByScreenshot 调用失败:', err);
         }
       });
+      console.log('[my] ✅ 立即设置封禁状态成功:', immediateRes);
+    } catch (err) {
+      console.error('[my] ⚠️ 立即设置封禁状态失败:', err);
+    }
+
+    // 🔴 跳转到封禁页面
+    console.log('[my] 🔴 跳转到封禁页');
+    this._jumpToBlocked(type);
+
+    // 🔴 异步补充位置信息（不阻塞，可选）
+    this._getLocationAndDeviceInfo().then(locationData => {
+      wx.cloud.callFunction({
+        name: 'banUserByScreenshot',
+        data: {
+          type: type,
+          banPage: 'my',
+          ...locationData
+        },
+        success: (res) => {
+          console.log('[my] 补充位置信息成功，类型:', type, '结果:', res);
+        },
+        fail: (err) => {
+          console.error('[my] 补充位置信息失败:', err);
+        }
+      });
+    }).catch(() => {
+      console.log('[my] 位置信息获取失败，但封禁状态已设置');
     });
   },
 

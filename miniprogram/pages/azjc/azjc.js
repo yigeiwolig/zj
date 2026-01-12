@@ -226,10 +226,10 @@ Page({
 
   // 加载视频和图文数据
   loadVideosAndGraphics: function() {
-    // 读取视频章节
+    // 读取视频章节 - 🔴 关键修复：按 order 字段排序
     db.collection('azjc').where({
       type: 'video'
-    }).orderBy('createTime', 'desc').get({
+    }).orderBy('order', 'asc').get({
       success: (res) => {
         if (res.data.length === 0) {
           // 没有视频数据，继续读取图文
@@ -259,6 +259,7 @@ Page({
                   url: tempURL || item.url, // 使用临时链接，如果没有则使用原ID
                   fileID: item.url, // 保存原始fileID用于删除和重新获取
                   matchCode: item.matchCode || '', // 匹配码，如 '1+1', '1+2' 等
+                  order: item.order || 0, // 🔴 关键修复：包含 order 字段
                   _id: item._id,
                   needRefresh: !tempURL // 标记是否需要刷新链接
                 };
@@ -278,6 +279,7 @@ Page({
                 url: item.url,
                 fileID: item.url,
                 matchCode: item.matchCode || '',
+                order: item.order || 0, // 🔴 关键修复：包含 order 字段
                 _id: item._id
               }));
               this.setData({ chapters });
@@ -296,11 +298,11 @@ Page({
     });
   },
 
-  // 加载图文数据
+  // 加载图文数据 - 🔴 关键修复：按 order 字段排序
   loadGraphicsData: function(chapters) {
     db.collection('azjc').where({
       type: 'image'
-    }).orderBy('createTime', 'desc').get({
+    }).orderBy('order', 'asc').get({
       success: (imgRes) => {
         if (imgRes.data.length === 0) {
           this.setData({
@@ -331,6 +333,7 @@ Page({
                 fileID: item.img, // 保存原始fileID用于删除
                 desc: item.desc || '',
                 matchCode: item.matchCode || '', // 匹配码，如 '1+1', '1+2' 等
+                order: item.order || 0, // 🔴 关键修复：包含 order 字段
                 _id: item._id
               }));
               
@@ -346,6 +349,7 @@ Page({
                 fileID: item.img,
                 desc: item.desc || '',
                 matchCode: item.matchCode || '',
+                order: item.order || 0, // 🔴 关键修复：包含 order 字段
                 _id: item._id
               }));
               
