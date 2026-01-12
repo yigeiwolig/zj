@@ -2063,61 +2063,86 @@ Page({
   },
   
   // ========================================================
-  // 智能文本解析：提取姓名、电话、地址
+  // 🔴 优化：智能文本解析（提取姓名、电话、地址）
   // ========================================================
   parseSmartText(text) {
     let name = '';
     let phone = '';
     let address = '';
     
-    // 1. 提取手机号（11位数字）
-    const phonePattern = /1[3-9]\d{9}/;
-    const phoneMatch = text.match(phonePattern);
+    // 清理文本：移除常见标签和符号
+    let cleanText = text.trim()
+      .replace(/收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?/g, ' ')
+      .replace(/[()（）【】\[\]<>]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // 1. 提取手机号（11位数字，更严格）
+    const phonePattern = /\b1[3-9]\d{9}\b/;
+    const phoneMatch = cleanText.match(phonePattern);
     if (phoneMatch) {
       phone = phoneMatch[0];
-      text = text.replace(phone, '').trim();
+      cleanText = cleanText.replace(phonePattern, ' ').trim();
     }
     
     // 2. 提取固定电话（带区号的）
     if (!phone) {
-      const telPattern = /0\d{2,3}-?\d{7,8}/;
-      const telMatch = text.match(telPattern);
+      const telPattern = /\b0\d{2,3}-?\d{7,8}\b/;
+      const telMatch = cleanText.match(telPattern);
       if (telMatch) {
         phone = telMatch[0];
-        text = text.replace(phone, '').trim();
+        cleanText = cleanText.replace(telPattern, ' ').trim();
       }
     }
     
-    // 3. 提取姓名（通常在开头，2-4个汉字）
-    // 先尝试匹配开头的2-4个汉字
-    const namePattern = /^[\u4e00-\u9fa5]{2,4}/;
-    const nameMatch = text.match(namePattern);
+    // 3. 提取姓名（更智能的判断）
+    // 姓名特征：2-4个汉字，不包含地址关键词
+    const addressKeywords = ['省', '市', '区', '县', '镇', '街道', '路', '街', '道', '号', '室', '楼', '苑', '村', '组', '栋', '单元', '层', '房'];
+    const namePattern = /^([\u4e00-\u9fa5]{2,4})/;
+    const nameMatch = cleanText.match(namePattern);
+    
     if (nameMatch) {
-      name = nameMatch[0];
-      text = text.replace(name, '').trim();
+      const candidateName = nameMatch[1];
+      // 检查候选姓名是否包含地址关键词
+      const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+      
+      // 如果候选姓名不包含地址关键词，且长度合理，则认为是姓名
+      if (!hasAddressKeyword && candidateName.length >= 2 && candidateName.length <= 4) {
+        name = candidateName;
+        cleanText = cleanText.replace(new RegExp('^' + candidateName), '').trim();
+      }
     }
     
-    // 4. 剩余部分作为地址（使用现有的地址解析函数）
-    if (text) {
-      const parsedAddress = this.parseAddress(text);
-      address = parsedAddress.fullAddress;
-    }
-    
-    // 5. 如果姓名没提取到，尝试从常见格式提取
-    // 例如："张三 13800138000 广东省..."
-    if (!name && text) {
-      // 尝试匹配：姓名 + 空格/换行 + 电话
-      const namePhonePattern = /^([\u4e00-\u9fa5]{2,4})\s+(\d+)/;
-      const namePhoneMatch = text.match(namePhonePattern);
-      if (namePhoneMatch) {
-        name = namePhoneMatch[1];
-        if (!phone) {
-          phone = namePhoneMatch[2];
+    // 4. 如果姓名没提取到，尝试从电话前后提取
+    // 格式："张三13800138000" 或 "13800138000张三"
+    if (!name && phone) {
+      const nameBeforePhone = cleanText.match(new RegExp('([\\u4e00-\\u9fa5]{2,4})\\s*' + phone.replace(/(\d)/g, '\\$1')));
+      const nameAfterPhone = cleanText.match(new RegExp(phone.replace(/(\d)/g, '\\$1') + '\\s*([\\u4e00-\\u9fa5]{2,4})'));
+      
+      if (nameBeforePhone) {
+        const candidateName = nameBeforePhone[1];
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        if (!hasAddressKeyword) {
+          name = candidateName;
+          cleanText = cleanText.replace(candidateName, '').trim();
+        }
+      } else if (nameAfterPhone) {
+        const candidateName = nameAfterPhone[1];
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        if (!hasAddressKeyword) {
+          name = candidateName;
+          cleanText = cleanText.replace(candidateName, '').trim();
         }
       }
     }
     
-    return { name, phone, address };
+    // 5. 剩余部分作为地址（使用现有的地址解析函数）
+    if (cleanText) {
+      const parsedAddress = this.parseAddress(cleanText);
+      address = parsedAddress.fullAddress || cleanText;
+    }
+    
+    return { name: name.trim(), phone: phone.trim(), address: address.trim() };
   },
   
   // ========================================================
@@ -2160,67 +2185,86 @@ Page({
     });
   },
   
-  // ========================================================
-  // 地址解析函数（智能识别省市区）
+  // 🔴 优化：地址解析函数（智能识别省市区）
   // ========================================================
   parseAddress(addressText) {
+    if (!addressText || !addressText.trim()) {
+      return { province: '', city: '', district: '', detail: '', fullAddress: addressText };
+    }
+    
     let text = addressText.trim();
     let province = '';
     let city = '';
     let district = '';
     let detail = '';
     
-    // 移除常见的分隔符，统一处理
-    text = text.replace(/[\/、]/g, ' ').replace(/[,，]/g, ' ').replace(/\s+/g, ' ').trim();
+    // 移除常见的分隔符，统一处理（保留空格用于分割）
+    text = text.replace(/[\/、]/g, ' ').replace(/[,，;；]/g, ' ').replace(/\s+/g, ' ').trim();
     
     // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
     let remaining = text;
     
-    // 识别省（必须包含"省"字）
-    const provincePattern = /([^省\s]+省)/;
+    // 识别省（必须包含"省"字，但不能是"省市区"这样的组合）
+    const provincePattern = /([\u4e00-\u9fa5]{1,10}省)/;
     const provinceMatch = remaining.match(provincePattern);
     if (provinceMatch) {
-      province = provinceMatch[1].trim();
-      remaining = remaining.replace(province, '').trim();
+      const candidate = provinceMatch[1].trim();
+      // 确保不是"省市区"这样的错误匹配
+      if (!candidate.includes('市') && !candidate.includes('区') && !candidate.includes('县')) {
+        province = candidate;
+        remaining = remaining.replace(new RegExp(province.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
     }
     
-    // 识别市（必须包含"市"字，排除"省"字）
-    const cityPattern = /([^省市\s]+市)/;
+    // 识别市（必须包含"市"字，排除已识别的省和"省市区"组合）
+    const cityPattern = /([\u4e00-\u9fa5]{1,10}市)/;
     const cityMatch = remaining.match(cityPattern);
     if (cityMatch) {
-      city = cityMatch[1].trim();
-      remaining = remaining.replace(city, '').trim();
+      const candidate = cityMatch[1].trim();
+      // 确保不是"市区"或"市县"这样的错误匹配
+      if (!candidate.includes('区') && !candidate.includes('县') && !candidate.includes('省')) {
+        city = candidate;
+        remaining = remaining.replace(new RegExp(city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
     }
     
-    // 识别区/县（必须包含"区"或"县"字）
-    const districtPattern = /([^省市区县\s]+[区县])/;
+    // 识别区/县（必须包含"区"或"县"字，排除已识别的省市）
+    const districtPattern = /([\u4e00-\u9fa5]{1,10}[区县])/;
     const districtMatch = remaining.match(districtPattern);
     if (districtMatch) {
-      district = districtMatch[1].trim();
-      remaining = remaining.replace(district, '').trim();
+      const candidate = districtMatch[1].trim();
+      // 确保不是"省市区"这样的错误匹配
+      if (!candidate.includes('省') && !candidate.includes('市')) {
+        district = candidate;
+        remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
+    }
+    
+    // 方法2: 如果没识别到省市，尝试识别特殊格式（直辖市）
+    if (!province && !city && !district) {
+      // 直辖市特殊处理：北京、上海、天津、重庆
+      const directCities = ['北京市', '上海市', '天津市', '重庆市'];
+      for (const dc of directCities) {
+        if (text.includes(dc)) {
+          city = dc;
+          remaining = text.replace(dc, '').trim();
+          
+          // 继续识别区
+          const districtMatch2 = remaining.match(districtPattern);
+          if (districtMatch2) {
+            const candidate = districtMatch2[1].trim();
+            if (!candidate.includes('省') && !candidate.includes('市')) {
+              district = candidate;
+              remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+            }
+          }
+          break;
+        }
+      }
     }
     
     // 剩余部分作为详细地址
     detail = remaining.trim();
-    
-    // 方法2: 如果没识别到，尝试识别特殊格式（如：北京市朝阳区）
-    if (!province && !city && !district) {
-      // 直辖市特殊处理：北京、上海、天津、重庆
-      const directCityPattern = /(北京市|上海市|天津市|重庆市|北京市|上海市|天津市|重庆市)/;
-      const directCityMatch = text.match(directCityPattern);
-      if (directCityMatch) {
-        city = directCityMatch[1];
-        remaining = text.replace(city, '').trim();
-        
-        // 继续识别区
-        const districtMatch2 = remaining.match(districtPattern);
-        if (districtMatch2) {
-          district = districtMatch2[1].trim();
-          remaining = remaining.replace(district, '').trim();
-        }
-        detail = remaining;
-      }
-    }
     
     // 组装完整地址（格式化输出）
     let fullAddress = '';
@@ -2230,7 +2274,7 @@ Page({
     if (district) parts.push(district);
     if (detail) parts.push(detail);
     
-    fullAddress = parts.join(' ');
+    fullAddress = parts.join(' ').trim();
     
     // 如果解析失败，使用原始文本
     if (!fullAddress) {

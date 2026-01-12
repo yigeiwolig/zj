@@ -91,6 +91,12 @@ Page({
     // 【新增】底部弹窗控制
     showReturnAddressModal: false,
     returnTrackingIdInput: '', // 运单号输入
+
+    // 【新增】测试密码输入弹窗
+    showTestPasswordModal: false,
+    testPasswordInput: '',
+    isClearingData: false, // 是否正在清空数据
+    clearProgress: { current: 0, total: 0, currentCollection: '' }, // 清空进度
   },
 
   onLoad(options) {
@@ -1740,6 +1746,109 @@ Page({
     }, 2000);
   },
 
+  // 🔴 测试按钮：打开密码输入弹窗
+  openTestPasswordModal() {
+    this.setData({
+      showTestPasswordModal: true,
+      testPasswordInput: '',
+      isClearingData: false
+    });
+  },
+
+  // 🔴 关闭测试密码弹窗
+  closeTestPasswordModal() {
+    this.setData({
+      showTestPasswordModal: false,
+      testPasswordInput: ''
+    });
+  },
+
+  // 🔴 测试密码输入
+  onTestPasswordInput(e) {
+    this.setData({
+      testPasswordInput: e.detail.value
+    });
+  },
+
+  // 🔴 确认测试密码并清空数据
+  confirmTestPassword() {
+    const password = this.data.testPasswordInput;
+    
+    if (!password) {
+      this.showAutoToast('提示', '请输入密码');
+      return;
+    }
+
+    if (password !== '123456') {
+      this.showAutoToast('提示', '密码错误');
+      return;
+    }
+
+    // 密码正确，开始清空数据
+    this.setData({
+      showTestPasswordModal: false,
+      testPasswordInput: '',
+      isClearingData: true
+    });
+
+    this.clearAllCollections();
+  },
+
+  // 🔴 清空所有集合数据（排除 app_config、guanliyuan、shouhou）
+  // 使用云函数来删除，避免权限问题
+  async clearAllCollections() {
+    try {
+      // 调用云函数清空所有集合
+      const res = await wx.cloud.callFunction({
+        name: 'clearAllCollections',
+        data: {
+          password: '123456' // 密码在云函数中再次验证
+        }
+      });
+
+      // 清空完成
+      this.setData({
+        isClearingData: false,
+        'clearProgress.current': 0,
+        'clearProgress.total': 0,
+        'clearProgress.currentCollection': ''
+      });
+
+      if (res.result && res.result.success) {
+        const results = res.result.results;
+        const successCount = results.success.length;
+        const failCount = results.failed.length;
+        const totalDeleted = results.totalDeleted;
+
+        if (failCount === 0) {
+          this.showAutoToast('提示', `清空完成！成功清空 ${successCount} 个集合，共删除 ${totalDeleted} 条数据`);
+        } else {
+          this.showAutoToast('提示', `清空完成！成功 ${successCount} 个，失败 ${failCount} 个，共删除 ${totalDeleted} 条数据`);
+          console.warn('部分集合清空失败:', results.failed);
+        }
+      } else {
+        this.setData({
+          isClearingData: false,
+          'clearProgress.current': 0,
+          'clearProgress.total': 0,
+          'clearProgress.currentCollection': ''
+        });
+        this.showAutoToast('提示', res.result?.error || '清空失败，请重试');
+        console.error('云函数调用失败:', res.result);
+      }
+    } catch (err) {
+      // 清空完成
+      this.setData({
+        isClearingData: false,
+        'clearProgress.current': 0,
+        'clearProgress.total': 0,
+        'clearProgress.currentCollection': ''
+      });
+      this.showAutoToast('提示', '清空失败：' + (err.message || err.errMsg || '未知错误'));
+      console.error('清空集合失败:', err);
+    }
+  },
+
   // 显示 Loading
   // 显示 Loading（使用和 index.js 一样的白色背景进度条动画）
   showMyLoading(title = '加载中...') {
@@ -2687,10 +2796,10 @@ Page({
     return `${m}-${day} ${h}:${min}`;
   },
 
-  // 【新增】地址解析方法（用于验证地址格式）
+  // 🔴 优化：地址解析方法（用于验证地址格式）
   parseAddressForShipping(addressText) {
     if (!addressText || !addressText.trim()) {
-      return { province: '', city: '', district: '', street: '', fullAddress: addressText };
+      return { province: '', city: '', district: '', detail: '', fullAddress: addressText };
     }
     
     let text = addressText.trim();
@@ -2699,57 +2808,73 @@ Page({
     let district = '';
     let detail = '';
     
-    // 移除常见的分隔符，统一处理
-    text = text.replace(/[\/、]/g, ' ').replace(/[,，]/g, ' ').replace(/\s+/g, ' ').trim();
+    // 移除常见的分隔符，统一处理（保留空格用于分割）
+    text = text.replace(/[\/、]/g, ' ').replace(/[,，;；]/g, ' ').replace(/\s+/g, ' ').trim();
     
     // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
     let remaining = text;
     
-    // 识别省（必须包含"省"字）
-    const provincePattern = /([^省\s]+省)/;
+    // 识别省（必须包含"省"字，但不能是"省市区"这样的组合）
+    const provincePattern = /([\u4e00-\u9fa5]{1,10}省)/;
     const provinceMatch = remaining.match(provincePattern);
     if (provinceMatch) {
-      province = provinceMatch[1].trim();
-      remaining = remaining.replace(province, '').trim();
+      const candidate = provinceMatch[1].trim();
+      // 确保不是"省市区"这样的错误匹配
+      if (!candidate.includes('市') && !candidate.includes('区') && !candidate.includes('县')) {
+        province = candidate;
+        remaining = remaining.replace(new RegExp(province.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
     }
     
-    // 识别市（必须包含"市"字，排除"省"字）
-    const cityPattern = /([^省市\s]+市)/;
+    // 识别市（必须包含"市"字，排除已识别的省和"省市区"组合）
+    const cityPattern = /([\u4e00-\u9fa5]{1,10}市)/;
     const cityMatch = remaining.match(cityPattern);
     if (cityMatch) {
-      city = cityMatch[1].trim();
-      remaining = remaining.replace(city, '').trim();
+      const candidate = cityMatch[1].trim();
+      // 确保不是"市区"或"市县"这样的错误匹配
+      if (!candidate.includes('区') && !candidate.includes('县') && !candidate.includes('省')) {
+        city = candidate;
+        remaining = remaining.replace(new RegExp(city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
     }
     
-    // 识别区/县（必须包含"区"或"县"字）
-    const districtPattern = /([^省市区县\s]+[区县])/;
+    // 识别区/县（必须包含"区"或"县"字，排除已识别的省市）
+    const districtPattern = /([\u4e00-\u9fa5]{1,10}[区县])/;
     const districtMatch = remaining.match(districtPattern);
     if (districtMatch) {
-      district = districtMatch[1].trim();
-      remaining = remaining.replace(district, '').trim();
+      const candidate = districtMatch[1].trim();
+      // 确保不是"省市区"这样的错误匹配
+      if (!candidate.includes('省') && !candidate.includes('市')) {
+        district = candidate;
+        remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
+    }
+    
+    // 方法2: 如果没识别到省市，尝试识别特殊格式（直辖市）
+    if (!province && !city && !district) {
+      // 直辖市特殊处理：北京、上海、天津、重庆
+      const directCities = ['北京市', '上海市', '天津市', '重庆市'];
+      for (const dc of directCities) {
+        if (text.includes(dc)) {
+          city = dc;
+          remaining = text.replace(dc, '').trim();
+          
+          // 继续识别区
+          const districtMatch2 = remaining.match(districtPattern);
+          if (districtMatch2) {
+            const candidate = districtMatch2[1].trim();
+            if (!candidate.includes('省') && !candidate.includes('市')) {
+              district = candidate;
+              remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+            }
+          }
+          break;
+        }
+      }
     }
     
     // 剩余部分作为详细地址
     detail = remaining.trim();
-    
-    // 方法2: 如果没识别到，尝试识别特殊格式（如：北京市朝阳区）
-    if (!province && !city && !district) {
-      // 直辖市特殊处理：北京、上海、天津、重庆
-      const directCityPattern = /(北京市|上海市|天津市|重庆市)/;
-      const directCityMatch = text.match(directCityPattern);
-      if (directCityMatch) {
-        city = directCityMatch[1];
-        remaining = text.replace(city, '').trim();
-        
-        // 继续识别区
-        const districtMatch2 = remaining.match(districtPattern);
-        if (districtMatch2) {
-          district = districtMatch2[1].trim();
-          remaining = remaining.replace(district, '').trim();
-        }
-        detail = remaining;
-      }
-    }
     
     // 组装完整地址（格式化输出）
     let fullAddress = '';
@@ -2759,7 +2884,7 @@ Page({
     if (district) parts.push(district);
     if (detail) parts.push(detail);
     
-    fullAddress = parts.join(' ');
+    fullAddress = parts.join(' ').trim();
     
     // 如果解析失败，使用原始文本
     if (!fullAddress) {

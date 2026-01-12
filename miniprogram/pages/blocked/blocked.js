@@ -3,7 +3,8 @@ Page({
   data: {
     checkTimer: null,
     type: '', // 封禁类型
-    canCheck: false // 冷却期间禁止检查
+    canCheck: false, // 冷却期间禁止检查
+    showCopySuccessModal: false // 自定义"内容已复制"弹窗
   },
 
   onLoad(options) {
@@ -164,6 +165,21 @@ Page({
   },
 
   handleCopyWechat() {
-    wx.setClipboardData({ data: 'MT-mogaishe' });
+    wx.setClipboardData({ 
+      data: 'MT-mogaishe',
+      success: () => {
+        // 立即隐藏微信原生的"内容已复制"提示（多次尝试确保隐藏）
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
+        setTimeout(() => { wx.hideToast(); }, 100);
+        setTimeout(() => { wx.hideToast(); }, 150);
+        
+        // 显示自定义"内容已复制"弹窗
+        this.setData({ showCopySuccessModal: true });
+        setTimeout(() => {
+          this.setData({ showCopySuccessModal: false });
+        }, 2000);
+      }
+    });
   }
 });

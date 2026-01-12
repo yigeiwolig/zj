@@ -50,3 +50,6 @@
   <view class="footer-tip">修改后将实时同步至前端展示</view>
 </view>
 
+
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />

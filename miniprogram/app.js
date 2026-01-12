@@ -117,57 +117,146 @@ App({
     }
   },
 
+  // 内部辅助：获取当前页面上的自定义弹窗组件
+  _getCustomToast() {
+    try {
+      const pages = getCurrentPages();
+      const curPage = pages[pages.length - 1];
+      if (curPage) {
+        return curPage.selectComponent('#custom-toast');
+      }
+    } catch (e) {
+      console.error('[app] 获取custom-toast组件失败', e);
+    }
+    return null;
+  },
+
   // ======================== 生命周期 ========================
   onLaunch: function () {
     // ======================== 方案A：全局拦截微信官方弹窗 ========================
     // 将 wx.showModal / wx.showToast / wx.showLoading / wx.hideLoading 统一替换为自定义白底黑字 UI
-    // 不改业务逻辑，只改 UI 展现
     try {
-      // 1) showModal
+      // 保存原生 API (防止重复保存)
       if (!wx.__mt_oldShowModal) wx.__mt_oldShowModal = wx.showModal;
+      if (!wx.__mt_oldShowToast) wx.__mt_oldShowToast = wx.showToast;
+      if (!wx.__mt_oldHideToast) wx.__mt_oldHideToast = wx.hideToast;
+      if (!wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = wx.showLoading;
+      if (!wx.__mt_oldHideLoading) wx.__mt_oldHideLoading = wx.hideLoading;
+      if (!wx.__mt_oldSetClipboardData) wx.__mt_oldSetClipboardData = wx.setClipboardData;
+
+      // 辅助函数：获取自定义弹窗组件
+      const getToast = () => {
+        try {
+          const pages = getCurrentPages();
+          const curPage = pages[pages.length - 1];
+          if (curPage) {
+            return curPage.selectComponent('#custom-toast');
+          }
+        } catch (e) {
+          console.error('[app] 获取custom-toast组件失败', e);
+        }
+        return null;
+      };
+
+      // 1) showModal
       wx.showModal = (opt = {}) => {
-        // 如果使用了 editable 等高级特性，直接调用官方原方法
+        // 如果使用了 editable 等高级特性，直接调用官方原方法（组件暂不支持）
         if (opt && opt.editable) {
           return wx.__mt_oldShowModal ? wx.__mt_oldShowModal(opt) : undefined;
         }
-        this.showDialog({
-          title: opt.title || '提示',
-          content: opt.content || '',
-          showCancel: opt.showCancel !== false && !!opt.showCancel,
-          confirmText: opt.confirmText || '确定',
-          cancelText: opt.cancelText || '取消',
-          maskClosable: opt.showCancel === false ? false : true,
-          onConfirm: () => opt.success && opt.success({ confirm: true, cancel: false }),
-          onCancel: () => opt.success && opt.success({ confirm: false, cancel: true })
-        });
+        
+        const toast = getToast();
+        if (toast) {
+          toast.showModal(opt);
+        } else {
+          // 降级回退到原生
+          console.warn('[app] 当前页面未找到 #custom-toast 组件，降级使用原生 showModal');
+          return wx.__mt_oldShowModal(opt);
+        }
       };
 
       // 2) showToast
-      if (!wx.__mt_oldShowToast) wx.__mt_oldShowToast = wx.showToast;
       wx.showToast = (opt = {}) => {
-        const msg = (typeof opt === 'string') ? opt : (opt.title || '');
-        const duration = (opt && opt.duration) ? opt.duration : 1500;
-        // 用全局 dialog 的轻提示也可以，但这里复用 dialog 可能太频繁；
-        // 直接用 dialog 作为白底提示：无取消按钮，自动关闭
-        this.showDialog({ title: '提示', content: msg, showCancel: false, confirmText: '知道了' });
-        if (this.globalData._toastTimer) clearTimeout(this.globalData._toastTimer);
-        this.globalData._toastTimer = setTimeout(() => {
-          this.hideDialog();
-        }, duration);
+        // 处理字符串参数（兼容 wx.showToast('提示') 这种调用方式）
+        if (typeof opt === 'string') {
+          opt = { title: opt };
+        }
+        
+        const toast = getToast();
+        if (toast) {
+          console.log('[app] 使用自定义弹窗显示 Toast:', opt);
+          toast.showToast(opt);
+        } else {
+          console.warn('[app] 当前页面未找到 #custom-toast 组件，降级使用原生 showToast', opt);
+          return wx.__mt_oldShowToast(opt);
+        }
+      };
+      wx.hideToast = () => {
+        const toast = getToast();
+        if (toast) toast.hideToast();
+        else wx.__mt_oldHideToast();
       };
 
       // 3) showLoading/hideLoading
-      if (!wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = wx.showLoading;
-      if (!wx.__mt_oldHideLoading) wx.__mt_oldHideLoading = wx.hideLoading;
       wx.showLoading = (opt = {}) => {
-        const title = (typeof opt === 'string') ? opt : (opt.title || '加载中...');
-        this.showLoading(title);
+        const toast = getToast();
+        if (toast) {
+          toast.showLoading(opt);
+        } else {
+          console.warn('[app] 当前页面未找到 #custom-toast 组件，降级使用原生 showLoading');
+          return wx.__mt_oldShowLoading(opt);
+        }
       };
       wx.hideLoading = () => {
-        this.hideLoading();
+        const toast = getToast();
+        if (toast) toast.hideLoading();
+        else wx.__mt_oldHideLoading();
+      };
+
+      // 4) setClipboardData - 拦截复制API，自动隐藏原生提示并显示自定义提示
+      wx.setClipboardData = (opt = {}) => {
+        const originalSuccess = opt.success;
+        const originalFail = opt.fail;
+        
+        // 🔴 策略：在复制前就显示自定义提示，抢占显示时机
+        const toast = getToast();
+        if (toast) {
+          // 立即显示自定义提示（抢占显示时机）
+          toast.showToast({ title: '内容已复制', icon: 'success', duration: 2000 });
+        }
+        
+        // 包装 success 回调
+        opt.success = (res) => {
+          // 尝试隐藏原生提示（虽然可能无法完全隐藏，但尽力尝试）
+          try {
+            wx.hideToast();
+            // 多次尝试隐藏
+            for (let i = 1; i <= 5; i++) {
+              setTimeout(() => {
+                try { wx.hideToast(); } catch (e) {}
+              }, i * 30);
+            }
+          } catch (e) {}
+          
+          // 如果自定义提示还没显示，现在显示
+          if (!toast) {
+            setTimeout(() => {
+              const t = getToast();
+              if (t) {
+                t.showToast({ title: '内容已复制', icon: 'success', duration: 1500 });
+              }
+            }, 100);
+          }
+          
+          // 执行原始 success 回调
+          if (originalSuccess) originalSuccess(res);
+        };
+        
+        // 调用原生 API
+        return wx.__mt_oldSetClipboardData(opt);
       };
     } catch (e) {
-      // ignore
+      console.error('[app] 替换API失败:', e);
     }
 
     if (!wx.cloud) {

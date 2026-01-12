@@ -522,3 +522,6 @@
     <cover-view class="cam-btn" style="width: 40px;"></cover-view>
   </cover-view>
 </view>
+
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />

@@ -513,3 +513,5 @@ module.exports = {
   getWaveClass: getWaveClass
 };
 </wxs>
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />

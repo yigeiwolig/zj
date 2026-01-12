@@ -113,3 +113,5 @@ module.exports = {
     </view>
   </block>
 </view>
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />

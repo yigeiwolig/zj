@@ -27,31 +27,19 @@
   </view>
 </view>
 
-<!-- 昵称授权窗口 (只有当未授权时显示) -->
+<!-- 昵称授权窗口 (改为高级身份验证模式) -->
 <view class="auth-mask" wx:if="{{!isAuthorized && isShowNicknameUI}}">
-  <view class="auth-panel">
-    <view class="auth-header">
-      <view class="app-icon"></view> 
-      <text class="app-name">MT Innovation Lab</text>
-      <text class="auth-apply">申请获取以下权限</text>
+  <view class="auth-panel-new">
+    <view class="auth-icon-lock">✨</view>
+    <view class="auth-title-new">开启专属体验</view>
+    <view class="auth-subtitle-new">请输入访问口令，解锁更多精彩内容</view>
+    
+    <view class="auth-input-wrapper">
+      <input type="nickname" class="auth-input-new" placeholder="点击下方微信昵称填入" bindinput="onNickNameInput" bindchange="onNickNameChange" value="{{inputNickName}}"/>
     </view>
-    <view class="auth-desc">
-      <view class="desc-dot"></view>
-      <text>获得你的公开信息（昵称、头像等）</text>
-    </view>
-    <view class="info-form">
-      <view class="form-item avatar-item">
-        <text class="label">头像</text>
-        <view class="avatar-wrapper"><view class="default-avatar"></view></view>
-      </view>
-      <view class="form-item">
-        <text class="label">昵称</text>
-        <input type="nickname" class="wechat-input" placeholder="请输入或一键填写" bindinput="onNickNameInput" bindchange="onNickNameChange" value="{{inputNickName}}"/>
-      </view>
-    </view>
-    <view class="auth-btns">
-      <button class="btn-reject" bindtap="handleDeny">拒绝</button>
-      <button class="btn-allow" bindtap="handleLogin">允许</button>
+    
+    <view class="auth-btn-new" bindtap="handleLogin">
+      立即开启
     </view>
   </view>
 </view>
@@ -283,3 +271,5 @@
     <view class="loading-bar"></view>
   </view>
 </view>
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />

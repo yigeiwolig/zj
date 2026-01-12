@@ -157,7 +157,8 @@
               </view>
               
               <!-- 🔴 优化：把价格包装在 view 中，根据管理员模式设置不同的 class -->
-              <view class="m-price-wrapper {{isAdmin ? 'm-price-wrapper-admin' : 'm-price-wrapper-normal'}}" catchtap="adminEditModelPrice" data-midx="{{index}}">
+              <!-- 🔴 修复：非管理员模式下使用 bindtap 或不绑定，避免阻止事件冒泡 -->
+              <view class="m-price-wrapper {{isAdmin ? 'm-price-wrapper-admin' : 'm-price-wrapper-normal'}}" catchtap="{{isAdmin ? 'adminEditModelPrice' : ''}}" data-midx="{{index}}">
                 <text class="m-price {{isAdmin?'editable':''}}">¥{{item.price}}</text>
               </view>
               
@@ -532,3 +533,5 @@
 </view>
 
 </view>
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />

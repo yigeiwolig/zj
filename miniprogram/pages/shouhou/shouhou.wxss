@@ -913,6 +913,8 @@ page {
   position: relative;
   background: #fff;
   z-index: 10;
+  /* 关键：裁剪掉输入框的可见部分 */
+  overflow: hidden;
 }
 .dots-row {
   display: flex;
@@ -931,19 +933,40 @@ page {
   background: #000;
   transform: scale(1.2);
 }
-/* 修复密码输入框：彻底隐形 */
+/* 修复密码输入框：彻底隐形，移到屏幕外但保持可输入功能 */
 .hidden-input {
-  position: absolute;
-  top: 0; 
-  left: 0;
-  width: 200%; /* 放大一点防止点不到 */
-  height: 100%;
-  opacity: 0; /* 关键：完全透明 */
-  z-index: 20;
-  color: transparent; /* 文字透明 */
-  background: transparent;
-  text-indent: -999em; /* 把光标移出屏幕 */
-  margin-left: -100%; /* 配合 width 防止撑开布局 */
+  position: fixed;
+  /* 移到屏幕外，完全不可见，但保持可输入功能 */
+  top: -9999px;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  z-index: -999;
+  color: transparent !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  /* 关键：隐藏光标和输入框的所有视觉效果 */
+  caret-color: transparent !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  /* 隐藏输入框边框和背景 */
+  box-shadow: none !important;
+  /* 确保文字不可见 */
+  font-size: 0 !important;
+  line-height: 0 !important;
+  /* 防止系统显示输入框 */
+  pointer-events: auto;
+  /* 确保完全不可见 */
+  visibility: hidden !important;
+  /* 移除所有可能的边框和装饰 */
+  -webkit-tap-highlight-color: transparent;
+  /* 防止输入框获得焦点时的系统样式 */
+  -webkit-user-select: none;
+  user-select: none;
+  /* 使用 transform 进一步移出视野，确保完全不可见 */
+  transform: translateX(-9999px) translateY(-9999px) scale(0.01);
 }
 
 /* === 视频教程列表 (大卡片风格) === */
@@ -1242,6 +1265,13 @@ page {
 .modal-btn.confirm {
   background: #000;
   color: #fff;
+}
+
+.modal-btn.confirm.disabled {
+  background: #999;
+  color: #fff;
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 /* === 管理员弹窗预览图 === */

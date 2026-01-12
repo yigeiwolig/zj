@@ -49,6 +49,10 @@
         <view class="return-required-btn" bindtap="openReturnRequiredModal">
           需寄回订单确认
         </view>
+        <!-- 测试按钮 -->
+        <view class="test-btn" bindtap="openTestPasswordModal">
+          测试按钮
+        </view>
       </view>
     </view>
 
@@ -964,4 +968,48 @@
     </view>
   </view>
 
+</view>
+
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />
+
+<!-- ================= 测试密码输入弹窗 ================= -->
+<view class="custom-dialog-mask" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal">
+  <view class="custom-dialog-box" catchtap="noop" style="max-width: 600rpx;">
+    <view class="cd-title">请输入测试密码</view>
+    <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
+      此操作将清空除 app_config、guanliyuan、shouhou 以外的所有集合数据
+    </view>
+    
+    <input 
+      class="cd-input" 
+      type="text" 
+      password
+      placeholder="请输入密码"
+      value="{{testPasswordInput}}"
+      bindinput="onTestPasswordInput"
+      confirm-type="done"
+      bindconfirm="confirmTestPassword"
+      maxlength="20"
+    />
+    
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel" bindtap="closeTestPasswordModal">取消</view>
+      <view class="cd-btn confirm" bindtap="confirmTestPassword">确定</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 清空数据进度提示 ================= -->
+<view class="loading-mask" wx:if="{{isClearingData}}">
+  <view class="loader">
+    <text class="loader-label">正在清空数据...</text>
+    <view class="loading-bar"></view>
+    <view style="margin-top: 20rpx; font-size: 24rpx; color: #666;">
+      <text wx:if="{{clearProgress.currentCollection}}">
+        正在处理：{{clearProgress.currentCollection}} 
+        ({{clearProgress.current}}/{{clearProgress.total}})
+      </text>
+    </view>
+  </view>
 </view>

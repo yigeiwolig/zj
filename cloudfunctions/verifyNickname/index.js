@@ -112,13 +112,62 @@ exports.main = async (event, context) => {
     }
 
     // 4. 检查是否在白名单 (valid_users)
+    // 支持占位逻辑：
+    // - 优先查找已绑定当前用户的记录
+    // - 其次查找未绑定任何用户的空位记录
     let isWhitelisted = false;
+    let targetValidUserDocId = null;
+    let isNewBinding = false;
+
     try {
-      const validRes = await db.collection('valid_users').where({ nickname }).limit(1).get();
+      const validRes = await db.collection('valid_users').where({ nickname }).get();
+      
       if (validRes.data.length > 0) {
-        isWhitelisted = true;
+        const records = validRes.data;
+        
+        // 4.1 优先查找已绑定当前用户的记录
+        const myRecord = records.find(r => r._openid === openid);
+        
+        if (myRecord) {
+          isWhitelisted = true;
+          targetValidUserDocId = myRecord._id;
+          console.log('[verifyNickname] 老用户回归，命中白名单');
+        } else {
+          // 4.2 查找未绑定的空位 (没有 _openid 字段，或者 _openid 为空/null)
+          // 注意：有些历史数据可能有 _openid 但不是当前用户，那些是被占用的
+          const emptyRecord = records.find(r => !r._openid);
+          
+          if (emptyRecord) {
+            isWhitelisted = true;
+            targetValidUserDocId = emptyRecord._id;
+            isNewBinding = true;
+            console.log('[verifyNickname] 发现空位，准备绑定');
+          } else {
+            console.log('[verifyNickname] 昵称存在但所有位置已被占用');
+          }
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.error('[verifyNickname] 查询 valid_users 失败:', e);
+    }
+
+    // 如果是新绑定，执行绑定操作
+    if (isNewBinding && targetValidUserDocId) {
+        try {
+            await db.collection('valid_users').doc(targetValidUserDocId).update({
+                data: {
+                    _openid: openid,
+                    bindTime: db.serverDate(),
+                    updateTime: db.serverDate()
+                }
+            });
+            console.log('[verifyNickname] 绑定成功');
+        } catch (e) {
+            console.error('[verifyNickname] 绑定失败:', e);
+            // 绑定失败（可能是并发冲突），视为验证失败
+            isWhitelisted = false;
+        }
+    }
 
     // 5. 自动录入模式 (Auto Mode)
     // 如果开启了自动模式，且没在白名单，自动加白

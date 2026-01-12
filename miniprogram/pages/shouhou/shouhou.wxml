@@ -180,7 +180,17 @@
           </block>
         </view>
         <view wx:if="{{passError}}" style="color:red; font-size:14px; margin-top:20px;">密码错误</view>
-        <input class="hidden-input" type="number" maxlength="6" bindinput="onPassInput" value="{{passInput}}" focus="{{focusPass}}" />
+        <input 
+          class="hidden-input" 
+          type="number" 
+          maxlength="6" 
+          bindinput="onPassInput" 
+          value="{{passInput}}" 
+          focus="{{focusPass}}"
+          adjust-position="{{false}}"
+          hold-keyboard="{{false}}"
+          confirm-type="done"
+        />
       </view>
 
       <!-- 视频列表 -->
@@ -435,7 +445,7 @@
 
       <view class="modal-btns">
         <view class="modal-btn cancel" bindtap="closeModal">取消</view>
-        <view class="modal-btn confirm" bindtap="confirmModal">确认发布</view>
+        <view class="modal-btn confirm {{isUploadingVideo ? 'disabled' : ''}}" bindtap="confirmModal">确认发布</view>
       </view>
     </view>
   </view>
@@ -509,3 +519,5 @@
   </view>
 
 </view>
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />

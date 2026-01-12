@@ -17,6 +17,9 @@
     "pages/call/call",
     "pages/home/home"
   ],
+  "usingComponents": {
+    "custom-toast": "/components/custom-toast/index"
+  },
   "window": {
     "navigationStyle": "custom",
     "backgroundTextStyle": "dark",

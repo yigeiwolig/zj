@@ -146,6 +146,9 @@ Page({
     // 是否正在提取封面
     extractingThumb: false,
 
+    // 是否正在上传视频（防止重复点击）
+    isUploadingVideo: false,
+
     // 拖拽排序相关
     dragIndex: -1,        // 当前拖拽的卡片索引
     dragStartY: 0,        // 拖拽开始时的Y坐标（相对于页面）
@@ -282,6 +285,45 @@ Page({
     setTimeout(() => {
       this.setData({ 'autoToast.show': false });
     }, 2000);
+  },
+
+  // 🔴 辅助函数：获取 custom-toast 组件并调用
+  _getCustomToast() {
+    return this.selectComponent('#custom-toast');
+  },
+
+  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
+  _showCustomToast(title, icon = 'none', duration = 2000) {
+    const toast = this._getCustomToast();
+    if (toast) {
+      toast.showToast({ title, icon, duration });
+    } else {
+      // 降级：如果组件不存在，使用全局拦截（理论上不会到这里）
+      wx.showToast({ title, icon, duration });
+    }
+  },
+
+  // 🔴 统一的自定义 Modal 方法（替换所有 wx.showModal，除了 editable 的情况）
+  _showCustomModal(options) {
+    // 如果 editable 为 true，使用原生（因为自定义组件不支持输入框）
+    if (options.editable) {
+      return wx.showModal(options);
+    }
+    
+    const toast = this._getCustomToast();
+    if (toast) {
+      toast.showModal({
+        title: options.title || '提示',
+        content: options.content || '',
+        showCancel: options.showCancel !== false,
+        confirmText: options.confirmText || '确定',
+        cancelText: options.cancelText || '取消',
+        success: options.success
+      });
+    } else {
+      // 降级
+      wx.showModal(options);
+    }
   },
   onDialogConfirm() {
     console.log('[onDialogConfirm] 用户点击了确定按钮');
@@ -459,7 +501,7 @@ Page({
                 },
                 fail: (err) => {
                   console.error('[checkUnfinishedReturn] 跳转失败:', err);
-                  wx.showToast({ title: '跳转失败，请手动进入个人中心', icon: 'none' });
+                  this._showCustomToast('跳转失败，请手动进入个人中心', 'none');
                 }
               });
             }
@@ -585,7 +627,7 @@ Page({
     console.log('[syncAllPartsToCloud] 开始执行，isAdmin:', this.data.isAdmin, 'db:', !!this.db);
     
     if (!this.data.isAdmin) {
-      wx.showToast({ title: '需要管理员权限', icon: 'none' });
+      this._showCustomToast('需要管理员权限', 'none');
       return;
     }
 
@@ -593,12 +635,12 @@ Page({
       // 如果 db 未初始化，尝试重新初始化
       this.db = wx.cloud.database();
       if (!this.db) {
-        wx.showToast({ title: '云服务未初始化', icon: 'none' });
+        this._showCustomToast('云服务未初始化', 'none');
         return;
       }
     }
 
-    wx.showModal({
+    this._showCustomModal({
       title: '确认同步',
       content: '将强制覆盖所有6个型号（F1 PRO、F1 MAX、F2 PRO、F2 MAX、F2 PRO Long、F2 MAX Long）的配件数据到云端，云端旧数据将被删除并替换为本地数据，是否继续？',
       showCancel: true,
@@ -711,13 +753,13 @@ Page({
               const failModels = results.filter(r => !r.success);
               
               if (failModels.length === 0) {
-                wx.showToast({ 
-                  title: `同步完成！共 ${totalParts} 个配件`, 
-                  icon: 'success',
-                  duration: 3000
-                });
+                this._showCustomToast(
+                  `同步完成！共 ${totalParts} 个配件`,
+                  'success',
+                  3000
+                );
               } else {
-                wx.showModal({
+                this._showCustomModal({
                   title: '部分同步失败',
                   content: `成功：${successModels.join('、')}\n失败：${failModels.map(r => r.modelName).join('、')}`,
                   showCancel: false
@@ -735,7 +777,7 @@ Page({
             .catch(err => {
               wx.hideLoading();
               console.error('[syncAllPartsToCloud] 同步过程出错:', err);
-              wx.showModal({
+              this._showCustomModal({
                 title: '同步失败',
                 content: err.message || '请检查网络连接后重试',
                 showCancel: false
@@ -785,7 +827,7 @@ Page({
     
     if (!this.data.isAdmin) {
       console.warn('[adminEditPartPrice] 非管理员，退出');
-      wx.showToast({ title: '需要管理员权限', icon: 'none' });
+      this._showCustomToast('需要管理员权限', 'none');
       return;
     }
 
@@ -1113,7 +1155,7 @@ Page({
     // 保存到云端
     this.updatePartsOrderToCloud(list);
     
-    wx.showToast({ title: '排序已更新', icon: 'success' });
+    this._showCustomToast('排序已更新', 'success');
   },
 
   // [新增] 更新配件顺序到云端
@@ -1152,11 +1194,11 @@ Page({
         const failedCount = results.filter(r => !r.result || !r.result.success).length;
         if (failedCount > 0) {
           console.warn('[updatePartsOrderToCloud] 有', failedCount, '个配件更新失败');
-          wx.showToast({ 
-            title: `排序已保存（${failedCount}个失败）`, 
-            icon: 'none',
-            duration: 2000
-          });
+            this._showCustomToast(
+              `排序已保存（${failedCount}个失败）`,
+              'none',
+              2000
+            );
         } else {
           console.log('[updatePartsOrderToCloud] ✅ 所有配件顺序更新成功');
         }
@@ -1164,11 +1206,11 @@ Page({
       .catch((err) => {
         wx.hideLoading();
         console.error('[updatePartsOrderToCloud] 更新顺序失败:', err);
-        wx.showToast({ 
-          title: '保存失败: ' + (err.errMsg || '未知错误'), 
-          icon: 'none',
-          duration: 3000
-        });
+        this._showCustomToast(
+          '保存失败: ' + (err.errMsg || '未知错误'),
+          'none',
+          3000
+        );
       });
   },
 
@@ -1185,7 +1227,7 @@ Page({
         if (res.confirm && res.content) {
           const partName = res.content.trim();
           if (!partName) {
-            wx.showToast({ title: '名称不能为空', icon: 'none' });
+            this._showCustomToast('名称不能为空', 'none');
             return;
           }
           
@@ -1233,14 +1275,14 @@ Page({
     }).then((res) => {
       console.log('[addPartToCloud] ✅ 添加成功，_id:', res._id);
       wx.hideLoading();
-      wx.showToast({ title: '添加成功', icon: 'success' });
+      this._showCustomToast('添加成功', 'success');
       
       // 重新加载配件列表
       this.loadParts(this.data.currentModelName);
     }).catch(err => {
       wx.hideLoading();
       console.error('[addPartToCloud] ❌ 添加失败:', err);
-      wx.showToast({ title: '添加失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+      this._showCustomToast('添加失败: ' + (err.errMsg || '未知错误'), 'none', 3000);
     });
   },
 
@@ -1261,12 +1303,11 @@ Page({
     // 延迟一下，确保前一个 ActionSheet 已关闭
     setTimeout(() => {
       console.log('[adminDeletePart] 延迟后开始弹出确认对话框');
-      wx.showModal({
-        title: '确认删除',
-        content: `确定要删除配件"${part.name}"吗？`,
-        confirmText: '删除',
-        cancelText: '取消',
-        confirmColor: '#FF3B30',
+    this._showCustomModal({
+      title: '确认删除',
+      content: `确定要删除配件"${part.name}"吗？`,
+      confirmText: '删除',
+      cancelText: '取消',
         success: (res) => {
           console.log('[adminDeletePart] 对话框返回结果:', res);
           console.log('[adminDeletePart] res.confirm:', res.confirm);
@@ -1320,7 +1361,7 @@ Page({
         if (result.success) {
           console.log('[deletePartFromCloud] ✅ 云端删除成功');
           wx.hideLoading();
-          wx.showToast({ title: '删除成功', icon: 'success' });
+            this._showCustomToast('删除成功', 'success');
           
           // 从本地列表中删除
           const list = [...this.data.currentPartsList];
@@ -1352,13 +1393,13 @@ Page({
         // 检查是否是云函数未部署的问题
         const errMsg = err.errMsg || err.message || '未知错误';
         if (errMsg.includes('FunctionName') || errMsg.includes('not found')) {
-          wx.showModal({
+          this._showCustomModal({
             title: '删除失败',
             content: '云函数未部署或未找到，请检查：\n1. 云函数是否已上传\n2. 云函数名称是否为 deleteShouhouPart',
             showCancel: false
           });
         } else {
-          wx.showModal({
+          this._showCustomModal({
             title: '删除失败',
             content: '错误信息：' + errMsg + '\n\n请查看控制台日志获取详细信息',
             showCancel: false
@@ -1378,7 +1419,7 @@ Page({
       const calculatedHeight = rows <= 3 ? 80 : Math.min(120, (rows - 3) * 20 + 80);
       this.setData({ partsPlaceholderHeight: calculatedHeight + 'rpx' });
       
-      wx.showToast({ title: '删除成功', icon: 'success' });
+            this._showCustomToast('删除成功', 'success');
       console.log('[deletePartFromCloud] ========== 本地删除完成 ==========');
     }
   },
@@ -1442,7 +1483,7 @@ Page({
       }).catch(err => {
         getApp().hideLoading();
         console.error('[updatePartData] ❌ 云端更新失败:', err);
-        wx.showToast({ title: '更新失败: ' + (err.errMsg || err.message || '未知错误'), icon: 'none', duration: 3000 });
+        this._showCustomToast('更新失败: ' + (err.errMsg || err.message || '未知错误'), 'none', 3000);
       });
     } 
     // B. 如果是本地默认数据 (还没存过云端)，先添加到云端
@@ -1467,12 +1508,12 @@ Page({
         } else {
           console.error('[updatePartData] ❌ 云端新建失败：未返回 _id');
           getApp().hideLoading();
-          wx.showToast({ title: '新建失败：未返回ID', icon: 'none' });
+          this._showCustomToast('新建失败：未返回ID', 'none');
         }
       }).catch(err => {
         getApp().hideLoading();
         console.error('[updatePartData] ❌ 云端新建失败:', err);
-        wx.showToast({ title: '新建失败: ' + (err.errMsg || err.message || '未知错误'), icon: 'none', duration: 3000 });
+        this._showCustomToast('新建失败: ' + (err.errMsg || err.message || '未知错误'), 'none', 3000);
       });
     }
   },
@@ -1502,7 +1543,7 @@ Page({
   // [新增] 更新成功后的刷新
   afterUpdateSuccess() {
     getApp().hideLoading();
-    wx.showToast({ title: '修改成功', icon: 'success' });
+    this._showCustomToast('修改成功', 'success');
     // 不再重新从云端读取，直接使用已更新的本地列表
   },
 
@@ -1513,7 +1554,7 @@ Page({
     const part = this.data.currentPartsList[idx];
     const partName = part.name;
 
-    wx.showModal({
+    this._showCustomModal({
       title: '提示',
       content: `确定删除配件: ${partName}?`,
       success: (res) => {
@@ -1524,11 +1565,11 @@ Page({
               .then(() => {
                 // 重新加载配件列表
                 this.loadParts(this.data.currentModelName);
-                wx.showToast({ title: '已删除', icon: 'success' });
+                this._showCustomToast('已删除', 'success');
               })
               .catch(err => {
                 console.error('删除失败:', err);
-                wx.showToast({ title: '删除失败', icon: 'none' });
+                this._showCustomToast('删除失败', 'none');
               });
           } else {
             // 本地删除（兼容旧数据）
@@ -1536,7 +1577,7 @@ Page({
               DB_PARTS[modelName].splice(idx, 1);
             }
             this.loadParts(this.data.currentModelName);
-            wx.showToast({ title: '已删除', icon: 'success' });
+            this._showCustomToast('已删除', 'success');
           }
         }
       }
@@ -1580,11 +1621,11 @@ Page({
             }
           } else {
             console.error('视频文件路径不存在');
-            wx.showToast({ title: '视频文件异常，请重试', icon: 'none' });
+            this._showCustomToast('视频文件异常，请重试', 'none');
           }
         } else {
           console.error('未选择到视频文件');
-          wx.showToast({ title: '未选择视频', icon: 'none' });
+          this._showCustomToast('未选择视频', 'none');
         }
       },
       fail: (err) => {
@@ -1657,7 +1698,7 @@ Page({
   confirmSmartPaste() {
     const text = this.data.smartPasteVal.trim();
     if (!text) {
-      wx.showToast({ title: '内容不能为空', icon: 'none' });
+      this._showCustomToast('内容不能为空', 'none');
       return;
     }
 
@@ -1682,113 +1723,183 @@ Page({
       this.reCalcFinalPrice();
     }
     
-    wx.showToast({ title: '解析完成', icon: 'success' });
+    this._showCustomToast('解析完成', 'success');
   },
   
-  // [修改] 高级解析算法（解析姓名、电话、地址）
+  // 🔴 优化：高级解析算法（解析姓名、电话、地址）
   parseAddress(text) {
-    let cleanText = text.trim();
+    if (!text || !text.trim()) {
+      return { name: '', phone: '', address: '' };
+    }
     
-    // 1. 提取手机号
+    let cleanText = text.trim();
+    let name = '';
     let phone = '';
-    const phoneReg = /(1[3-9]\d{9})/;
-    const phoneMatch = cleanText.match(phoneReg);
+    let address = '';
+    
+    // 1. 提取手机号（更严格）
+    const phonePattern = /\b1[3-9]\d{9}\b/;
+    const phoneMatch = cleanText.match(phonePattern);
     if (phoneMatch) {
-      phone = phoneMatch[1];
-      cleanText = cleanText.replace(phoneReg, ' ');
+      phone = phoneMatch[0];
+      cleanText = cleanText.replace(phonePattern, ' ').trim();
+    }
+    
+    // 2. 提取固定电话（带区号的）
+    if (!phone) {
+      const telPattern = /\b0\d{2,3}-?\d{7,8}\b/;
+      const telMatch = cleanText.match(telPattern);
+      if (telMatch) {
+        phone = telMatch[0];
+        cleanText = cleanText.replace(telPattern, ' ').trim();
+      }
+    }
+    
+    // 3. 清理杂质
+    cleanText = cleanText
+      .replace(/收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?/g, ' ')
+      .replace(/[()（）【】\[\]<>]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // 4. 提取姓名（更智能的判断）
+    const addressKeywords = ['省', '市', '区', '县', '镇', '街道', '路', '街', '道', '号', '室', '楼', '苑', '村', '组', '栋', '单元', '层', '房'];
+    const namePattern = /^([\u4e00-\u9fa5]{2,4})/;
+    const nameMatch = cleanText.match(namePattern);
+    
+    if (nameMatch) {
+      const candidateName = nameMatch[1];
+      // 检查候选姓名是否包含地址关键词
+      const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+      
+      // 如果候选姓名不包含地址关键词，且长度合理，则认为是姓名
+      if (!hasAddressKeyword && candidateName.length >= 2 && candidateName.length <= 4) {
+        name = candidateName;
+        cleanText = cleanText.replace(new RegExp('^' + candidateName), '').trim();
+      }
+    }
+    
+    // 5. 如果姓名没提取到，尝试从电话前后提取
+    if (!name && phone && text.includes(phone)) {
+      const phoneIndex = text.indexOf(phone);
+      const beforePhone = text.substring(0, phoneIndex).trim();
+      const afterPhone = text.substring(phoneIndex + phone.length).trim();
+      
+      // 检查电话前面的内容
+      const nameBeforeMatch = beforePhone.match(/([\u4e00-\u9fa5]{2,4})\s*$/);
+      if (nameBeforeMatch) {
+        const candidateName = nameBeforeMatch[1];
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        if (!hasAddressKeyword) {
+          name = candidateName;
+          cleanText = cleanText.replace(new RegExp(candidateName), '').trim();
+        }
+      }
+      
+      // 检查电话后面的内容（通常是地址）
+      if (!name) {
+        const nameAfterMatch = afterPhone.match(/^\s*([\u4e00-\u9fa5]{2,4})/);
+        if (nameAfterMatch) {
+          const candidateName = nameAfterMatch[1];
+          const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+          if (!hasAddressKeyword) {
+            name = candidateName;
+            cleanText = cleanText.replace(new RegExp(candidateName), '').trim();
+          }
+        }
+      }
     }
 
-    // 2. 清理杂质
-    cleanText = cleanText
-      .replace(/收货人[:：]?|姓名[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?/g, ' ')
-      .replace(/[()（）\[\]]/g, ' ')
-      .replace(/\s+/g, ' ');
-
-    // 3. 切分片段
-    const fragments = cleanText.split(/[ ,，;；\n\t]+/).filter(v => v && v.trim().length > 0);
-
-    let name = '';
-    let addressBuffer = [];
-    const addrKeywords = ['省', '市', '区', '县', '镇', '街道', '路', '街', '道', '号', '室', '楼', '苑'];
-
-    fragments.forEach(frag => {
-      const isAddress = addrKeywords.some(k => frag.includes(k)) || frag.length > 5;
-      // 名字通常短且无关键字
-      if (!isAddress && frag.length >= 2 && frag.length <= 4 && !name) {
-        name = frag;
-      } else {
-        addressBuffer.push(frag);
-      }
-    });
-
+    // 6. 剩余部分作为地址
+    address = cleanText.trim();
+    
     return {
-      name: name,
-      phone: phone,
-      address: addressBuffer.join('')
+      name: name.trim(),
+      phone: phone.trim(),
+      address: address.trim()
     };
   },
 
-  // ========================================================
-  // [新增] 地址解析函数（智能识别省市区，用于计算运费）
+  // 🔴 优化：地址解析函数（智能识别省市区，用于计算运费）
   // ========================================================
   parseAddressForShipping(addressText) {
+    if (!addressText || !addressText.trim()) {
+      return { province: '', city: '', district: '', detail: '', fullAddress: addressText };
+    }
+    
     let text = addressText.trim();
     let province = '';
     let city = '';
     let district = '';
     let detail = '';
     
-    // 移除常见的分隔符，统一处理
-    text = text.replace(/[\/、]/g, ' ').replace(/[,，]/g, ' ').replace(/\s+/g, ' ').trim();
+    // 移除常见的分隔符，统一处理（保留空格用于分割）
+    text = text.replace(/[\/、]/g, ' ').replace(/[,，;；]/g, ' ').replace(/\s+/g, ' ').trim();
     
     // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
     let remaining = text;
     
-    // 识别省（必须包含"省"字）
-    const provincePattern = /([^省\s]+省)/;
+    // 识别省（必须包含"省"字，但不能是"省市区"这样的组合）
+    const provincePattern = /([\u4e00-\u9fa5]{1,10}省)/;
     const provinceMatch = remaining.match(provincePattern);
     if (provinceMatch) {
-      province = provinceMatch[1].trim();
-      remaining = remaining.replace(province, '').trim();
+      const candidate = provinceMatch[1].trim();
+      // 确保不是"省市区"这样的错误匹配
+      if (!candidate.includes('市') && !candidate.includes('区') && !candidate.includes('县')) {
+        province = candidate;
+        remaining = remaining.replace(new RegExp(province.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
     }
     
-    // 识别市（必须包含"市"字，排除"省"字）
-    const cityPattern = /([^省市\s]+市)/;
+    // 识别市（必须包含"市"字，排除已识别的省和"省市区"组合）
+    const cityPattern = /([\u4e00-\u9fa5]{1,10}市)/;
     const cityMatch = remaining.match(cityPattern);
     if (cityMatch) {
-      city = cityMatch[1].trim();
-      remaining = remaining.replace(city, '').trim();
+      const candidate = cityMatch[1].trim();
+      // 确保不是"市区"或"市县"这样的错误匹配
+      if (!candidate.includes('区') && !candidate.includes('县') && !candidate.includes('省')) {
+        city = candidate;
+        remaining = remaining.replace(new RegExp(city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
     }
     
-    // 识别区/县（必须包含"区"或"县"字）
-    const districtPattern = /([^省市区县\s]+[区县])/;
+    // 识别区/县（必须包含"区"或"县"字，排除已识别的省市）
+    const districtPattern = /([\u4e00-\u9fa5]{1,10}[区县])/;
     const districtMatch = remaining.match(districtPattern);
     if (districtMatch) {
-      district = districtMatch[1].trim();
-      remaining = remaining.replace(district, '').trim();
+      const candidate = districtMatch[1].trim();
+      // 确保不是"省市区"这样的错误匹配
+      if (!candidate.includes('省') && !candidate.includes('市')) {
+        district = candidate;
+        remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
+    }
+    
+    // 方法2: 如果没识别到省市，尝试识别特殊格式（直辖市）
+    if (!province && !city && !district) {
+      // 直辖市特殊处理：北京、上海、天津、重庆
+      const directCities = ['北京市', '上海市', '天津市', '重庆市'];
+      for (const dc of directCities) {
+        if (text.includes(dc)) {
+          city = dc;
+          remaining = text.replace(dc, '').trim();
+          
+          // 继续识别区
+          const districtMatch2 = remaining.match(districtPattern);
+          if (districtMatch2) {
+            const candidate = districtMatch2[1].trim();
+            if (!candidate.includes('省') && !candidate.includes('市')) {
+              district = candidate;
+              remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+            }
+          }
+          break;
+        }
+      }
     }
     
     // 剩余部分作为详细地址
     detail = remaining.trim();
-    
-    // 方法2: 如果没识别到，尝试识别特殊格式（如：北京市朝阳区）
-    if (!province && !city && !district) {
-      // 直辖市特殊处理：北京、上海、天津、重庆
-      const directCityPattern = /(北京市|上海市|天津市|重庆市)/;
-      const directCityMatch = text.match(directCityPattern);
-      if (directCityMatch) {
-        city = directCityMatch[1];
-        remaining = text.replace(city, '').trim();
-        
-        // 继续识别区
-        const districtMatch2 = remaining.match(districtPattern);
-        if (districtMatch2) {
-          district = districtMatch2[1].trim();
-          remaining = remaining.replace(district, '').trim();
-        }
-        detail = remaining;
-      }
-    }
     
     // 组装完整地址（格式化输出）
     let fullAddress = '';
@@ -1798,7 +1909,7 @@ Page({
     if (district) parts.push(district);
     if (detail) parts.push(detail);
     
-    fullAddress = parts.join(' ');
+    fullAddress = parts.join(' ').trim();
     
     // 如果解析失败，使用原始文本
     if (!fullAddress) {
@@ -1878,7 +1989,7 @@ Page({
     // 增强调试：检查配件列表状态
     if (!currentPartsList || currentPartsList.length === 0) {
       console.warn('[shouhou] 当前配件列表为空，型号:', currentModelName);
-      wx.showModal({
+      this._showCustomModal({
         title: '提示',
         content: `当前 ${currentModelName} 型号的配件列表为空，请先添加配件或联系管理员`,
         showCancel: false
@@ -2246,7 +2357,7 @@ Page({
           wx.requestPayment({
             ...payment,
             success: () => {
-              wx.showToast({ title: '支付成功' });
+              this._showCustomToast('支付成功', 'success');
               this.closeOrderModal();
               wx.removeStorageSync('my_cart');
               this.setData({
@@ -2265,14 +2376,14 @@ Page({
               wx.navigateTo({ url: '/pages/my/my' });
             },
             fail: () => {
-              wx.showToast({ title: '支付取消', icon: 'none' });
+              this._showCustomToast('支付取消', 'none');
             }
           });
         }
       },
       fail: () => {
         getApp().hideLoading();
-        wx.showToast({ title: '下单失败', icon: 'none' });
+        this._showCustomToast('下单失败', 'none');
       }
     });
   },
@@ -2287,12 +2398,12 @@ Page({
       const { contactName, contactPhone, contactAddr, contactWechat, repairDescription, videoFileName } = this.data;
       
       if (!repairDescription || repairDescription.trim() === '') {
-        wx.showToast({ title: '请填写故障描述', icon: 'none' });
+        this._showCustomToast('请填写故障描述', 'none');
         return;
       }
       
       if (!contactName || !contactPhone || !contactAddr || !contactWechat) {
-        wx.showToast({ title: '请完善收货信息', icon: 'none' });
+        this._showCustomToast('请完善收货信息', 'none');
         return;
       }
       
@@ -2314,7 +2425,7 @@ Page({
         },
         success: () => {
           getApp().hideLoading();
-          wx.showToast({ title: '提交成功', icon: 'success' });
+          this._showCustomToast('提交成功', 'success');
           setTimeout(() => {
             this.setData({
               repairDescription: '',
@@ -2325,7 +2436,7 @@ Page({
         fail: (err) => {
           getApp().hideLoading();
           console.error('提交失败:', err);
-          wx.showToast({ title: '提交失败，请重试', icon: 'none' });
+          this._showCustomToast('提交失败，请重试', 'none');
         }
       });
       return;
@@ -2334,7 +2445,7 @@ Page({
     // 配件购买逻辑
     // 校验
     if (selectedCount === 0) {
-      wx.showToast({ title: '请选择配件', icon: 'none' });
+      this._showCustomToast('请选择配件', 'none');
       return;
     }
     if (!orderInfo.name || !orderInfo.phone || !orderInfo.address) {
@@ -2382,13 +2493,13 @@ Page({
         const payment = res.result;
         
         if (!payment || !payment.paySign) {
-           return wx.showToast({ title: '系统审核中', icon: 'none' });
+           return this._showCustomToast('系统审核中', 'none');
         }
 
         wx.requestPayment({
           ...payment,
           success: () => {
-            wx.showToast({ title: '支付成功', icon: 'success' });
+            this._showCustomToast('支付成功', 'success');
             this.closeOrderModal();
             // 清空选中状态
             this.loadParts(this.data.currentModelName); 
@@ -2409,13 +2520,13 @@ Page({
             }, 1000);
           },
           fail: () => {
-            wx.showToast({ title: '支付取消', icon: 'none' });
+            this._showCustomToast('支付取消', 'none');
           }
         });
       },
       fail: err => {
         getApp().hideLoading();
-        wx.showToast({ title: '下单失败', icon: 'none' });
+        this._showCustomToast('下单失败', 'none');
       }
     });
   },
@@ -2435,14 +2546,14 @@ Page({
         const result = res.result || {};
         console.log('[shouhou] checkPayResult 返回:', result);
         if (result.success) {
-          wx.showToast({ title: '订单已确认', icon: 'success' });
+          this._showCustomToast('订单已确认', 'success');
         } else if (attempt < maxAttempts) {
           setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
         } else {
-          wx.showToast({
-            title: result.msg || '支付状态待确认，请稍后查看“我的订单”',
-            icon: 'none'
-          });
+          this._showCustomToast(
+            result.msg || '支付状态待确认，请稍后查看"我的订单"',
+            'none'
+          );
         }
       },
       fail: (err) => {
@@ -2450,10 +2561,10 @@ Page({
         if (attempt < maxAttempts) {
           setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
         } else {
-          wx.showToast({
-            title: '网络异常，请稍后在“我的订单”查看',
-            icon: 'none'
-          });
+          this._showCustomToast(
+            '网络异常，请稍后在"我的订单"查看',
+            'none'
+          );
         }
       },
       complete: () => {
@@ -2632,7 +2743,7 @@ Page({
     const target = videoList[idx];
     if (!target) return;
 
-    wx.showModal({
+    this._showCustomModal({
       title: '提示',
       content: `确定删除教程「${target.title}」吗？\n（同组型号的视频也会被删除）`,
       success: (res) => {
@@ -2642,11 +2753,11 @@ Page({
             this.db.collection('shouhouvideo').doc(target._id).remove()
               .then(() => {
                 this.renderVideos();
-                wx.showToast({ title: '已删除', icon: 'success' });
+                this._showCustomToast('已删除', 'success');
               })
               .catch(err => {
                 console.error('删除失败:', err);
-                wx.showToast({ title: '删除失败', icon: 'none' });
+                this._showCustomToast('删除失败', 'none');
               });
           } else {
             // 本地删除（兼容旧数据）
@@ -2655,7 +2766,7 @@ Page({
               DB_VIDEOS[modelName].splice(idx, 1);
             }
             this.renderVideos();
-            wx.showToast({ title: '已删除', icon: 'success' });
+            this._showCustomToast('已删除', 'success');
           }
         }
       }
@@ -2768,6 +2879,11 @@ Page({
       // 关键：保持视觉连续性，不跳跃
       const remainingOffset = deltaY - (moveIndex * cardHeightPx);
       
+      // 更新 order 值（根据当前显示顺序）
+      newList.forEach((item, index) => {
+        item.order = index;
+      });
+      
       this.setData({
         currentVideoList: newList,
         dragIndex: targetIndex,
@@ -2775,20 +2891,6 @@ Page({
         dragOffsetY: remainingOffset, // 保持剩余偏移量，让卡片继续跟随
         lastSwapIndex: targetIndex // 记录本次交换的位置
       });
-      
-      // 同步到云数据库（更新排序）- 同组共享，更新一个即可
-      if (this.db) {
-        const modelName = this.data.currentModelName;
-        const groupName = MODEL_TO_GROUP[modelName];
-        // 更新云数据库中的 order 字段
-        newList.forEach((item, index) => {
-          if (item._id) {
-            this.db.collection('shouhouvideo').doc(item._id).update({
-              data: { order: index }
-            }).catch(err => console.error('更新排序失败:', err));
-          }
-        });
-      }
       
       // 同步到本地 DB_VIDEOS（兼容）
       const modelName = this.data.currentModelName;
@@ -2826,45 +2928,44 @@ Page({
         DB_VIDEOS[modelName] = videoList;
       }
       
-      // 更新云数据库中的 order 字段
-      if (this.db) {
-        let updateCount = 0;
+      // 🔴 优化：统一保存所有 order 值（类似 azjc 页面的实现）
+      if (this.db && videoList.length > 0) {
+        const updatePromises = [];
         videoList.forEach((item, index) => {
-          if (item._id) {
-            this.db.collection('shouhouvideo').doc(item._id).update({
-              data: { order: index }
-            }).then(() => {
-              updateCount++;
-              // 所有更新完成后提示
-              if (updateCount === videoList.filter(v => v._id).length) {
-                wx.showToast({ 
-                  title: '顺序已更新', 
-                  icon: 'success',
-                  duration: 1000
-                });
-              }
-            }).catch(err => {
-              console.error('更新排序失败:', err);
-            });
+          // 只更新 order 值有变化的项
+          if (item._id && item.order !== index) {
+            updatePromises.push(
+              this.db.collection('shouhouvideo').doc(item._id).update({
+                data: { order: index }
+              }).catch(err => {
+                console.error('更新order失败:', err);
+              })
+            );
           }
         });
         
-        // 如果没有需要更新的项，直接提示
-        if (videoList.filter(v => v._id).length === 0) {
-          wx.showToast({ 
-            title: '顺序已更新', 
-            icon: 'success',
-            duration: 1000
+        // 等待所有更新完成
+        if (updatePromises.length > 0) {
+          Promise.all(updatePromises).then(() => {
+            // 更新本地数据的 order 值
+            videoList.forEach((item, index) => {
+              item.order = index;
+            });
+            this.setData({ currentVideoList: videoList });
+            
+            this._showCustomToast('顺序已保存', 'success', 1000);
+          }).catch(err => {
+            console.error('批量更新order失败:', err);
+            this._showCustomToast('保存失败，请重试', 'none', 2000);
           });
+        } else {
+          // 没有需要更新的项，直接提示
+          this._showCustomToast('顺序已保存', 'success', 1000);
         }
       } else {
         // 只有在实际移动了位置时才提示
         if (this.data.dragIndex !== this.data.lastSwapIndex || Math.abs(this.data.dragOffsetY) > 10) {
-          wx.showToast({ 
-            title: '顺序已更新', 
-            icon: 'success',
-            duration: 1000
-          });
+          this._showCustomToast('顺序已保存', 'success', 1000);
         }
       }
     }
@@ -2919,9 +3020,15 @@ Page({
   },
 
   confirmModal() {
+    // 🔴 防止重复点击：如果正在上传，直接返回
+    if (this.data.isUploadingVideo) {
+      console.log('[confirmModal] 正在上传中，忽略重复点击');
+      return;
+    }
+
     const val = this.data.modalInputVal;
     if (!val) {
-      wx.showToast({ title: '请输入名称', icon: 'none' });
+      this._showCustomToast('请输入名称', 'none');
       return;
     }
 
@@ -2955,12 +3062,12 @@ Page({
               success: () => {
                 // 重新加载配件列表
                 this.renderParts();
-                wx.showToast({ title: '配件已添加', icon: 'success' });
+                this._showCustomToast('配件已添加', 'success');
                 this.closeModal();
               },
               fail: (err) => {
                 console.error('添加配件失败:', err);
-                wx.showToast({ title: '添加失败，请重试', icon: 'none' });
+                this._showCustomToast('添加失败，请重试', 'none');
               }
             });
           })
@@ -2976,12 +3083,12 @@ Page({
               },
               success: () => {
                 this.renderParts();
-                wx.showToast({ title: '配件已添加', icon: 'success' });
+                this._showCustomToast('配件已添加', 'success');
                 this.closeModal();
               },
               fail: (err2) => {
                 console.error('添加配件失败:', err2);
-                wx.showToast({ title: '添加失败，请重试', icon: 'none' });
+                this._showCustomToast('添加失败，请重试', 'none');
               }
             });
           });
@@ -2992,18 +3099,23 @@ Page({
         }
         DB_PARTS[modelName].push(val);
         this.renderParts();
-        wx.showToast({ title: '配件已添加', icon: 'success' });
+        this._showCustomToast('配件已添加', 'success');
         this.closeModal();
       }
     } else {
       // 视频模式：校验是否选择了视频
       if (!this.data.tempVideoPath) {
-        wx.showToast({ title: '请先选择视频', icon: 'none' });
+        this._showCustomToast('请先选择视频', 'none');
         return;
       }
 
+      // 🔴 立即设置上传状态和加载动画，防止重复点击
+      this.setData({ 
+        isUploadingVideo: true,
+        showLoadingAnimation: true 
+      });
+
       // 上传视频到云存储并写入 shouhouvideo 集合（按型号独立）
-      getApp().showLoading({ title: '上传中...', mask: true });
       
       const modelName = this.data.currentModelName;
       const timestamp = Date.now();
@@ -3038,9 +3150,13 @@ Page({
               }
         },
         fail: (err) => {
-          getApp().hideLoading();
+          // 🔴 上传失败时清除上传状态
+          this.setData({ 
+            showLoadingAnimation: false,
+            isUploadingVideo: false 
+          });
           console.error('视频上传失败:', err);
-          wx.showToast({ title: '视频上传失败', icon: 'none' });
+          this._showCustomToast('视频上传失败', 'none');
         }
       });
     }
@@ -3049,16 +3165,24 @@ Page({
   // 保存视频信息到数据库（按组同步，同组型号共享视频）
   saveVideoToDB(title, modelName, videoFileID, thumbFileID) {
     if (!this.db) {
-      getApp().hideLoading();
-      wx.showToast({ title: '云服务未初始化', icon: 'none' });
+      // 🔴 清除上传状态
+      this.setData({ 
+        showLoadingAnimation: false,
+        isUploadingVideo: false 
+      });
+      this._showCustomToast('云服务未初始化', 'none');
       return;
     }
 
     // 获取当前型号所属的组
     const groupName = MODEL_TO_GROUP[modelName];
     if (!groupName) {
-      getApp().hideLoading();
-      wx.showToast({ title: '型号分组错误', icon: 'none' });
+      // 🔴 清除上传状态
+      this.setData({ 
+        showLoadingAnimation: false,
+        isUploadingVideo: false 
+      });
+      this._showCustomToast('型号分组错误', 'none');
       return;
     }
 
@@ -3085,16 +3209,24 @@ Page({
             order: maxOrder + 1 // 用于排序，管理员可以调整
           },
           success: () => {
-            getApp().hideLoading();
-            wx.showToast({ title: '教程发布成功', icon: 'success' });
+            // 🔴 清除上传状态
+            this.setData({ 
+              showLoadingAnimation: false,
+              isUploadingVideo: false 
+            });
+            this._showCustomToast('教程发布成功', 'success');
             this.closeModal();
             // 重新加载视频列表
             this.renderVideos();
           },
           fail: (err) => {
-            getApp().hideLoading();
+            // 🔴 清除上传状态
+            this.setData({ 
+              showLoadingAnimation: false,
+              isUploadingVideo: false 
+            });
             console.error('保存失败:', err);
-            wx.showToast({ title: '保存失败，请重试', icon: 'none' });
+            this._showCustomToast('保存失败，请重试', 'none');
           }
         });
       })
@@ -3112,15 +3244,23 @@ Page({
             order: 0
           },
           success: () => {
-            getApp().hideLoading();
-            wx.showToast({ title: '教程发布成功', icon: 'success' });
+            // 🔴 清除上传状态
+            this.setData({ 
+              showLoadingAnimation: false,
+              isUploadingVideo: false 
+            });
+            this._showCustomToast('教程发布成功', 'success');
             this.closeModal();
             this.renderVideos();
           },
           fail: (err2) => {
-            getApp().hideLoading();
+            // 🔴 清除上传状态
+            this.setData({ 
+              showLoadingAnimation: false,
+              isUploadingVideo: false 
+            });
             console.error('保存失败:', err2);
-            wx.showToast({ title: '保存失败，请重试', icon: 'none' });
+            this._showCustomToast('保存失败，请重试', 'none');
           }
         });
       });
@@ -3150,7 +3290,7 @@ Page({
           if (!this.data.modalInputVal) {
             this.setData({ modalInputVal: "新上传教程" });
           }
-          wx.showToast({ title: '视频已选择', icon: 'success' });
+          this._showCustomToast('视频已选择', 'success');
         } else {
           // 如果没有封面，使用 video 组件的 snapshot 方法提取第一帧
           this.setData({
@@ -3203,7 +3343,7 @@ Page({
             extractingThumb: false
           });
           getApp().hideLoading();
-          wx.showToast({ title: '视频已选择', icon: 'success' });
+          this._showCustomToast('视频已选择', 'success');
         },
         fail: (err) => {
           // 截图失败，使用占位提示
@@ -3212,11 +3352,7 @@ Page({
             extractingThumb: false
           });
           getApp().hideLoading();
-          wx.showToast({ 
-            title: '视频已选择（封面提取失败）', 
-            icon: 'none',
-            duration: 2000
-          });
+          this._showCustomToast('视频已选择（封面提取失败）', 'none', 2000);
         }
       });
     }, 500);
@@ -3231,10 +3367,9 @@ Page({
 
   // [新增] 清空购物车
   clearCart() {
-    wx.showModal({
+    this._showCustomModal({
       title: '清空购物车',
       content: '确定要清空所有商品吗？',
-      confirmColor: '#FF3B30',
       success: (res) => {
         if (res.confirm) {
           // 1. 清除本地缓存

@@ -45,8 +45,8 @@ Page({
       },
       { 
         id: 4, 
-        title: '配件选购', 
-        en: 'PARTS', 
+        title: '产品选购', 
+        en: 'PRODUCTS', 
         iconSvg: iconShop, 
         iconSize: '72rpx'  // <---【在这里改】实心购物车，稍微改小显得精致
       },
