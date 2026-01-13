@@ -173,20 +173,29 @@
           <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="optionTitle">
             {{currentSeries.labels.optionTitle || '配置方案'}}
           </view>
-          <view class="opt-grid">
+          <view class="opt-grid {{isAdmin ? 'admin-mode' : ''}}">
              <block wx:for="{{currentSeries.options}}" wx:key="name">
-                <view class="opt-card {{selectedOptionIdx === index ? 'selected' : ''}}" bindtap="selectOption" data-index="{{index}}">
-                   <image wx:if="{{item.img}}" src="{{item.img}}" class="opt-img" mode="aspectFill" />
-                   <view wx:if="{{isAdmin && !item.img}}" class="admin-add-icon" catchtap="adminUploadOptionImg" data-oidx="{{index}}">📷</view>
+                <view class="opt-card {{selectedOptionIdx === index ? 'selected' : ''}} {{isAdmin ? 'admin-mode' : ''}}" bindtap="selectOption" data-index="{{index}}">
+                   <!-- 普通模式：显示图片 -->
+                   <image wx:if="{{item.img && !isAdmin}}" src="{{item.img}}" class="opt-img" mode="aspectFill" />
                    
+                   <!-- 管理员模式：左边文字区域 -->
                    <view class="opt-info">
                       <text class="opt-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditOptName':''}}" data-oidx="{{index}}">{{item.name}}</text>
                       <text class="opt-sub {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditOptPrice':''}}" data-oidx="{{index}}">{{item.price > 0 ? '+¥'+item.price : '标配'}}</text>
                    </view>
+                   
+                   <!-- 管理员模式：右边上传照片按钮 -->
+                   <view wx:if="{{isAdmin}}" class="admin-add-icon" catchtap="adminUploadOptionImg" data-oidx="{{index}}">
+                     <image wx:if="{{item.img}}" src="{{item.img}}" style="width: 100%; height: 100%; border-radius: 14rpx; object-fit: cover;" mode="aspectFill" />
+                     <text wx:else style="font-size: 50rpx;">📷</text>
+                   </view>
+                   
+                   <!-- 删除按钮 -->
                    <view wx:if="{{isAdmin}}" class="admin-del-corner" catchtap="adminDelOption" data-oidx="{{index}}">✕</view>
                 </view>
              </block>
-             <view class="opt-card add-btn" wx:if="{{isAdmin}}" bindtap="adminAddOption">+</view>
+             <view class="opt-card add-btn {{isAdmin ? 'admin-mode' : ''}}" wx:if="{{isAdmin}}" bindtap="adminAddOption">+</view>
           </view>
         </view>
 
@@ -509,6 +518,22 @@
       <view class="sp-btn cancel" bindtap="closeSmartPasteModal">取消</view>
       <view class="sp-btn confirm" bindtap="confirmSmartPaste">智能分析</view>
     </view>
+  </view>
+</view>
+
+<!-- ================= 自定义操作菜单（替代 wx.showActionSheet） ================= -->
+<view class="action-sheet-mask" wx:if="{{actionSheet.show}}" bindtap="closeActionSheet">
+  <view class="action-sheet-box" catchtap="">
+    <view 
+      class="action-sheet-item" 
+      wx:for="{{actionSheet.itemList}}" 
+      wx:key="index"
+      data-index="{{index}}"
+      bindtap="onActionSheetItemTap"
+    >
+      {{item}}
+    </view>
+    <view class="action-sheet-cancel" bindtap="closeActionSheet">取消</view>
   </view>
 </view>
 

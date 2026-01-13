@@ -34,7 +34,17 @@ Page({
     
     
     // 测试模式
-    isTestMode: false
+    isTestMode: false,
+    
+    // 【新增】自动消失提示（无按钮，2秒后自动消失）
+    autoToast: { show: false, title: '', content: '' },
+    
+    // 【新增】自定义对话框
+    dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+    
+    // 【新增】自定义加载动画
+    showLoadingAnimation: false,
+    loadingText: '加载中...'
   },
 
   onLoad() {
@@ -674,15 +684,12 @@ Page({
   // 管理员模式手动切换开关
   toggleAdminMode() {
     if (!this.data.isAuthorized) {
-      wx.showToast({ title: '无权限', icon: 'none' });
+      this.showAutoToast('提示', '无权限');
       return;
     }
     const nextState = !this.data.isAdmin;
     this.setData({ isAdmin: nextState });
-    wx.showToast({
-      title: nextState ? '管理模式开启' : '已回到用户模式',
-      icon: 'none'
-    });
+    this.showAutoToast('提示', nextState ? '管理模式开启' : '已回到用户模式');
   },
 
   // 点击空白处进入管理员模式（仅管理员）
@@ -698,10 +705,7 @@ Page({
     // 只有管理员才能通过点击空白处进入管理员模式
     if (this.data.isAuthorized && !this.data.isAdmin) {
       this.setData({ isAdmin: true });
-      wx.showToast({
-        title: '管理模式开启',
-        icon: 'none'
-      });
+      this.showAutoToast('提示', '管理模式开启');
     }
   },
 
@@ -886,7 +890,7 @@ Page({
                   'editData.img': cloudFileID
                 });
                 getApp().hideLoading();
-                wx.showToast({ title: '图片已更新', icon: 'success', duration: 1500 });
+                this.showAutoToast('成功', '图片已更新');
               } else if (that.data.isAdmin) {
                 // 管理员浏览模式下，直接更新并保存到云数据库
                 const shopId = activeItem._id || activeItem.id;
@@ -907,10 +911,10 @@ Page({
                   that.setData({ shops });
                   
                   getApp().hideLoading();
-                  wx.showToast({ title: '图片已更新', icon: 'success', duration: 1500 });
+                  this.showAutoToast('成功', '图片已更新');
                 } else {
                   getApp().hideLoading();
-                  wx.showToast({ title: '图片上传成功', icon: 'success', duration: 1500 });
+                  this.showAutoToast('成功', '图片上传成功');
                 }
               } else {
                 // 其他情况，确保隐藏 loading
@@ -919,19 +923,19 @@ Page({
             } catch (err) {
               console.error('处理图片更新失败:', err);
               getApp().hideLoading();
-              wx.showToast({ title: '保存失败，请重试', icon: 'none' });
+              this.showAutoToast('提示', '保存失败，请重试');
             }
           },
           fail: (err) => {
             console.error('图片上传失败:', err);
             getApp().hideLoading();
-            wx.showToast({ title: '图片上传失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 2000 });
+            this.showAutoToast('提示', '图片上传失败: ' + (err.errMsg || '未知错误'));
           }
         });
       },
       fail: (err) => {
         console.error('选择图片失败:', err);
-        wx.showToast({ title: '选择图片失败', icon: 'none' });
+        this.showAutoToast('提示', '选择图片失败');
       }
     });
   },
@@ -971,7 +975,7 @@ Page({
       },
       fail(err) {
         console.error(err);
-        wx.showToast({ title: '选择位置失败', icon: 'none' });
+        this.showAutoToast('提示', '选择位置失败');
       }
     });
   },
@@ -1160,7 +1164,7 @@ Page({
   async generateTestData() {
     const { userLocation, allServices } = this.data;
     if (!userLocation || !userLocation.latitude || !userLocation.longitude) {
-      wx.showToast({ title: '请先获取位置信息', icon: 'none' });
+      this.showAutoToast('提示', '请先获取位置信息');
       return;
     }
     
@@ -1404,7 +1408,7 @@ Page({
       // 新店铺：从 shops 数组中找到临时创建的店铺
       foundIndex = shops.findIndex(s => s.id === editData.id);
       if (foundIndex === -1) {
-        wx.showToast({ title: '店铺不存在', icon: 'none' });
+        this.showAutoToast('提示', '店铺不存在');
         return;
       }
       item = shops[foundIndex];
@@ -1416,7 +1420,7 @@ Page({
         return false;
       });
       if (foundIndex === -1) {
-        wx.showToast({ title: '店铺不存在', icon: 'none' });
+        this.showAutoToast('提示', '店铺不存在');
         return;
       }
       item = shops[foundIndex];
@@ -1485,13 +1489,9 @@ Page({
         
         // 如果找不到新店铺（可能被测试模式过滤），提示用户
         if (newIndex < 0) {
-          wx.showToast({ 
-            title: '保存成功，但当前测试模式已开启，请关闭测试模式查看', 
-            icon: 'none',
-            duration: 3000
-          });
+          this.showAutoToast('提示', '保存成功，但当前测试模式已开启，请关闭测试模式查看');
         } else {
-          wx.showToast({ title: '保存成功', icon: 'success' });
+          this.showAutoToast('成功', '保存成功');
         }
       } else {
         // 编辑已有店铺：更新本地数据中的 _id（如果返回了新的ID）
@@ -1521,11 +1521,11 @@ Page({
         });
 
         this.updateWheel();
-        wx.showToast({ title: '保存成功', icon: 'success' });
+        this.showAutoToast('成功', '保存成功');
       }
     } catch (err) {
       console.error('保存到云数据库失败:', err);
-      wx.showToast({ title: '保存失败，请重试', icon: 'none' });
+      this.showAutoToast('提示', '保存失败，请重试');
     }
   },
 
@@ -1546,9 +1546,12 @@ Page({
   },
 
   deleteShop() {
-    wx.showModal({
+    this.showMyDialog({
       title: '确认删除', 
       content: '删除后无法恢复，确定吗？',
+      showCancel: true,
+      confirmText: '删除',
+      cancelText: '取消',
       success: async (res) => {
         if(res.confirm) {
           const { activeItem, shops } = this.data;
@@ -1582,11 +1585,11 @@ Page({
               this.setData({ shops: list, scroll: 0, target: 0 });
               this.preprocessData();
               this.updateWheel();
-              wx.showToast({ title: '删除成功', icon: 'success' });
+              this.showAutoToast('成功', '删除成功');
             }, 500);
           } catch (err) {
             console.error('删除失败:', err);
-            wx.showToast({ title: '删除失败，请重试', icon: 'none' });
+            this.showAutoToast('提示', '删除失败，请重试');
           }
         }
       }
@@ -1603,7 +1606,7 @@ Page({
         address: item.address
       })
     } else {
-      wx.showToast({ title: '暂无定位数据', icon: 'none' });
+      this.showAutoToast('提示', '暂无定位数据');
     }
   },
   
@@ -1793,4 +1796,42 @@ Page({
       }
     });
   },
+  
+  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  showAutoToast(title = '提示', content = '') {
+    this.setData({
+      'autoToast.show': true,
+      'autoToast.title': title,
+      'autoToast.content': content
+    });
+    // 2秒后自动消失
+    setTimeout(() => {
+      this.setData({ 'autoToast.show': false });
+    }, 2000);
+  },
+  
+  // 【新增】自定义对话框
+  showMyDialog(options) {
+    this.setData({
+      'dialog.show': true,
+      'dialog.title': options.title || '提示',
+      'dialog.content': options.content || '',
+      'dialog.showCancel': options.showCancel || false,
+      'dialog.confirmText': options.confirmText || '确定',
+      'dialog.cancelText': options.cancelText || '取消',
+      'dialog.callback': options.success || null
+    });
+  },
+  
+  // 【新增】关闭自定义对话框
+  closeCustomDialog() {
+    this.setData({ 'dialog.show': false });
+  },
+  
+  // 【新增】点击对话框确定
+  onDialogConfirm() {
+    const cb = this.data.dialog.callback;
+    this.setData({ 'dialog.show': false });
+    if (cb) cb({ confirm: true });
+  }
 })

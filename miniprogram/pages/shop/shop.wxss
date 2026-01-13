@@ -321,14 +321,119 @@ page {
 
 /* 选项 Grid (图上字下) */
 .opt-grid { display: flex; flex-wrap: wrap; gap: 20rpx; }
-.opt-card { width: 30%; flex-grow: 1; border: 2rpx solid #eee; border-radius: 16rpx; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.opt-card { width: 30%; flex-grow: 1; border: 2rpx solid #eee; border-radius: 16rpx; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; transition: all 0.3s ease; }
 .opt-card.selected { border-color: #0071E3; background: rgba(0,113,227,0.03); }
+
+/* 🔴 优化：管理员模式下改为横向布局，左边文字，右边上传照片 */
+.opt-grid.admin-mode .opt-card.admin-mode {
+  width: 100% !important; /* 横向拉长，占满整行 */
+  flex-direction: row !important; /* 改为横向布局 */
+  align-items: center !important;
+  text-align: left !important; /* 文字左对齐 */
+  padding: 30rpx !important;
+  min-height: 180rpx !important;
+  gap: 30rpx !important; /* 文字和图片之间的间距 */
+}
+
+/* 管理员模式下隐藏图片区域（原来在顶部的图片） */
+.opt-grid.admin-mode .opt-card.admin-mode .opt-img {
+  display: none !important;
+}
+
+/* 管理员模式下：文字区域在左边 */
+.opt-grid.admin-mode .opt-card.admin-mode .opt-info {
+  flex: 1 !important; /* 占据剩余空间 */
+  padding: 0 !important; /* 移除内边距 */
+  margin: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  align-items: flex-start !important; /* 左对齐 */
+  text-align: left !important;
+}
+
+/* 管理员模式下：上传照片按钮在右边 */
+.opt-grid.admin-mode .opt-card.admin-mode .admin-add-icon {
+  position: static !important; /* 取消绝对定位 */
+  width: 140rpx !important; /* 🔴 增大尺寸，更容易点击 */
+  height: 140rpx !important;
+  background: #F5F5F7 !important;
+  border: 2rpx dashed #ddd !important;
+  border-radius: 16rpx !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 50rpx !important;
+  flex-shrink: 0 !important; /* 不收缩 */
+  margin: 0 !important;
+  padding: 0 !important;
+  /* 🔴 优化：如果有图片，显示图片预览 */
+  overflow: hidden !important;
+}
+
+/* 🔴 优化：管理员模式下文字样式 */
+.opt-grid.admin-mode .opt-card.admin-mode .opt-name {
+  font-size: 36rpx !important; /* 字体更大 */
+  font-weight: 700 !important;
+  margin-bottom: 12rpx !important;
+  color: #1c1c1e !important;
+}
+.opt-grid.admin-mode .opt-card.admin-mode .opt-sub {
+  font-size: 28rpx !important; /* 字体更大 */
+  color: #666 !important;
+}
+
 .opt-img { width: 100%; height: 160rpx; background: #f0f0f0; object-fit: cover; }
-.opt-info { padding: 20rpx 10rpx; width: 100%; box-sizing: border-box; }
-.opt-name { font-size: 26rpx; font-weight: 600; display: block; }
-.opt-sub { font-size: 22rpx; color: #666; }
+.opt-info { 
+  padding: 20rpx 10rpx; 
+  width: 100%; 
+  box-sizing: border-box; 
+  position: relative;
+  z-index: 1; /* 确保在图片下方 */
+}
+.opt-name { 
+  font-size: 26rpx; 
+  font-weight: 600; 
+  display: block; 
+  /* 🔴 优化：管理员模式下，文字可点击区域不阻挡其他操作 */
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
+.opt-sub { 
+  font-size: 22rpx; 
+  color: #666; 
+  /* 🔴 优化：管理员模式下，文字可点击区域不阻挡其他操作 */
+  pointer-events: auto;
+  position: relative;
+  z-index: 2;
+}
 .admin-add-icon { position: absolute; top: 10rpx; right: 10rpx; font-size: 20rpx; background: #eee; padding: 6rpx; border-radius: 6rpx; }
-.admin-del-corner { position: absolute; bottom: 0; right: 0; background: red; color: #fff; font-size: 18rpx; padding: 4rpx 10rpx; border-top-left-radius: 10rpx; }
+.admin-del-corner { 
+  position: absolute !important; 
+  top: 10rpx !important; 
+  right: 10rpx !important; 
+  background: rgba(255, 255, 255, 0.95) !important; 
+  color: #FF3B30 !important; 
+  font-size: 32rpx !important; 
+  font-weight: 900 !important;
+  width: 50rpx !important;
+  height: 50rpx !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15) !important;
+  z-index: 100 !important; /* 🔴 关键：确保删除按钮在最上层，不被文字遮挡 */
+  pointer-events: auto !important;
+}
+
+/* 🔴 优化：管理员模式下，删除按钮位置调整，避免与上传按钮重叠 */
+.opt-grid.admin-mode .opt-card.admin-mode .admin-del-corner {
+  top: 10rpx !important;
+  right: 10rpx !important;
+  z-index: 101 !important; /* 确保在图片按钮之上 */
+}
 .opt-card.add-btn { height: 160rpx; justify-content: center; font-size: 50rpx; color: #ccc; border: 2rpx dashed #ccc; }
 
 /* 配件列表 (垂直列表) */
@@ -778,27 +883,26 @@ page {
 .admin-del-corner-top, 
 .admin-del-mini {
   position: absolute !important;
-  top: 0 !important;
-  right: 0 !important;
+  /* 🔴 优化：位置稍微向内移动，避免贴边误触 */
+  top: 10rpx !important;
+  right: 10rpx !important;
   
   /* 关键修改：背景变透明，去掉那个难看的红块 */
   background: transparent !important; 
   
   /* 文字颜色保持红色，字体加大一点 */
   color: #FF3B30 !important;
-  font-size: 36rpx !important; 
+  font-size: 32rpx !important; 
   font-weight: 900;
   
-  /* 保证点击区域够大，但看不见背景 */
-  width: 80rpx !important;
-  height: 80rpx !important;
+  /* 🔴 优化：减小点击区域，避免误触 */
+  width: 50rpx !important;
+  height: 50rpx !important;
   
-  /* 让 X 处于右上角稍微偏内一点的位置，看起来舒服 */
+  /* 让 X 居中显示 */
   display: flex;
-  align-items: flex-start; /* 靠上 */
-  justify-content: flex-end; /* 靠右 */
-  padding-top: 10rpx;
-  padding-right: 15rpx;
+  align-items: center;
+  justify-content: center;
   
   z-index: 20;
 }
@@ -962,8 +1066,24 @@ page {
 }
 
 /* 确保删除按钮在右上角 (之前已经改过，这里确保一下) */
+/* 🔴 优化：配置方案删除按钮，防止误触 */
 .admin-del-corner {
   z-index: 20; /* 确保层级最高 */
+  /* 关键优化：按钮位置稍微向内移动，避免贴边误触 */
+  top: 8rpx !important;    /* 距离顶部8rpx，不贴边 */
+  right: 8rpx !important;  /* 距离右边8rpx，不贴边 */
+  /* 减小点击区域，避免误触 */
+  width: 50rpx !important;
+  height: 50rpx !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 32rpx !important;
+  font-weight: 900 !important;
+  /* 添加背景，提高可见性 */
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-radius: 50% !important;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15) !important;
 }
 
 /* ======================================================== */
@@ -1920,4 +2040,63 @@ page {
   line-height: 1.7;
   word-break: break-all;
   letter-spacing: 0.2rpx;
+}
+
+/* ================= 自定义操作菜单（替代 wx.showActionSheet） ================= */
+.action-sheet-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  z-index: 99999;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.action-sheet-box {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.action-sheet-item {
+  padding: 32rpx;
+  text-align: center;
+  font-size: 32rpx;
+  color: #1D1D1F;
+  border-bottom: 1rpx solid #E5E5EA;
+  transition: background-color 0.2s;
+}
+
+.action-sheet-item:active {
+  background-color: #F5F5F7;
+}
+
+.action-sheet-cancel {
+  padding: 32rpx;
+  text-align: center;
+  font-size: 32rpx;
+  color: #1D1D1F;
+  margin-top: 16rpx;
+  border-top: 16rpx solid #F5F5F7;
+  transition: background-color 0.2s;
+}
+
+.action-sheet-cancel:active {
+  background-color: #F5F5F7;
 }

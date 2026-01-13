@@ -364,5 +364,33 @@
 
 
 
+<!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
+<view class="auto-toast-mask" wx:if="{{autoToast.show}}">
+  <view class="auto-toast-box">
+    <view class="at-title">{{autoToast.title}}</view>
+    <view class="at-content">{{autoToast.content}}</view>
+  </view>
+</view>
+
+<!-- ================= 自定义对话框 ================= -->
+<view class="custom-dialog-mask" wx:if="{{dialog.show}}" bindtap="closeCustomDialog">
+  <view class="custom-dialog-box" catchtap="">
+    <view class="cd-title">{{dialog.title}}</view>
+    <view class="cd-content">{{dialog.content}}</view>
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText}}</view>
+      <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText}}</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 自定义加载动画 ================= -->
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
+  <view class="loader">
+    <text class="loader-label">{{loadingText}}</text>
+    <view class="loading-bar"></view>
+  </view>
+</view>
+
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />

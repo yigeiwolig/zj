@@ -45,6 +45,9 @@ Page({
 
     // 【新增】自动消失提示（无按钮，2秒后自动消失）
     autoToast: { show: false, title: '', content: '' },
+    
+    // 【新增】自定义操作菜单
+    actionSheet: { show: false, itemList: [], callback: null },
 
 
     // ============ 核心产品数据 ============
@@ -372,17 +375,14 @@ Page({
   // 管理员模式手动切换开关
   toggleAdminMode() {
     if (!this.data.isAuthorized) {
-      wx.showToast({ title: '无权限', icon: 'none' });
+      this.showAutoToast('提示', '无权限');
       return;
     }
     
     const nextState = !this.data.isAdmin;
     this.setData({ isAdmin: nextState });
     
-    wx.showToast({
-      title: nextState ? '管理模式开启' : '已回到用户模式',
-      icon: 'none'
-    });
+    this.showAutoToast('提示', nextState ? '管理模式开启' : '已回到用户模式');
   },
 
   // ========================================================
@@ -873,31 +873,31 @@ Page({
   // ================== 1. 顶部媒体 (分开上传) ==================
   adminAddImage() {
     this.chooseImageWithCrop().then(async (path) => {
-      wx.showLoading({ title: '上传中...' });
+      this.showMyLoading('上传中...');
       try {
         const fileID = await this.uploadToCloud(path, 'shop/topMedia');
         this.data.topMediaList.push({ type: 'image', url: fileID });
         this.setData({ topMediaList: this.data.topMediaList });
         this.saveTopMediaToCloud();
       } catch (err) {
-        wx.showToast({ title: '上传失败', icon: 'none' });
+        this.showAutoToast('提示', '上传失败');
       } finally {
-        wx.hideLoading();
+        this.hideMyLoading();
       }
     }).catch(() => {});
   },
   adminAddVideo() {
     wx.chooseMedia({ count: 1, mediaType: ['video'], success: async (res) => {
-      wx.showLoading({ title: '上传中...' });
+      this.showMyLoading('上传中...');
       try {
         const fileID = await this.uploadToCloud(res.tempFiles[0].tempFilePath, 'shop/topMedia');
         this.data.topMediaList.push({ type: 'video', url: fileID });
         this.setData({ topMediaList: this.data.topMediaList });
         this.saveTopMediaToCloud();
-        wx.hideLoading();
+        this.hideMyLoading();
       } catch (err) {
-        wx.hideLoading();
-        wx.showToast({ title: '上传失败', icon: 'none' });
+        this.hideMyLoading();
+        this.showAutoToast('提示', '上传失败');
       }
     }});
   },
@@ -913,7 +913,7 @@ Page({
   // ========================================================
   adminAddSeries() {
     // 1. 【新增】立刻显示 Loading，防止重复点击
-    wx.showLoading({ title: '创建中...', mask: true });
+    this.showMyLoading('创建中...');
 
     // 2. 尝试找一个现有的产品做模板（通常是第1个）
     const template = this.data.seriesList.length > 0 ? this.data.seriesList[0] : null;
@@ -979,10 +979,10 @@ Page({
     // 6. 保存到云端 (isNew = true)
     this.saveSeriesToCloud(newOne, true).then(() => {
         // 【新增】创建完了再关掉 Loading
-        wx.hideLoading();
-        wx.showToast({ title: '已新建', icon: 'success' });
+        this.hideMyLoading();
+        this.showAutoToast('成功', '已新建');
     }).catch(() => {
-        wx.hideLoading();
+        this.hideMyLoading();
     });
   },
 
@@ -1001,7 +1001,7 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '删除中...' });
+          this.showMyLoading('删除中...');
 
           // 1. 如果有 _id，说明已经在云数据库里，需要删库
         if (this.db && series._id) {
@@ -1023,8 +1023,8 @@ Page({
             this.setData({ showDetail: false });
           }
 
-          wx.hideLoading();
-          wx.showToast({ title: '已删除', icon: 'none' });
+          this.hideMyLoading();
+          this.showAutoToast('提示', '已删除');
       }
       }
     });
@@ -1035,7 +1035,7 @@ Page({
     console.log('[shop.js] 产品索引:', idx);
     
     this.chooseImageWithCrop().then(async (path) => {
-      wx.showLoading({ title: '上传中...' });
+      this.showMyLoading('上传中...');
       try {
         const fileID = await this.uploadToCloud(path, 'shop/covers');
 
@@ -1062,12 +1062,12 @@ Page({
           });
         }
 
-        wx.showToast({ title: '上传成功', icon: 'success' });
+        this.showAutoToast('成功', '上传成功');
       } catch (err) {
         console.error('[shop.js] adminUploadCover 上传失败:', err);
-        wx.showToast({ title: '上传失败', icon: 'none' });
+        this.showAutoToast('提示', '上传失败');
       } finally {
-        wx.hideLoading();
+        this.hideMyLoading();
       }
     }).catch((err) => {
       console.error('[shop.js] adminUploadCover 选择或裁切失败:', err);
@@ -1095,7 +1095,7 @@ Page({
       // 校验：必须是纯数字
       const numValue = v.trim();
       if (numValue && !/^\d+$/.test(numValue)) {
-        wx.showToast({ title: '号码必须是纯数字', icon: 'none' });
+        this.showAutoToast('提示', '号码必须是纯数字');
         return;
       }
       
@@ -1105,7 +1105,7 @@ Page({
           i !== idx && item.jumpNumber && item.jumpNumber.toString() === numValue
         );
         if (duplicate) {
-          wx.showToast({ title: '号码已存在，请使用其他号码', icon: 'none' });
+          this.showAutoToast('提示', '号码已存在，请使用其他号码');
           return;
         }
       }
@@ -1114,7 +1114,7 @@ Page({
       series.jumpNumber = numValue ? parseInt(numValue) : null;
       this.setData({ [`seriesList[${idx}].jumpNumber`]: series.jumpNumber });
       this.saveSeriesToCloud(series);
-      wx.showToast({ title: '号码已更新', icon: 'success' });
+      this.showAutoToast('成功', '号码已更新');
     });
   },
   
@@ -1191,7 +1191,7 @@ Page({
         if (lastIdx >= 0) {
           list[lastIdx].selectedForCompare = false;
         }
-        wx.showToast({ title: '最多选择2个产品对比', icon: 'none' });
+        this.showAutoToast('提示', '最多选择2个产品对比');
       }
       
       const finalComps = list.filter(i => i.selectedForCompare);
@@ -1236,7 +1236,7 @@ Page({
       mediaType: ['image', 'video'], // 允许选视频
       sourceType: ['album', 'camera'],
       success: async (res) => {
-        wx.showLoading({ title: '上传中...' });
+        this.showMyLoading('上传中...');
         try {
           const file = res.tempFiles[0];
           const tempPath = file.fileType === 'image'
@@ -1266,8 +1266,8 @@ Page({
             [`seriesList[${this.data.currentSeriesIdx}].detailImages`]: updatedDetailImages
           });
           
-          // 保存到云端
-          this.saveSeriesToCloud(updatedSeries);
+          // 保存到云端（等待完成）
+          await this.saveSeriesToCloud(updatedSeries);
           
           // 检查如果现在有图了，且在顶部，可以先关掉 bar 
           // 或者为了操作方便，管理员模式下我们可以让它一直开启
@@ -1275,17 +1275,17 @@ Page({
             this.setData({ showFooterBar: true });
           }
           
-          wx.hideLoading();
-          wx.showToast({ title: '上传成功', icon: 'success' });
+          this.hideMyLoading();
+          this.showAutoToast('成功', '上传成功');
         } catch (err) {
           console.error('[shop.js] adminAddDetailMedia 上传失败:', err);
-          wx.hideLoading();
-          wx.showToast({ title: '上传失败', icon: 'none' });
+          this.hideMyLoading();
+          this.showAutoToast('提示', '上传失败');
         }
       },
       fail: (err) => {
         console.error('[shop.js] adminAddDetailMedia 选择文件失败:', err);
-        wx.showToast({ title: '选择文件失败', icon: 'none' });
+        this.showAutoToast('提示', '选择文件失败');
       }
     });
   },
@@ -1295,7 +1295,7 @@ Page({
     
     // 【修复】确保 detailImages 数组存在
     if (!s.detailImages || idx >= s.detailImages.length) {
-      wx.showToast({ title: '删除失败', icon: 'none' });
+      this.showAutoToast('提示', '删除失败');
       return;
     }
     
@@ -1393,7 +1393,7 @@ Page({
       this._input(s.models[idx].price+'', (v)=>{
           const newPrice = Number(v);
           if (isNaN(newPrice)) {
-            wx.showToast({ title: '请输入有效数字', icon: 'none' });
+            this.showAutoToast('提示', '请输入有效数字');
             return;
           }
           
@@ -1438,15 +1438,15 @@ Page({
   adminUploadOptionImg(e) {
       const idx = e.currentTarget.dataset.oidx;
     this.chooseImageWithCrop().then(async (path)=>{
-      wx.showLoading({ title: '上传中...' });
+      this.showMyLoading('上传中...');
       try {
         const fileID = await this.uploadToCloud(path, 'shop/options');
           const s = this.data.currentSeries;
           
           // 【修复】确保 options 数组和对应项存在
           if (!s.options || !s.options[idx]) {
-            wx.showToast({ title: '数据错误', icon: 'none' });
-            wx.hideLoading();
+            this.showAutoToast('提示', '数据错误');
+            this.hideMyLoading();
             return;
           }
           
@@ -1470,16 +1470,16 @@ Page({
           // 保存到云端
           this.saveSeriesToCloud(updatedSeries);
           
-          wx.hideLoading();
-          wx.showToast({ title: '上传成功', icon: 'success' });
+          this.hideMyLoading();
+          this.showAutoToast('成功', '上传成功');
         } catch (err) {
           console.error('[shop.js] adminUploadOptionImg 上传失败:', err);
-          wx.hideLoading();
-          wx.showToast({ title: '上传失败', icon: 'none' });
+          this.hideMyLoading();
+          this.showAutoToast('提示', '上传失败');
         }
       }).catch((err) => {
         console.error('[shop.js] adminUploadOptionImg 选择文件失败:', err);
-        wx.showToast({ title: '选择文件失败', icon: 'none' });
+        this.showAutoToast('提示', '选择文件失败');
       });
   },
   adminEditOptName(e) {
@@ -1549,7 +1549,7 @@ Page({
       });
 
       if (selectedIndices.length < 2) {
-        wx.showToast({ title: '请至少选2个', icon: 'none' });
+        this.showAutoToast('提示', '请至少选2个');
         return;
       }
 
@@ -1606,9 +1606,9 @@ Page({
     
     if (!s.compareVideo) {
       if (this.data.isAdmin) {
-        wx.showToast({ title: '请先上传视频', icon: 'none' });
+        this.showAutoToast('提示', '请先上传视频');
       } else {
-        wx.showToast({ title: '暂无演示视频', icon: 'none' });
+        this.showAutoToast('提示', '暂无演示视频');
       }
       return;
     }
@@ -1635,7 +1635,7 @@ Page({
       mediaType: ['video'],
       sourceType: ['album', 'camera'],
       success: async (res) => {
-        wx.showLoading({ title: '上传中...' });
+        this.showMyLoading('上传中...');
         try {
           const tempPath = res.tempFiles[0].tempFilePath;
           
@@ -1659,12 +1659,12 @@ Page({
           // 马上保存到云端
           this.saveSeriesToCloud(s);
           
-          wx.hideLoading();
-          wx.showToast({ title: '上传成功', icon: 'success' });
+          this.hideMyLoading();
+          this.showAutoToast('成功', '上传成功');
         } catch (err) {
-          wx.hideLoading();
+          this.hideMyLoading();
           console.error('上传失败', err);
-          wx.showToast({ title: '上传失败', icon: 'none' });
+          this.showAutoToast('提示', '上传失败');
         }
       }
     });
@@ -1723,7 +1723,7 @@ Page({
     const idx = e.currentTarget.dataset.index;
     
     if (!s.specs || idx >= s.specs.length) {
-      wx.showToast({ title: '删除失败', icon: 'none' });
+      this.showAutoToast('提示', '删除失败');
       return;
     }
     
@@ -1751,7 +1751,7 @@ Page({
     
     // 确保 specs 数组存在
     if (!s.specs || !s.specs[rIdx]) {
-      wx.showToast({ title: '数据错误', icon: 'none' });
+      this.showAutoToast('提示', '数据错误');
       return;
     }
     
@@ -1779,59 +1779,83 @@ Page({
   // 2. 新增：管理员管理参数 (添加/删除行)
   // ========================================================
   adminManageSpecs() {
-    wx.showActionSheet({
-      itemList: ['添加参数行', '删除最后一行', '重置所有参数'],
-      success: (res) => {
-        const s = this.data.currentSeries;
-        
-        // 确保 specs 数组存在
-        if (!s.specs) {
-          s.specs = [];
-        }
-        
-        if (res.tapIndex === 0) {
-          // 添加行：根据型号数量动态生成列数
-          const modelCount = s.models ? s.models.length : 3;
-          const newRow = { label: '新参数' };
-          for (let i = 1; i <= modelCount; i++) {
-            newRow[`v${i}`] = '-';
+    // 🔴 使用自定义actionSheet替代wx.showActionSheet
+    this.setData({
+      actionSheet: {
+        show: true,
+        itemList: ['添加参数行', '删除最后一行', '重置所有参数'],
+        callback: (tapIndex) => {
+          const s = this.data.currentSeries;
+          
+          // 确保 specs 数组存在
+          if (!s.specs) {
+            s.specs = [];
           }
-          s.specs.push(newRow);
-        } else if (res.tapIndex === 1) {
-          // 删除最后一行
-          if (s.specs.length > 0) {
-            s.specs.pop();
-          } else {
-            wx.showToast({ title: '没有可删除的行', icon: 'none' });
-            return;
+          
+          if (tapIndex === 0) {
+            // 添加行：根据型号数量动态生成列数
+            const modelCount = s.models ? s.models.length : 3;
+            const newRow = { label: '新参数' };
+            for (let i = 1; i <= modelCount; i++) {
+              newRow[`v${i}`] = '-';
+            }
+            s.specs.push(newRow);
+          } else if (tapIndex === 1) {
+            // 删除最后一行
+            if (s.specs.length > 0) {
+              s.specs.pop();
+            } else {
+              this.showAutoToast('提示', '没有可删除的行');
+              return;
+            }
+          } else if (tapIndex === 2) {
+            // 重置 (慎用)
+            const modelCount = s.models ? s.models.length : 3;
+            const defaultRow = { label: '续航' };
+            for (let i = 1; i <= modelCount; i++) {
+              defaultRow[`v${i}`] = '-';
+            }
+            s.specs = [defaultRow];
           }
-        } else if (res.tapIndex === 2) {
-          // 重置 (慎用)
-          const modelCount = s.models ? s.models.length : 3;
-          const defaultRow = { label: '续航' };
-          for (let i = 1; i <= modelCount; i++) {
-            defaultRow[`v${i}`] = '-';
+          
+          // 同步到 currentSeries 和 seriesList
+          this.setData({ 
+            currentSeries: s, 
+            [`seriesList[${this.data.currentSeriesIdx}]`]: s 
+          });
+          
+          // 保存到云端
+          this.saveSeriesToCloud(s);
+          
+          // 如果对比表格正在显示，刷新它
+          if (this.data.showSpecsModal) {
+            this.openSpecsModal();
           }
-          s.specs = [defaultRow];
+          
+          this.showAutoToast('成功', '已更新');
         }
-        
-        // 同步到 currentSeries 和 seriesList
-        this.setData({ 
-          currentSeries: s, 
-          [`seriesList[${this.data.currentSeriesIdx}]`]: s 
-        });
-        
-        // 保存到云端
-        this.saveSeriesToCloud(s);
-        
-        // 如果对比表格正在显示，刷新它
-        if (this.data.showSpecsModal) {
-          this.openSpecsModal();
-        }
-        
-        wx.showToast({ title: '已更新', icon: 'success' });
       }
     });
+  },
+  
+  // 🔴 新增：关闭自定义actionSheet
+  closeActionSheet() {
+    this.setData({ actionSheet: { show: false, itemList: [], callback: null } });
+  },
+  
+  // 🔴 新增：点击actionSheet选项
+  onActionSheetItemTap(e) {
+    const index = e.currentTarget.dataset.index;
+    const callback = this.data.actionSheet.callback;
+    this.closeActionSheet();
+    if (callback) {
+      callback(index);
+    }
+  },
+  
+  // 🔴 新增：阻止事件冒泡
+  stopPropagation() {
+    // 空函数，用于阻止事件冒泡
   },
 
   // ================== 5. 配件 (Accessory) 新交互 ==================
@@ -1856,7 +1880,7 @@ Page({
     const idx = this.data.currentAccIdx;
     this.setData({ [`accessoryList[${idx}].selected`]: true });
     this.calcTotal();
-    wx.showToast({ title: '已加入', icon: 'success' });
+    this.showAutoToast('成功', '已加入');
     this.closeAccessoryDetail();
   },
   
@@ -1891,7 +1915,7 @@ Page({
   },
   adminAddAccDetailImg() {
     this.chooseImageWithCrop().then(async (path) => {
-      wx.showLoading({ title: '上传中...' });
+      this.showMyLoading('上传中...');
       try {
         const idx = this.data.currentAccIdx;
         const fileID = await this.uploadToCloud(path, 'shop/accessories');
@@ -1900,10 +1924,10 @@ Page({
         list[idx].detailImages.push(fileID);
         this.setData({ accessoryList: list });
         this.saveAccessoryToCloud(list[idx], idx);
-        wx.hideLoading();
+        this.hideMyLoading();
       } catch (err) {
-        wx.hideLoading();
-        wx.showToast({ title: '上传失败', icon: 'none' });
+        this.hideMyLoading();
+        this.showAutoToast('提示', '上传失败');
       }
     }).catch((err) => {
       console.error('[shop.js] adminAddAccDetailImg 选择或裁切失败:', err);
@@ -1941,17 +1965,17 @@ Page({
   adminUploadAccThumb(e) {
     const idx = e.currentTarget.dataset.index;
     this.chooseImageWithCrop().then(async (path)=>{
-      wx.showLoading({ title: '上传中...' });
+      this.showMyLoading('上传中...');
       try {
         const fileID = await this.uploadToCloud(path, 'shop/accessories');
         const acc = this.data.accessoryList[idx];
         acc.img = fileID;
         this.setData({ [`accessoryList[${idx}].img`]: fileID });
         this.saveAccessoryToCloud(acc, idx);
-        wx.hideLoading();
+        this.hideMyLoading();
       } catch (err) {
-        wx.hideLoading();
-        wx.showToast({ title: '上传失败', icon: 'none' });
+        this.hideMyLoading();
+        this.showAutoToast('提示', '上传失败');
       }
     }).catch((err)=>{
       console.error('[shop.js] adminUploadAccThumb 选择或裁切失败:', err);
@@ -2028,7 +2052,7 @@ Page({
     const text = this.data.smartPasteVal.trim();
     
     if (!text) {
-      wx.showToast({ title: '请输入内容', icon: 'none' });
+      this.showAutoToast('提示', '请输入内容');
       return;
     }
     
@@ -2052,13 +2076,9 @@ Page({
     
     // 提示用户
     if (parsed.name && parsed.phone && parsed.address) {
-      wx.showToast({ title: '解析成功', icon: 'success' });
+      this.showAutoToast('成功', '解析成功');
     } else {
-      wx.showToast({ 
-        title: `已解析：${parsed.name ? '姓名✓' : ''}${parsed.phone ? '电话✓' : ''}${parsed.address ? '地址✓' : ''}`, 
-        icon: 'none',
-        duration: 2000
-      });
+      this.showAutoToast('提示', `已解析：${parsed.name ? '姓名✓' : ''}${parsed.phone ? '电话✓' : ''}${parsed.address ? '地址✓' : ''}`);
     }
   },
   
@@ -2070,10 +2090,15 @@ Page({
     let phone = '';
     let address = '';
     
-    // 清理文本：移除常见标签和符号
+    // 🔴 优化：更彻底地清理文本，移除所有标签、符号和无用词汇
     let cleanText = text.trim()
-      .replace(/收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?/g, ' ')
-      .replace(/[()（）【】\[\]<>]/g, ' ')
+      // 移除所有地址相关标签（包括收件人、收货人等）
+      .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
+      // 移除号码、编号等无用词汇
+      .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
+      // 移除所有括号和特殊符号
+      .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
+      // 移除多余空格
       .replace(/\s+/g, ' ')
       .trim();
     
@@ -2138,8 +2163,14 @@ Page({
     
     // 5. 剩余部分作为地址（使用现有的地址解析函数）
     if (cleanText) {
-      const parsedAddress = this.parseAddress(cleanText);
-      address = parsedAddress.fullAddress || cleanText;
+      // 🔴 优化：再次清理地址文本，移除可能的残留标签
+      let addressText = cleanText
+        .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      const parsedAddress = this.parseAddress(addressText);
+      address = parsedAddress.fullAddress || addressText;
     }
     
     return { name: name.trim(), phone: phone.trim(), address: address.trim() };
@@ -2153,7 +2184,7 @@ Page({
       success: (res) => {
         const clipboardText = res.data.trim();
         if (!clipboardText) {
-          wx.showToast({ title: '剪贴板为空', icon: 'none' });
+          this.showAutoToast('提示', '剪贴板为空');
           return;
         }
         
@@ -2174,13 +2205,13 @@ Page({
           if (parsed.province) msg += parsed.province;
           if (parsed.city) msg += parsed.city;
           if (parsed.district) msg += parsed.district;
-          wx.showToast({ title: msg, icon: 'none', duration: 2000 });
+          this.showAutoToast('提示', msg);
         } else {
-          wx.showToast({ title: '地址已粘贴', icon: 'success' });
+          this.showAutoToast('成功', '地址已粘贴');
         }
       },
       fail: () => {
-        wx.showToast({ title: '获取剪贴板失败', icon: 'none' });
+        this.showAutoToast('提示', '获取剪贴板失败');
       }
     });
   },
@@ -2198,8 +2229,19 @@ Page({
     let district = '';
     let detail = '';
     
-    // 移除常见的分隔符，统一处理（保留空格用于分割）
-    text = text.replace(/[\/、]/g, ' ').replace(/[,，;；]/g, ' ').replace(/\s+/g, ' ').trim();
+    // 🔴 优化：更彻底地清理地址文本，移除所有标签和无用词汇
+    text = text
+      // 移除所有地址相关标签
+      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|收件地址|收货地址/g, ' ')
+      // 移除号码、编号等无用词汇
+      .replace(/号码|编号|单号|订单号|运单号/g, ' ')
+      // 移除常见分隔符
+      .replace(/[\/、，。；：！？]/g, ' ')
+      // 移除所有括号
+      .replace(/[()（）【】\[\]<>《》""'']/g, ' ')
+      // 统一空格
+      .replace(/\s+/g, ' ')
+      .trim();
     
     // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
     let remaining = text;
@@ -2263,8 +2305,11 @@ Page({
       }
     }
     
-    // 剩余部分作为详细地址
-    detail = remaining.trim();
+    // 🔴 优化：剩余部分作为详细地址，再次清理无用词汇
+    detail = remaining
+      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     
     // 组装完整地址（格式化输出）
     let fullAddress = '';
@@ -2870,7 +2915,7 @@ Page({
           success: (payRes) => {
             console.log('[doRealPayment] 支付成功:', payRes);
             // 支付成功处理
-            wx.showToast({ title: '支付成功', icon: 'success' });
+            this.showAutoToast('成功', '支付成功');
             this.closeOrderModal();
             
             // 清理购物车
@@ -2938,9 +2983,9 @@ Page({
     if (!orderId) return;
     const maxAttempts = 3;
     if (attempt === 1) {
-      wx.showLoading({ title: '确认订单中...', mask: true });
+      this.showMyLoading('确认订单中...');
     } else {
-      wx.showLoading({ title: '再次确认...', mask: true });
+      this.showMyLoading('再次确认...');
     }
 
     wx.cloud.callFunction({
@@ -2950,14 +2995,11 @@ Page({
         const result = res.result || {};
         console.log('[callCheckPayResult] 云函数返回:', result);
         if (result.success) {
-          wx.showToast({ title: '订单已确认', icon: 'success' });
+          this.showAutoToast('成功', '订单已确认');
         } else if (attempt < maxAttempts) {
           setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
         } else {
-          wx.showToast({
-            title: result.msg || '支付状态待确认，请稍后在“我的订单”查看',
-            icon: 'none'
-          });
+          this.showAutoToast('提示', result.msg || '支付状态待确认，请稍后在"我的订单"查看');
         }
       },
       fail: (err) => {
@@ -2965,14 +3007,11 @@ Page({
         if (attempt < maxAttempts) {
           setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
         } else {
-          wx.showToast({
-            title: '网络异常，请稍后在“我的订单”查看',
-            icon: 'none'
-          });
+          this.showAutoToast('提示', '网络异常，请稍后在"我的订单"查看');
         }
       },
       complete: () => {
-        wx.hideLoading();
+        this.hideMyLoading();
       }
     });
   },
@@ -2998,7 +3037,7 @@ Page({
           });
           // 清空本地存储
           wx.removeStorageSync('my_cart');
-          wx.showToast({ title: '已清空', icon: 'success' });
+          this.showAutoToast('成功', '已清空');
         }
       }
     });
@@ -3076,7 +3115,7 @@ Page({
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
-          wx.showLoading({ title: '提交中...' });
+          this.showMyLoading('提交中...');
           wx.cloud.callFunction({
             name: 'createOrder',
             data: {
@@ -3088,15 +3127,15 @@ Page({
               shippingMethod: shippingMethod
             },
             success: () => {
-              wx.hideLoading();
-              wx.showToast({ title: '提交成功' });
+              this.hideMyLoading();
+              this.showAutoToast('成功', '提交成功');
               this.closeOrderModal();
               wx.removeStorageSync('my_cart');
               this.setData({ cart: [], cartTotalPrice: 0 });
               setTimeout(() => { wx.navigateTo({ url: '/pages/my/my' }); }, 1000);
             },
             fail: () => {
-              wx.hideLoading();
+              this.hideMyLoading();
               this.showError('提交失败');
             }
           });
@@ -3201,6 +3240,17 @@ Page({
       const loginRes = await wx.cloud.callFunction({ name: 'login' });
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
+      
+      // 🔴 关键修复：先检查是否是管理员，管理员豁免封禁检查
+      const adminCheck = await db.collection('guanliyuan')
+        .where({ openid: openid })
+        .limit(1)
+        .get();
+      
+      if (adminCheck.data && adminCheck.data.length > 0) {
+        console.log('[shop] ✅ 检测到管理员身份，豁免封禁检查');
+        return; // 管理员直接返回，不检查封禁状态
+      }
       
       const buttonRes = await db.collection('login_logbutton')
         .where({ _openid: openid })
@@ -3397,5 +3447,5 @@ Page({
         wx.exitMiniProgram();
       }
     });
-  },
+  }
 })

@@ -33,6 +33,9 @@ Page({
     dragOffset: 0,
     currentIndex: 0, // 默认选中第0个，即"产品上新"
     
+    // 【新增】自动消失提示（无按钮，2秒后自动消失）
+    autoToast: { show: false, title: '', content: '' },
+    
     // 按照你的要求 1-12 顺序排列
     // === 在这里单独调整每个图标的大小 ===
     list: [
@@ -141,6 +144,17 @@ Page({
       const loginRes = await wx.cloud.callFunction({ name: 'login' });
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
+      
+      // 🔴 关键修复：先检查是否是管理员，管理员豁免封禁检查
+      const adminCheck = await db.collection('guanliyuan')
+        .where({ openid: openid })
+        .limit(1)
+        .get();
+      
+      if (adminCheck.data && adminCheck.data.length > 0) {
+        console.log('[products] ✅ 检测到管理员身份，豁免封禁检查');
+        return; // 管理员直接返回，不检查封禁状态
+      }
       
       const buttonRes = await db.collection('login_logbutton')
         .where({ _openid: openid })
@@ -431,11 +445,17 @@ Page({
         success: function() {
           console.log('联系方式跳转成功');
         },
-        fail: function(err) {
+        fail: (err) => {
           console.log('联系方式跳转失败:', err);
-          wx.showToast({ title: '跳转失败: ' + JSON.stringify(err), icon: 'none' });
+          this.showAutoToast('提示', '跳转失败: ' + JSON.stringify(err));
         }
       });
+      return;
+    }
+
+    // 🔴 安装教程：跳转前进行权限检查
+    if (id === 7) {
+      this.checkTutorialAccess();
       return;
     }
 
@@ -449,7 +469,6 @@ Page({
       case 1: target = '/pages/scan/scan'; break;       // 控制中心
       case 9: target = '/pages/ota/ota'; break;         // OTA升级
       case 6: target = '/pages/shouhou/shouhou'; break; // 维修中心
-      case 7: target = '/pages/azjc/azjc'; break;       // 安装教程
       case 12: target = '/pages/home/home'; break;       // 附近门店
       case 2: target = '/pages/my/my'; break;           // 我的信息 -> my 页面
       // 其他待开发...
@@ -459,11 +478,100 @@ Page({
     if (target) {
       wx.navigateTo({ url: target });
     } else {
-      wx.showToast({ title: '该功能暂未开放', icon: 'none' });
+      this.showAutoToast('提示', '该功能暂未开放');
+    }
+  },
+
+  // 🔴 检查安装教程访问权限
+  async checkTutorialAccess() {
+    wx.showLoading({ title: '验证权限中...', mask: true });
+    
+    try {
+      const db = wx.cloud.database();
+      const _ = db.command;
+      
+      // 1. 获取当前用户 openid
+      const { result: { openid } } = await wx.cloud.callFunction({ name: 'login' });
+
+      // 2. 检查管理员
+      let adminCheck = await db.collection('guanliyuan').where({ openid: openid }).count();
+      if (adminCheck.total === 0) {
+        adminCheck = await db.collection('guanliyuan').where({ _openid: openid }).count();
+      }
+      
+      if (adminCheck.total > 0) {
+        // 是管理员：直接放行
+        wx.hideLoading();
+        wx.navigateTo({ url: '/pages/azjc/azjc' });
+        return; 
+      }
+
+      // 3. 检查是否有"已发货但未签收/查看"的订单
+      // status: 1 (已发货/运输中) 或 'SHIPPED'
+      const pendingOrderRes = await db.collection('shop_orders').where({
+        _openid: openid,
+        status: _.in([1, 'SHIPPED']) 
+      }).count();
+
+      if (pendingOrderRes.total > 0) {
+        // 🔴 有未确认收货的订单：即使绑定了设备，也不能直接查看
+        wx.hideLoading();
+        wx.showModal({
+          title: '提示',
+          content: '请前往个人中心-我的订单\n确认收货后解锁教程',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+        return;
+      }
+
+      // 4. 检查是否绑定了设备（使用 openid 字段，因为 bindDevice 云函数存储的是 openid）
+      const deviceRes = await db.collection('sn').where({
+        openid: openid
+      }).count();
+
+      if (deviceRes.total > 0) {
+        // 绑定了设备且没有待处理订单 -> 放行
+        wx.hideLoading();
+        wx.navigateTo({ url: '/pages/azjc/azjc' });
+        return; 
+      }
+
+      // 5. 既没订单也没绑定设备 -> 拒绝
+      wx.hideLoading();
+      wx.showModal({
+        title: '提示',
+        content: '检测到您并未绑定设备，请在个人中心页面绑定设备后查看',
+        showCancel: false,
+        confirmText: '知道了'
+      });
+
+    } catch (err) {
+      console.error('权限检查异常', err);
+      wx.hideLoading();
+      wx.showModal({
+        title: '提示',
+        content: '权限验证失败，请重试',
+        showCancel: false,
+        confirmText: '知道了'
+      });
     }
   },
   
   goBack() { 
     wx.reLaunch({ url: '/pages/index/index' }); 
+  },
+  
+  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  showAutoToast(title = '提示', content = '') {
+    this.setData({
+      'autoToast.show': true,
+      'autoToast.title': title,
+      'autoToast.content': content
+    });
+    // 2秒后自动消失
+    setTimeout(() => {
+      this.setData({ 'autoToast.show': false });
+    }, 2000);
   }
 });

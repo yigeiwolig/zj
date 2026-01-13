@@ -25,13 +25,16 @@
   <view class="selector-center {{isInjecting ? 'fade-out' : ''}}" wx:if="{{!exploded}}">
     <view class="carousel">
       <view class="arrow left" bindtap="prevDevice">‹</view>
-      <view class="device-name" bindtap="startInject">{{devices[currentDevIdx]}}</view>
+      <view class="device-selector-content">
+        <image src="{{currentSvg}}" class="device-icon-preview force-white" mode="aspectFit" bindtap="startInject"></image>
+        <view class="device-name" bindtap="startInject">{{devices[currentDevIdx]}}</view>
+      </view>
       <view class="arrow right" bindtap="nextDevice">›</view>
     </view>
   </view>
 
   <view class="reveal-box {{isInjecting ? 'shaking' : ''}}" wx:if="{{isInjecting && !exploded}}">
-    <view class="reveal-mask" style="height: {{revealProgress}}">
+    <view class="reveal-mask" style="height: {{revealProgress}}%">
       <image src="{{currentSvg}}" class="device-svg force-white" mode="aspectFit"></image>
     </view>
   </view>

@@ -283,14 +283,54 @@ Page({
       },
       fail: (err) => {
         console.error('[handleAccess] 位置获取失败:', err);
-        // 预览环境/部分机型可能拿不到定位：直接给出提示并兜底跳转（不阻塞用户进入）
-        this.setData({ 
-          showAuthForceModal: true, 
-          authMissingType: 'location' 
+        
+        // 🔴 关键修复：先检查定位权限状态
+        wx.getSetting({
+          success: (settingRes) => {
+            const locationAuth = settingRes.authSetting['scope.userLocation'];
+            console.log('[handleAccess] 定位权限状态:', locationAuth);
+            
+            if (locationAuth === false) {
+              // 用户拒绝了定位权限，必须要求用户开启
+              console.log('[handleAccess] 用户拒绝了定位权限，要求开启');
+              this.setData({ 
+                showAuthForceModal: true, 
+                authMissingType: 'location' 
+              });
+              // 🔴 不允许跳转，必须等用户开启权限
+              return;
+            } else if (locationAuth === undefined) {
+              // 权限状态未知（可能是首次请求），也要求用户开启
+              console.log('[handleAccess] 定位权限未设置，要求开启');
+              this.setData({ 
+                showAuthForceModal: true, 
+                authMissingType: 'location' 
+              });
+              // 🔴 不允许跳转，必须等用户开启权限
+              return;
+            } else {
+              // 权限已开启，但获取位置失败（可能是GPS信号弱、网络问题等）
+              // 这种情况下可以允许进入，但给出提示
+              console.log('[handleAccess] 定位权限已开启，但获取位置失败，允许进入');
+              this.showMyDialog({ 
+                title: '提示', 
+                content: '无法获取当前位置，将使用默认设置' 
+              });
+              // 延迟跳转，给用户看到提示的时间
+              setTimeout(() => {
+                wx.reLaunch({ url: '/pages/products/products' });
+              }, 1500);
+            }
+          },
+          fail: () => {
+            // 无法获取权限状态，保守处理：要求用户开启权限
+            console.log('[handleAccess] 无法获取权限状态，要求开启定位权限');
+            this.setData({ 
+              showAuthForceModal: true, 
+              authMissingType: 'location' 
+            });
+          }
         });
-        setTimeout(() => {
-          wx.reLaunch({ url: '/pages/products/products' });
-        }, 300);
       }
     });
   },
@@ -691,12 +731,12 @@ Page({
               wx.reLaunch({ url: targetPage });
             });
           } else {
+          // 🔴 修复：不能手动设置 _openid，云数据库会自动根据当前用户设置
           db.collection(collectionName)
             .add({
               data: {
                 ...locData,
                 nickName: nickName,
-                _openid: openid,
                 createTime: db.serverDate(),
                 updateTime: db.serverDate()
               }
@@ -901,7 +941,16 @@ Page({
       });
       setTimeout(() => {
         this.setData({ showCustomSuccessModal: false });
-      }, 2000);
+        // 🔴 关键修复：用户开启权限后，自动重新尝试获取位置
+        console.log('[onOpenSettingResult] 用户已开启定位权限，重新获取位置');
+        this.handleAccess();
+      }, 1500);
+    } else {
+      // 用户没有开启权限，继续显示提示
+      this.setData({ 
+        showAuthForceModal: true, 
+        authMissingType: 'location' 
+      });
     }
   },
   retryBluetooth() { this.setData({ showAuthForceModal: false }); },
@@ -916,7 +965,10 @@ Page({
       });
       setTimeout(() => {
         this.setData({ showCustomSuccessModal: false });
-      }, 2000);
+        // 🔴 关键修复：用户开启权限后，自动重新尝试获取位置
+        console.log('[onOpenSetting] 用户已开启定位权限，重新获取位置');
+        this.handleAccess();
+      }, 1500);
     } else {
       // 显示自定义错误弹窗
       this.setData({ 
@@ -1050,7 +1102,7 @@ Page({
     this.hideConfirmModal();
 
     try {
-      wx.showLoading({ title: '处理中...', mask: true });
+      this.showMyLoading('处理中...');
 
       // 根据不同的封禁类型执行不同的逻辑
       if (banReason === 'screenshot' || banReason === 'screen_record') {
@@ -1105,7 +1157,7 @@ Page({
 
       console.log('[unbanUser] 操作成功，已从列表中移除');
 
-      wx.hideLoading();
+      this.hideMyLoading();
 
       // 🔴 2. 使用自定义白底黑字弹窗显示成功
       this.setData({
@@ -1124,7 +1176,7 @@ Page({
       }, 2000);
 
     } catch (err) {
-      wx.hideLoading();
+      this.hideMyLoading();
       console.error('[index] 解封用户失败:', err);
       this.showMyDialog({ title: '错误', content: '解封失败：' + err.message });
     }

@@ -27,6 +27,16 @@ Page({
     // 🆕 开发中弹窗
     showDevDialog: false,
     
+    // 【新增】自动消失提示（无按钮，2秒后自动消失）
+    autoToast: { show: false, title: '', content: '' },
+    
+    // 【新增】自定义对话框
+    dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+    
+    // 【新增】自定义加载动画
+    showLoadingAnimation: false,
+    loadingText: '加载中...',
+    
     // 布局适配
     statusBarHeight: 20,
     navBarHeight: 44,
@@ -142,15 +152,12 @@ Page({
   // 管理员模式手动切换开关
   toggleAdminMode() {
     if (!this.data.isAuthorized) {
-      wx.showToast({ title: '无权限', icon: 'none' });
+      this.showAutoToast('提示', '无权限');
       return;
     }
     const nextState = !this.data.isAdminMode;
     this.setData({ isAdminMode: nextState });
-    wx.showToast({
-      title: nextState ? '管理模式开启' : '已回到用户模式',
-      icon: 'none'
-    });
+    this.showAutoToast('提示', nextState ? '管理模式开启' : '已回到用户模式');
   },
 
 
@@ -244,7 +251,7 @@ Page({
     const newType = this.data.myInfo.type === 'gas' ? 'ev' : 'gas';
     this.setData({ 'myInfo.type': newType }, () => {
       this.updateTheme();
-      wx.showToast({ title: newType==='gas'?'黑金主题':'极简白主题', icon:'none' });
+      this.showAutoToast('提示', newType==='gas'?'黑金主题':'极简白主题');
     });
   },
 
@@ -360,7 +367,7 @@ Page({
         'userForm.maxAngle': (Math.random() * 15 + 75).toFixed(1),
         'userForm.avgAngle': (Math.random() * 10 + 60).toFixed(1),
       });
-      wx.showToast({ title: '数据读取成功', icon: 'success' });
+      this.showAutoToast('成功', '数据读取成功');
     }, 1500);
   },
 
@@ -424,35 +431,38 @@ Page({
 
   deleteRecord(e) {
     const id = e.currentTarget.dataset.id;
-    wx.showModal({
+    this.showMyDialog({
       title: '警告',
       content: '确定删除?',
+      showCancel: true,
+      confirmText: '删除',
+      cancelText: '取消',
       success: (res) => {
         if (!res.confirm) return;
 
-        wx.showLoading({ title: '删除中...' });
+        this.showMyLoading('删除中...');
         wx.cloud.callFunction({
           name: 'adminUpdateMotoRank',
           data: { action: 'delete', record: { _id: id } },
           success: (r) => {
-            wx.hideLoading();
+            this.hideMyLoading();
             if (r.result && r.result.success) {
               this.fetchRankFromCloud().then(() => {
                 this.computeRankings();
-                wx.showToast({ title: '已删除', icon: 'success' });
+                this.showAutoToast('成功', '已删除');
               });
             } else {
-              wx.showToast({ title: (r.result && r.result.errMsg) ? r.result.errMsg : '删除失败', icon: 'none' });
+              this.showAutoToast('提示', (r.result && r.result.errMsg) ? r.result.errMsg : '删除失败');
             }
           },
           fail: (err) => {
-            wx.hideLoading();
+            this.hideMyLoading();
             console.error('adminUpdateMotoRank delete fail', err);
-            wx.showToast({ title: '删除失败', icon: 'none' });
+            this.showAutoToast('提示', '删除失败');
           }
         });
       }
-    })
+    });
   },
 
   // 统一保存逻辑（管理员新增/用户上传）
@@ -463,7 +473,10 @@ Page({
     if (this.data.showUserUpload) {
       // --- 用户上传流程 ---
       const u = this.data.userForm;
-      if(u.maxAngle === '--') return wx.showToast({title:'请先读取数据', icon:'none'});
+      if(u.maxAngle === '--') {
+        this.showAutoToast('提示', '请先读取数据');
+        return;
+      }
       
       const newHistoryItem = {
         id: Date.now(),
@@ -477,12 +490,15 @@ Page({
       const newHistory = [newHistoryItem, ...this.data.myInfo.history];
       this.setData({ 'myInfo.history': newHistory, showUserUpload: false });
       this.calculateStats(); // 重新算分
-      wx.showToast({ title: '提交成功', icon: 'success' });
+      this.showAutoToast('成功', '提交成功');
 
     } else {
       // --- 管理员操作流程（写入云端） ---
       const f = this.data.form;
-      if (!f.name || !f.bike) return wx.showToast({ title: '信息不全', icon: 'none' });
+      if (!f.name || !f.bike) {
+        this.showAutoToast('提示', '信息不全');
+        return;
+      }
 
       const finalScore = f.score || (parseFloat(f.angle||0) + parseFloat(f.dist||0)).toFixed(1);
       const finalAvatar = f.avatar || `https://api.dicebear.com/9.x/adventurer/svg?seed=${f.name}`;
@@ -500,27 +516,27 @@ Page({
       };
 
       const action = this.data.isEdit ? 'update' : 'add';
-      wx.showLoading({ title: '同步中...' });
+      this.showMyLoading('同步中...');
       wx.cloud.callFunction({
         name: 'adminUpdateMotoRank',
         data: { action, record },
         success: (res) => {
-          wx.hideLoading();
+          this.hideMyLoading();
           if (res.result && res.result.success) {
             this.setData({ showEditModal: false });
             // 重新拉取云端数据，保证所有人同步
             this.fetchRankFromCloud().then(() => {
               this.computeRankings();
-              wx.showToast({ title: '已发布', icon: 'success' });
+              this.showAutoToast('成功', '已发布');
             });
           } else {
-            wx.showToast({ title: (res.result && res.result.errMsg) ? res.result.errMsg : '同步失败', icon: 'none' });
+            this.showAutoToast('提示', (res.result && res.result.errMsg) ? res.result.errMsg : '同步失败');
           }
         },
         fail: (err) => {
-          wx.hideLoading();
+          this.hideMyLoading();
           console.error('adminUpdateMotoRank fail', err);
-          wx.showToast({ title: '同步失败', icon: 'none' });
+          this.showAutoToast('提示', '同步失败');
         }
       });
     }
@@ -708,4 +724,55 @@ Page({
       }
     });
   },
+  
+  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  showAutoToast(title = '提示', content = '') {
+    this.setData({
+      'autoToast.show': true,
+      'autoToast.title': title,
+      'autoToast.content': content
+    });
+    // 2秒后自动消失
+    setTimeout(() => {
+      this.setData({ 'autoToast.show': false });
+    }, 2000);
+  },
+  
+  // 【新增】自定义对话框
+  showMyDialog(options) {
+    this.setData({
+      'dialog.show': true,
+      'dialog.title': options.title || '提示',
+      'dialog.content': options.content || '',
+      'dialog.showCancel': options.showCancel || false,
+      'dialog.confirmText': options.confirmText || '确定',
+      'dialog.cancelText': options.cancelText || '取消',
+      'dialog.callback': options.success || null
+    });
+  },
+  
+  // 【新增】关闭自定义对话框
+  closeCustomDialog() {
+    this.setData({ 'dialog.show': false });
+  },
+  
+  // 【新增】点击对话框确定
+  onDialogConfirm() {
+    const cb = this.data.dialog.callback;
+    this.setData({ 'dialog.show': false });
+    if (cb) cb({ confirm: true });
+  },
+  
+  // 【新增】显示自定义加载动画
+  showMyLoading(title = '加载中...') {
+    if (wx.__mt_oldHideLoading) {
+      wx.__mt_oldHideLoading();
+    }
+    this.setData({ showLoadingAnimation: true, loadingText: title });
+  },
+  
+  // 【新增】隐藏自定义加载动画
+  hideMyLoading() {
+    this.setData({ showLoadingAnimation: false });
+  }
 })

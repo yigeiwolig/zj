@@ -395,15 +395,12 @@ Page({
 
   toggleAdminMode() {
     if (!this.data.isAuthorized) {
-      wx.showToast({ title: '无权限', icon: 'none' });
+      this.showAutoToast('提示', '无权限');
       return;
     }
     const nextState = !this.data.isAdmin;
     this.setData({ isAdmin: nextState });
-    wx.showToast({
-      title: nextState ? '管理模式开启' : '已回到用户模式',
-      icon: 'none'
-    });
+    this.showAutoToast('提示', nextState ? '管理模式开启' : '已回到用户模式');
   },
 
   // ================== 管理员物料发出功能 ==================
@@ -710,7 +707,7 @@ Page({
           ...payment,
           success: (payRes) => {
             console.log('[repayOrder] 支付成功:', payRes);
-            wx.showToast({ title: '支付成功', icon: 'success' });
+            this.showAutoToast('成功', '支付成功');
             const orderId = payment.outTradeNo;
             if (orderId) {
               this.callCheckPayResult(orderId);
@@ -757,10 +754,7 @@ Page({
   callCheckPayResult(orderId, attempt = 1) {
     if (!orderId) return;
     const maxAttempts = 3;
-    wx.showLoading({
-      title: attempt === 1 ? '确认订单中...' : '再次确认...',
-      mask: true
-    });
+    this.showMyLoading(attempt === 1 ? '确认订单中...' : '再次确认...');
 
     wx.cloud.callFunction({
       name: 'checkPayResult',
@@ -769,14 +763,11 @@ Page({
         const result = res.result || {};
         console.log('[my] checkPayResult 返回:', result);
         if (result.success) {
-          wx.showToast({ title: '订单已确认', icon: 'success' });
+          this.showAutoToast('成功', '订单已确认');
         } else if (attempt < maxAttempts) {
           setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
         } else {
-          wx.showToast({
-            title: result.msg || '支付状态待确认，请稍候刷新订单',
-            icon: 'none'
-          });
+          this.showAutoToast('提示', result.msg || '支付状态待确认，请稍候刷新订单');
         }
       },
       fail: (err) => {
@@ -784,14 +775,11 @@ Page({
         if (attempt < maxAttempts) {
           setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
         } else {
-          wx.showToast({
-            title: '网络异常，请稍后再试',
-            icon: 'none'
-          });
+          this.showAutoToast('提示', '网络异常，请稍后再试');
         }
       },
       complete: () => {
-        wx.hideLoading();
+        this.hideMyLoading();
       }
     });
   },
@@ -807,7 +795,8 @@ Page({
     const order = this.data.orders.find(item => item.id === id)
     if (!order) {
       console.error('[viewTutorialAndSign] 订单不存在')
-      return wx.showToast({ title: '订单数据异常', icon: 'none' })
+      this.showAutoToast('提示', '订单数据异常');
+      return;
     }
 
     console.log('[viewTutorialAndSign] 订单信息:', order)
@@ -824,7 +813,7 @@ Page({
     // 3. 校验必要参数
     if (!order.transactionId) {
       console.error('[viewTutorialAndSign] 缺少 transactionId:', order)
-      wx.showToast({ title: '缺少支付单号，无法确认', icon: 'none' })
+      this.showAutoToast('提示', '缺少支付单号，无法确认');
       return
     }
 
@@ -851,14 +840,14 @@ Page({
         } else {
           console.log('[viewTutorialAndSign] 用户取消或关闭')
           // 用户点了取消或关闭，不做操作
-          wx.showToast({ title: '需要确认收货才能观看哦', icon: 'none' })
+          this.showAutoToast('提示', '需要确认收货才能观看哦');
         }
       },
       fail: (err) => {
         console.error('[viewTutorialAndSign] ❌ 组件唤起失败:', err)
         console.error('[viewTutorialAndSign] 错误详情:', JSON.stringify(err))
         // 常见错误：订单未发货(shipped)，或者 transaction_id 错误
-        wx.showToast({ title: '无法唤起确认组件(请检查是否已发货)', icon: 'none' })
+        this.showAutoToast('提示', '无法唤起确认组件(请检查是否已发货)');
       }
     })
   },
@@ -899,11 +888,7 @@ Page({
           wx.navigateTo({
             url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : ''),
             success: () => {
-              wx.showToast({ 
-                title: '教程已解锁', 
-                icon: 'success',
-                duration: 2000
-              })
+              this.showAutoToast('成功', '教程已解锁');
             }
           })
           
@@ -2007,6 +1992,14 @@ Page({
     });
 
     // 4. 调用云函数 (传过去的 deviceName 是 MT 开头的)
+    // 🔴 添加重试机制
+    this._bindDeviceWithRetry(sn, displayName, 0);
+  },
+
+  // 🔴 新增：带重试机制的绑定设备函数
+  _bindDeviceWithRetry(sn, displayName, retryCount = 0) {
+    const maxRetries = 3;
+    
     wx.cloud.callFunction({
       name: 'bindDevice',
       data: {
@@ -2023,7 +2016,7 @@ Page({
           connectStatusText: '已连接'
         });
 
-        if (result.success) {
+        if (result && result.success) {
           // 情况1：自动通过 (重绑/二手)
           if (result.status === 'AUTO_APPROVED') {
             // 使用自定义弹窗，而不是 Toast
@@ -2054,13 +2047,51 @@ Page({
           // 失败情况 (被锁)
           this.setData({
             isDeviceLocked: true,
-            lockedReason: result.msg
+            lockedReason: result?.msg || '设备绑定失败'
           });
         }
       },
-      fail: () => {
-        this.showAutoToast('错误', '网络校验失败');
-        this.resetBluetoothState();
+      fail: (err) => {
+        console.error('[bindDevice] 云函数调用失败:', err);
+        
+        // 🔴 改进错误处理：显示详细错误信息，并支持重试
+        const errMsg = err.errMsg || err.message || '未知错误';
+        const isNetworkError = errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('网络');
+        
+        if (retryCount < maxRetries && isNetworkError) {
+          // 网络错误，自动重试
+          const nextRetry = retryCount + 1;
+          console.log(`[bindDevice] 网络错误，${1000 * nextRetry}ms 后重试 (${nextRetry}/${maxRetries})`);
+          this.setData({ 
+            connectStatusText: `网络校验失败，正在重试 (${nextRetry}/${maxRetries})...` 
+          });
+          
+          setTimeout(() => {
+            this._bindDeviceWithRetry(sn, displayName, nextRetry);
+          }, 1000 * nextRetry); // 递增延迟：1s, 2s, 3s
+        } else {
+          // 达到最大重试次数或其他错误，显示错误信息
+          const errorText = retryCount >= maxRetries 
+            ? `网络校验失败，已重试 ${maxRetries} 次，请检查网络后重试` 
+            : `网络校验失败: ${errMsg}`;
+          
+          this.showMyDialog({
+            title: '绑定失败',
+            content: errorText,
+            confirmText: '重试',
+            showCancel: true,
+            cancelText: '取消',
+            success: (res) => {
+              if (res.confirm) {
+                // 用户点击重试，重新开始绑定流程
+                this._bindDeviceWithRetry(sn, displayName, 0);
+              } else {
+                // 用户取消，重置蓝牙状态
+                this.resetBluetoothState();
+              }
+            }
+          });
+        }
       }
     });
   },
@@ -2808,8 +2839,19 @@ Page({
     let district = '';
     let detail = '';
     
-    // 移除常见的分隔符，统一处理（保留空格用于分割）
-    text = text.replace(/[\/、]/g, ' ').replace(/[,，;；]/g, ' ').replace(/\s+/g, ' ').trim();
+    // 🔴 优化：更彻底地清理地址文本，移除所有标签和无用词汇
+    text = text
+      // 移除所有地址相关标签
+      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|收件地址|收货地址/g, ' ')
+      // 移除号码、编号等无用词汇
+      .replace(/号码|编号|单号|订单号|运单号/g, ' ')
+      // 移除常见分隔符
+      .replace(/[\/、，。；：！？]/g, ' ')
+      // 移除所有括号
+      .replace(/[()（）【】\[\]<>《》""'']/g, ' ')
+      // 统一空格
+      .replace(/\s+/g, ' ')
+      .trim();
     
     // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
     let remaining = text;
@@ -2873,8 +2915,11 @@ Page({
       }
     }
     
-    // 剩余部分作为详细地址
-    detail = remaining.trim();
+    // 🔴 优化：剩余部分作为详细地址，再次清理无用词汇
+    detail = remaining
+      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     
     // 组装完整地址（格式化输出）
     let fullAddress = '';

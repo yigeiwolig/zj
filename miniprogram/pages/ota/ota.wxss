@@ -137,6 +137,25 @@ page {
 .selector-center.fade-out { opacity: 0; pointer-events: none; }
 
 .carousel { display: flex; align-items: center; justify-content: center; gap: 40px; }
+.device-selector-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+.device-icon-preview {
+  width: 200px;
+  height: 140px;
+  display: block;
+  opacity: 0.9;
+  cursor: pointer; /* 添加指针样式，提示可点击 */
+  transition: opacity 0.2s, transform 0.2s; /* 添加过渡效果 */
+}
+.device-icon-preview:active {
+  opacity: 0.7; /* 点击时降低透明度，提供视觉反馈 */
+  transform: scale(0.95); /* 点击时稍微缩小，提供触觉反馈 */
+}
 .device-name { 
   font-size: 48px; font-weight: 900; font-style: italic; 
   text-shadow: 0 0 20px #fff; transition: transform 0.2s; padding: 20px; 

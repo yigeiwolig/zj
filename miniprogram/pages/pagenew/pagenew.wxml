@@ -101,5 +101,27 @@
 
 
 </view>
+
+<!-- ================= 自定义编辑弹窗 ================= -->
+<view class="custom-modal-mask" wx:if="{{showCustomEditModal}}" bindtap="closeCustomEditModal">
+  <view class="custom-modal-box" catchtap="">
+    <view class="modal-title">{{customEditTitle}}</view>
+    <input 
+      class="modal-input" 
+      type="text" 
+      placeholder="请输入号码"
+      value="{{customEditVal}}"
+      bindinput="onCustomEditInput"
+      confirm-type="done"
+      bindconfirm="confirmCustomEdit"
+      focus="{{showCustomEditModal}}"
+    />
+    <view class="modal-btn-row">
+      <view class="modal-btn cancel" bindtap="closeCustomEditModal">取消</view>
+      <view class="modal-btn confirm" bindtap="confirmCustomEdit">确定</view>
+    </view>
+  </view>
+</view>
+
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />

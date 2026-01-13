@@ -325,6 +325,20 @@ Page({
       wx.showModal(options);
     }
   },
+
+  // 🔴 统一的自定义 Loading 方法（替换所有 wx.showLoading 和 getApp().showLoading）
+  showMyLoading(title = '加载中...') {
+    this.setData({
+      showLoadingAnimation: true
+    });
+  },
+
+  // 🔴 统一的自定义 Loading 隐藏方法（替换所有 wx.hideLoading 和 getApp().hideLoading）
+  hideMyLoading() {
+    this.setData({
+      showLoadingAnimation: false
+    });
+  },
   onDialogConfirm() {
     console.log('[onDialogConfirm] 用户点击了确定按钮');
     const cb = this.data.dialog && this.data.dialog.callback;
@@ -649,7 +663,7 @@ Page({
       success: (res) => {
         if (res.confirm) {
           console.log('[syncAllPartsToCloud] 用户确认，开始同步');
-          wx.showLoading({ title: '同步中...', mask: true });
+          this.showMyLoading('同步中...');
           
           // 所有型号列表
           const allModels = ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 PRO Long', 'F2 MAX Long'];
@@ -747,7 +761,7 @@ Page({
           Promise.all(syncPromises)
             .then((results) => {
               console.log('[syncAllPartsToCloud] 所有型号同步完成，结果:', results);
-              wx.hideLoading();
+              this.hideMyLoading();
               
               const successModels = results.filter(r => r.success).map(r => r.modelName);
               const failModels = results.filter(r => !r.success);
@@ -775,7 +789,7 @@ Page({
               }
             })
             .catch(err => {
-              wx.hideLoading();
+              this.hideMyLoading();
               console.error('[syncAllPartsToCloud] 同步过程出错:', err);
               this._showCustomModal({
                 title: '同步失败',
@@ -1162,7 +1176,7 @@ Page({
   updatePartsOrderToCloud(list) {
     console.log('[updatePartsOrderToCloud] 开始更新云端顺序');
     
-    wx.showLoading({ title: '保存中...', mask: true });
+    this.showMyLoading('保存中...');
     
     // 批量更新：只更新有 _id 的配件
     const updatePromises = list
@@ -1181,14 +1195,14 @@ Page({
       });
     
     if (updatePromises.length === 0) {
-      wx.hideLoading();
+      this.hideMyLoading();
       console.log('[updatePartsOrderToCloud] 没有需要更新的配件（都没有 _id）');
       return;
     }
     
     Promise.all(updatePromises)
       .then((results) => {
-        wx.hideLoading();
+        this.hideMyLoading();
         console.log('[updatePartsOrderToCloud] 所有配件顺序更新完成，结果:', results);
         
         const failedCount = results.filter(r => !r.result || !r.result.success).length;
@@ -1204,7 +1218,7 @@ Page({
         }
       })
       .catch((err) => {
-        wx.hideLoading();
+        this.hideMyLoading();
         console.error('[updatePartsOrderToCloud] 更新顺序失败:', err);
         this._showCustomToast(
           '保存失败: ' + (err.errMsg || '未知错误'),
@@ -1251,7 +1265,7 @@ Page({
 
   // [新增] 添加配件到云端和本地
   addPartToCloud(name, price) {
-    wx.showLoading({ title: '添加中...' });
+    this.showMyLoading('添加中...');
     const db = wx.cloud.database();
     
     // 获取当前配件列表的最大 order 值
@@ -1274,13 +1288,13 @@ Page({
       data: newPart
     }).then((res) => {
       console.log('[addPartToCloud] ✅ 添加成功，_id:', res._id);
-      wx.hideLoading();
+      this.hideMyLoading();
       this._showCustomToast('添加成功', 'success');
       
       // 重新加载配件列表
       this.loadParts(this.data.currentModelName);
     }).catch(err => {
-      wx.hideLoading();
+      this.hideMyLoading();
       console.error('[addPartToCloud] ❌ 添加失败:', err);
       this._showCustomToast('添加失败: ' + (err.errMsg || '未知错误'), 'none', 3000);
     });
@@ -1336,7 +1350,7 @@ Page({
     console.log('[deletePartFromCloud] 配件_id:', part._id);
     console.log('[deletePartFromCloud] 配件完整数据:', JSON.stringify(part));
     
-    wx.showLoading({ title: '删除中...', mask: true });
+    this.showMyLoading('删除中...');
     
     // 如果有 _id，从云端删除
     if (part._id) {
@@ -1360,7 +1374,7 @@ Page({
         
         if (result.success) {
           console.log('[deletePartFromCloud] ✅ 云端删除成功');
-          wx.hideLoading();
+          this.hideMyLoading();
             this._showCustomToast('删除成功', 'success');
           
           // 从本地列表中删除
@@ -1383,7 +1397,7 @@ Page({
           throw new Error(result.error || result.message || '云函数删除失败');
         }
       }).catch(err => {
-        wx.hideLoading();
+        this.hideMyLoading();
         console.error('[deletePartFromCloud] ❌ 删除失败 - 捕获到错误');
         console.error('[deletePartFromCloud] 错误对象:', err);
         console.error('[deletePartFromCloud] err.errMsg:', err.errMsg);
@@ -1409,7 +1423,7 @@ Page({
     } else {
       // 如果没有 _id，只从本地删除
       console.log('[deletePartFromCloud] 配件无 _id，仅删除本地数据');
-      wx.hideLoading();
+      this.hideMyLoading();
       const list = [...this.data.currentPartsList];
       list.splice(idx, 1);
       this.setData({ currentPartsList: list });
@@ -1446,7 +1460,7 @@ Page({
 
   // [新增] 执行数据库更新
   updatePartData(part, type, value, idx) {
-    getApp().showLoading({ title: '保存中...' });
+    this.showMyLoading('保存中...');
     const db = wx.cloud.database();
     
     // 准备要更新的数据
@@ -1481,7 +1495,7 @@ Page({
           throw new Error(result.error || '云函数更新失败');
         }
       }).catch(err => {
-        getApp().hideLoading();
+        this.hideMyLoading();
         console.error('[updatePartData] ❌ 云端更新失败:', err);
         this._showCustomToast('更新失败: ' + (err.errMsg || err.message || '未知错误'), 'none', 3000);
       });
@@ -1507,11 +1521,11 @@ Page({
           this.afterUpdateSuccess();
         } else {
           console.error('[updatePartData] ❌ 云端新建失败：未返回 _id');
-          getApp().hideLoading();
+          this.hideMyLoading();
           this._showCustomToast('新建失败：未返回ID', 'none');
         }
       }).catch(err => {
-        getApp().hideLoading();
+        this.hideMyLoading();
         console.error('[updatePartData] ❌ 云端新建失败:', err);
         this._showCustomToast('新建失败: ' + (err.errMsg || err.message || '未知错误'), 'none', 3000);
       });
@@ -1542,7 +1556,7 @@ Page({
 
   // [新增] 更新成功后的刷新
   afterUpdateSuccess() {
-    getApp().hideLoading();
+    this.hideMyLoading();
     this._showCustomToast('修改成功', 'success');
     // 不再重新从云端读取，直接使用已更新的本地列表
   },
@@ -1755,10 +1769,15 @@ Page({
       }
     }
     
-    // 3. 清理杂质
+    // 3. 🔴 优化：更彻底地清理杂质，移除所有标签和无用词汇
     cleanText = cleanText
-      .replace(/收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?/g, ' ')
-      .replace(/[()（）【】\[\]<>]/g, ' ')
+      // 移除所有地址相关标签
+      .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
+      // 移除号码、编号等无用词汇
+      .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
+      // 移除所有括号和特殊符号
+      .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
+      // 移除多余空格
       .replace(/\s+/g, ' ')
       .trim();
 
@@ -1810,8 +1829,17 @@ Page({
       }
     }
 
-    // 6. 剩余部分作为地址
-    address = cleanText.trim();
+    // 6. 🔴 优化：剩余部分作为地址，再次清理后解析
+    if (cleanText) {
+      // 再次清理地址文本，移除可能的残留标签
+      let addressText = cleanText
+        .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      const parsedAddress = this.parseAddressForShipping(addressText);
+      address = parsedAddress.fullAddress || addressText;
+    }
     
     return {
       name: name.trim(),
@@ -1833,8 +1861,19 @@ Page({
     let district = '';
     let detail = '';
     
-    // 移除常见的分隔符，统一处理（保留空格用于分割）
-    text = text.replace(/[\/、]/g, ' ').replace(/[,，;；]/g, ' ').replace(/\s+/g, ' ').trim();
+    // 🔴 优化：更彻底地清理地址文本，移除所有标签和无用词汇
+    text = text
+      // 移除所有地址相关标签
+      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|收件地址|收货地址/g, ' ')
+      // 移除号码、编号等无用词汇
+      .replace(/号码|编号|单号|订单号|运单号/g, ' ')
+      // 移除常见分隔符
+      .replace(/[\/、，。；：！？]/g, ' ')
+      // 移除所有括号
+      .replace(/[()（）【】\[\]<>《》""'']/g, ' ')
+      // 统一空格
+      .replace(/\s+/g, ' ')
+      .trim();
     
     // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
     let remaining = text;
@@ -1898,8 +1937,11 @@ Page({
       }
     }
     
-    // 剩余部分作为详细地址
-    detail = remaining.trim();
+    // 🔴 优化：剩余部分作为详细地址，再次清理无用词汇
+    detail = remaining
+      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
     
     // 组装完整地址（格式化输出）
     let fullAddress = '';
@@ -2338,7 +2380,7 @@ Page({
 
   // 统一的云函数调用
   doCloudSubmit(action, goods, addr, total, fee, method) {
-    getApp().showLoading({ title: '处理中...' });
+    this.showMyLoading('处理中...');
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
@@ -2350,7 +2392,7 @@ Page({
         shippingMethod: method
       },
       success: res => {
-        getApp().hideLoading();
+        this.hideMyLoading();
         const payment = res.result;
 
         if (action === 'pay' && payment && payment.paySign) {
@@ -2382,7 +2424,7 @@ Page({
         }
       },
       fail: () => {
-        getApp().hideLoading();
+        this.hideMyLoading();
         this._showCustomToast('下单失败', 'none');
       }
     });
@@ -2408,7 +2450,7 @@ Page({
       }
       
       // 提交到 shouhou_read 集合（故障报修逻辑）
-      getApp().showLoading({ title: '提交中...', mask: true });
+      this.showMyLoading('提交中...');
       const db = wx.cloud.database();
       db.collection('shouhou_read').add({
         data: {
@@ -2424,7 +2466,7 @@ Page({
           status: 'pending'
         },
         success: () => {
-          getApp().hideLoading();
+          this.hideMyLoading();
           this._showCustomToast('提交成功', 'success');
           setTimeout(() => {
             this.setData({
@@ -2434,7 +2476,7 @@ Page({
           }, 1500);
         },
         fail: (err) => {
-          getApp().hideLoading();
+          this.hideMyLoading();
           console.error('提交失败:', err);
           this._showCustomToast('提交失败，请重试', 'none');
         }
@@ -2479,7 +2521,7 @@ Page({
 
   // [修改] 支付执行函数 (适配新的参数结构)
   doPayment(goodsList, totalPrice, addressData) {
-    getApp().showLoading({ title: '正在下单...', mask: true });
+    this.showMyLoading('正在下单...');
 
     wx.cloud.callFunction({
       name: 'createOrder',
@@ -2489,7 +2531,7 @@ Page({
         addressData: addressData
       },
       success: res => {
-        getApp().hideLoading();
+        this.hideMyLoading();
         const payment = res.result;
         
         if (!payment || !payment.paySign) {
@@ -2525,7 +2567,7 @@ Page({
         });
       },
       fail: err => {
-        getApp().hideLoading();
+        this.hideMyLoading();
         this._showCustomToast('下单失败', 'none');
       }
     });
@@ -2534,10 +2576,7 @@ Page({
   callCheckPayResult(orderId, attempt = 1) {
     if (!orderId) return;
     const maxAttempts = 3;
-    wx.showLoading({
-      title: attempt === 1 ? '确认订单中...' : '再次确认...',
-      mask: true
-    });
+    this.showMyLoading(attempt === 1 ? '确认订单中...' : '再次确认...');
 
     wx.cloud.callFunction({
       name: 'checkPayResult',
@@ -2568,7 +2607,7 @@ Page({
         }
       },
       complete: () => {
-        wx.hideLoading();
+        this.hideMyLoading();
       }
     });
   },
@@ -3301,7 +3340,7 @@ Page({
           if (!this.data.modalInputVal) {
             this.setData({ modalInputVal: "新上传教程" });
           }
-          getApp().showLoading({ title: '正在提取封面...', mask: true });
+          this.showMyLoading('正在提取封面...');
         }
       }
     });
@@ -3342,7 +3381,7 @@ Page({
             tempVideoThumb: res.tempImagePath,
             extractingThumb: false
           });
-          getApp().hideLoading();
+          this.hideMyLoading();
           this._showCustomToast('视频已选择', 'success');
         },
         fail: (err) => {
@@ -3351,7 +3390,7 @@ Page({
           this.setData({
             extractingThumb: false
           });
-          getApp().hideLoading();
+          this.hideMyLoading();
           this._showCustomToast('视频已选择（封面提取失败）', 'none', 2000);
         }
       });

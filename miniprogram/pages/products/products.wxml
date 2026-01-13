@@ -113,5 +113,13 @@ module.exports = {
     </view>
   </block>
 </view>
+<!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
+<view class="auto-toast-mask" wx:if="{{autoToast.show}}">
+  <view class="auto-toast-box">
+    <view class="at-title">{{autoToast.title}}</view>
+    <view class="at-content">{{autoToast.content}}</view>
+  </view>
+</view>
+
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />

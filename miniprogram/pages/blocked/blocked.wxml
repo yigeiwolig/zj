@@ -35,5 +35,19 @@
   </view>
 </view>
 
+<!-- 【新增】自定义成功提示弹窗 - 白底黑字样式 -->
+<view class="custom-modal-mask" wx:if="{{showCustomSuccessModal}}">
+  <view class="custom-modal-box success-modal">
+    <!-- 图标：使用 Unicode 字符 -->
+    <view class="modal-icon-new success-icon">✓</view>
+    <!-- 标题 -->
+    <view class="modal-title-new">{{successModalTitle}}</view>
+    <!-- 内容（如果有） -->
+    <view class="modal-content-new" wx:if="{{successModalContent}}">
+      <view class="content-main">{{successModalContent}}</view>
+    </view>
+  </view>
+</view>
+
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />

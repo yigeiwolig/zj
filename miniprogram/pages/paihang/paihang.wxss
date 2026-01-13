@@ -39,6 +39,118 @@
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 
+/* ================= 自动消失提示（无按钮，2秒后自动消失） ================= */
+.auto-toast-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.auto-toast-box {
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(20rpx);
+  border-radius: 24rpx;
+  padding: 24rpx 40rpx;
+  max-width: 600rpx;
+  text-align: center;
+  animation: toastFadeIn 0.3s ease-out;
+  pointer-events: auto;
+}
+
+@keyframes toastFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.at-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-bottom: 8rpx;
+}
+
+.at-content {
+  font-size: 26rpx;
+  color: #FFFFFF;
+  opacity: 0.9;
+  line-height: 1.5;
+}
+
+/* ================= 自定义加载动画 ================= */
+.loading-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loader {
+  width: 600rpx;
+  height: 260rpx;
+  border-radius: 20rpx;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  padding: 40rpx;
+  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.12);
+  box-sizing: border-box;
+}
+
+.loading-bar {
+  width: 100%;
+  height: 20rpx;
+  background: #E5E5EA;
+  border-radius: 20rpx;
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-bar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 30%;
+  background: linear-gradient(90deg, #007AFF, #5AC8FA);
+  border-radius: 20rpx;
+  animation: loadingMove 1.5s infinite;
+}
+
+@keyframes loadingMove {
+  0% { left: -30%; }
+  100% { left: 100%; }
+}
+
+.loader-label {
+  font-size: 28rpx;
+  color: #1D1D1F;
+  font-weight: 500;
+}
+
 /* 主题变量 (包含领奖台动态色) */
 .theme-gas {
   --bg-color: #000000;

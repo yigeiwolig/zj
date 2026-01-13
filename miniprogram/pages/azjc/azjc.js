@@ -4,7 +4,10 @@ Page({
   data: {
     // 基础交互数据
     isVideoFullScreen: false,
+    fullScreenVideoUrl: '', // 🔴 全屏视频URL
+    fullScreenVideoIndex: -1, // 🔴 全屏视频索引
     stepIndex: 0,
+    pageTitle: '请选择产品', // 🔴 动态标题
     pIndex: -1,
     tIndex: -1,
     mode: 'v',
@@ -63,11 +66,16 @@ Page({
 
     // 滚动控制
     scrollTopValue: 0,
-    locked: false
+    locked: false,
+    
+    // 🔴 全屏视频控制
+    fullScreenVideoPaused: false, // 全屏视频是否暂停
+    fullScreenVideoTransform: '', // 全屏视频的初始transform（用于动画）
+    fullScreenVideoInitialStyle: '' // 全屏视频的初始样式（用于动画）
   },
 
   // 页面加载时从云数据库读取数据
-  onLoad: function() {
+  onLoad: function(options) {
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -86,12 +94,101 @@ Page({
       scrollViewHeight
     });
 
-    // 检查管理员权限
-    this.checkAdminPrivilege();
-    this.loadDataFromCloud();
+    // 🔴 检查访问权限（如果是从订单页面进入，直接放行）
+    if (options && options.from === 'order') {
+      console.log('[azjc] 从订单页进入，直接放行');
+      this.checkAdminPrivilege();
+      this.loadDataFromCloud();
+    } else {
+      // 否则进行权限检查
+      this.checkAccessPermission();
+    }
   },
 
   // ================== 权限检查逻辑 ==================
+  
+  // 🔴 核心入口检查：限制普通用户访问
+  async checkAccessPermission() {
+    wx.showLoading({ title: '验证权限中...', mask: true });
+    
+    try {
+      const db = wx.cloud.database();
+      const _ = db.command;
+      
+      // 1. 获取当前用户 openid
+      const { result: { openid } } = await wx.cloud.callFunction({ name: 'login' });
+
+      // 2. 检查管理员
+      let adminCheck = await db.collection('guanliyuan').where({ openid: openid }).count();
+      if (adminCheck.total === 0) {
+        adminCheck = await db.collection('guanliyuan').where({ _openid: openid }).count();
+      }
+      
+      if (adminCheck.total > 0) {
+        // 是管理员：授权并放行
+        this.setData({ isAuthorized: true });
+        wx.hideLoading();
+        this.checkAdminPrivilege();
+        this.loadDataFromCloud();
+        return; 
+      }
+
+      // 3. 检查是否有"已发货但未签收/查看"的订单
+      // status: 1 (已发货/运输中) 或 'SHIPPED'
+      const pendingOrderRes = await db.collection('shop_orders').where({
+        _openid: openid,
+        status: _.in([1, 'SHIPPED']) 
+      }).count();
+
+      if (pendingOrderRes.total > 0) {
+        // 🔴 有未确认收货的订单：即使绑定了设备，也不能直接查看
+        wx.hideLoading();
+        this.showRejectModal('请前往个人中心-我的订单\n确认收货后解锁教程');
+        return;
+      }
+
+      // 4. 检查是否绑定了设备（使用 openid 字段，因为 bindDevice 云函数存储的是 openid）
+      const deviceRes = await db.collection('sn').where({
+        openid: openid
+      }).count();
+
+      if (deviceRes.total > 0) {
+        // 绑定了设备且没有待处理订单 -> 放行
+        wx.hideLoading();
+        this.checkAdminPrivilege();
+        this.loadDataFromCloud();
+        return; 
+      }
+
+      // 5. 既没订单也没绑定设备 -> 拒绝
+      wx.hideLoading();
+      this.showRejectModal('下单后，在个人中心点击查看教程进入');
+
+    } catch (err) {
+      console.error('权限检查异常', err);
+      wx.hideLoading();
+      this.showRejectModal('权限验证失败，请重试');
+    }
+  },
+
+  // 🔴 显示拒绝访问的提示
+  showRejectModal(content) {
+    wx.showModal({
+      title: '提示',
+      content: content,
+      showCancel: false,
+      confirmText: '返回',
+      success: () => {
+        const pages = getCurrentPages();
+        if (pages.length > 1) {
+          wx.navigateBack();
+        } else {
+          wx.switchTab({ url: '/pages/index/index' });
+        }
+      }
+    });
+  },
+
   async checkAdminPrivilege() {
     try {
       const res = await wx.cloud.callFunction({ name: 'login' });
@@ -1396,13 +1493,14 @@ Page({
   },
 
   touchEnd: function(e) {
-    // 如果是管理员模式，或者正在全屏，或者刚才摸了视频区域 -> 都不准翻页
-    if (this.data.isAdmin || this.data.isVideoFullScreen || this.data.locked) return;
+    // 如果正在全屏或已锁定，不处理翻页
+    // 🔴 额外检查：如果正在处理全屏切换，也不处理翻页（防止点击全屏按钮时触发）
+    if (this.data.isVideoFullScreen || this.data.locked || this._isHandlingFullScreen) return;
 
     let endY = e.changedTouches[0].pageY;
     let distance = endY - this.data.startY;
     
-    // 如果是管理员，放开所有限制
+    // 🔴 管理员模式：可以上下滑动，无限制
     if (this.data.isAdmin) {
       if (Math.abs(distance) > 50) {
         if (distance > 0 && this.data.stepIndex > 0) {
@@ -1413,16 +1511,17 @@ Page({
           this.setData({ stepIndex: this.data.stepIndex + 1 });
         }
       }
-      return; // 管理员逻辑执行完直接结束，不走下面的普通锁定逻辑
+      return; // 管理员逻辑执行完直接结束，不走下面的普通用户逻辑
     }
 
-    // --- 以下是普通用户逻辑 (保持原有的锁定逻辑) ---
+    // --- 以下是普通用户逻辑：只能往下滑返回，不能往上滑 ---
     if (distance > 80) { // 向下滑动
       // 仅在非视频列表页（stepIndex不为2）时才允许向下滑动返回
       if (this.data.stepIndex === 1) {
         this.setData({ stepIndex: 0 }); // 产品保持记录
       }
     }
+    // 🔴 普通用户模式下，向上滑动被禁止（不处理 distance < 0 的情况）
   },
 
   // 1. 新增：拦截视频区域的触摸，防止翻页
@@ -1450,34 +1549,135 @@ Page({
     }
   },
 
-  // 视频进入/退出全屏
-  onVideoFullScreen(e) {
-    const isFull = e.detail.fullScreen;
-    const currentPos = this.privateScrollTop || 0;
+  // 🔴 打开全屏视频遮罩层（自定义按钮触发）
+  openFullScreenVideo(e) {
+    const index = e.currentTarget.dataset.index;
+    const videoUrl = this.data.filteredChapters[index]?.url || '';
 
-    if (isFull) {
-      // 进入全屏：立即锁定翻页，防止点击全屏按钮时触发 touchEnd 翻页
+    // 🔴 标记正在处理全屏切换，防止 touchEnd 事件干扰
+    this._isHandlingFullScreen = true;
+
+    // 🔴 获取原视频卡片的位置信息
+    const query = wx.createSelectorQuery().in(this);
+    query.select(`#video-card-${index}`).boundingClientRect((rect) => {
+      if (!rect) {
+        // 如果获取不到位置，使用默认动画
+        this.setData({
+          isVideoFullScreen: true,
+          fullScreenVideoUrl: videoUrl,
+          fullScreenVideoIndex: index,
+          fullScreenVideoPaused: false,
+          fullScreenVideoInitialStyle: '',
+          locked: true
+        });
+        return;
+      }
+
+      // 获取窗口尺寸
+      const sysInfo = wx.getSystemInfoSync();
+      const windowWidth = sysInfo.windowWidth;
+      const windowHeight = sysInfo.windowHeight;
+
+      // 计算原视频卡片的位置和尺寸（rpx转px）
+      const cardLeft = rect.left;
+      const cardTop = rect.top;
+      const cardWidth = rect.width;
+      const cardHeight = rect.height;
+
+      // 计算中心点偏移
+      const centerX = windowWidth / 2;
+      const centerY = windowHeight / 2;
+      const cardCenterX = cardLeft + cardWidth / 2;
+      const cardCenterY = cardTop + cardHeight / 2;
+
+      // 计算缩放比例（使用较大的缩放值，确保填满屏幕）
+      const scale = Math.max(windowWidth / cardWidth, windowHeight / cardHeight);
+      
+      // 计算位移（从卡片中心移动到屏幕中心）
+      // 目标位置(卡片中心) - 初始位置(屏幕中心)
+      const moveX = cardCenterX - centerX;
+      const moveY = cardCenterY - centerY;
+
+      // 设置初始transform（从原位置开始，缩小到卡片大小）
+      const initialStyle = `transform: translate(${moveX}px, ${moveY}px) scale(${1/scale});`;
+
+      // 🔴 先显示遮罩层（初始状态：在原位置，不添加active类）
       this.setData({
         isVideoFullScreen: true,
-        locked: true, // 立即锁定，防止翻页
-        scrollTopValue: currentPos
+        fullScreenVideoUrl: videoUrl,
+        fullScreenVideoIndex: index,
+        fullScreenVideoPaused: false,
+        fullScreenVideoInitialStyle: initialStyle,
+        fullScreenVideoTransform: '', // 先不设置transform，使用内联样式
+        locked: true
       });
-      this._savedPos = currentPos;
-      
-    } else {
-      // 退出全屏
-      this.setData({ isVideoFullScreen: false });
-      
-      // 延迟恢复位置和释放锁定
+
+      // 🔴 延迟一帧后添加active类触发动画，确保初始状态已渲染
       setTimeout(() => {
-        this.setData({ 
-          scrollTopValue: this._savedPos,
-          locked: false // 延迟释放锁定，防止退出时误触发翻页
+        this.setData({
+          fullScreenVideoTransform: 'active' // 添加active类触发动画
         });
-      }, 300);
-      
-    } // <--- 【注意】这里是 else 的结束，绝对不能加逗号！
+      }, 50);
+    }).exec();
+  },
+
+  // 🔴 切换全屏视频播放/暂停
+  toggleFullScreenVideoPlay(e) {
+    // 如果点击的是关闭按钮，不处理
+    if (e.target && e.target.classList && e.target.classList.contains('fullscreen-close-btn')) {
+      return;
+    }
     
+    const paused = !this.data.fullScreenVideoPaused;
+    this.setData({ fullScreenVideoPaused: paused });
+    
+    // 控制视频播放/暂停
+    const videoContext = wx.createVideoContext('fullscreen-video-player');
+    if (paused) {
+      videoContext.pause();
+    } else {
+      videoContext.play();
+    }
+  },
+
+  // 🔴 关闭全屏视频遮罩层
+  closeFullScreenVideo() {
+    // 先暂停视频
+    const videoContext = wx.createVideoContext('fullscreen-video-player');
+    videoContext.pause();
+    
+    // 🔴 先移除active类，触发退出动画
+    this.setData({
+      fullScreenVideoTransform: ''
+    });
+    
+    // 🔴 延迟后隐藏遮罩层
+    setTimeout(() => {
+      this.setData({
+        isVideoFullScreen: false,
+        fullScreenVideoUrl: '',
+        fullScreenVideoIndex: -1,
+        fullScreenVideoPaused: false,
+        fullScreenVideoInitialStyle: ''
+      });
+      setTimeout(() => {
+        this.setData({ locked: false });
+        this._isHandlingFullScreen = false;
+      }, 100);
+    }, 500); // 等待动画完成
+  },
+
+  // 视频进入/退出全屏（保留此函数以防万一，但不再使用）
+  onVideoFullScreen(e) {
+    // 🔴 完全禁用原视频组件的全屏功能，防止页面跳转
+    // 如果原视频组件仍然触发了全屏事件，立即关闭它
+    if (e.detail.fullScreen) {
+      // 阻止原视频组件的全屏功能
+      const videoContext = wx.createVideoContext(`video-${e.currentTarget.dataset.index}`);
+      if (videoContext) {
+        videoContext.exitFullScreen();
+      }
+    }
   },
 
   // 视频播放错误处理

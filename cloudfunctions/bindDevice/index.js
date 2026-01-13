@@ -59,34 +59,14 @@ exports.main = async (event, context) => {
       
       // 【修改】文案统一改为"绑定成功"，不提"二手"
       return { success: true, status: 'AUTO_APPROVED', msg: '绑定成功' }
-    } 
-    
-    // E. 未激活的无主设备
-    else {
+    } else {
+      // E. 未激活的无主设备
       await db.collection('sn').doc(device._id).update({ data: { openid: myOpenid } })
       return { success: true, status: 'NEED_AUDIT', msg: '请提交审核' }
     }
 
   } catch (err) {
-    return { success: false, msg: err.errMsg }
-  }
-}
-
-
-    else {
-      await db.collection('sn').doc(device._id).update({ data: { openid: myOpenid } })
-      return { success: true, status: 'NEED_AUDIT', msg: '请提交审核' }
-    }
-
-  } catch (err) {
-    return { success: false, msg: err.errMsg }
-  }
-}
-
-    else {
-      await db.collection('sn').doc(device._id).update({ data: { openid: myOpenid } })
-      return { success: true, status: 'NEED_AUDIT', msg: '请提交审核' }
-    }  } catch (err) {
-    return { success: false, msg: err.errMsg }
+    console.error('[bindDevice] 云函数执行失败:', err);
+    return { success: false, msg: err.message || err.errMsg || '网络校验失败，请重试' }
   }
 }

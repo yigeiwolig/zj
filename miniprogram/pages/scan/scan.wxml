@@ -371,13 +371,13 @@
           <view class="guide-modal">
             <view class="guide-title" style="margin-bottom: 40rpx;">操作指引</view>
             <view class="anim-stage">
-               <view class="ring-btn-wrapper {{openAngleAnimIsPressing ? 'pressing' : ''}}">
+               <view class="ring-btn-wrapper {{openAngleAnimIsPressing ? 'pressing' : ''}}" bindtap="toggleOpenAngleLight">
                   <view class="ring-outer {{openAngleAnimLightOn ? 'light-on' : ''}}">
                      <view class="ring-inner"></view>
                   </view>
                   <view class="sim-finger-tap" wx:if="{{openAngleAnimIsPressing}}"></view>
                </view>
-               <text class="anim-desc">{{openAngleAnimText}}</text>
+               <text class="anim-desc">{{openAngleAnimText || (openAngleAnimLightOn ? '指示灯已亮' : '点击使指示灯亮')}}</text>
             </view>
             <view class="guide-close-btn {{angleHintBtnLocked ? 'btn-locked' : ''}}" bindtap="dismissHint" style="margin-top: 60rpx;">{{angleHintBtnText}}</view>
           </view>

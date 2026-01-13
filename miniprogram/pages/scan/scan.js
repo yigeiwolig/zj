@@ -394,7 +394,8 @@ Page({
     openAngleTutorialTimer: null,
     openAngleAnimLightOn: false,    // 打开角度动画：指示灯状态（false=灰，true=红）
     openAngleAnimIsPressing: false, // 打开角度动画：是否正在按下
-    openAngleAnimText: '点击车把按键\n使指示灯亮', // 打开角度动画：提示文字      
+    openAngleAnimText: '点击车把按键\n使指示灯亮', // 打开角度动画：提示文字
+    openAngleLightOn: false,        // 打开角度页面：指示灯按钮状态（false=灰，true=红）      
 
     // === 动画状态 (关钥匙) ===
     keyAnimState: 'red',      // 'red' | 'grey'
@@ -1628,6 +1629,24 @@ Page({
       clearTimeout(this.data.openAngleTutorialTimer);
       this.data.openAngleTutorialTimer = null;
     }
+  },
+
+  // ===============================================
+  // 打开角度页面：切换指示灯状态
+  // ===============================================
+  toggleOpenAngleLight() {
+    // 停止动画循环，避免干扰用户操作
+    this.stopOpenAngleTutorialLoop();
+    
+    const newState = !this.data.openAngleLightOn;
+    this.setData({
+      openAngleLightOn: newState,
+      // 同时更新动画状态，确保视觉一致
+      openAngleAnimLightOn: newState,
+      openAngleAnimText: newState ? '指示灯已亮' : '点击使指示灯亮'
+    });
+    // 添加震动反馈
+    wx.vibrateShort({ type: 'light' });
   },
 
   // ===============================================

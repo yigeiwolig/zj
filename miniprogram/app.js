@@ -280,6 +280,17 @@ App({
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
       
+      // 🔴 关键修复：先检查是否是管理员，管理员豁免封禁检查
+      const adminCheck = await db.collection('guanliyuan')
+        .where({ openid: openid })
+        .limit(1)
+        .get();
+      
+      if (adminCheck.data && adminCheck.data.length > 0) {
+        console.log('[app] ✅ 检测到管理员身份，豁免封禁检查');
+        return; // 管理员直接返回，不检查封禁状态
+      }
+      
       const buttonRes = await db.collection('login_logbutton')
         .where({ _openid: openid })
         .orderBy('updateTime', 'desc')

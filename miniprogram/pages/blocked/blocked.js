@@ -4,7 +4,11 @@ Page({
     checkTimer: null,
     type: '', // 封禁类型
     canCheck: false, // 冷却期间禁止检查
-    showCopySuccessModal: false // 自定义"内容已复制"弹窗
+    showCopySuccessModal: false, // 自定义"内容已复制"弹窗
+    // 【新增】自定义成功提示弹窗
+    showCustomSuccessModal: false,
+    successModalTitle: '',
+    successModalContent: ''
   },
 
   onLoad(options) {
@@ -97,8 +101,14 @@ Page({
         if (returnToIndex) {
           // 🔴 地址拦截解封：直接返回 index 页面，不设置永久授权（让用户重新走流程）
           console.log('[blocked] 地址拦截解封，返回 index 页面');
-          wx.showToast({ title: '已解封', icon: 'success' });
+          // 🔴 使用自定义弹窗替代微信官方弹窗
+          this.setData({ 
+            showCustomSuccessModal: true,
+            successModalTitle: '已解封',
+            successModalContent: ''
+          });
           setTimeout(() => {
+            this.setData({ showCustomSuccessModal: false });
             wx.reLaunch({ url: '/pages/index/index' });
           }, 1500);
         } else {
@@ -108,9 +118,15 @@ Page({
           wx.setStorageSync('user_nickname', nickname);
         }
         
-        wx.showToast({ title: '验证通过', icon: 'success' });
+        // 🔴 使用自定义弹窗替代微信官方弹窗
+        this.setData({ 
+          showCustomSuccessModal: true,
+          successModalTitle: '验证通过',
+          successModalContent: ''
+        });
 
         setTimeout(() => {
+          this.setData({ showCustomSuccessModal: false });
           // 直接跳回首页，用户已通过验证，不需要重新输入昵称
           wx.reLaunch({ url: '/pages/index/index' });
         }, 1500);
@@ -134,13 +150,24 @@ Page({
           wx.removeStorageSync('is_screenshot_banned');
           // 保持 has_permanent_auth 和 user_nickname，不清除
           
-          wx.showToast({ title: '已解封', icon: 'success' });
+          // 🔴 使用自定义弹窗替代微信官方弹窗
+          this.setData({ 
+            showCustomSuccessModal: true,
+            successModalTitle: '已解封',
+            successModalContent: ''
+          });
           setTimeout(() => {
+            this.setData({ showCustomSuccessModal: false });
             wx.reLaunch({ url: '/pages/products/products' });
           }, 1500);
         } else {
           // 其他情况：需要重新验证昵称
-        wx.showToast({ title: '请重新验证', icon: 'none' });
+          // 🔴 使用自定义弹窗替代微信官方弹窗
+          this.setData({ 
+            showCustomSuccessModal: true,
+            successModalTitle: '请重新验证',
+            successModalContent: ''
+          });
 
           // 清除所有封禁标记和授权状态
         wx.removeStorageSync('is_user_banned');
@@ -148,7 +175,8 @@ Page({
         wx.removeStorageSync('has_permanent_auth'); 
         
         setTimeout(() => {
-          wx.reLaunch({ url: '/pages/index/index' });
+            this.setData({ showCustomSuccessModal: false });
+            wx.reLaunch({ url: '/pages/index/index' });
         }, 1500);
         }
       }
