@@ -52,7 +52,7 @@ exports.main = async (event, context) => {
     const isExplicitlyUnbanned = buttonRecord && (rawFlag === false || rawFlag === 0 || rawFlag === 'false' || rawFlag === '0')
     const isLocationBlock = buttonRecord && buttonRecord.banReason === 'location_blocked'
     const bypassLocationCheck = buttonRecord && buttonRecord.bypassLocationCheck === true
-    
+
     // 🔴 关键修复：如果是截屏/录屏封禁，但 isBanned = false，可能是数据库还没更新完成
     // 检查 updateTime，如果是在最近3秒内更新的，可能是刚封禁，需要等待
     const isScreenshotBanCheck = buttonRecord && (buttonRecord.banReason === 'screenshot' || buttonRecord.banReason === 'screen_record');

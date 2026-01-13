@@ -17,12 +17,12 @@ page { height: 100%; background: #fff; overflow: hidden; }
 
 /* 第三页需要额外的顶部间距，避开固定导航栏 */
 #step3.step-view {
-  padding-top: 180rpx; /* 给固定导航栏（160rpx）留出空间，只留一点点间距 */
+  padding-top: 200rpx; /* 🔴 增加顶部间距，从 180rpx 增加到 200rpx，确保有足够间隙 */
 }
 
 .view-content {
   height: 100%;       /* 确保继承全屏高度 */
-  padding: 180rpx 48rpx 60rpx;
+  padding: 220rpx 48rpx 60rpx; /* 🔴 增加顶部间距，从 180rpx 增加到 220rpx，避免与标题遮挡 */
   display: flex;
   flex-direction: column; /* 垂直排列 */
   justify-content: center; /* 🔴 垂直居中，因为标题去掉了 */
@@ -31,8 +31,8 @@ page { height: 100%; background: #fff; overflow: hidden; }
 
 /* 修改第三页专用内容包裹层 */
 #step3 .view-content {
-  /* 将原来的 180rpx 减少到 20rpx，因为 step-view 已经添加了 padding-top */
-  padding-top: 20rpx !important; 
+  /* 🔴 增加顶部间距，从 20rpx 增加到 40rpx，确保有足够间隙 */
+  padding-top: 40rpx !important; 
 }
 
 /* 局部滚动区 */
@@ -602,20 +602,37 @@ page { height: 100%; background: #fff; overflow: hidden; }
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: #000;
+  /* 🔴 优化：初始背景为白色，营造"白→灰→黑"的渐变效果 */
+  background: #ffffff;
   z-index: 10000;
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
   pointer-events: none;
-  /* 🔴 优化：背景黑色延迟出现，营造"先飞出，再变黑"的感觉 */
-  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s;
+  /* 🔴 优化：关闭时立即开始变透明 */
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0s, 
+              background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0s;
 }
 
 .fullscreen-video-mask.active {
   opacity: 1;
   pointer-events: auto;
+  /* 🔴 优化：opacity立即变为1（显示白色背景），background-color延迟渐变到黑色 */
+  /* 视频先飞出来，背景慢慢从白色变黑，营造流畅的视觉效果 */
+  background: #000000;
+  /* opacity立即显示白色背景，background-color延迟0.2s后开始渐变到黑色 */
+  transition: opacity 0.1s ease-out 0s, 
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.2s;
+}
+
+/* 🔴 关闭状态：背景立即开始变透明，与视频缩小同步 */
+.fullscreen-video-mask.closing {
+  opacity: 0;
+  /* 🔴 关闭时背景快速变回白色，然后变透明，时长与打开时同步（0.5s） */
+  background: #ffffff;
+  transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0s,
+              background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0s;
 }
 
 .fullscreen-video-container {
@@ -626,16 +643,22 @@ page { height: 100%; background: #fff; overflow: hidden; }
   align-items: center;
   justify-content: center;
   transform-origin: center center;
-  /* 容器变换立即开始 */
-  transition: transform 0.5s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.3s ease-out;
+  /* 🔴 优化：默认状态，关闭时动画时间与打开时同步（0.5s） */
+  transition: transform 0.5s cubic-bezier(0.2, 0, 0.2, 1), opacity 0.5s ease-out;
   opacity: 0;
   will-change: transform, opacity; /* 优化性能 */
+  /* 🔴 优化：添加底部内边距，让视频控制条往上移动，避免在 iPhone 上误触导航栏 */
+  padding-bottom: 80rpx;
+  box-sizing: border-box;
 }
 
-/* 🔴 激活状态：从原位置放大到全屏 */
+/* 🔴 激活状态：从原位置放大到全屏，视频先飞出来，然后背景慢慢变黑 */
 .fullscreen-video-mask.active .fullscreen-video-container.active {
   transform: translate(0, 0) scale(1) !important;
   opacity: 1;
+  /* 🔴 优化：视频立即开始飞出来（0s延迟），与背景渐变同步完成 */
+  transition: transform 0.5s cubic-bezier(0.2, 0, 0.2, 1) 0s, 
+              opacity 0.5s ease-out 0s;
 }
 
 .fullscreen-video-player {
@@ -964,4 +987,78 @@ page { height: 100%; background: #fff; overflow: hidden; }
 
 .match-code-btn.confirm {
   color: #1890ff;
+}
+
+/* ================= 自定义加载动画 ================= */
+.loading-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(5px);
+  z-index: 99999 !important; /* 确保在最上层，覆盖微信原生提示 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loader {
+  width: 350rpx;
+  height: 180rpx;
+  border-radius: 20rpx;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-evenly;
+  padding: 30rpx;
+  box-shadow: 0 0 20rpx rgba(0,0,0,0.1);
+}
+
+.loading-bar {
+  width: 100%;
+  height: 20rpx;
+  background: #E5E5EA;
+  border-radius: 20rpx;
+  position: relative;
+  overflow: hidden;
+}
+.loading-bar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 50%;
+  height: 100%;
+  background: #1c1c1e;
+  border-radius: 20rpx;
+  animation: loadingBar 0.6s alternate infinite ease-in-out;
+}
+.loader-label {
+  color: #1c1c1e;
+  font-size: 28rpx;
+  animation: labelBlink 0.6s alternate infinite;
+}
+
+@keyframes labelBlink {
+  from { opacity: 0.3; }
+  to   { opacity: 1; }
+}
+@keyframes loadingBar {
+  0%   { left: 0%; }
+  50%  { left: 25%; }
+  100% { left: 50%; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }

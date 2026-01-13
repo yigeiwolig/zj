@@ -71,7 +71,11 @@ Page({
     // 🔴 全屏视频控制
     fullScreenVideoPaused: false, // 全屏视频是否暂停
     fullScreenVideoTransform: '', // 全屏视频的初始transform（用于动画）
-    fullScreenVideoInitialStyle: '' // 全屏视频的初始样式（用于动画）
+    fullScreenVideoInitialStyle: '', // 全屏视频的初始样式（用于动画）
+    fullScreenVideoMaskClosing: false, // 🔴 背景遮罩层关闭状态（用于同步背景变透明动画）
+    
+    // 🔴 自定义加载动画
+    showLoadingAnimation: false
   },
 
   // 页面加载时从云数据库读取数据
@@ -105,11 +109,31 @@ Page({
     }
   },
 
+  // 🔴 页面渲染完成，确保组件已准备好
+  onReady() {
+    // 延迟检查组件，确保已渲染，最多重试5次
+    let retryCount = 0;
+    const checkComponent = () => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast) {
+        this._customToastInstance = toast; // 缓存组件实例
+        this._customToastReady = true;
+        console.log('[azjc] custom-toast 组件已准备好');
+      } else if (retryCount < 5) {
+        retryCount++;
+        setTimeout(checkComponent, 200 * retryCount); // 递增延迟
+      } else {
+        console.warn('[azjc] custom-toast 组件未找到，将使用降级方案');
+      }
+    };
+    setTimeout(checkComponent, 100);
+  },
+
   // ================== 权限检查逻辑 ==================
   
   // 🔴 核心入口检查：限制普通用户访问
   async checkAccessPermission() {
-    wx.showLoading({ title: '验证权限中...', mask: true });
+    this.showMyLoading('验证权限中...');
     
     try {
       const db = wx.cloud.database();
@@ -127,7 +151,7 @@ Page({
       if (adminCheck.total > 0) {
         // 是管理员：授权并放行
         this.setData({ isAuthorized: true });
-        wx.hideLoading();
+        this.hideMyLoading();
         this.checkAdminPrivilege();
         this.loadDataFromCloud();
         return; 
@@ -142,38 +166,40 @@ Page({
 
       if (pendingOrderRes.total > 0) {
         // 🔴 有未确认收货的订单：即使绑定了设备，也不能直接查看
-        wx.hideLoading();
+        this.hideMyLoading();
         this.showRejectModal('请前往个人中心-我的订单\n确认收货后解锁教程');
         return;
       }
 
       // 4. 检查是否绑定了设备（使用 openid 字段，因为 bindDevice 云函数存储的是 openid）
+      // 🔴 必须检查 isActive: true，只有审核通过的设备才算绑定成功
       const deviceRes = await db.collection('sn').where({
-        openid: openid
+        openid: openid,
+        isActive: true  // 🔴 只有已激活的设备才算绑定成功
       }).count();
 
       if (deviceRes.total > 0) {
         // 绑定了设备且没有待处理订单 -> 放行
-        wx.hideLoading();
+        this.hideMyLoading();
         this.checkAdminPrivilege();
         this.loadDataFromCloud();
         return; 
       }
 
       // 5. 既没订单也没绑定设备 -> 拒绝
-      wx.hideLoading();
+      this.hideMyLoading();
       this.showRejectModal('下单后，在个人中心点击查看教程进入');
 
     } catch (err) {
       console.error('权限检查异常', err);
-      wx.hideLoading();
+      this.hideMyLoading();
       this.showRejectModal('权限验证失败，请重试');
     }
   },
 
   // 🔴 显示拒绝访问的提示
   showRejectModal(content) {
-    wx.showModal({
+    this._showCustomModal({
       title: '提示',
       content: content,
       showCancel: false,
@@ -211,15 +237,12 @@ Page({
   // 管理员模式手动切换开关
   toggleAdminMode() {
     if (!this.data.isAuthorized) {
-      wx.showToast({ title: '无权限', icon: 'none' });
+      this._showCustomToast('无权限', 'none');
       return;
     }
     const nextState = !this.data.isAdmin;
     this.setData({ isAdmin: nextState });
-    wx.showToast({
-      title: nextState ? '管理模式开启' : '已回到用户模式',
-      icon: 'none'
-    });
+    this._showCustomToast(nextState ? '管理模式开启' : '已回到用户模式', 'none');
   },
 
   // 从云数据库加载数据
@@ -390,7 +413,7 @@ Page({
       },
       fail: (err) => {
         console.error('加载视频数据失败:', err);
-        wx.showToast({ title: '加载数据失败', icon: 'none' });
+        this._showCustomToast('加载数据失败', 'none');
       }
     });
   },
@@ -464,9 +487,20 @@ Page({
       },
       fail: (err) => {
         console.error('加载图文数据失败:', err);
-        wx.showToast({ title: '加载数据失败', icon: 'none' });
+        this._showCustomToast('加载数据失败', 'none');
       }
     });
+  },
+
+  // 🔴 更新页面标题
+  updatePageTitle: function(stepIndex) {
+    let title = '请选择产品';
+    if (stepIndex === 1) {
+      title = '请选择车型';
+    } else if (stepIndex === 2) {
+      title = '请选择车型'; // 🔴 选择车型后，标题保持为"请选择车型"
+    }
+    this.setData({ pageTitle: title });
   },
 
   // 第一步：选产品
@@ -476,6 +510,7 @@ Page({
     wx.vibrateShort({ type: 'medium' });
     setTimeout(() => {
       this.setData({ stepIndex: 1, canScroll: true });
+      this.updatePageTitle(1); // 🔴 更新标题
       this.filterContent(); // 选择产品后重新过滤内容
     }, 450);
   },
@@ -487,6 +522,7 @@ Page({
     wx.vibrateShort({ type: 'medium' });
     setTimeout(() => {
       this.setData({ stepIndex: 2 });
+      this.updatePageTitle(2); // 🔴 立即更新标题为"请选择车型"
       this.filterContent(); // 选择车型后重新过滤内容
     }, 450);
   },
@@ -600,7 +636,7 @@ Page({
               const title = resModal.content || '未命名步骤';
               
               // 显示上传进度
-              getApp().showLoading({ title: '上传中...', mask: true });
+              this.showMyLoading('上传中...');
               
               // 生成云存储路径
               const suffix = mediaType === 'video' ? '.mp4' : '.jpg';
@@ -629,12 +665,12 @@ Page({
                   // 弹出设置匹配码的弹窗
                   this.showMatchCodeModal(mediaType, fileID, title, data);
               // 关闭上传中的 loading，等待用户选择匹配码
-              getApp().hideLoading();
+              this.hideMyLoading();
                 },
                 fail: (err) => {
                   console.error('上传文件失败:', err);
-                  getApp().hideLoading();
-                  wx.showToast({ title: '上传失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+                  this.hideMyLoading();
+                  this._showCustomToast('上传失败: ' + (err.errMsg || '未知错误'), 'none', 3000);
                 }
               });
             }
@@ -718,11 +754,11 @@ Page({
                 this.setData({ types: list });
               }
               
-              wx.showToast({ title: '添加成功', icon: 'success' });
+              this._showCustomToast('添加成功', 'success');
             },
             fail: (err) => {
               console.error('保存到数据库失败:', err);
-              wx.showToast({ title: '保存失败', icon: 'none' });
+              this._showCustomToast('保存失败', 'none');
             }
           });
         }
@@ -749,8 +785,8 @@ Page({
     
     // 如果确实没有任何数据，才提示
     if (availableProducts.length === 0 || availableTypes.length === 0) {
-      wx.showToast({ title: '请先创建产品和车型', icon: 'none', duration: 2000 });
-      getApp().hideLoading();
+      this._showCustomToast('请先创建产品和车型', 'none', 2000);
+      this.hideMyLoading();
       return;
     }
     
@@ -817,7 +853,7 @@ Page({
     const { tempUploadData, matchCodeProductNum, matchCodeTypeNum, products, types, chapters, graphics } = this.data;
     
     if (!tempUploadData) {
-      wx.showToast({ title: '上传数据丢失，请重新上传', icon: 'none' });
+      this._showCustomToast('上传数据丢失，请重新上传', 'none');
       this.hideMatchCodePicker();
       return;
     }
@@ -842,11 +878,11 @@ Page({
           }
           
           this.hideMatchCodePicker();
-          wx.showToast({ title: '匹配码已更新', icon: 'success' });
+          this._showCustomToast('匹配码已更新', 'success');
         },
         fail: (err) => {
           console.error('更新匹配码失败:', err);
-          wx.showToast({ title: '更新失败', icon: 'none' });
+          this._showCustomToast('更新失败', 'none');
         }
       });
       return;
@@ -865,7 +901,7 @@ Page({
     data.order = maxOrder + 1; // 新上传的排在最后
     
     console.log('保存到数据库，数据:', data);
-    getApp().showLoading({ title: '保存中...', mask: true });
+    this.showMyLoading('保存中...');
     
     db.collection('azjc').add({
       data: data,
@@ -914,8 +950,8 @@ Page({
             
             this.filterContent(); // 重新过滤内容
             this.hideMatchCodePicker(); // 关闭弹窗
-            getApp().hideLoading();
-            wx.showToast({ title: '上传成功', icon: 'success' });
+            this.hideMyLoading();
+            this._showCustomToast('上传成功', 'success');
           },
           fail: (err) => {
             console.error('获取临时链接失败:', err);
@@ -939,15 +975,15 @@ Page({
             }
             this.filterContent();
             this.hideMatchCodePicker();
-            getApp().hideLoading();
-            wx.showToast({ title: '上传成功', icon: 'success' });
+            this.hideMyLoading();
+            this._showCustomToast('上传成功', 'success');
           }
         });
       },
       fail: (err) => {
         console.error('保存到数据库失败:', err);
-        getApp().hideLoading();
-        wx.showToast({ title: '保存失败', icon: 'none' });
+        this.hideMyLoading();
+        this._showCustomToast('保存失败', 'none');
       }
     });
   },
@@ -981,11 +1017,11 @@ Page({
                 list.sort((a, b) => (a.number || 0) - (b.number || 0));
                 this.setData({ [type]: list });
                 this.filterContent(); // 重新过滤内容
-                wx.showToast({ title: '设置成功', icon: 'success' });
+                this._showCustomToast('设置成功', 'success');
               },
               fail: (err) => {
                 console.error('更新失败:', err);
-                wx.showToast({ title: '更新失败', icon: 'none' });
+                this._showCustomToast('更新失败', 'none');
               }
             });
           } else {
@@ -995,7 +1031,7 @@ Page({
             list.sort((a, b) => (a.number || 0) - (b.number || 0));
             this.setData({ [type]: list });
             this.filterContent();
-            wx.showToast({ title: '设置成功', icon: 'success' });
+            this._showCustomToast('设置成功', 'success');
           }
         }
       }
@@ -1046,10 +1082,10 @@ Page({
         [type === 'chapters' ? 'chapters' : 'graphics']: allList
       });
       this.filterContent();
-      wx.showToast({ title: '已上移', icon: 'success' });
+      this._showCustomToast('已上移', 'success');
     }).catch(err => {
       console.error('更新排序失败:', err);
-      wx.showToast({ title: '更新失败', icon: 'none' });
+      this._showCustomToast('更新失败', 'none');
     });
   },
 
@@ -1097,17 +1133,17 @@ Page({
         [type === 'chapters' ? 'chapters' : 'graphics']: allList
       });
       this.filterContent();
-      wx.showToast({ title: '已下移', icon: 'success' });
+      this._showCustomToast('已下移', 'success');
     }).catch(err => {
       console.error('更新排序失败:', err);
-      wx.showToast({ title: '更新失败', icon: 'none' });
+      this._showCustomToast('更新失败', 'none');
     });
   },
 
   // 原地删除数据
   deleteItem: function(e) {
     const { type, index } = e.currentTarget.dataset;
-    (wx.__mt_oldShowModal || wx.showModal)({
+    this._showCustomModal({
       title: '确认删除',
       content: '删除后无法撤销',
       success: (res) => {
@@ -1119,12 +1155,12 @@ Page({
             // 如果没有 _id，说明是本地数据，直接删除
             list.splice(index, 1);
             this.setData({ [type]: list });
-            wx.showToast({ title: '已删除', icon: 'success' });
+            this._showCustomToast('已删除', 'success');
             return;
           }
           
           // 显示删除进度
-          getApp().showLoading({ title: '删除中...', mask: true });
+          this.showMyLoading('删除中...');
           
           // 删除云数据库记录
           db.collection('azjc').doc(item._id).remove({
@@ -1151,13 +1187,13 @@ Page({
               // 重新过滤以刷新显示
               this.filterContent();
               
-              getApp().hideLoading();
-              wx.showToast({ title: '已删除', icon: 'success' });
+              this.hideMyLoading();
+              this._showCustomToast('已删除', 'success');
             },
             fail: (err) => {
               console.error('删除数据库记录失败:', err);
-              getApp().hideLoading();
-              wx.showToast({ title: '删除失败', icon: 'none' });
+              this.hideMyLoading();
+              this._showCustomToast('删除失败', 'none');
             }
           });
         }
@@ -1196,7 +1232,7 @@ Page({
     const { editItemData, editItemType, editItemIndex } = this.data;
     
     if (!editItemData || !editItemData._id) {
-      wx.showToast({ title: '数据错误', icon: 'none' });
+      this._showCustomToast('数据错误', 'none');
       return;
     }
     
@@ -1225,11 +1261,11 @@ Page({
               }
               
               this.hideEditModal();
-              wx.showToast({ title: '编辑成功', icon: 'success' });
+              this._showCustomToast('编辑成功', 'success');
             },
             fail: (err) => {
               console.error('更新失败:', err);
-              wx.showToast({ title: '更新失败', icon: 'none' });
+              this._showCustomToast('更新失败', 'none');
             }
           });
         }
@@ -1466,7 +1502,7 @@ Page({
       // 重新过滤内容以更新显示
       this.filterContent();
       
-      wx.showToast({ title: '排序已保存', icon: 'success', duration: 1000 });
+      this._showCustomToast('排序已保存', 'success', 1000);
     }).catch(err => {
       console.error('保存排序失败:', err);
       // 即使失败也重置状态
@@ -1505,10 +1541,14 @@ Page({
       if (Math.abs(distance) > 50) {
         if (distance > 0 && this.data.stepIndex > 0) {
           // 向下滑动 -> 回退上一页
-          this.setData({ stepIndex: this.data.stepIndex - 1 });
+          const newStepIndex = this.data.stepIndex - 1;
+          this.setData({ stepIndex: newStepIndex });
+          this.updatePageTitle(newStepIndex); // 🔴 更新标题
         } else if (distance < 0 && this.data.stepIndex < 2) {
           // 向上滑动 -> 进入下一页
-          this.setData({ stepIndex: this.data.stepIndex + 1 });
+          const newStepIndex = this.data.stepIndex + 1;
+          this.setData({ stepIndex: newStepIndex });
+          this.updatePageTitle(newStepIndex); // 🔴 更新标题
         }
       }
       return; // 管理员逻辑执行完直接结束，不走下面的普通用户逻辑
@@ -1519,6 +1559,7 @@ Page({
       // 仅在非视频列表页（stepIndex不为2）时才允许向下滑动返回
       if (this.data.stepIndex === 1) {
         this.setData({ stepIndex: 0 }); // 产品保持记录
+        this.updatePageTitle(0); // 🔴 更新标题
       }
     }
     // 🔴 普通用户模式下，向上滑动被禁止（不处理 distance < 0 的情况）
@@ -1602,20 +1643,24 @@ Page({
       const initialStyle = `transform: translate(${moveX}px, ${moveY}px) scale(${1/scale});`;
 
       // 🔴 先显示遮罩层（初始状态：在原位置，不添加active类）
+      // 同时清除关闭状态，确保动画流畅
+      // 注意：原视频的暂停状态会在打开时保持（默认播放，如果用户在全屏中暂停，关闭时会同步）
       this.setData({
         isVideoFullScreen: true,
         fullScreenVideoUrl: videoUrl,
         fullScreenVideoIndex: index,
-        fullScreenVideoPaused: false,
+        fullScreenVideoPaused: false, // 🔴 默认播放状态，如果原视频是暂停的，需要手动处理
         fullScreenVideoInitialStyle: initialStyle,
         fullScreenVideoTransform: '', // 先不设置transform，使用内联样式
+        fullScreenVideoMaskClosing: false, // 🔴 清除关闭状态，确保打开动画流畅
         locked: true
       });
 
       // 🔴 延迟一帧后添加active类触发动画，确保初始状态已渲染
+      // 这样会先显示白色背景（opacity变为1），然后视频飞出来，最后背景渐变到黑色
       setTimeout(() => {
         this.setData({
-          fullScreenVideoTransform: 'active' // 添加active类触发动画
+          fullScreenVideoTransform: 'active' // 添加active类触发视频放大动画
         });
       }, 50);
     }).exec();
@@ -1642,29 +1687,45 @@ Page({
 
   // 🔴 关闭全屏视频遮罩层
   closeFullScreenVideo() {
-    // 先暂停视频
+    // 🔴 保存当前全屏视频的暂停状态
+    const pausedState = this.data.fullScreenVideoPaused;
+    const videoIndex = this.data.fullScreenVideoIndex;
+    
+    // 先暂停全屏视频
     const videoContext = wx.createVideoContext('fullscreen-video-player');
     videoContext.pause();
     
-    // 🔴 先移除active类，触发退出动画
+    // 🔴 同时触发视频缩小和背景变透明，让动画同步进行
     this.setData({
-      fullScreenVideoTransform: ''
+      fullScreenVideoTransform: '', // 移除active类，触发视频缩小动画
+      fullScreenVideoMaskClosing: true // 🔴 添加关闭状态，触发背景变透明
     });
     
-    // 🔴 延迟后隐藏遮罩层
+    // 🔴 延迟后隐藏遮罩层，并同步暂停状态到原视频（等待动画完成）
     setTimeout(() => {
+      // 🔴 同步暂停状态到原视频
+      if (videoIndex >= 0) {
+        const originalVideoContext = wx.createVideoContext(`video-${videoIndex}`);
+        if (pausedState) {
+          originalVideoContext.pause(); // 如果全屏时是暂停的，原视频也暂停
+        } else {
+          originalVideoContext.play(); // 如果全屏时是播放的，原视频也播放
+        }
+      }
+      
       this.setData({
         isVideoFullScreen: false,
         fullScreenVideoUrl: '',
         fullScreenVideoIndex: -1,
         fullScreenVideoPaused: false,
-        fullScreenVideoInitialStyle: ''
+        fullScreenVideoInitialStyle: '',
+        fullScreenVideoMaskClosing: false // 🔴 清除关闭状态
       });
       setTimeout(() => {
         this.setData({ locked: false });
         this._isHandlingFullScreen = false;
       }, 100);
-    }, 500); // 等待动画完成
+    }, 500); // 🔴 调整时间与动画时间一致（0.5s，与打开时同步）
   },
 
   // 视频进入/退出全屏（保留此函数以防万一，但不再使用）
@@ -1687,7 +1748,7 @@ Page({
     
     // 如果播放失败，尝试重新获取临时链接
     if (fileid && fileid.startsWith('cloud://')) {
-      getApp().showLoading({ title: '重新加载...', mask: true });
+      this.showMyLoading('重新加载...');
       
       wx.cloud.getTempFileURL({
         fileList: [fileid],
@@ -1699,23 +1760,102 @@ Page({
               chapters[index].url = tempURL;
               chapters[index].needRefresh = false;
               this.setData({ chapters: chapters });
-              getApp().hideLoading();
-              wx.showToast({ title: '视频已重新加载', icon: 'success', duration: 1500 });
+              this.hideMyLoading();
+              this._showCustomToast('视频已重新加载', 'success', 1500);
             }
           } else {
-            getApp().hideLoading();
-            wx.showToast({ title: '视频加载失败，请稍后重试', icon: 'none' });
+            this.hideMyLoading();
+            this._showCustomToast('视频加载失败，请稍后重试', 'none');
           }
         },
         fail: (err) => {
           console.error('重新获取临时链接失败:', err);
-          getApp().hideLoading();
-          wx.showToast({ title: '视频加载失败', icon: 'none' });
+          this.hideMyLoading();
+          this._showCustomToast('视频加载失败', 'none');
         }
       });
     } else {
-      wx.showToast({ title: '视频文件无效', icon: 'none' });
+      this._showCustomToast('视频文件无效', 'none');
     }
+  },
+
+  // 🔴 统一的自定义 Loading 显示方法（替换所有 wx.showLoading 和 getApp().showLoading）
+  showMyLoading(title = '加载中...') {
+    this.setData({
+      showLoadingAnimation: true
+    });
+  },
+
+  // 🔴 统一的自定义 Loading 隐藏方法（替换所有 wx.hideLoading 和 getApp().hideLoading）
+  hideMyLoading() {
+    this.setData({
+      showLoadingAnimation: false
+    });
+  },
+
+  // 🔴 辅助函数：获取 custom-toast 组件并调用（优先使用缓存的实例）
+  _getCustomToast() {
+    // 优先使用缓存的实例
+    if (this._customToastInstance) {
+      return this._customToastInstance;
+    }
+    // 如果缓存不存在，尝试获取
+    const toast = this.selectComponent('#custom-toast');
+    if (toast) {
+      this._customToastInstance = toast; // 缓存实例
+      return toast;
+    }
+    return null;
+  },
+
+  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
+  _showCustomToast(title, icon = 'none', duration = 2000) {
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showToast) {
+        toast.showToast({ title, icon, duration });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[azjc] custom-toast 组件未找到，使用降级方案');
+        wx.showToast({ title, icon, duration });
+      }
+    };
+    tryShow();
+  },
+
+  // 🔴 统一的自定义 Modal 方法（替换所有 wx.showModal，除了 editable 的情况）
+  _showCustomModal(options) {
+    // 如果 editable 为 true，使用原生（因为自定义组件不支持输入框）
+    if (options.editable) {
+      return wx.showModal(options);
+    }
+    
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showModal) {
+        toast.showModal({
+          title: options.title || '提示',
+          content: options.content || '',
+          showCancel: options.showCancel !== false,
+          confirmText: options.confirmText || '确定',
+          cancelText: options.cancelText || '取消',
+          success: options.success
+        });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[azjc] custom-toast 组件未找到，使用降级方案');
+        wx.showModal(options);
+      }
+    };
+    tryShow();
   },
 
   // 返回键处理

@@ -139,7 +139,11 @@ Page({
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
       const db = wx.cloud.database();
-      const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      let adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      if (adminCheck.data.length === 0) {
+        adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
+      }
       if (adminCheck.data.length > 0) {
         this.setData({ isAuthorized: true });
         console.log('[paihang.js] 身份验证成功：合法管理员');
@@ -664,7 +668,7 @@ Page({
       console.log('[paihang] ✅ 立即设置封禁状态成功:', immediateRes);
     } catch (err) {
       console.error('[paihang] ⚠️ 立即设置封禁状态失败:', err);
-    }
+        }
 
     // 🔴 跳转到封禁页面
     console.log('[paihang] 🔴 跳转到封禁页');

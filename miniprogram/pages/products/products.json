@@ -1,4 +1,7 @@
 {
+  "usingComponents": {
+    "custom-toast": "/components/custom-toast/index"
+  },
   "navigationBarTitleText": "分类",
   "navigationStyle": "custom",
   "backgroundColor": "#F9F9F9",

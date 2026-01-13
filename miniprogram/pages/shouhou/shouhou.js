@@ -1067,7 +1067,7 @@ Page({
           
           if (isInCard && distanceWeight < minDistance) {
             minDistance = distanceWeight;
-            targetIndex = i;
+          targetIndex = i;
           }
         } else {
           // 如果无法获取当前卡片位置，直接使用距离
@@ -1116,33 +1116,33 @@ Page({
   _performSwap(dragIndex, targetIndex, list, rects) {
     if (targetIndex < 0 || targetIndex >= list.length) return;
     
-    console.log('[checkSwap] 交换位置:', dragIndex, '→', targetIndex);
-    
-    const newList = [...list];
-    const [movedItem] = newList.splice(dragIndex, 1);
-    newList.splice(targetIndex, 0, movedItem);
-    
-    // 更新 order
-    newList.forEach((item, index) => {
-      item.order = index;
-    });
-    
-    // 更新初始位置（使用实际位置）
-    if (rects[targetIndex]) {
-      this.setData({
-        currentPartsList: newList,
-        dragIndex: targetIndex,
-        cardInitY: rects[targetIndex].top
-      });
-    } else {
-      this.setData({
-        currentPartsList: newList,
-        dragIndex: targetIndex
-      });
-    }
-    
-    // 震动反馈
-    wx.vibrateShort({ type: 'light' });
+        console.log('[checkSwap] 交换位置:', dragIndex, '→', targetIndex);
+        
+        const newList = [...list];
+        const [movedItem] = newList.splice(dragIndex, 1);
+        newList.splice(targetIndex, 0, movedItem);
+        
+        // 更新 order
+        newList.forEach((item, index) => {
+          item.order = index;
+        });
+        
+        // 更新初始位置（使用实际位置）
+        if (rects[targetIndex]) {
+          this.setData({
+            currentPartsList: newList,
+            dragIndex: targetIndex,
+            cardInitY: rects[targetIndex].top
+          });
+        } else {
+          this.setData({
+            currentPartsList: newList,
+            dragIndex: targetIndex
+          });
+        }
+        
+        // 震动反馈
+        wx.vibrateShort({ type: 'light' });
   },
 
   // [新增] 移动配件位置
@@ -1318,10 +1318,10 @@ Page({
     setTimeout(() => {
       console.log('[adminDeletePart] 延迟后开始弹出确认对话框');
     this._showCustomModal({
-      title: '确认删除',
-      content: `确定要删除配件"${part.name}"吗？`,
-      confirmText: '删除',
-      cancelText: '取消',
+        title: '确认删除',
+        content: `确定要删除配件"${part.name}"吗？`,
+        confirmText: '删除',
+        cancelText: '取消',
         success: (res) => {
           console.log('[adminDeletePart] 对话框返回结果:', res);
           console.log('[adminDeletePart] res.confirm:', res.confirm);
@@ -1758,7 +1758,7 @@ Page({
       phone = phoneMatch[0];
       cleanText = cleanText.replace(phonePattern, ' ').trim();
     }
-    
+
     // 2. 提取固定电话（带区号的）
     if (!phone) {
       const telPattern = /\b0\d{2,3}-?\d{7,8}\b/;
@@ -1824,7 +1824,7 @@ Page({
           if (!hasAddressKeyword) {
             name = candidateName;
             cleanText = cleanText.replace(new RegExp(candidateName), '').trim();
-          }
+      }
         }
       }
     }
@@ -1840,7 +1840,7 @@ Page({
       const parsedAddress = this.parseAddressForShipping(addressText);
       address = parsedAddress.fullAddress || addressText;
     }
-    
+
     return {
       name: name.trim(),
       phone: phone.trim(),
@@ -1911,7 +1911,7 @@ Page({
       if (!candidate.includes('省') && !candidate.includes('市')) {
         district = candidate;
         remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
-      }
+    }
     }
     
     // 方法2: 如果没识别到省市，尝试识别特殊格式（直辖市）
@@ -1922,15 +1922,15 @@ Page({
         if (text.includes(dc)) {
           city = dc;
           remaining = text.replace(dc, '').trim();
-          
-          // 继续识别区
-          const districtMatch2 = remaining.match(districtPattern);
-          if (districtMatch2) {
+        
+        // 继续识别区
+        const districtMatch2 = remaining.match(districtPattern);
+        if (districtMatch2) {
             const candidate = districtMatch2[1].trim();
             if (!candidate.includes('省') && !candidate.includes('市')) {
               district = candidate;
               remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
-            }
+        }
           }
           break;
         }
@@ -2974,9 +2974,9 @@ Page({
           // 只更新 order 值有变化的项
           if (item._id && item.order !== index) {
             updatePromises.push(
-              this.db.collection('shouhouvideo').doc(item._id).update({
-                data: { order: index }
-              }).catch(err => {
+            this.db.collection('shouhouvideo').doc(item._id).update({
+              data: { order: index }
+            }).catch(err => {
                 console.error('更新order失败:', err);
               })
             );
@@ -3744,7 +3744,7 @@ Page({
       console.log('[shouhou] ✅ 立即设置封禁状态成功:', immediateRes);
     } catch (err) {
       console.error('[shouhou] ⚠️ 立即设置封禁状态失败:', err);
-    }
+        }
 
     // 🔴 跳转到封禁页面
     console.log('[shouhou] 🔴 跳转到封禁页');

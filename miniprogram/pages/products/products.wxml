@@ -121,5 +121,13 @@ module.exports = {
   </view>
 </view>
 
+<!-- 自定义加载动画 -->
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
+  <view class="loader">
+    <text class="loader-label">请稍候...</text>
+    <view class="loading-bar"></view>
+  </view>
+</view>
+
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />

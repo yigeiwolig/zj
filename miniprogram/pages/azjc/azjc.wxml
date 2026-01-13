@@ -251,7 +251,7 @@
 </view>
 
 <!-- 🔴 全屏视频遮罩层：覆盖在整个页面上，不改变 stepIndex -->
-<view class="fullscreen-video-mask {{isVideoFullScreen ? 'active' : ''}}" wx:if="{{isVideoFullScreen}}" catchtouchmove="true">
+<view class="fullscreen-video-mask {{isVideoFullScreen ? 'active' : ''}} {{fullScreenVideoMaskClosing ? 'closing' : ''}}" wx:if="{{isVideoFullScreen}}" catchtouchmove="true">
   <view class="fullscreen-video-container {{fullScreenVideoTransform}}" style="{{fullScreenVideoInitialStyle}}" catchtap="toggleFullScreenVideoPlay">
     <view class="fullscreen-close-btn" catchtap="closeFullScreenVideo">✕</view>
     <video 
@@ -271,6 +271,14 @@
     <view class="fullscreen-play-overlay {{fullScreenVideoPaused ? 'show' : ''}}" catchtap="toggleFullScreenVideoPlay">
       <view class="play-button-icon">▶</view>
     </view>
+  </view>
+</view>
+
+<!-- 自定义加载动画 -->
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
+  <view class="loader">
+    <text class="loader-label">请稍候...</text>
+    <view class="loading-bar"></view>
   </view>
 </view>
 

@@ -416,7 +416,8 @@
     <!-- 【新增】需寄回配件维修卡片（仅当未录入单号时显示） -->
     <view class="return-required-card" wx:if="{{myReturnRequiredRepair && !isAdmin && !myReturnRequiredRepair.returnTrackingId}}">
       <view class="rr-card-header">
-        <view class="rr-card-title">需寄回配件维修</view>
+        <!-- 🔴 场景B：管理员手动标记的需寄回，显示不同标题 -->
+        <view class="rr-card-title">{{myReturnRequiredRepair.returnStatus === 'PENDING_RETURN' ? '需要寄回维修完成后的配件' : '需寄回配件维修'}}</view>
         <view class="rr-card-badge">待处理</view>
       </view>
       <!-- 显示备注 -->
@@ -447,8 +448,8 @@
         <view class="rr-card-btn" bindtap="openReturnAddressModal" data-id="{{myReturnRequiredRepair._id}}">
           录入单号
         </view>
-        <!-- 一键复制地址按钮 -->
-        <view class="rr-card-btn copy-address" bindtap="copyReturnAddress">
+        <!-- 🔴 场景A：只有正常需寄回维修才显示"一键复制地址"按钮 -->
+        <view class="rr-card-btn copy-address" wx:if="{{myReturnRequiredRepair.returnStatus !== 'PENDING_RETURN'}}" bindtap="copyReturnAddress">
           一键复制地址
         </view>
       </block>
@@ -513,8 +514,13 @@
                 查看教程可修复
               </view>
               
-              <!-- 维修单审核中 -->
-              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 0 || item.status === 'PENDING') && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+              <!-- 🔴 待寄回维修（需要寄回且未完成寄回） -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && item.needReturn && !item.returnCompleted && item.status !== 'REPAIR_COMPLETED_SENT' && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT'}}">
+                <view class="dot-p"></view>待寄回维修
+              </view>
+              
+              <!-- 维修单审核中（非需寄回状态） -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 0 || item.status === 'PENDING') && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT' && !item.needReturn}}">
                 <view class="dot-p"></view>工程师审核中
               </view>
               
@@ -615,7 +621,7 @@
           </view>
 
           <view class="form-item">
-            <text class="form-label">{{bindType == 'new' ? '上传凭证 (购买截图)' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
+            <text class="form-label">{{bindType == 'new' ? '订单截图' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
             <view class="upload-group">
               <view class="upload-box" bindtap="chooseProofImage" data-type="receipt">
                 <image wx:if="{{imgReceipt}}" src="{{imgReceipt}}" mode="aspectFill" class="uploaded-img" />
@@ -869,78 +875,82 @@
   </view>
 
   <!-- ================= 底部半屏弹窗：录入单号和填写地址 ================= -->
-  <view class="bottom-modal-mask {{showReturnAddressModal ? 'show' : ''}}" bindtap="closeReturnAddressModal">
+  <view class="bottom-modal-mask {{showReturnAddressModal ? 'show' : ''}}" wx:if="{{showReturnAddressModal}}" bindtap="closeReturnAddressModal">
     <view class="bottom-modal-content" catchtap="noop">
       <!-- 弹窗头部 -->
       <view class="bottom-modal-header">
-        <view class="bottom-modal-title">填写修好后寄回地址</view>
+        <!-- 🔴 场景B：管理员手动标记的需寄回，只显示"录入寄回运单号" -->
+        <view class="bottom-modal-title">{{myReturnRequiredRepair && myReturnRequiredRepair.returnStatus === 'PENDING_RETURN' ? '录入寄回运单号' : '填写修好后寄回地址'}}</view>
         <view class="bottom-modal-close" bindtap="closeReturnAddressModal">✕</view>
       </view>
       
       <!-- 弹窗内容区 -->
       <scroll-view class="bottom-modal-body" scroll-y>
         <view class="bottom-modal-form">
-          <!-- 如果未填写地址，显示地址填写表单 -->
-          <view wx:if="{{!myReturnRequiredRepair.returnAddress}}">
-            <view class="ra-form-smart-paste-wrapper">
-              <view class="ra-form-smart-paste" bindtap="smartPasteAddress">
-                <text class="ra-smart-paste-icon">📋</text>
-                <text class="ra-smart-paste-text">智能粘贴</text>
+          <!-- 🔴 场景B：管理员手动标记的需寄回，不显示地址输入 -->
+          <block wx:if="{{myReturnRequiredRepair && myReturnRequiredRepair.returnStatus !== 'PENDING_RETURN'}}">
+            <!-- 如果未填写地址，显示地址填写表单 -->
+            <view wx:if="{{!myReturnRequiredRepair.returnAddress}}">
+              <view class="ra-form-smart-paste-wrapper">
+                <view class="ra-form-smart-paste" bindtap="openSmartAnalyzeModal">
+                  <text class="ra-smart-paste-icon">📋</text>
+                  <text class="ra-smart-paste-text">智能分析</text>
+                </view>
+              </view>
+              
+              <view class="ra-form-item">
+                <text class="ra-label">收件人姓名</text>
+                <input 
+                  class="ra-input" 
+                  type="text" 
+                  placeholder="请输入收件人姓名"
+                  value="{{userReturnAddress.name}}"
+                  data-key="name"
+                  bindinput="onUserReturnAddressInput"
+                />
+              </view>
+              
+              <view class="ra-form-item">
+                <text class="ra-label">收件人手机号</text>
+                <input 
+                  class="ra-input" 
+                  type="number" 
+                  placeholder="请输入11位手机号"
+                  value="{{userReturnAddress.phone}}"
+                  data-key="phone"
+                  bindinput="onUserReturnAddressInput"
+                  maxlength="11"
+                />
+              </view>
+              
+              <view class="ra-form-item">
+                <text class="ra-label">详细地址</text>
+                <textarea 
+                  class="ra-textarea" 
+                  placeholder="请输入详细地址，包含省市区信息，如：广东省 佛山市 南海区 某某街道101号"
+                  value="{{userReturnAddress.address}}"
+                  data-key="address"
+                  bindinput="onUserReturnAddressInput"
+                  auto-height
+                  maxlength="200"
+                />
               </view>
             </view>
             
-            <view class="ra-form-item">
-              <text class="ra-label">收件人姓名</text>
-              <input 
-                class="ra-input" 
-                type="text" 
-                placeholder="请输入收件人姓名"
-                value="{{userReturnAddress.name}}"
-                data-key="name"
-                bindinput="onUserReturnAddressInput"
-              />
-            </view>
-            
-            <view class="ra-form-item">
-              <text class="ra-label">收件人手机号</text>
-              <input 
-                class="ra-input" 
-                type="number" 
-                placeholder="请输入11位手机号"
-                value="{{userReturnAddress.phone}}"
-                data-key="phone"
-                bindinput="onUserReturnAddressInput"
-                maxlength="11"
-              />
-            </view>
-            
-            <view class="ra-form-item">
-              <text class="ra-label">详细地址</text>
-              <textarea 
-                class="ra-textarea" 
-                placeholder="请输入详细地址，包含省市区信息，如：广东省 佛山市 南海区 某某街道101号"
-                value="{{userReturnAddress.address}}"
-                data-key="address"
-                bindinput="onUserReturnAddressInput"
-                auto-height
-                maxlength="200"
-              />
-            </view>
-          </view>
-          
-          <!-- 如果已填写地址，显示地址信息 -->
-          <view wx:else>
-            <view class="ra-info-section">
-              <view class="ra-info-title">已填写地址信息：</view>
-              <view class="ra-info-content">
-                <text>{{myReturnRequiredRepair.returnAddress.name}} {{myReturnRequiredRepair.returnAddress.phone}}</text>
-                <text>{{myReturnRequiredRepair.returnAddress.address}}</text>
+            <!-- 如果已填写地址，显示地址信息 -->
+            <view wx:else>
+              <view class="ra-info-section">
+                <view class="ra-info-title">已填写地址信息：</view>
+                <view class="ra-info-content">
+                  <text>{{myReturnRequiredRepair.returnAddress.name}} {{myReturnRequiredRepair.returnAddress.phone}}</text>
+                  <text>{{myReturnRequiredRepair.returnAddress.address}}</text>
+                </view>
               </view>
             </view>
-          </view>
+          </block>
           
           <!-- 运单号输入（始终显示，无论是否填写地址） -->
-          <view class="ra-form-item" style="margin-top: 40rpx;" wx:if="{{!myReturnRequiredRepair.returnTrackingId}}">
+          <view class="ra-form-item" style="margin-top: {{myReturnRequiredRepair && myReturnRequiredRepair.returnStatus === 'PENDING_RETURN' ? '0' : '40'}}rpx;" wx:if="{{!myReturnRequiredRepair.returnTrackingId}}">
             <text class="ra-label">录入寄回运单号</text>
             <input 
               class="ra-input" 
@@ -1010,6 +1020,40 @@
         正在处理：{{clearProgress.currentCollection}} 
         ({{clearProgress.current}}/{{clearProgress.total}})
       </text>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 定位权限提示遮罩 ================= -->
+<view class="location-permission-mask" wx:if="{{showLocationPermissionModal}}">
+  <view class="location-permission-content">
+    <view class="location-permission-icon">📍</view>
+    <text class="location-permission-title">需要获取您的位置信息</text>
+    <text class="location-permission-desc">用于展示附近维修门店和计算配送距离</text>
+    <view class="location-permission-buttons">
+      <view class="location-permission-btn cancel" bindtap="closeLocationPermissionModal">拒绝</view>
+      <view class="location-permission-btn confirm" bindtap="_openLocationSetting">去设置</view>
+    </view>
+    <text class="location-permission-tip" wx:if="{{locationPermissionChecking}}">等待授权中...</text>
+  </view>
+</view>
+
+<!-- ================= 智能分析弹窗 ================= -->
+<view class="smart-paste-mask" wx:if="{{showSmartAnalyzeModal}}" style="z-index: 99999;">
+  <view class="smart-paste-box">
+    <view class="sp-title">智能分析</view>
+    <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
+    <textarea 
+      class="sp-textarea" 
+      placeholder="例如：张三 13800138000 广东省深圳市南山区..." 
+      value="{{smartAnalyzeVal}}" 
+      bindinput="onSmartAnalyzeInput"
+      adjust-position="{{true}}"
+      fixed="{{true}}"
+    ></textarea>
+    <view class="sp-btn-row">
+      <view class="sp-btn cancel" bindtap="closeSmartAnalyzeModal">取消</view>
+      <view class="sp-btn confirm" bindtap="confirmSmartAnalyze">智能分析</view>
     </view>
   </view>
 </view>

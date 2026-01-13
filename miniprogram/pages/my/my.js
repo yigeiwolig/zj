@@ -91,12 +91,24 @@ Page({
     // 【新增】底部弹窗控制
     showReturnAddressModal: false,
     returnTrackingIdInput: '', // 运单号输入
+    
+    // 🔴 管理员填写用户地址（临时数据）
+    showReturnAddressDialog: false,
+    tempReturnAddress: { name: '', phone: '', address: '' },
+    
+    // 🔴 智能分析弹窗相关
+    showSmartAnalyzeModal: false,
+    smartAnalyzeVal: '',
 
     // 【新增】测试密码输入弹窗
     showTestPasswordModal: false,
     testPasswordInput: '',
     isClearingData: false, // 是否正在清空数据
     clearProgress: { current: 0, total: 0, currentCollection: '' }, // 清空进度
+    
+    // 🔴 定位权限相关
+    showLocationPermissionModal: false, // 是否显示定位权限提示遮罩
+    locationPermissionChecking: false, // 是否正在检查定位权限
   },
 
   onLoad(options) {
@@ -164,6 +176,100 @@ Page({
     }
   },
 
+  // 🔴 检查定位权限状态
+  async _checkLocationPermission() {
+    return new Promise((resolve) => {
+      wx.getSetting({
+        success: (res) => {
+          if (res.authSetting['scope.userLocation'] === true) {
+            resolve(true); // 已授权
+          } else if (res.authSetting['scope.userLocation'] === false) {
+            resolve(false); // 已拒绝
+          } else {
+            resolve(null); // 未询问过
+          }
+        },
+        fail: () => {
+          resolve(null);
+        }
+      });
+    });
+  },
+
+  // 🔴 等待用户授权定位权限（轮询检查）
+  async _waitForLocationPermission() {
+    return new Promise((resolve) => {
+      // 显示权限提示遮罩
+      this.setData({ 
+        showLocationPermissionModal: true,
+        locationPermissionChecking: true
+      });
+
+      // 轮询检查权限状态
+      const checkInterval = setInterval(async () => {
+        const hasPermission = await this._checkLocationPermission();
+        
+        if (hasPermission === true) {
+          // 用户已授权
+          clearInterval(checkInterval);
+          this.setData({ 
+            showLocationPermissionModal: false,
+            locationPermissionChecking: false
+          });
+          resolve(true);
+        } else if (hasPermission === false) {
+          // 用户已拒绝，继续等待（不关闭遮罩）
+          // 遮罩会一直显示，等待用户去设置页面开启权限
+        }
+        // hasPermission === null 表示未询问过，继续等待
+      }, 500); // 每500ms检查一次
+
+      // 🔴 不设置超时，一直等待直到用户授权
+      // 这样可以确保用户必须授权才能继续使用
+    });
+  },
+
+  // 🔴 关闭定位权限提示遮罩（拒绝按钮）
+  closeLocationPermissionModal() {
+    // 不允许关闭，必须授权才能继续
+    wx.showToast({
+      title: '需要授权定位才能使用此功能',
+      icon: 'none',
+      duration: 2000
+    });
+  },
+
+  // 🔴 打开设置页面让用户授权
+  _openLocationSetting() {
+    wx.openSetting({
+      success: (res) => {
+        if (res.authSetting['scope.userLocation'] === true) {
+          // 用户已授权，关闭遮罩
+          this.setData({ 
+            showLocationPermissionModal: false,
+            locationPermissionChecking: false
+          });
+          // 重新尝试获取定位
+          this._getLocationAndDeviceInfo().then(locationData => {
+            // 继续执行后续逻辑
+            console.log('[my] 定位权限已授权，位置信息获取成功');
+          }).catch(err => {
+            console.error('[my] 获取位置信息失败:', err);
+            // 如果还是失败，继续等待
+            this._waitForLocationPermission();
+          });
+        } else {
+          // 用户仍未授权，继续等待
+          wx.showToast({
+            title: '请在设置中开启定位权限',
+            icon: 'none',
+            duration: 2000
+          });
+        }
+      }
+    });
+  },
+
   // 🔴 获取位置和设备信息的辅助函数（必须解析出详细地址）
   async _getLocationAndDeviceInfo() {
     const sysInfo = wx.getSystemInfoSync();
@@ -172,52 +278,53 @@ Page({
       phoneModel: sysInfo.model || ''
     };
     
-    // 尝试从缓存获取位置信息
-    const cachedLocation = wx.getStorageSync('last_location');
-    if (cachedLocation && cachedLocation.province && cachedLocation.city) {
-      // 如果缓存中有完整的地址信息，直接使用
-      return {
-        ...cachedLocation,
-        ...deviceInfo
-      };
-    }
-    
-    try {
-      // 获取当前位置
-      const locationRes = await new Promise((resolve, reject) => {
-        wx.getLocation({
-          type: 'gcj02',
-          success: resolve,
-          fail: reject
-        });
-      });
-
-      const lat = locationRes.latitude;
-      const lng = locationRes.longitude;
+    // 🔴 循环检查权限，直到用户授权
+    while (true) {
+      // 检查权限状态
+      const hasPermission = await this._checkLocationPermission();
       
-      // 🔴 使用带重试机制的逆地理编码获取详细地址
-      const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
-      const addressData = await reverseGeocodeWithRetry(lat, lng, {
-        maxRetries: 3,
-        timeout: 10000,
-        retryDelay: 1000
-      });
+      // 如果未授权或已拒绝，等待用户授权
+      if (hasPermission !== true) {
+        await this._waitForLocationPermission();
+        // 等待后继续循环检查
+        continue;
+      }
+      
+      // 已授权，尝试获取定位
+      try {
+        const locationRes = await new Promise((resolve, reject) => {
+          wx.getLocation({
+            type: 'gcj02',
+            success: resolve,
+            fail: reject
+          });
+        });
 
-      return {
-        ...addressData,
-        ...deviceInfo
-      };
-    } catch (err) {
-      console.error('[my] 获取位置信息失败:', err);
-      // 获取定位失败，尝试使用缓存的位置信息
-      if (cachedLocation) {
+        const lat = locationRes.latitude;
+        const lng = locationRes.longitude;
+        
+        // 🔴 使用带重试机制的逆地理编码获取详细地址
+        const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
+        const addressData = await reverseGeocodeWithRetry(lat, lng, {
+          maxRetries: 3,
+          timeout: 10000,
+          retryDelay: 1000
+        });
+
         return {
-          ...cachedLocation,
+          ...addressData,
           ...deviceInfo
         };
-      } else {
-        // 完全失败，只返回设备信息
-        return deviceInfo;
+      } catch (err) {
+        // 如果获取定位失败（可能是权限被拒绝），继续等待授权
+        if (err.errMsg && (err.errMsg.includes('auth deny') || err.errMsg.includes('permission'))) {
+          console.log('[my] 定位权限被拒绝，继续等待授权...');
+          await this._waitForLocationPermission();
+          continue; // 继续循环等待
+        } else {
+          // 其他错误，抛出
+          throw err;
+        }
       }
     }
   },
@@ -329,6 +436,20 @@ Page({
     if (savedNickname) {
       this.setData({ userName: savedNickname });
     }
+    
+    // 🔴 清理表单数据，避免残留
+    this.setData({
+      userReturnAddress: { name: '', phone: '', address: '' },
+      tempReturnAddress: { name: '', phone: '', address: '' },
+      returnTrackingIdInput: '',
+      imgReceipt: '',
+      imgChat: '',
+      buyDate: '',
+      modelIndex: null,
+      testPasswordInput: '',
+      showReturnAddressDialog: false,
+      showReturnAddressModal: false
+    });
     
     // 🔴 先检查权限获取 openid，然后再加载数据
     this.checkAdminPrivilege().then(() => {
@@ -1230,9 +1351,11 @@ Page({
         showCancel: false,
         confirmText: '好的',
         callback: () => {
-          // 关闭弹窗
+          // 关闭弹窗并清理数据
           this.setData({
-            showReturnAddressModal: false
+            showReturnAddressModal: false,
+            userReturnAddress: { name: '', phone: '', address: '' },
+            returnTrackingIdInput: ''
           });
           // 刷新数据（会更新弹窗内容，显示运单号输入框）
           this.loadMyActivitiesPromise().catch(() => {});
@@ -1297,9 +1420,10 @@ Page({
         setTimeout(() => { wx.hideToast(); }, 50);
         // 使用统一的"内容已复制"自定义弹窗
         this.setData({ showCopySuccessModal: true });
+        // 🔴 缩短显示时间，第一时间关闭
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
-        }, 2000);
+        }, 800);
       },
       fail: (err) => {
         console.error('[copyReturnAddress] 复制失败', err);
@@ -1341,9 +1465,10 @@ Page({
         setTimeout(() => { wx.hideToast(); }, 50);
         // 使用统一的"内容已复制"自定义弹窗
         this.setData({ showCopySuccessModal: true });
+        // 🔴 缩短显示时间，第一时间关闭
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
-        }, 2000);
+        }, 800);
       },
       fail: (err) => {
         console.error('[copyUserAddress] 复制失败', err);
@@ -2512,6 +2637,11 @@ Page({
           statusText = '查看教程可修复'; // 用户看到这个状态
           statusClass = 'info'; // 蓝色
           statusNum = 1; // 已处理
+        } else if (i.needReturn && !i.returnCompleted && i.status !== 'REPAIR_COMPLETED_SENT') {
+          // 🔴 需要寄回维修，且未完成寄回，显示"待寄回维修"
+          statusText = '待寄回维修';
+          statusClass = 'processing';
+          statusNum = 0; // 待处理
         } else if (i.status === 'PENDING') {
           statusText = '工程师审核中';
           statusClass = 'processing';
@@ -2612,8 +2742,156 @@ Page({
   closeReturnAddressModal() {
     this.setData({
       showReturnAddressModal: false,
-      returnTrackingIdInput: ''
+      returnTrackingIdInput: '',
+      // 🔴 清理用户填写的地址信息，避免残留
+      userReturnAddress: { name: '', phone: '', address: '' }
     });
+  },
+
+  // 🔴 关闭管理员填写地址弹窗
+  closeReturnAddressDialog() {
+    this.setData({
+      showReturnAddressDialog: false,
+      // 🔴 清理临时地址数据，避免残留
+      tempReturnAddress: { name: '', phone: '', address: '' }
+    });
+  },
+
+  // 🔴 管理员填写地址输入处理
+  onReturnAddressInput(e) {
+    const key = e.currentTarget.dataset.key;
+    const val = e.detail.value;
+    this.setData({
+      [`tempReturnAddress.${key}`]: val
+    });
+  },
+
+  // 🔴 确认管理员填写的地址（如果需要的话，可以在这里添加保存逻辑）
+  confirmReturnAddress() {
+    // 这里可以添加保存逻辑
+    // 暂时只关闭弹窗并清理数据
+    this.closeReturnAddressDialog();
+  },
+  
+  // 🔴 智能分析相关方法
+  // 1. 打开智能分析弹窗
+  openSmartAnalyzeModal() {
+    this.setData({
+      showSmartAnalyzeModal: true,
+      smartAnalyzeVal: '' // 每次打开清空
+    });
+  },
+  
+  // 2. 关闭智能分析弹窗
+  closeSmartAnalyzeModal() {
+    this.setData({ showSmartAnalyzeModal: false });
+  },
+  
+  // 3. 监听智能分析输入
+  onSmartAnalyzeInput(e) {
+    this.setData({ smartAnalyzeVal: e.detail.value });
+  },
+  
+  // 4. 确认智能分析（解析地址并填充到表单）
+  confirmSmartAnalyze() {
+    const text = this.data.smartAnalyzeVal.trim();
+    if (!text) {
+      this.showAutoToast('提示', '内容不能为空');
+      return;
+    }
+    
+    const result = this.parseSmartAddress(text);
+    
+    // 填充到表单
+    this.setData({
+      showSmartAnalyzeModal: false,
+      'userReturnAddress.name': result.name || '',
+      'userReturnAddress.phone': result.phone || '',
+      'userReturnAddress.address': result.address || ''
+    });
+    
+    if (result.name || result.phone || result.address) {
+      this.showAutoToast('提示', '解析完成');
+    } else {
+      this.showAutoToast('提示', '未能解析出有效信息，请手动填写');
+    }
+  },
+  
+  // 5. 智能解析地址（解析姓名、电话、地址）
+  parseSmartAddress(text) {
+    if (!text || !text.trim()) {
+      return { name: '', phone: '', address: '' };
+    }
+    
+    let cleanText = text.trim();
+    let name = '';
+    let phone = '';
+    let address = '';
+    
+    // 1. 提取手机号（更严格）
+    const phonePattern = /\b1[3-9]\d{9}\b/;
+    const phoneMatch = cleanText.match(phonePattern);
+    if (phoneMatch) {
+      phone = phoneMatch[0];
+      cleanText = cleanText.replace(phonePattern, ' ').trim();
+    }
+    
+    // 2. 提取固定电话（带区号的）
+    if (!phone) {
+      const telPattern = /\b0\d{2,3}-?\d{7,8}\b/;
+      const telMatch = cleanText.match(telPattern);
+      if (telMatch) {
+        phone = telMatch[0];
+        cleanText = cleanText.replace(telPattern, ' ').trim();
+      }
+    }
+    
+    // 3. 清理杂质，移除所有标签和无用词汇
+    cleanText = cleanText
+      .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
+      .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
+      .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // 4. 提取姓名（更智能的判断）
+    const addressKeywords = ['省', '市', '区', '县', '镇', '街道', '路', '街', '道', '号', '室', '楼', '苑', '村', '组', '栋', '单元', '层', '房'];
+    const namePattern = /^([\u4e00-\u9fa5]{2,4})/;
+    const nameMatch = cleanText.match(namePattern);
+    
+    if (nameMatch) {
+      const candidateName = nameMatch[1];
+      const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+      
+      if (!hasAddressKeyword && candidateName.length >= 2 && candidateName.length <= 4) {
+        name = candidateName;
+        cleanText = cleanText.replace(new RegExp('^' + candidateName), '').trim();
+      }
+    }
+    
+    // 5. 如果姓名没提取到，尝试从电话前后提取
+    if (!name && phone && text.includes(phone)) {
+      const phoneIndex = text.indexOf(phone);
+      const beforePhone = text.substring(0, phoneIndex).trim();
+      const afterPhone = text.substring(phoneIndex + phone.length).trim();
+      
+      const nameBeforeMatch = beforePhone.match(/([\u4e00-\u9fa5]{2,4})\s*$/);
+      if (nameBeforeMatch) {
+        const candidateName = nameBeforeMatch[1];
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        if (!hasAddressKeyword) {
+          name = candidateName;
+        }
+      }
+    }
+    
+    // 6. 剩余部分作为地址
+    address = cleanText
+      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    return { name, phone, address };
   },
   
   // 运单号输入
@@ -2697,39 +2975,50 @@ Page({
     }
     
     const repair = myReturnRequiredRepair;
-    const needsAddress = !repair.returnAddress;
+    // 🔴 场景B：管理员手动标记的需寄回，只需要运单号，不需要地址
+    const isAdminMarkedReturn = repair.returnStatus === 'PENDING_RETURN';
+    const needsAddress = !isAdminMarkedReturn && !repair.returnAddress;
     const trackingId = returnTrackingIdInput.trim();
     const needsTrackingId = !repair.returnTrackingId && trackingId;
     
-    // 如果既没有地址也没有运单号，提示至少填写一项
-    if (needsAddress && !needsTrackingId) {
-      // 检查地址是否完整
-      if (!userReturnAddress.name || !userReturnAddress.name.trim()) {
-        this.showAutoToast('提示', '请填写收件人姓名');
+    // 🔴 场景B：只需要运单号
+    if (isAdminMarkedReturn) {
+      if (!trackingId) {
+        this.showAutoToast('提示', '请输入运单号');
         return;
       }
-      if (!userReturnAddress.phone || !userReturnAddress.phone.trim()) {
-        this.showAutoToast('提示', '请填写收件人手机号');
+    } else {
+      // 场景A：正常需寄回维修流程
+      // 如果既没有地址也没有运单号，提示至少填写一项
+      if (needsAddress && !needsTrackingId) {
+        // 检查地址是否完整
+        if (!userReturnAddress.name || !userReturnAddress.name.trim()) {
+          this.showAutoToast('提示', '请填写收件人姓名');
+          return;
+        }
+        if (!userReturnAddress.phone || !userReturnAddress.phone.trim()) {
+          this.showAutoToast('提示', '请填写收件人手机号');
+          return;
+        }
+        if (!/^1[3-9]\d{9}$/.test(userReturnAddress.phone)) {
+          this.showAutoToast('提示', '请输入正确的11位手机号');
+          return;
+        }
+        if (!userReturnAddress.address || !userReturnAddress.address.trim()) {
+          this.showAutoToast('提示', '请填写详细地址');
+          return;
+        }
+      }
+      
+      if (!needsAddress && !needsTrackingId) {
+        this.showAutoToast('提示', '请至少填写地址或运单号');
         return;
       }
-      if (!/^1[3-9]\d{9}$/.test(userReturnAddress.phone)) {
-        this.showAutoToast('提示', '请输入正确的11位手机号');
+      
+      if (needsTrackingId && !trackingId) {
+        this.showAutoToast('提示', '请输入运单号');
         return;
       }
-      if (!userReturnAddress.address || !userReturnAddress.address.trim()) {
-        this.showAutoToast('提示', '请填写详细地址');
-        return;
-      }
-    }
-    
-    if (!needsAddress && !needsTrackingId) {
-      this.showAutoToast('提示', '请至少填写地址或运单号');
-      return;
-    }
-    
-    if (needsTrackingId && !trackingId) {
-      this.showAutoToast('提示', '请输入运单号');
-      return;
     }
     
     // 先提交地址（如果需要），然后提交运单号（如果需要）
@@ -2789,9 +3078,10 @@ Page({
           // 关闭弹窗
           this.setData({
             showReturnAddressModal: false,
-            returnTrackingIdInput: ''
+            returnTrackingIdInput: '',
+            userReturnAddress: { name: '', phone: '', address: '' }
           });
-          // 刷新数据
+          // 🔴 刷新数据，卡片会自动消失（因为 returnTrackingId 已存在）
           this.loadMyActivitiesPromise().catch(() => {});
         }
       });

@@ -36,6 +36,9 @@ Page({
     // 【新增】自动消失提示（无按钮，2秒后自动消失）
     autoToast: { show: false, title: '', content: '' },
     
+    // 🔴 自定义加载动画
+    showLoadingAnimation: false,
+    
     // 按照你的要求 1-12 顺序排列
     // === 在这里单独调整每个图标的大小 ===
     list: [
@@ -484,7 +487,7 @@ Page({
 
   // 🔴 检查安装教程访问权限
   async checkTutorialAccess() {
-    wx.showLoading({ title: '验证权限中...', mask: true });
+    this.showMyLoading('验证权限中...');
     
     try {
       const db = wx.cloud.database();
@@ -501,7 +504,7 @@ Page({
       
       if (adminCheck.total > 0) {
         // 是管理员：直接放行
-        wx.hideLoading();
+        this.hideMyLoading();
         wx.navigateTo({ url: '/pages/azjc/azjc' });
         return; 
       }
@@ -515,8 +518,8 @@ Page({
 
       if (pendingOrderRes.total > 0) {
         // 🔴 有未确认收货的订单：即使绑定了设备，也不能直接查看
-        wx.hideLoading();
-        wx.showModal({
+        this.hideMyLoading();
+        this._showCustomModal({
           title: '提示',
           content: '请前往个人中心-我的订单\n确认收货后解锁教程',
           showCancel: false,
@@ -526,20 +529,22 @@ Page({
       }
 
       // 4. 检查是否绑定了设备（使用 openid 字段，因为 bindDevice 云函数存储的是 openid）
+      // 🔴 必须检查 isActive: true，只有审核通过的设备才算绑定成功
       const deviceRes = await db.collection('sn').where({
-        openid: openid
+        openid: openid,
+        isActive: true  // 🔴 只有已激活的设备才算绑定成功
       }).count();
 
       if (deviceRes.total > 0) {
         // 绑定了设备且没有待处理订单 -> 放行
-        wx.hideLoading();
+        this.hideMyLoading();
         wx.navigateTo({ url: '/pages/azjc/azjc' });
         return; 
       }
 
       // 5. 既没订单也没绑定设备 -> 拒绝
-      wx.hideLoading();
-      wx.showModal({
+      this.hideMyLoading();
+      this._showCustomModal({
         title: '提示',
         content: '检测到您并未绑定设备，请在个人中心页面绑定设备后查看',
         showCancel: false,
@@ -548,8 +553,8 @@ Page({
 
     } catch (err) {
       console.error('权限检查异常', err);
-      wx.hideLoading();
-      wx.showModal({
+      this.hideMyLoading();
+      this._showCustomModal({
         title: '提示',
         content: '权限验证失败，请重试',
         showCancel: false,
@@ -573,5 +578,84 @@ Page({
     setTimeout(() => {
       this.setData({ 'autoToast.show': false });
     }, 2000);
+  },
+
+  // 🔴 统一的自定义 Loading 显示方法（替换所有 wx.showLoading 和 getApp().showLoading）
+  showMyLoading(title = '加载中...') {
+    this.setData({
+      showLoadingAnimation: true
+    });
+  },
+
+  // 🔴 统一的自定义 Loading 隐藏方法（替换所有 wx.hideLoading 和 getApp().hideLoading）
+  hideMyLoading() {
+    this.setData({
+      showLoadingAnimation: false
+    });
+  },
+
+  // 🔴 辅助函数：获取 custom-toast 组件并调用（优先使用缓存的实例）
+  _getCustomToast() {
+    // 优先使用缓存的实例
+    if (this._customToastInstance) {
+      return this._customToastInstance;
+    }
+    // 如果缓存不存在，尝试获取
+    const toast = this.selectComponent('#custom-toast');
+    if (toast) {
+      this._customToastInstance = toast; // 缓存实例
+      return toast;
+    }
+    return null;
+  },
+
+  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
+  _showCustomToast(title, icon = 'none', duration = 2000) {
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this._getCustomToast();
+      if (toast && toast.showToast) {
+        toast.showToast({ title, icon, duration });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[products] custom-toast 组件未找到，使用降级方案');
+        wx.showToast({ title, icon, duration });
+      }
+    };
+    tryShow();
+  },
+
+  // 🔴 统一的自定义 Modal 方法（替换所有 wx.showModal，除了 editable 的情况）
+  _showCustomModal(options) {
+    // 如果 editable 为 true，使用原生（因为自定义组件不支持输入框）
+    if (options.editable) {
+      return wx.showModal(options);
+    }
+    
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this._getCustomToast();
+      if (toast && toast.showModal) {
+        toast.showModal({
+          title: options.title || '提示',
+          content: options.content || '',
+          showCancel: options.showCancel !== false,
+          confirmText: options.confirmText || '确定',
+          cancelText: options.cancelText || '取消',
+          success: options.success
+        });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[products] custom-toast 组件未找到，使用降级方案');
+        wx.showModal(options);
+      }
+    };
+    tryShow();
   }
 });

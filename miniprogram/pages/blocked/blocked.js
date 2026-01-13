@@ -34,7 +34,7 @@ Page({
       if (isScreenshotType) {
         console.log(`🛡️ 截屏/录屏封禁模式：启动 ${initialDelay}ms 延迟，等待数据库更新完成...`);
       } else {
-        console.log(`🛡️ 地址拦截模式：启动 ${initialDelay}ms 写入保护期...`);
+      console.log(`🛡️ 地址拦截模式：启动 ${initialDelay}ms 写入保护期...`);
       }
     }
 
@@ -176,7 +176,7 @@ Page({
         
         setTimeout(() => {
             this.setData({ showCustomSuccessModal: false });
-            wx.reLaunch({ url: '/pages/index/index' });
+          wx.reLaunch({ url: '/pages/index/index' });
         }, 1500);
         }
       }

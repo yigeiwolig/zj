@@ -414,7 +414,7 @@ input, textarea { text-align: left; }
 }
 .btn-allow:active {
   background: #06ad56;
-}
+  }
 
 /* ================= 高级身份验证弹窗样式 ================= */
 .auth-panel-new {

@@ -73,10 +73,14 @@ Page({
     
     // 1. 先检查缓存（不立即跳转，等异步检查完成）
     const hasAuth = wx.getStorageSync('has_permanent_auth');
-    if (hasAuth) {
+    const savedNickname = wx.getStorageSync('user_nickname');
+    
+    if (hasAuth && savedNickname) {
+      // 缓存中有授权和昵称，直接使用
       this.setData({ isAuthorized: true, isShowNicknameUI: false });
     } else {
-      this.setData({ isShowNicknameUI: true });
+      // 缓存中没有，先检查 valid_users 集合
+      this.checkValidUserFromDatabase();
     }
     
     // 2. 异步检查全局黑名单（避免死循环）
@@ -85,6 +89,61 @@ Page({
     
     // 3. 检查管理员权限
     this.checkAdminPrivilege();
+  },
+
+  // 🔴 从 valid_users 集合检查用户是否有记录
+  async checkValidUserFromDatabase() {
+    try {
+      // 1. 获取当前用户 openid
+      const loginRes = await wx.cloud.callFunction({ name: 'login' });
+      const openid = loginRes.result?.openid;
+      
+      if (!openid) {
+        console.warn('[index] 无法获取 openid，显示昵称输入界面');
+        this.setData({ isShowNicknameUI: true });
+        return;
+      }
+
+      // 2. 查询 valid_users 集合，查找该用户的记录
+      const db = wx.cloud.database();
+      const validUserRes = await db.collection('valid_users')
+        .where({
+          _openid: openid
+        })
+        .limit(1)
+        .get();
+
+      if (validUserRes.data && validUserRes.data.length > 0) {
+        // 找到了记录，自动获取昵称
+        const userRecord = validUserRes.data[0];
+        const nickname = userRecord.nickname;
+        
+        if (nickname) {
+          // 保存昵称和授权状态到本地存储
+          wx.setStorageSync('user_nickname', nickname);
+          wx.setStorageSync('has_permanent_auth', true);
+          
+          // 更新页面状态，直接进入
+          this.setData({ 
+            isAuthorized: true, 
+            isShowNicknameUI: false,
+            inputNickName: nickname
+          });
+          
+          console.log('[index] 从 valid_users 自动恢复用户昵称:', nickname);
+          return;
+        }
+      }
+      
+      // 没有找到记录，显示昵称输入界面
+      console.log('[index] valid_users 中未找到用户记录，显示昵称输入界面');
+      this.setData({ isShowNicknameUI: true });
+      
+    } catch (err) {
+      console.error('[index] 检查 valid_users 失败:', err);
+      // 出错时显示昵称输入界面
+      this.setData({ isShowNicknameUI: true });
+    }
   },
 
   // === 全局封号检查 ===
