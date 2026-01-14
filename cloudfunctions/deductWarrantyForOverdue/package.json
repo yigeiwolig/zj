@@ -1,0 +1,9 @@
+{
+  "name": "deductWarrantyForOverdue",
+  "version": "1.0.0",
+  "description": "检查并扣除超过30天未上传运单号的质保",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

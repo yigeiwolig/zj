@@ -11,7 +11,9 @@
       <text class="back-icon">‹</text>
     </view>
     <view class="brand">
-      <text>{{pageTitle}}</text>
+      <view class="brand-title-row">
+        <text>{{pageTitle}}</text>
+      </view>
       <!-- 只有白名单用户能看到的切换开关 -->
       <view 
         wx:if="{{isAuthorized}}" 

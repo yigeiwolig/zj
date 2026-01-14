@@ -101,8 +101,9 @@ Page({
     // 🔴 检查访问权限（如果是从订单页面进入，直接放行）
     if (options && options.from === 'order') {
       console.log('[azjc] 从订单页进入，直接放行');
-      this.checkAdminPrivilege();
-      this.loadDataFromCloud();
+      this.checkAdminPrivilege().then(() => {
+        this.loadDataFromCloud();
+      });
     } else {
       // 否则进行权限检查
       this.checkAccessPermission();
@@ -181,7 +182,7 @@ Page({
       if (deviceRes.total > 0) {
         // 绑定了设备且没有待处理订单 -> 放行
         this.hideMyLoading();
-        this.checkAdminPrivilege();
+        await this.checkAdminPrivilege(); // 🔴 等待管理员权限检查完成
         this.loadDataFromCloud();
         return; 
       }
@@ -219,15 +220,20 @@ Page({
     try {
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
+      console.log('[azjc.js] 检查管理员权限，openid:', myOpenid);
       const db = wx.cloud.database();
       let adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      console.log('[azjc.js] 第一次查询结果:', adminCheck.data);
       // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
       if (adminCheck.data.length === 0) {
         adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
+        console.log('[azjc.js] 第二次查询结果（使用_openid）:', adminCheck.data);
       }
       if (adminCheck.data.length > 0) {
         this.setData({ isAuthorized: true });
-        console.log('[azjc.js] 身份验证成功：合法管理员');
+        console.log('[azjc.js] ✅ 身份验证成功：合法管理员，isAuthorized已设置为true');
+      } else {
+        console.log('[azjc.js] ❌ 未找到管理员记录，isAuthorized保持false');
       }
     } catch (err) {
       console.error('[azjc.js] 权限检查失败', err);
