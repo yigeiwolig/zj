@@ -68,19 +68,58 @@ exports.main = async (event, context) => {
     // 2. 对每个超时维修单，扣除对应设备的质保
     for (const repair of overdueRepairs) {
       try {
-        // 通过 openid 和 model 找到对应的设备
-        // 注意：这里假设一个用户可能有多个相同型号的设备，我们取第一个
-        const deviceRes = await db.collection('sn')
+        console.log(`[deductWarrantyForOverdue] 处理维修单: repairId=${repair._id}, openid=${repair._openid}, model=${repair.model}`)
+        
+        // 🔴 直接查询用户的所有设备，然后匹配
+        // 注意：设备表使用的是 openid 字段，不是 _openid
+        const userOpenid = repair._openid || repair.openid;
+        
+        // 先查询用户的所有设备
+        const allDevicesRes = await db.collection('sn')
           .where({
-            _openid: repair._openid,
-            productModel: repair.model,
-            isActive: true
+            openid: userOpenid
           })
-          .limit(1)
           .get()
         
-        if (deviceRes.data.length === 0) {
-          console.warn(`[deductWarrantyForOverdue] 未找到设备: openid=${repair._openid}, model=${repair.model}`)
+        console.log(`[deductWarrantyForOverdue] 用户设备总数: ${allDevicesRes.data.length}`)
+        
+        if (allDevicesRes.data.length === 0) {
+          console.warn(`[deductWarrantyForOverdue] 用户没有任何设备: openid=${userOpenid}`)
+          results.failed.push({
+            repairId: repair._id,
+            reason: '用户未绑定设备'
+          })
+          continue
+        }
+        
+        // 尝试匹配设备
+        let device = null;
+        const repairModel = repair.model || repair.productModel;
+        
+        // 方法1：精确匹配型号（优先选择活跃设备）
+        device = allDevicesRes.data.find(d => 
+          (d.productModel === repairModel || d.model === repairModel) && d.isActive === true
+        )
+        
+        if (!device) {
+          // 方法2：匹配型号（不限制活跃状态）
+          device = allDevicesRes.data.find(d => 
+            d.productModel === repairModel || d.model === repairModel
+          )
+        }
+        
+        if (!device) {
+          // 方法3：取第一个活跃设备
+          device = allDevicesRes.data.find(d => d.isActive === true)
+        }
+        
+        if (!device) {
+          // 方法4：取第一个设备（不管是否活跃）
+          device = allDevicesRes.data[0]
+        }
+        
+        if (!device) {
+          console.warn(`[deductWarrantyForOverdue] 未找到设备: openid=${userOpenid}, model=${repairModel}`)
           results.failed.push({
             repairId: repair._id,
             reason: '未找到对应设备'
@@ -88,7 +127,8 @@ exports.main = async (event, context) => {
           continue
         }
         
-        const device = deviceRes.data[0]
+        console.log(`[deductWarrantyForOverdue] 找到设备: sn=${device.sn}, productModel=${device.productModel}, repairModel=${repairModel}, isActive=${device.isActive}`)
+        
         const currentExpiryDate = new Date(device.expiryDate)
         
         // 扣除30天质保
