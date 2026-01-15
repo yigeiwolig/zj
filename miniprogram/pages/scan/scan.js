@@ -99,7 +99,7 @@ class BLEHelper {
                   type: 'auth_deny',
                   message: '蓝牙权限被拒绝',
                   detail: '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。'
-                });
+              });
               }
             }
               if (this.onError) this.onError(err);
@@ -126,7 +126,7 @@ class BLEHelper {
                     type: 'auth_deny',
                     message: '蓝牙功能不可用',
                     detail: '请确保：\n1. 系统蓝牙已开启\n2. 已授权小程序使用蓝牙功能\n\n可在手机设置中检查权限'
-                  });
+                });
                 }
               }
               if (this.onError) this.onError(err);

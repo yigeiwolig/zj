@@ -246,10 +246,10 @@
 
 <!-- ================= 4. 对比表格弹窗 (最终修正版) ================= -->
 <!-- 遮罩层 -->
-<view class="dark-mask" wx:if="{{showSpecsModal}}" bindtap="closeSpecsModal" style="z-index: 998;"></view>
+<view class="dark-mask" wx:if="{{showSpecsModal}}" bindtap="closeSpecsModal" catchtouchmove="noop" style="z-index: 998;"></view>
 
 <!-- 弹窗主体 -->
-<view class="overlay {{showSpecsModal ? 'active' : ''}}" catchtap="stopPropagation">
+<view class="overlay {{showSpecsModal ? 'active' : ''}}" catchtap="stopPropagation" catchtouchmove="noop">
   
   <!-- 1. 标题栏 (白色背景) -->
   <view class="overlay-head">

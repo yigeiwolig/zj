@@ -12,7 +12,7 @@
     </view>
     <view class="brand">
       <view class="brand-title-row">
-        <text>{{pageTitle}}</text>
+      <text>{{pageTitle}}</text>
       </view>
       <!-- 只有白名单用户能看到的切换开关 -->
       <view 

@@ -1,4 +1,13 @@
 page { background: #F7F7F7; color: #1D1D1F; }
+
+/* 弹窗显示时锁定页面滚动和点击 */
+.container.modal-open {
+  height: 100vh;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  touch-action: none;
+}
 .container { padding-bottom: 40rpx; }
 
 /* ================= 本页自定义加载动画（白色虚化 + 你的 loader） ================= */
@@ -10,10 +19,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
   height: 100%;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
-  z-index: 99999;
+  z-index: 1000000000; /* 最高层级，应在所有弹窗之上 */
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 
 .loader {
@@ -752,7 +762,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .f-btn.dark { background: #000; color: #fff; border: 1px solid #000; }
 
 /* --- 6. 模态窗 --- */
-.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); visibility: hidden; opacity: 0; transition: 0.3s; z-index: 1000; }
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); visibility: hidden; opacity: 0; transition: 0.3s; z-index: 1000; overflow: hidden; /* 防止页面滚动 */ }
 .modal.show { visibility: visible; opacity: 1; }
 
 .modal-content { 
@@ -845,6 +855,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
@@ -871,6 +882,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   backdrop-filter: blur(10px);
   z-index: 99999999; /* 🔴 确保显示在需寄回订单确认弹窗之上 */
   display: flex; align-items: center; justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 
 .custom-modal-box {
@@ -1227,6 +1239,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
@@ -1553,6 +1566,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
@@ -1879,6 +1893,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
@@ -2205,6 +2220,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
@@ -2531,6 +2547,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
@@ -2857,6 +2874,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
@@ -3291,31 +3309,50 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .act-time { font-size: 22rpx; color: #999; }
 
 .status-pill {
-  /* 固定 pill 高度，保证与"撤销"完全一致 */
-  height: 52rpx; /* 稍微增高 */
-  line-height: 52rpx;
+  /* 移除固定高度，改为 padding 撑开，适应长文本 */
+  /* height: 52rpx; */
+  /* line-height: 52rpx; */
   box-sizing: border-box;
 
-  /* 统一宽度（和撤销一致） */
+  /* 统一宽度 */
   min-width: 124rpx;
-  /* max-width: 200rpx; 🔴 移除最大宽度限制 */
   justify-content: center;
 
   display: flex;
   align-items: center;
-  font-size: 24rpx; /* 稍微调大字体 */
+  font-size: 24rpx; 
   font-weight: 600;
-  padding: 0 24rpx; /* 增加内边距 */
+  padding: 10rpx 24rpx; /* 增加上下内边距 */
   border-radius: 30rpx;
   white-space: nowrap; 
-  /* overflow: hidden; 🔴 移除溢出隐藏 */
-  /* text-overflow: ellipsis; 🔴 移除省略号 */
   flex-shrink: 0; /* 防止被挤压 */
+}
+/* 多行状态标签样式 */
+.status-pill.multi-line {
+  white-space: normal; /* 允许换行 */
+  align-items: center;
+  justify-content: center;
+  padding: 12rpx 20rpx; /* 调整内边距 */
+  line-height: 1.4; /* 行间距 */
+}
+.status-pill.multi-line .status-line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx; /* 两行之间的间距 */
+}
+.status-pill.multi-line .status-text {
+  display: block;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
 }
 .status-pill.processing { background: #FFF8E1; color: #FFA000; }
 .status-pill.success { background: #E8F5E9; color: #34C759; }
-.status-pill.fail { background: #FFEBEE; color: #FF3B30; }
-.status-pill.info { background: #FFEBEE; color: #E57373; }
+.status-pill.fail { background: #FDE2E2; color: #F56C6C; } /* 浅红色 */
+.status-pill.info { background: #FDE2E2; color: #F56C6C; } /* 统一红色样式 */
 
 .dot-p { width: 10rpx; height: 10rpx; background: #FFA000; border-radius: 50%; margin-right: 8rpx; }
 .dot-s { width: 10rpx; height: 10rpx; background: #34C759; border-radius: 50%; margin-right: 8rpx; }
@@ -3389,7 +3426,8 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .return-required-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 9999998; display: flex; align-items: center; justify-content: center;
+  z-index: 100000000; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; /* 防止页面滚动 */
 }
 
 .return-required-modal {
@@ -3623,10 +3661,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
 
 .rr-actions {
   display: flex;
-  gap: 12rpx;
+  gap: 16rpx;
   margin-top: 24rpx;
   padding-top: 24rpx;
   border-top: 1rpx solid #F5F5F5;
+  flex-wrap: wrap; /* 允许换行，避免按钮挤压 */
 }
 
 .rr-btn {
@@ -3639,7 +3678,10 @@ page { background: #F7F7F7; color: #1D1D1F; }
   transition: all 0.2s;
   flex: 1;
   letter-spacing: 0.5rpx;
-  min-width: 0;
+  min-width: 180rpx; /* 设置最小宽度，避免按钮太窄 */
+  white-space: nowrap; /* 防止文字换行 */
+  overflow: hidden;
+  text-overflow: ellipsis; /* 如果文字太长，显示省略号 */
 }
 
 .rr-btn.cancel {
@@ -3702,8 +3744,8 @@ page { background: #F7F7F7; color: #1D1D1F; }
 /* 🔴 新增：扣除质保按钮（红色边框） */
 .rr-btn.deduct {
   background: #fff;
-  color: #FF3B30;
-  border: 1rpx solid #FF3B30;
+  color: #F56C6C; /* 使用与状态标签一致的浅红色 */
+  border: 1rpx solid #F56C6C;
 }
 
 .rr-btn.deduct:active {
@@ -4177,6 +4219,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   align-items: center;
   justify-content: center;
   pointer-events: none; /* 允许点击穿透 */
+  overflow: hidden; /* 防止页面滚动 */
 }
 
 .auto-toast-box {
@@ -4487,11 +4530,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
   width: 100%; 
   height: 100%;
   background: rgba(0,0,0,0.6); 
-  z-index: 99999 !important;
+  z-index: 100000000 !important; /* 应在需寄回订单确认弹窗之上 */
   display: flex; 
   align-items: center; 
   justify-content: center;
   backdrop-filter: blur(5px);
+  overflow: hidden; /* 防止页面滚动 */
 }
 
 .smart-paste-box {
@@ -4581,13 +4625,14 @@ page { background: #F7F7F7; color: #1D1D1F; }
   right: 0;
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
-  z-index: 9999;
+  z-index: 100000000; /* 应在需寄回订单确认弹窗之上 */
   display: none;
   align-items: flex-end;
   justify-content: center;
   opacity: 0;
   visibility: hidden;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden; /* 防止页面滚动 */
 }
 
 .bottom-modal-mask.show {
@@ -4739,11 +4784,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
   height: 100%;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(10px);
-  z-index: 99998;
+  z-index: 10000000; /* 提高层级 */
   display: flex;
   align-items: center;
   justify-content: center;
   animation: fadeIn 0.3s ease;
+  overflow: hidden; /* 防止页面滚动 */
 }
 
 .location-permission-content {
@@ -4828,4 +4874,312 @@ page { background: #F7F7F7; color: #1D1D1F; }
   to {
     opacity: 1;
   }
+}
+
+/* ================= 物流查询弹窗样式 ================= */
+.logistics-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 100000000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  animation: fadeIn 0.3s ease;
+}
+
+.logistics-modal-box {
+  width: 100%;
+  max-height: 85vh;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.15);
+  transform: translateY(100%);
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+/* 1. 品牌头部 */
+.logistics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 40rpx 40rpx 20rpx;
+  background: #fff;
+  z-index: 10;
+}
+
+.brand-tag {
+  font-size: 28rpx; /* 稍微调小以适应更长文字 */
+  font-weight: 700;
+  color: #000;
+  letter-spacing: 0.5rpx;
+  line-height: 1.3;
+}
+
+.close-btn {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30rpx;
+  color: #666;
+  background: #F5F5F7;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+.close-btn:active {
+  background: #E5E5E7;
+  transform: scale(0.95);
+}
+
+.logistics-modal-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  min-height: 0; /* 关键：允许 flex 子元素收缩 */
+}
+
+/* 2. 核心信息区 */
+.logistics-info-card {
+  padding: 0 40rpx 40rpx;
+  background: #fff;
+  /* border-bottom: 1rpx solid #F0F0F0; */ /* 去掉分割线，用留白分割 */
+  z-index: 5;
+}
+
+.info-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.tracking-number {
+  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
+  font-size: 44rpx; /* 更大 */
+  font-weight: 700;
+  color: #000;
+  letter-spacing: 1rpx;
+}
+
+.copy-btn {
+  font-size: 22rpx;
+  color: #007AFF;
+  padding: 8rpx 20rpx;
+  border-radius: 8rpx;
+  background: rgba(0, 122, 255, 0.1);
+  font-weight: 600;
+  border: 1rpx solid rgba(0, 122, 255, 0.2);
+  transition: all 0.2s;
+}
+.copy-btn:active {
+  background: rgba(0, 122, 255, 0.15);
+  transform: scale(0.98);
+}
+
+.info-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.company-name {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 600;
+}
+
+.status-tag {
+  font-size: 20rpx;
+  color: #fff;
+  background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
+  padding: 6rpx 14rpx;
+  border-radius: 6rpx;
+  font-weight: 600;
+  letter-spacing: 1rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 122, 255, 0.25);
+}
+
+/* 3. 加载状态 */
+.logistics-loading {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mt-loader {
+  width: 40rpx;
+  height: 40rpx;
+  border: 4rpx solid rgba(0, 122, 255, 0.1);
+  border-top: 4rpx solid #007AFF;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* 4. 错误提示 */
+.logistics-error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40rpx;
+}
+.error-icon {
+  font-size: 64rpx;
+  margin-bottom: 20rpx;
+}
+.error-text {
+  font-size: 26rpx;
+  color: #666;
+}
+
+/* 5. 物流轨迹列表 (优化版：轴线左置，内容全宽) */
+.logistics-scroll {
+  flex: 1;
+  height: 100%; /* 关键：设置高度 */
+  padding: 30rpx 40rpx 0;
+  box-sizing: border-box;
+  border-top: 1rpx solid #F5F5F5;
+  -webkit-overflow-scrolling: touch; /* iOS 平滑滚动 */
+}
+
+.timeline-container {
+  position: relative;
+  padding-bottom: 40rpx;
+}
+
+.timeline-item {
+  display: flex;
+  position: relative;
+  margin-bottom: 0;
+}
+.timeline-item:last-child .line {
+  display: none;
+}
+.timeline-item:last-child .timeline-content-wrapper {
+  padding-bottom: 0;
+}
+
+/* 左侧：轴线 */
+.timeline-axis {
+  width: 32rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  margin-right: 24rpx;
+  flex-shrink: 0;
+}
+
+.dot {
+  width: 12rpx;
+  height: 12rpx;
+  background: #D0D0D0;
+  border-radius: 50%;
+  z-index: 2;
+  margin-top: 6rpx;
+  flex-shrink: 0;
+  border: 2rpx solid #fff;
+  box-sizing: border-box;
+}
+.dot.active {
+  width: 18rpx;
+  height: 18rpx;
+  background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
+  border-color: #fff;
+  box-shadow: 0 0 0 4rpx rgba(0, 122, 255, 0.15);
+  margin-top: 4rpx;
+}
+
+.line {
+  width: 1.5rpx;
+  background: linear-gradient(to bottom, #E8E8E8 0%, rgba(0, 122, 255, 0.1) 50%, #E8E8E8 100%);
+  flex: 1;
+  margin-top: 6rpx;
+  margin-bottom: 6rpx;
+  min-height: 50rpx;
+}
+
+/* 右侧：内容容器 */
+.timeline-content-wrapper {
+  flex: 1;
+  padding-bottom: 56rpx;
+  opacity: 0.45;
+  transition: opacity 0.3s;
+}
+.timeline-content-wrapper.active {
+  opacity: 1;
+}
+
+/* 时间行 */
+.timeline-header {
+  margin-bottom: 10rpx;
+  display: flex;
+  align-items: center;
+}
+
+.time-full {
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-size: 20rpx;
+  color: #999;
+  line-height: 1.3;
+  font-weight: 400;
+  letter-spacing: 0.5rpx;
+}
+.timeline-content-wrapper.active .time-full {
+  color: #007AFF;
+  font-weight: 600;
+  font-size: 21rpx;
+}
+
+/* 内容行 */
+.timeline-body {
+  width: 100%;
+}
+
+.desc-text {
+  font-size: 30rpx;
+  color: #2C2C2C;
+  line-height: 1.75;
+  text-align: left;
+  letter-spacing: 0.2rpx;
+  display: block;
+  font-weight: 400;
+  word-break: break-all;
+}
+.timeline-content-wrapper.active .desc-text {
+  font-weight: 500;
+  color: #000;
+  font-size: 32rpx;
+  line-height: 1.8;
+}
+
+/* 无轨迹信息 */
+.logistics-empty {
+  text-align: center;
+  color: #999;
+  font-size: 26rpx;
+  padding: 100rpx 0;
 }

@@ -1,6 +1,6 @@
 <!-- 强制授权弹窗 (蓝牙/定位失败时显示) - 黑白风格 -->
-<view class="custom-modal-mask" wx:if="{{showAuthForceModal}}">
-  <view class="custom-modal-box">
+<view class="custom-modal-mask" wx:if="{{showAuthForceModal}}" catchtouchmove="noop">
+  <view class="custom-modal-box" catchtouchmove="noop">
     <!-- 图标：使用 Unicode 字符，无需加载图片 -->
     <view class="modal-icon-new">📍</view>
     
@@ -28,8 +28,8 @@
 </view>
 
 <!-- 昵称授权窗口 (改为高级身份验证模式) -->
-<view class="auth-mask" wx:if="{{!isAuthorized && isShowNicknameUI}}">
-  <view class="auth-panel-new">
+<view class="auth-mask" wx:if="{{!isAuthorized && isShowNicknameUI}}" catchtouchmove="noop">
+  <view class="auth-panel-new" catchtouchmove="noop">
     <view class="auth-icon-lock">✨</view>
     <view class="auth-title-new">开启专属体验</view>
     <view class="auth-subtitle-new">请输入访问口令，解锁更多精彩内容</view>

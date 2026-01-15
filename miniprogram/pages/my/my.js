@@ -9,6 +9,7 @@ Page({
     countdownTimer: null, // 🔴 倒计时定时器
     currentOrderIndex: 0,
     showModal: false,
+    hasModalOpen: false, // 🔴 是否有弹窗打开（用于锁定页面滚动）
     bluetoothReady: false,
     modelOptions: ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 PRO Long', 'F2 MAX Long'],
     modelIndex: null,
@@ -92,6 +93,13 @@ Page({
     // 【新增】底部弹窗控制
     showReturnAddressModal: false,
     returnTrackingIdInput: '', // 运单号输入
+    
+    // 【新增】物流查询弹窗
+    showLogisticsModal: false,
+    currentTrackingId: '', // 当前查看的运单号
+    logisticsData: null, // 物流查询结果
+    logisticsLoading: false, // 是否正在加载
+    logisticsError: null, // 物流查询错误信息
     
     // 🔴 管理员填写用户地址（临时数据）
     showReturnAddressDialog: false,
@@ -205,6 +213,7 @@ Page({
         showLocationPermissionModal: true,
         locationPermissionChecking: true
       });
+      this.updateModalState();
 
       // 轮询检查权限状态
       const checkInterval = setInterval(async () => {
@@ -217,6 +226,7 @@ Page({
             showLocationPermissionModal: false,
             locationPermissionChecking: false
           });
+          this.updateModalState();
           resolve(true);
         } else if (hasPermission === false) {
           // 用户已拒绝，继续等待（不关闭遮罩）
@@ -246,6 +256,7 @@ Page({
             showLocationPermissionModal: false,
             locationPermissionChecking: false
           });
+          this.updateModalState();
           // 重新尝试获取定位
           this._getLocationAndDeviceInfo().then(locationData => {
             // 继续执行后续逻辑
@@ -1121,43 +1132,249 @@ Page({
     }, 200); // 延迟加大到 200ms，更稳
   },
   
-  // 跳转快递100查询（服务类进度说明）
+  // 使用微信官方物流查询接口
   viewLogisticsDetail(e) {
-    const sn = e.currentTarget.dataset.sn;
-    console.log("尝试跳转查运单号:", sn);
+    const sn = String(e.currentTarget.dataset.sn || '').trim().toUpperCase(); // 标准化运单号
+    const expressCompany = String(e.currentTarget.dataset.company || '').trim(); // 标准化快递公司名称
+    const receiverPhone = String(e.currentTarget.dataset.phone || '').trim(); // 收件人手机号
+    
+    console.log(`[前端] 开始查询物流 - 运单号: ${sn}, 快递公司: ${expressCompany || '未指定'}, 手机号: ${receiverPhone || '未提供'}`);
 
     if (!sn) {
+      console.error('[前端] 运单号为空，无法查询');
       this.showAutoToast('提示', '无运单号');
       return;
     }
 
-    wx.navigateToMiniProgram({
-      // 👇👇👇【这里也要改】把 a 改成 c 👇👇👇
-      appId: 'wx6885acbedba59c14', 
-      path: `pages/result/result?nu=${sn}&querysource=third_xcx`, // 加上 querysource 更稳
-      envVersion: 'release', 
-      success(res) {
-        console.log('跳转成功');
+    // 🔴 生成本次查询的唯一ID，用于防止竞态条件
+    const queryId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    this._currentQueryId = queryId;
+    
+    // 🔴 显示加载中（清空所有旧数据，确保不会显示错误数据）
+    this.setData({
+      showLogisticsModal: true,
+      currentTrackingId: sn, // 立即设置当前查询的运单号
+      logisticsData: null, // 清空旧数据
+      logisticsLoading: true,
+      logisticsError: null
+    });
+    this.updateModalState();
+    
+    console.log(`[前端] 已清空旧数据，开始调用云函数查询: ${sn}, 查询ID: ${queryId}`);
+
+    // 调用云函数查询物流信息（使用微信官方物流查询API）
+    wx.cloud.callFunction({
+      name: 'queryLogistics',
+      data: {
+        trackingId: sn, // 已标准化的运单号
+        expressCompany: expressCompany || undefined, // 如果没有则传undefined，避免空字符串
+        receiverPhone: receiverPhone || undefined // 收件人手机号（可选，但建议提供以提高查询准确性）
+        // openid 会在云函数中自动从 context 获取
       },
-      fail: (err) => {
-        console.error('跳转失败', err);
-        
-        // 🔴 如果是用户取消，不显示错误弹窗
-        const errMsg = err.errMsg || '';
-        if (errMsg.includes('cancel') || errMsg.includes('取消') || errMsg.includes('user cancel')) {
-          console.log('用户取消了跳转');
-          return; // 静默处理，不显示任何提示
+      success: (res) => {
+        // 🔴 检查是否是最后一次查询（防止竞态条件）
+        if (this._currentQueryId !== queryId) {
+          console.warn(`[前端] 查询已过期，忽略结果 - 当前查询ID: ${this._currentQueryId}, 返回查询ID: ${queryId}`);
+          return;
         }
         
-        // 其他错误才显示弹窗
-        this.showMyDialog({
-          title: '跳转失败',
-          // 把错误打印出来看，通常是因为 app.json 没生效
-          content: err.errMsg, 
-          showCancel: false
+        console.log(`[前端] 物流查询结果 (查询ID: ${queryId}):`, res);
+        
+        // 检查返回结果结构
+        if (!res.result) {
+          console.error('云函数返回结果为空:', res);
+          // 🔴 再次检查查询ID
+          if (this._currentQueryId !== queryId) return;
+          this.setData({
+            logisticsError: '查询失败：服务器未返回数据',
+            logisticsLoading: false,
+            logisticsData: null // 确保清空旧数据
+          });
+          return;
+        }
+        
+        // 检查是否有错误信息
+        if (res.result.errMsg && !res.result.success) {
+          console.error('云函数返回错误:', res.result.errMsg);
+          // 🔴 再次检查查询ID
+          if (this._currentQueryId !== queryId) return;
+          this.setData({
+            logisticsError: res.result.errMsg || '查询失败',
+            logisticsLoading: false,
+            logisticsData: null // 确保清空旧数据
+          });
+          return;
+        }
+        
+        if (res.result.success && res.result.data) {
+          // 🔴 使用深拷贝，避免修改原始数据
+          const rawData = res.result.data;
+          const data = JSON.parse(JSON.stringify(rawData)); // 深拷贝
+          
+          // 🔴 再次检查查询ID和运单号
+          if (this._currentQueryId !== queryId) {
+            console.warn(`[前端] 查询ID已改变，忽略结果`);
+            return;
+          }
+          
+          if (this.data.currentTrackingId !== sn) {
+            console.warn(`[前端] 运单号已改变，忽略结果 - 当前: ${this.data.currentTrackingId}, 查询: ${sn}`);
+            return;
+          }
+          
+          // 🔴 验证返回的运单号是否与查询的运单号一致（允许大小写差异）
+          if (data.waybill_id) {
+            const returnedId = String(data.waybill_id).trim().toUpperCase();
+            const queryId = String(sn).trim().toUpperCase();
+            if (returnedId !== queryId) {
+              console.error(`[前端验证] 运单号不匹配！查询: ${sn} (标准化: ${queryId}), 返回: ${data.waybill_id} (标准化: ${returnedId})`);
+              this.setData({
+                logisticsError: `运单号不匹配：查询的是 ${sn}，但返回的是 ${data.waybill_id}`,
+                logisticsLoading: false,
+                logisticsData: null // 确保清空旧数据
+              });
+              return;
+            }
+            console.log(`[前端验证] 运单号验证通过: ${sn} === ${data.waybill_id}`);
+          } else {
+            console.warn(`[前端验证] 返回数据中没有运单号，但继续处理`);
+          }
+          
+          // 前端兜底：如果没有返回中文名称，尝试本地映射
+          if (data.express_company_name && /^[a-z]+$/i.test(data.express_company_name)) {
+            const map = {
+              'zhongtong': '中通快递', 'yuantong': '圆通速递', 'shentong': '申通快递',
+              'yunda': '韵达快递', 'shunfeng': '顺丰速运', 'ems': 'EMS',
+              'jd': '京东快递', 'jitu': '极兔速递', 'youzhengguonei': '中国邮政',
+              'debangwuliu': '德邦快递', 'huitongkuaidi': '百世快递'
+            };
+            data.express_company_name = map[data.express_company_name.toLowerCase()] || data.express_company_name;
+          }
+          
+          // 处理时间格式，拆分日期和时间（统一处理逻辑）
+          if (data.path_list && data.path_list.length > 0) {
+            // 先确保列表按时间倒序排列（最新的在前）
+            data.path_list.sort((a, b) => {
+              const timeA = (a.time || '').replace(/-/g, '/')
+              const timeB = (b.time || '').replace(/-/g, '/')
+              try {
+                return new Date(timeB).getTime() - new Date(timeA).getTime()
+              } catch (e) {
+                return 0
+              }
+            })
+            
+            // 统一处理时间格式
+            data.path_list = data.path_list.map(item => {
+              const timeStr = (item.time || '').trim()
+              let _dateStr = ''
+              let time = timeStr
+              
+              // 尝试多种时间格式
+              // 格式1: YYYY-MM-DD HH:mm:ss
+              const pattern1 = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/
+              // 格式2: YYYY-MM-DD HH:mm
+              const pattern2 = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/
+              // 格式3: YYYY/MM/DD HH:mm:ss
+              const pattern3 = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/
+              
+              let match = timeStr.match(pattern1) || timeStr.match(pattern2) || timeStr.match(pattern3)
+              
+              if (match) {
+                // 提取日期和时间
+                const year = match[1]
+                const month = match[2]
+                const day = match[3]
+                const hour = match[4]
+                const minute = match[5]
+                
+                _dateStr = `${month}-${day}`
+                time = `${hour}:${minute}`
+              } else if (timeStr.length >= 16) {
+                // 尝试固定位置提取（YYYY-MM-DD HH:mm:ss）
+                const datePart = timeStr.substring(0, 10)
+                const timePart = timeStr.substring(11, 16)
+                if (datePart.match(/^\d{4}-\d{2}-\d{2}$/) && timePart.match(/^\d{2}:\d{2}$/)) {
+                  const dateArr = datePart.split('-')
+                  _dateStr = `${dateArr[1]}-${dateArr[2]}`
+                  time = timePart
+                }
+              }
+              
+              return {
+                ...item,
+                _dateStr: _dateStr,
+                time: time,
+                desc: (item.desc || '').trim()
+              }
+            })
+          }
+
+          // 🔴 最终验证：确保查询ID和运单号都匹配
+          if (this._currentQueryId !== queryId || this.data.currentTrackingId !== sn) {
+            console.warn(`[前端] 最终验证失败 - 查询ID: ${this._currentQueryId === queryId ? '匹配' : '不匹配'}, 运单号: ${this.data.currentTrackingId === sn ? '匹配' : '不匹配'}`);
+            return;
+          }
+          
+          console.log(`[前端] 查询成功，更新显示数据 - 运单号: ${sn}, 轨迹数量: ${data.path_list ? data.path_list.length : 0}, 查询ID: ${queryId}`);
+          this.setData({
+            logisticsData: data,
+            logisticsLoading: false
+          });
+        } else {
+          // 查询失败，清空所有数据
+          // 🔴 检查查询ID
+          if (this._currentQueryId !== queryId) {
+            console.warn(`[前端] 查询失败但查询ID已改变，忽略`);
+            return;
+          }
+          console.error('查询失败，返回结果:', res.result);
+          this.setData({
+            logisticsError: res.result?.errMsg || '查询失败，请稍后重试',
+            logisticsLoading: false,
+            logisticsData: null // 确保清空旧数据
+          });
+        }
+      },
+      fail: (err) => {
+        // 🔴 检查查询ID
+        if (this._currentQueryId !== queryId) {
+          console.warn(`[前端] 查询失败但查询ID已改变，忽略`);
+          return;
+        }
+        console.error('物流查询失败:', err);
+        this.setData({
+          logisticsError: err.errMsg || '网络错误，请稍后重试',
+          logisticsLoading: false,
+          logisticsData: null // 确保清空旧数据
         });
       }
     });
+  },
+
+  // 关闭物流查询弹窗
+  closeLogisticsModal() {
+    this.setData({
+      showLogisticsModal: false,
+      currentTrackingId: '',
+      logisticsData: null, // 关闭时清空数据
+      logisticsError: null,
+      logisticsLoading: false
+    });
+    this.updateModalState();
+  },
+
+  // 复制运单号
+  copyTrackingId(e) {
+    const sn = e.currentTarget.dataset.sn;
+    if (sn) {
+      wx.setClipboardData({
+        data: sn,
+        success: () => {
+          // 自带提示，这里不需要额外的toast
+        }
+      });
+    }
   },
 
   // 1. [新增] 用户取消订单
@@ -1263,7 +1480,7 @@ Page({
               content: '已标记为需要用户寄回\n用户端将显示寄回提示',
               showCancel: false,
               confirmText: '好的',
-              callback: () => {
+              success: () => {
                 this.loadMyOrders(); // 刷新订单列表
                 this.loadPendingRepairs(); // 🔴 刷新待处理列表（卡片会消失）
                 this.loadReturnRequiredList(); // 刷新需寄回列表
@@ -1348,7 +1565,7 @@ Page({
         content: '地址信息已保存\n管理员修好后将按此地址寄回',
         showCancel: false,
         confirmText: '好的',
-        callback: () => {
+        success: () => {
           // 关闭弹窗并清理数据
           this.setData({
             showReturnAddressModal: false,
@@ -1418,9 +1635,11 @@ Page({
         setTimeout(() => { wx.hideToast(); }, 50);
         // 使用统一的"内容已复制"自定义弹窗
         this.setData({ showCopySuccessModal: true });
+        this.updateModalState();
         // 🔴 缩短显示时间，第一时间关闭
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
+          this.updateModalState();
         }, 800);
       },
       fail: (err) => {
@@ -1463,9 +1682,11 @@ Page({
         setTimeout(() => { wx.hideToast(); }, 50);
         // 使用统一的"内容已复制"自定义弹窗
         this.setData({ showCopySuccessModal: true });
+        this.updateModalState();
         // 🔴 缩短显示时间，第一时间关闭
         setTimeout(() => {
           this.setData({ showCopySuccessModal: false });
+          this.updateModalState();
         }, 800);
       },
       fail: (err) => {
@@ -1479,12 +1700,18 @@ Page({
   // 【新增】打开需寄回订单确认弹窗
   openReturnRequiredModal() {
     this.loadReturnRequiredList();
-    this.setData({ showReturnRequiredModal: true });
+    this.setData({ 
+      showReturnRequiredModal: true,
+      hasModalOpen: true // 锁定页面滚动
+    });
   },
 
   // 【新增】关闭需寄回订单确认弹窗
   closeReturnRequiredModal() {
-    this.setData({ showReturnRequiredModal: false });
+    this.setData({ 
+      showReturnRequiredModal: false,
+      hasModalOpen: false // 解锁页面滚动
+    });
   },
 
   // 【新增】加载需寄回订单列表（只显示维修单，不显示普通订单）
@@ -1492,11 +1719,12 @@ Page({
     this.showMyLoading('加载中...');
     const db = wx.cloud.database();
     // 查询需要寄回且未完成的维修单（只查 shouhou_repair，不查 shop_orders）
+    // 排除条件：returnCompleted为true，或status为COMPLETED/RETURN_RECEIVED
     db.collection('shouhou_repair')
       .where({
         needReturn: true,
         returnCompleted: db.command.neq(true), // 未完成的
-        status: db.command.neq('COMPLETED') // 排除已完成的
+        status: db.command.nin(['COMPLETED', 'RETURN_RECEIVED']) // 排除已完成和售后完结的
       })
       .orderBy('createTime', 'desc')
       .get()
@@ -1558,7 +1786,7 @@ Page({
               content: '维修完成，已寄出快递\n用户端已更新状态',
               showCancel: false,
               confirmText: '好的',
-              callback: () => {
+              success: () => {
                 this.loadReturnRequiredList(); // 刷新列表，卡片会消失
                 this.loadMyOrders(); // 刷新订单列表
               }
@@ -1633,7 +1861,7 @@ Page({
     
     this.showMyDialog({
       title: '扣除质保',
-      content: '确认扣除用户30天质保？扣除后将显示"因为配件错误，所以扣除30天质保"。',
+      content: '确认扣除用户30天质保？扣除后将显示"配件错误，已扣除30天质保"。',
       showCancel: true,
       confirmText: '确定',
       cancelText: '取消',
@@ -1913,11 +2141,13 @@ Page({
   // --- 绑定设备相关逻辑 ---
   openBindModal() { 
     this.resetBluetoothState(); // 这一步保证了每次进来都是干净的
-    this.setData({ showModal: true }); 
+    this.setData({ showModal: true });
+    this.updateModalState();
   },
   closeBindModal() { 
     this.resetBluetoothState(); // 关闭时也重置
-    this.setData({ showModal: false }); 
+    this.setData({ showModal: false });
+    this.updateModalState();
   },
   
   // [新增] 重置蓝牙和表单状态
@@ -1959,18 +2189,21 @@ Page({
       'dialog.cancelText': options.cancelText || '取消',
       'dialog.callback': options.success || null // 存下回调函数
     });
+    this.updateModalState();
   },
 
   // [交互] 点击弹窗确定
   onDialogConfirm() {
     const cb = this.data.dialog.callback;
     this.setData({ 'dialog.show': false }); // 先关弹窗
+    this.updateModalState();
     if (cb) cb({ confirm: true }); // 执行回调
   },
 
   // [交互] 点击取消
   closeCustomDialog() {
     this.setData({ 'dialog.show': false });
+    this.updateModalState();
   },
 
   // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
@@ -1999,9 +2232,11 @@ Page({
       'autoToast.title': title,
       'autoToast.content': content
     });
+    this.updateModalState();
     // 2秒后自动消失
     setTimeout(() => {
       this.setData({ 'autoToast.show': false });
+      this.updateModalState();
     }, 2000);
   },
 
@@ -2012,6 +2247,7 @@ Page({
       testPasswordInput: '',
       isClearingData: false
     });
+    this.updateModalState();
   },
 
   // 🔴 关闭测试密码弹窗
@@ -2020,6 +2256,7 @@ Page({
       showTestPasswordModal: false,
       testPasswordInput: ''
     });
+    this.updateModalState();
   },
 
   // 🔴 测试密码输入
@@ -2049,6 +2286,7 @@ Page({
       testPasswordInput: '',
       isClearingData: true
     });
+    this.updateModalState();
 
     this.clearAllCollections();
   },
@@ -2072,6 +2310,7 @@ Page({
         'clearProgress.total': 0,
         'clearProgress.currentCollection': ''
       });
+      this.updateModalState();
 
       if (res.result && res.result.success) {
         const results = res.result.results;
@@ -2092,6 +2331,7 @@ Page({
           'clearProgress.total': 0,
           'clearProgress.currentCollection': ''
         });
+        this.updateModalState();
         this.showAutoToast('提示', res.result?.error || '清空失败，请重试');
         console.error('云函数调用失败:', res.result);
       }
@@ -2103,6 +2343,7 @@ Page({
         'clearProgress.total': 0,
         'clearProgress.currentCollection': ''
       });
+      this.updateModalState();
       this.showAutoToast('提示', '清空失败：' + (err.message || err.errMsg || '未知错误'));
       console.error('清空集合失败:', err);
     }
@@ -2116,11 +2357,13 @@ Page({
       wx.__mt_oldHideLoading();
     }
     this.setData({ showLoadingAnimation: true, loadingText: title });
+    this.updateModalState();
   },
 
   // 隐藏 Loading
   hideMyLoading() {
     this.setData({ showLoadingAnimation: false });
+    this.updateModalState();
   },
 
   // 显示输入弹窗
@@ -2132,11 +2375,13 @@ Page({
       'inputDialog.value': options.value || '',
       'inputDialog.callback': options.success || null
     });
+    this.updateModalState();
   },
 
   // 关闭输入弹窗
   closeInputDialog() {
     this.setData({ 'inputDialog.show': false });
+    this.updateModalState();
   },
 
   // 输入弹窗输入监听
@@ -2149,6 +2394,7 @@ Page({
     const callback = this.data.inputDialog.callback;
     const value = this.data.inputDialog.value;
     this.setData({ 'inputDialog.show': false });
+    this.updateModalState();
     if (callback) callback({ confirm: true, content: value });
   },
 
@@ -2614,11 +2860,13 @@ Page({
       adminSetDate: item.buyDate, // 默认填用户写的日期
       adminSetDaysIndex: 1        // 默认选 365天
     });
+    this.updateModalState();
   },
 
   // 4. 关闭弹窗
   closeAuditModal() {
     this.setData({ showAuditModal: false, currentAuditItem: null });
+    this.updateModalState();
   },
 
   // 5. 弹窗里的输入监听
@@ -2773,10 +3021,10 @@ Page({
         // 🔴 优先检查扣除质保状态
         if (i.warrantyDeducted || i.isWarrantyDeducted) {
           if (i.deductionReason === '配件错误' || i.deductionReason === 'wrong_part') {
-            statusText = '因为配件错误，所以扣除30天质保';
+            statusText = '配件错误，已扣除30天质保';
             statusClass = 'fail';
           } else if (i.deductionReason === '超时' || i.deductionReason === 'timeout') {
-            statusText = '因超时，扣除30天质保';
+            statusText = '超时未寄，已扣除30天质保';
             statusClass = 'fail';
           } else {
             statusText = '已扣除30天质保';
@@ -2975,6 +3223,7 @@ Page({
       returnTrackingIdInput: repair.returnTrackingId || '',
       showReturnAddressModal: true
     });
+    this.updateModalState();
   },
   
   // 关闭底部弹窗
@@ -2985,6 +3234,7 @@ Page({
       // 🔴 清理用户填写的地址信息，避免残留
       userReturnAddress: { name: '', phone: '', address: '' }
     });
+    this.updateModalState();
   },
 
   // 🔴 关闭管理员填写地址弹窗
@@ -2994,6 +3244,7 @@ Page({
       // 🔴 清理临时地址数据，避免残留
       tempReturnAddress: { name: '', phone: '', address: '' }
     });
+    this.updateModalState();
   },
 
   // 🔴 管理员填写地址输入处理
@@ -3019,11 +3270,13 @@ Page({
       showSmartAnalyzeModal: true,
       smartAnalyzeVal: '' // 每次打开清空
     });
+    this.updateModalState();
   },
   
   // 2. 关闭智能分析弹窗
   closeSmartAnalyzeModal() {
     this.setData({ showSmartAnalyzeModal: false });
+    this.updateModalState();
   },
   
   // 3. 监听智能分析输入
@@ -3158,7 +3411,7 @@ Page({
         content: '运单号已录入，管理员可查看物流信息',
         showCancel: false,
         confirmText: '好的',
-        callback: () => {
+        success: () => {
           // 如果有回调函数，执行回调（比如关闭弹窗）
           if (onSuccessCallback && typeof onSuccessCallback === 'function') {
             onSuccessCallback();
@@ -3373,19 +3626,21 @@ Page({
         successMsg = '运单号已录入，管理员可查看物流信息';
       }
       
+      // 显示成功提示，在用户点击确认后关闭弹窗并刷新数据
       this.showMyDialog({
         title: '提交成功',
         content: successMsg,
         showCancel: false,
         confirmText: '好的',
-        callback: () => {
-          // 关闭弹窗
+        success: () => {
+          // 关闭地址弹窗
           this.setData({
             showReturnAddressModal: false,
             returnTrackingIdInput: '',
             userReturnAddress: { name: '', phone: '', address: '' }
           });
-          // 🔴 刷新数据，卡片会自动消失（因为 returnTrackingId 已存在）
+          
+          // 刷新数据，卡片会自动消失（因为 returnTrackingId 已存在）
           this.loadMyActivitiesPromise().catch(() => {});
         }
       });
@@ -3542,6 +3797,36 @@ Page({
   // 【新增】空操作函数（用于阻止事件冒泡）
   noop() {
     // 空函数，用于阻止事件冒泡
+  },
+  
+  // 阻止页面滚动（仅在弹窗 mask 层使用）
+  preventScroll(e) {
+    // 阻止默认滚动行为
+    return false;
+  },
+  
+  // 🔴 检查是否有弹窗打开，更新 hasModalOpen 状态
+  updateModalState() {
+    const hasModal = 
+      this.data.showModal ||
+      this.data.showAuditModal ||
+      this.data.showReturnRequiredModal ||
+      this.data.showReturnAddressModal ||
+      this.data.showReturnAddressDialog ||
+      this.data.showSmartAnalyzeModal ||
+      this.data.showTestPasswordModal ||
+      this.data.showLocationPermissionModal ||
+      this.data.showLogisticsModal ||
+      this.data.showCopySuccessModal ||
+      this.data.showLoadingAnimation ||
+      this.data.isClearingData ||
+      (this.data.dialog && this.data.dialog.show) ||
+      (this.data.inputDialog && this.data.inputDialog.show) ||
+      (this.data.autoToast && this.data.autoToast.show);
+    
+    if (this.data.hasModalOpen !== hasModal) {
+      this.setData({ hasModalOpen: hasModal });
+    }
   },
 
   // 7. 拒绝操作

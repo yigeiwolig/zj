@@ -352,7 +352,7 @@ Page({
         // 最终降级
         console.warn('[adminLite] custom-toast 组件未找到，使用降级方案');
         wx.showToast({ title, icon, duration });
-      }
+  }
     };
     tryShow();
   },

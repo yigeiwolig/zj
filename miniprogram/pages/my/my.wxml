@@ -1,6 +1,6 @@
 <!-- pages/my/my.wxml -->
 
-<view class="container">
+<view class="container {{hasModalOpen ? 'modal-open' : ''}}">
 
   <!-- 顶部导航 -->
   <view class="header">
@@ -566,15 +566,25 @@
               </view>
               
               <!-- 扣除质保状态 -->
-              <view class="status-pill fail" wx:if="{{item.type === 'repair' && (item.warrantyDeducted || item.isWarrantyDeducted)}}">
-                {{item.deductionReason === '配件错误' || item.deductionReason === 'wrong_part' ? '因为配件错误，所以扣除30天质保' : (item.deductionReason === '超时' || item.deductionReason === 'timeout' ? '因超时，扣除30天质保' : '已扣除30天质保')}}
+              <view class="status-pill fail multi-line" wx:if="{{item.type === 'repair' && (item.warrantyDeducted || item.isWarrantyDeducted)}}">
+                <view class="status-line" wx:if="{{item.deductionReason === '配件错误' || item.deductionReason === 'wrong_part'}}">
+                  <text class="status-text">配件错误</text>
+                  <text class="status-text">已扣除30天质保</text>
+                </view>
+                <view class="status-line" wx:elif="{{item.deductionReason === '超时' || item.deductionReason === 'timeout'}}">
+                  <text class="status-text">超时未寄</text>
+                  <text class="status-text">已扣除30天质保</text>
+                </view>
+                <view class="status-line" wx:else>
+                  <text class="status-text">已扣除30天质保</text>
+                </view>
               </view>
             </view>
           </view>
           
           <!-- 🔴 查看物流按钮（显示在已备件寄出或已维修完成状态） -->
           <view class="logistics-btn-wrapper" wx:if="{{item.type === 'repair' && ((item.status === 1 || item.status === 'SHIPPED' || item.status === 'REPAIR_COMPLETED_SENT') && item.trackingId)}}">
-            <view class="btn-logistics-action" catchtap="viewLogisticsDetail" data-sn="{{item.trackingId}}">
+            <view class="btn-logistics-action" catchtap="viewLogisticsDetail" data-sn="{{item.trackingId}}" data-phone="{{item.contact && item.contact.phone ? item.contact.phone : ''}}">
               查看物流
             </view>
           </view>
@@ -600,8 +610,8 @@
   </block>
 
   <!-- 5. 绑定模态框 -->
-  <view class="modal {{showModal ? 'show' : ''}}">
-    <view class="modal-content">
+  <view class="modal {{showModal ? 'show' : ''}}" catchtouchmove="noop">
+    <view class="modal-content" catchtouchmove="noop">
       
       <!-- 1. 文案修改：绑定设备 -->
       <view class="modal-header">
@@ -695,8 +705,8 @@
   </view>
 
   <!-- === 改动2：管理员审核弹窗 (放在最底部) === -->
-  <view class="modal {{showAuditModal ? 'show' : ''}}" style="z-index: 2000;">
-    <view class="modal-content">
+  <view class="modal {{showAuditModal ? 'show' : ''}}" style="z-index: 2000;" catchtouchmove="noop">
+    <view class="modal-content" catchtouchmove="noop">
       <view class="modal-header">
         <text>审批设置</text>
         <view class="close-modal" bindtap="closeAuditModal">✕</view>
@@ -725,8 +735,8 @@
   </view>
 
   <!-- ================= 全局自定义弹窗 (替代原生) ================= -->
-  <view class="custom-dialog-mask" wx:if="{{dialog.show}}">
-    <view class="custom-dialog-box">
+  <view class="custom-dialog-mask" wx:if="{{dialog.show}}" catchtouchmove="noop">
+    <view class="custom-dialog-box" catchtouchmove="noop">
       <view class="cd-title">{{dialog.title}}</view>
       <view class="cd-content">{{dialog.content}}</view>
       
@@ -740,24 +750,24 @@
   </view>
 
   <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
-  <view class="auto-toast-mask" wx:if="{{autoToast.show}}">
-    <view class="auto-toast-box">
+  <view class="auto-toast-mask" wx:if="{{autoToast.show}}" catchtouchmove="noop">
+    <view class="auto-toast-box" catchtouchmove="noop">
       <view class="at-title">{{autoToast.title}}</view>
       <view class="at-content">{{autoToast.content}}</view>
     </view>
   </view>
 
   <!-- ================= 全局自定义 Loading (白色背景进度条) ================= -->
-  <view class="loading-mask" wx:if="{{showLoadingAnimation}}">
-    <view class="loader">
+  <view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop">
+    <view class="loader" catchtouchmove="noop">
       <text class="loader-label">{{loadingText}}</text>
       <view class="loading-bar"></view>
     </view>
   </view>
 
   <!-- ================= 输入弹窗 (替代 editable modal) ================= -->
-  <view class="custom-dialog-mask" wx:if="{{inputDialog.show}}">
-    <view class="custom-dialog-box">
+  <view class="custom-dialog-mask" wx:if="{{inputDialog.show}}" catchtouchmove="noop">
+    <view class="custom-dialog-box" catchtouchmove="noop">
       <view class="cd-title">{{inputDialog.title}}</view>
       <input 
         class="cd-input" 
@@ -776,22 +786,22 @@
   </view>
 
   <!-- 统一的"内容已复制"弹窗（样式和首页一致） -->
-  <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}">
-    <view class="custom-modal-box copy-success-modal">
+  <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop">
+    <view class="custom-modal-box copy-success-modal" catchtouchmove="noop">
       <view class="modal-icon-new success-icon">✓</view>
       <view class="modal-title-new">内容已复制</view>
     </view>
   </view>
 
   <!-- ================= 需寄回订单确认弹窗 ================= -->
-  <view class="return-required-mask" wx:if="{{showReturnRequiredModal}}" bindtap="closeReturnRequiredModal">
-    <view class="return-required-modal" catchtap="noop">
+  <view class="return-required-mask" wx:if="{{showReturnRequiredModal}}" bindtap="closeReturnRequiredModal" catchtouchmove="preventScroll">
+    <view class="return-required-modal" catchtap="noop" catchtouchmove="preventScroll">
       <view class="rr-header">
         <text class="rr-title">需寄回订单确认</text>
         <text class="rr-close" bindtap="closeReturnRequiredModal">✕</text>
       </view>
       
-      <scroll-view scroll-y class="rr-content">
+      <scroll-view scroll-y class="rr-content" catchtouchmove="noop">
         <block wx:for="{{returnRequiredList}}" wx:key="_id">
           <view class="rr-item {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? 'user-sent' : (item.returnTrackingId ? 'returned' : 'pending')}}">
             <view class="rr-item-header">
@@ -816,10 +826,10 @@
                   </view>
                 </view>
               </view>
-              <!-- 如果已填写修好后寄回地址，显示该地址 -->
-              <view class="rr-info-row" wx:if="{{item.returnAddress}}">
-                <text class="rr-info-label">修好后寄回地址：</text>
-                <text class="rr-info-value">{{item.returnAddress.name}} {{item.returnAddress.phone}} {{item.returnAddress.address}}</text>
+              <!-- 显示备注 -->
+              <view class="rr-info-row" wx:if="{{item.returnNote}}">
+                <text class="rr-info-label">备注：</text>
+                <text class="rr-info-value">{{item.returnNote}}</text>
               </view>
               <view class="rr-info-row">
                 <text class="rr-info-label">故障描述：</text>
@@ -841,19 +851,19 @@
             <view class="rr-actions">
               <!-- 🔴 场景B：管理员手动标记的需寄回，用户已寄出（需寄回维修），显示查看物流和寄出快递 -->
               <block wx:if="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus === 'PENDING_RETURN'}}">
-                <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}">查看物流</view>
+                <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}">查看物流</view>
                 <view class="rr-btn ship-out" bindtap="adminShipOutAfterRepair" data-id="{{item._id}}">寄出快递</view>
               </block>
               <!-- 场景A：用户寄回故障配件，显示扣除一个月质保、查看物流和确认收货 -->
               <block wx:elif="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN'}}">
-                <view class="rr-btn deduct" bindtap="deductWarrantyForRepair" data-id="{{item._id}}">扣除一个月质保</view>
-                <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}">查看物流</view>
+                <view class="rr-btn deduct" bindtap="deductWarrantyForRepair" data-id="{{item._id}}">扣除质保</view>
+                <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}">查看物流</view>
                 <view class="rr-btn confirm" bindtap="confirmReturnReceived" data-id="{{item._id}}">确认收货</view>
               </block>
               <!-- 其他状态：显示取消和已完成 -->
               <block wx:else>
                 <view class="rr-btn cancel" bindtap="cancelReturnRequired" data-id="{{item._id}}">取消</view>
-                <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}">查看物流</view>
+                <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}">查看物流</view>
                 <view class="rr-btn complete" bindtap="completeReturnRequired" data-id="{{item._id}}">已完成</view>
               </block>
             </view>
@@ -868,8 +878,8 @@
   </view>
 
   <!-- ================= 地址信息填写弹窗（管理员填写用户地址） ================= -->
-  <view class="custom-dialog-mask" wx:if="{{showReturnAddressDialog}}" bindtap="closeReturnAddressDialog">
-    <view class="custom-dialog-box" catchtap="noop" style="max-width: 680rpx; padding: 50rpx 40rpx;">
+  <view class="custom-dialog-mask" wx:if="{{showReturnAddressDialog}}" bindtap="closeReturnAddressDialog" catchtouchmove="noop">
+    <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop" style="max-width: 680rpx; padding: 50rpx 40rpx;">
       <view class="cd-title">填写用户地址信息</view>
       <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
         修好后将按此地址寄回给用户
@@ -923,8 +933,8 @@
   </view>
 
   <!-- ================= 底部半屏弹窗：录入单号和填写地址 ================= -->
-  <view class="bottom-modal-mask {{showReturnAddressModal ? 'show' : ''}}" wx:if="{{showReturnAddressModal}}" bindtap="closeReturnAddressModal">
-    <view class="bottom-modal-content" catchtap="noop">
+  <view class="bottom-modal-mask {{showReturnAddressModal ? 'show' : ''}}" wx:if="{{showReturnAddressModal}}" bindtap="closeReturnAddressModal" catchtouchmove="noop">
+    <view class="bottom-modal-content" catchtap="noop" catchtouchmove="noop">
       <!-- 弹窗头部 -->
       <view class="bottom-modal-header">
         <!-- 🔴 场景A：管理员录单备件寄出，显示"录入寄回运单号"；场景B：管理员手动标记，显示"填写修好后寄回地址" -->
@@ -933,7 +943,7 @@
       </view>
       
       <!-- 弹窗内容区 -->
-      <scroll-view class="bottom-modal-body" scroll-y>
+      <scroll-view class="bottom-modal-body" scroll-y catchtouchmove="noop">
         <view class="bottom-modal-form">
           <!-- 🔴 场景B：管理员手动标记，显示地址输入 -->
           <block wx:if="{{myReturnRequiredRepair && myReturnRequiredRepair.returnStatus === 'PENDING_RETURN'}}">
@@ -1032,8 +1042,8 @@
 <custom-toast id="custom-toast" />
 
 <!-- ================= 测试密码输入弹窗 ================= -->
-<view class="custom-dialog-mask" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal">
-  <view class="custom-dialog-box" catchtap="noop" style="max-width: 600rpx;">
+<view class="custom-dialog-mask" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal" catchtouchmove="noop">
+  <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop" style="max-width: 600rpx;">
     <view class="cd-title">请输入测试密码</view>
     <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
       此操作将清空除 app_config、guanliyuan、shouhou 以外的所有集合数据
@@ -1059,8 +1069,8 @@
 </view>
 
 <!-- ================= 清空数据进度提示 ================= -->
-<view class="loading-mask" wx:if="{{isClearingData}}">
-  <view class="loader">
+<view class="loading-mask" wx:if="{{isClearingData}}" catchtouchmove="noop">
+  <view class="loader" catchtouchmove="noop">
     <text class="loader-label">正在清空数据...</text>
     <view class="loading-bar"></view>
     <view style="margin-top: 20rpx; font-size: 24rpx; color: #666;">
@@ -1073,8 +1083,8 @@
 </view>
 
 <!-- ================= 定位权限提示遮罩 ================= -->
-<view class="location-permission-mask" wx:if="{{showLocationPermissionModal}}">
-  <view class="location-permission-content">
+<view class="location-permission-mask" wx:if="{{showLocationPermissionModal}}" catchtouchmove="noop">
+  <view class="location-permission-content" catchtouchmove="noop">
     <view class="location-permission-icon">📍</view>
     <text class="location-permission-title">需要获取您的位置信息</text>
     <text class="location-permission-desc">用于展示附近维修门店和计算配送距离</text>
@@ -1087,8 +1097,8 @@
 </view>
 
 <!-- ================= 智能分析弹窗 ================= -->
-<view class="smart-paste-mask" wx:if="{{showSmartAnalyzeModal}}" style="z-index: 99999;">
-  <view class="smart-paste-box">
+<view class="smart-paste-mask" wx:if="{{showSmartAnalyzeModal}}" catchtouchmove="noop">
+  <view class="smart-paste-box" catchtouchmove="noop">
     <view class="sp-title">智能分析</view>
     <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
     <textarea 
@@ -1102,6 +1112,78 @@
     <view class="sp-btn-row">
       <view class="sp-btn cancel" bindtap="closeSmartAnalyzeModal">取消</view>
       <view class="sp-btn confirm" bindtap="confirmSmartAnalyze">智能分析</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 物流查询弹窗 ================= -->
+<view class="logistics-modal-mask" wx:if="{{showLogisticsModal}}" bindtap="closeLogisticsModal" catchtouchmove="noop">
+  <view class="logistics-modal-box" catchtap="noop" catchtouchmove="noop">
+    
+    <!-- 1. 品牌头部 -->
+    <view class="logistics-header">
+      <view class="brand-tag">MT-摩改社保障你的物流</view>
+      <view class="close-btn" bindtap="closeLogisticsModal">✕</view>
+    </view>
+
+    <view class="logistics-modal-content">
+      
+      <!-- 2. 核心信息区 -->
+      <view class="logistics-info-card">
+        <view class="info-row-main">
+          <text class="tracking-number">{{currentTrackingId}}</text>
+          <view class="copy-btn" bindtap="copyTrackingId" data-sn="{{currentTrackingId}}">复制</view>
+        </view>
+        <view class="info-row-sub">
+          <text class="company-name">{{logisticsData.express_company_name || '查询中...'}}</text>
+          <view class="status-tag" wx:if="{{logisticsData.status_text}}">{{logisticsData.status_text}}</view>
+        </view>
+      </view>
+      
+      <!-- 3. 加载状态 -->
+      <view class="logistics-loading" wx:if="{{logisticsLoading}}">
+        <view class="mt-loader"></view>
+      </view>
+      
+      <!-- 4. 错误提示 -->
+      <view class="logistics-error" wx:if="{{logisticsError && !logisticsLoading}}">
+        <text class="error-icon">⚠️</text>
+        <text class="error-text">{{logisticsError}}</text>
+      </view>
+      
+      <!-- 5. 物流轨迹 (优化版：轴线左置，内容全宽) -->
+      <scroll-view scroll-y class="logistics-scroll" enable-back-to-top="{{true}}" wx:if="{{logisticsData && !logisticsLoading}}">
+        <view class="timeline-container">
+          <view class="timeline-item" wx:for="{{logisticsData.path_list}}" wx:key="index">
+            
+            <!-- 左侧：轴线 -->
+            <view class="timeline-axis">
+              <view class="dot {{index === 0 ? 'active' : ''}}"></view>
+              <view class="line" wx:if="{{index < logisticsData.path_list.length - 1}}"></view>
+            </view>
+            
+            <!-- 右侧：时间 + 内容 -->
+            <view class="timeline-content-wrapper {{index === 0 ? 'active' : ''}}">
+              <!-- 时间行 -->
+              <view class="timeline-header">
+                <text class="time-full" wx:if="{{item._dateStr}}">{{item._dateStr}} {{item.time}}</text>
+                <text class="time-full" wx:else>{{item.time}}</text>
+              </view>
+              <!-- 内容行 -->
+              <view class="timeline-body">
+                <text class="desc-text" selectable="true">{{item.desc}}</text>
+              </view>
+            </view>
+
+          </view>
+        </view>
+        
+        <!-- 无轨迹信息 -->
+        <view class="logistics-empty" wx:if="{{!logisticsData.path_list || logisticsData.path_list.length === 0}}">
+          <text>暂无物流轨迹信息</text>
+        </view>
+      </scroll-view>
+      
     </view>
   </view>
 </view>

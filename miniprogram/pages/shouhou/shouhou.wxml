@@ -257,8 +257,8 @@
 </view>
 
 <!-- 6. 故障视频预览弹窗 -->
-<view class="dark-mask" wx:if="{{showVideoPreview}}" bindtap="closeVideoPreview"></view>
-<view class="video-preview-modal" wx:if="{{showVideoPreview}}">
+<view class="dark-mask" wx:if="{{showVideoPreview}}" bindtap="closeVideoPreview" catchtouchmove="noop"></view>
+<view class="video-preview-modal" wx:if="{{showVideoPreview}}" catchtouchmove="noop">
   <view class="video-preview-box">
     <view class="video-preview-close" bindtap="closeVideoPreview">✕</view>
     <video src="{{tempVideoPath}}" controls autoplay object-fit="contain" class="video-preview-player"></video>
@@ -268,7 +268,7 @@
 <!-- ================= 核心弹窗区域 ================= -->
 
 <!-- 1. 加入购物车成功弹窗 -->
-<view class="success-mask" wx:if="{{showCartSuccess}}">
+<view class="success-mask" wx:if="{{showCartSuccess}}" catchtouchmove="noop">
   <view class="success-box">
     <view class="s-icon">✔</view>
     <view class="s-title">已加入购物车</view>
@@ -281,9 +281,9 @@
 </view>
 
 <!-- ================= 2. 订单确认/结算弹窗 ================= -->
-<view class="dark-mask" wx:if="{{showOrderModal}}" bindtap="closeOrderModal"></view>
+<view class="dark-mask" wx:if="{{showOrderModal}}" bindtap="closeOrderModal" catchtouchmove="noop"></view>
 
-<view class="overlay full-screen-overlay {{showOrderModal ? 'active' : ''}}" style="z-index: 600;">
+<view class="overlay full-screen-overlay {{showOrderModal ? 'active' : ''}}" style="z-index: 600;" catchtouchmove="noop">
   <!-- 顶部 -->
   <view class="checkout-header">
     <view class="nav-close" bindtap="closeOrderModal">✕</view>
@@ -419,8 +419,8 @@
 </view>
 
   <!-- 3. 管理员上传弹窗 -->
-  <view class="modal-mask" wx:if="{{showModal}}">
-    <view class="modal-box">
+  <view class="modal-mask" wx:if="{{showModal}}" catchtouchmove="noop">
+    <view class="modal-box" catchtouchmove="noop">
       <view class="modal-header">
         <text class="modal-title">{{modalMode === 'part' ? '添加新配件' : '发布新教程'}}</text>
       </view>

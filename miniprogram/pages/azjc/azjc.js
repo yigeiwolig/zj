@@ -102,7 +102,7 @@ Page({
     if (options && options.from === 'order') {
       console.log('[azjc] 从订单页进入，直接放行');
       this.checkAdminPrivilege().then(() => {
-        this.loadDataFromCloud();
+      this.loadDataFromCloud();
       });
     } else {
       // 否则进行权限检查
