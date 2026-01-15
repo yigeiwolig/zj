@@ -6,6 +6,7 @@ var qqmapsdk = new QQMapWX({
 
 Page({
   data: {
+    countdownTimer: null, // 🔴 倒计时定时器
     currentOrderIndex: 0,
     showModal: false,
     bluetoothReady: false,
@@ -232,11 +233,7 @@ Page({
   // 🔴 关闭定位权限提示遮罩（拒绝按钮）
   closeLocationPermissionModal() {
     // 不允许关闭，必须授权才能继续
-    wx.showToast({
-      title: '需要授权定位才能使用此功能',
-      icon: 'none',
-      duration: 2000
-    });
+    this._showCustomToast('需要授权定位才能使用此功能', 'none', 2000);
   },
 
   // 🔴 打开设置页面让用户授权
@@ -260,11 +257,7 @@ Page({
           });
         } else {
           // 用户仍未授权，继续等待
-          wx.showToast({
-            title: '请在设置中开启定位权限',
-            icon: 'none',
-            duration: 2000
-          });
+          this._showCustomToast('请在设置中开启定位权限', 'none', 2000);
         }
       }
     });
@@ -423,6 +416,11 @@ Page({
     if (this.ble) {
       this.ble.stopScan();
       this.ble.disconnect();
+    }
+    // 🔴 清除倒计时定时器
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer);
+      this.countdownTimer = null;
     }
   },
 
@@ -1580,6 +1578,136 @@ Page({
     });
   },
 
+  // 🔴 场景B：管理员确认收货
+  confirmReturnReceived(e) {
+    const id = e.currentTarget.dataset.id;
+    
+    this.showMyDialog({
+      title: '确认收货',
+      content: '确认已收到用户寄回的配件？确认后将标记为"售后完结"。',
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) {
+          this.showMyLoading('处理中...');
+          const db = wx.cloud.database();
+          // 标记为售后完结
+          db.collection('shouhou_repair').doc(id).update({
+            data: {
+              returnCompleted: true,
+              returnCompleteTime: db.serverDate(),
+              status: 'RETURN_RECEIVED' // 标记为售后完结状态
+            }
+          }).then(() => {
+            this.hideMyLoading();
+            this.showMyDialog({
+              title: '操作成功',
+              content: '已确认收货，订单已标记为售后完结',
+              showCancel: false,
+              confirmText: '好的',
+              success: () => {
+                this.loadReturnRequiredList(); // 刷新列表
+                this.loadMyActivitiesPromise().catch(() => {}); // 刷新用户端数据
+                this.loadPendingRepairs(); // 刷新待处理列表
+              }
+            });
+          }).catch(err => {
+            this.hideMyLoading();
+            console.error('操作失败:', err);
+            this.showMyDialog({
+              title: '操作失败',
+              content: err.errMsg || '请稍后重试',
+              showCancel: false,
+              confirmText: '知道了'
+            });
+          });
+        }
+      }
+    });
+  },
+
+  // 🔴 场景B：管理员扣除质保
+  deductWarrantyForRepair(e) {
+    const id = e.currentTarget.dataset.id;
+    
+    this.showMyDialog({
+      title: '扣除质保',
+      content: '确认扣除用户30天质保？扣除后将显示"因为配件错误，所以扣除30天质保"。',
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) {
+          this.showMyLoading('处理中...');
+          // 调用云函数扣除质保
+          wx.cloud.callFunction({
+            name: 'deductWarrantyForOverdue',
+            data: {
+              repairId: id,
+              force: true, // 强制扣除，不检查时间
+              reason: '配件错误' // 扣除原因
+            }
+          }).then((res) => {
+            this.hideMyLoading();
+            
+            console.log('扣除质保结果:', res.result);
+
+            if (res.result && res.result.success) {
+              // 检查是否有成功扣除的记录
+              const resultData = res.result.results;
+              if (resultData && resultData.totalDeducted > 0) {
+                // 成功扣除（云函数已经更新了数据库状态，前端只需刷新）
+                this.showMyDialog({
+                  title: '操作成功',
+                  content: '已扣除用户30天质保',
+                  showCancel: false,
+                  confirmText: '好的',
+                  success: () => {
+                    this.loadReturnRequiredList(); // 刷新列表
+                    this.loadMyActivitiesPromise().catch(() => {}); // 刷新用户端数据
+                    this.loadPendingRepairs(); // 刷新待处理列表
+                  }
+                });
+              } else {
+                // 执行成功但没有扣除任何记录（可能是找不到设备或已扣除）
+                let failReason = '未能扣除质保';
+                if (resultData && resultData.failed && resultData.failed.length > 0) {
+                  failReason += '：' + resultData.failed[0].reason;
+                } else if (res.result.message) {
+                  failReason += '：' + res.result.message;
+                }
+                
+                this.showMyDialog({
+                  title: '操作失败',
+                  content: failReason,
+                  showCancel: false,
+                  confirmText: '我知道了'
+                });
+              }
+            } else {
+              this.showMyDialog({
+                title: '操作失败',
+                content: (res.result && res.result.message) || res.result?.error || '扣除质保失败，请稍后重试',
+                showCancel: false,
+                confirmText: '知道了'
+              });
+            }
+          }).catch(err => {
+            this.hideMyLoading();
+            console.error('云函数调用失败:', err);
+            this.showMyDialog({
+              title: '操作失败',
+              content: '请求失败：' + (err.errMsg || '网络错误'),
+              showCancel: false,
+              confirmText: '知道了'
+            });
+          });
+        }
+      }
+    });
+  },
+
   // 【新增】管理员标记需寄回订单为已完成（删除订单）
   completeReturnRequired(e) {
     const id = e.currentTarget.dataset.id;
@@ -1590,39 +1718,41 @@ Page({
       showCancel: true,
       confirmText: '确定',
       cancelText: '取消',
-      callback: () => {
-        this.showMyLoading('处理中...');
-        const db = wx.cloud.database();
-        // 标记为已完成（会从列表中移除）
-        db.collection('shouhou_repair').doc(id).update({
-          data: {
-            returnCompleted: true,
-            returnCompleteTime: db.serverDate(),
-            status: 'COMPLETED' // 标记为已完成状态
-          }
-        }).then(() => {
-          this.hideMyLoading();
-          this.showMyDialog({
-            title: '操作成功',
-            content: '订单已完成，已从列表中移除',
-            showCancel: false,
-            confirmText: '好的',
-            callback: () => {
-              this.loadReturnRequiredList(); // 刷新列表
-              this.loadMyActivitiesPromise().catch(() => {}); // 刷新用户端数据，移除用户端的卡片
-              this.loadPendingRepairs(); // 刷新待处理列表
+      success: (res) => {
+        if (res.confirm) {
+          this.showMyLoading('处理中...');
+          const db = wx.cloud.database();
+          // 标记为已完成（会从列表中移除）
+          db.collection('shouhou_repair').doc(id).update({
+            data: {
+              returnCompleted: true,
+              returnCompleteTime: db.serverDate(),
+              status: 'COMPLETED' // 标记为已完成状态
             }
+          }).then(() => {
+            this.hideMyLoading();
+            this.showMyDialog({
+              title: '操作成功',
+              content: '订单已完成，已从列表中移除',
+              showCancel: false,
+              confirmText: '好的',
+              success: () => {
+                this.loadReturnRequiredList(); // 刷新列表
+                this.loadMyActivitiesPromise().catch(() => {}); // 刷新用户端数据，移除用户端的卡片
+                this.loadPendingRepairs(); // 刷新待处理列表
+              }
+            });
+          }).catch(err => {
+            this.hideMyLoading();
+            console.error('操作失败:', err);
+            this.showMyDialog({
+              title: '操作失败',
+              content: err.errMsg || '请稍后重试',
+              showCancel: false,
+              confirmText: '知道了'
+            });
           });
-        }).catch(err => {
-          this.hideMyLoading();
-          console.error('操作失败:', err);
-          this.showMyDialog({
-            title: '操作失败',
-            content: err.errMsg || '请稍后重试',
-            showCancel: false,
-            confirmText: '知道了'
-          });
-        });
+        }
       }
     });
   },
@@ -1841,6 +1971,25 @@ Page({
   // [交互] 点击取消
   closeCustomDialog() {
     this.setData({ 'dialog.show': false });
+  },
+
+  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
+  _showCustomToast(title, icon = 'none', duration = 2000) {
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showToast) {
+        toast.showToast({ title, icon, duration });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[my] custom-toast 组件未找到，使用降级方案');
+        wx.showToast({ title, icon, duration });
+      }
+    };
+    tryShow();
   },
 
   // 【新增】自动消失提示（无按钮，2秒后自动消失）
@@ -2621,26 +2770,68 @@ Page({
         let statusNum = 0; // 统一状态值，用于过滤逻辑
         
         // 处理各种状态
-        if (i.status === 'REPAIR_COMPLETED_SENT') {
+        // 🔴 优先检查扣除质保状态
+        if (i.warrantyDeducted || i.isWarrantyDeducted) {
+          if (i.deductionReason === '配件错误' || i.deductionReason === 'wrong_part') {
+            statusText = '因为配件错误，所以扣除30天质保';
+            statusClass = 'fail';
+          } else if (i.deductionReason === '超时' || i.deductionReason === 'timeout') {
+            statusText = '因超时，扣除30天质保';
+            statusClass = 'fail';
+          } else {
+            statusText = '已扣除30天质保';
+            statusClass = 'fail';
+          }
+          statusNum = 1; // 已处理
+        } else if (i.status === 'RETURN_RECEIVED' || i.status === 'COMPLETED') {
+          // 🔴 场景A：售后完结；场景B：已维修完成
+          if (i.returnStatus !== 'PENDING_RETURN') {
+            statusText = '售后完结';
+            statusClass = 'success';
+          } else {
+            statusText = '已维修完成';
+            statusClass = 'success';
+          }
+          statusNum = 1; // 已处理
+        } else if (i.status === 'REPAIR_COMPLETED_SENT') {
           statusText = '已维修完成';
           statusClass = 'success';
           statusNum = 1; // 已处理
         } else if (i.status === 'USER_SENT' || i.returnStatus === 'USER_SENT') {
-          statusText = '正在维修中';
-          statusClass = 'processing';
+          // 🔴 场景A：如果returnStatus不是PENDING_RETURN，显示"运输中"
+          if (i.returnStatus !== 'PENDING_RETURN') {
+            statusText = '运输中';
+            statusClass = 'processing';
+          } else {
+            // 场景B：显示"正在维修中"
+            statusText = '正在维修中';
+            statusClass = 'processing';
+          }
           statusNum = 0; // 维修中
         } else if (i.status === 'SHIPPED') {
-          statusText = '配件已寄出';
-          statusClass = 'success';
+          // 🔴 场景A：如果needReturn为true，显示"需寄回故障配件"（红色），否则显示"配件已寄出"（绿色）
+          if (i.needReturn && i.returnStatus !== 'PENDING_RETURN') {
+            statusText = '需寄回故障配件';
+            statusClass = 'fail';
+          } else {
+            statusText = '配件已寄出';
+            statusClass = 'success';
+          }
           statusNum = 1; // 已处理
         } else if (i.status === 'TUTORIAL') {
           statusText = '查看教程可修复'; // 用户看到这个状态
           statusClass = 'info'; // 蓝色
           statusNum = 1; // 已处理
-        } else if (i.needReturn && !i.returnCompleted && i.status !== 'REPAIR_COMPLETED_SENT') {
-          // 🔴 需要寄回维修，且未完成寄回，显示"待寄回维修"
-          statusText = '待寄回维修';
-          statusClass = 'processing';
+        } else if (i.needReturn && !i.returnCompleted && i.status !== 'REPAIR_COMPLETED_SENT' && i.status !== 'SHIPPED') {
+          // 🔴 场景B：需要寄回维修，且未完成寄回，显示"需要寄回维修"（红色）
+          // 注意：场景A（status === 'SHIPPED'）已经在上面处理了，这里只处理场景B
+          if (i.returnStatus === 'PENDING_RETURN') {
+            statusText = '需要寄回维修';
+            statusClass = 'fail';
+          } else {
+            statusText = '待寄回维修';
+            statusClass = 'processing';
+          }
           statusNum = 0; // 待处理
         } else if (i.status === 'PENDING') {
           statusText = '工程师审核中';
@@ -2691,11 +2882,26 @@ Page({
       );
       let myReturnRequiredRepair = returnRequiredRepairs.length > 0 ? returnRequiredRepairs[0] : null;
       
-      // 格式化时间用于显示
+      // 格式化时间用于显示，并计算倒计时（场景A：管理员录单备件寄出）
       if (myReturnRequiredRepair && myReturnRequiredRepair.createTime) {
+        // 🔴 场景A：计算30天倒计时（returnStatus !== 'PENDING_RETURN'）
+        let countdownDays = null;
+        let isOverdue = false;
+        if (myReturnRequiredRepair.returnStatus !== 'PENDING_RETURN' && myReturnRequiredRepair.status === 'SHIPPED') {
+          const now = new Date();
+          const startTime = myReturnRequiredRepair.solveTime ? new Date(myReturnRequiredRepair.solveTime) : (myReturnRequiredRepair.createTime ? new Date(myReturnRequiredRepair.createTime) : null);
+          if (startTime) {
+            const daysDiff = Math.floor((now - startTime) / (1000 * 60 * 60 * 24));
+            countdownDays = Math.max(0, 30 - daysDiff);
+            isOverdue = daysDiff >= 30;
+          }
+        }
+        
         myReturnRequiredRepair = {
           ...myReturnRequiredRepair,
-          createTime: this.formatTimeSimple(myReturnRequiredRepair.createTime)
+          createTime: this.formatTimeSimple(myReturnRequiredRepair.createTime),
+          countdownDays: countdownDays,
+          isOverdue: isOverdue
         };
       }
       
@@ -2706,6 +2912,8 @@ Page({
         console.log('✅ [loadMyActivities] 数据已更新到页面，当前 myActivityList 长度:', this.data.myActivityList.length);
         if (myReturnRequiredRepair) {
           console.log('✅ [loadMyActivities] 检测到需寄回维修单:', myReturnRequiredRepair._id);
+          // 🔴 启动倒计时定时器
+          this.startCountdownTimer();
         }
         resolve(); // 🔴 Promise 完成
       });
@@ -2719,6 +2927,37 @@ Page({
   // 🔴 保留原方法以兼容其他地方的调用
   loadMyActivities() {
     this.loadMyActivitiesPromise().catch(() => {});
+  },
+
+  // 🔴 启动倒计时定时器
+  startCountdownTimer() {
+    if (this.countdownTimer) {
+      clearInterval(this.countdownTimer);
+    }
+    
+    this.countdownTimer = setInterval(() => {
+      const repair = this.data.myReturnRequiredRepair;
+      if (repair && repair.returnStatus !== 'PENDING_RETURN' && repair.status === 'SHIPPED' && !repair.returnTrackingId) {
+        const now = new Date();
+        const startTime = repair.solveTime ? new Date(repair.solveTime) : (repair.createTime ? new Date(repair.createTime) : null);
+        if (startTime) {
+          const daysDiff = Math.floor((now - startTime) / (1000 * 60 * 60 * 24));
+          const countdownDays = Math.max(0, 30 - daysDiff);
+          const isOverdue = daysDiff >= 30;
+          
+          this.setData({
+            'myReturnRequiredRepair.countdownDays': countdownDays,
+            'myReturnRequiredRepair.isOverdue': isOverdue
+          });
+        }
+      } else {
+        // 如果不符合条件，清除定时器
+        if (this.countdownTimer) {
+          clearInterval(this.countdownTimer);
+          this.countdownTimer = null;
+        }
+      }
+    }, 1000); // 每秒更新一次
   },
 
   // 【新增】打开寄回运单号录入
@@ -2955,6 +3194,45 @@ Page({
       return;
     }
     
+    // 🔴 检查是否超时，如果超时则自动扣除质保
+    const repair = myReturnRequiredRepair;
+    const now = new Date();
+    const solveTime = repair.solveTime ? new Date(repair.solveTime) : (repair.createTime ? new Date(repair.createTime) : null);
+    
+    if (solveTime) {
+      const daysDiff = Math.floor((now - solveTime) / (1000 * 60 * 60 * 24));
+      if (daysDiff > 30 && !repair.warrantyDeducted && !repair.isWarrantyDeducted) {
+        // 超时了，自动扣除质保
+        wx.cloud.callFunction({
+          name: 'deductWarrantyForOverdue',
+          data: {
+            repairId: repair._id,
+            force: true,
+            reason: '超时' // 超时原因
+          }
+        }).then(() => {
+          // 扣除质保后，继续提交运单号
+          this.submitReturnTrackingId(myReturnRequiredRepair._id, trackingId, () => {
+            // 提交成功后的回调：关闭弹窗
+            this.setData({
+              showReturnAddressModal: false,
+              returnTrackingIdInput: ''
+            });
+          });
+        }).catch(err => {
+          console.error('自动扣除质保失败:', err);
+          // 即使扣除失败，也继续提交运单号
+          this.submitReturnTrackingId(myReturnRequiredRepair._id, trackingId, () => {
+            this.setData({
+              showReturnAddressModal: false,
+              returnTrackingIdInput: ''
+            });
+          });
+        });
+        return;
+      }
+    }
+    
     // 🔴 调用原来的 submitReturnTrackingId 函数（保留原来的逻辑）
     this.submitReturnTrackingId(myReturnRequiredRepair._id, trackingId, () => {
       // 提交成功后的回调：关闭弹窗
@@ -2975,20 +3253,39 @@ Page({
     }
     
     const repair = myReturnRequiredRepair;
-    // 🔴 场景B：管理员手动标记的需寄回，只需要运单号，不需要地址
+    // 🔴 场景A：管理员录单备件寄出，只需要运单号；场景B：管理员手动标记，需要地址和运单号
     const isAdminMarkedReturn = repair.returnStatus === 'PENDING_RETURN';
-    const needsAddress = !isAdminMarkedReturn && !repair.returnAddress;
+    const needsAddress = isAdminMarkedReturn && !repair.returnAddress;
     const trackingId = returnTrackingIdInput.trim();
     const needsTrackingId = !repair.returnTrackingId && trackingId;
     
-    // 🔴 场景B：只需要运单号
+    // 🔴 场景B：管理员手动标记，需要地址和运单号
     if (isAdminMarkedReturn) {
+      // 检查地址是否完整
+      if (needsAddress) {
+        if (!userReturnAddress.name || !userReturnAddress.name.trim()) {
+          this.showAutoToast('提示', '请填写收件人姓名');
+          return;
+        }
+        if (!userReturnAddress.phone || !userReturnAddress.phone.trim()) {
+          this.showAutoToast('提示', '请填写收件人手机号');
+          return;
+        }
+        if (!/^1[3-9]\d{9}$/.test(userReturnAddress.phone)) {
+          this.showAutoToast('提示', '请输入正确的11位手机号');
+          return;
+        }
+        if (!userReturnAddress.address || !userReturnAddress.address.trim()) {
+          this.showAutoToast('提示', '请填写详细地址');
+          return;
+        }
+      }
       if (!trackingId) {
         this.showAutoToast('提示', '请输入运单号');
         return;
       }
     } else {
-      // 场景A：正常需寄回维修流程
+      // 场景A：管理员录单备件寄出，只需要运单号
       // 如果既没有地址也没有运单号，提示至少填写一项
       if (needsAddress && !needsTrackingId) {
         // 检查地址是否完整
@@ -3050,8 +3347,15 @@ Page({
     if (needsTrackingId) {
       updateData.returnTrackingId = trackingId;
       updateData.returnTrackingTime = db.serverDate();
-      updateData.returnStatus = 'USER_SENT';
-      updateData.status = 'USER_SENT';
+      // 🔴 场景B：保持 returnStatus 为 'PENDING_RETURN'，只更新 status
+      if (isAdminMarkedReturn) {
+        // 场景B：保持 returnStatus: 'PENDING_RETURN'，只更新 status
+        updateData.status = 'USER_SENT';
+      } else {
+        // 场景A：更新 returnStatus 和 status
+        updateData.returnStatus = 'USER_SENT';
+        updateData.status = 'USER_SENT';
+      }
     }
     
     // 执行更新

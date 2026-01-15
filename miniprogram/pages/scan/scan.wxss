@@ -573,6 +573,31 @@ page {
   height: 50rpx; 
   transition: filter 0.3s ease;
 }
+
+/* 🔴 校准中图标样式 */
+.calibrating-icon-wrap {
+  width: 120rpx; 
+  height: 120rpx; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  margin-bottom: 30rpx;
+}
+
+.calibrating-spinner {
+  width: 80rpx;
+  height: 80rpx;
+  border: 6rpx solid #E5E5EA;
+  border-top-color: #1C1C1E;
+  border-radius: 50%;
+  animation: calibratingRotate 1s linear infinite;
+}
+
+@keyframes calibratingRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
 .pass-title { font-size: 36rpx; font-weight: 800; color: #1c1c1e; margin-bottom: 30rpx; }
 .pass-desc { font-size: 26rpx; color: #888; margin-bottom: 40rpx; text-align: center; line-height: 1.6; white-space: pre-wrap; }
 .pass-input {

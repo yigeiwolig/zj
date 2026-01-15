@@ -1,0 +1,11 @@
+{
+  "_id": "blocking_rules",
+  "is_active": true,
+  "blocked_provinces": ["广东省"],
+  "blocked_cities": [
+    {
+      "city": "佛山市",
+      "district": "南海区"
+    }
+  ]
+}

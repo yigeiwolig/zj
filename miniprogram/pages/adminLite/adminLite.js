@@ -75,15 +75,12 @@ Page({
   // 管理员模式手动切换开关
   toggleAdminMode() {
     if (!this.data.isAuthorized) {
-      wx.showToast({ title: '无权限', icon: 'none' });
+      this._showCustomToast('无权限', 'none');
       return;
     }
     const nextState = !this.data.isAdmin;
     this.setData({ isAdmin: nextState });
-    wx.showToast({
-      title: nextState ? '管理模式开启' : '已回到用户模式',
-      icon: 'none'
-    });
+    this._showCustomToast(nextState ? '管理模式开启' : '已回到用户模式', 'none');
   },
 
   onShow() {
@@ -148,22 +145,22 @@ Page({
     const productList = this.data.productList || [];
     
     if (index < 0 || index >= productList.length) {
-      wx.showToast({ title: '产品数据错误', icon: 'none' });
+      this._showCustomToast('产品数据错误', 'none');
       return;
     }
     
     const product = productList[index];
     if (!product) {
-      wx.showToast({ title: '产品不存在', icon: 'none' });
+      this._showCustomToast('产品不存在', 'none');
       return;
     }
     
     // 如果没有号码，提示设置
     if (!product.jumpNumber) {
       if (this.data.isAdmin) {
-        wx.showToast({ title: '请先设置号码', icon: 'none' });
+        this._showCustomToast('请先设置号码', 'none');
       } else {
-        wx.showToast({ title: '该产品未设置跳转号码', icon: 'none' });
+        this._showCustomToast('该产品未设置跳转号码', 'none');
       }
       return;
     }
@@ -173,7 +170,7 @@ Page({
       url: `/pages/shop/shop?jumpNumber=${product.jumpNumber}`,
       fail: (err) => {
         console.error('[adminLite] 跳转失败:', err);
-        wx.showToast({ title: '跳转失败', icon: 'none' });
+        this._showCustomToast('跳转失败', 'none');
       }
     });
   },
@@ -187,7 +184,7 @@ Page({
     
     if (!this.data.isAdmin) {
       console.log('[adminLite] 不是管理员模式');
-      wx.showToast({ title: '请先进入管理员模式', icon: 'none' });
+      this._showCustomToast('请先进入管理员模式', 'none');
       return;
     }
     
@@ -197,14 +194,14 @@ Page({
     
     if (idx < 0 || idx >= productList.length) {
       console.error('[adminLite] 产品索引错误:', idx, '列表长度:', productList.length);
-      wx.showToast({ title: '产品索引错误', icon: 'none' });
+      this._showCustomToast('产品索引错误', 'none');
       return;
     }
     
     const product = productList[idx];
     if (!product) {
       console.error('[adminLite] 产品不存在');
-      wx.showToast({ title: '产品数据错误', icon: 'none' });
+      this._showCustomToast('产品数据错误', 'none');
       return;
     }
     
@@ -222,14 +219,14 @@ Page({
         // 校验：必须是纯数字
         const numValue = v.trim();
         if (numValue && !/^\d+$/.test(numValue)) {
-          wx.showToast({ title: '号码必须是纯数字', icon: 'none' });
+          this._showCustomToast('号码必须是纯数字', 'none');
           return;
         }
         
         // 校验：唯一性（需要检查shop_series集合中所有产品的号码）
         if (numValue) {
           if (!this.db) {
-            wx.showToast({ title: '数据库未初始化', icon: 'none' });
+            this._showCustomToast('数据库未初始化', 'none');
             return;
           }
           
@@ -242,7 +239,7 @@ Page({
               // 检查是否有其他产品使用了这个号码
               const otherProduct = res.data.find(item => item._id !== product._id);
               if (otherProduct) {
-                wx.showToast({ title: '号码已存在，请使用其他号码', icon: 'none' });
+                this._showCustomToast('号码已存在，请使用其他号码', 'none');
                 return;
               }
               
@@ -251,7 +248,7 @@ Page({
             })
             .catch(err => {
               console.error('[adminLite] 校验号码失败:', err);
-              wx.showToast({ title: '校验失败', icon: 'none' });
+              this._showCustomToast('校验失败', 'none');
             });
         } else {
           // 清空号码
@@ -266,7 +263,7 @@ Page({
   // ========================================================
   updateProductJumpNumber(productId, jumpNumber, localIdx) {
     if (!this.db || !productId) {
-      wx.showToast({ title: '数据错误', icon: 'none' });
+      this._showCustomToast('数据错误', 'none');
       return;
     }
     
@@ -277,10 +274,10 @@ Page({
       const updatedList = [...this.data.productList];
       updatedList[localIdx].jumpNumber = jumpNumber;
       this.setData({ productList: updatedList });
-      wx.showToast({ title: '号码已更新', icon: 'success' });
+      this._showCustomToast('号码已更新', 'success');
     }).catch(err => {
       console.error('[adminLite] 更新号码失败:', err);
-      wx.showToast({ title: '更新失败', icon: 'none' });
+      this._showCustomToast('更新失败', 'none');
     });
   },
 
@@ -320,7 +317,7 @@ Page({
   async handleSubmit(event) {
     const formData = event.detail.value;
     if (!formData.title) {
-      wx.showToast({ title: '标题必填', icon: 'none' });
+      this._showCustomToast('标题必填', 'none');
       return;
     }
     this.setData({ submitting: true });
@@ -334,8 +331,31 @@ Page({
       submitting: false,
       lastSubmission: submission
     });
-    wx.showToast({ title: '已保存至本地', icon: 'success' });
-  }
+    this._showCustomToast('已保存至本地', 'success');
+  },
+
+  // ===============================================
+  // 🔴 统一的自定义弹窗方法（替换所有 wx.showToast）
+  // ===============================================
+  
+  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
+  _showCustomToast(title, icon = 'none', duration = 2000) {
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showToast) {
+        toast.showToast({ title, icon, duration });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[adminLite] custom-toast 组件未找到，使用降级方案');
+        wx.showToast({ title, icon, duration });
+      }
+    };
+    tryShow();
+  },
 });
 
 

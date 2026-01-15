@@ -322,7 +322,7 @@ Page({
       isAdmin: newState,
       adminSubMode: 'edit' // 默认切换到编辑模式
     });
-    wx.showToast({ title: newState ? '管理模式' : '浏览模式', icon: 'none' });
+    this._showCustomToast(newState ? '管理模式' : '浏览模式', 'none');
 
     // 【新增】如果是开启管理员，立刻拉取待审核视频
     if (newState) {
@@ -334,10 +334,7 @@ Page({
   switchAdminSubMode(e) {
     const mode = e.currentTarget.dataset.mode;
     this.setData({ adminSubMode: mode });
-    wx.showToast({ 
-      title: mode === 'edit' ? '视频编辑模式' : '管理现有视频模式', 
-      icon: 'none' 
-    });
+    this._showCustomToast(mode === 'edit' ? '视频编辑模式' : '管理现有视频模式', 'none');
   },
 
   // ==========================================
@@ -497,7 +494,7 @@ Page({
   approvePending(e) {
     const item = e.currentTarget.dataset.item;
     
-    wx.showModal({
+    this._showCustomModal({
       title: '确认通过',
       content: '该视频将发布到公开案例列表，并自动赠送30天延保',
       success: (res) => {
@@ -514,18 +511,18 @@ Page({
           }).then(result => {
             this.hideMyLoading();
             if (result.result.success) {
-              wx.showToast({ title: result.result.msg || '已发布', icon: 'success' });
+              this._showCustomToast(result.result.msg || '已发布', 'success');
               
               // 刷新两个列表
               this.fetchPendingVideos(); 
               this.fetchCloudData();
             } else {
-              wx.showToast({ title: result.result.errMsg || '操作失败', icon: 'none' });
+              this._showCustomToast(result.result.errMsg || '操作失败', 'none');
             }
           }).catch(err => {
             getApp().hideLoading();
             console.error('审核失败:', err);
-            wx.showToast({ title: '操作失败', icon: 'none' });
+            this._showCustomToast('操作失败', 'none');
           });
         }
       }
@@ -539,7 +536,7 @@ Page({
     if (!item) return;
     
     // 使用输入框让管理员填写拒绝理由
-    wx.showModal({
+    this._showCustomModal({
       title: '拒绝理由',
       editable: true,
       placeholderText: '请输入拒绝理由（必填）',
@@ -548,7 +545,7 @@ Page({
         if (res.confirm) {
           const rejectReason = res.content.trim();
           if (!rejectReason) {
-            wx.showToast({ title: '请填写拒绝理由', icon: 'none' });
+            this._showCustomToast('请填写拒绝理由', 'none');
             return;
           }
           
@@ -565,15 +562,15 @@ Page({
           }).then(result => {
             getApp().hideLoading();
             if (result.result.success) {
-              wx.showToast({ title: result.result.msg || '已驳回', icon: 'none' });
+              this._showCustomToast(result.result.msg || '已驳回', 'none');
               this.fetchPendingVideos(); // 刷新列表
             } else {
-              wx.showToast({ title: result.result.errMsg || '操作失败', icon: 'none' });
+              this._showCustomToast(result.result.errMsg || '操作失败', 'none');
             }
           }).catch(err => {
             getApp().hideLoading();
             console.error('拒绝失败:', err);
-            wx.showToast({ title: '操作失败', icon: 'none' });
+            this._showCustomToast('操作失败', 'none');
           });
         }
       }
@@ -586,7 +583,7 @@ Page({
     const item = this.data.pendingList.find(i => i._id === id);
     if (!item) return;
     
-    wx.showModal({
+    this._showCustomModal({
       title: '确认采纳',
       content: '将通知用户审核通过并发放奖励，但不会直接发布此视频（需您手动打码后上传）。',
       success: (res) => {
@@ -606,11 +603,11 @@ Page({
             success: (result) => {
               getApp().hideLoading();
               if (result.result && result.result.success) {
-                wx.showToast({ title: result.result.msg || '已标记', icon: 'success' });
+                this._showCustomToast(result.result.msg || '已标记', 'success');
                 this.fetchPendingVideos(); // 刷新列表
               } else {
                 // 如果失败，把错误弹出来看
-                wx.showModal({ 
+                this._showCustomModal({ 
                   title: '操作失败', 
                   content: result.result ? result.result.errMsg || '未知错误' : '返回数据异常',
                   showCancel: false
@@ -620,7 +617,7 @@ Page({
             fail: (err) => {
               getApp().hideLoading();
               console.error('标记失败:', err);
-              wx.showModal({ 
+              this._showCustomModal({ 
                 title: '调用失败', 
                 content: err.errMsg || '网络错误，请重试',
                 showCancel: false
@@ -655,7 +652,7 @@ Page({
         fail: err => {
           getApp().hideLoading();
           console.error('❌ [下载] 云存储下载失败:', err);
-          wx.showToast({ title: '下载文件失败', icon: 'none' });
+          this._showCustomToast('下载文件失败', 'none');
         }
       });
     } else if (fileID.startsWith('http://') || fileID.startsWith('https://')) {
@@ -667,13 +664,13 @@ Page({
             this.saveVideoToAlbum(res.tempFilePath);
           } else {
             getApp().hideLoading();
-            wx.showToast({ title: '下载失败', icon: 'none' });
+            this._showCustomToast('下载失败', 'none');
           }
         },
         fail: err => {
           getApp().hideLoading();
           console.error('❌ [下载] 临时 URL 下载失败:', err);
-          wx.showToast({ title: '下载文件失败', icon: 'none' });
+          this._showCustomToast('下载文件失败', 'none');
         }
       });
     } else {
@@ -686,7 +683,7 @@ Page({
         fail: err => {
           getApp().hideLoading();
           console.error('❌ [下载] 下载失败:', err);
-          wx.showToast({ title: '下载文件失败', icon: 'none' });
+          this._showCustomToast('下载文件失败', 'none');
         }
       });
     }
@@ -698,14 +695,14 @@ Page({
       filePath: tempFilePath,
       success: () => {
         getApp().hideLoading();
-        wx.showToast({ title: '已保存到相册', icon: 'success' });
+        this._showCustomToast('已保存到相册', 'success');
       },
       fail: (err) => {
         getApp().hideLoading();
         console.error('❌ [保存] 保存到相册失败:', err);
         // 如果用户拒绝授权，提示去设置
         if (err.errMsg && err.errMsg.indexOf('auth') > -1) {
-          wx.showModal({
+          this._showCustomModal({
             title: '权限不足',
             content: '需要保存视频权限，请在设置中开启',
             confirmText: '去设置',
@@ -714,7 +711,7 @@ Page({
             }
           });
         } else {
-          wx.showToast({ title: '保存失败: ' + (err.errMsg || '未知错误'), icon: 'none' });
+          this._showCustomToast('保存失败: ' + (err.errMsg || '未知错误'), 'none');
         }
       }
     });
@@ -790,7 +787,7 @@ Page({
           // 🔴 调试：确保数据存在
           if (!this.data.categoryArray || this.data.categoryArray.length === 0) {
             console.error('❌ [错误] categoryArray 为空！');
-            wx.showToast({ title: '数据错误：categoryArray为空', icon: 'none', duration: 3000 });
+            this._showCustomToast('数据错误：categoryArray为空', 'none', 3000);
           }
           // 🔴 修复：按照 zj4 的写法，打开表单时不重置 categoryIndex 和 modelIndex
           this.setData({
@@ -808,7 +805,7 @@ Page({
         },
         fail: (err) => {
           console.error('❌ 选择视频失败:', err);
-          wx.showToast({ title: '选择失败: ' + (err.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+          this._showCustomToast('选择失败: ' + (err.errMsg || '未知错误'), 'none', 3000);
         }
       });
     }, 300);
@@ -841,7 +838,7 @@ Page({
           this.openCamera();
         } else {
           console.error('❌ openCamera 方法不存在');
-          wx.showToast({ title: '打开相机失败：方法不存在', icon: 'none', duration: 3000 });
+          this._showCustomToast('打开相机失败：方法不存在', 'none', 3000);
         }
       }, 300);
     }).catch((err) => {
@@ -868,7 +865,7 @@ Page({
           
           // 如果有权限被拒绝且不可再次请求，提示用户去设置
           if (cameraAuth === false || recordAuth === false) {
-            wx.showModal({
+            this._showCustomModal({
               title: '需要权限',
               content: '录制视频需要摄像头和麦克风权限，请在设置中开启',
               confirmText: '去设置',
@@ -1000,7 +997,7 @@ Page({
       if (targetItem && targetItem.videoUrl) {
         this.setData({ currentVideo: targetItem, showVideoPlayer: true });
       } else {
-        wx.showToast({ title: '暂无视频资源', icon: 'none' });
+        this._showCustomToast('暂无视频资源', 'none');
       }
     }
   },
@@ -1193,13 +1190,13 @@ Page({
   submitAdminForm() {
     const { vehicleName, categoryIndex, modelIndex, adminVideoPath, adminThumbPath, categoryValueArray, categoryArray, modelArray, isEditing, editingId } = this.data;
 
-    if (!adminVideoPath) return wx.showToast({ title: '请选择视频', icon: 'none' });
+    if (!adminVideoPath) return this._showCustomToast('请选择视频', 'none');
     // 编辑模式下可以不改封面，新增模式必须有封面
-    if (!isEditing && !adminThumbPath) return wx.showToast({ title: '请选择封面图', icon: 'none' });
-    if (!vehicleName) return wx.showToast({ title: '请填写车型', icon: 'none' });
+    if (!isEditing && !adminThumbPath) return this._showCustomToast('请选择封面图', 'none');
+    if (!vehicleName) return this._showCustomToast('请填写车型', 'none');
     // 🔴 修复：按照 zj4 的写法，只检查是否为 null
-    if (categoryIndex === null) return wx.showToast({ title: '请选分类', icon: 'none' });
-    if (modelIndex === null) return wx.showToast({ title: '请选型号', icon: 'none' });
+    if (categoryIndex === null) return this._showCustomToast('请选分类', 'none');
+    if (modelIndex === null) return this._showCustomToast('请选型号', 'none');
 
     this.setData({ isSubmitting: true });
     getApp().showLoading({ title: isEditing ? '修改中...' : '上传中...', mask: true });
@@ -1276,13 +1273,13 @@ Page({
       console.error(err);
       getApp().hideLoading();
       this.setData({ isSubmitting: false });
-      wx.showToast({ title: '操作失败', icon: 'none' });
+      this._showCustomToast('操作失败', 'none');
     });
   },
 
   finishSubmit(msg) {
     getApp().hideLoading();
-    wx.showToast({ title: msg, icon: 'success' });
+    this._showCustomToast(msg, 'success');
     this.setData({ 
       isSubmitting: false, showAdminForm: false, 
       adminVideoPath: null, adminThumbPath: null,
@@ -1303,7 +1300,7 @@ Page({
   openCamera() { 
     // 校验：必须先绑定设备
     if (this.data.myDevices.length === 0) {
-      wx.showModal({
+      this._showCustomModal({
         title: '无法上传',
         content: '您尚未绑定任何 MT 设备，无法参与延保活动。请先去"我的"页面绑定设备。',
         confirmText: '去绑定',
@@ -1407,7 +1404,7 @@ Page({
       },
       fail: (err) => {
         console.error('录制失败', err);
-        wx.showToast({ title: '录制启动失败', icon: 'none' });
+        this._showCustomToast('录制启动失败', 'none');
         this.setData({ isRecording: false });
       }
     }); 
@@ -1466,7 +1463,7 @@ Page({
                 // 🔴 修复：按照 zj4 的写法，不重置 categoryIndex 和 modelIndex
               }); 
             } else if (save) {
-              wx.showToast({ title: '录制无效', icon: 'none' });
+              this._showCustomToast('录制无效', 'none');
             }
         }, 250); // 🔴 优化：从 500ms 缩短到 250ms，加快响应
       },
@@ -1477,7 +1474,7 @@ Page({
           isRecording: false,
           isStopping: false
         });
-        wx.showToast({ title: '停止录制失败', icon: 'none' });
+        this._showCustomToast('停止录制失败', 'none');
       }
     }); 
   },
@@ -1610,7 +1607,7 @@ Page({
             console.error('❌ [提交] 数据库写入失败:', dbErr);
             getApp().hideLoading();
             this.setData({ isSubmitting: false });
-            wx.showToast({ title: '提交失败: ' + (dbErr.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+            this._showCustomToast('提交失败: ' + (dbErr.errMsg || '未知错误'), 'none', 3000);
           }
         });
       },
@@ -1618,7 +1615,7 @@ Page({
         console.error('❌ [提交] 视频上传失败:', uploadErr);
         getApp().hideLoading();
         this.setData({ isSubmitting: false });
-        wx.showToast({ title: '上传失败: ' + (uploadErr.errMsg || '未知错误'), icon: 'none', duration: 3000 });
+        this._showCustomToast('上传失败: ' + (uploadErr.errMsg || '未知错误'), 'none', 3000);
       }
     });
   },
@@ -1637,8 +1634,8 @@ Page({
 
   deleteCase(e) {
      const id = e.currentTarget.dataset.id;
-     wx.showModal({ title:'确认删除', content:'不可恢复', confirmColor:'#FF3B30', success:(res)=>{
-       if(res.confirm) { db.collection('video_go').doc(id).remove().then(()=>{ this.fetchCloudData(); wx.showToast({title:'已删除'}); }); }
+     this._showCustomModal({ title:'确认删除', content:'不可恢复', confirmColor:'#FF3B30', success:(res)=>{
+       if(res.confirm) { db.collection('video_go').doc(id).remove().then(()=>{ this.fetchCloudData(); this._showCustomToast({title:'已删除'}); }); }
      }});
   },
   
@@ -1791,7 +1788,7 @@ Page({
   showDevicePicker() {
     if (!this.data.useCustomPicker) return;
     if (!this.data.myDevices || this.data.myDevices.length === 0) {
-      wx.showToast({ title: '暂无设备，请先绑定设备', icon: 'none' });
+      this._showCustomToast('暂无设备，请先绑定设备', 'none');
       return;
     }
     const currentIndex = this.data.selectedSnIndex !== null ? this.data.selectedSnIndex : 0;
@@ -1989,6 +1986,60 @@ Page({
         wx.exitMiniProgram();
       }
     });
+  },
+
+  // ===============================================
+  // 🔴 统一的自定义弹窗方法（替换所有 wx.showModal 和 wx.showToast）
+  // ===============================================
+  
+  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
+  _showCustomToast(title, icon = 'none', duration = 2000) {
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showToast) {
+        toast.showToast({ title, icon, duration });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[case] custom-toast 组件未找到，使用降级方案');
+        this._showCustomToast({ title, icon, duration });
+      }
+    };
+    tryShow();
+  },
+
+  // 🔴 统一的自定义 Modal 方法（替换所有 wx.showModal，除了 editable 的情况）
+  _showCustomModal(options) {
+    // 如果 editable 为 true，使用原生（因为自定义组件不支持输入框）
+    if (options.editable) {
+      return this._showCustomModal(options);
+    }
+    
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showModal) {
+        toast.showModal({
+          title: options.title || '提示',
+          content: options.content || '',
+          showCancel: options.showCancel !== false,
+          confirmText: options.confirmText || '确定',
+          cancelText: options.cancelText || '取消',
+          success: options.success
+        });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[case] custom-toast 组件未找到，使用降级方案');
+        this._showCustomModal(options);
+      }
+    };
+    tryShow();
   },
   
 });

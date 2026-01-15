@@ -133,9 +133,43 @@ exports.main = async (event, context) => {
           finalMsg = "📍 访问通过";
         } else {
           const blockedCities = Array.isArray(config.blocked_cities) ? config.blocked_cities : [];
-          const isBlockedCity = blockedCities.some(blockedCity => 
-            city && blockedCity && (city.indexOf(blockedCity) !== -1 || blockedCity.indexOf(city) !== -1)
-          );
+          // 🔴 新的拦截判断逻辑：支持对象数组格式 {city, district}，同时兼容旧格式字符串数组
+          const isBlockedCity = blockedCities.some(blockedItem => {
+            let blockedCity = '';
+            let blockedDistrict = '';
+            
+            // 判断是新格式（对象）还是旧格式（字符串）
+            if (typeof blockedItem === 'object' && blockedItem !== null) {
+              // 新格式：{city: "佛山市", district: "南海区"} 或 {city: "佛山市", district: ""}
+              blockedCity = blockedItem.city || '';
+              blockedDistrict = blockedItem.district || '';
+            } else if (typeof blockedItem === 'string') {
+              // 旧格式：兼容 "佛山市" 这样的字符串
+              blockedCity = blockedItem;
+              blockedDistrict = ''; // 旧格式默认拦截整个市
+            }
+            
+            // 如果城市不匹配，直接返回 false
+            if (!city || !blockedCity || 
+                (city.indexOf(blockedCity) === -1 && blockedCity.indexOf(city) === -1)) {
+              return false;
+            }
+            
+            // 城市匹配了，检查区级拦截
+            if (blockedDistrict && blockedDistrict.trim() !== '') {
+              // 如果配置了区，则只拦截该区
+              // 如果用户没有区信息，不拦截（因为无法判断）
+              if (!district || district.trim() === '') {
+                return false;
+              }
+              // 检查区是否匹配
+              return district.indexOf(blockedDistrict) !== -1 || 
+                     blockedDistrict.indexOf(district) !== -1;
+            } else {
+              // 如果没有配置区（district 为空），则拦截整个市
+              return true;
+            }
+          });
 
           if (isBlockedCity && !bypassLocationCheck) {
           // 城市被拦截，更新 login_logbutton

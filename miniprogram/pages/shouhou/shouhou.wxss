@@ -285,7 +285,7 @@ page {
 }
 .style-white .badge {
   background: #F2F2F7;
-  color: #666;
+  color: #000;
 }
 .style-white .circle-decor {
   background: #F2F2F7;
@@ -533,7 +533,7 @@ page {
   font-size: 26rpx;
   font-weight: 600; /* 加粗，更明显 */
   line-height: 1.5; /* 行高，允许换行 */
-  color: #333333; /* 柔和的深灰色，不脏 */
+  color: #000333; /* 柔和的深灰色，不脏 */
   word-break: break-all; /* 允许长单词换行 */
   word-wrap: break-word; /* 允许在单词内换行 */
   display: -webkit-box;
@@ -633,7 +633,7 @@ page {
   padding: 20rpx 30rpx;
   border: 2rpx dashed #999;
   border-radius: 40rpx;
-  color: #666;
+  color: #000;
   font-size: 24rpx;
 }
 
@@ -1067,7 +1067,7 @@ page {
 
 .time-badge {
   background: #F2F2F7;
-  color: #666;
+  color: #000;
   font-size: 24rpx;
   padding: 6rpx 16rpx;
   border-radius: 8rpx;
@@ -1181,7 +1181,7 @@ page {
 
 .cancel-btn {
   background: #F5F5F7;
-  color: #666;
+  color: #000;
 }
 
 .confirm-btn {
@@ -1220,7 +1220,7 @@ page {
 }
 .input-label {
   font-size: 26rpx;
-  color: #666;
+  color: #000;
   margin-bottom: 16rpx;
   font-weight: 600;
 }
@@ -1336,7 +1336,7 @@ page {
 .sp-textarea {
   background: #F5F5F7; width: 100%; height: 200rpx;
   border-radius: 20rpx; padding: 20rpx; box-sizing: border-box;
-  font-size: 28rpx; color: #333; margin-bottom: 40rpx;
+  font-size: 28rpx; color: #000; margin-bottom: 40rpx;
 }
 
 .sp-btn-row { width: 100%; display: flex; gap: 20rpx; }
@@ -1344,7 +1344,7 @@ page {
   flex: 1; height: 80rpx; line-height: 80rpx; text-align: center;
   border-radius: 40rpx; font-weight: 600; font-size: 28rpx;
 }
-.sp-btn.cancel { background: #F5F5F7; color: #666; }
+.sp-btn.cancel { background: #F5F5F7; color: #000; }
 .sp-btn.confirm { background: #0071E3; color: #fff; }
 .sp-btn:active { opacity: 0.8; transform: scale(0.98); }
 
@@ -1447,7 +1447,7 @@ page {
 }
 .ms-btn {
   width: 44rpx; height: 44rpx; line-height: 44rpx; text-align: center;
-  font-weight: 600; color: #666;
+  font-weight: 600; color: #000;
 }
 .ms-num { width: 40rpx; text-align: center; font-size: 24rpx; font-weight: 600; }
 
@@ -1484,7 +1484,7 @@ page {
   transform: scale(1.05);
 }
 .ship-name { font-size: 28rpx; font-weight: 700; margin-bottom: 8rpx; text-align: center; }
-.ship-price { font-size: 24rpx; color: #666; text-align: center; }
+.ship-price { font-size: 24rpx; color: #000; text-align: center; }
 
 /* 4. 总价栏 */
 .final-total-row {
@@ -1549,7 +1549,7 @@ page {
   flex: 1; height: 80rpx; line-height: 80rpx; text-align: center;
   border-radius: 40rpx; font-weight: 600; font-size: 28rpx;
 }
-.s-btn.outline { background: #F5F5F7; color: #666; border: 1rpx solid #E5E5EA; }
+.s-btn.outline { background: #F5F5F7; color: #000; border: 1rpx solid #E5E5EA; }
 .s-btn.fill { background: #000; color: #fff; }
 
 
@@ -1599,7 +1599,7 @@ page {
   transform: scale(1.05);
 }
 .ship-name { font-size: 28rpx; font-weight: 700; margin-bottom: 8rpx; text-align: center; }
-.ship-price { font-size: 24rpx; color: #666; text-align: center; }
+.ship-price { font-size: 24rpx; color: #000; text-align: center; }
 .ship-item.active .ship-name { color: #000; }
 
 /* 总价显示 */
@@ -1639,7 +1639,7 @@ page {
 }
 .form-label { width: 140rpx; font-size: 28rpx; font-weight: 600; }
 .form-input { flex: 1; text-align: right; font-size: 28rpx; height: 100%; }
-.picker-view { flex: 1; text-align: right; font-size: 28rpx; color: #333; }
+.picker-view { flex: 1; text-align: right; font-size: 28rpx; color: #000; }
 .picker-view.ph-style { color: #ccc; }
 .arrow-right { margin-left: 10rpx; color: #ccc; font-size: 24rpx; }
 
@@ -1672,7 +1672,7 @@ page {
 }
 .ms-btn {
   width: 44rpx; height: 44rpx; line-height: 44rpx; text-align: center;
-  font-weight: 600; color: #666;
+  font-weight: 600; color: #000;
 }
 .ms-num { width: 40rpx; text-align: center; font-size: 24rpx; font-weight: 600; }
 
@@ -1939,12 +1939,12 @@ page {
   font-size: 36rpx; 
   font-weight: 700; 
   margin-bottom: 30rpx; 
-  color: #333; 
+  color: #000; /* 🔴 改为纯黑色 */
   letter-spacing: 0.5rpx;
 }
 .cd-content { 
   font-size: 30rpx; 
-  color: #666; 
+  color: #000; /* 🔴 改为纯黑色 */
   margin-bottom: 60rpx; 
   line-height: 1.8; 
   letter-spacing: 0.5rpx;
@@ -1960,7 +1960,7 @@ page {
   font-weight: 600; 
   transition: all 0.2s;
 }
-.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.cancel { background: #F5F5F7; color: #000; }
 .cd-btn.confirm { 
   background: #000; 
   color: #fff; 
@@ -2052,7 +2052,7 @@ page {
 .at-title {
   font-size: 34rpx;
   font-weight: 700;
-  color: #1D1D1F;
+  color: #000; /* 🔴 改为纯黑色 */
   text-align: center;
   margin-bottom: 16rpx;
   letter-spacing: -0.5rpx;
@@ -2061,7 +2061,7 @@ page {
 
 .at-content {
   font-size: 30rpx;
-  color: #48484A;
+  color: #000; /* 🔴 改为纯黑色 */
   text-align: center;
   line-height: 1.7;
   word-break: break-all;

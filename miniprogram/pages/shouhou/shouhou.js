@@ -476,11 +476,62 @@ Page({
   toggleService(e) {
     const type = e.currentTarget.dataset.type;
     
-    // 如果切换到故障报修，先检查是否有未完成的寄回订单
+    // 如果切换到故障报修，先检查是否绑定了设备
     if (type === 'repair') {
-      this.checkUnfinishedReturn();
+      this.checkDeviceBeforeRepair();
     } else {
       this.setData({ serviceType: type });
+    }
+  },
+
+  // 🔴 检查设备绑定（在切换到故障报修时调用）
+  async checkDeviceBeforeRepair() {
+    try {
+      const db = wx.cloud.database();
+      const _ = db.command;
+      
+      // 1. 获取当前用户 openid
+      const loginRes = await wx.cloud.callFunction({ name: 'login' });
+      const openid = loginRes.result?.openid;
+      
+      if (!openid) {
+        this._showCustomModal({
+          title: '提示',
+          content: '无法获取用户信息，请稍后重试',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+        return;
+      }
+
+      // 2. 检查是否绑定了设备（使用 openid 字段，必须检查 isActive: true）
+      const deviceRes = await db.collection('sn').where({
+        openid: openid,
+        isActive: true  // 🔴 只有已激活的设备才算绑定成功
+      }).count();
+
+      if (deviceRes.total === 0) {
+        // 🔴 没有绑定设备，显示自定义弹窗
+        this._showCustomModal({
+          title: '提示',
+          content: '您尚未绑定设备，无法进行故障报修。请先前往个人中心绑定设备。',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+        return; // 不切换服务类型
+      }
+      
+      // 3. 绑定了设备，继续检查是否有未完成的寄回订单
+      this.checkUnfinishedReturn();
+    } catch (err) {
+      console.error('[checkDeviceBeforeRepair] 检查设备失败:', err);
+      // 检查失败时，使用自定义弹窗提示
+      this._showCustomModal({
+        title: '提示',
+        content: '检查设备状态失败，请稍后重试',
+        showCancel: false,
+        confirmText: '知道了'
+      });
     }
   },
 
@@ -3431,7 +3482,7 @@ Page({
              });
           }
 
-          wx.showToast({ title: '已清空', icon: 'none' });
+          this._showCustomToast('已清空', 'none');
         }
       }
     });

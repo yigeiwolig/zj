@@ -302,16 +302,7 @@ Page({
   // === 点击进入逻辑 ===
   handleAccess() {
     console.log('[handleAccess] 点击事件触发');
-
-    // ✅ 兜底跳转：从点击开始计时，防止任意链路卡住（预览环境常见）
-    if (this._jumpFallbackTimer) {
-      clearTimeout(this._jumpFallbackTimer);
-      this._jumpFallbackTimer = null;
-    }
-    this._jumpFallbackTimer = setTimeout(() => {
-      console.warn('[handleAccess] 兜底跳转触发');
-      wx.reLaunch({ url: '/pages/products/products' });
-    }, 5400);
+    // 🔴 移除兜底跳转，严格等待用户授权
     console.log('[handleAccess] step:', this.data.step);
     console.log('[handleAccess] isAuthorized:', this.data.isAuthorized);
     
@@ -431,11 +422,6 @@ Page({
 
     // ✅ 小齿轮掉落动画结束后执行跳转（0.8s + 少量缓冲）
     const jumpTimer = setTimeout(() => {
-      if (this._jumpFallbackTimer) {
-        clearTimeout(this._jumpFallbackTimer);
-        this._jumpFallbackTimer = null;
-      }
-      
       // 🔴 检查是否有待跳转的目标（由地址检查结果决定）
       if (this.data.pendingJumpTarget) {
         console.log('[index] 动画完成，执行待跳转:', this.data.pendingJumpTarget);
@@ -448,9 +434,8 @@ Page({
           wx.reLaunch({ url: this.data.pendingJumpTarget });
         }
       } else {
-        // 默认跳转到产品页（兜底）
-        console.log('[index] 动画完成，无待跳转目标，执行默认跳转');
-      wx.reLaunch({ url: '/pages/products/products' });
+        // 🔴 移除默认跳转，严格等待用户授权定位
+        console.log('[index] 动画完成，无待跳转目标，等待用户授权定位');
       }
     }, 900);
     this.addAnimationTimer(jumpTimer);
@@ -482,19 +467,50 @@ Page({
     return { is_active: false, blocked_provinces: [], blocked_cities: [] };
   },
 
-  checkIsBlockedRegion(province, city, config) {
+  checkIsBlockedRegion(province, city, district, config) {
     if (!config || !config.is_active) return false;
     const blockedCities = config.blocked_cities || [];
 
-    // 🔴 高危地址判断：只以市为准，不检查省份
+    // 🔴 高危地址判断：支持新格式对象数组，同时兼容旧格式字符串数组
     if (blockedCities.length > 0) {
-      // 检查城市是否在拦截列表中
-      if (blockedCities.some(c => city.indexOf(c) !== -1 || c.indexOf(city) !== -1)) {
-        return true; // 城市匹配，视为高危地址
-    }
+      return blockedCities.some(blockedItem => {
+        let blockedCity = '';
+        let blockedDistrict = '';
+        
+        // 判断是新格式（对象）还是旧格式（字符串）
+        if (typeof blockedItem === 'object' && blockedItem !== null) {
+          // 新格式：{city: "佛山市", district: "南海区"} 或 {city: "佛山市", district: ""}
+          blockedCity = blockedItem.city || '';
+          blockedDistrict = blockedItem.district || '';
+        } else if (typeof blockedItem === 'string') {
+          // 旧格式：兼容 "佛山市" 这样的字符串
+          blockedCity = blockedItem;
+          blockedDistrict = ''; // 旧格式默认拦截整个市
+        }
+        
+        // 如果城市不匹配，直接返回 false
+        if (!city || !blockedCity || 
+            (city.indexOf(blockedCity) === -1 && blockedCity.indexOf(city) === -1)) {
+          return false;
+        }
+        
+        // 城市匹配了，检查区级拦截
+        if (blockedDistrict && blockedDistrict.trim() !== '') {
+          // 如果配置了区，则只拦截该区
+          // 如果用户没有区信息，不拦截（因为无法判断）
+          if (!district || district.trim() === '') {
+            return false;
+          }
+          // 检查区是否匹配
+          return district.indexOf(blockedDistrict) !== -1 || 
+                 blockedDistrict.indexOf(district) !== -1;
+        } else {
+          // 如果没有配置区（district 为空），则拦截整个市
+          return true;
+        }
+      });
     }
     
-    // 🔴 不再检查省份，高危地址只以市为准
     return false;
   },
 
@@ -588,9 +604,43 @@ Page({
       console.log('[index] 当前省份:', locData.province);
       console.log('[index] 当前区县:', locData.district);
       
-      const isBlockedCity = blockedCities.some(city => 
-        locData.city && city && (locData.city.indexOf(city) !== -1 || city.indexOf(locData.city) !== -1)
-      );
+      // 🔴 新的拦截判断逻辑：支持对象数组格式 {city, district}，同时兼容旧格式字符串数组
+      const isBlockedCity = blockedCities.some(blockedItem => {
+        let blockedCity = '';
+        let blockedDistrict = '';
+        
+        // 判断是新格式（对象）还是旧格式（字符串）
+        if (typeof blockedItem === 'object' && blockedItem !== null) {
+          // 新格式：{city: "佛山市", district: "南海区"} 或 {city: "佛山市", district: ""}
+          blockedCity = blockedItem.city || '';
+          blockedDistrict = blockedItem.district || '';
+        } else if (typeof blockedItem === 'string') {
+          // 旧格式：兼容 "佛山市" 这样的字符串
+          blockedCity = blockedItem;
+          blockedDistrict = ''; // 旧格式默认拦截整个市
+        }
+        
+        // 如果城市不匹配，直接返回 false
+        if (!locData.city || !blockedCity || 
+            (locData.city.indexOf(blockedCity) === -1 && blockedCity.indexOf(locData.city) === -1)) {
+          return false;
+        }
+        
+        // 城市匹配了，检查区级拦截
+        if (blockedDistrict && blockedDistrict.trim() !== '') {
+          // 如果配置了区，则只拦截该区
+          // 如果用户没有区信息，不拦截（因为无法判断）
+          if (!locData.district || locData.district.trim() === '') {
+            return false;
+          }
+          // 检查区是否匹配
+          return locData.district.indexOf(blockedDistrict) !== -1 || 
+                 blockedDistrict.indexOf(locData.district) !== -1;
+        } else {
+          // 如果没有配置区（district 为空），则拦截整个市
+          return true;
+        }
+      });
 
       console.log('[index] 是否命中拦截城市:', isBlockedCity);
 
@@ -862,20 +912,12 @@ Page({
             // 🔴 截屏/录屏封禁：最高优先级，不允许任何方式绕过
             if (btn.banReason === 'screenshot' || btn.banReason === 'screen_record') {
               console.warn('[index] 最终检查：检测到截屏/录屏封禁，立即拦截！', btn);
-              if (this._jumpFallbackTimer) {
-                clearTimeout(this._jumpFallbackTimer);
-                this._jumpFallbackTimer = null;
-              }
               wx.reLaunch({ url: '/pages/blocked/blocked?type=screenshot' });
           return;
             } else if (btn.banReason === 'location_blocked' && hasGoldMedal) {
               console.log('[index] 最终检查：地址拦截但有金牌，放行');
             } else {
               console.warn('[index] 最终检查：发现封禁记录，拦截跳转！', btn);
-              if (this._jumpFallbackTimer) {
-                clearTimeout(this._jumpFallbackTimer);
-                this._jumpFallbackTimer = null;
-              }
               const banType = btn.banReason === 'location_blocked' ? 'location' : 'banned';
               wx.reLaunch({ url: `/pages/blocked/blocked?type=${banType}` });
               return;
@@ -901,26 +943,19 @@ Page({
         };
 
         const jump = () => {
-          if (this._jumpFallbackTimer) {
-            clearTimeout(this._jumpFallbackTimer);
-            this._jumpFallbackTimer = null;
-          }
           wx.reLaunch({ url: targetPage });
         };
 
-        const fallbackTimer = setTimeout(() => {
-          console.warn('[index] 写入超时，兜底跳转');
-          jump();
-        }, 3000);
+        // 🔴 移除写入超时的兜底跳转，严格等待数据库操作完成
+        // 如果数据库操作失败，仍然跳转（因为用户已经授权，不应该因为数据库问题阻止进入）
 
         db.collection(collectionName).add({ data: newData })
           .then(() => {
-            clearTimeout(fallbackTimer);
             setTimeout(jump, 200);
           })
           .catch(err => {
-            console.error('[index] 写入失败，兜底跳转', err);
-            clearTimeout(fallbackTimer);
+            console.error('[index] 写入失败', err);
+            // 🔴 数据库写入失败时，仍然跳转（因为用户已经授权，不应该因为数据库问题阻止进入）
             setTimeout(jump, 200);
           }); 
       });

@@ -1,6 +1,9 @@
 {
   "navigationBarTitleText": "数据管理",
   "navigationBarBackgroundColor": "#F8F8F8",
-  "navigationBarTextStyle": "black"
+  "navigationBarTextStyle": "black",
+  "usingComponents": {
+    "custom-toast": "/components/custom-toast/index"
+  }
 }
 

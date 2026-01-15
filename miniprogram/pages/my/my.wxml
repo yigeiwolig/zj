@@ -416,8 +416,8 @@
     <!-- 【新增】需寄回配件维修卡片（仅当未录入单号时显示） -->
     <view class="return-required-card" wx:if="{{myReturnRequiredRepair && !isAdmin && !myReturnRequiredRepair.returnTrackingId}}">
       <view class="rr-card-header">
-        <!-- 🔴 场景B：管理员手动标记的需寄回，显示不同标题 -->
-        <view class="rr-card-title">{{myReturnRequiredRepair.returnStatus === 'PENDING_RETURN' ? '需要寄回维修完成后的配件' : '需寄回配件维修'}}</view>
+      <!-- 🔴 场景A：管理员录单备件寄出，显示"需寄回故障配件"；场景B：管理员手动标记，显示"需寄回配件维修" -->
+      <view class="rr-card-title">{{myReturnRequiredRepair.returnStatus === 'PENDING_RETURN' ? '需寄回配件维修' : '需寄回故障配件'}}</view>
         <view class="rr-card-badge">待处理</view>
       </view>
       <!-- 显示备注 -->
@@ -436,6 +436,17 @@
         </view>
       </view>
       
+      <!-- 🔴 场景A：30天倒计时显示（管理员录单备件寄出，且未录入单号） -->
+      <view class="rr-card-countdown" wx:if="{{myReturnRequiredRepair && myReturnRequiredRepair.returnStatus !== 'PENDING_RETURN' && myReturnRequiredRepair.status === 'SHIPPED' && !myReturnRequiredRepair.returnTrackingId && myReturnRequiredRepair.countdownDays !== null}}">
+        <view class="rr-countdown-wrapper">
+          <text class="rr-countdown-text">剩余时间：</text>
+          <text class="countdown-days {{myReturnRequiredRepair.isOverdue ? 'overdue' : ''}}">{{myReturnRequiredRepair.countdownDays || 0}}</text>
+        </view>
+        <view class="countdown-warning {{myReturnRequiredRepair.isOverdue ? 'overdue' : ''}}">
+          {{myReturnRequiredRepair.isOverdue ? '已超时，将扣除一个月质保' : '30天内无上传运单号则扣除一个月质保'}}
+        </view>
+      </view>
+      
       <!-- 如果已录入单号，显示状态 -->
       <view class="rr-card-status" wx:if="{{myReturnRequiredRepair.returnTrackingId}}">
         <view class="rr-card-status-text">已寄出，维修中，请等候</view>
@@ -448,8 +459,8 @@
         <view class="rr-card-btn" bindtap="openReturnAddressModal" data-id="{{myReturnRequiredRepair._id}}">
           录入单号
         </view>
-        <!-- 🔴 场景A：只有正常需寄回维修才显示"一键复制地址"按钮 -->
-        <view class="rr-card-btn copy-address" wx:if="{{myReturnRequiredRepair.returnStatus !== 'PENDING_RETURN'}}" bindtap="copyReturnAddress">
+        <!-- 🔴 场景B：管理员手动标记，显示"一键复制地址"按钮 -->
+        <view class="rr-card-btn copy-address" wx:if="{{myReturnRequiredRepair.returnStatus === 'PENDING_RETURN'}}" bindtap="copyReturnAddress">
           一键复制地址
         </view>
       </block>
@@ -504,9 +515,14 @@
                 <view class="dot-s"></view>已维修完成
               </view>
               
+              <!-- 🔴 场景A：需寄回故障配件（红色） -->
+              <view class="status-pill fail" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'SHIPPED') && item.needReturn && item.returnStatus !== 'PENDING_RETURN' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+                <view class="dot-f"></view>需寄回故障配件
+              </view>
+              
               <!-- 已备件寄出（不显示运单号，运单号在查看物流按钮中） -->
-              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'SHIPPED') && item.trackingId && item.status !== 'REPAIR_COMPLETED_SENT'}}">
-                配件已寄出
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'SHIPPED') && item.trackingId && item.status !== 'REPAIR_COMPLETED_SENT' && !(item.needReturn && item.returnStatus !== 'PENDING_RETURN')}}">
+                <view class="dot-s"></view>配件已寄出
               </view>
               
               <!-- 看教程 (蓝色) -->
@@ -514,8 +530,13 @@
                 查看教程可修复
               </view>
               
-              <!-- 🔴 待寄回维修（需要寄回且未完成寄回） -->
-              <view class="status-pill processing" wx:if="{{item.type === 'repair' && item.needReturn && !item.returnCompleted && item.status !== 'REPAIR_COMPLETED_SENT' && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT'}}">
+              <!-- 🔴 场景B：需要寄回维修（红色） -->
+              <view class="status-pill fail" wx:if="{{item.type === 'repair' && item.needReturn && !item.returnCompleted && item.status !== 'REPAIR_COMPLETED_SENT' && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.returnStatus === 'PENDING_RETURN' && item.status !== 'SHIPPED'}}">
+                <view class="dot-f"></view>需要寄回维修
+              </view>
+              
+              <!-- 🔴 待寄回维修（其他情况，黄色）- 排除场景A和场景B -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && item.needReturn && !item.returnCompleted && item.status !== 'REPAIR_COMPLETED_SENT' && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.returnStatus !== 'PENDING_RETURN' && item.status !== 'SHIPPED'}}">
                 <view class="dot-p"></view>待寄回维修
               </view>
               
@@ -524,9 +545,29 @@
                 <view class="dot-p"></view>工程师审核中
               </view>
               
-              <!-- 正在维修中（用户已寄出快递后） -->
-              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+              <!-- 等待管理员确认收货（场景A：用户已寄出快递后） -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN' && item.status !== 'REPAIR_COMPLETED_SENT' && !item.warrantyDeducted && !item.isWarrantyDeducted && item.status !== 'RETURN_RECEIVED' && item.status !== 'COMPLETED'}}">
+                <view class="dot-p"></view>等待管理员确认收货
+              </view>
+              
+              <!-- 正在维修中（场景B：用户已寄出快递后） -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus === 'PENDING_RETURN' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
                 <view class="dot-p"></view>正在维修中
+              </view>
+              
+              <!-- 售后完结（场景A：管理员确认收货后） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 'RETURN_RECEIVED' || item.status === 'COMPLETED') && item.returnStatus !== 'PENDING_RETURN'}}">
+                <view class="dot-s"></view>售后完结
+              </view>
+              
+              <!-- 已维修完成（场景B：管理员确认收货后） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 'RETURN_RECEIVED' || item.status === 'COMPLETED') && item.returnStatus === 'PENDING_RETURN'}}">
+                <view class="dot-s"></view>已维修完成
+              </view>
+              
+              <!-- 扣除质保状态 -->
+              <view class="status-pill fail" wx:if="{{item.type === 'repair' && (item.warrantyDeducted || item.isWarrantyDeducted)}}">
+                {{item.deductionReason === '配件错误' || item.deductionReason === 'wrong_part' ? '因为配件错误，所以扣除30天质保' : (item.deductionReason === '超时' || item.deductionReason === 'timeout' ? '因超时，扣除30天质保' : '已扣除30天质保')}}
               </view>
             </view>
           </view>
@@ -756,7 +797,7 @@
             <view class="rr-item-header">
               <text class="rr-model">{{item.model}}</text>
               <text class="rr-status-badge {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? 'user-sent' : (item.returnTrackingId ? 'returned' : 'pending')}}">
-                {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? '用户寄回维修' : (item.returnTrackingId ? '已寄回' : '待寄回')}}
+                {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN' ? '用户寄回故障配件' : (item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? '用户寄回维修' : (item.returnTrackingId ? '已寄回' : '待寄回'))}}
               </text>
             </view>
             
@@ -765,7 +806,8 @@
                 <text class="rr-info-label">用户信息：</text>
                 <text class="rr-info-value">{{item.contact.name}} {{item.contact.phone}}</text>
               </view>
-              <view class="rr-info-row">
+              <!-- 🔴 场景B：显示用户地址 -->
+              <view class="rr-info-row" wx:if="{{item.returnStatus === 'PENDING_RETURN'}}">
                 <text class="rr-info-label">用户地址：</text>
                 <view class="rr-info-value-wrapper">
                   <text class="rr-info-value">{{item.contact.address}}</text>
@@ -797,10 +839,16 @@
             
             <!-- 操作按钮 -->
             <view class="rr-actions">
-              <!-- 用户寄回维修中：显示查看物流和寄出快递 -->
-              <block wx:if="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT')}}">
+              <!-- 🔴 场景B：管理员手动标记的需寄回，用户已寄出（需寄回维修），显示查看物流和寄出快递 -->
+              <block wx:if="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus === 'PENDING_RETURN'}}">
                 <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}">查看物流</view>
                 <view class="rr-btn ship-out" bindtap="adminShipOutAfterRepair" data-id="{{item._id}}">寄出快递</view>
+              </block>
+              <!-- 场景A：用户寄回故障配件，显示扣除一个月质保、查看物流和确认收货 -->
+              <block wx:elif="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN'}}">
+                <view class="rr-btn deduct" bindtap="deductWarrantyForRepair" data-id="{{item._id}}">扣除一个月质保</view>
+                <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}">查看物流</view>
+                <view class="rr-btn confirm" bindtap="confirmReturnReceived" data-id="{{item._id}}">确认收货</view>
               </block>
               <!-- 其他状态：显示取消和已完成 -->
               <block wx:else>
@@ -879,16 +927,16 @@
     <view class="bottom-modal-content" catchtap="noop">
       <!-- 弹窗头部 -->
       <view class="bottom-modal-header">
-        <!-- 🔴 场景B：管理员手动标记的需寄回，只显示"录入寄回运单号" -->
-        <view class="bottom-modal-title">{{myReturnRequiredRepair && myReturnRequiredRepair.returnStatus === 'PENDING_RETURN' ? '录入寄回运单号' : '填写修好后寄回地址'}}</view>
+        <!-- 🔴 场景A：管理员录单备件寄出，显示"录入寄回运单号"；场景B：管理员手动标记，显示"填写修好后寄回地址" -->
+        <view class="bottom-modal-title">{{myReturnRequiredRepair && myReturnRequiredRepair.returnStatus === 'PENDING_RETURN' ? '填写修好后寄回地址' : '录入寄回运单号'}}</view>
         <view class="bottom-modal-close" bindtap="closeReturnAddressModal">✕</view>
       </view>
       
       <!-- 弹窗内容区 -->
       <scroll-view class="bottom-modal-body" scroll-y>
         <view class="bottom-modal-form">
-          <!-- 🔴 场景B：管理员手动标记的需寄回，不显示地址输入 -->
-          <block wx:if="{{myReturnRequiredRepair && myReturnRequiredRepair.returnStatus !== 'PENDING_RETURN'}}">
+          <!-- 🔴 场景B：管理员手动标记，显示地址输入 -->
+          <block wx:if="{{myReturnRequiredRepair && myReturnRequiredRepair.returnStatus === 'PENDING_RETURN'}}">
             <!-- 如果未填写地址，显示地址填写表单 -->
             <view wx:if="{{!myReturnRequiredRepair.returnAddress}}">
               <view class="ra-form-smart-paste-wrapper">

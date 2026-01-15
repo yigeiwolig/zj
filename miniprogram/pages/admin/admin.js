@@ -36,7 +36,7 @@ Page({
             list.push(res.content);
             this.setData({ types: list });
           }
-          wx.showToast({ title: '添加成功' });
+          this._showCustomToast('添加成功', 'success');
         }
       }
     });
@@ -45,7 +45,7 @@ Page({
   // 删除数据
   deleteItem: function(e) {
     const { type, index } = e.currentTarget.dataset;
-    wx.showModal({
+    this._showCustomModal({
       title: '确认删除',
       content: '删除后无法恢复，确定吗？',
       success: (res) => {
@@ -62,6 +62,60 @@ Page({
         }
       }
     });
-  }
+  },
+
+  // ===============================================
+  // 🔴 统一的自定义弹窗方法（替换所有 wx.showModal 和 wx.showToast）
+  // ===============================================
+  
+  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
+  _showCustomToast(title, icon = 'none', duration = 2000) {
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showToast) {
+        toast.showToast({ title, icon, duration });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[admin] custom-toast 组件未找到，使用降级方案');
+        wx.showToast({ title, icon, duration });
+      }
+    };
+    tryShow();
+  },
+
+  // 🔴 统一的自定义 Modal 方法（替换所有 wx.showModal，除了 editable 的情况）
+  _showCustomModal(options) {
+    // 如果 editable 为 true，使用原生（因为自定义组件不支持输入框）
+    if (options.editable) {
+      return wx.showModal(options);
+    }
+    
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showModal) {
+        toast.showModal({
+          title: options.title || '提示',
+          content: options.content || '',
+          showCancel: options.showCancel !== false,
+          confirmText: options.confirmText || '确定',
+          cancelText: options.cancelText || '取消',
+          success: options.success
+        });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[admin] custom-toast 组件未找到，使用降级方案');
+        wx.showModal(options);
+      }
+    };
+    tryShow();
+  },
 });
 

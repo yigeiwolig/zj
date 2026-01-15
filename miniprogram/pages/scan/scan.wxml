@@ -24,6 +24,22 @@
     </view>
   </view>
 
+  <!-- ======================= -->
+  <!-- 新增：自动校准中弹窗 -->
+  <!-- ======================= -->
+  <view class="password-modal-mask" wx:if="{{showCalibratingModal}}" catchtouchmove="preventMove">
+    <view class="password-box">
+      <view class="calibrating-icon-wrap">
+        <view class="calibrating-spinner"></view>
+      </view>
+      <view class="pass-title">正在校准中</view>
+      <view class="pass-desc">请等待校准完成</view>
+      <view class="pass-btns">
+        <view class="p-btn confirm full-width" bindtap="closeCalibratingModal">知道了</view>
+      </view>
+    </view>
+  </view>
+
 
   <!-- ======================= -->
   <!-- 1. 密码验证弹窗 -->

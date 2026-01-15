@@ -14,7 +14,7 @@
 }
 
 .auto-toast-box {
-  background: rgba(0, 0, 0, 0.75);
+  background: #fff; /* 🔴 改为白色背景 */
   backdrop-filter: blur(20rpx);
   border-radius: 24rpx;
   padding: 24rpx 40rpx;
@@ -22,6 +22,7 @@
   text-align: center;
   animation: toastFadeIn 0.3s ease-out;
   pointer-events: auto;
+  box-shadow: 0 8rpx 30rpx rgba(0,0,0,0.15); /* 🔴 添加阴影 */
 }
 
 @keyframes toastFadeIn {
@@ -38,14 +39,13 @@
 .at-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: #FFFFFF;
+  color: #000; /* 🔴 改为黑色 */
   margin-bottom: 8rpx;
 }
 
 .at-content {
   font-size: 26rpx;
-  color: #FFFFFF;
-  opacity: 0.9;
+  color: #000; /* 🔴 改为黑色 */
   line-height: 1.5;
 }
 

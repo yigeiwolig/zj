@@ -856,11 +856,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+.cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
 
 .cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
-.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.cancel { background: #F5F5F7; color: #000; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 
@@ -1238,11 +1238,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+.cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
 
 .cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
-.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.cancel { background: #F5F5F7; color: #000; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 
@@ -1564,11 +1564,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+.cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
 
 .cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
-.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.cancel { background: #F5F5F7; color: #000; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 
@@ -1890,11 +1890,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+.cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
 
 .cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
-.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.cancel { background: #F5F5F7; color: #000; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 
@@ -2216,11 +2216,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+.cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
 
 .cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
-.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.cancel { background: #F5F5F7; color: #000; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 
@@ -2542,11 +2542,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+.cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
 
 .cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
-.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.cancel { background: #F5F5F7; color: #000; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 
@@ -2868,11 +2868,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
 @keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+.cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
 
 .cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
-.cd-btn.cancel { background: #F5F5F7; color: #666; }
+.cd-btn.cancel { background: #F5F5F7; color: #000; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 
@@ -3292,24 +3292,25 @@ page { background: #F7F7F7; color: #1D1D1F; }
 
 .status-pill {
   /* 固定 pill 高度，保证与"撤销"完全一致 */
-  height: 44rpx;
-  line-height: 44rpx;
+  height: 52rpx; /* 稍微增高 */
+  line-height: 52rpx;
   box-sizing: border-box;
 
   /* 统一宽度（和撤销一致） */
   min-width: 124rpx;
-  max-width: 200rpx; /* 🔴 限制最大宽度，避免状态标签过长 */
+  /* max-width: 200rpx; 🔴 移除最大宽度限制 */
   justify-content: center;
 
   display: flex;
   align-items: center;
-  font-size: 22rpx;
+  font-size: 24rpx; /* 稍微调大字体 */
   font-weight: 600;
-  padding: 0 20rpx;
+  padding: 0 24rpx; /* 增加内边距 */
   border-radius: 30rpx;
-  white-space: nowrap; /* 🔴 状态标签不换行，保持简洁 */
-  overflow: hidden;
-  text-overflow: ellipsis; /* 🔴 超出部分显示省略号 */
+  white-space: nowrap; 
+  /* overflow: hidden; 🔴 移除溢出隐藏 */
+  /* text-overflow: ellipsis; 🔴 移除省略号 */
+  flex-shrink: 0; /* 防止被挤压 */
 }
 .status-pill.processing { background: #FFF8E1; color: #FFA000; }
 .status-pill.success { background: #E8F5E9; color: #34C759; }
@@ -3686,6 +3687,30 @@ page { background: #F7F7F7; color: #1D1D1F; }
   transform: scale(0.98);
 }
 
+/* 🔴 新增：确认收货按钮（黑色） */
+.rr-btn.confirm {
+  background: #000;
+  color: #fff;
+  border: none;
+}
+
+.rr-btn.confirm:active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
+/* 🔴 新增：扣除质保按钮（红色边框） */
+.rr-btn.deduct {
+  background: #fff;
+  color: #FF3B30;
+  border: 1rpx solid #FF3B30;
+}
+
+.rr-btn.deduct:active {
+  background: #FFF5F5;
+  transform: scale(0.98);
+}
+
 .rr-btn:active {
   opacity: 0.8;
   transform: scale(0.98);
@@ -3909,6 +3934,105 @@ page { background: #F7F7F7; color: #1D1D1F; }
   box-shadow: none;
 }
 
+/* 🔴 倒计时区域样式 - 优化版 */
+.rr-card-countdown {
+  background: #FFF9F9;
+  border-radius: 20rpx;
+  padding: 30rpx;
+  margin-bottom: 30rpx;
+  border: 1rpx solid rgba(255, 59, 48, 0.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.rr-card-countdown::before {
+  display: none;
+}
+
+.rr-countdown-wrapper {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  margin-bottom: 24rpx;
+  width: 100%;
+}
+
+.rr-countdown-text {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 600;
+  margin-right: 16rpx;
+}
+
+.countdown-days {
+  font-size: 64rpx;
+  font-weight: 800;
+  color: #FF3B30;
+  line-height: 1;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Segoe UI, Arial, Roboto, 'PingFang SC', 'miui', 'Hiragino Sans GB', 'Microsoft Yahei', sans-serif;
+}
+
+.countdown-days.overdue {
+  color: #FF3B30;
+  animation: pulseRed 2s ease-in-out infinite;
+}
+
+.countdown-days::after {
+  content: '天';
+  font-size: 28rpx;
+  color: #FF3B30;
+  font-weight: 600;
+  margin-left: 6rpx;
+}
+
+.countdown-warning {
+  background: #FFF0E8;
+  border-left: none;
+  border-radius: 12rpx;
+  padding: 16rpx 24rpx;
+  font-size: 24rpx;
+  color: #FF6B00;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: normal;
+  text-align: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.countdown-warning::before {
+  content: '';
+  display: inline-block;
+  width: 6rpx;
+  height: 24rpx;
+  background: #FF9500;
+  border-radius: 4rpx;
+  vertical-align: middle;
+  margin-right: 12rpx;
+  margin-top: -4rpx;
+}
+
+.countdown-warning.overdue {
+  background: #FFF0F0;
+  color: #FF3B30;
+}
+
+.countdown-warning.overdue::before {
+  background: #FF3B30;
+}
+
+@keyframes pulseRed {
+  0%, 100% { 
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% { 
+    opacity: 0.85;
+    transform: scale(1.05);
+  }
+}
+
 .reason-text {
   font-size: 22rpx;
   color: #666;
@@ -4056,15 +4180,14 @@ page { background: #F7F7F7; color: #1D1D1F; }
 }
 
 .auto-toast-box {
-  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  background: #fff; /* 🔴 改为纯白色背景 */
   border-radius: 32rpx;
   padding: 48rpx 56rpx;
   max-width: 640rpx;
   min-width: 480rpx;
   box-shadow: 
     0 20rpx 60rpx rgba(0, 0, 0, 0.12),
-    0 8rpx 24rpx rgba(0, 0, 0, 0.08),
-    inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+    0 8rpx 24rpx rgba(0, 0, 0, 0.08);
   animation: autoToastFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), 
              autoToastFadeOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) 1.7s forwards;
   position: relative;
@@ -4113,7 +4236,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .at-title {
   font-size: 34rpx;
   font-weight: 700;
-  color: #1D1D1F;
+  color: #000; /* 🔴 改为纯黑色 */
   text-align: center;
   margin-bottom: 16rpx;
   letter-spacing: -0.5rpx;
@@ -4122,7 +4245,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 
 .at-content {
   font-size: 30rpx;
-  color: #48484A;
+  color: #000; /* 🔴 改为纯黑色 */
   text-align: center;
   line-height: 1.7;
   word-break: break-all;

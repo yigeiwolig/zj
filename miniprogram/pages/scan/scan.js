@@ -93,12 +93,14 @@ class BLEHelper {
             fail: (err) => {
             // 如果用户拒绝蓝牙授权，提示去设置中开启
             if (err && err.errMsg && err.errMsg.includes('auth deny')) {
-              wx.showModal({
-                title: '蓝牙权限被拒绝',
-                content: '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。',
-                showCancel: false,
-                confirmText: '知道了'
-              });
+              // 🔴 使用回调方式，让Page层处理弹窗
+              if (this.onError) {
+                this.onError({ 
+                  type: 'auth_deny',
+                  message: '蓝牙权限被拒绝',
+                  detail: '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。'
+                });
+              }
             }
               if (this.onError) this.onError(err);
               reject(err);
@@ -118,12 +120,14 @@ class BLEHelper {
             fail: (err) => {
               // 如果是权限错误，提供更友好的提示
               if (err.errMsg && err.errMsg.includes('auth deny')) {
-                wx.showModal({
-                  title: '蓝牙功能不可用',
-                  content: '请确保：\n1. 系统蓝牙已开启\n2. 已授权小程序使用蓝牙功能\n\n可在手机设置中检查权限',
-                  showCancel: false,
-                  confirmText: '知道了'
-                });
+                // 🔴 使用回调方式，让Page层处理弹窗
+                if (this.onError) {
+                  this.onError({ 
+                    type: 'auth_deny',
+                    message: '蓝牙功能不可用',
+                    detail: '请确保：\n1. 系统蓝牙已开启\n2. 已授权小程序使用蓝牙功能\n\n可在手机设置中检查权限'
+                  });
+                }
               }
               if (this.onError) this.onError(err);
               reject(err);
@@ -355,6 +359,9 @@ Page({
     // 新增：蓝牙未开启提示弹窗
     showBluetoothAlert: false,
     
+    // 新增：自动校准中弹窗
+    showCalibratingModal: false,
+    
     // 新增：请先连接蓝牙提示（小胶囊样式）
     showConnectBluetoothTip: false,
     
@@ -521,6 +528,16 @@ Page({
     };
     this.ble.onError = (err) => {
       this.setData({ isScanning: false });
+      
+      // 🔴 处理蓝牙权限错误，使用自定义弹窗
+      if (err && err.type === 'auth_deny') {
+        this._showCustomModal({
+          title: err.message || '蓝牙权限被拒绝',
+          content: err.detail || '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+      }
       // 可以在这里做必要的错误上报或静默处理
     };
     this.ble.onDisconnected = () => {
@@ -706,7 +723,7 @@ Page({
           console.error('跳转失败:', err);
           // 跳转失败时重置标记，允许重试
           this.setData({ isNavigatingToOta: false });
-          wx.showToast({ title: '请先进行OTA升级', icon: 'none' });
+          this._showCustomToast('请先进行OTA升级', 'none');
         }
       });
     }, 2500);
@@ -916,7 +933,7 @@ Page({
       // 密码正确后，进入折叠教程
       this.showTutorial('fold');
     } else {
-      wx.showToast({ title: '密码错误', icon: 'error' });
+      this._showCustomToast('密码错误', 'none');
       this.setData({ passwordInput: '' });
     }
   },
@@ -1109,11 +1126,7 @@ Page({
   switchAngle(e) {
     // 🔴 检查蓝牙连接状态
     if (!this.data.isConnected) {
-      wx.showToast({
-        title: '未连接蓝牙',
-        icon: 'none',
-        duration: 2000
-      });
+      this._showCustomToast('未连接蓝牙', 'none', 2000);
       return;
     }
     
@@ -1335,11 +1348,7 @@ Page({
   handleAdjust(e) {
     // 🔴 检查蓝牙连接状态
     if (!this.data.isConnected) {
-      wx.showToast({
-        title: '未连接蓝牙',
-        icon: 'none',
-        duration: 2000
-      });
+      this._showCustomToast('未连接蓝牙', 'none', 2000);
       return;
     }
     
@@ -1397,19 +1406,11 @@ Page({
             this.sendData('调整折叠角度');
           } else {
             console.log('❌ [蓝牙] 未连接，无法发送"调整折叠角度"');
-            wx.showToast({
-              title: '蓝牙未连接',
-              icon: 'none',
-              duration: 2000
-            });
+            this._showCustomToast('蓝牙未连接', 'none', 2000);
           }
         } else {
           console.log('❌ [调试] 不是 F1/F2 机型，不发送');
-          wx.showToast({
-            title: '当前机型不支持',
-            icon: 'none',
-            duration: 2000
-          });
+          this._showCustomToast('当前机型不支持', 'none', 2000);
         }
       } else if (action === 'zero') {
         gap = 20;
@@ -1427,19 +1428,11 @@ Page({
             this.sendData('初始化角度');
           } else {
             console.log('❌ [蓝牙] 未连接，无法发送"初始化角度"');
-            wx.showToast({
-              title: '蓝牙未连接',
-              icon: 'none',
-              duration: 2000
-            });
+            this._showCustomToast('蓝牙未连接', 'none', 2000);
           }
         } else {
           console.log('❌ [调试] 不是 F1/F2 机型，不发送');
-          wx.showToast({
-            title: '当前机型不支持',
-            icon: 'none',
-            duration: 2000
-          });
+          this._showCustomToast('当前机型不支持', 'none', 2000);
         }
         // 🔴 点击归零后，重置滑动状态
         this.resetAdjustSlider();
@@ -1672,7 +1665,19 @@ Page({
     
     console.log('📤 [蓝牙] 发送"自动调平"');
     this.sendData('自动调平');
-    wx.showToast({ title: '已发送自动调平', icon: 'success' });
+    
+    // 🔴 显示校准中弹窗
+    this.setData({ showCalibratingModal: true });
+  },
+  
+  // 🔴 关闭校准弹窗
+  closeCalibratingModal() {
+    this.setData({ showCalibratingModal: false });
+  },
+  
+  // 🔴 阻止背景滚动
+  preventMove() {
+    return false;
   },
 
   // ===============================================
@@ -2099,5 +2104,54 @@ Page({
   sendData(text) {
     const arrayBuffer = this.stringToArrayBuffer(text);
     this.writeBleData(arrayBuffer);
+  },
+
+  // ===============================================
+  // 🔴 统一的自定义弹窗方法（替换所有 wx.showModal 和 wx.showToast）
+  // ===============================================
+  
+  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
+  _showCustomToast(title, icon = 'none', duration = 2000) {
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showToast) {
+        toast.showToast({ title, icon, duration });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[scan] custom-toast 组件未找到，使用降级方案');
+        wx.showToast({ title, icon, duration });
+      }
+    };
+    tryShow();
+  },
+
+  // 🔴 统一的自定义 Modal 方法（替换所有 wx.showModal）
+  _showCustomModal(options) {
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showModal) {
+        toast.showModal({
+          title: options.title || '提示',
+          content: options.content || '',
+          showCancel: options.showCancel !== false,
+          confirmText: options.confirmText || '确定',
+          cancelText: options.cancelText || '取消',
+          success: options.success
+        });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[scan] custom-toast 组件未找到，使用降级方案');
+        wx.showModal(options);
+      }
+    };
+    tryShow();
   },
 });

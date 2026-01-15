@@ -107,11 +107,13 @@ exports.main = async (event, context) => {
           }
         })
         
-        // 标记维修单已扣除质保
+        // 标记维修单已扣除质保，记录扣除原因
         await db.collection('shouhou_repair').doc(repair._id).update({
           data: {
             warrantyDeducted: true,
-            warrantyDeductedTime: db.serverDate()
+            isWarrantyDeducted: true,
+            deductionReason: event.reason || '超时', // 记录扣除原因，默认为"超时"
+            deductionTime: db.serverDate()
           }
         })
         

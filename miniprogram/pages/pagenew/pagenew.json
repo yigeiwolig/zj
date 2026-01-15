@@ -1,5 +1,7 @@
 {
   "navigationStyle": "custom",
   "navigationBarTitleText": "New Arrivals",
-  "usingComponents": {}
+  "usingComponents": {
+    "custom-toast": "/components/custom-toast/index"
+  }
 }

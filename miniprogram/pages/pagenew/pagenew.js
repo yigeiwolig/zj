@@ -56,15 +56,12 @@ Page({
   // 管理员模式手动切换开关
   toggleAdminMode() {
     if (!this.data.isAuthorized) {
-      wx.showToast({ title: '无权限', icon: 'none' });
+      this._showCustomToast('无权限', 'none');
       return;
     }
     const nextState = !this.data.isAdmin;
     this.setData({ isAdmin: nextState });
-    wx.showToast({
-      title: nextState ? '管理模式开启' : '已回到用户模式',
-      icon: 'none'
-    });
+    this._showCustomToast(nextState ? '管理模式开启' : '已回到用户模式', 'none');
   },
 
   // 左上角返回
@@ -96,11 +93,11 @@ Page({
   // 1. 新增
   handleAddNew: function() {
     var _this = this;
-    wx.showLoading({ title: '创建中' });
+    wx.showLoading({ title: '创建中' }); // 🔴 保留原生 Loading（因为自定义组件可能没有实现）
     const newProduct = { title: 'New Product', price: '0', cover: '' }; // 不再需要 details 字段
     this.db.collection('products').add({ data: newProduct }).then(() => {
       wx.hideLoading();
-      wx.showToast({ title: '已创建' });
+      this._showCustomToast('已创建', 'success');
       _this.fetchProducts();
     });
   },
@@ -142,8 +139,11 @@ Page({
     var _this = this;
     var idx = this.data.currentIndex;
     var item = this.data.products[idx];
-    wx.showModal({
-      title: '删除', content: '确认删除？', confirmColor: '#FF3B30',
+    this._showCustomModal({
+      title: '删除', 
+      content: '确认删除？', 
+      confirmText: '删除',
+      confirmColor: '#FF3B30',
       success(res) {
         if(res.confirm) {
           _this.db.collection('products').doc(item._id).remove().then(() => {
@@ -224,7 +224,7 @@ Page({
     // 注意：微信小程序中，使用catchtap已经阻止了冒泡，不需要stopPropagation
     
     if (!this.data.isAdmin) {
-      wx.showToast({ title: '请先进入管理员模式', icon: 'none' });
+      this._showCustomToast('请先进入管理员模式', 'none');
       return;
     }
     
@@ -232,7 +232,7 @@ Page({
     const product = this.data.products[idx];
     
     if (!product) {
-      wx.showToast({ title: '产品数据错误', icon: 'none' });
+      this._showCustomToast('产品数据错误', 'none');
       return;
     }
     
@@ -242,7 +242,7 @@ Page({
       // 校验：必须是纯数字
       const numValue = v.trim();
       if (numValue && !/^\d+$/.test(numValue)) {
-        wx.showToast({ title: '号码必须是纯数字', icon: 'none' });
+        this._showCustomToast('号码必须是纯数字', 'none');
         return;
       }
       
@@ -257,7 +257,7 @@ Page({
             // 检查是否有其他产品使用了这个号码
             const otherProduct = res.data.find(item => item._id !== product._id);
             if (otherProduct) {
-              wx.showToast({ title: '号码已存在，请使用其他号码', icon: 'none' });
+              this._showCustomToast('号码已存在，请使用其他号码', 'none');
               return;
             }
             
@@ -266,7 +266,7 @@ Page({
           })
           .catch(err => {
             console.error('[pagenew] 校验号码失败:', err);
-            wx.showToast({ title: '校验失败', icon: 'none' });
+            this._showCustomToast('校验失败', 'none');
           });
       } else {
         // 清空号码
@@ -280,7 +280,7 @@ Page({
   // ========================================================
   updateProductJumpNumber: function(productId, jumpNumber, localIdx) {
     if (!this.db || !productId) {
-      wx.showToast({ title: '数据错误', icon: 'none' });
+      this._showCustomToast('数据错误', 'none');
       return;
     }
     
@@ -291,10 +291,10 @@ Page({
       const updatedProducts = [...this.data.products];
       updatedProducts[localIdx].jumpNumber = jumpNumber;
       this.setData({ products: updatedProducts });
-      wx.showToast({ title: '号码已更新', icon: 'success' });
+      this._showCustomToast('号码已更新', 'success');
     }).catch(err => {
       console.error('[pagenew] 更新号码失败:', err);
-      wx.showToast({ title: '更新失败', icon: 'none' });
+      this._showCustomToast('更新失败', 'none');
     });
   },
   
@@ -329,5 +329,59 @@ Page({
       callback(this.data.customEditVal);
     }
     this.closeCustomEditModal();
-  }
+  },
+
+  // ===============================================
+  // 🔴 统一的自定义弹窗方法（替换所有 wx.showModal 和 wx.showToast）
+  // ===============================================
+  
+  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
+  _showCustomToast(title, icon = 'none', duration = 2000) {
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showToast) {
+        toast.showToast({ title, icon, duration });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[pagenew] custom-toast 组件未找到，使用降级方案');
+        wx.showToast({ title, icon, duration });
+      }
+    };
+    tryShow();
+  },
+
+  // 🔴 统一的自定义 Modal 方法（替换所有 wx.showModal，除了 editable 的情况）
+  _showCustomModal(options) {
+    // 如果 editable 为 true，使用原生（因为自定义组件不支持输入框）
+    if (options.editable) {
+      return wx.showModal(options);
+    }
+    
+    // 尝试获取组件，最多重试3次
+    const tryShow = (attempt = 0) => {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.showModal) {
+        toast.showModal({
+          title: options.title || '提示',
+          content: options.content || '',
+          showCancel: options.showCancel !== false,
+          confirmText: options.confirmText || '确定',
+          cancelText: options.cancelText || '取消',
+          success: options.success
+        });
+      } else if (attempt < 3) {
+        // 延迟重试
+        setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
+      } else {
+        // 最终降级
+        console.warn('[pagenew] custom-toast 组件未找到，使用降级方案');
+        wx.showModal(options);
+      }
+    };
+    tryShow();
+  },
 })

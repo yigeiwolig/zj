@@ -32,7 +32,7 @@
 }
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #666; margin-bottom: 50rpx; line-height: 1.5; }
+.cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
 
 .cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
@@ -55,7 +55,7 @@
 }
 
 .auto-toast-box {
-  background: rgba(0, 0, 0, 0.75);
+  background: #fff; /* 🔴 改为白色背景 */
   backdrop-filter: blur(20rpx);
   border-radius: 24rpx;
   padding: 24rpx 40rpx;
@@ -63,6 +63,7 @@
   text-align: center;
   animation: toastFadeIn 0.3s ease-out;
   pointer-events: auto;
+  box-shadow: 0 8rpx 30rpx rgba(0,0,0,0.15); /* 🔴 添加阴影 */
 }
 
 @keyframes toastFadeIn {
@@ -79,14 +80,13 @@
 .at-title {
   font-size: 28rpx;
   font-weight: 600;
-  color: #FFFFFF;
+  color: #000; /* 🔴 改为黑色 */
   margin-bottom: 8rpx;
 }
 
 .at-content {
   font-size: 26rpx;
-  color: #FFFFFF;
-  opacity: 0.9;
+  color: #000; /* 🔴 改为黑色 */
   line-height: 1.5;
 }
 
@@ -424,7 +424,7 @@ page { background-color: #000; color: #fff; box-sizing: border-box; font-family:
 .data-display-screen { background: #000; border: 1px solid #333; border-radius: 12rpx; padding: 10rpx; font-family: 'Courier New', monospace; }
 .data-row { display: flex; padding: 15rpx 0; } .border-top { border-top: 1px dashed #333; }
 .data-cell { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.data-cell .label { font-size: 20rpx; color: #666; margin-bottom: 6rpx; }
+.data-cell .label { font-size: 20rpx; color: #000; margin-bottom: 6rpx; }
 .data-cell .value { font-size: 32rpx; color: var(--accent-color); font-weight: bold; }
 .data-cell .value.sm { font-size: 24rpx; color: #fff; }
 .data-cell .unit { font-size: 20rpx; color: #888; }
