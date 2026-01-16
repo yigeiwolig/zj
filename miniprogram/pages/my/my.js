@@ -1132,222 +1132,41 @@ Page({
     }, 200); // 延迟加大到 200ms，更稳
   },
   
-  // 使用微信官方物流查询接口
+  // 使用快递100插件查询物流
   viewLogisticsDetail(e) {
-    const sn = String(e.currentTarget.dataset.sn || '').trim().toUpperCase(); // 标准化运单号
-    const expressCompany = String(e.currentTarget.dataset.company || '').trim(); // 标准化快递公司名称
-    const receiverPhone = String(e.currentTarget.dataset.phone || '').trim(); // 收件人手机号
+    const sn = String(e.currentTarget.dataset.sn || '').trim().toUpperCase();
+    const expressCompany = String(e.currentTarget.dataset.company || '').trim();
     
-    console.log(`[前端] 开始查询物流 - 运单号: ${sn}, 快递公司: ${expressCompany || '未指定'}, 手机号: ${receiverPhone || '未提供'}`);
-
     if (!sn) {
-      console.error('[前端] 运单号为空，无法查询');
       this.showAutoToast('提示', '无运单号');
       return;
     }
 
-    // 🔴 生成本次查询的唯一ID，用于防止竞态条件
-    const queryId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    this._currentQueryId = queryId;
+    // 构建跳转URL（不传递手机尾号，让用户自己填写）
+    const url = `plugin://kuaidi100/index?num=${encodeURIComponent(sn)}&appName=${encodeURIComponent('MT-摩改社')}`;
     
-    // 🔴 显示加载中（清空所有旧数据，确保不会显示错误数据）
-    this.setData({
-      showLogisticsModal: true,
-      currentTrackingId: sn, // 立即设置当前查询的运单号
-      logisticsData: null, // 清空旧数据
-      logisticsLoading: true,
-      logisticsError: null
-    });
-    this.updateModalState();
+    console.log('[物流查询] 跳转快递100插件URL:', url);
     
-    console.log(`[前端] 已清空旧数据，开始调用云函数查询: ${sn}, 查询ID: ${queryId}`);
-
-    // 调用云函数查询物流信息（使用微信官方物流查询API）
-    wx.cloud.callFunction({
-      name: 'queryLogistics',
-      data: {
-        trackingId: sn, // 已标准化的运单号
-        expressCompany: expressCompany || undefined, // 如果没有则传undefined，避免空字符串
-        receiverPhone: receiverPhone || undefined // 收件人手机号（可选，但建议提供以提高查询准确性）
-        // openid 会在云函数中自动从 context 获取
-      },
-      success: (res) => {
-        // 🔴 检查是否是最后一次查询（防止竞态条件）
-        if (this._currentQueryId !== queryId) {
-          console.warn(`[前端] 查询已过期，忽略结果 - 当前查询ID: ${this._currentQueryId}, 返回查询ID: ${queryId}`);
-          return;
-        }
-        
-        console.log(`[前端] 物流查询结果 (查询ID: ${queryId}):`, res);
-        
-        // 检查返回结果结构
-        if (!res.result) {
-          console.error('云函数返回结果为空:', res);
-          // 🔴 再次检查查询ID
-          if (this._currentQueryId !== queryId) return;
-          this.setData({
-            logisticsError: '查询失败：服务器未返回数据',
-            logisticsLoading: false,
-            logisticsData: null // 确保清空旧数据
-          });
-          return;
-        }
-        
-        // 检查是否有错误信息
-        if (res.result.errMsg && !res.result.success) {
-          console.error('云函数返回错误:', res.result.errMsg);
-          // 🔴 再次检查查询ID
-          if (this._currentQueryId !== queryId) return;
-          this.setData({
-            logisticsError: res.result.errMsg || '查询失败',
-            logisticsLoading: false,
-            logisticsData: null // 确保清空旧数据
-          });
-          return;
-        }
-        
-        if (res.result.success && res.result.data) {
-          // 🔴 使用深拷贝，避免修改原始数据
-          const rawData = res.result.data;
-          const data = JSON.parse(JSON.stringify(rawData)); // 深拷贝
-          
-          // 🔴 再次检查查询ID和运单号
-          if (this._currentQueryId !== queryId) {
-            console.warn(`[前端] 查询ID已改变，忽略结果`);
-            return;
-          }
-          
-          if (this.data.currentTrackingId !== sn) {
-            console.warn(`[前端] 运单号已改变，忽略结果 - 当前: ${this.data.currentTrackingId}, 查询: ${sn}`);
-            return;
-          }
-          
-          // 🔴 验证返回的运单号是否与查询的运单号一致（允许大小写差异）
-          if (data.waybill_id) {
-            const returnedId = String(data.waybill_id).trim().toUpperCase();
-            const queryId = String(sn).trim().toUpperCase();
-            if (returnedId !== queryId) {
-              console.error(`[前端验证] 运单号不匹配！查询: ${sn} (标准化: ${queryId}), 返回: ${data.waybill_id} (标准化: ${returnedId})`);
-              this.setData({
-                logisticsError: `运单号不匹配：查询的是 ${sn}，但返回的是 ${data.waybill_id}`,
-                logisticsLoading: false,
-                logisticsData: null // 确保清空旧数据
-              });
-              return;
-            }
-            console.log(`[前端验证] 运单号验证通过: ${sn} === ${data.waybill_id}`);
-          } else {
-            console.warn(`[前端验证] 返回数据中没有运单号，但继续处理`);
-          }
-          
-          // 前端兜底：如果没有返回中文名称，尝试本地映射
-          if (data.express_company_name && /^[a-z]+$/i.test(data.express_company_name)) {
-            const map = {
-              'zhongtong': '中通快递', 'yuantong': '圆通速递', 'shentong': '申通快递',
-              'yunda': '韵达快递', 'shunfeng': '顺丰速运', 'ems': 'EMS',
-              'jd': '京东快递', 'jitu': '极兔速递', 'youzhengguonei': '中国邮政',
-              'debangwuliu': '德邦快递', 'huitongkuaidi': '百世快递'
-            };
-            data.express_company_name = map[data.express_company_name.toLowerCase()] || data.express_company_name;
-          }
-          
-          // 处理时间格式，拆分日期和时间（统一处理逻辑）
-          if (data.path_list && data.path_list.length > 0) {
-            // 先确保列表按时间倒序排列（最新的在前）
-            data.path_list.sort((a, b) => {
-              const timeA = (a.time || '').replace(/-/g, '/')
-              const timeB = (b.time || '').replace(/-/g, '/')
-              try {
-                return new Date(timeB).getTime() - new Date(timeA).getTime()
-              } catch (e) {
-                return 0
-              }
-            })
-            
-            // 统一处理时间格式
-            data.path_list = data.path_list.map(item => {
-              const timeStr = (item.time || '').trim()
-              let _dateStr = ''
-              let time = timeStr
-              
-              // 尝试多种时间格式
-              // 格式1: YYYY-MM-DD HH:mm:ss
-              const pattern1 = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/
-              // 格式2: YYYY-MM-DD HH:mm
-              const pattern2 = /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/
-              // 格式3: YYYY/MM/DD HH:mm:ss
-              const pattern3 = /^(\d{4})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/
-              
-              let match = timeStr.match(pattern1) || timeStr.match(pattern2) || timeStr.match(pattern3)
-              
-              if (match) {
-                // 提取日期和时间
-                const year = match[1]
-                const month = match[2]
-                const day = match[3]
-                const hour = match[4]
-                const minute = match[5]
-                
-                _dateStr = `${month}-${day}`
-                time = `${hour}:${minute}`
-              } else if (timeStr.length >= 16) {
-                // 尝试固定位置提取（YYYY-MM-DD HH:mm:ss）
-                const datePart = timeStr.substring(0, 10)
-                const timePart = timeStr.substring(11, 16)
-                if (datePart.match(/^\d{4}-\d{2}-\d{2}$/) && timePart.match(/^\d{2}:\d{2}$/)) {
-                  const dateArr = datePart.split('-')
-                  _dateStr = `${dateArr[1]}-${dateArr[2]}`
-                  time = timePart
-                }
-              }
-              
-              return {
-                ...item,
-                _dateStr: _dateStr,
-                time: time,
-                desc: (item.desc || '').trim()
-              }
-            })
-          }
-
-          // 🔴 最终验证：确保查询ID和运单号都匹配
-          if (this._currentQueryId !== queryId || this.data.currentTrackingId !== sn) {
-            console.warn(`[前端] 最终验证失败 - 查询ID: ${this._currentQueryId === queryId ? '匹配' : '不匹配'}, 运单号: ${this.data.currentTrackingId === sn ? '匹配' : '不匹配'}`);
-            return;
-          }
-          
-          console.log(`[前端] 查询成功，更新显示数据 - 运单号: ${sn}, 轨迹数量: ${data.path_list ? data.path_list.length : 0}, 查询ID: ${queryId}`);
-          this.setData({
-            logisticsData: data,
-            logisticsLoading: false
-          });
-        } else {
-          // 查询失败，清空所有数据
-          // 🔴 检查查询ID
-          if (this._currentQueryId !== queryId) {
-            console.warn(`[前端] 查询失败但查询ID已改变，忽略`);
-            return;
-          }
-          console.error('查询失败，返回结果:', res.result);
-          this.setData({
-            logisticsError: res.result?.errMsg || '查询失败，请稍后重试',
-            logisticsLoading: false,
-            logisticsData: null // 确保清空旧数据
-          });
-        }
+    // 直接跳转快递100插件页面
+    wx.navigateTo({
+      url: url,
+      success: () => {
+        console.log('[物流查询] 跳转成功');
       },
       fail: (err) => {
-        // 🔴 检查查询ID
-        if (this._currentQueryId !== queryId) {
-          console.warn(`[前端] 查询失败但查询ID已改变，忽略`);
-          return;
+        console.error('[物流查询] 跳转失败:', err);
+        // 更详细的错误提示
+        let errorMsg = '跳转失败';
+        if (err.errMsg) {
+          if (err.errMsg.includes('plugin')) {
+            errorMsg = '插件未启用，请在微信小程序后台添加快递100插件';
+          } else if (err.errMsg.includes('navigateTo')) {
+            errorMsg = '跳转失败，请检查网络连接';
+          } else {
+            errorMsg = err.errMsg;
+          }
         }
-        console.error('物流查询失败:', err);
-        this.setData({
-          logisticsError: err.errMsg || '网络错误，请稍后重试',
-          logisticsLoading: false,
-          logisticsData: null // 确保清空旧数据
-        });
+        this.showAutoToast('提示', errorMsg);
       }
     });
   },
@@ -3160,6 +2979,8 @@ Page({
         console.log('✅ [loadMyActivities] 数据已更新到页面，当前 myActivityList 长度:', this.data.myActivityList.length);
         if (myReturnRequiredRepair) {
           console.log('✅ [loadMyActivities] 检测到需寄回维修单:', myReturnRequiredRepair._id);
+          // 🔴 立即检查一次是否需要自动扣除（不等待定时器）
+          this.checkAndAutoDeductWarranty(myReturnRequiredRepair);
           // 🔴 启动倒计时定时器
           this.startCountdownTimer();
         }
@@ -3177,10 +2998,65 @@ Page({
     this.loadMyActivitiesPromise().catch(() => {});
   },
 
+  // 🔴 检查并自动扣除质保（提取为独立方法，供定时器和页面加载时调用）
+  checkAndAutoDeductWarranty(repair) {
+    if (!repair || repair.returnStatus === 'PENDING_RETURN' || repair.status !== 'SHIPPED' || repair.returnTrackingId) {
+      return;
+    }
+    
+    // 如果已经扣除过，直接返回
+    if (repair.warrantyDeducted || repair.isWarrantyDeducted) {
+      return;
+    }
+    
+    // 如果正在处理中，避免重复触发
+    if (this._autoDeducting) {
+      return;
+    }
+    
+    const now = new Date();
+    const startTime = repair.solveTime ? new Date(repair.solveTime) : (repair.createTime ? new Date(repair.createTime) : null);
+    if (!startTime) {
+      return;
+    }
+    
+    const daysDiff = Math.floor((now - startTime) / (1000 * 60 * 60 * 24));
+    const isOverdue = daysDiff >= 30;
+    
+    // 🔴 自动扣除质保：当超时且未扣除过时，自动触发扣除
+    if (isOverdue) {
+      this._autoDeducting = true;
+      console.log('[自动扣除质保] 检测到超时，开始自动扣除质保，repairId:', repair._id, 'daysDiff:', daysDiff);
+      
+      wx.cloud.callFunction({
+        name: 'deductWarrantyForOverdue',
+        data: {
+          repairId: repair._id,
+          force: true,
+          reason: '超时未寄'
+        }
+      }).then((res) => {
+        console.log('[自动扣除质保] 扣除成功:', res.result);
+        this._autoDeducting = false;
+        // 刷新数据，更新扣除状态
+        this.loadMyActivitiesPromise().catch(() => {});
+      }).catch((err) => {
+        console.error('[自动扣除质保] 扣除失败:', err);
+        this._autoDeducting = false;
+        // 扣除失败不影响倒计时继续运行
+      });
+    }
+  },
+
   // 🔴 启动倒计时定时器
   startCountdownTimer() {
     if (this.countdownTimer) {
       clearInterval(this.countdownTimer);
+    }
+    
+    // 🔴 标记是否正在处理自动扣除，避免重复触发
+    if (!this._autoDeducting) {
+      this._autoDeducting = false;
     }
     
     this.countdownTimer = setInterval(() => {
@@ -3197,6 +3073,9 @@ Page({
             'myReturnRequiredRepair.countdownDays': countdownDays,
             'myReturnRequiredRepair.isOverdue': isOverdue
           });
+          
+          // 🔴 调用统一的检查方法
+          this.checkAndAutoDeductWarranty(repair);
         }
       } else {
         // 如果不符合条件，清除定时器
@@ -3454,7 +3333,8 @@ Page({
     
     if (solveTime) {
       const daysDiff = Math.floor((now - solveTime) / (1000 * 60 * 60 * 24));
-      if (daysDiff > 30 && !repair.warrantyDeducted && !repair.isWarrantyDeducted) {
+      // 🔴 修复：改为 >= 30，与倒计时显示逻辑一致（刚好30天也应该扣除）
+      if (daysDiff >= 30 && !repair.warrantyDeducted && !repair.isWarrantyDeducted) {
         // 超时了，自动扣除质保
         wx.cloud.callFunction({
           name: 'deductWarrantyForOverdue',

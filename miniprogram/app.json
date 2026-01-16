@@ -43,5 +43,11 @@
   ],
   "style": "v2",
   "sitemapLocation": "sitemap.json",
-  "lazyCodeLoading": "requiredComponents"
+  "lazyCodeLoading": "requiredComponents",
+  "plugins": {
+    "kuaidi100": {
+      "version": "1.1.4",
+      "provider": "wx6885acbedba59c14"
+    }
+  }
 }

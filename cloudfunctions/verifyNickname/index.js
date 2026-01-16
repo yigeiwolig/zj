@@ -133,17 +133,25 @@ exports.main = async (event, context) => {
           targetValidUserDocId = myRecord._id;
           console.log('[verifyNickname] 老用户回归，命中白名单');
         } else {
-          // 4.2 查找未绑定的空位 (没有 _openid 字段，或者 _openid 为空/null)
+          // 4.2 查找未绑定的空位 (没有 _openid 字段，或者 _openid 为空/null/空字符串)
           // 注意：有些历史数据可能有 _openid 但不是当前用户，那些是被占用的
-          const emptyRecord = records.find(r => !r._openid);
+          // 🔴 更严格的空位判断：_openid 不存在、为 null、为空字符串、或为 undefined
+          const emptyRecord = records.find(r => {
+            const openidValue = r._openid;
+            return !openidValue || openidValue === '' || openidValue === null || openidValue === undefined;
+          });
           
           if (emptyRecord) {
             isWhitelisted = true;
             targetValidUserDocId = emptyRecord._id;
             isNewBinding = true;
-            console.log('[verifyNickname] 发现空位，准备绑定');
+            console.log('[verifyNickname] 发现空位，准备绑定 - 记录ID:', emptyRecord._id, '当前_openid值:', emptyRecord._openid);
           } else {
-            console.log('[verifyNickname] 昵称存在但所有位置已被占用');
+            console.log('[verifyNickname] 昵称存在但所有位置已被占用，记录数:', records.length);
+            // 🔴 调试：打印所有记录的 _openid 值
+            records.forEach((r, idx) => {
+              console.log(`[verifyNickname] 记录${idx}: _id=${r._id}, _openid=${r._openid}, nickname=${r.nickname}`);
+            });
           }
         }
       }
@@ -154,16 +162,31 @@ exports.main = async (event, context) => {
     // 如果是新绑定，执行绑定操作
     if (isNewBinding && targetValidUserDocId) {
         try {
-            await db.collection('valid_users').doc(targetValidUserDocId).update({
+            console.log('[verifyNickname] 开始绑定操作 - 记录ID:', targetValidUserDocId, 'openid:', openid);
+            
+            // 🔴 执行绑定操作
+            const updateResult = await db.collection('valid_users').doc(targetValidUserDocId).update({
                 data: {
                     _openid: openid,
                     bindTime: db.serverDate(),
                     updateTime: db.serverDate()
                 }
             });
-            console.log('[verifyNickname] 绑定成功');
+            console.log('[verifyNickname] 绑定操作完成，更新结果:', updateResult);
+            
+            // 🔴 绑定成功后，重新查询确认绑定状态（防止并发问题）
+            const verifyRes = await db.collection('valid_users').doc(targetValidUserDocId).get();
+            console.log('[verifyNickname] 绑定后验证查询结果:', verifyRes.data);
+            
+            if (verifyRes.data && verifyRes.data._openid === openid) {
+                console.log('[verifyNickname] ✅ 绑定确认成功，_openid 已正确设置为:', verifyRes.data._openid);
+                isWhitelisted = true; // 确保状态为 true
+            } else {
+                console.error('[verifyNickname] ❌ 绑定后验证失败 - 期望openid:', openid, '实际openid:', verifyRes.data?._openid);
+                isWhitelisted = false;
+            }
         } catch (e) {
-            console.error('[verifyNickname] 绑定失败:', e);
+            console.error('[verifyNickname] ❌ 绑定失败，错误信息:', e);
             // 绑定失败（可能是并发冲突），视为验证失败
             isWhitelisted = false;
         }

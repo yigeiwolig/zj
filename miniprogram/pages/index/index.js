@@ -52,7 +52,11 @@ Page({
     isAdmin: false,        // 是否是管理员
     isAdminMode: false,    // 是否开启了管理员模式
     bannedUsers: [],       // 被封禁的用户列表
-    isLoadingBannedUsers: false  // 是否正在加载封禁用户列表
+    isLoadingBannedUsers: false,  // 是否正在加载封禁用户列表
+    // 🔴 昵称录入相关状态
+    isNicknameMode: false, // false=封禁管理, true=昵称录入
+    nicknameInput: '',    // 昵称输入
+    isSubmittingNickname: false // 是否正在提交昵称
   },
 
   onLoad(options) {
@@ -987,6 +991,9 @@ Page({
     if (cb) cb({ confirm: true });
   },
 
+  // 空函数，用于阻止事件冒泡
+  noop() {},
+
   // 显示 Loading（使用自定义动画，不使用微信官方弹窗和全局 UI）
   showMyLoading(title = '加载中...') {
     // 🔴 关键：先隐藏全局 UI 的 loading（如果存在）
@@ -1276,6 +1283,69 @@ Page({
     }
   },
 
+  // 🔴 重试昵称验证（将 isBanned 设置为 false，让用户重新输入昵称）
+  async retryNickname(e) {
+    const buttonId = e.currentTarget.dataset.buttonId;
+    const userIndex = e.currentTarget.dataset.index;
+    const nickname = e.currentTarget.dataset.nickname || '该用户';
+    const user = this.data.bannedUsers[userIndex];
+    
+    if (!user || !buttonId) {
+      this.showMyDialog({ title: '错误', content: '缺少必要参数' });
+      return;
+    }
+
+    // 二次确认
+    this.showMyDialog({
+      title: '确认重试',
+      content: `确定要让用户 "${nickname}" 重新输入昵称吗？\n\n将解除封禁状态，用户可以重新验证。`,
+      showCancel: true,
+      confirmText: '确认重试',
+      cancelText: '取消',
+      success: async (res) => {
+        if (res.confirm) {
+          try {
+            this.showMyLoading('处理中...');
+            
+            // 调用云函数，将 login_logbutton 中的 isBanned 设置为 false
+            const result = await wx.cloud.callFunction({
+              name: 'unbanUser',
+              data: {
+                buttonId: buttonId,
+                updateData: { isBanned: false }
+              }
+            });
+
+            this.hideMyLoading();
+
+            if (result.result && result.result.success) {
+              // 从列表中移除该用户
+              const users = this.data.bannedUsers;
+              users.splice(userIndex, 1);
+              this.setData({ bannedUsers: users });
+              
+              this.showMyDialog({
+                title: '操作成功',
+                content: `用户 "${nickname}" 已解除封禁，可以重新输入昵称`,
+                showCancel: false
+              });
+            } else {
+              throw new Error(result.result?.error || '操作失败');
+            }
+          } catch (err) {
+            this.hideMyLoading();
+            console.error('[retryNickname] 操作失败:', err);
+            this.showMyDialog({
+              title: '操作失败',
+              content: err.message || '请稍后重试',
+              showCancel: false
+            });
+          }
+        }
+      }
+    });
+  },
+
   // 🔴 无视用户（永久封禁，二次确认）
   ignoreUser(e) {
     const buttonId = e.currentTarget.dataset.buttonId;
@@ -1310,6 +1380,87 @@ Page({
         }
       }
     });
+  },
+
+  // 🔴 切换昵称录入模式
+  toggleNicknameMode() {
+    this.setData({
+      isNicknameMode: !this.data.isNicknameMode,
+      nicknameInput: '' // 切换时清空输入
+    });
+  },
+
+  // 🔴 昵称输入
+  onNicknameInput(e) {
+    this.setData({
+      nicknameInput: e.detail.value.trim()
+    });
+  },
+
+  // 🔴 提交昵称到 valid_users
+  async submitNickname() {
+    const nickname = this.data.nicknameInput.trim();
+    
+    if (!nickname) {
+      this.showMyDialog({
+        title: '提示',
+        content: '请输入昵称',
+        showCancel: false
+      });
+      return;
+    }
+
+    if (this.data.isSubmittingNickname) {
+      return;
+    }
+
+    this.setData({ isSubmittingNickname: true });
+
+    try {
+      // 调用专门的云函数，直接写入 valid_users
+      const res = await wx.cloud.callFunction({
+        name: 'addNicknameToWhitelist',
+        data: {
+          nickname: nickname
+        }
+      });
+
+      console.log('[index] 昵称录入结果:', res.result);
+
+      // 🔴 立即重置提交状态，不依赖对话框回调
+      this.setData({ isSubmittingNickname: false });
+
+      if (res.result && res.result.success) {
+        // 录入成功
+        const message = res.result.message || `昵称 "${nickname}" 已同步到白名单`;
+        // 清空输入框
+        this.setData({ nicknameInput: '' });
+        
+        this.showMyDialog({
+          title: '录入成功',
+          content: message,
+          showCancel: false
+        });
+      } else {
+        // 录入失败
+        const errMsg = res.result?.errMsg || '录入失败，请稍后重试';
+        this.showMyDialog({
+          title: '录入失败',
+          content: errMsg,
+          showCancel: false
+        });
+      }
+    } catch (err) {
+      console.error('[index] 昵称录入失败:', err);
+      // 🔴 确保错误时也重置状态
+      this.setData({ isSubmittingNickname: false });
+      
+      this.showMyDialog({
+        title: '录入失败',
+        content: err.errMsg || '网络错误，请稍后重试',
+        showCancel: false
+      });
+    }
   },
 
   // 🔴 格式化时间
