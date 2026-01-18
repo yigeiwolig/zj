@@ -5,7 +5,7 @@
   <!-- 顶部导航 -->
   <view class="header">
     <view class="back-icon" catchtap="goBack">
-      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+      <text class="back-arrow">‹</text>
     </view>
     <view class="admin-toggle-wrapper" wx:if="{{isAuthorized}}">
       <view class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
@@ -734,8 +734,8 @@
     </view>
   </view>
 
-  <!-- ================= 全局自定义弹窗 (替代原生) ================= -->
-  <view class="custom-dialog-mask" wx:if="{{dialog.show}}" catchtouchmove="noop">
+  <!-- ================= 全局自定义弹窗 (替代原生，带收缩退出动画) ================= -->
+  <view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop">
     <view class="custom-dialog-box" catchtouchmove="noop">
       <view class="cd-title">{{dialog.title}}</view>
       <view class="cd-content">{{dialog.content}}</view>
@@ -749,8 +749,8 @@
     </view>
   </view>
 
-  <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
-  <view class="auto-toast-mask" wx:if="{{autoToast.show}}" catchtouchmove="noop">
+  <!-- ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= -->
+  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
     <view class="auto-toast-box" catchtouchmove="noop">
       <view class="at-title">{{autoToast.title}}</view>
       <view class="at-content">{{autoToast.content}}</view>
@@ -765,8 +765,8 @@
     </view>
   </view>
 
-  <!-- ================= 输入弹窗 (替代 editable modal) ================= -->
-  <view class="custom-dialog-mask" wx:if="{{inputDialog.show}}" catchtouchmove="noop">
+  <!-- ================= 输入弹窗 (替代 editable modal，带收缩退出动画) ================= -->
+  <view class="custom-dialog-mask {{inputDialogClosing ? 'closing' : ''}}" wx:if="{{inputDialog.show}}" catchtouchmove="noop">
     <view class="custom-dialog-box" catchtouchmove="noop">
       <view class="cd-title">{{inputDialog.title}}</view>
       <input 
@@ -877,8 +877,8 @@
     </view>
   </view>
 
-  <!-- ================= 地址信息填写弹窗（管理员填写用户地址） ================= -->
-  <view class="custom-dialog-mask" wx:if="{{showReturnAddressDialog}}" bindtap="closeReturnAddressDialog" catchtouchmove="noop">
+  <!-- ================= 地址信息填写弹窗（管理员填写用户地址，带收缩退出动画） ================= -->
+  <view class="custom-dialog-mask {{returnAddressDialogClosing ? 'closing' : ''}}" wx:if="{{showReturnAddressDialog}}" bindtap="closeReturnAddressDialog" catchtouchmove="noop">
     <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop" style="max-width: 680rpx; padding: 50rpx 40rpx;">
       <view class="cd-title">填写用户地址信息</view>
       <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
@@ -1041,8 +1041,8 @@
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />
 
-<!-- ================= 测试密码输入弹窗 ================= -->
-<view class="custom-dialog-mask" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal" catchtouchmove="noop">
+<!-- ================= 测试密码输入弹窗（带收缩退出动画） ================= -->
+<view class="custom-dialog-mask {{testPasswordModalClosing ? 'closing' : ''}}" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal" catchtouchmove="noop">
   <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop" style="max-width: 600rpx;">
     <view class="cd-title">请输入测试密码</view>
     <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">

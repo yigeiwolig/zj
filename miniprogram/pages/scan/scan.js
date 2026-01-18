@@ -358,9 +358,16 @@ Page({
     
     // 新增：蓝牙未开启提示弹窗
     showBluetoothAlert: false,
+    bluetoothAlertClosing: false, // 蓝牙提示弹窗退出动画中
     
     // 新增：自动校准中弹窗
     showCalibratingModal: false,
+    calibratingModalClosing: false, // 校准弹窗退出动画中
+    
+    // 弹窗退出动画状态
+    passwordModalClosing: false, // 密码弹窗退出动画中
+    tutorialModalClosing: false, // 教程弹窗退出动画中
+    keyModalClosing: false, // 钥匙弹窗退出动画中
     
     // 新增：请先连接蓝牙提示（小胶囊样式）
     showConnectBluetoothTip: false,
@@ -643,10 +650,16 @@ Page({
     this.ble.disconnect();
   },
 
-  // 新增：关闭蓝牙提示弹窗
+  // 新增：关闭蓝牙提示弹窗（带收缩退出动画）
   closeBluetoothAlert() {
     if (this.data.modalBtnDisabled) return; // 防误触：还在锁定中
-    this.setData({ showBluetoothAlert: false });
+    this.setData({ bluetoothAlertClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showBluetoothAlert: false,
+        bluetoothAlertClosing: false
+      });
+    }, 420);
   },
 
 
@@ -906,13 +919,25 @@ Page({
   },
 
   showTutorial(type) {
-    this.setData({
-      showPasswordModal: false,
-      showTutorialModal: true
-    });
-    this.startTutorialLoop(type);
-    // 🔴 启动倒计时
-    this.startTutorialCountdown();
+    // 如果密码弹窗还在显示，先关闭它（带退出动画）
+    if (this.data.showPasswordModal) {
+      this.setData({ passwordModalClosing: true });
+      setTimeout(() => {
+        this.setData({ 
+          showPasswordModal: false,
+          passwordModalClosing: false,
+          showTutorialModal: true
+        });
+        this.startTutorialLoop(type);
+        this.startTutorialCountdown();
+      }, 420);
+    } else {
+      this.setData({
+        showTutorialModal: true
+      });
+      this.startTutorialLoop(type);
+      this.startTutorialCountdown();
+    }
   },
 
   // ===============================================
@@ -928,10 +953,16 @@ Page({
     if (this.data.passwordInput === '1234') {
       this.setData({ 
         isAuthorized: true, // 授权成功，下次不用密码
-        showPasswordModal: false 
+        passwordModalClosing: true 
       });
-      // 密码正确后，进入折叠教程
-      this.showTutorial('fold');
+      // 密码正确后，等待退出动画完成再进入折叠教程
+      setTimeout(() => {
+        this.setData({ 
+          showPasswordModal: false,
+          passwordModalClosing: false
+        });
+        this.showTutorial('fold');
+      }, 420);
     } else {
       this._showCustomToast('密码错误', 'none');
       this.setData({ passwordInput: '' });
@@ -939,7 +970,13 @@ Page({
   },
 
   cancelPassword() {
-    this.setData({ showPasswordModal: false });
+    this.setData({ passwordModalClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showPasswordModal: false,
+        passwordModalClosing: false
+      });
+    }, 420);
   },
 
   // ===============================================
@@ -1010,17 +1047,21 @@ Page({
     }
   },
 
-  // 教程确认按钮
+  // 教程确认按钮（带收缩退出动画）
   finishTutorial() {
     if (this.data.tutorialBtnLocked) return; // 🔴 倒计时锁定中
 
     this.stopTutorialLoop();
     const type = this.data.pendingEditType || 'fold';
-    this.setData({
-      showTutorialModal: false,
-      detailMode: 'edit',
-      editType: type
-    });
+    this.setData({ tutorialModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showTutorialModal: false,
+        detailMode: 'edit',
+        editType: type,
+        tutorialModalClosing: false
+      });
+    }, 420);
 
     // 教程结束后，如果是"打开角度"，初始化新的刻度模式
     if (type === 'open') {
@@ -1073,7 +1114,14 @@ Page({
 
     // 停止循环
     if (this.data.keyLoopTimer) clearTimeout(this.data.keyLoopTimer);
-    this.setData({ showKeyModal: false, detailMode: 'main' });
+    this.setData({ keyModalClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showKeyModal: false, 
+        detailMode: 'main',
+        keyModalClosing: false
+      });
+    }, 420);
   },
 
   // ===============================================
@@ -1670,15 +1718,22 @@ Page({
     this.setData({ showCalibratingModal: true });
   },
   
-  // 🔴 关闭校准弹窗
+  // 🔴 关闭校准弹窗（带收缩退出动画）
   closeCalibratingModal() {
-    this.setData({ showCalibratingModal: false });
+    this.setData({ calibratingModalClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showCalibratingModal: false,
+        calibratingModalClosing: false
+      });
+    }, 420);
   },
   
-  // 🔴 阻止背景滚动
+  // 🔴 阻止背景滚动（空函数，用于 catchtouchmove）
   preventMove() {
     return false;
   },
+  noop() {},
 
   // ===============================================
   // 新增：高级设置交互逻辑

@@ -2,7 +2,7 @@
   <!-- 顶部导航 -->
   <view class="header" wx:if="{{!isVideoFullScreen}}">
     <view class="back-icon" catchtap="handleBack">
-      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+      <text class="back-arrow">‹</text>
     </view>
   </view>
   <!-- 顶部标题保持固定 -->
@@ -194,7 +194,7 @@
 
 
   <!-- 匹配码选择弹窗 -->
-  <view class="match-code-modal" wx:if="{{showMatchCodePicker}}">
+  <view class="match-code-modal {{matchCodePickerClosing ? 'closing' : ''}}" wx:if="{{showMatchCodePicker}}" catchtouchmove="noop">
     <view class="match-code-overlay" catchtap="hideMatchCodePicker"></view>
     <view class="match-code-content">
       <view class="match-code-header">
@@ -226,7 +226,7 @@
   </view>
 
   <!-- 编辑弹窗 -->
-  <view class="edit-modal" wx:if="{{showEditModal}}">
+  <view class="edit-modal {{editModalClosing ? 'closing' : ''}}" wx:if="{{showEditModal}}" catchtouchmove="noop">
     <view class="edit-overlay" catchtap="hideEditModal"></view>
     <view class="edit-content">
       <view class="edit-header">
@@ -253,7 +253,7 @@
 </view>
 
 <!-- 🔴 全屏视频遮罩层：覆盖在整个页面上，不改变 stepIndex -->
-<view class="fullscreen-video-mask {{isVideoFullScreen ? 'active' : ''}} {{fullScreenVideoMaskClosing ? 'closing' : ''}}" wx:if="{{isVideoFullScreen}}" catchtouchmove="true">
+<view class="fullscreen-video-mask {{isVideoFullScreen ? 'active' : ''}} {{fullScreenVideoMaskClosing ? 'closing' : ''}}" wx:if="{{isVideoFullScreen}}" catchtouchmove="noop">
   <view class="fullscreen-video-container {{fullScreenVideoTransform}}" style="{{fullScreenVideoInitialStyle}}" catchtap="toggleFullScreenVideoPlay">
     <view class="fullscreen-close-btn" catchtap="closeFullScreenVideo">✕</view>
     <video 

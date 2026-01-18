@@ -71,7 +71,18 @@ Page({
 
   // --- 邮箱弹窗逻辑 ---
   openModal() { this.setData({ showModal: true, step: 1 }) },
-  closeModal() { this.setData({ showModal: false }) },
+  closeModal() { 
+    this.setData({ modalClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showModal: false,
+        modalClosing: false
+      });
+    }, 420);
+  },
+  
+  // 空函数，用于阻止事件冒泡和滚动
+  noop() {},
   handleInput(e) { this.setData({ emailContent: e.detail.value }) },
 
   // 3. 发送邮件逻辑 (极速消灭系统弹窗版)

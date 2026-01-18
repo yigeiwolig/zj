@@ -5,8 +5,10 @@ Page({
     type: '', // 封禁类型
     canCheck: false, // 冷却期间禁止检查
     showCopySuccessModal: false, // 自定义"内容已复制"弹窗
+    copySuccessModalClosing: false, // 复制成功弹窗退出动画中
     // 【新增】自定义成功提示弹窗
     showCustomSuccessModal: false,
+    customSuccessModalClosing: false, // 成功提示弹窗退出动画中
     successModalTitle: '',
     successModalContent: ''
   },
@@ -25,6 +27,12 @@ Page({
     app.globalData._isJumpingToBlocked = false;
     
     wx.hideHomeButton();
+
+    // 🔴 PC端不需要自动检查，直接返回
+    if (type === 'pc') {
+      console.log('[blocked] PC端访问，停止自动检查');
+      return;
+    }
 
     // 🔴 关键修复：截屏/录屏封禁需要延迟更长时间，等待 banUserByScreenshot 云函数执行完成
     const isScreenshotType = type === 'screenshot' || type === 'record';
@@ -108,8 +116,14 @@ Page({
             successModalContent: ''
           });
           setTimeout(() => {
-            this.setData({ showCustomSuccessModal: false });
-            wx.reLaunch({ url: '/pages/index/index' });
+            this.setData({ customSuccessModalClosing: true });
+            setTimeout(() => {
+              this.setData({ 
+                showCustomSuccessModal: false,
+                customSuccessModalClosing: false
+              });
+              wx.reLaunch({ url: '/pages/index/index' });
+            }, 420);
           }, 1500);
         } else {
           // 其他情况：设置永久授权和昵称，直接放行
@@ -205,7 +219,13 @@ Page({
         // 显示自定义"内容已复制"弹窗
         this.setData({ showCopySuccessModal: true });
         setTimeout(() => {
-          this.setData({ showCopySuccessModal: false });
+          this.setData({ copySuccessModalClosing: true });
+          setTimeout(() => {
+            this.setData({ 
+              showCopySuccessModal: false,
+              copySuccessModalClosing: false
+            });
+          }, 420);
         }, 2000);
       }
     });

@@ -36,11 +36,13 @@ Page({
     // 测试模式
     isTestMode: false,
     
-    // 【新增】自动消失提示（无按钮，2秒后自动消失）
+    // 【新增】自动消失提示（无按钮，3秒后自动消失）
     autoToast: { show: false, title: '', content: '' },
+    autoToastClosing: false, // 自动提示退出动画中
     
     // 【新增】自定义对话框
     dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+    dialogClosing: false, // 自定义弹窗退出动画中
     
     // 【新增】自定义加载动画
     showLoadingAnimation: false,
@@ -1801,17 +1803,43 @@ Page({
     });
   },
   
-  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  // 【新增】自动消失提示（无按钮，3秒后自动消失，带收缩退出动画）
   showAutoToast(title = '提示', content = '') {
+    // 如果已有toast在显示，先关闭它
+    if (this.data.autoToast.show) {
+      this._closeAutoToastWithAnimation();
+      setTimeout(() => {
+        this._showAutoToastInternal(title, content);
+      }, 420);
+    } else {
+      this._showAutoToastInternal(title, content);
+    }
+  },
+
+  // 内部方法：显示自动提示
+  _showAutoToastInternal(title, content) {
     this.setData({
       'autoToast.show': true,
       'autoToast.title': title,
-      'autoToast.content': content
+      'autoToast.content': content,
+      autoToastClosing: false
     });
-    // 2秒后自动消失
+    // 3秒后自动消失（带退出动画）
     setTimeout(() => {
-      this.setData({ 'autoToast.show': false });
-    }, 2000);
+      this._closeAutoToastWithAnimation();
+    }, 3000);
+  },
+
+  // 关闭自动提示（带收缩退出动画）
+  _closeAutoToastWithAnimation() {
+    if (!this.data.autoToast.show) return;
+    this.setData({ autoToastClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'autoToast.show': false,
+        autoToastClosing: false
+      });
+    }, 420);
   },
   
   // 【新增】自定义对话框
@@ -1827,15 +1855,30 @@ Page({
     });
   },
   
-  // 【新增】关闭自定义对话框
+  // 【新增】关闭自定义对话框（带收缩退出动画）
   closeCustomDialog() {
-    this.setData({ 'dialog.show': false });
+    this.setData({ dialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'dialog.show': false,
+        dialogClosing: false
+      });
+    }, 420);
   },
   
-  // 【新增】点击对话框确定
+  // 【新增】点击对话框确定（带收缩退出动画）
   onDialogConfirm() {
     const cb = this.data.dialog.callback;
-    this.setData({ 'dialog.show': false });
-    if (cb) cb({ confirm: true });
-  }
+    this.setData({ dialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'dialog.show': false,
+        dialogClosing: false
+      });
+      if (cb) cb({ confirm: true });
+    }, 420);
+  },
+
+  // 空函数，用于阻止事件冒泡和滚动
+  noop() {}
 })

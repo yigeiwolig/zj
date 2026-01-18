@@ -4,7 +4,7 @@
 <!-- 顶部导航 -->
 <view class="header" wx:if="{{!showVideoPlayer}}">
   <view class="back-icon" catchtap="goBack">
-    <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+    <text class="back-arrow">‹</text>
   </view>
 </view>
 <view class="custom-header" style="padding-top: {{statusBarHeight}}px;">
@@ -210,7 +210,7 @@
 <!-- ================= 弹窗区域 ================= -->
 
 <!-- 5. 初始福利弹窗 -->
-<view class="modal-overlay active" wx:if="{{showIntro}}">
+<view class="modal-overlay active {{introClosing ? 'closing' : ''}}" wx:if="{{showIntro}}" catchtouchmove="noop">
   <view class="ios-dialog">
     <view class="emoji-icon">🎁</view>
     <view class="dialog-title">上传视频赢延保</view>
@@ -220,7 +220,7 @@
 </view>
 
 <!-- 6. 用户表单 -->
-<view class="modal-overlay active" wx:if="{{showForm}}">
+<view class="modal-overlay active {{formClosing ? 'closing' : ''}}" wx:if="{{showForm}}" catchtouchmove="noop">
   <view class="ios-dialog left-align {{formShake ? 'shake' : ''}}">
     
     <!-- 🆕 新增：左上角关闭按钮 -->

@@ -8,7 +8,7 @@
     <!-- 顶部导航 -->
     <view class="header">
       <view class="back-icon" catchtap="goBack">
-        <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+        <text class="back-arrow">‹</text>
       </view>
     </view>
     <view class="nav-back-btn" bindtap="goBack" style="display: none;">
@@ -261,7 +261,24 @@
 <view class="video-preview-modal" wx:if="{{showVideoPreview}}" catchtouchmove="noop">
   <view class="video-preview-box">
     <view class="video-preview-close" bindtap="closeVideoPreview">✕</view>
-    <video src="{{tempVideoPath}}" controls autoplay object-fit="contain" class="video-preview-player"></video>
+    <video 
+      src="{{tempVideoPath}}" 
+      id="repairVideoPreviewPlayer"
+      controls="{{false}}"
+      autoplay="{{true}}" 
+      object-fit="contain" 
+      class="video-preview-player"
+      bindplay="onVideoPlay"
+      bindpause="onVideoPause"
+    ></video>
+    <!-- 🔴 新增：点击层，点击屏幕暂停/播放 -->
+    <view class="video-preview-click-layer" bindtap="toggleVideoPlayPause"></view>
+    <!-- 🔴 新增：暂停时显示的播放图标 -->
+    <view class="video-preview-pause-overlay {{!isVideoPlaying ? 'show' : ''}}" catchtap="toggleVideoPlayPause">
+      <view class="play-icon">
+        <view class="play-triangle"></view>
+      </view>
+    </view>
   </view>
 </view>
 
@@ -470,8 +487,8 @@
     </view>
   </view>
 
-  <!-- 5. 全局自定义弹窗 -->
-  <view class="custom-dialog-mask" wx:if="{{dialog.show}}" bindtap="onDialogMaskTap">
+  <!-- 5. 全局自定义弹窗（带收缩退出动画） -->
+  <view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="onDialogMaskTap" catchtouchmove="noop">
     <view class="custom-dialog-box" catchtap="noop">
       <view class="cd-title">{{dialog.title}}</view>
       <view class="cd-content">{{dialog.content}}</view>
@@ -482,8 +499,8 @@
     </view>
   </view>
 
-  <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
-  <view class="auto-toast-mask" wx:if="{{autoToast.show}}">
+  <!-- ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= -->
+  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
     <view class="auto-toast-box">
       <view class="at-title">{{autoToast.title}}</view>
       <view class="at-content">{{autoToast.content}}</view>
@@ -519,5 +536,52 @@
   </view>
 
 </view>
+
+<!-- 🔴 新增：上传选项弹窗（选择相册/录制） -->
+<view class="modal-overlay active" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions">
+  <view class="ios-dialog" catchtap="preventBubble">
+    <view class="dialog-title center">选择上传方式</view>
+    <view class="upload-options">
+      <view class="option-item" bindtap="chooseVideoFromAlbum" data-action="album">
+        <view class="option-icon">📷</view>
+        <view class="option-text">从相册选择</view>
+      </view>
+      <view class="option-item" bindtap="chooseRecord" data-action="record">
+        <view class="option-icon">🎥</view>
+        <view class="option-text">录制视频</view>
+      </view>
+    </view>
+    <button class="dialog-btn" style="background:#eee; color:#000; margin-top:20rpx;" bindtap="closeUploadOptions">取消</button>
+  </view>
+</view>
+
+<!-- 🔴 新增：录制全屏页（参考 case 页面） -->
+<view class="camera-full-screen {{cameraAnimating ? 'animating' : 'animated'}}" wx:if="{{showCamera}}" catchtouchmove="preventScroll">
+  <camera device-position="back" flash="off" style="width: 100%; height: 100%;" bindready="onCameraReady">
+    <cover-view class="cam-overlay">
+      <!-- 1. 顶部布局：红点 + 白色时间 -->
+      <cover-view class="rec-header-layout">
+        <!-- 红点：isRecording为true时显示并闪烁 -->
+        <cover-view class="rec-dot {{isRecording ? 'active' : ''}}"></cover-view>
+        <cover-view class="rec-time-text">{{recTimeStr}}</cover-view>
+      </cover-view>
+      
+      <!-- 2. 隐私提示：只有文字，胶囊风格 -->
+      <cover-view class="privacy-tip {{showPrivacyTip ? 'show' : ''}}">
+        <cover-view class="privacy-text">MT团队将人工打码保障您的隐私信息</cover-view>
+      </cover-view>
+    </cover-view>
+  </camera>
+
+  <!-- 底部控制 -->
+  <cover-view class="cam-controls">
+    <cover-view class="cam-btn text-btn" bindtap="closeCamera">取消</cover-view>
+    <cover-view class="shutter-outer" catchtap="toggleRecord">
+      <cover-view class="shutter-inner {{isRecording ? 'recording breathing' : ''}}"></cover-view>
+    </cover-view>
+    <cover-view class="cam-btn" style="width: 40px;"></cover-view>
+  </cover-view>
+</view>
+
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />

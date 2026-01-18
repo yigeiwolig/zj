@@ -298,12 +298,16 @@ Page({
   },
 
   closeCustomEditModal() {
-    this.setData({
-      showCustomEditModal: false,
-      customEditTitle: '',
-      customEditVal: '',
-      customEditCallback: null
-    });
+    this.setData({ customEditModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showCustomEditModal: false,
+        customEditTitle: '',
+        customEditVal: '',
+        customEditCallback: null,
+        customEditModalClosing: false
+      });
+    }, 420);
   },
 
   confirmCustomEdit() {

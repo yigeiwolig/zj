@@ -1,5 +1,6 @@
 {
   "pages": [
+    "pages/blocked/blocked",
     "pages/index/index",
     "pages/shop/shop",
     "pages/my/my",
@@ -9,7 +10,6 @@
     "pages/case/case",
     "pages/pagenew/pagenew",
     "pages/scan/scan",
-    "pages/blocked/blocked",
     "pages/adminLite/adminLite",
     "pages/admin/admin",
     "pages/paihang/paihang",
@@ -28,7 +28,6 @@
     "navigationBarTextStyle": "black",
     "backgroundColor": "#F9F9F9"
   },
-  "renderer": "webview",
   "permission": {
     "scope.userLocation": {
       "desc": "用于展示附近维修门店和计算配送距离"
@@ -43,7 +42,6 @@
   ],
   "style": "v2",
   "sitemapLocation": "sitemap.json",
-  "lazyCodeLoading": "requiredComponents",
   "plugins": {
     "kuaidi100": {
       "version": "1.1.4",

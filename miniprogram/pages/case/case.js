@@ -18,11 +18,15 @@ Page({
     
     // --- 页面状态 ---
     showIntro: true,
+    introClosing: false, // 介绍弹窗退出动画中
     showCamera: false,
-    showForm: false,      
+    showForm: false,
+    formClosing: false, // 表单弹窗退出动画中
     showSuccess: false,
     showUploadOptions: false, // 显示上传选项弹窗（选择相册/录制）
-    showBindDeviceTip: false, // 显示绑定设备提示弹窗   
+    showBindDeviceTip: false, // 显示绑定设备提示弹窗
+    showCategoryPickerModal: false,
+    categoryPickerClosing: false, // 分类选择器退出动画中   
     
     // --- 播放器与管理员状态 ---
     showVideoPlayer: false, 
@@ -1620,16 +1624,20 @@ Page({
     });
   },
 
-  // 🆕 关闭用户表单
+  // 🆕 关闭用户表单（带收缩退出动画）
   closeForm() {
-    this.setData({
-      showForm: false,
-      videoPath: null, // 清空临时视频路径
-      // 清空表单数据（可选）
-      vehicleName: '',
-      categoryIndex: null, // 🔴 修复：按照 zj4 的写法，重置为 null
-      modelIndex: null // 🔴 修复：按照 zj4 的写法，重置为 null
-    });
+    this.setData({ formClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showForm: false,
+        formClosing: false,
+        videoPath: null, // 清空临时视频路径
+        // 清空表单数据（可选）
+        vehicleName: '',
+        categoryIndex: null, // 🔴 修复：按照 zj4 的写法，重置为 null
+        modelIndex: null // 🔴 修复：按照 zj4 的写法，重置为 null
+      });
+    }, 420);
   },
 
   deleteCase(e) {
@@ -1704,7 +1712,15 @@ Page({
       showModelPickerModal: false
     }); 
   },
-  closeIntro() { this.setData({ showIntro: false }); },
+  closeIntro() { 
+    this.setData({ introClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showIntro: false,
+        introClosing: false
+      });
+    }, 420);
+  },
   closeSuccess() { this.setData({ showSuccess: false }); },
   onInputVehicle(e) { this.setData({ vehicleName: e.detail.value }); },
   
@@ -1749,8 +1765,17 @@ Page({
     });
   },
   closeCategoryPicker() {
-    this.setData({ showCategoryPickerModal: false });
+    this.setData({ categoryPickerClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showCategoryPickerModal: false,
+        categoryPickerClosing: false
+      });
+    }, 420);
   },
+
+  // 空函数，用于阻止事件冒泡和滚动
+  noop() {},
   onCategoryPickerChange(e) {
     const index = e.detail.value[0];
     this.setData({ tempCategoryIndex: index });

@@ -97,14 +97,33 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .header {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
   padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
-  box-sizing: border-box; display: flex; justify-content: center; align-items: center;
-  z-index: 10000; pointer-events: none;
+  box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
+  z-index: 100; pointer-events: none;
   background: transparent; 
 }
 .back-icon {
-  position: absolute;
-  left: 40rpx;
+  width: 70rpx;
+  height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   pointer-events: auto;
+  transition: all 0.2s;
+}
+.back-icon:active {
+  transform: scale(0.95);
+  opacity: 0.7;
+}
+.back-icon::before {
+  display: none;
+}
+
+/* 统一返回箭头样式 */
+.back-arrow {
+  font-size: 48rpx;
+  font-weight: 300;
+  color: #000;
+  line-height: 1;
 }
 .admin-toggle-wrapper {
   pointer-events: auto;
@@ -856,15 +875,47 @@ page { background: #F7F7F7; color: #1D1D1F; }
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
   overflow: hidden; /* 防止页面滚动 */
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }
+.custom-dialog-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   position: relative;
   z-index: 99999999;
 }
-@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+.custom-dialog-mask.closing .custom-dialog-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
+}
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
 .cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
@@ -1240,15 +1291,47 @@ page { background: #F7F7F7; color: #1D1D1F; }
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
   overflow: hidden; /* 防止页面滚动 */
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }
+.custom-dialog-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   position: relative;
   z-index: 99999999;
 }
-@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+.custom-dialog-mask.closing .custom-dialog-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
+}
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
 .cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
@@ -1567,15 +1650,47 @@ page { background: #F7F7F7; color: #1D1D1F; }
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
   overflow: hidden; /* 防止页面滚动 */
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }
+.custom-dialog-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   position: relative;
   z-index: 99999999;
 }
-@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+.custom-dialog-mask.closing .custom-dialog-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
+}
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
 .cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
@@ -1894,15 +2009,47 @@ page { background: #F7F7F7; color: #1D1D1F; }
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
   overflow: hidden; /* 防止页面滚动 */
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }
+.custom-dialog-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   position: relative;
   z-index: 99999999;
 }
-@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+.custom-dialog-mask.closing .custom-dialog-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
+}
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
 .cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
@@ -2221,15 +2368,47 @@ page { background: #F7F7F7; color: #1D1D1F; }
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
   overflow: hidden; /* 防止页面滚动 */
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }
+.custom-dialog-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   position: relative;
   z-index: 99999999;
 }
-@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+.custom-dialog-mask.closing .custom-dialog-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
+}
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
 .cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
@@ -2548,15 +2727,47 @@ page { background: #F7F7F7; color: #1D1D1F; }
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
   overflow: hidden; /* 防止页面滚动 */
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }
+.custom-dialog-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   position: relative;
   z-index: 99999999;
 }
-@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+.custom-dialog-mask.closing .custom-dialog-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
+}
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
 .cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
@@ -2875,15 +3086,47 @@ page { background: #F7F7F7; color: #1D1D1F; }
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 99999999; display: flex; align-items: center; justify-content: center;
   overflow: hidden; /* 防止页面滚动 */
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }
+.custom-dialog-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
-  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2); animation: popIn 0.2s ease-out;
+  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   position: relative;
   z-index: 99999999;
 }
-@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
+.custom-dialog-mask.closing .custom-dialog-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
+}
 
 .cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
 .cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; }
@@ -4204,7 +4447,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 }
 
 
-/* ================= 自动消失提示样式（无按钮，2秒后自动消失）- 优化版 ================= */
+/* ================= 自动消失提示样式（无按钮，3秒后自动消失，带收缩退出动画） ================= */
 .auto-toast-mask {
   position: fixed;
   top: 0;
@@ -4220,6 +4463,18 @@ page { background: #F7F7F7; color: #1D1D1F; }
   justify-content: center;
   pointer-events: none; /* 允许点击穿透 */
   overflow: hidden; /* 防止页面滚动 */
+  animation: autoToastMaskFadeIn 0.25s ease-out forwards;
+}
+.auto-toast-mask.closing {
+  animation: autoToastMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes autoToastMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes autoToastMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .auto-toast-box {
@@ -4231,10 +4486,24 @@ page { background: #F7F7F7; color: #1D1D1F; }
   box-shadow: 
     0 20rpx 60rpx rgba(0, 0, 0, 0.12),
     0 8rpx 24rpx rgba(0, 0, 0, 0.08);
-  animation: autoToastFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), 
-             autoToastFadeOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) 1.7s forwards;
+  animation: autoToastFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; /* 移除自动退出，改为手动触发 */
   position: relative;
   overflow: hidden;
+}
+.auto-toast-mask.closing .auto-toast-box {
+  animation: autoToastShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes autoToastShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
 }
 
 /* 添加微妙的边框 */
@@ -4265,16 +4534,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   }
 }
 
-@keyframes autoToastFadeOut {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-20rpx) scale(0.96);
-  }
-}
+/* autoToastFadeOut 已移除，改用 autoToastShrinkOut（手动触发） */
 
 .at-title {
   font-size: 34rpx;

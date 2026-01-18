@@ -6,14 +6,18 @@
     <image class="shield-icon" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgMjJDMTIgMjIgMjAgMTggMjAgMTJWNUwxMiAyTDQgNVYxMkM0IDE4IDEyIDIyIDEyIDIyWiIgZmlsbD0iYmxhY2siLz48cGF0aCBkPSJNMTIgNkMxMi41NSA2IDEzIDYuNDUgMTMgN1YxM0MxMyAxMy41NSAxMi41NSAxNCAxMiAxNEMxMS40NSAxNCAxMSAxMy41NSAxMSAxM1Y3QzExIDYuNDUgMTEuNDUgNiAxMiA2WiIgZmlsbD0id2hpdGUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjE3IiByPSIxIiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPgo=" mode="aspectFit"></image>
   </view>
   
-  <view class="title">访问受限</view>
+  <view class="title">{{type === 'pc' ? '不支持PC端' : '访问受限'}}</view>
   
-  <view class="desc">
+  <view class="desc" wx:if="{{type !== 'pc'}}">
     <view>为了防止恶意攻击服务器</view>
     <view>请联系管理员录入信息</view>
   </view>
+  <view class="desc" wx:if="{{type === 'pc'}}">
+    <view>本小程序仅支持在手机上使用</view>
+    <view>请在微信手机端打开小程序</view>
+  </view>
 
-  <view class="btn-area">
+  <view class="btn-area" wx:if="{{type !== 'pc'}}">
     <button class="copy-btn" hover-class="btn-hover" bindtap="handleCopyWechat">
       联系管理员开通
     </button>
@@ -36,7 +40,7 @@
 </view>
 
 <!-- 【新增】自定义成功提示弹窗 - 白底黑字样式 -->
-<view class="custom-modal-mask" wx:if="{{showCustomSuccessModal}}">
+<view class="custom-modal-mask {{customSuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCustomSuccessModal}}" catchtouchmove="noop">
   <view class="custom-modal-box success-modal">
     <!-- 图标：使用 Unicode 字符 -->
     <view class="modal-icon-new success-icon">✓</view>

@@ -3,7 +3,7 @@
   <!-- 顶部导航 -->
   <view class="header">
     <view class="back-icon" catchtap="goBack">
-      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+      <text class="back-arrow">‹</text>
     </view>
     <view class="nav-logo">MT控制中心</view>
   </view>
@@ -27,7 +27,7 @@
   <!-- ======================= -->
   <!-- 新增：自动校准中弹窗 -->
   <!-- ======================= -->
-  <view class="password-modal-mask" wx:if="{{showCalibratingModal}}" catchtouchmove="preventMove">
+  <view class="password-modal-mask {{calibratingModalClosing ? 'closing' : ''}}" wx:if="{{showCalibratingModal}}" catchtouchmove="noop">
     <view class="password-box">
       <view class="calibrating-icon-wrap">
         <view class="calibrating-spinner"></view>
@@ -44,7 +44,7 @@
   <!-- ======================= -->
   <!-- 1. 密码验证弹窗 -->
   <!-- ======================= -->
-  <view class="password-modal-mask" wx:if="{{showPasswordModal}}">
+  <view class="password-modal-mask {{passwordModalClosing ? 'closing' : ''}}" wx:if="{{showPasswordModal}}" catchtouchmove="noop">
     <view class="password-box">
       <view class="pass-title">安全验证</view>
       <view class="pass-desc">调节折叠角度需要管理员权限</view>
@@ -59,7 +59,7 @@
   <!-- ======================= -->
   <!-- 2. 操作指引弹窗 -->
   <!-- ======================= -->
-  <view class="password-modal-mask" wx:if="{{showTutorialModal}}">
+  <view class="password-modal-mask {{tutorialModalClosing ? 'closing' : ''}}" wx:if="{{showTutorialModal}}" catchtouchmove="noop">
     <view class="password-box">
       <view class="pass-title" style="margin-bottom: 60rpx;">操作指引</view>
       <view class="anim-stage">
@@ -80,7 +80,7 @@
   <!-- ======================= -->
   <!-- 3. 关钥匙动画弹窗 -->
   <!-- ======================= -->
-  <view class="password-modal-mask" wx:if="{{showKeyModal}}">
+  <view class="password-modal-mask {{keyModalClosing ? 'closing' : ''}}" wx:if="{{showKeyModal}}" catchtouchmove="noop">
     <view class="password-box">
       <view class="pass-title" style="margin-bottom: 60rpx;">操作完成</view>
       <view class="anim-stage">

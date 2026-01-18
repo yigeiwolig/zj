@@ -3,7 +3,9 @@ Component({
   data: {
     modal: { show: false },
     toast: { show: false },
-    loading: { show: false }
+    loading: { show: false },
+    modalClosing: false, // Modal退出动画中
+    toastClosing: false // Toast退出动画中
   },
   methods: {
     preventTouchMove() {
@@ -28,38 +30,84 @@ Component({
       });
     },
     hideModal() {
-      this.setData({ 'modal.show': false });
+      this.setData({ modalClosing: true });
+      setTimeout(() => {
+        this.setData({ 
+          'modal.show': false,
+          modalClosing: false
+        });
+      }, 420);
     },
     onCancel() {
       const { success, fail } = this.data.modal;
-      this.hideModal();
-      if (success) success({ confirm: false, cancel: true, errMsg: "showModal:ok" });
+      this.setData({ modalClosing: true });
+      setTimeout(() => {
+        this.setData({ 
+          'modal.show': false,
+          modalClosing: false
+        });
+        if (success) success({ confirm: false, cancel: true, errMsg: "showModal:ok" });
+      }, 420);
     },
     onConfirm() {
       const { success, fail } = this.data.modal;
-      this.hideModal();
-      if (success) success({ confirm: true, cancel: false, errMsg: "showModal:ok" });
+      this.setData({ modalClosing: true });
+      setTimeout(() => {
+        this.setData({ 
+          'modal.show': false,
+          modalClosing: false
+        });
+        if (success) success({ confirm: true, cancel: false, errMsg: "showModal:ok" });
+      }, 420);
     },
 
-    // Toast
+    // Toast（带收缩退出动画）
     showToast(opts) {
       const duration = opts.duration || 1500;
+      // 如果已有toast在显示，先关闭它
+      if (this.data.toast.show) {
+        this._closeToastWithAnimation();
+        setTimeout(() => {
+          this._showToastInternal(opts, duration);
+        }, 420);
+      } else {
+        this._showToastInternal(opts, duration);
+      }
+    },
+    // 内部方法：显示Toast
+    _showToastInternal(opts, duration) {
       this.setData({
         toast: {
           show: true,
           title: opts.title || '',
           icon: opts.icon || 'none'
-        }
+        },
+        toastClosing: false
       });
       if (this._toastTimer) clearTimeout(this._toastTimer);
       this._toastTimer = setTimeout(() => {
-        this.setData({ 'toast.show': false });
-        if (opts.success) opts.success({ errMsg: "showToast:ok" });
+        this._closeToastWithAnimation(() => {
+          if (opts.success) opts.success({ errMsg: "showToast:ok" });
+        });
       }, duration);
     },
+    // 关闭Toast（带收缩退出动画）
+    _closeToastWithAnimation(callback) {
+      if (!this.data.toast.show) {
+        if (callback) callback();
+        return;
+      }
+      this.setData({ toastClosing: true });
+      setTimeout(() => {
+        this.setData({ 
+          'toast.show': false,
+          toastClosing: false
+        });
+        if (callback) callback();
+      }, 420);
+    },
     hideToast() {
-      if (this._toastTimer) clearTimeout(this._toastTimer);
-      this.setData({ 'toast.show': false });
+      this._closeToastWithAnimation();
     },
 
     // Loading

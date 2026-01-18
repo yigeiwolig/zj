@@ -126,10 +126,12 @@ Page({
 
     // 全局自定义弹窗
     dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+    dialogClosing: false, // 自定义弹窗退出动画中
+    autoToastClosing: false, // 自动提示退出动画中
 
     // 自定义视频预览弹窗
     showVideoPreview: false,
-    
+    isVideoPlaying: true, // 视频播放状态（用于预览弹窗）
 
     // 临时视频信息
     tempVideoPath: '',
@@ -148,6 +150,16 @@ Page({
 
     // 是否正在上传视频（防止重复点击）
     isUploadingVideo: false,
+
+    // 🔴 上传选项和录制相关状态（参考 case 页面）
+    showUploadOptions: false, // 显示上传选项弹窗（选择相册/录制）
+    showCamera: false, // 显示录制界面
+    cameraAnimating: false, // 录制页面动画状态
+    isRecording: false, // 是否正在录制
+    recTimeStr: "00:00", // 录制时间字符串
+    timer: null, // 录制计时器
+    showPrivacyTip: false, // 隐私提示显隐控制
+    isStopping: false, // 防止重复点击停止按钮
 
     // 拖拽排序相关
     dragIndex: -1,        // 当前拖拽的卡片索引
@@ -191,6 +203,26 @@ Page({
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('shouhou');
+    }
+  },
+
+  // 🔴 新增：页面准备就绪，初始化 camera context（参考 case 页面）
+  onReady() {
+    this.ctx = wx.createCameraContext();
+    
+    // 🔴 物理防线：确保录屏、截屏出来的全是黑屏
+    if (wx.setVisualEffectOnCapture) {
+      try {
+        wx.setVisualEffectOnCapture({
+          visualEffect: 'hidden',
+          success: () => console.log('🛡️ 硬件级防偷拍锁定'),
+          fail: (err) => {
+            console.warn('⚠️ setVisualEffectOnCapture 失败（可能是预览模式）:', err);
+          }
+        });
+      } catch (e) {
+        console.warn('⚠️ setVisualEffectOnCapture 不可用:', e);
+      }
     }
     
     // 🔴 截屏/录屏封禁
@@ -271,20 +303,52 @@ Page({
     console.log('[showMyDialog] 弹窗状态已更新，dialog.show:', this.data.dialog.show);
   },
   closeCustomDialog() {
-    this.setData({ dialog: { ...this.data.dialog, show: false, callback: null } });
+    this.setData({ dialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        dialog: { ...this.data.dialog, show: false, callback: null },
+        dialogClosing: false
+      });
+    }, 420);
   },
 
-  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  // 【新增】自动消失提示（无按钮，3秒后自动消失，带收缩退出动画）
   showAutoToast(title = '提示', content = '') {
+    // 如果已有toast在显示，先关闭它
+    if (this.data.autoToast.show) {
+      this._closeAutoToastWithAnimation();
+      setTimeout(() => {
+        this._showAutoToastInternal(title, content);
+      }, 420);
+    } else {
+      this._showAutoToastInternal(title, content);
+    }
+  },
+
+  // 内部方法：显示自动提示
+  _showAutoToastInternal(title, content) {
     this.setData({
       'autoToast.show': true,
       'autoToast.title': title,
-      'autoToast.content': content
+      'autoToast.content': content,
+      autoToastClosing: false
     });
-    // 2秒后自动消失
+    // 3秒后自动消失（带退出动画）
     setTimeout(() => {
-      this.setData({ 'autoToast.show': false });
-    }, 2000);
+      this._closeAutoToastWithAnimation();
+    }, 3000);
+  },
+
+  // 关闭自动提示（带收缩退出动画）
+  _closeAutoToastWithAnimation() {
+    if (!this.data.autoToast.show) return;
+    this.setData({ autoToastClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'autoToast.show': false,
+        autoToastClosing: false
+      });
+    }, 420);
   },
 
   // 🔴 辅助函数：获取 custom-toast 组件并调用
@@ -342,14 +406,17 @@ Page({
   onDialogConfirm() {
     console.log('[onDialogConfirm] 用户点击了确定按钮');
     const cb = this.data.dialog && this.data.dialog.callback;
-    this.closeCustomDialog();
-    if (typeof cb === 'function') {
-      console.log('[onDialogConfirm] 执行回调函数');
-      // 延迟执行回调，确保弹窗关闭动画完成后再跳转
-      setTimeout(() => {
+    this.setData({ dialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        dialog: { ...this.data.dialog, show: false, callback: null },
+        dialogClosing: false
+      });
+      if (typeof cb === 'function') {
+        console.log('[onDialogConfirm] 执行回调函数');
         cb();
-      }, 300);
-    }
+      }
+    }, 420);
   },
   onDialogMaskTap() {
     if (this.data.dialog && this.data.dialog.maskClosable) {
@@ -361,10 +428,50 @@ Page({
   // ================= 视频预览 =================
   openVideoPreview() {
     if (!this.data.tempVideoPath) return;
-    this.setData({ showVideoPreview: true });
+    this.setData({ 
+      showVideoPreview: true,
+      isVideoPlaying: true // 打开时默认播放
+    });
   },
   closeVideoPreview() {
-    this.setData({ showVideoPreview: false });
+    // 停止视频播放
+    const videoContext = wx.createVideoContext('repairVideoPreviewPlayer');
+    if (videoContext) {
+      videoContext.pause();
+    }
+    
+    this.setData({ 
+      showVideoPreview: false,
+      isVideoPlaying: true // 重置播放状态
+    });
+  },
+
+  // 🔴 新增：切换播放/暂停（预览弹窗）
+  toggleVideoPlayPause() {
+    const videoContext = wx.createVideoContext('repairVideoPreviewPlayer');
+    if (!videoContext) {
+      return;
+    }
+
+    if (this.data.isVideoPlaying) {
+      videoContext.pause();
+    } else {
+      videoContext.play();
+    }
+  },
+
+  // 🔴 新增：视频播放事件（预览弹窗）
+  onVideoPlay() {
+    this.setData({
+      isVideoPlaying: true
+    });
+  },
+
+  // 🔴 新增：视频暂停事件（预览弹窗）
+  onVideoPause() {
+    this.setData({
+      isVideoPlaying: false
+    });
   },
 
   // 删除已选择的故障视频
@@ -551,26 +658,22 @@ Page({
         
         if (unfinishedReturns.length > 0) {
           // 有未完成的寄回订单，显示提示并阻止切换
-          this.showMyDialog({
-            title: '提示',
-            content: '检测到您有一笔未完成的售后，未寄回维修配件，请先处理完成',
-            showCancel: false,
-            confirmText: '去处理',
-            callback: () => {
-              // 跳转到个人中心
-              console.log('[checkUnfinishedReturn] 准备跳转到 my 页面');
-              wx.navigateTo({ 
-                url: '/pages/my/my',
-                success: () => {
-                  console.log('[checkUnfinishedReturn] 跳转成功');
-                },
-                fail: (err) => {
-                  console.error('[checkUnfinishedReturn] 跳转失败:', err);
-                  this._showCustomToast('跳转失败，请手动进入个人中心', 'none');
-                }
-              });
-            }
-          });
+          this.showAutoToast('提示', '检测到您有一笔未完成的售后，未寄回维修配件，请先处理完成');
+          // 延迟跳转，让用户看到提示
+          setTimeout(() => {
+            // 跳转到个人中心
+            console.log('[checkUnfinishedReturn] 准备跳转到 my 页面');
+            wx.navigateTo({ 
+              url: '/pages/my/my',
+              success: () => {
+                console.log('[checkUnfinishedReturn] 跳转成功');
+              },
+              fail: (err) => {
+                console.error('[checkUnfinishedReturn] 跳转失败:', err);
+                this._showCustomToast('跳转失败，请手动进入个人中心', 'none');
+              }
+            });
+          }, 3000);
           return; // 不切换服务类型
         }
         
@@ -1649,36 +1752,51 @@ Page({
     });
   },
 
-  // 视频上传模拟
+  // 🔴 修改：显示上传选项弹窗（参考 case 页面）
   chooseVideo() {
-    wx.chooseMedia({
-      count: 1,
-      mediaType: ['video'],
-      sourceType: ['album', 'camera'], // 允许从相册或相机选择
-      success: (res) => {
-        console.log('选择视频成功:', res);
-        if (res.tempFiles && res.tempFiles.length > 0) {
-          const file = res.tempFiles[0];
-          console.log('视频文件信息:', file);
-          if (file.tempFilePath) {
+    this.setData({ showUploadOptions: true });
+  },
+
+  // 🔴 新增：关闭上传选项弹窗
+  closeUploadOptions() {
+    this.setData({ showUploadOptions: false });
+  },
+
+  // 🔴 新增：从相册选择视频（参考 case 页面）
+  chooseVideoFromAlbum(e) {
+    console.log('✅ chooseVideoFromAlbum 被调用', e);
+    
+    // 🔴 强制关闭录制层，防止它的 z-index 盖住表单
+    this.setData({ 
+      showUploadOptions: false,
+      showCamera: false,
+      cameraAnimating: false,
+      isRecording: false
+    });
+    
+    setTimeout(() => {
+      wx.chooseVideo({
+        sourceType: ['album'],
+        maxDuration: 60,
+        camera: 'back',
+        success: (res) => {
+          console.log('✅ 选择视频成功:', res);
+          if (res.tempFilePath) {
             // 如果有微信自动生成的封面，直接使用
-            if (file.thumbTempFilePath) {
+            if (res.thumbTempFilePath) {
               this.setData({ 
                 videoFileName: '已选择视频 (点击重新上传)',
-                tempVideoPath: file.tempFilePath,
-                tempVideoThumb: file.thumbTempFilePath // 保存封面
+                tempVideoPath: res.tempFilePath,
+                tempVideoThumb: res.thumbTempFilePath
               });
-              // 静默成功（不使用原生 toast）
             } else {
               // 如果没有封面，先保存视频路径，然后尝试提取封面
               this.setData({ 
                 videoFileName: '已选择视频 (点击重新上传)',
-                tempVideoPath: file.tempFilePath,
-                tempVideoThumb: '', // 先清空封面
-                extractingThumb: true // 标记正在提取封面
+                tempVideoPath: res.tempFilePath,
+                tempVideoThumb: '',
+                extractingThumb: true
               });
-              // 不使用原生 loading
-              getApp().showDialog({ title: '处理中', content: '正在提取封面，请稍后...', showCancel: false });
               // 延迟一下，确保视频组件已准备好
               setTimeout(() => {
                 this.captureRepairVideoFrame();
@@ -1688,20 +1806,329 @@ Page({
             console.error('视频文件路径不存在');
             this._showCustomToast('视频文件异常，请重试', 'none');
           }
-        } else {
-          console.error('未选择到视频文件');
-          this._showCustomToast('未选择视频', 'none');
+        },
+        fail: (err) => {
+          // 用户取消不提示
+          if (err && (err.errMsg || '').includes('cancel')) {
+            return;
+          }
+          console.error('❌ 选择视频失败:', err);
+          this._showCustomToast('选择失败: ' + (err.errMsg || '未知错误'), 'none', 3000);
         }
+      });
+    }, 300);
+  },
+
+  // 🔴 新增：选择录制（参考 case 页面）
+  chooseRecord(e) {
+    console.log('✅ chooseRecord 被调用', e);
+    
+    // 🔴 确保关闭上传选项弹窗，避免层级冲突
+    this.setData({ showUploadOptions: false });
+    
+    // 先请求摄像头和麦克风权限
+    this.requestCameraAndMicrophonePermission().then(() => {
+      // 权限获取成功，延迟一下让弹窗关闭动画完成
+      setTimeout(() => {
+        if (typeof this.openCamera === 'function') {
+          console.log('📷 权限已获取，准备调用 openCamera');
+          this.openCamera();
+        } else {
+          console.error('❌ openCamera 方法不存在');
+          this._showCustomToast('打开相机失败：方法不存在', 'none', 3000);
+        }
+      }, 300);
+    }).catch((err) => {
+      console.error('❌ 权限获取失败:', err);
+      // 权限获取失败，不打开相机
+    });
+  },
+
+  // 🔴 新增：请求摄像头和麦克风权限（参考 case 页面）
+  requestCameraAndMicrophonePermission() {
+    return new Promise((resolve, reject) => {
+      wx.getSetting({
+        success: (res) => {
+          const cameraAuth = res.authSetting['scope.camera'];
+          const recordAuth = res.authSetting['scope.record'];
+          
+          // 如果两个权限都已授权，直接resolve
+          if (cameraAuth === true && recordAuth === true) {
+            console.log('✅ 摄像头和麦克风权限已授权');
+            resolve();
+            return;
+          }
+          
+          // 如果有权限被拒绝且不可再次请求，提示用户去设置
+          if (cameraAuth === false || recordAuth === false) {
+            this.showMyDialog({
+              title: '需要权限',
+              content: '录制视频需要摄像头和麦克风权限，请在设置中开启',
+              showCancel: true,
+              confirmText: '去设置',
+              cancelText: '取消',
+              success: (modalRes) => {
+                if (modalRes.confirm) {
+                  wx.openSetting({
+                    success: (settingRes) => {
+                      if (settingRes.authSetting['scope.camera'] && settingRes.authSetting['scope.record']) {
+                        resolve();
+                      } else {
+                        reject(new Error('用户未开启权限'));
+                      }
+                    },
+                    fail: () => {
+                      reject(new Error('打开设置失败'));
+                    }
+                  });
+                } else {
+                  reject(new Error('用户取消授权'));
+                }
+              }
+            });
+            return;
+          }
+          
+          // 请求摄像头权限
+          const requestCamera = () => {
+            return new Promise((resolveCam, rejectCam) => {
+              if (cameraAuth === true) {
+                resolveCam();
+                return;
+              }
+              wx.authorize({
+                scope: 'scope.camera',
+                success: () => {
+                  console.log('✅ 摄像头权限授权成功');
+                  resolveCam();
+                },
+                fail: (err) => {
+                  console.error('❌ 摄像头权限授权失败:', err);
+                  rejectCam(err);
+                }
+              });
+            });
+          };
+          
+          // 请求麦克风权限
+          const requestRecord = () => {
+            return new Promise((resolveRec, rejectRec) => {
+              if (recordAuth === true) {
+                resolveRec();
+                return;
+              }
+              wx.authorize({
+                scope: 'scope.record',
+                success: () => {
+                  console.log('✅ 麦克风权限授权成功');
+                  resolveRec();
+                },
+                fail: (err) => {
+                  console.error('❌ 麦克风权限授权失败:', err);
+                  rejectRec(err);
+                }
+              });
+            });
+          };
+          
+          // 依次请求两个权限
+          requestCamera().then(() => {
+            return requestRecord();
+          }).then(() => {
+            resolve();
+          }).catch((err) => {
+            reject(err);
+          });
+        },
+        fail: (err) => {
+          console.error('❌ 获取权限设置失败:', err);
+          reject(err);
+        }
+      });
+    });
+  },
+
+  // 🔴 新增：阻止事件冒泡
+  preventBubble(e) {
+    if (e) {
+      e.stopPropagation && e.stopPropagation();
+    }
+  },
+
+  // 🔴 新增：阻止滚动
+  preventScroll() {
+    return false;
+  },
+
+  // 🔴 新增：相机准备就绪（在 onReady 中调用，用于创建 camera context）
+  onCameraReady() {
+    this.ctx = wx.createCameraContext();
+  },
+
+  // 🔴 新增：打开相机（参考 case 页面）
+  openCamera() {
+    // 1. 先设置显示状态
+    this.setData({ 
+      showCamera: true, 
+      cameraAnimating: true,
+      showPrivacyTip: true 
+    }); 
+    
+    // 2. 使用短延迟触发弹出动画
+    if (typeof wx.nextTick === 'function') {
+      wx.nextTick(() => {
+        this.setData({ cameraAnimating: false });
+      });
+    } else {
+      setTimeout(() => {
+        this.setData({ cameraAnimating: false });
+      }, 16);
+    }
+    
+    // 3. 隐私提示显示 4 秒后自动消失
+    setTimeout(() => {
+      this.setData({ showPrivacyTip: false });
+    }, 4000);
+  },
+
+  // 🔴 新增：关闭相机（参考 case 页面）
+  closeCamera() {
+    this.setData({ 
+      showPrivacyTip: false,
+      isRecording: false,
+      recTimeStr: "00:00"
+    });
+    
+    if(this.data.isRecording) {
+      this.stopRecordLogic(false); 
+      setTimeout(() => {
+        this.setData({ cameraAnimating: true });
+        setTimeout(() => {
+          this.setData({ showCamera: false, cameraAnimating: false });
+        }, 200);
+      }, 30);
+    } else {
+      this.setData({ cameraAnimating: true });
+      setTimeout(() => {
+        this.setData({ 
+          showCamera: false, 
+          cameraAnimating: false 
+        }); 
+      }, 200);
+    }
+  },
+
+  // 🔴 新增：切换录制（参考 case 页面）
+  toggleRecord() {
+    if (this.data.isStopping) {
+      console.log('⚠️ 正在停止录制，请稍候...');
+      return;
+    }
+    
+    if(this.data.isRecording) {
+      this.stopRecordLogic(true); 
+    } else {
+      wx.vibrateShort();
+      this.startRecordLogic(); 
+    }
+  },
+
+  // 🔴 新增：开始录制逻辑（参考 case 页面）
+  startRecordLogic() {
+    if (!this.ctx) {
+      this.ctx = wx.createCameraContext();
+    }
+    
+    this.ctx.startRecord({ 
+      timeoutCallback: { duration: 60 },
+      success:()=>{
+        this.setData({isRecording: true, recTimeStr: "00:00"});
+        this.startTime = Date.now();
+        
+        if(this.data.timer) clearInterval(this.data.timer);
+        let seconds = 0;
+        this.data.timer = setInterval(() => {
+          seconds++;
+          const min = Math.floor(seconds / 60).toString().padStart(2, '0');
+          const sec = (seconds % 60).toString().padStart(2, '0');
+          this.setData({ recTimeStr: `${min}:${sec}` });
+        }, 1000);
       },
       fail: (err) => {
-        // 用户取消不提示
-        if (err && (err.errMsg || '').includes('fail cancel')) {
-          return;
-        }
-        console.error('选择视频失败:', err);
-        getApp().showDialog({ title: '提示', content: '选择视频失败，请重试' });
+        console.error('录制失败', err);
+        this._showCustomToast('录制启动失败', 'none');
+        this.setData({ isRecording: false });
       }
-    });
+    }); 
+  },
+
+  // 🔴 新增：停止录制逻辑（参考 case 页面）
+  stopRecordLogic(save) {
+    if (!this.data.isRecording) {
+      console.log('⚠️ [警告] 当前未在录制，无需停止');
+      return;
+    }
+    
+    this.setData({ isStopping: true });
+    wx.vibrateShort();
+    
+    if (!this.ctx) {
+      console.error('❌ camera context 不存在');
+      this.setData({ 
+        isRecording: false, 
+        isStopping: false 
+      });
+      return;
+    }
+    
+    console.log('🔄 开始停止录制...');
+    
+    this.ctx.stopRecord({ 
+      success:(res)=>{
+        console.log('✅ 录制结束，返回结果:', res);
+        
+        if (this.data.timer) {
+          clearInterval(this.data.timer);
+          this.setData({ timer: null });
+        }
+
+        this.setData({
+          isRecording: false, 
+          recTimeStr: "00:00",
+          isStopping: false
+        }); 
+
+        setTimeout(() => {
+          if(save && res.tempVideoPath) {
+            // 🔴 关闭相机层，设置视频路径
+            this.setData({
+              showCamera: false, 
+              cameraAnimating: false,
+              tempVideoPath: res.tempVideoPath,
+              tempVideoThumb: '' // 先清空封面，稍后提取
+            });
+            
+            // 提取封面
+            setTimeout(() => {
+              this.setData({ extractingThumb: true });
+              setTimeout(() => {
+                this.captureRepairVideoFrame();
+              }, 500);
+            }, 300);
+          } else if (save) {
+            this._showCustomToast('录制无效', 'none');
+          }
+        }, 250);
+      },
+      fail: (err) => {
+        console.error('❌ 停止失败', err);
+        this.setData({
+          isRecording: false,
+          isStopping: false
+        });
+        this._showCustomToast('停止录制失败', 'none');
+      }
+    }); 
   },
 
   // [新增] 提取故障报修视频封面
@@ -2093,11 +2520,7 @@ Page({
     if (selectedCount === 0) {
       // 提示用户选择配件，并显示所有可用配件
       const partNames = currentPartsList.map(p => p.name).join('、');
-      this.showMyDialog({
-        title: '请选择配件',
-        content: `请先点击配件进行选择。\n可用配件：${partNames.substring(0, 50)}${partNames.length > 50 ? '...' : ''}`,
-        showCancel: false
-      });
+      this.showAutoToast('提示', `请先点击配件进行选择。可用配件：${partNames.substring(0, 50)}${partNames.length > 50 ? '...' : ''}`);
       return;
     }
 
@@ -2372,8 +2795,20 @@ Page({
         }
       }
 
-      // 调用故障报修提交函数
-      this.submitRepairTicket();
+      // 先关闭可能存在的自动提示，确保确认弹窗能正常显示
+      this.setData({ 'autoToast.show': false });
+      
+      // 支付/提交之前先弹出确认：定制维修服务不支持退款
+      this.showMyDialog({
+        title: '维修服务确认',
+        content: '此为定制维修配件服务，下单后不支持退款。',
+        showCancel: true,
+        confirmText: '提交',
+        cancelText: '取消',
+        callback: () => {
+          this.submitRepairTicket();
+        }
+      });
       return;
     }
 
@@ -2416,6 +2851,9 @@ Page({
     const fullAddressString = parsed.fullAddress || detailAddress;
     const finalInfo = { ...orderInfo, address: fullAddressString };
 
+    // 先关闭可能存在的自动提示，确保确认弹窗能正常显示
+    this.setData({ 'autoToast.show': false });
+    
     // 调支付
     this.showMyDialog({
       title: '确认支付',
@@ -2557,6 +2995,9 @@ Page({
         total: p.price || 0
       }));
 
+    // 先关闭可能存在的自动提示，确保确认弹窗能正常显示
+    this.setData({ 'autoToast.show': false });
+    
     // 弹出免责声明
     this.showMyDialog({
       title: '维修服务确认',
@@ -3612,15 +4053,12 @@ Page({
             // 等待订单弹窗关闭动画完成后再显示成功弹窗
             setTimeout(() => {
               console.log('[submitRepairTicket] 准备显示成功弹窗');
-              // 成功弹窗（使用自定义弹窗）
-              this.showMyDialog({
-              title: '提交成功',
-              content: '售后工程师将在后台查看您的视频并进行评估。',
-              confirmText: '好的',
-              showCancel: false,
-              callback: () => {
-                console.log('[submitRepairTicket] 用户点击了确定按钮');
-                // 清空表单并跳转
+              // 成功提示（自动消失）
+              this.showAutoToast('提交成功', '售后工程师将在后台查看您的视频并进行评估。');
+              // 延迟清空表单，让用户看到提示
+              setTimeout(() => {
+                console.log('[submitRepairTicket] 自动清空表单');
+                // 清空表单
                 this.setData({ 
                   repairDescription: '', 
                   videoFileName: '', 
@@ -3630,8 +4068,7 @@ Page({
                   detailAddress: ''
                 });
                 // 不自动跳转到个人页，停留在当前页面（订单弹窗已经在上面关闭了）
-              }
-            });
+              }, 3000);
             }, 300); // 等待订单弹窗关闭动画完成
           },
           fail: err => {
@@ -3641,19 +4078,9 @@ Page({
             
             // 如果是集合不存在错误，提示用户（使用自定义弹窗）
             if (err.errCode === -502005 || err.errMsg.includes('collection not exists')) {
-              this.showMyDialog({
-                title: '提示',
-                content: '数据库集合不存在，请联系管理员创建 shouhou_repair 集合',
-                showCancel: false,
-                confirmText: '知道了'
-              });
+              this.showAutoToast('提示', '数据库集合不存在，请联系管理员创建 shouhou_repair 集合');
             } else {
-              this.showMyDialog({
-                title: '提交失败',
-                content: err.errMsg || '未知错误',
-                showCancel: false,
-                confirmText: '知道了'
-              });
+              this.showAutoToast('提交失败', err.errMsg || '未知错误');
             }
           }
         });
@@ -3662,12 +4089,7 @@ Page({
         // 隐藏自定义加载动画
         this.setData({ showLoadingAnimation: false });
         console.error('[submitRepairTicket] 视频上传失败:', err);
-        this.showMyDialog({
-          title: '上传失败',
-          content: err.errMsg || '视频上传失败，请检查网络后重试',
-          showCancel: false,
-          confirmText: '知道了'
-        });
+        this.showAutoToast('上传失败', err.errMsg || '视频上传失败，请检查网络后重试');
       }
       });
     });

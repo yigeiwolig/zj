@@ -121,9 +121,19 @@ Page({
     showSpecsModal: false,  // 对比表格弹窗
     showOrderModal: false,  // 订单弹窗
     showCartSuccess: false, // 新增：加入购物车成功弹窗
+    cartSuccessClosing: false, // 收缩退出动画中
+    dialogClosing: false, // 自定义弹窗退出动画中
+    autoToastClosing: false, // 自动提示退出动画中
+    customModalClosing: false, // 自定义编辑弹窗退出动画中
+    actionSheetClosing: false, // 操作菜单退出动画中
+    smartPasteClosing: false, // 智能粘贴弹窗退出动画中
+    centerToastClosing: false, // 中间提示退出动画中
 
     // 新增：中间弹窗数据
     centerToast: { show: false, text: '' },
+
+    // 新增：免责协议同意状态
+    agreedToDisclaimer: false,
 
     // 新增：底部按钮栏是否显示 (默认false，滑下去才出来)
     showFooterBar: false,
@@ -146,6 +156,7 @@ Page({
     // [新增] 自定义视频弹窗控制
     showVideoPlayer: false,
     currentVideoUrl: '',
+    isVideoPlaying: true, // 全屏视频播放状态
 
     // 新增：媒体区域的实际高度
     mediaHeight: 0,
@@ -400,8 +411,17 @@ Page({
   // 弹窗输入监听
   onCustomEditInput(e) { this.setData({ customEditVal: e.detail.value }); },
   
-  // 弹窗取消
-  closeCustomEditModal() { this.setData({ showCustomEditModal: false, customEditCallback: null }); },
+  // 弹窗取消（带收缩退出动画）
+  closeCustomEditModal() {
+    this.setData({ customModalClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showCustomEditModal: false, 
+        customEditCallback: null,
+        customModalClosing: false
+      });
+    }, 420);
+  },
   
   // 弹窗确定
   confirmCustomEdit() {
@@ -1622,10 +1642,196 @@ Page({
 
   // 2. [新增] 关闭视频弹窗
   closeVideoPlayer() {
+    // 停止视频播放
+    const videoContext = wx.createVideoContext('fullscreen-video');
+    if (videoContext) {
+      videoContext.pause();
+    }
+    
     this.setData({
       showVideoPlayer: false,
-      currentVideoUrl: '' // 清空地址停止播放
+      currentVideoUrl: '', // 清空地址停止播放
+      isVideoPlaying: true // 重置播放状态
     });
+  },
+
+  // 3. [新增] 播放视频（打开全屏播放器）
+  playVideo(e) {
+    const url = e.currentTarget.dataset.url || '';
+    if (!url) {
+      return;
+    }
+
+    console.log('[playVideo] 打开视频播放器，URL:', url);
+
+    // 🔴 修复：初始状态设为 false，等待视频真正开始播放后再设为 true
+    this.setData({
+      showVideoPlayer: true,
+      currentVideoUrl: url,
+      isVideoPlaying: false // 初始状态为 false，等待视频开始播放
+    });
+
+    // 等待DOM更新后播放视频
+    setTimeout(() => {
+      const videoContext = wx.createVideoContext('fullscreen-video');
+      if (videoContext) {
+        console.log('[playVideo] 调用 videoContext.play()');
+        videoContext.play();
+        // 🔴 额外保险：延迟设置状态为 true（如果事件没触发）
+        // 使用多个延迟点，确保状态能正确更新
+        setTimeout(() => {
+          if (!this.data.isVideoPlaying) {
+            console.log('[playVideo] 300ms后检查，状态仍为false，强制设为true');
+            this.setData({
+              isVideoPlaying: true
+            });
+          }
+        }, 300);
+        setTimeout(() => {
+          if (!this.data.isVideoPlaying) {
+            console.log('[playVideo] 800ms后检查，状态仍为false，强制设为true（最终保险）');
+            this.setData({
+              isVideoPlaying: true
+            });
+          }
+        }, 800);
+      }
+    }, 100);
+  },
+
+  // 🔴 新增：视频可以播放时（确保状态同步）
+  onVideoCanPlay() {
+    console.log('[onVideoCanPlay] 视频可以播放');
+    // 如果视频设置了 autoplay，此时应该已经开始播放了
+    // 延迟一下，确保视频已经开始播放
+    setTimeout(() => {
+      this.setData({
+        isVideoPlaying: true
+      });
+      console.log('[onVideoCanPlay] 设置 isVideoPlaying 为 true');
+    }, 200);
+  },
+
+  // 🔴 新增：免责协议勾选状态变化
+  onDisclaimerChange(e) {
+    // checkbox 的 value 是数组，包含所有被选中的 value
+    const checked = Array.isArray(e.detail.value) && e.detail.value.includes('agree');
+    console.log('[onDisclaimerChange] 协议状态变化:', {
+      checked: checked,
+      value: e.detail.value,
+      currentState: this.data.agreedToDisclaimer
+    });
+    
+    this.setData({
+      agreedToDisclaimer: checked
+    }, () => {
+      // 设置完成后再次确认状态
+      console.log('[onDisclaimerChange] 设置完成后的状态:', this.data.agreedToDisclaimer);
+    });
+  },
+
+  // 🔴 新增：点击文字区域也可以切换勾选状态
+  toggleDisclaimerCheckbox() {
+    const newState = !this.data.agreedToDisclaimer;
+    console.log('[toggleDisclaimerCheckbox] 切换协议状态:', newState);
+    this.setData({
+      agreedToDisclaimer: newState
+    });
+  },
+
+  // 🔴 新增：显示免责协议弹窗
+  showDisclaimerModal() {
+    const disclaimerContent = `
+<div style="line-height: 2; font-size: 28rpx; color: #333;">
+  <div style="font-weight: 600; margin-bottom: 30rpx; font-size: 32rpx; color: #000;">重要提示</div>
+  
+  <div style="margin-bottom: 30rpx; line-height: 2.2;">
+    本产品（<span style="font-weight: 600;">电动折叠牌照架</span>）<span style="color: #FF3B30; font-weight: 600;">仅限赛道使用</span>。
+  </div>
+  
+  <div style="margin-bottom: 20rpx; line-height: 2.2;">
+    如用户将本产品用于道路行驶，用户需自行承担一切法律责任和风险，包括但不限于：
+  </div>
+  
+  <div style="margin-left: 30rpx; margin-bottom: 20rpx; line-height: 2.2;">
+    • 交通违法责任
+  </div>
+  <div style="margin-left: 30rpx; margin-bottom: 20rpx; line-height: 2.2;">
+    • 交通事故责任
+  </div>
+  <div style="margin-left: 30rpx; margin-bottom: 20rpx; line-height: 2.2;">
+    • 车辆年检不合格责任
+  </div>
+  <div style="margin-left: 30rpx; margin-bottom: 30rpx; line-height: 2.2;">
+    • 其他因违规使用导致的法律后果
+  </div>
+  
+  <div style="color: #666; font-size: 26rpx; line-height: 2; margin-top: 30rpx; padding-top: 20rpx; border-top: 1rpx solid #eee;">
+    购买即视为用户已充分理解并同意上述免责条款。
+  </div>
+</div>
+    `.trim();
+
+    // 免责协议弹窗保留，因为需要用户阅读完整内容
+    this.showMyDialog({
+      title: '免责协议',
+      content: disclaimerContent,
+      showCancel: false,
+      confirmText: '我已阅读并同意'
+    });
+  },
+
+  // 4. [新增] 切换播放/暂停
+  toggleVideoPlayPause() {
+    const videoContext = wx.createVideoContext('fullscreen-video');
+    if (!videoContext) {
+      return;
+    }
+
+    if (this.data.isVideoPlaying) {
+      console.log('[toggleVideoPlayPause] 当前播放中，执行暂停');
+      videoContext.pause();
+    } else {
+      console.log('[toggleVideoPlayPause] 当前暂停中，执行播放');
+      videoContext.play();
+      // 🔴 额外保险：如果 onVideoPlay 事件没触发，延迟设置状态
+      setTimeout(() => {
+        if (!this.data.isVideoPlaying) {
+          console.log('[toggleVideoPlayPause] 延迟设置状态为 true');
+          this.setData({
+            isVideoPlaying: true
+          });
+        }
+      }, 300);
+    }
+  },
+
+  // 5. [新增] 视频播放事件
+  onVideoPlay() {
+    console.log('[onVideoPlay] 视频开始播放，更新状态为 true');
+    this.setData({
+      isVideoPlaying: true
+    });
+  },
+
+  // 6. [新增] 视频暂停事件
+  onVideoPause() {
+    console.log('[onVideoPause] 视频暂停，更新状态为 false');
+    this.setData({
+      isVideoPlaying: false
+    });
+  },
+
+  // 🔴 新增：视频时间更新事件（用于检测播放状态）
+  onVideoTimeUpdate() {
+    // 如果视频时间在更新，说明视频正在播放
+    // 这是一个备用机制，确保状态正确
+    if (!this.data.isVideoPlaying) {
+      console.log('[onVideoTimeUpdate] 检测到视频正在播放，更新状态');
+      this.setData({
+        isVideoPlaying: true
+      });
+    }
   },
 
   // 2. 管理员：上传/更换对比视频
@@ -1838,9 +2044,15 @@ Page({
     });
   },
   
-  // 🔴 新增：关闭自定义actionSheet
+  // 🔴 新增：关闭自定义actionSheet（带收缩退出动画）
   closeActionSheet() {
-    this.setData({ actionSheet: { show: false, itemList: [], callback: null } });
+    this.setData({ actionSheetClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        actionSheet: { show: false, itemList: [], callback: null },
+        actionSheetClosing: false
+      });
+    }, 420);
   },
   
   // 🔴 新增：点击actionSheet选项
@@ -2005,7 +2217,12 @@ Page({
     this.setData({ totalPrice: m.price + o.price + accP });
   },
   openOrderModal() { this.setData({ showOrderModal: true }); },
-  closeOrderModal() { this.setData({ showOrderModal: false }); },
+  closeOrderModal() { 
+    this.setData({ 
+      showOrderModal: false,
+      agreedToDisclaimer: false // 🔴 关闭时重置协议状态
+    }); 
+  },
   // ========================================================
   // 1. [修改] 输入监听 (处理详细地址 + 手机号)
   // ========================================================
@@ -2035,10 +2252,14 @@ Page({
   },
   
   closeSmartPasteModal() {
-    this.setData({ 
-      showSmartPasteModal: false,
-      smartPasteVal: ''
-    });
+    this.setData({ smartPasteClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showSmartPasteModal: false,
+        smartPasteVal: '',
+        smartPasteClosing: false
+      });
+    }, 420);
   },
   
   onSmartPasteInput(e) {
@@ -2402,17 +2623,26 @@ Page({
   // ========================================================
   // 新增：成功弹窗的操作
   // ========================================================
+  // 加入购物车成功弹窗：带收缩退出动画的关闭
+  _closeCartSuccess(extra) {
+    this.setData({ cartSuccessClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showCartSuccess: false,
+        cartSuccessClosing: false,
+        ...(extra || {})
+      });
+    }, 420); // 等待动画完成（0.4s = 400ms，加20ms缓冲）
+  },
+
   // 继续选购
   onContinueShopping() {
-    this.setData({ showCartSuccess: false });
+    this._closeCartSuccess();
   },
-  
+
   // 立即结算 (从成功弹窗跳转)
   onGoToCheckout() {
-    this.setData({ 
-      showCartSuccess: false,
-      showOrderModal: true 
-    });
+    this._closeCartSuccess({ showOrderModal: true });
   },
 
   // ========================================================
@@ -2549,11 +2779,18 @@ Page({
   // ========================================================
   showCenterToast(msg) {
     this.setData({
-      centerToast: { show: true, text: msg }
+      centerToast: { show: true, text: msg },
+      centerToastClosing: false
     });
-    // 1.5秒后自动消失
+    // 1.5秒后自动消失（带收缩退出动画）
     setTimeout(() => {
-      this.setData({ 'centerToast.show': false });
+      this.setData({ centerToastClosing: true });
+      setTimeout(() => {
+        this.setData({ 
+          'centerToast.show': false,
+          centerToastClosing: false
+        });
+      }, 420);
     }, 1500);
   },
 
@@ -2590,30 +2827,75 @@ Page({
     });
   },
 
+  // 关闭自定义弹窗（带收缩退出动画）
+  _closeDialogWithAnimation(callback) {
+    this.setData({ dialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'dialog.show': false,
+        dialogClosing: false
+      });
+      if (typeof callback === 'function') {
+        callback();
+      }
+    }, 420);
+  },
+
   // 关闭自定义弹窗
   closeCustomDialog() {
-    this.setData({ 'dialog.show': false });
+    this._closeDialogWithAnimation();
   },
 
   // 点击弹窗确定
   onDialogConfirm() {
     const cb = this.data.dialog.callback;
-    this.setData({ 'dialog.show': false });
-    if (cb) cb({ confirm: true });
+    this._closeDialogWithAnimation(() => {
+      if (cb) cb({ confirm: true });
+    });
   },
 
-  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  // 【新增】自动消失提示（无按钮，3秒后自动消失，带收缩退出动画）
   showAutoToast(title = '提示', content = '') {
+    // 如果已有toast在显示，先关闭它
+    if (this.data.autoToast.show) {
+      this._closeAutoToastWithAnimation();
+      // 等待关闭动画完成后再显示新的
+      setTimeout(() => {
+        this._showAutoToastInternal(title, content);
+      }, 420);
+    } else {
+      this._showAutoToastInternal(title, content);
+    }
+  },
+
+  // 内部方法：显示自动提示
+  _showAutoToastInternal(title, content) {
     this.setData({
       'autoToast.show': true,
       'autoToast.title': title,
-      'autoToast.content': content
+      'autoToast.content': content,
+      autoToastClosing: false
     });
-    // 2秒后自动消失
+    // 3秒后自动消失（带退出动画）
     setTimeout(() => {
-      this.setData({ 'autoToast.show': false });
-    }, 2000);
+      this._closeAutoToastWithAnimation();
+    }, 3000);
   },
+
+  // 关闭自动提示（带收缩退出动画）
+  _closeAutoToastWithAnimation() {
+    if (!this.data.autoToast.show) return;
+    this.setData({ autoToastClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'autoToast.show': false,
+        autoToastClosing: false
+      });
+    }, 420);
+  },
+
+  // 空函数，用于阻止事件冒泡和滚动
+  noop() {},
 
 
   // ========================================================
@@ -2761,15 +3043,26 @@ Page({
 
   },
   
-  closeOrderModal() { this.setData({ showOrderModal: false }); },
+  closeOrderModal() { 
+    this.setData({ 
+      showOrderModal: false,
+      agreedToDisclaimer: false // 🔴 关闭时重置协议状态
+    }); 
+  },
 
   // 修改 4：退出管理员模式
 
   // ========================================================
   // 6. [核心] 提交校验与组装
   // ========================================================
-  submitOrder() {
+  submitOrder(e) {
     console.log('[submitOrder] 按钮被点击');
+    console.log('[submitOrder] 事件数据:', e?.currentTarget?.dataset);
+    console.log('[submitOrder] 当前数据状态:', {
+      agreedToDisclaimer: this.data.agreedToDisclaimer,
+      type: typeof this.data.agreedToDisclaimer
+    });
+    
     const { cart, orderInfo, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
 
     console.log('[submitOrder] 当前数据:', { 
@@ -2778,6 +3071,22 @@ Page({
       detailAddress, 
       finalTotalPrice 
     });
+
+    // 【未勾选免责时】点击灰色立即支付：弹出「是否阅读免责协议」确认，确认后自动打钩
+    if (!this.data.agreedToDisclaimer) {
+      this.setData({ 'autoToast.show': false });
+      this.showMyDialog({
+        title: '确认',
+        content: '是否已阅读免责协议？',
+        showCancel: true,
+        cancelText: '取消',
+        confirmText: '确认',
+        success: () => {
+          this.setData({ agreedToDisclaimer: true });
+        }
+      });
+      return;
+    }
 
     // A. 购物车校验
     if (cart.length === 0) {
@@ -2825,20 +3134,34 @@ Page({
       return this.showError('请完善地址信息以计算运费');
     }
 
+    console.log('[submitOrder] 协议校验通过，继续支付流程');
+
     // 【修复】在调用支付前，重新计算最终价格，确保金额准确
     this.reCalcFinalPrice();
     const currentFinalTotalPrice = this.data.finalTotalPrice;
     const currentShippingFee = this.data.shippingFee;
 
-    console.log('[submitOrder] 所有校验通过，准备调用支付');
+    console.log('[submitOrder] 所有校验通过，准备弹出「定制产品不可退换」确认');
     console.log('[submitOrder] 重新计算后的价格:', {
       finalTotalPrice: currentFinalTotalPrice,
       shippingFee: currentShippingFee,
       cartTotalPrice: this.data.cartTotalPrice
     });
 
-    // F. 唤起支付 (复用之前的逻辑)
-    this.doRealPayment(cart, finalOrderInfo, currentFinalTotalPrice, currentShippingFee, shippingMethod);
+    // 先关闭可能存在的自动提示，确保确认弹窗能马上显示
+    this.setData({ 'autoToast.show': false });
+
+    // G. 点击立即支付后马上弹出：定制产品不可退换，用户确认后再唤起收银台
+    this.showMyDialog({
+      title: '确认支付',
+      content: '定制产品不支持退换服务。',
+      showCancel: true,
+      confirmText: '支付',
+      cancelText: '取消',
+      success: () => {
+        this.doRealPayment(cart, finalOrderInfo, currentFinalTotalPrice, currentShippingFee, shippingMethod);
+      }
+    });
   },
 
   // ========================================================
@@ -2963,11 +3286,7 @@ Page({
                 errorMsg = err.errMsg;
               }
             }
-            this.showMyDialog({ 
-              title: '支付提示', 
-              content: errorMsg, 
-              showCancel: false 
-            });
+            this.showAutoToast('支付提示', errorMsg);
           }
         });
       },

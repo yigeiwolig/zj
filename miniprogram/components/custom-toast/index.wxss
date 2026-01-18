@@ -4,16 +4,47 @@
   background: rgba(0,0,0,0.4);
   z-index: 99999;
   display: flex; align-items: center; justify-content: center;
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
+}
+.ct-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
-/* Modal */
+/* Modal（带弹出+收缩退出动画） */
 .ct-modal {
   width: 600rpx;
   background: #fff;
   border-radius: 24rpx;
   overflow: hidden;
   box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.12);
-  animation: scaleIn 0.2s ease-out;
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.ct-mask.closing .ct-modal {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
 }
 .ct-modal-title {
   padding: 40rpx 40rpx 0;
@@ -76,14 +107,27 @@
   color: #000; /* 🔴 改为纯黑色 */
 }
 
-/* Toast */
+/* Toast（带收缩退出动画） */
 .ct-toast-mask {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
   z-index: 99999;
   display: flex; align-items: center; justify-content: center;
   pointer-events: none;
   background: transparent; /* 透明背景，不遮挡内容 */
+  animation: autoToastMaskFadeIn 0.25s ease-out forwards;
 }
+.ct-toast-mask.closing {
+  animation: autoToastMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes autoToastMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes autoToastMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .ct-toast {
   background: #fff;
   color: #000;
@@ -94,9 +138,24 @@
   max-width: 60%;
   min-width: 280rpx;
   overflow: hidden;
-  animation: toastSlideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: toastSlideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   pointer-events: auto;
   position: relative;
+}
+.ct-toast-mask.closing .ct-toast {
+  animation: autoToastShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes autoToastShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
 }
 /* 成功类型的特殊样式 */
 .ct-toast.success {
@@ -142,7 +201,7 @@
 }
 
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-@keyframes scaleIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+/* scaleIn 已移除，改用 dialogBoxPopIn */
 @keyframes fadeIn { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
 @keyframes toastSlideIn {
   0% {

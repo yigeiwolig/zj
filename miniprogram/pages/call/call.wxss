@@ -9,7 +9,7 @@ page {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
   padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 10000; pointer-events: none;
+  z-index: 100; pointer-events: none;
   background: transparent; 
 }
 .back-icon {
@@ -20,10 +20,6 @@ page {
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
-  font-size: 52rpx;
-  font-weight: 300;
-  color: #000;
-  line-height: 1;
 }
 .back-icon:active {
   transform: scale(0.95);
@@ -31,6 +27,14 @@ page {
 }
 .back-icon::before {
   display: none;
+}
+
+/* 统一返回箭头样式 */
+.back-arrow {
+  font-size: 48rpx;
+  font-weight: 300;
+  color: #000;
+  line-height: 1;
 }
 
 /* 左上角返回按钮 - 统一样式 */

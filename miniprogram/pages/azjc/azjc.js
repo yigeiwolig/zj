@@ -22,6 +22,7 @@ Page({
     
     // 匹配码选择弹窗
     showMatchCodePicker: false,
+    matchCodePickerClosing: false, // 匹配码选择器退出动画中
     availableProducts: [], // 可用的产品列表（已创建的）
     availableTypes: [], // 可用的车型列表（已创建的）
     matchCodeProductNum: 1,
@@ -57,6 +58,7 @@ Page({
     
     // 编辑相关
     showEditModal: false,
+    editModalClosing: false, // 编辑弹窗退出动画中
     editItemData: null,  // 正在编辑的项目数据
     editItemType: '',    // 编辑类型：'chapters' 或 'graphics'
     editItemIndex: -1,
@@ -816,10 +818,14 @@ Page({
 
   // 关闭匹配码选择弹窗
   hideMatchCodePicker: function() {
-    this.setData({
-      showMatchCodePicker: false,
-      tempUploadData: null
-    });
+    this.setData({ matchCodePickerClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showMatchCodePicker: false,
+        tempUploadData: null,
+        matchCodePickerClosing: false
+      });
+    }, 420);
   },
 
   // 选择产品号码
@@ -1225,13 +1231,20 @@ Page({
 
   // 关闭编辑弹窗
   hideEditModal: function() {
-    this.setData({
-      showEditModal: false,
-      editItemData: null,
-      editItemType: '',
-      editItemIndex: -1
-    });
+    this.setData({ editModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showEditModal: false,
+        editItemData: null,
+        editItemType: '',
+        editItemIndex: -1,
+        editModalClosing: false
+      });
+    }, 420);
   },
+
+  // 空函数，用于阻止事件冒泡和滚动
+  noop() {},
 
   // 保存编辑
   saveEdit: function() {

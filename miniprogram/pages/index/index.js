@@ -47,6 +47,8 @@ Page({
     
     // 自定义弹窗
     dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+    dialogClosing: false, // 自定义弹窗退出动画中
+    autoToastClosing: false, // 自动提示退出动画中
     
     // 【新增】管理员相关状态
     isAdmin: false,        // 是否是管理员
@@ -191,7 +193,7 @@ Page({
     if (this.data.isLoading) return;
     const name = this.data.inputNickName.trim();
     if (!name) {
-      this.showMyDialog({ title: '提示', content: '请输入昵称' });
+      this.showAutoToast('提示', '请输入昵称');
       return;
     }
 
@@ -268,7 +270,7 @@ Page({
     }).catch(err => {
       this.setData({ isLoading: false });
       this.hideMyLoading();
-      this.showMyDialog({ title: '错误', content: '网络错误，请重试' });
+      this.showAutoToast('错误', '网络错误，请重试');
     });
   },
 
@@ -319,7 +321,7 @@ Page({
     // 如果未授权，不允许进入
     if (!this.data.isAuthorized) {
       console.log('[handleAccess] 未授权，不允许进入');
-      this.showMyDialog({ title: '提示', content: '请先完成身份验证' });
+      this.showAutoToast('提示', '请先完成身份验证');
       return; 
     }
 
@@ -366,10 +368,7 @@ Page({
               // 权限已开启，但获取位置失败（可能是GPS信号弱、网络问题等）
               // 这种情况下可以允许进入，但给出提示
               console.log('[handleAccess] 定位权限已开启，但获取位置失败，允许进入');
-              this.showMyDialog({ 
-                title: '提示', 
-                content: '无法获取当前位置，将使用默认设置' 
-              });
+              this.showAutoToast('提示', '无法获取当前位置，将使用默认设置');
               // 延迟跳转，给用户看到提示的时间
               setTimeout(() => {
                 wx.reLaunch({ url: '/pages/products/products' });
@@ -804,6 +803,15 @@ Page({
         // 🔴 最终安检：检查 login_logbutton，确保没有封禁
         if (buttonRes.data && buttonRes.data.length > 0) {
           const btn = buttonRes.data[0];
+          
+          // 🔴 最高优先级：检查强制封禁按钮 qiangli
+          const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
+          if (qiangli) {
+            console.log('[index] ⚠️ 最终安检：检测到强制封禁按钮 qiangli 已开启，无视一切放行，直接封禁');
+            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+            return; // 强制封禁，直接返回，不执行后续任何检查
+          }
+          
           const rawFlag = btn.isBanned;
           const isBanned =
             rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
@@ -979,16 +987,28 @@ Page({
     });
   },
 
-  // 关闭自定义弹窗
+  // 关闭自定义弹窗（带收缩退出动画）
   closeCustomDialog() {
-    this.setData({ 'dialog.show': false });
+    this.setData({ dialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'dialog.show': false,
+        dialogClosing: false
+      });
+    }, 420);
   },
 
-  // 点击弹窗确定
+  // 点击弹窗确定（带收缩退出动画）
   onDialogConfirm() {
     const cb = this.data.dialog.callback;
-    this.setData({ 'dialog.show': false });
-    if (cb) cb({ confirm: true });
+    this.setData({ dialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'dialog.show': false,
+        dialogClosing: false
+      });
+      if (cb) cb({ confirm: true });
+    }, 420);
   },
 
   // 空函数，用于阻止事件冒泡
@@ -1029,7 +1049,7 @@ Page({
   },
 
   handleDeny() { 
-    this.showMyDialog({ title: '提示', content: '需要授权才能使用' });
+    this.showAutoToast('提示', '需要授权才能使用');
   },
   onOpenSettingResult(e) {
     if (e.detail.authSetting && e.detail.authSetting['scope.userLocation']) {
@@ -1279,7 +1299,7 @@ Page({
     } catch (err) {
       this.hideMyLoading();
       console.error('[index] 解封用户失败:', err);
-      this.showMyDialog({ title: '错误', content: '解封失败：' + err.message });
+      this.showAutoToast('错误', '解封失败：' + err.message);
     }
   },
 
@@ -1335,11 +1355,7 @@ Page({
           } catch (err) {
             this.hideMyLoading();
             console.error('[retryNickname] 操作失败:', err);
-            this.showMyDialog({
-              title: '操作失败',
-              content: err.message || '请稍后重试',
-              showCancel: false
-            });
+            this.showAutoToast('操作失败', err.message || '请稍后重试');
           }
         }
       }
@@ -1444,22 +1460,14 @@ Page({
       } else {
         // 录入失败
         const errMsg = res.result?.errMsg || '录入失败，请稍后重试';
-        this.showMyDialog({
-          title: '录入失败',
-          content: errMsg,
-          showCancel: false
-        });
+        this.showAutoToast('录入失败', errMsg);
       }
     } catch (err) {
       console.error('[index] 昵称录入失败:', err);
       // 🔴 确保错误时也重置状态
       this.setData({ isSubmittingNickname: false });
       
-      this.showMyDialog({
-        title: '录入失败',
-        content: err.errMsg || '网络错误，请稍后重试',
-        showCancel: false
-      });
+      this.showAutoToast('录入失败', err.errMsg || '网络错误，请稍后重试');
     }
   },
 

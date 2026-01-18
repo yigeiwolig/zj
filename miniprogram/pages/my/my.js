@@ -26,6 +26,11 @@ Page({
     
     // [新增] 弹窗控制数据
     dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+    dialogClosing: false, // 自定义弹窗退出动画中
+    autoToastClosing: false, // 自动提示退出动画中
+    inputDialogClosing: false, // 输入弹窗退出动画中
+    returnAddressDialogClosing: false, // 退货地址弹窗退出动画中
+    testPasswordModalClosing: false, // 测试密码弹窗退出动画中
     // 输入弹窗（用于需要输入的场景）
     inputDialog: { show: false, title: '', placeholder: '', value: '', callback: null },
     
@@ -567,13 +572,8 @@ Page({
               this.hideMyLoading();
               
               // ✅ [替换]
-              this.showMyDialog({
-                title: '物料发出成功',
-                content: '物料运单号已录入，用户端已同步。',
-                success: () => {
-                  this.loadMyOrders(); // 刷新订单列表
-                }
-              });
+              this.showAutoToast('物料发出成功', '物料运单号已录入，用户端已同步。');
+              this.loadMyOrders(); // 刷新订单列表
             },
             fail: err => {
               this.hideMyLoading();
@@ -823,11 +823,7 @@ Page({
 
         if (!payment || !payment.paySign) {
           console.error('[repayOrder] 支付参数缺失:', payment);
-          this.showMyDialog({ 
-            title: '提示', 
-            content: '支付系统对接中，请稍后再试', 
-            showCancel: false 
-          });
+          this.showAutoToast('提示', '支付系统对接中，请稍后再试');
           return;
         }
 
@@ -861,22 +857,14 @@ Page({
                 errorMsg = err.errMsg;
               }
             }
-            this.showMyDialog({ 
-              title: '支付提示', 
-              content: errorMsg, 
-              showCancel: false 
-            });
+            this.showAutoToast('支付提示', errorMsg);
           }
         });
       },
       fail: err => {
         console.error('[repayOrder] 云函数调用失败:', err);
         this.hideMyLoading();
-        this.showMyDialog({ 
-          title: '创建订单失败', 
-          content: err.errMsg || '网络错误，请重试', 
-          showCancel: false 
-        });
+        this.showAutoToast('创建订单失败', err.errMsg || '网络错误，请重试');
       }
     });
   },
@@ -1024,11 +1012,7 @@ Page({
           
         } else {
           console.error('[confirmReceiptAndViewTutorial] 云函数返回失败:', r)
-          this.showMyDialog({ 
-            title: '操作失败', 
-            content: r.result.errMsg || '同步状态失败',
-            showCancel: false
-          })
+          this.showAutoToast('操作失败', r.result.errMsg || '同步状态失败');
         }
       },
       fail: (err) => {
@@ -1036,11 +1020,7 @@ Page({
         console.error('[confirmReceiptAndViewTutorial] 云函数调用失败:', err)
         // 即使同步失败，如果用户已经在微信组件里确认了，也可以考虑让他跳转
         // 这里偏向严格，失败就不跳
-        this.showMyDialog({ 
-          title: '网络异常', 
-          content: err.errMsg || '请稍后重试',
-          showCancel: false
-        })
+        this.showAutoToast('网络异常', err.errMsg || '请稍后重试');
       }
     })
   },
@@ -1050,17 +1030,14 @@ Page({
     const modelName = e.currentTarget.dataset.model || ''; // 产品型号（可选）
     
     // 显示提示后跳转
-    this.showMyDialog({
-      title: '查看教程',
-      content: '即将跳转到安装教程页面',
-      showCancel: false,
-      confirmText: '好的',
-      success: () => {
-        wx.navigateTo({
-          url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '')
-        });
-      }
-    });
+    this.showAutoToast('提示', '即将跳转到安装教程页面');
+    // 延迟跳转，让用户看到提示
+    setTimeout(() => {
+      const modelName = e.currentTarget.dataset.model || '';
+      wx.navigateTo({
+        url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '')
+      });
+    }, 3000);
   },
 
   // [修改] 调试状态切换
@@ -1245,11 +1222,7 @@ Page({
            if (res.confirm && res.content) {
              const trackingId = res.content.trim();
              if (!trackingId) {
-               this.showMyDialog({ 
-                 title: '提示', 
-                 content: '请输入运单号', 
-                 showCancel: false 
-               });
+               this.showAutoToast('提示', '请输入运单号');
                return;
              }
              this.updateRepairStatus(id, 'SHIPPED', trackingId);
@@ -1464,12 +1437,7 @@ Page({
       fail: (err) => {
         console.error('[copyReturnAddress] 复制失败', err);
         wx.hideToast();
-        this.showMyDialog({
-          title: '复制失败',
-          content: '请手动复制地址',
-          showCancel: false,
-          confirmText: '知道了'
-        });
+        this.showAutoToast('复制失败', '请手动复制地址');
       }
     });
   },
@@ -1562,12 +1530,7 @@ Page({
       .catch(err => {
         this.hideMyLoading();
         console.error('加载需寄回订单失败:', err);
-        this.showMyDialog({
-          title: '加载失败',
-          content: err.errMsg || '请稍后重试',
-          showCancel: false,
-          confirmText: '知道了'
-        });
+        this.showAutoToast('加载失败', err.errMsg || '请稍后重试');
       });
   },
 
@@ -1582,11 +1545,7 @@ Page({
         if (res.confirm && res.content) {
           const trackingId = res.content.trim();
           if (!trackingId) {
-            this.showMyDialog({ 
-              title: '提示', 
-              content: '请输入运单号', 
-              showCancel: false 
-            });
+            this.showAutoToast('提示', '请输入运单号');
             return;
           }
           this.showMyLoading('处理中...');
@@ -1725,30 +1684,15 @@ Page({
                   failReason += '：' + res.result.message;
                 }
                 
-                this.showMyDialog({
-                  title: '操作失败',
-                  content: failReason,
-                  showCancel: false,
-                  confirmText: '我知道了'
-                });
+                this.showAutoToast('操作失败', failReason);
               }
             } else {
-              this.showMyDialog({
-                title: '操作失败',
-                content: (res.result && res.result.message) || res.result?.error || '扣除质保失败，请稍后重试',
-                showCancel: false,
-                confirmText: '知道了'
-              });
+              this.showAutoToast('操作失败', (res.result && res.result.message) || res.result?.error || '扣除质保失败，请稍后重试');
             }
           }).catch(err => {
             this.hideMyLoading();
             console.error('云函数调用失败:', err);
-            this.showMyDialog({
-              title: '操作失败',
-              content: '请求失败：' + (err.errMsg || '网络错误'),
-              showCancel: false,
-              confirmText: '知道了'
-            });
+            this.showAutoToast('操作失败', '请求失败：' + (err.errMsg || '网络错误'));
           });
         }
       }
@@ -2011,18 +1955,30 @@ Page({
     this.updateModalState();
   },
 
-  // [交互] 点击弹窗确定
+  // [交互] 点击弹窗确定（带收缩退出动画）
   onDialogConfirm() {
     const cb = this.data.dialog.callback;
-    this.setData({ 'dialog.show': false }); // 先关弹窗
-    this.updateModalState();
-    if (cb) cb({ confirm: true }); // 执行回调
+    this.setData({ dialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'dialog.show': false,
+        dialogClosing: false
+      });
+      this.updateModalState();
+      if (cb) cb({ confirm: true });
+    }, 420);
   },
 
-  // [交互] 点击取消
+  // [交互] 点击取消（带收缩退出动画）
   closeCustomDialog() {
-    this.setData({ 'dialog.show': false });
-    this.updateModalState();
+    this.setData({ dialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'dialog.show': false,
+        dialogClosing: false
+      });
+      this.updateModalState();
+    }, 420);
   },
 
   // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
@@ -2044,19 +2000,45 @@ Page({
     tryShow();
   },
 
-  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  // 【新增】自动消失提示（无按钮，3秒后自动消失，带收缩退出动画）
   showAutoToast(title = '提示', content = '') {
+    // 如果已有toast在显示，先关闭它
+    if (this.data.autoToast.show) {
+      this._closeAutoToastWithAnimation();
+      setTimeout(() => {
+        this._showAutoToastInternal(title, content);
+      }, 420);
+    } else {
+      this._showAutoToastInternal(title, content);
+    }
+  },
+
+  // 内部方法：显示自动提示
+  _showAutoToastInternal(title, content) {
     this.setData({
       'autoToast.show': true,
       'autoToast.title': title,
-      'autoToast.content': content
+      'autoToast.content': content,
+      autoToastClosing: false
     });
     this.updateModalState();
-    // 2秒后自动消失
+    // 3秒后自动消失（带退出动画）
     setTimeout(() => {
-      this.setData({ 'autoToast.show': false });
+      this._closeAutoToastWithAnimation();
+    }, 3000);
+  },
+
+  // 关闭自动提示（带收缩退出动画）
+  _closeAutoToastWithAnimation() {
+    if (!this.data.autoToast.show) return;
+    this.setData({ autoToastClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'autoToast.show': false,
+        autoToastClosing: false
+      });
       this.updateModalState();
-    }, 2000);
+    }, 420);
   },
 
   // 🔴 测试按钮：打开密码输入弹窗
@@ -2069,13 +2051,17 @@ Page({
     this.updateModalState();
   },
 
-  // 🔴 关闭测试密码弹窗
+  // 🔴 关闭测试密码弹窗（带收缩退出动画）
   closeTestPasswordModal() {
-    this.setData({
-      showTestPasswordModal: false,
-      testPasswordInput: ''
-    });
-    this.updateModalState();
+    this.setData({ testPasswordModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showTestPasswordModal: false,
+        testPasswordInput: '',
+        testPasswordModalClosing: false
+      });
+      this.updateModalState();
+    }, 420);
   },
 
   // 🔴 测试密码输入
@@ -2197,10 +2183,16 @@ Page({
     this.updateModalState();
   },
 
-  // 关闭输入弹窗
+  // 关闭输入弹窗（带收缩退出动画）
   closeInputDialog() {
-    this.setData({ 'inputDialog.show': false });
-    this.updateModalState();
+    this.setData({ inputDialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'inputDialog.show': false,
+        inputDialogClosing: false
+      });
+      this.updateModalState();
+    }, 420);
   },
 
   // 输入弹窗输入监听
@@ -2208,13 +2200,19 @@ Page({
     this.setData({ 'inputDialog.value': e.detail.value });
   },
 
-  // 输入弹窗确认
+  // 输入弹窗确认（带收缩退出动画）
   onInputDialogConfirm() {
     const callback = this.data.inputDialog.callback;
     const value = this.data.inputDialog.value;
-    this.setData({ 'inputDialog.show': false });
-    this.updateModalState();
-    if (callback) callback({ confirm: true, content: value });
+    this.setData({ inputDialogClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'inputDialog.show': false,
+        inputDialogClosing: false
+      });
+      this.updateModalState();
+      if (callback) callback({ confirm: true, content: value });
+    }, 420);
   },
 
   // --- 配置蓝牙回调 ---
@@ -3116,14 +3114,18 @@ Page({
     this.updateModalState();
   },
 
-  // 🔴 关闭管理员填写地址弹窗
+  // 🔴 关闭管理员填写地址弹窗（带收缩退出动画）
   closeReturnAddressDialog() {
-    this.setData({
-      showReturnAddressDialog: false,
-      // 🔴 清理临时地址数据，避免残留
-      tempReturnAddress: { name: '', phone: '', address: '' }
-    });
-    this.updateModalState();
+    this.setData({ returnAddressDialogClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showReturnAddressDialog: false,
+        // 🔴 清理临时地址数据，避免残留
+        tempReturnAddress: { name: '', phone: '', address: '' },
+        returnAddressDialogClosing: false
+      });
+      this.updateModalState();
+    }, 420);
   },
 
   // 🔴 管理员填写地址输入处理

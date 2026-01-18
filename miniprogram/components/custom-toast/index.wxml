@@ -1,6 +1,6 @@
 <!-- components/custom-toast/index.wxml -->
-<view class="ct-mask" wx:if="{{modal.show || loading.show}}" catchtouchmove="preventTouchMove">
-  <!-- Modal -->
+<view class="ct-mask {{modalClosing ? 'closing' : ''}}" wx:if="{{modal.show || loading.show}}" catchtouchmove="preventTouchMove">
+  <!-- Modal（带收缩退出动画） -->
   <view class="ct-modal" wx:if="{{modal.show}}">
     <view class="ct-modal-title" wx:if="{{modal.title}}">{{modal.title}}</view>
     <view class="ct-modal-content">{{modal.content}}</view>
@@ -17,8 +17,8 @@
   </view>
 </view>
 
-<!-- Toast (透明遮罩，允许交互但防止误触) -->
-<view class="ct-toast-mask" wx:if="{{toast.show}}" catchtouchmove="preventTouchMove">
+<!-- Toast (透明遮罩，允许交互但防止误触，带收缩退出动画) -->
+<view class="ct-toast-mask {{toastClosing ? 'closing' : ''}}" wx:if="{{toast.show}}" catchtouchmove="preventTouchMove">
   <view class="ct-toast {{toast.icon === 'success' ? 'success' : ''}}">
     <view class="ct-toast-icon" wx:if="{{toast.icon === 'success'}}">✓</view>
     <view class="ct-toast-icon error" wx:if="{{toast.icon === 'error'}}">✕</view>

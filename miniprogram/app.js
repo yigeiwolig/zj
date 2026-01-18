@@ -269,7 +269,53 @@ App({
       console.log('✅ 云开发已在 app.js 初始化，环境ID: cloudbase-4gn1heip7c38ec6c');
       
       // 🔴 应用启动时检查封禁状态（确保重启后也能拦截）
+      // 注意：先检查PC端，如果是PC端则不继续执行其他检查
+      const isPC = this.checkPCEnvironment();
+      if (isPC) {
+        // PC端直接返回，不执行后续检查
+        return;
+      }
       this.checkBanStatusOnLaunch();
+    }
+  },
+
+  // 🔴 检测PC端环境，禁止在电脑上打开
+  checkPCEnvironment() {
+    try {
+      const systemInfo = wx.getSystemInfoSync();
+      const platform = systemInfo.platform || '';
+      
+      // PC端平台：windows、mac（微信PC版）
+      const isPC = platform === 'windows' || platform === 'mac';
+      
+      if (isPC) {
+        console.warn('[app] ⚠️ 检测到PC端环境，禁止使用');
+        
+        // 延迟显示提示，确保页面加载完成
+        setTimeout(() => {
+          wx.showModal({
+            title: '不支持PC端',
+            content: '本小程序仅支持在手机上使用，请在微信手机端打开。',
+            showCancel: false,
+            confirmText: '知道了',
+            success: (res) => {
+              if (res.confirm) {
+                // 跳转到禁止页面，显示PC端提示
+                wx.reLaunch({
+                  url: '/pages/blocked/blocked?type=pc'
+                });
+              }
+            }
+          });
+        }, 500);
+        
+        return true; // 返回true表示检测到PC端
+      }
+      
+      return false; // 返回false表示非PC端
+    } catch (err) {
+      console.error('[app] 检测PC环境失败:', err);
+      return false; // 检测失败时允许继续
     }
   },
 
@@ -280,7 +326,28 @@ App({
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
       
-      // 🔴 关键修复：先检查是否是管理员，管理员豁免封禁检查
+      const buttonRes = await db.collection('login_logbutton')
+        .where({ _openid: openid })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+      
+      if (buttonRes.data && buttonRes.data.length > 0) {
+        const btn = buttonRes.data[0];
+        
+        // 🔴 最高优先级：检查强制封禁按钮 qiangli
+        const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
+        if (qiangli) {
+          console.log('[app] ⚠️ 检测到强制封禁按钮 qiangli 已开启，无视一切放行，直接封禁');
+          // 延迟一下，确保页面加载完成
+          setTimeout(() => {
+            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          }, 500);
+          return; // 强制封禁，直接返回，不执行后续任何检查
+        }
+      }
+      
+      // 🔴 关键修复：先检查是否是管理员，管理员豁免封禁检查（但qiangli优先级更高）
       const adminCheck = await db.collection('guanliyuan')
         .where({ openid: openid })
         .limit(1)
@@ -290,12 +357,6 @@ App({
         console.log('[app] ✅ 检测到管理员身份，豁免封禁检查');
         return; // 管理员直接返回，不检查封禁状态
       }
-      
-      const buttonRes = await db.collection('login_logbutton')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
       
       if (buttonRes.data && buttonRes.data.length > 0) {
         const btn = buttonRes.data[0];

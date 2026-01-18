@@ -33,8 +33,9 @@ Page({
     dragOffset: 0,
     currentIndex: 0, // 默认选中第0个，即"产品上新"
     
-    // 【新增】自动消失提示（无按钮，2秒后自动消失）
+    // 【新增】自动消失提示（无按钮，3秒后自动消失）
     autoToast: { show: false, title: '', content: '' },
+    autoToastClosing: false, // 自动提示退出动画中
     
     // 🔴 自定义加载动画
     showLoadingAnimation: false,
@@ -148,7 +149,25 @@ Page({
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
       
-      // 🔴 关键修复：先检查是否是管理员，管理员豁免封禁检查
+      const buttonRes = await db.collection('login_logbutton')
+        .where({ _openid: openid })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+      
+      if (buttonRes.data && buttonRes.data.length > 0) {
+        const btn = buttonRes.data[0];
+        
+        // 🔴 最高优先级：检查强制封禁按钮 qiangli
+        const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
+        if (qiangli) {
+          console.log('[products] ⚠️ 检测到强制封禁按钮 qiangli 已开启，无视一切放行，直接封禁');
+          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          return; // 强制封禁，直接返回，不执行后续任何检查
+        }
+      }
+      
+      // 🔴 关键修复：先检查是否是管理员，管理员豁免封禁检查（但qiangli优先级更高）
       const adminCheck = await db.collection('guanliyuan')
         .where({ openid: openid })
         .limit(1)
@@ -158,12 +177,6 @@ Page({
         console.log('[products] ✅ 检测到管理员身份，豁免封禁检查');
         return; // 管理员直接返回，不检查封禁状态
       }
-      
-      const buttonRes = await db.collection('login_logbutton')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
       
       if (buttonRes.data && buttonRes.data.length > 0) {
         const btn = buttonRes.data[0];
@@ -185,6 +198,9 @@ Page({
   },
 
   onShow() {
+    // 🔴 检查是否有未完成的寄回订单
+    this.checkUnfinishedReturn();
+    
     // 🔴 检查录屏状态
     if (wx.getScreenRecordingState) {
       wx.getScreenRecordingState({
@@ -567,17 +583,90 @@ Page({
     wx.reLaunch({ url: '/pages/index/index' }); 
   },
   
-  // 【新增】自动消失提示（无按钮，2秒后自动消失）
+  // 【新增】自动消失提示（无按钮，3秒后自动消失）
+  // 空函数，用于阻止事件冒泡和滚动
+  noop() {},
+
+  // 【新增】检查是否有未完成的寄回订单
+  checkUnfinishedReturn() {
+    const db = wx.cloud.database();
+    db.collection('shouhou_repair')
+      .where({
+        needReturn: true
+      })
+      .get()
+      .then(checkRes => {
+        // 过滤出未完成且用户未录入运单号的订单
+        const unfinishedReturns = (checkRes.data || []).filter(item => 
+          !item.returnCompleted && !item.returnTrackingId
+        );
+        
+        if (unfinishedReturns.length > 0) {
+          // 有未完成的寄回订单，显示提示
+          this._showCustomModal({
+            title: '提示',
+            content: '检测到您有一笔未完成的售后，未寄回维修配件，请先处理完成',
+            showCancel: true,
+            confirmText: '去处理',
+            cancelText: '稍后',
+            success: (res) => {
+              if (res.confirm) {
+                // 跳转到个人中心
+                wx.navigateTo({ 
+                  url: '/pages/my/my',
+                  fail: (err) => {
+                    console.error('[checkUnfinishedReturn] 跳转失败:', err);
+                    this.showAutoToast('提示', '跳转失败，请手动进入个人中心');
+                  }
+                });
+              }
+            }
+          });
+        }
+      })
+      .catch(err => {
+        console.error('检查寄回订单失败:', err);
+        // 检查失败不显示错误，避免影响用户体验
+      });
+  },
+
+  // 【新增】自动消失提示（无按钮，3秒后自动消失，带收缩退出动画）
   showAutoToast(title = '提示', content = '') {
+    // 如果已有toast在显示，先关闭它
+    if (this.data.autoToast.show) {
+      this._closeAutoToastWithAnimation();
+      setTimeout(() => {
+        this._showAutoToastInternal(title, content);
+      }, 420);
+    } else {
+      this._showAutoToastInternal(title, content);
+    }
+  },
+
+  // 内部方法：显示自动提示
+  _showAutoToastInternal(title, content) {
     this.setData({
       'autoToast.show': true,
       'autoToast.title': title,
-      'autoToast.content': content
+      'autoToast.content': content,
+      autoToastClosing: false
     });
-    // 2秒后自动消失
+    // 3秒后自动消失（带退出动画）
     setTimeout(() => {
-      this.setData({ 'autoToast.show': false });
-    }, 2000);
+      this._closeAutoToastWithAnimation();
+    }, 3000);
+  },
+
+  // 关闭自动提示（带收缩退出动画）
+  _closeAutoToastWithAnimation() {
+    if (!this.data.autoToast.show) return;
+    this.setData({ autoToastClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        'autoToast.show': false,
+        autoToastClosing: false
+      });
+    }, 420);
   },
 
   // 🔴 统一的自定义 Loading 显示方法（替换所有 wx.showLoading 和 getApp().showLoading）

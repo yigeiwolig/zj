@@ -83,7 +83,7 @@
 
 
   <!-- 自定义编辑弹窗 -->
-  <view class="custom-modal-mask" wx:if="{{showCustomEditModal}}">
+  <view class="custom-modal-mask {{customEditModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" catchtouchmove="noop">
     <view class="custom-modal-box">
       <view class="custom-modal-title">{{customEditTitle}}</view>
       <input class="custom-modal-input" value="{{customEditVal}}" bindinput="onCustomEditInput" focus="{{showCustomEditModal}}" cursor-spacing="100"/>

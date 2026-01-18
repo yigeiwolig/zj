@@ -3,8 +3,8 @@
 
 <!-- ================= 1. 顶部导航 ================= -->
 <view class="nav-header">
-  <view class="nav-back" bindtap="goBack">
-    <text class="icon-back">‹</text>
+  <view class="back-icon" catchtap="goBack">
+    <text class="back-arrow">‹</text>
   </view>
 
   <view class="brand-box">
@@ -103,7 +103,7 @@
 </view>
 
 <!-- ================= 自定义编辑弹窗 ================= -->
-<view class="custom-modal-mask" wx:if="{{showCustomEditModal}}" bindtap="closeCustomEditModal">
+<view class="custom-modal-mask {{customEditModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" bindtap="closeCustomEditModal" catchtouchmove="noop">
   <view class="custom-modal-box" catchtap="">
     <view class="modal-title">{{customEditTitle}}</view>
     <input 

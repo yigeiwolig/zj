@@ -1,4 +1,4 @@
-/* ================= 自动消失提示（无按钮，2秒后自动消失） ================= */
+/* ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= */
 .auto-toast-mask {
   position: fixed;
   top: 0;
@@ -11,6 +11,18 @@
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  animation: autoToastMaskFadeIn 0.25s ease-out forwards;
+}
+.auto-toast-mask.closing {
+  animation: autoToastMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes autoToastMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes autoToastMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .auto-toast-box {
@@ -20,19 +32,33 @@
   padding: 24rpx 40rpx;
   max-width: 600rpx;
   text-align: center;
-  animation: toastFadeIn 0.3s ease-out;
+  animation: toastFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   pointer-events: auto;
   box-shadow: 0 8rpx 30rpx rgba(0,0,0,0.15); /* 🔴 添加阴影 */
 }
-
+.auto-toast-mask.closing .auto-toast-box {
+  animation: autoToastShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
 @keyframes toastFadeIn {
   from {
     opacity: 0;
-    transform: translateY(-20rpx);
+    transform: translateY(-20rpx) scale(0.92);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes autoToastShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
   }
 }
 

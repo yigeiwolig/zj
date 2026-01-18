@@ -13,7 +13,8 @@ Page({
     showCustomEditModal: false,
     customEditTitle: '',
     customEditVal: '',
-    customEditCallback: null
+    customEditCallback: null,
+    customEditModalClosing: false // 编辑弹窗退出动画中
   },
 
   onLoad: function() {
@@ -315,12 +316,29 @@ Page({
   },
   
   closeCustomEditModal: function() {
-    this.setData({
-      showCustomEditModal: false,
-      customEditTitle: '',
-      customEditVal: '',
-      customEditCallback: null
-    });
+    this.setData({ customEditModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showCustomEditModal: false,
+        customEditTitle: '',
+        customEditVal: '',
+        customEditCallback: null,
+        customEditModalClosing: false
+      });
+    }, 420);
+  },
+  
+  closeCustomEditModal() {
+    this.setData({ customEditModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showCustomEditModal: false,
+        customEditTitle: '',
+        customEditVal: '',
+        customEditCallback: null,
+        customEditModalClosing: false
+      });
+    }, 420);
   },
   
   confirmCustomEdit: function() {
@@ -330,6 +348,9 @@ Page({
     }
     this.closeCustomEditModal();
   },
+
+  // 空函数，用于阻止事件冒泡和滚动
+  noop() {},
 
   // ===============================================
   // 🔴 统一的自定义弹窗方法（替换所有 wx.showModal 和 wx.showToast）

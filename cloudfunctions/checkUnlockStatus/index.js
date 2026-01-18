@@ -46,6 +46,13 @@ exports.main = async (event, context) => {
       }
     } catch (e) {}
 
+    // 🔴 最高优先级：检查强制封禁按钮 qiangli
+    const qiangli = buttonRecord && (buttonRecord.qiangli === true || buttonRecord.qiangli === 1 || buttonRecord.qiangli === 'true' || buttonRecord.qiangli === '1')
+    if (qiangli) {
+      console.log('[checkUnlockStatus] ⚠️ 检测到强制封禁按钮 qiangli 已开启，无视一切放行，直接封禁')
+      return { action: 'WAIT', msg: '强制封禁中：qiangli按钮已开启' }
+    }
+    
     // 解析状态
     const rawFlag = buttonRecord ? buttonRecord.isBanned : undefined
     const isBanned = buttonRecord && (rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1')

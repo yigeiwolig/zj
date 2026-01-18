@@ -36,7 +36,25 @@
     <swiper class="hero-swiper" indicator-dots="{{true}}" circular="{{true}}" autoplay="{{!isAdmin}}">
       <block wx:for="{{topMediaList}}" wx:key="url">
         <swiper-item>
-          <video wx:if="{{item.type === 'video'}}" src="{{item.url}}" class="hero-media" autoplay muted loop show-play-btn="{{false}}" controls="{{false}}"></video>
+          <view wx:if="{{item.type === 'video'}}" class="hero-video-wrapper">
+            <video 
+              src="{{item.url}}" 
+              class="hero-media" 
+              id="hero-video-{{index}}"
+              muted 
+              loop 
+              show-play-btn="{{false}}" 
+              show-center-play-btn="{{false}}"
+              controls="{{false}}"
+              bindplay="onVideoPlay"
+              bindpause="onVideoPause"
+            ></video>
+            <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.url}}" data-location="hero">
+              <view class="play-icon">
+                <view class="play-triangle"></view>
+              </view>
+            </view>
+          </view>
           <image wx:else src="{{item.url}}" class="hero-media" mode="aspectFill" />
           
           <view wx:if="{{isAdmin}}" class="admin-del-media" catchtap="adminDelTopMedia" data-index="{{index}}">✕</view>
@@ -105,7 +123,26 @@
       <view class="detail-images">
          <block wx:for="{{currentSeries.detailImages}}" wx:key="url">
            <view class="dimg-box">
-              <video wx:if="{{item.type === 'video'}}" src="{{item.url}}" class="dimg" style="height:400rpx; width:100%;" autoplay muted loop show-play-btn="{{false}}" controls="{{false}}"></video>
+              <view wx:if="{{item.type === 'video'}}" class="detail-video-wrapper">
+                <video 
+                  src="{{item.url}}" 
+                  class="dimg" 
+                  style="height:400rpx; width:100%;" 
+                  id="detail-video-{{index}}"
+                  muted 
+                  loop 
+                  show-play-btn="{{false}}" 
+                  show-center-play-btn="{{false}}"
+                  controls="{{false}}"
+                  bindplay="onVideoPlay"
+                  bindpause="onVideoPause"
+                ></video>
+                <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.url}}" data-location="detail">
+                  <view class="play-icon">
+                    <view class="play-triangle"></view>
+                  </view>
+                </view>
+              </view>
               <image wx:else src="{{item.url}}" mode="widthFix" class="dimg" />
               
               <view wx:if="{{isAdmin}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
@@ -336,8 +373,8 @@
   </view>
 </view>
 
-<!-- ================= 6. 加入购物车成功弹窗 ================= -->
-<view class="success-mask" wx:if="{{showCartSuccess}}">
+<!-- ================= 6. 加入购物车成功弹窗（弹出+收缩退出动画） ================= -->
+<view class="success-mask {{cartSuccessClosing ? 'closing' : ''}}" wx:if="{{showCartSuccess}}" catchtouchmove="noop">
   <view class="success-box">
     <view class="s-icon">✔</view>
     <view class="s-title">已加入购物车</view>
@@ -450,19 +487,34 @@
 
       </view>
 
+      <!-- 免责协议（保持在最下面，位置稍微高一点） -->
+      <view class="disclaimer-section">
+        <view class="disclaimer-checkbox">
+          <checkbox-group bindchange="onDisclaimerChange">
+            <label class="disclaimer-label">
+              <checkbox value="agree" checked="{{agreedToDisclaimer}}"/>
+              <view class="disclaimer-text-wrapper">
+                <text class="disclaimer-text">我已阅读并同意</text>
+                <text class="disclaimer-link" catchtap="showDisclaimerModal">《免责协议》</text>
+              </view>
+            </label>
+          </checkbox-group>
+        </view>
+      </view>
+
     </view>
   </scroll-view>
 
   <!-- 底部单按钮 (立即支付) -->
   <view class="checkout-footer-single">
-    <view class="btn-black full" catchtap="submitOrder">
+    <view class="btn-black full {{!agreedToDisclaimer ? 'grayed' : ''}}" catchtap="submitOrder" data-agreed="{{agreedToDisclaimer}}">
       <text class="btn-main">立即支付 ¥{{finalTotalPrice}}</text>
     </view>
   </view>
 </view>
 
 <!-- ================= 8. 自定义编辑弹窗 ================= -->
-<view class="custom-modal-mask" wx:if="{{showCustomEditModal}}">
+<view class="custom-modal-mask {{customModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" catchtouchmove="noop">
   <view class="custom-modal-box">
     <view class="custom-modal-title">{{customEditTitle}}</view>
     <input class="custom-modal-input" value="{{customEditVal}}" bindinput="onCustomEditInput" focus="{{showCustomEditModal}}" cursor-spacing="100"/>
@@ -473,8 +525,8 @@
   </view>
 </view>
 
-<!-- ================= 自定义弹窗（替换 wx.showModal） ================= -->
-<view class="custom-dialog-mask" wx:if="{{dialog.show}}">
+<!-- ================= 自定义弹窗（替换 wx.showModal，带收缩退出动画） ================= -->
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop">
   <view class="custom-dialog-box">
     <view class="cd-title">{{dialog.title}}</view>
     <rich-text class="cd-content" nodes="{{dialog.content}}"></rich-text>
@@ -485,8 +537,8 @@
   </view>
 </view>
 
-<!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
-<view class="auto-toast-mask" wx:if="{{autoToast.show}}">
+<!-- ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= -->
+<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
   <view class="auto-toast-box">
     <view class="at-title">{{autoToast.title}}</view>
     <view class="at-content">{{autoToast.content}}</view>
@@ -494,7 +546,7 @@
 </view>
 
 <!-- ================= 9. 屏幕中间提示气泡 ================= -->
-<view class="center-toast-mask" wx:if="{{centerToast.show}}">
+<view class="center-toast-mask {{centerToastClosing ? 'closing' : ''}}" wx:if="{{centerToast.show}}" catchtouchmove="noop">
   <view class="center-toast-box">
     <view class="ct-icon">!</view> 
     <view class="ct-text">{{centerToast.text}}</view>
@@ -502,7 +554,7 @@
 </view>
 
 <!-- ================= 10. 智能粘贴输入弹窗 ================= -->
-<view class="smart-paste-mask" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;">
+<view class="smart-paste-mask {{smartPasteClosing ? 'closing' : ''}}" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;" catchtouchmove="noop">
   <view class="smart-paste-box">
     <view class="sp-title">智能粘贴</view>
     <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
@@ -522,7 +574,7 @@
 </view>
 
 <!-- ================= 自定义操作菜单（替代 wx.showActionSheet） ================= -->
-<view class="action-sheet-mask" wx:if="{{actionSheet.show}}" bindtap="closeActionSheet">
+<view class="action-sheet-mask {{actionSheetClosing ? 'closing' : ''}}" wx:if="{{actionSheet.show}}" bindtap="closeActionSheet" catchtouchmove="noop">
   <view class="action-sheet-box" catchtap="">
     <view 
       class="action-sheet-item" 
@@ -538,15 +590,27 @@
 </view>
 
 <!-- ================= 11. 自定义全屏视频播放器 ================= -->
-<view class="video-modal-mask" wx:if="{{showVideoPlayer}}" style="z-index: 99999;">
-  <view class="video-close-btn" bindtap="closeVideoPlayer">✕</view>
+<view class="video-modal-mask" wx:if="{{showVideoPlayer}}" style="z-index: 99999;" bindtap="toggleVideoPlayPause">
+  <view class="video-close-btn" catchtap="closeVideoPlayer">✕</view>
   <video 
     src="{{currentVideoUrl}}" 
+    id="fullscreen-video"
     autoplay="{{true}}" 
     class="fullscreen-video" 
     show-fullscreen-btn="{{false}}" 
+    show-center-play-btn="{{false}}"
     object-fit="contain"
+    bindplay="onVideoPlay"
+    bindpause="onVideoPause"
+    bindcanplay="onVideoCanPlay"
+    bindtimeupdate="onVideoTimeUpdate"
+    bindtap="toggleVideoPlayPause"
   ></video>
+  <view class="video-pause-overlay {{!isVideoPlaying ? 'show' : ''}}" catchtap="toggleVideoPlayPause">
+    <view class="play-icon">
+      <view class="play-triangle"></view>
+    </view>
+  </view>
 </view>
 
 <!-- ================= 自定义加载动画（白色背景进度条） ================= -->

@@ -89,7 +89,7 @@ page {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
   padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 10000; pointer-events: none;
+  z-index: 100; pointer-events: none;
   background: transparent; 
 }
 .back-icon {
@@ -673,17 +673,50 @@ page {
 .top-error-toast.show { top: 0; }
 
 /* ============================================================== */
-/* 2. 加入成功弹窗 (Success Modal) - 优化层级和美观 */
+/* 2. 加入成功弹窗 (Success Modal) - 弹出 + 收缩退出动画 */
 /* ============================================================== */
 .success-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.4); backdrop-filter: blur(5px);
-  z-index: 900; display: flex; align-items: center; justify-content: center; /* 确保比 detail modal (200) 高 */
+  z-index: 900; display: flex; align-items: center; justify-content: center;
+  animation: cartMaskFadeIn 0.25s ease-out forwards;
 }
+.success-mask.closing {
+  animation: cartMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes cartMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes cartMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .success-box {
-  background: #fff; width: 600rpx; border-radius: 50rpx; padding: 70rpx 50rpx; /* 更圆润 */
+  background: #fff; width: 600rpx; border-radius: 50rpx; padding: 70rpx 50rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.15);
+  animation: cartBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; /* 轻微回弹，灵动 */
+}
+.success-mask.closing .success-box {
+  animation: cartBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes cartBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx); /* 明显收缩并向上移动 */
+    opacity: 0;
+    filter: blur(12rpx); /* 更明显的模糊 */
+  }
+}
+@keyframes cartBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
 }
 .s-icon {
   width: 120rpx; height: 120rpx; background: #E1F8E8; color: #00C853;
@@ -831,10 +864,18 @@ page {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); z-index: 1000;
   display: flex; align-items: center; justify-content: center;
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
+}
+.custom-modal-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 .custom-modal-box {
   background: #fff; width: 600rpx; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center;
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.custom-modal-mask.closing .custom-modal-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 .custom-modal-title {
   font-size: 34rpx; font-weight: 800; margin-bottom: 40rpx; color: #1D1D1F;
@@ -854,26 +895,67 @@ page {
 .c-btn-cancel { background: #F5F5F7; color: #888; }
 .c-btn-confirm { background: #000; color: #fff; }
 
-/* ================= 自定义弹窗 (替代 wx.showModal) ================= */
+/* ================= 自定义弹窗 (替代 wx.showModal，带弹出+收缩退出动画) ================= */
 .custom-dialog-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
   z-index: 9999; display: flex; align-items: center; justify-content: center;
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }
+.custom-dialog-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 50rpx 40rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
-  animation: popIn 0.2s ease-out;
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; /* 轻微回弹，灵动 */
 }
-.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 20rpx; color: #000; }
-.cd-content { font-size: 28rpx; color: #000; margin-bottom: 50rpx; line-height: 1.5; } /* 🔴 改为纯黑色 */
+.custom-dialog-mask.closing .custom-dialog-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx); /* 明显收缩并向上移动 */
+    opacity: 0;
+    filter: blur(12rpx); /* 更明显的模糊 */
+  }
+}
+
+.cd-title { font-size: 34rpx; font-weight: 800; margin-bottom: 30rpx; color: #000; }
+.cd-content { 
+  font-size: 28rpx; 
+  color: #333; 
+  margin-bottom: 50rpx; 
+  line-height: 2; 
+  text-align: left; /* 🔴 左对齐，更易读 */
+  max-height: 60vh; /* 限制最大高度 */
+  overflow-y: auto; /* 内容过多时可滚动 */
+  word-wrap: break-word; /* 自动换行 */
+}
 .cd-btn-row { width: 100%; display: flex; gap: 30rpx; }
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
 .cd-btn.cancel { background: #F5F5F7; color: #000; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
-@keyframes popIn { from{transform: scale(0.9); opacity: 0;} to{transform: scale(1); opacity: 1;} }
 
 /* ======================================================== */
 /* 1. 修复删除按钮：去掉红色块，只要X，且保持右上角定位 */
@@ -1286,6 +1368,10 @@ page {
   z-index: 2000; /* 最高层级 */
   display: flex; align-items: center; justify-content: center;
   pointer-events: none; /* 让点击穿透背景，但不穿透气泡(气泡太小无所谓) */
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
+}
+.center-toast-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .center-toast-box {
@@ -1295,7 +1381,10 @@ page {
   display: flex; flex-direction: column; align-items: center;
   min-width: 200rpx;
   backdrop-filter: blur(10px);
-  animation: fadeInOut 0.2s ease-out;
+  animation: fadeInOut 0.2s ease-out forwards;
+}
+.center-toast-mask.closing .center-toast-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .ct-icon {
@@ -1322,13 +1411,20 @@ page {
   background: rgba(0,0,0,0.6); z-index: 99999 !important; /* 确保在最上层 */
   display: flex; align-items: center; justify-content: center;
   backdrop-filter: blur(5px);
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
+}
+.smart-paste-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .smart-paste-box {
   background: #fff; width: 600rpx; border-radius: 40rpx; padding: 40rpx;
   display: flex; flex-direction: column; align-items: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.2);
-  animation: popUp 0.3s ease;
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.smart-paste-mask.closing .smart-paste-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .sp-title { font-size: 34rpx; font-weight: 800; margin-bottom: 10rpx; color: #1D1D1F; }
@@ -1541,14 +1637,166 @@ page {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100000; /* 必须比视频层级高 */
+  z-index: 100002; /* 必须比暂停覆盖层(100001)高，确保点击X时能关闭视频 */
   backdrop-filter: blur(5px);
+  pointer-events: auto; /* 确保可以点击 */
 }
 
 /* 按下效果 */
 .video-close-btn:active {
   background: rgba(255, 255, 255, 0.6);
 }
+
+/* 视频播放覆盖层 - 更加透明，只保留点击功能 */
+.video-play-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent; /* 完全透明，不让画面变暗 */
+  z-index: 10;
+}
+
+/* ================================================= */
+/* 极简无底播放/暂停图标 (仿抖音风格) */
+/* ================================================= */
+
+/* 公共容器样式 - 去掉所有背景，只保留占位 */
+.play-icon, 
+.pause-icon {
+  width: 140rpx;
+  height: 140rpx;
+  
+  /* 🔴 核心修改：去掉背景、模糊、边框、阴影 */
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  cursor: pointer;
+  
+  /* 🔴 禁用点击高亮（解决蓝色底问题） */
+  -webkit-tap-highlight-color: transparent;
+  tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 点击时的缩放反馈 */
+.play-icon:active,
+.pause-icon:active {
+  transform: scale(0.9);
+  background: transparent !important; /* 保持透明，强制覆盖 */
+  -webkit-tap-highlight-color: transparent !important;
+  tap-highlight-color: transparent !important;
+}
+
+/* 播放三角形 */
+.play-triangle {
+  width: 0;
+  height: 0;
+  
+  /* 🔴 核心修改：灰色半透明，无底 */
+  border-left: 50rpx solid rgba(255, 255, 255, 0.6); /* 浅灰色/半透明白 */
+  border-top: 32rpx solid transparent;
+  border-bottom: 32rpx solid transparent;
+  
+  /* 视觉居中修正 */
+  margin-left: 14rpx; 
+  
+  /* 简单的阴影增加可见度 */
+  filter: drop-shadow(0 2rpx 4rpx rgba(0,0,0,0.2));
+  transition: all 0.2s ease;
+}
+
+/* 点击时图标变暗一点 */
+.play-icon:active .play-triangle {
+  border-left-color: rgba(255, 255, 255, 0.4);
+}
+
+/* 暂停图标布局 */
+.pause-icon {
+  gap: 18rpx;
+}
+
+/* 暂停竖条 */
+.pause-bar {
+  width: 14rpx;
+  height: 60rpx;
+  background: rgba(255, 255, 255, 0.6); /* 浅灰色/半透明白 */
+  border-radius: 8rpx;
+  box-shadow: 0 2rpx 4rpx rgba(0,0,0,0.2);
+  transition: all 0.2s ease;
+}
+
+/* 点击时竖条变暗 */
+.pause-icon:active .pause-bar {
+  background: rgba(255, 255, 255, 0.4);
+}
+
+/* 移除之前的伪元素和多余动画 */
+.play-icon::before,
+.pause-icon::before {
+  display: none;
+}
+.pause-bar-left, .pause-bar-right {
+  margin: 0; 
+}
+
+/* 视频容器 */
+.hero-video-wrapper,
+.detail-video-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* 全屏播放器的暂停覆盖层 */
+.video-pause-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  z-index: 100001;
+  pointer-events: auto;
+  
+  /* 🔴 禁用点击高亮（解决蓝色底问题） */
+  -webkit-tap-highlight-color: transparent;
+  tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  
+  /* 🔴 核心动画：默认隐藏 */
+  opacity: 0;
+  transform: scale(1.2);
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  visibility: hidden;
+}
+
+/* 暂停时显示 */
+.video-pause-overlay.show {
+  opacity: 1;
+  transform: scale(1);
+  visibility: visible;
+}
+
 
 /* ============================================== */
 /* [新增] 主页卡片删除按钮 */
@@ -1850,7 +2098,7 @@ page {
 
 /* 滚动区域 */
 .checkout-scroll { flex: 1; overflow-y: auto; }
-.checkout-body { padding: 40rpx; padding-bottom: 200rpx; }
+.checkout-body { padding: 40rpx; padding-bottom: 280rpx; }  /* 可多滑一点到底 */
 
 /* 3. 卡片通用样式 */
 .group-card {
@@ -1936,22 +2184,90 @@ page {
 .ms-num { width: 40rpx; text-align: center; font-size: 24rpx; font-weight: 600; }
 
 /* 7. 底部单按钮 (立即支付) */
+/* 🔴 结算弹窗内：收货信息 form 与下方免责协议尽量靠近 */
+.checkout-body .form-group {
+  margin-bottom: 12rpx;
+}
+
+/* 🔴 免责协议区域：紧跟收货信息 */
+.disclaimer-section {
+  margin-top: 4rpx;
+  padding: 12rpx 0;
+  border-top: 1rpx solid #eee;
+}
+
+.disclaimer-checkbox {
+  display: flex;
+  align-items: flex-start;
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.6;
+}
+
+.disclaimer-label {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+}
+
+.disclaimer-checkbox checkbox {
+  margin-right: 12rpx;
+  margin-top: 2rpx; /* 🔴 往上移一点 */
+  transform: scale(0.9);
+}
+
+.disclaimer-text-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  line-height: 1.6;
+}
+
+.disclaimer-text {
+  color: #666;
+}
+
+.disclaimer-link {
+  color: #007AFF;
+  text-decoration: underline;
+}
+
 .checkout-footer-single {
   position: absolute; bottom: 0; left: 0; width: 100%;
   /* 纯白实心背景，防止透视 */
   background: #FFFFFF;
-  padding: 20rpx 30rpx calc(40rpx + env(safe-area-inset-bottom));
+  padding: 20rpx 30rpx calc(28rpx + env(safe-area-inset-bottom));  /* 底部减小：立即支付稍微往下 */
   border-top: 1rpx solid #eee; display: flex; justify-content: flex-start; box-sizing: border-box;
   z-index: 601;
   pointer-events: auto; /* 确保可以点击 */
 }
+
+.btn-black.full.disabled {
+  background: #ccc !important;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* 🔴 确保按钮在禁用状态下不可点击 */
+.btn-black.full.disabled:active {
+  transform: none !important;
+  opacity: 0.6 !important;
+}
+
+/* 未勾选免责时：灰色样式但可点击，点击后弹出「是否阅读免责协议」确认，确认即自动打钩 */
+.btn-black.full.grayed {
+  background: #ccc !important;
+  opacity: 0.6;
+  /* 不设 pointer-events: none，保持可点击 */
+}
+
 .btn-main { font-size: 30rpx; font-weight: 700; }
 /* 去掉小字，如果 wxml 还有 btn-sub 也不显示 */
 .btn-sub { display: none; }
 
 
 
-/* ================= 自动消失提示样式（无按钮，2秒后自动消失）- 优化版 ================= */
+/* ================= 自动消失提示样式（无按钮，3秒后自动消失，带收缩退出动画） ================= */
 .auto-toast-mask {
   position: fixed;
   top: 0;
@@ -1966,6 +2282,18 @@ page {
   align-items: center;
   justify-content: center;
   pointer-events: none; /* 允许点击穿透 */
+  animation: autoToastMaskFadeIn 0.25s ease-out forwards;
+}
+.auto-toast-mask.closing {
+  animation: autoToastMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes autoToastMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes autoToastMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .auto-toast-box {
@@ -1978,10 +2306,24 @@ page {
     0 20rpx 60rpx rgba(0, 0, 0, 0.12),
     0 8rpx 24rpx rgba(0, 0, 0, 0.08),
     inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
-  animation: autoToastFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), 
-             autoToastFadeOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) 1.7s forwards;
+  animation: autoToastFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; /* 移除自动退出，改为手动触发 */
   position: relative;
   overflow: hidden;
+}
+.auto-toast-mask.closing .auto-toast-box {
+  animation: autoToastShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes autoToastShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx); /* 明显收缩并向上移动 */
+    opacity: 0;
+    filter: blur(12rpx); /* 更明显的模糊 */
+  }
 }
 
 /* 添加微妙的边框 */
@@ -2012,16 +2354,7 @@ page {
   }
 }
 
-@keyframes autoToastFadeOut {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-20rpx) scale(0.96);
-  }
-}
+/* autoToastFadeOut 已移除，改用 autoToastShrinkOut（手动触发） */
 
 .at-title {
   font-size: 34rpx;
@@ -2055,6 +2388,10 @@ page {
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
+}
+.action-sheet-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .action-sheet-box {
@@ -2062,7 +2399,10 @@ page {
   background: #ffffff;
   border-radius: 32rpx 32rpx 0 0;
   padding-bottom: env(safe-area-inset-bottom);
-  animation: slideUp 0.3s ease-out;
+  animation: slideUp 0.3s ease-out forwards;
+}
+.action-sheet-mask.closing .action-sheet-box {
+  animation: slideDown 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes slideUp {
@@ -2071,6 +2411,16 @@ page {
   }
   to {
     transform: translateY(0);
+  }
+}
+@keyframes slideDown {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
   }
 }
 

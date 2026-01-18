@@ -3,7 +3,7 @@
   <!-- 顶部导航 -->
   <view class="header">
     <view class="back-icon" catchtap="handleBack">
-      <text style="font-size: 48rpx; font-weight: 300; color: #000; line-height: 1;">‹</text>
+      <text class="back-arrow">‹</text>
     </view>
   </view>
   <view class="back-btn" catchtap="handleBack" style="display: none;">
@@ -64,7 +64,7 @@
   <view class="footer">© 2025 MT-MOGAISHE. All Rights Reserved.</view>
 
   <!-- 高级多步弹窗 -->
-  <view class="modal-overlay {{showModal ? 'active' : ''}}" catchtouchmove="preventMove">
+  <view class="modal-overlay {{showModal ? 'active' : ''}} {{modalClosing ? 'closing' : ''}}" catchtouchmove="noop">
     <view class="ios-modal">
       
       <!-- 步骤 1: 输入内容 -->

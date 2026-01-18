@@ -4,7 +4,7 @@
   <!-- 顶部导航 -->
   <view class="header">
     <view class="back-icon" catchtap="goBack">
-      <text>‹</text>
+      <text class="back-arrow">‹</text>
     </view>
   </view>
   <view class="custom-nav-container" style="padding-top: {{statusBarHeight}}px;">
@@ -325,7 +325,7 @@
   </view>
 
   <!-- ================= 更好看的自定义弹窗（复用 my 页风格） ================= -->
-  <view class="custom-dialog-mask" wx:if="{{showDevDialog}}" bindtap="closeDevDialog">
+  <view class="custom-dialog-mask {{devDialogClosing ? 'closing' : ''}}" wx:if="{{showDevDialog}}" bindtap="closeDevDialog" catchtouchmove="noop">
     <view class="custom-dialog-box" catchtap="noop">
       <view class="cd-title">提示</view>
       <view class="cd-content">产品正在开发中，敬请期待</view>
@@ -365,7 +365,7 @@
 
 
 <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
-<view class="auto-toast-mask" wx:if="{{autoToast.show}}">
+<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
   <view class="auto-toast-box">
     <view class="at-title">{{autoToast.title}}</view>
     <view class="at-content">{{autoToast.content}}</view>
@@ -373,7 +373,7 @@
 </view>
 
 <!-- ================= 自定义对话框 ================= -->
-<view class="custom-dialog-mask" wx:if="{{dialog.show}}" bindtap="closeCustomDialog">
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="closeCustomDialog" catchtouchmove="noop">
   <view class="custom-dialog-box" catchtap="">
     <view class="cd-title">{{dialog.title}}</view>
     <view class="cd-content">{{dialog.content}}</view>

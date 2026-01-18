@@ -309,7 +309,7 @@
 </view>
 
 <!-- ================= 自定义弹窗（替换 wx.showModal） ================= -->
-<view class="custom-dialog-mask" wx:if="{{dialog.show}}" bindtap="closeCustomDialog">
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="closeCustomDialog" catchtouchmove="noop">
   <view class="custom-dialog-box" catchtap="noop">
     <view class="cd-title">{{dialog.title}}</view>
     <view class="cd-content">{{dialog.content}}</view>

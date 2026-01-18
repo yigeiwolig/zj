@@ -31,7 +31,7 @@ page {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
   padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 10000; pointer-events: none;
+  z-index: 100; pointer-events: none;
   background: transparent; 
 }
 .back-icon {
@@ -42,10 +42,6 @@ page {
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
-  font-size: 52rpx;
-  font-weight: 300;
-  color: #000;
-  line-height: 1;
 }
 .back-icon:active {
   transform: scale(0.95);
@@ -53,6 +49,14 @@ page {
 }
 .back-icon::before {
   display: none;
+}
+
+/* 统一返回箭头样式 */
+.back-arrow {
+  font-size: 48rpx;
+  font-weight: 300;
+  color: #000;
+  line-height: 1;
 }
 
 .nav-header {
@@ -833,12 +837,93 @@ page {
   align-items: center;
   justify-content: center;
   font-size: 34rpx;
-  z-index: 2;
+  z-index: 3; /* 🔴 确保比暂停覆盖层(2)高 */
+  pointer-events: auto;
 }
 
 .video-preview-player {
   width: 100%;
   height: 900rpx;
+}
+
+/* 🔴 新增：视频预览弹窗点击层和暂停覆盖层 */
+.video-preview-box {
+  position: relative;
+}
+
+.video-preview-click-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+.video-preview-pause-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  z-index: 2;
+  pointer-events: auto;
+  
+  /* 🔴 核心动画：默认隐藏 */
+  opacity: 0;
+  transform: scale(1.2);
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  visibility: hidden;
+}
+
+/* 暂停时显示 */
+.video-preview-pause-overlay.show {
+  opacity: 1;
+  transform: scale(1);
+  visibility: visible;
+}
+
+/* 🔴 播放图标样式（无底灰色，仿抖音） */
+.video-preview-pause-overlay .play-icon {
+  width: 140rpx;
+  height: 140rpx;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+  cursor: pointer;
+}
+
+.video-preview-pause-overlay .play-icon:active {
+  transform: scale(0.9);
+  background: transparent;
+}
+
+.video-preview-pause-overlay .play-triangle {
+  width: 0;
+  height: 0;
+  border-left: 50rpx solid rgba(255, 255, 255, 0.6);
+  border-top: 32rpx solid transparent;
+  border-bottom: 32rpx solid transparent;
+  margin-left: 14rpx;
+  filter: drop-shadow(0 2rpx 4rpx rgba(0,0,0,0.2));
+  transition: all 0.2s ease;
+}
+
+.video-preview-pause-overlay .play-icon:active .play-triangle {
+  border-left-color: rgba(255, 255, 255, 0.4);
 }
 
 /* 旧的 section-row / smart-paste 已被新的 contact-section 替代 */
@@ -1676,11 +1761,11 @@ page {
 }
 .ms-num { width: 40rpx; text-align: center; font-size: 24rpx; font-weight: 600; }
 
-/* 底部单按钮 (立即支付) */
+/* 底部单按钮 (立即支付)，与 shop 页一致 */
 .checkout-footer-single {
   position: absolute; bottom: 0; left: 0; width: 100%;
   background: #FFFFFF;
-  padding: 20rpx 30rpx calc(40rpx + env(safe-area-inset-bottom));
+  padding: 20rpx 30rpx calc(28rpx + env(safe-area-inset-bottom));
   border-top: 1rpx solid #eee; display: flex; justify-content: flex-start; box-sizing: border-box;
   z-index: 601;
 }
@@ -1923,17 +2008,49 @@ page {
 }
 .btn-main { font-size: 30rpx; font-weight: 700; }
 
-/* ================= 自定义弹窗样式 ================= */
+/* ================= 自定义弹窗样式（带弹出+收缩退出动画） ================= */
 .custom-dialog-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.6); backdrop-filter: blur(5px);
-  z-index: 10000; display: flex; align-items: center; justify-content: center;
+  z-index: 999999999; display: flex; align-items: center; justify-content: center;
+  animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }
+.custom-dialog-mask.closing {
+  animation: dialogMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes dialogMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .custom-dialog-box {
   width: 600rpx; background: #fff; border-radius: 40rpx; padding: 60rpx 50rpx 50rpx;
   display: flex; flex-direction: column; align-items: center; text-align: center;
   box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.15);
-  animation: popIn 0.25s ease-out;
+  animation: dialogBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+.custom-dialog-mask.closing .custom-dialog-box {
+  animation: dialogBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes dialogBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes dialogBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
 }
 .cd-title { 
   font-size: 36rpx; 
@@ -1977,7 +2094,7 @@ page {
   } 
 }
 
-/* ================= 自动消失提示样式（无按钮，2秒后自动消失）- 优化版 ================= */
+/* ================= 自动消失提示样式（无按钮，3秒后自动消失，带收缩退出动画） ================= */
 .auto-toast-mask {
   position: fixed;
   top: 0;
@@ -1992,6 +2109,18 @@ page {
   align-items: center;
   justify-content: center;
   pointer-events: none; /* 允许点击穿透 */
+  animation: autoToastMaskFadeIn 0.25s ease-out forwards;
+}
+.auto-toast-mask.closing {
+  animation: autoToastMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes autoToastMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes autoToastMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .auto-toast-box {
@@ -2004,10 +2133,24 @@ page {
     0 20rpx 60rpx rgba(0, 0, 0, 0.12),
     0 8rpx 24rpx rgba(0, 0, 0, 0.08),
     inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
-  animation: autoToastFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), 
-             autoToastFadeOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) 1.7s forwards;
+  animation: autoToastFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; /* 移除自动退出，改为手动触发 */
   position: relative;
   overflow: hidden;
+}
+.auto-toast-mask.closing .auto-toast-box {
+  animation: autoToastShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+@keyframes autoToastShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
 }
 
 /* 添加微妙的边框 */
@@ -2038,16 +2181,7 @@ page {
   }
 }
 
-@keyframes autoToastFadeOut {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateY(-20rpx) scale(0.96);
-  }
-}
+/* autoToastFadeOut 已移除，改用 autoToastShrinkOut（手动触发） */
 
 .at-title {
   font-size: 34rpx;
@@ -2066,4 +2200,248 @@ page {
   line-height: 1.7;
   word-break: break-all;
   letter-spacing: 0.2rpx;
+}
+
+/* ================================================= */
+/* 🔴 新增：上传选项弹窗样式（参考 case 页面） */
+/* ================================================= */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.ios-dialog {
+  position: relative; 
+  background: #FFFFFF;
+  width: 600rpx;
+  border-radius: 48rpx;
+  padding: 50rpx 40rpx;
+  text-align: center;
+  transform: scale(0.95);
+  transition: transform 0.3s;
+}
+
+.modal-overlay.active .ios-dialog {
+  transform: scale(1);
+}
+
+.upload-options {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  margin: 30rpx 0;
+}
+
+.option-item {
+  display: flex;
+  align-items: center;
+  padding: 30rpx;
+  background: #F5F5F7;
+  border-radius: 20rpx;
+  transition: all 0.2s;
+}
+
+.option-item:active {
+  background: #E5E5EA;
+  transform: scale(0.98);
+}
+
+.option-icon {
+  font-size: 48rpx;
+  margin-right: 20rpx;
+}
+
+.option-text {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1D1D1F;
+}
+
+/* ================================================= */
+/* 🔴 新增：录制全屏页样式（参考 case 页面） */
+/* ================================================= */
+.camera-full-screen {
+  position: fixed; 
+  top: 0; 
+  left: 0; 
+  width: 100vw; 
+  height: 100vh; 
+  z-index: 3000; 
+  background: #000;
+  touch-action: none;
+  overflow: hidden;
+  will-change: transform, opacity, border-radius;
+  transform: translateZ(0);
+  transform-origin: center bottom;
+  transform: scale(0.05);
+  opacity: 0;
+  border-radius: 50%;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.2s ease-out,
+              border-radius 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.camera-full-screen.animating {
+  transform: scale(0.05);
+  opacity: 0;
+  border-radius: 50%;
+}
+
+.camera-full-screen.animated {
+  transform: scale(1);
+  opacity: 1;
+  border-radius: 0;
+}
+
+.cam-overlay {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  display: flex; flex-direction: column; justify-content: center; align-items: center;
+}
+
+.rec-header-layout {
+  position: absolute;
+  top: 120rpx;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  opacity: 0.9;
+}
+
+.rec-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background-color: #FF3B30;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.rec-dot.active {
+  opacity: 1;
+  animation: blinkDot 1s infinite;
+}
+
+@keyframes blinkDot {
+  0% { opacity: 1; }
+  50% { opacity: 0.3; }
+  100% { opacity: 1; }
+}
+
+.rec-time-text {
+  color: #FFFFFF;
+  font-size: 48rpx;
+  font-weight: 500;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', Roboto, sans-serif;
+  letter-spacing: 2rpx;
+  text-shadow: 0 2rpx 6rpx rgba(0,0,0,0.3);
+}
+
+.privacy-tip {
+  position: absolute;
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  background: #FFFFFF;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.15);
+  padding: 24rpx 40rpx;
+  border-radius: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease-out;
+  pointer-events: none;
+}
+
+.privacy-tip.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.privacy-text {
+  color: #333333;
+  font-size: 28rpx;
+  font-weight: 500;
+  letter-spacing: 1rpx;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.cam-controls {
+  position: absolute; bottom: 0; left: 0; width: 100%; height: 240rpx;
+  background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: space-around;
+  padding-bottom: 40rpx;
+  z-index: 9999;
+}
+
+.cam-btn { color: #fff; font-size: 32rpx; }
+
+.shutter-outer {
+  width: 150rpx;
+  height: 150rpx;
+  border: 8rpx solid rgba(255, 255, 255, 1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+
+.shutter-outer:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+}
+
+.shutter-inner {
+  width: 120rpx;
+  height: 120rpx;
+  background: #FF3B30;
+  border-radius: 60rpx;
+  transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              height 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              border-radius 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.shutter-inner.recording {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 12rpx;
+  background: #FF3B30;
+}
+
+@keyframes breathe {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(0.8);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.shutter-inner.breathing {
+  animation: breathe 1.5s infinite ease-in-out;
 }
