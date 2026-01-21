@@ -112,8 +112,8 @@ Page({
       app.globalData.updatePageVisit('case');
     }
     
-    const sysInfo = wx.getSystemInfoSync();
-    this.setData({ statusBarHeight: sysInfo.statusBarHeight });
+    const winInfo = wx.getWindowInfo();
+    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
     this.ctx = wx.createCameraContext();
 
     // 🔴 物理防线：确保录屏、截屏出来的全是黑屏 (这是最稳的)
@@ -166,6 +166,12 @@ Page({
   },
   
   onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+    
     // 针对进入页面前就在录屏的情况，尝试抓一次
     if (wx.getScreenRecordingState) {
       try {
@@ -185,6 +191,22 @@ Page({
       }
     } else {
       console.warn('⚠️ getScreenRecordingState API 不存在（可能是预览模式）');
+    }
+  },
+
+  onHide() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+  },
+
+  onUnload() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
     }
   },
   
@@ -1932,28 +1954,28 @@ Page({
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    console.log('[case] 🔴 截屏/录屏检测，立即设置封禁状态');
+    console.log('[case] 🔴 截屏/录屏检测，立即跳转');
     
-    // 🔴 关键修复：立即调用云函数设置 isBanned = true，不等待位置信息
-    try {
-      const sysInfo = wx.getSystemInfoSync();
-      const immediateRes = await wx.cloud.callFunction({
-        name: 'banUserByScreenshot',
-        data: {
-          type: type,
-          banPage: 'case',
-          deviceInfo: sysInfo.system || '',
-          phoneModel: sysInfo.model || ''
-        }
-      });
-      console.log('[case] ✅ 立即设置封禁状态成功:', immediateRes);
-    } catch (err) {
-      console.error('[case] ⚠️ 立即设置封禁状态失败:', err);
-    }
-
-    // 🔴 跳转到封禁页面
-    console.log('[case] 🔴 跳转到封禁页');
+    // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
+
+    // 🔴 异步调用云函数（不阻塞跳转）
+    const sysInfo = wx.getSystemInfoSync();
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: {
+        type: type,
+        banPage: 'case',
+        deviceInfo: sysInfo.system || '',
+        phoneModel: sysInfo.model || ''
+      },
+      success: (res) => {
+        console.log('[case] ✅ 设置封禁状态成功:', res);
+      },
+      fail: (err) => {
+        console.error('[case] ⚠️ 设置封禁状态失败:', err);
+      }
+    });
 
     // 🔴 异步补充位置信息（不阻塞，可选）
     this._getLocationAndDeviceInfo().then(locationData => {

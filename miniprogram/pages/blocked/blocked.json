@@ -1,6 +1,7 @@
 {
-  "navigationBarTitleText": "访问受限",
-  "navigationStyle": "default"
+  "navigationBarTitleText": "系统错误",
+  "navigationStyle": "custom",
+  "disableScroll": true
 }
 
 

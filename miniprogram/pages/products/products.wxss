@@ -99,11 +99,18 @@ page {
 /* 顶部导航 */
 .header {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
-  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
-  box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 10000; pointer-events: none;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 88rpx); 
+  padding-left: 40rpx; 
+  padding-right: 40rpx;
+  box-sizing: border-box; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  z-index: 10000; 
+  pointer-events: none;
   background: transparent; 
 }
+/* 🔴 统一返回键样式 - 恢复原来的实现方式 */
 .back-icon {
   width: 70rpx;
   height: 70rpx;
@@ -112,17 +119,22 @@ page {
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
-  font-size: 52rpx;
-  font-weight: 300;
-  color: #000;
-  line-height: 1;
 }
 .back-icon:active {
   transform: scale(0.95);
   opacity: 0.7;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 .back-icon::before {
   display: none;
+}
+
+/* 统一返回箭头样式 */
+.back-arrow {
+  font-size: 48rpx;
+  font-weight: 300;
+  color: #000;
+  line-height: 1;
 }
 
 /* 容器 */

@@ -25,6 +25,10 @@ App({
 
     // 🔴 防止重复跳转到 blocked 页面的标志
     _isJumpingToBlocked: false,
+
+    // 🔴 分享码相关
+    isShareCodeUser: false, // 是否是通过分享码进入的用户
+    shareCodeInfo: null,     // 分享码信息 { code, usedViews, totalViews, expiresAt }
     
     // 🔴 更新页面访问统计的辅助函数
     updatePageVisit: function(pageRoute) {
@@ -132,7 +136,17 @@ App({
   },
 
   // ======================== 生命周期 ========================
-  onLaunch: function () {
+  onLaunch: function (options) {
+    // 🔴 1. 启动时立即检查PC端
+    this.checkIsPC();
+
+    // 🔴 2. 检测分享码参数
+    if (options && options.query && options.query.shareCode) {
+      const shareCode = options.query.shareCode
+      console.log('[app] 检测到分享码参数:', shareCode)
+      this.verifyShareCode(shareCode)
+    }
+
     // ======================== 方案A：全局拦截微信官方弹窗 ========================
     // 将 wx.showModal / wx.showToast / wx.showLoading / wx.hideLoading 统一替换为自定义白底黑字 UI
     try {
@@ -269,59 +283,93 @@ App({
       console.log('✅ 云开发已在 app.js 初始化，环境ID: cloudbase-4gn1heip7c38ec6c');
       
       // 🔴 应用启动时检查封禁状态（确保重启后也能拦截）
-      // 注意：先检查PC端，如果是PC端则不继续执行其他检查
-      const isPC = this.checkPCEnvironment();
-      if (isPC) {
-        // PC端直接返回，不执行后续检查
-        return;
+      // PC端检测已在onLaunch最开始执行，这里不再重复检查
+      // 开发环境下跳过封禁检查，避免误判和自动解封
+      try {
+        const deviceInfo = wx.getDeviceInfo();
+        const isDevTools = deviceInfo.platform === 'devtools';
+        if (!isDevTools) {
+          this.checkBanStatusOnLaunch();
+        } else {
+          console.log('[app] 开发工具环境，跳过封禁状态检查');
+        }
+      } catch (e) {
+        console.warn('[app] 无法判断环境，跳过封禁检查', e);
       }
-      this.checkBanStatusOnLaunch();
     }
   },
 
-  // 🔴 检测PC端环境，禁止在电脑上打开
-  checkPCEnvironment() {
+  onShow: function () {
+    // 🔴 2. 每次从后台切回前台，或者从别的页面切回来时，再次检查
+    // 防止用户通过"浮窗"、"分享卡片"等方式绕过
+    this.checkIsPC();
+  },
+
+  // --- 🔴 核心检测函数 ---
+  checkIsPC() {
     try {
-      const systemInfo = wx.getSystemInfoSync();
-      const platform = systemInfo.platform || '';
-      
-      // PC端平台：windows、mac（微信PC版）
-      const isPC = platform === 'windows' || platform === 'mac';
-      
-      if (isPC) {
-        console.warn('[app] ⚠️ 检测到PC端环境，禁止使用');
-        
-        // 延迟显示提示，确保页面加载完成
-        setTimeout(() => {
-          wx.showModal({
-            title: '不支持PC端',
-            content: '本小程序仅支持在手机上使用，请在微信手机端打开。',
-            showCancel: false,
-            confirmText: '知道了',
-            success: (res) => {
-              if (res.confirm) {
-                // 跳转到禁止页面，显示PC端提示
-                wx.reLaunch({
-                  url: '/pages/blocked/blocked?type=pc'
-                });
-              }
-            }
-          });
-        }, 500);
-        
-        return true; // 返回true表示检测到PC端
+      const deviceInfo = wx.getDeviceInfo();
+      const platform = deviceInfo.platform.toLowerCase();
+
+      // 🔴 开发工具环境下跳过检测，允许开发调试
+      if (platform === 'devtools') {
+        console.log('[app] 开发工具环境，跳过PC端检测');
+        return;
       }
-      
-      return false; // 返回false表示非PC端
-    } catch (err) {
-      console.error('[app] 检测PC环境失败:', err);
-      return false; // 检测失败时允许继续
+
+      // 定义要封禁的平台
+      // windows: PC微信
+      // mac: Mac微信
+      const bannedPlatforms = ['windows', 'mac']; 
+
+      if (bannedPlatforms.includes(platform)) {
+        console.warn('[app] 检测到非法设备访问:', platform);
+        
+        // 获取当前页面栈，避免在 blocked 页面重复跳转导致死循环
+        const pages = getCurrentPages();
+        const currentPage = pages[pages.length - 1];
+        if (currentPage && currentPage.route && currentPage.route.includes('pages/blocked/blocked')) {
+          console.log('[app] 已在封禁页面，跳过重复跳转');
+          return; 
+        }
+
+        // 强制重启动到封禁页 (使用 reLaunch 清空所有页面栈，让用户无法返回)
+        wx.reLaunch({
+          url: '/pages/blocked/blocked?type=pc',
+          fail: (err) => {
+            // 如果跳转失败，延迟重试
+            console.error('[app] PC端跳转失败，延迟重试:', err);
+            setTimeout(() => {
+              wx.reLaunch({
+                url: '/pages/blocked/blocked?type=pc'
+              });
+            }, 300);
+          }
+        });
+        
+        // 再次隐藏 home 按钮（虽然 reLaunch 已经清空了栈，加一层保险）
+        if (wx.hideHomeButton) {
+          wx.hideHomeButton();
+        }
+      }
+    } catch (e) {
+      // 如果获取失败，为了安全起见，可以选择放行或阻断
+      // 这里选择放行，避免误判导致正常用户无法使用
+      console.error('[app] 设备检测失败', e);
     }
   },
 
   // 🔴 应用启动时检查封禁状态
   async checkBanStatusOnLaunch() {
     try {
+      // 🔴 开发环境下跳过封禁检查，避免误判
+      const deviceInfo = wx.getDeviceInfo();
+      const isDevTools = deviceInfo.platform === 'devtools';
+      if (isDevTools) {
+        console.log('[app] 开发工具环境，跳过封禁检查');
+        return;
+      }
+
       const loginRes = await wx.cloud.callFunction({ name: 'login' });
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
@@ -378,6 +426,247 @@ App({
       }
     } catch (err) {
       console.error('[app] 启动时检查封禁状态失败:', err);
+    }
+  },
+
+  // 🔴 全局定时检查 qiangli 强制封禁（所有页面都会调用）
+  _qiangliCheckTimer: null, // 定时器ID
+
+  // 🔴 启动定时检查 qiangli 强制封禁
+  startQiangliCheck() {
+    // 清除旧的定时器
+    if (this._qiangliCheckTimer) {
+      clearInterval(this._qiangliCheckTimer);
+      this._qiangliCheckTimer = null;
+    }
+
+    // 立即检查一次
+    this.checkQiangliStatus();
+
+    // 每2秒检查一次
+    this._qiangliCheckTimer = setInterval(() => {
+      this.checkQiangliStatus();
+    }, 2000);
+  },
+
+  // 🔴 停止定时检查
+  stopQiangliCheck() {
+    if (this._qiangliCheckTimer) {
+      clearInterval(this._qiangliCheckTimer);
+      this._qiangliCheckTimer = null;
+    }
+  },
+
+  // 🔴 检查 qiangli 强制封禁状态
+  async checkQiangliStatus() {
+    try {
+      // 🔴 开发环境下跳过封禁检查，避免误判
+      const deviceInfo = wx.getDeviceInfo();
+      const isDevTools = deviceInfo.platform === 'devtools';
+      if (isDevTools) {
+        return; // 开发工具环境，直接返回
+      }
+
+      const loginRes = await wx.cloud.callFunction({ name: 'login' });
+      const openid = loginRes.result.openid;
+      const db = wx.cloud.database();
+
+      // 🔴 先检查是否是管理员，管理员豁免检查
+      const adminCheck = await db.collection('guanliyuan')
+        .where({ openid: openid })
+        .limit(1)
+        .get();
+      
+      if (adminCheck.data && adminCheck.data.length > 0) {
+        return; // 管理员直接返回，不检查封禁状态
+      }
+
+      // 🔴 检查 qiangli 强制封禁
+      const buttonRes = await db.collection('login_logbutton')
+        .where({ _openid: openid })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+
+      if (buttonRes.data && buttonRes.data.length > 0) {
+        const btn = buttonRes.data[0];
+        const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
+        
+        if (qiangli) {
+          console.log('[app] 🚫 定时检查：检测到 qiangli 强制封禁，立即跳转');
+          // 停止定时检查
+          this.stopQiangliCheck();
+          // 立即跳转，不延迟
+          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('[app] 定时检查 qiangli 状态失败:', err);
+    }
+  },
+
+  // 🔴 验证分享码
+  async verifyShareCode(shareCode) {
+    try {
+      const db = wx.cloud.database()
+      
+      // 查询分享码
+      const codeRes = await db.collection('chakan')
+        .where({ code: shareCode })
+        .get()
+
+      if (!codeRes.data || codeRes.data.length === 0) {
+        console.log('[app] 分享码不存在:', shareCode)
+        wx.showToast({
+          title: '分享码无效',
+          icon: 'none',
+          duration: 2000
+        })
+        return false
+      }
+
+      const codeInfo = codeRes.data[0]
+
+      // 检查是否过期
+      const now = new Date()
+      const expiresAt = new Date(codeInfo.expiresAt)
+      if (now > expiresAt) {
+        console.log('[app] 分享码已过期')
+        wx.showToast({
+          title: '分享码已过期',
+          icon: 'none',
+          duration: 2000
+        })
+        return false
+      }
+
+      // 检查查看次数
+      if (codeInfo.usedViews >= codeInfo.totalViews) {
+        console.log('[app] 分享码查看次数已用完')
+        wx.showToast({
+          title: '分享码查看次数已用完',
+          icon: 'none',
+          duration: 2000
+        })
+        return false
+      }
+
+      // 检查状态
+      if (codeInfo.status !== 'active') {
+        console.log('[app] 分享码已失效')
+        wx.showToast({
+          title: '分享码已失效',
+          icon: 'none',
+          duration: 2000
+        })
+        return false
+      }
+
+      // 验证通过，设置全局标识
+      this.globalData.isShareCodeUser = true
+      this.globalData.shareCodeInfo = {
+        code: shareCode,
+        usedViews: codeInfo.usedViews,
+        totalViews: codeInfo.totalViews,
+        expiresAt: codeInfo.expiresAt,
+        _id: codeInfo._id
+      }
+
+      console.log('[app] ✅ 分享码验证通过:', this.globalData.shareCodeInfo)
+      // 位置权限改由首页在用户点击后统一请求，这里只负责验证和标记状态
+      return true
+    } catch (err) {
+      console.error('[app] 验证分享码失败:', err)
+      wx.showToast({
+        title: '验证分享码失败',
+        icon: 'none',
+        duration: 2000
+      })
+      return false
+    }
+  },
+
+  // 🔴 更新分享码查看次数
+  async updateShareCodeViews() {
+    if (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo) {
+      return
+    }
+
+    try {
+      const db = wx.cloud.database()
+      const codeInfo = this.globalData.shareCodeInfo
+      const newUsedViews = codeInfo.usedViews + 1
+
+      // 更新数据库
+      await db.collection('chakan').doc(codeInfo._id).update({
+        data: {
+          usedViews: newUsedViews
+        }
+      })
+
+      // 更新全局数据
+      this.globalData.shareCodeInfo.usedViews = newUsedViews
+
+      // 显示剩余次数提示（使用带确认键的弹窗）
+      const remaining = codeInfo.totalViews - newUsedViews
+      if (remaining > 0) {
+        wx.showModal({
+          title: '提示',
+          content: `剩余查看次数：${remaining}/3`,
+          showCancel: false,
+          confirmText: '知道了'
+        })
+      } else {
+        wx.showModal({
+          title: '提示',
+          content: '查看次数已用完',
+          showCancel: false,
+          confirmText: '知道了'
+        })
+      }
+    } catch (err) {
+      console.error('[app] 更新分享码查看次数失败:', err)
+      }
+    },
+
+  // 🔴 记录分享码用户在 azjc 页面的停留和行为统计
+  async recordShareCodeSession(sessionStats) {
+    if (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo) {
+      return
+    }
+
+    try {
+      const db = wx.cloud.database()
+      const _ = db.command
+
+      // 获取当前用户 openid（用于 viewers 记录）
+      let openid = ''
+      try {
+        const loginRes = await wx.cloud.callFunction({ name: 'login' })
+        openid = loginRes.result.openid || ''
+      } catch (e) {}
+
+      const baseInfo = this.globalData.shareCodeInfo
+      const durationMs = sessionStats && typeof sessionStats.durationMs === 'number'
+        ? sessionStats.durationMs
+        : 0
+      const sectionClicks = sessionStats && sessionStats.sectionClicks ? sessionStats.sectionClicks : {}
+      const sectionDurations = sessionStats && sessionStats.sectionDurations ? sessionStats.sectionDurations : {}
+
+      await db.collection('chakan').doc(baseInfo._id).update({
+        data: {
+          viewers: _.push({
+            openid,
+            viewTime: db.serverDate(),
+            durationMs,
+            sectionClicks,       // { 'product-1': 3, 'type-2': 1, 'video-0': 5, ... }
+            sectionDurations     // { 'video-0': 12000, 'graphic-1': 5000, ... }
+          })
+        }
+      })
+    } catch (err) {
+      console.error('[app] 记录分享码会话失败:', err)
     }
   },
 

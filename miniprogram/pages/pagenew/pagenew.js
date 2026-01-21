@@ -3,6 +3,9 @@ const app = getApp()
 
 Page({
   data: {
+    // 🔴 状态栏高度
+    statusBarHeight: 44,
+    
     isAuthorized: false, // 是否是白名单里的管理员
     isAdmin: false,      // 当前是否开启了管理员模式
     currentIndex: 0,
@@ -18,6 +21,9 @@ Page({
   },
 
   onLoad: function() {
+    // 🔴 获取状态栏高度
+    const winInfo = wx.getWindowInfo();
+    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -32,6 +38,30 @@ Page({
     
     // 检查管理员权限
     this.checkAdminPrivilege();
+  },
+
+  onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+  },
+
+  onHide() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+  },
+
+  onUnload() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
   },
 
   // ================== 权限检查逻辑 ==================

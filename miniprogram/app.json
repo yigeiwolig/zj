@@ -1,7 +1,7 @@
 {
   "pages": [
-    "pages/blocked/blocked",
     "pages/index/index",
+    "pages/blocked/blocked",
     "pages/shop/shop",
     "pages/my/my",
     "pages/azjc/azjc",
@@ -20,6 +20,7 @@
   "usingComponents": {
     "custom-toast": "/components/custom-toast/index"
   },
+  "lazyCodeLoading": "requiredComponents",
   "window": {
     "navigationStyle": "custom",
     "backgroundTextStyle": "dark",

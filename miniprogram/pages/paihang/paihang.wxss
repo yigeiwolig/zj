@@ -247,7 +247,7 @@ page { background-color: #000; color: #fff; box-sizing: border-box; font-family:
 .text-accent { color: var(--accent-color); } .text-sub { color: var(--text-sub); }
 
 /* 导航 */
-.custom-nav-container { width: 100%; padding-bottom: 20rpx; z-index: 100; position: relative; }
+.custom-nav-container { width: 100%; padding-bottom: 20rpx; z-index: 99; position: relative; } /* 降低z-index，确保不被返回键遮挡 */
 .nav-bar-row { display: flex; align-items: center; justify-content: center; }
 .brand-title { display: flex; flex-direction: column; justify-content: center; align-items: center; line-height: 1.2; }
 .brand-sub { font-size: 18rpx; color: var(--text-sub); font-weight: bold; letter-spacing: 2px; margin-bottom: 4rpx; text-align: center; }
@@ -265,23 +265,35 @@ page { background-color: #000; color: #fff; box-sizing: border-box; font-family:
 /* 顶部导航 */
 .header {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
-  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
-  box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 100; pointer-events: none;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 88rpx); 
+  padding-left: 40rpx; 
+  padding-right: 40rpx;
+  box-sizing: border-box; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center;
+  z-index: 10000 !important; /* 确保在最上层，不被其他元素遮挡 */
+  pointer-events: none;
   background: transparent; 
 }
+
+/* 🔴 统一返回键样式 - 确保可点击 */
 .back-icon {
+  position: relative;
   width: 70rpx;
   height: 70rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: auto;
+  pointer-events: auto !important;
   transition: all 0.2s;
+  z-index: 10001; /* 比 header 更高 */
+  cursor: pointer;
 }
 .back-icon:active {
   transform: scale(0.95);
   opacity: 0.7;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 .back-icon::before {
   display: none;

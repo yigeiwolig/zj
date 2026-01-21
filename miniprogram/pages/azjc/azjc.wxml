@@ -1,6 +1,6 @@
 <view class="app-container">
-  <!-- 顶部导航 -->
-  <view class="header" wx:if="{{!isVideoFullScreen}}">
+  <!-- 顶部导航 - 分享码用户隐藏返回键 -->
+  <view class="header" wx:if="{{!isVideoFullScreen && !isShareCodeUser}}">
     <view class="back-icon" catchtap="handleBack">
       <text class="back-arrow">‹</text>
     </view>
@@ -127,7 +127,8 @@
                   enable-play-gesture="{{true}}"
                   vslide-gesture="{{true}}"
                   vslide-gesture-in-fullscreen="{{true}}"
-                  binderror="onVideoError" 
+                  binderror="onVideoError"
+                  bindplay="onVideoPlay"
                   data-index="{{index}}"
                   data-fileid="{{item.fileID}}"
                   object-fit="contain"
@@ -162,7 +163,7 @@
               wx:for="{{filteredGraphics}}" 
               wx:key="index"
               style="{{isAdmin && isDragging && dragIndex === index && dragType === 'graphics' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
-              bindtouchstart="{{isAdmin ? 'onDragStart' : ''}}"
+              bindtouchstart="{{isAdmin ? 'onDragStart' : 'onGraphicTap'}}"
               catchtouchmove="{{isAdmin ? 'onDragMove' : ''}}"
               bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
               data-index="{{index}}"

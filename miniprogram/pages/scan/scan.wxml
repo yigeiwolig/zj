@@ -2,7 +2,7 @@
   
   <!-- 顶部导航 -->
   <view class="header">
-    <view class="back-icon" catchtap="goBack">
+    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 8}}px;">
       <text class="back-arrow">‹</text>
     </view>
     <view class="nav-logo">MT控制中心</view>

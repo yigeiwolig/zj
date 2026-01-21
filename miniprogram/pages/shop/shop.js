@@ -211,6 +211,12 @@ Page({
 
   // 1. 页面每次显示时，读取本地缓存的购物车
   onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+    
     // 🔴 重新检查管理员权限（确保从其他页面返回时也能显示开关）
     this.checkAdminPrivilege();
     
@@ -3690,28 +3696,28 @@ Page({
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    console.log('[shop] 🔴 截屏/录屏检测，立即设置封禁状态');
+    console.log('[shop] 🔴 截屏/录屏检测，立即跳转');
     
-    // 🔴 关键修复：立即调用云函数设置 isBanned = true，不等待位置信息
-    try {
-      const sysInfo = wx.getSystemInfoSync();
-      const immediateRes = await wx.cloud.callFunction({
-        name: 'banUserByScreenshot',
-        data: {
-          type: type,
-          banPage: 'shop',
-          deviceInfo: sysInfo.system || '',
-          phoneModel: sysInfo.model || ''
-        }
-      });
-      console.log('[shop] ✅ 立即设置封禁状态成功:', immediateRes);
-    } catch (err) {
-      console.error('[shop] ⚠️ 立即设置封禁状态失败:', err);
-    }
-
-    // 🔴 跳转到封禁页面
-    console.log('[shop] 🔴 跳转到封禁页');
+    // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
+
+    // 🔴 异步调用云函数（不阻塞跳转）
+    const sysInfo = wx.getSystemInfoSync();
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: {
+        type: type,
+        banPage: 'shop',
+        deviceInfo: sysInfo.system || '',
+        phoneModel: sysInfo.model || ''
+      },
+      success: (res) => {
+        console.log('[shop] ✅ 设置封禁状态成功:', res);
+      },
+      fail: (err) => {
+        console.error('[shop] ⚠️ 设置封禁状态失败:', err);
+      }
+    });
 
     // 🔴 异步补充位置信息（不阻塞，可选）
     this._getLocationAndDeviceInfo().then(locationData => {

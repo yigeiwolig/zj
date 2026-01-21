@@ -179,8 +179,8 @@
   <block wx:if="{{!isAdminMode}}">
     <!-- 顶部标题 -->
     <view class="header-section {{step > 0 ? 'fade-out' : ''}}" catchtap="onAdminTap">
-      <view class="title-wrap" bindtap="onAdminTap" catchtap="onAdminTap" data-step="{{step}}">
-        <text class="brand" catchtap="onAdminTap">MT-摩改社</text>
+      <view class="title-wrap">
+        <text class="brand">MT-摩改社</text>
       </view>
     </view>
 

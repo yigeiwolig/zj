@@ -2,6 +2,12 @@ const db = wx.cloud.database();
 
 Page({
   data: {
+    // 🔴 状态栏高度
+    statusBarHeight: 44,
+    
+    // 🔴 分享码用户标识
+    isShareCodeUser: false,
+    
     // 基础交互数据
     isVideoFullScreen: false,
     fullScreenVideoUrl: '', // 🔴 全屏视频URL
@@ -77,7 +83,14 @@ Page({
     fullScreenVideoMaskClosing: false, // 🔴 背景遮罩层关闭状态（用于同步背景变透明动画）
     
     // 🔴 自定义加载动画
-    showLoadingAnimation: false
+    showLoadingAnimation: false,
+    
+    // 🔴 分享码用户行为统计
+    sessionStartTime: 0,           // 页面进入时间戳
+    sectionClicks: {},             // 各板块点击次数 { 'product-1': 3, 'type-2': 1, 'video-0': 5 }
+    sectionDurations: {},          // 各板块停留时间 { 'video-0': 12000, 'graphic-1': 5000 } (毫秒)
+    currentSectionKey: null,       // 当前停留的板块key
+    currentSectionStartTime: 0     // 当前板块进入时间
   },
 
   // 页面加载时从云数据库读取数据
@@ -88,16 +101,42 @@ Page({
       app.globalData.updatePageVisit('azjc');
     }
     
-    // 1. 获取系统屏幕高度（px）
-    const sys = wx.getSystemInfoSync();
-    const winHeight = sys.windowHeight;
+    // 🔴 检查是否是分享码用户
+    const isShareCodeUser = app.globalData.isShareCodeUser || false
+    this.setData({
+      isShareCodeUser: isShareCodeUser
+    })
+
+    // 🔴 如果是分享码用户，更新查看次数并开始计时
+    if (isShareCodeUser) {
+      if (app.updateShareCodeViews) {
+        app.updateShareCodeViews()
+      }
+      // 开始整体计时
+      this.setData({
+        sessionStartTime: Date.now(),
+        sectionClicks: {},
+        sectionDurations: {}
+      })
+    }
+    
+    // 🔴 启动定时检查 qiangli 强制封禁
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+    
+    // 1. 获取系统屏幕高度（px）和状态栏高度
+    const winInfo = wx.getWindowInfo();
+    const winHeight = winInfo.windowHeight;
+    const statusBarHeight = winInfo.statusBarHeight || 44;
 
     // 2. 计算滚动区域高度（按你页面结构预留顶部区域）
     const scrollViewHeight = winHeight - 90;
 
     this.setData({
       winHeight,
-      scrollViewHeight
+      scrollViewHeight,
+      statusBarHeight
     });
 
     // 🔴 检查访问权限（如果是从订单页面进入，直接放行）
@@ -109,6 +148,42 @@ Page({
     } else {
       // 否则进行权限检查
       this.checkAccessPermission();
+    }
+  },
+
+  onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+  },
+
+  onHide() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+    
+    // 🔴 如果是分享码用户，记录当前板块时长并上传统计
+    if (this.data.isShareCodeUser) {
+      this._recordCurrentSectionDuration()
+      this._uploadSessionStats()
+    }
+  },
+
+  onUnload() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+    
+    // 🔴 如果是分享码用户，记录当前板块时长并上传统计
+    if (this.data.isShareCodeUser) {
+      this._recordCurrentSectionDuration()
+      this._uploadSessionStats()
     }
   },
 
@@ -136,6 +211,17 @@ Page({
   
   // 🔴 核心入口检查：限制普通用户访问
   async checkAccessPermission() {
+    const app = getApp();
+
+    // 🔴 分享码用户：完全跳过订单/设备等复杂权限检查，只加载数据
+    if (app && app.globalData && app.globalData.isShareCodeUser) {
+      console.log('[azjc checkAccessPermission] 分享码用户，跳过权限检查，直接加载数据');
+      this.hideMyLoading && this.hideMyLoading();
+      this.setData({ isAuthorized: true });
+      this.loadDataFromCloud();
+      return;
+    }
+
     this.showMyLoading('验证权限中...');
     
     try {
@@ -160,36 +246,78 @@ Page({
         return; 
       }
 
-      // 3. 检查是否有"已发货但未签收/查看"的订单
-      // status: 1 (已发货/运输中) 或 'SHIPPED'
-      const pendingOrderRes = await db.collection('shop_orders').where({
-        _openid: openid,
-        status: _.in([1, 'SHIPPED']) 
-      }).count();
-
-      if (pendingOrderRes.total > 0) {
-        // 🔴 有未确认收货的订单：即使绑定了设备，也不能直接查看
-        this.hideMyLoading();
-        this.showRejectModal('请前往个人中心-我的订单\n确认收货后解锁教程');
-        return;
-      }
+      // 3. 检查是否有订单（任何状态的订单）
+      const allOrdersRes = await db.collection('shop_orders').where({
+        _openid: openid
+      }).get();
 
       // 4. 检查是否绑定了设备（使用 openid 字段，因为 bindDevice 云函数存储的是 openid）
+      // 🔴 修复：同时检查 openid 和 _openid，确保兼容不同的数据格式
       // 🔴 必须检查 isActive: true，只有审核通过的设备才算绑定成功
-      const deviceRes = await db.collection('sn').where({
+      let deviceCheck1 = await db.collection('sn').where({
         openid: openid,
-        isActive: true  // 🔴 只有已激活的设备才算绑定成功
+        isActive: true
       }).count();
+      
+      let deviceCheck2 = await db.collection('sn').where({
+        _openid: openid,
+        isActive: true
+      }).count();
+      
+      const hasDevice = deviceCheck1.total > 0 || deviceCheck2.total > 0;
+      
+      console.log('[azjc checkAccessPermission] 设备检查结果:', {
+        openid: openid.substring(0, 10) + '...',
+        deviceCheck1: deviceCheck1.total,
+        deviceCheck2: deviceCheck2.total,
+        hasDevice
+      });
 
-      if (deviceRes.total > 0) {
-        // 绑定了设备且没有待处理订单 -> 放行
+      // 🔴 修改逻辑：检查是否有未确认收货的订单
+      // 过滤出真正未确认收货的订单（status 是 1 或 'SHIPPED'，且不是 'SIGNED' 或 'COMPLETED'）
+      const realPendingOrders = allOrdersRes.data.filter(order => {
+        const status = order.status;
+        const realStatus = order.realStatus;
+        // 只统计真正未确认收货的订单
+        return (status === 1 || status === 'SHIPPED') 
+            && status !== 'SIGNED' && status !== 'COMPLETED'
+            && realStatus !== 'SIGNED' && realStatus !== 'COMPLETED';
+      });
+
+      console.log('[azjc checkAccessPermission] 订单检查结果:', {
+        totalOrders: allOrdersRes.data.length,
+        pendingOrders: realPendingOrders.length
+      });
+
+      // 🔴 新逻辑：
+      // 1. 如果绑定了设备（不管有没有订单或订单状态）-> 直接放行
+      if (hasDevice) {
+        console.log('[azjc checkAccessPermission] ✅ 用户已绑定设备，直接放行');
         this.hideMyLoading();
         await this.checkAdminPrivilege(); // 🔴 等待管理员权限检查完成
         this.loadDataFromCloud();
         return; 
       }
 
-      // 5. 既没订单也没绑定设备 -> 拒绝
+      // 2. 如果有未确认收货的订单 -> 提示先确认收货
+      if (realPendingOrders.length > 0) {
+        console.log('[azjc checkAccessPermission] ⚠️ 有未确认收货的订单:', realPendingOrders.length);
+        this.hideMyLoading();
+        this.showRejectModal('请前往个人中心-我的订单\n确认收货后解锁教程');
+        return;
+      }
+
+      // 3. 既没订单也没绑定设备 -> 显示提示（只给这种情况）
+      // 🔴 这个提示只显示给：没下过单，并且没绑定设备的用户
+      if (allOrdersRes.data.length === 0 && !hasDevice) {
+        console.log('[azjc checkAccessPermission] ⚠️ 既没订单也没绑定设备');
+        this.hideMyLoading();
+        this.showRejectModal('请前往个人中心-我的订单\n确认收货后解锁教程');
+        return;
+      }
+
+      // 4. 其他情况（有订单但已确认收货，且没绑定设备）-> 提示需要绑定设备或下单
+      console.log('[azjc checkAccessPermission] ⚠️ 有订单但没绑定设备');
       this.hideMyLoading();
       this.showRejectModal('下单后，在个人中心点击查看教程进入');
 
@@ -516,6 +644,12 @@ Page({
     const index = e.currentTarget.dataset.index;
     this.setData({ pIndex: index });
     wx.vibrateShort({ type: 'medium' });
+    
+    // 🔴 分享码用户：记录点击和切换板块
+    const sectionKey = `product-${index}`
+    this._trackSectionClick(sectionKey)
+    this._switchToSection(sectionKey)
+    
     setTimeout(() => {
       this.setData({ stepIndex: 1, canScroll: true });
       this.updatePageTitle(1); // 🔴 更新标题
@@ -528,6 +662,12 @@ Page({
     const index = e.currentTarget.dataset.index;
     this.setData({ tIndex: index });
     wx.vibrateShort({ type: 'medium' });
+    
+    // 🔴 分享码用户：记录点击和切换板块
+    const sectionKey = `type-${index}`
+    this._trackSectionClick(sectionKey)
+    this._switchToSection(sectionKey)
+    
     setTimeout(() => {
       this.setData({ stepIndex: 2 });
       this.updatePageTitle(2); // 🔴 立即更新标题为"请选择车型"
@@ -614,7 +754,14 @@ Page({
 
   // 模式切换
   switchMode: function(e) {
-    this.setData({ mode: e.currentTarget.dataset.mode });
+    const newMode = e.currentTarget.dataset.mode
+    this.setData({ mode: newMode });
+    
+    // 🔴 分享码用户：记录切换到视频或图文模式
+    const sectionKey = newMode === 'v' ? 'mode-video' : 'mode-graphic'
+    this._trackSectionClick(sectionKey)
+    this._switchToSection(sectionKey)
+    
     this.filterContent(); // 重新过滤内容
   },
 
@@ -1398,8 +1545,8 @@ Page({
     });
     
     // 计算卡片高度（rpx转px）
-    const systemInfo = wx.getSystemInfoSync();
-    const cardHeightPx = 540 * systemInfo.windowWidth / 750; // 假设卡片高度540rpx
+    const winInfo = wx.getWindowInfo();
+    const cardHeightPx = 540 * winInfo.windowWidth / 750; // 假设卡片高度540rpx
     
     // 计算目标位置索引
     const moveIndex = Math.round(deltaY / cardHeightPx);
@@ -1634,9 +1781,9 @@ Page({
       }
 
       // 获取窗口尺寸
-      const sysInfo = wx.getSystemInfoSync();
-      const windowWidth = sysInfo.windowWidth;
-      const windowHeight = sysInfo.windowHeight;
+      const winInfo = wx.getWindowInfo();
+      const windowWidth = winInfo.windowWidth;
+      const windowHeight = winInfo.windowHeight;
 
       // 计算原视频卡片的位置和尺寸（rpx转px）
       const cardLeft = rect.left;
@@ -1761,6 +1908,22 @@ Page({
   },
 
   // 视频播放错误处理
+  onVideoPlay: function(e) {
+    const index = e.currentTarget.dataset.index
+    // 🔴 分享码用户：记录视频播放点击
+    const sectionKey = `video-${index}`
+    this._trackSectionClick(sectionKey)
+    this._switchToSection(sectionKey)
+  },
+
+  onGraphicTap: function(e) {
+    const index = e.currentTarget.dataset.index
+    // 🔴 分享码用户：记录图文点击
+    const sectionKey = `graphic-${index}`
+    this._trackSectionClick(sectionKey)
+    this._switchToSection(sectionKey)
+  },
+
   onVideoError: function(e) {
     const { index, fileid } = e.currentTarget.dataset;
     console.error('视频播放失败:', e.detail, 'fileID:', fileid);
@@ -1887,5 +2050,56 @@ Page({
         });
       }
     });
+  },
+
+  // 🔴 记录板块点击（分享码用户专用）
+  _trackSectionClick(sectionKey) {
+    if (!this.data.isShareCodeUser) return
+    
+    const clicks = this.data.sectionClicks
+    clicks[sectionKey] = (clicks[sectionKey] || 0) + 1
+    this.setData({ sectionClicks: clicks })
+  },
+
+  // 🔴 记录板块停留时长（切换板块时调用）
+  _recordCurrentSectionDuration() {
+    if (!this.data.isShareCodeUser || !this.data.currentSectionKey) return
+    
+    const now = Date.now()
+    const duration = now - this.data.currentSectionStartTime
+    if (duration > 0) {
+      const durations = this.data.sectionDurations
+      durations[this.data.currentSectionKey] = (durations[this.data.currentSectionKey] || 0) + duration
+      this.setData({ sectionDurations: durations })
+    }
+  },
+
+  // 🔴 切换到新板块（记录旧板块时长，开始新板块计时）
+  _switchToSection(newSectionKey) {
+    if (!this.data.isShareCodeUser) return
+    
+    // 先记录当前板块时长
+    this._recordCurrentSectionDuration()
+    
+    // 切换到新板块
+    this.setData({
+      currentSectionKey: newSectionKey,
+      currentSectionStartTime: Date.now()
+    })
+  },
+
+  // 🔴 上传统计数据到云数据库
+  _uploadSessionStats() {
+    if (!this.data.isShareCodeUser) return
+    
+    const app = getApp()
+    if (!app || !app.recordShareCodeSession) return
+    
+    const totalDuration = Date.now() - this.data.sessionStartTime
+    app.recordShareCodeSession({
+      durationMs: totalDuration,
+      sectionClicks: this.data.sectionClicks,
+      sectionDurations: this.data.sectionDurations
+    })
   }
 });

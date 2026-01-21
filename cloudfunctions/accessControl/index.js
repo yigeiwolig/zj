@@ -209,6 +209,7 @@ exports.main = async (event, context) => {
                 ...locationInfo,   // 地址信息
                 ...deviceInfoObj,  // 设备信息
                 bypassLocationCheck: false,
+                qiangli: false, // 🔴 自动添加qiangli字段，默认false
                 createTime: db.serverDate(),
                 updateTime: db.serverDate()
               }

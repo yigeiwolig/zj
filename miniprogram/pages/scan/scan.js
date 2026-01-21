@@ -479,6 +479,10 @@ Page({
   },
 
   onLoad() {
+    // 🔴 获取状态栏高度
+    const winInfo = wx.getWindowInfo();
+    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
+    
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -552,6 +556,11 @@ Page({
     };
 
     // 计算 px 比例 (CSS bar宽度6px + 间距14px = 20px)
+    // 🔴 获取状态栏高度（已在 onLoad 中设置过，这里无需重复声明 winInfo）
+    // 直接复用 onLoad 中写入的 statusBarHeight，避免重复声明变量
+    // const winInfo2 = wx.getWindowInfo();
+    // this.setData({ statusBarHeight: winInfo2.statusBarHeight || 44 });
+  
     const sys = wx.getSystemInfoSync();
     // 注意：CSS中使用的是px单位，所以直接计算px
     this.tickWidthPx = 20; // 每个刻度总宽度20px
@@ -569,7 +578,29 @@ Page({
     this.updateRuler(0, false);
   },
 
+  onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+  },
+
+  onHide() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+  },
+
   onUnload() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+    
     // 停止所有动画循环
     this.stopTutorialLoop();
     this.stopOpenAngleTutorialLoop();

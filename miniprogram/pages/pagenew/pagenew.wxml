@@ -3,8 +3,8 @@
 
 <!-- ================= 1. 顶部导航 ================= -->
 <view class="nav-header">
-  <view class="back-icon" catchtap="goBack">
-    <text class="back-arrow">‹</text>
+  <view class="nav-back" catchtap="goBack">
+    <text class="icon-back">‹</text>
   </view>
 
   <view class="brand-box">

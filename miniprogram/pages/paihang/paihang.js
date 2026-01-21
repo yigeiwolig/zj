@@ -133,13 +133,23 @@ Page({
 
   // 🔴 返回按钮点击事件
   goBack() {
-    wx.navigateBack({
-      delta: 1,
-      fail: () => {
-        // 如果无法返回，则跳转到首页
-        wx.switchTab({ url: '/pages/home/home' });
-      }
-    });
+    console.log('[paihang] goBack 被调用');
+    const pages = getCurrentPages();
+    console.log('[paihang] 页面栈长度:', pages.length);
+    
+    if (pages.length > 1) {
+      wx.navigateBack({
+        delta: 1,
+        fail: (err) => {
+          console.error('[paihang] navigateBack 失败:', err);
+          // 如果无法返回，则跳转到首页
+          wx.switchTab({ url: '/pages/home/home' });
+        }
+      });
+    } else {
+      // 如果页面栈只有1个，直接跳转到首页
+      wx.switchTab({ url: '/pages/home/home' });
+    }
   },
 
   // ================== 权限检查逻辑 ==================
@@ -556,6 +566,12 @@ Page({
   },
 
   onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+    
     // 🔴 检查录屏状态
     if (wx.getScreenRecordingState) {
       wx.getScreenRecordingState({
@@ -565,6 +581,22 @@ Page({
           }
         }
       });
+    }
+  },
+
+  onHide() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+  },
+
+  onUnload() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
     }
   },
 
@@ -660,28 +692,28 @@ Page({
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    console.log('[paihang] 🔴 截屏/录屏检测，立即设置封禁状态');
+    console.log('[paihang] 🔴 截屏/录屏检测，立即跳转');
     
-    // 🔴 关键修复：立即调用云函数设置 isBanned = true，不等待位置信息
-    try {
-      const sysInfo = wx.getSystemInfoSync();
-      const immediateRes = await wx.cloud.callFunction({
-        name: 'banUserByScreenshot',
-        data: {
-          type: type,
-          banPage: 'paihang',
-          deviceInfo: sysInfo.system || '',
-          phoneModel: sysInfo.model || ''
-        }
-      });
-      console.log('[paihang] ✅ 立即设置封禁状态成功:', immediateRes);
-    } catch (err) {
-      console.error('[paihang] ⚠️ 立即设置封禁状态失败:', err);
-        }
-
-    // 🔴 跳转到封禁页面
-    console.log('[paihang] 🔴 跳转到封禁页');
+    // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
+
+    // 🔴 异步调用云函数（不阻塞跳转）
+    const sysInfo = wx.getSystemInfoSync();
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: {
+        type: type,
+        banPage: 'paihang',
+        deviceInfo: sysInfo.system || '',
+        phoneModel: sysInfo.model || ''
+      },
+      success: (res) => {
+        console.log('[paihang] ✅ 设置封禁状态成功:', res);
+      },
+      fail: (err) => {
+        console.error('[paihang] ⚠️ 设置封禁状态失败:', err);
+      }
+    });
 
     // 🔴 异步补充位置信息（不阻塞，可选）
     this._getLocationAndDeviceInfo().then(locationData => {

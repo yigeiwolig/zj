@@ -26,6 +26,9 @@ const iconShop = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5v
 
 Page({
   data: {
+    // 🔴 状态栏高度
+    statusBarHeight: 44,
+    
     // 状态控制
     hasEntered: false,      // 控制入场动画启动
     
@@ -124,8 +127,24 @@ Page({
   },
 
   onLoad() {
-    // 🔴 更新页面访问统计
+    // 🔴 分享码用户访问拦截：如果不是安装教程页面，跳转回去
     const app = getApp();
+    if (app.globalData.isShareCodeUser) {
+      console.log('[products] 分享码用户尝试访问其他页面，跳转回安装教程');
+      wx.redirectTo({
+        url: '/pages/azjc/azjc',
+        fail: () => {
+          wx.reLaunch({ url: '/pages/azjc/azjc' });
+        }
+      });
+      return;
+    }
+
+    // 🔴 获取状态栏高度
+    const winInfo = wx.getWindowInfo();
+    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
+    
+    // 🔴 更新页面访问统计
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('products');
     }
@@ -198,7 +217,16 @@ Page({
   },
 
   onShow() {
-    // 🔴 检查是否有未完成的寄回订单
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+    
+    // 🔴 检查封禁状态
+    this.checkBanStatus();
+    
+    // 🔴 检查未完成的寄回订单
     this.checkUnfinishedReturn();
     
     // 🔴 检查录屏状态
@@ -305,31 +333,28 @@ Page({
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    console.log('[products] 🔴 截屏/录屏检测，立即设置封禁状态');
+    console.log('[products] 🔴 截屏/录屏检测，立即跳转');
     
-    // 🔴 关键修复：立即调用云函数设置 isBanned = true，不等待位置信息
-    // 先立即设置封禁状态，位置信息可以后续补充
-    try {
-      const sysInfo = wx.getSystemInfoSync();
-      const immediateRes = await wx.cloud.callFunction({
-        name: 'banUserByScreenshot',
-        data: {
-          type: type,
-          banPage: 'products',
-          deviceInfo: sysInfo.system || '',
-          phoneModel: sysInfo.model || ''
-          // 先不带位置信息，立即设置 isBanned = true
-        }
-      });
-      console.log('[products] ✅ 立即设置封禁状态成功:', immediateRes);
-    } catch (err) {
-      console.error('[products] ⚠️ 立即设置封禁状态失败:', err);
-      // 即使失败也继续，后续会重试
-    }
-
-    // 🔴 跳转到封禁页面
-    console.log('[products] 🔴 跳转到封禁页');
+    // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
+
+    // 🔴 异步调用云函数（不阻塞跳转）
+    const sysInfo = wx.getSystemInfoSync();
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: {
+        type: type,
+        banPage: 'products',
+        deviceInfo: sysInfo.system || '',
+        phoneModel: sysInfo.model || ''
+      },
+      success: (res) => {
+        console.log('[products] ✅ 设置封禁状态成功:', res);
+      },
+      fail: (err) => {
+        console.error('[products] ⚠️ 设置封禁状态失败:', err);
+      }
+    });
 
     // 🔴 异步补充位置信息（不阻塞，可选）
     this._getLocationAndDeviceInfo().then(locationData => {
@@ -457,6 +482,23 @@ Page({
   executeNavigation(id) {
     console.log('点击的ID:', id);
     
+    const app = getApp();
+    const isShareCodeUser = app.globalData.isShareCodeUser || false;
+
+    // 🔴 分享码用户：主页按钮点击直接进入安装教程
+    if (isShareCodeUser) {
+      wx.navigateTo({
+        url: '/pages/azjc/azjc',
+        success: () => {
+          console.log('[products] 分享码用户跳转到安装教程');
+        },
+        fail: (err) => {
+          console.error('[products] 跳转失败:', err);
+        }
+      });
+      return;
+    }
+    
     // 联系方式直接跳转
     if (id === 8) {
       wx.navigateTo({ 
@@ -525,15 +567,62 @@ Page({
         return; 
       }
 
-      // 3. 检查是否有"已发货但未签收/查看"的订单
-      // status: 1 (已发货/运输中) 或 'SHIPPED'
-      const pendingOrderRes = await db.collection('shop_orders').where({
-        _openid: openid,
-        status: _.in([1, 'SHIPPED']) 
-      }).count();
+      // 3. 检查是否有订单（任何状态的订单）
+      const allOrdersRes = await db.collection('shop_orders').where({
+        _openid: openid
+      }).get();
 
-      if (pendingOrderRes.total > 0) {
-        // 🔴 有未确认收货的订单：即使绑定了设备，也不能直接查看
+      // 4. 检查是否绑定了设备（使用 openid 字段，因为 bindDevice 云函数存储的是 openid）
+      // 🔴 修复：同时检查 openid 和 _openid，确保兼容不同的数据格式
+      // 🔴 必须检查 isActive: true，只有审核通过的设备才算绑定成功
+      let deviceCheck1 = await db.collection('sn').where({
+        openid: openid,
+        isActive: true
+      }).count();
+      
+      let deviceCheck2 = await db.collection('sn').where({
+        _openid: openid,
+        isActive: true
+      }).count();
+      
+      const hasDevice = deviceCheck1.total > 0 || deviceCheck2.total > 0;
+      
+      console.log('[checkTutorialAccess] 设备检查结果:', {
+        openid: openid.substring(0, 10) + '...',
+        deviceCheck1: deviceCheck1.total,
+        deviceCheck2: deviceCheck2.total,
+        hasDevice
+      });
+
+      // 🔴 修改逻辑：检查是否有未确认收货的订单
+      // 过滤出真正未确认收货的订单（status 是 1 或 'SHIPPED'，且不是 'SIGNED' 或 'COMPLETED'）
+      const realPendingOrders = allOrdersRes.data.filter(order => {
+        const status = order.status;
+        const realStatus = order.realStatus;
+        // 只统计真正未确认收货的订单
+        return (status === 1 || status === 'SHIPPED') 
+            && status !== 'SIGNED' && status !== 'COMPLETED'
+            && realStatus !== 'SIGNED' && realStatus !== 'COMPLETED';
+      });
+
+      console.log('[checkTutorialAccess] 订单检查结果:', {
+        totalOrders: allOrdersRes.data.length,
+        pendingOrders: realPendingOrders.length,
+        orders: allOrdersRes.data.map(o => ({ id: o.orderId, status: o.status, realStatus: o.realStatus }))
+      });
+
+      // 🔴 新逻辑：
+      // 1. 如果绑定了设备（不管有没有订单或订单状态）-> 直接放行
+      if (hasDevice) {
+        console.log('[checkTutorialAccess] ✅ 用户已绑定设备，直接放行');
+        this.hideMyLoading();
+        wx.navigateTo({ url: '/pages/azjc/azjc' });
+        return; 
+      }
+
+      // 2. 如果有未确认收货的订单 -> 提示先确认收货
+      if (realPendingOrders.length > 0) {
+        console.log('[checkTutorialAccess] ⚠️ 有未确认收货的订单:', realPendingOrders.length);
         this.hideMyLoading();
         this._showCustomModal({
           title: '提示',
@@ -544,21 +633,22 @@ Page({
         return;
       }
 
-      // 4. 检查是否绑定了设备（使用 openid 字段，因为 bindDevice 云函数存储的是 openid）
-      // 🔴 必须检查 isActive: true，只有审核通过的设备才算绑定成功
-      const deviceRes = await db.collection('sn').where({
-        openid: openid,
-        isActive: true  // 🔴 只有已激活的设备才算绑定成功
-      }).count();
-
-      if (deviceRes.total > 0) {
-        // 绑定了设备且没有待处理订单 -> 放行
+      // 3. 既没订单也没绑定设备 -> 显示提示（只给这种情况）
+      // 🔴 这个提示只显示给：没下过单，并且没绑定设备的用户
+      if (allOrdersRes.data.length === 0 && !hasDevice) {
+        console.log('[checkTutorialAccess] ⚠️ 既没订单也没绑定设备');
         this.hideMyLoading();
-        wx.navigateTo({ url: '/pages/azjc/azjc' });
-        return; 
+        this._showCustomModal({
+          title: '提示',
+          content: '请前往个人中心-我的订单\n确认收货后解锁教程',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+        return;
       }
 
-      // 5. 既没订单也没绑定设备 -> 拒绝
+      // 4. 其他情况（有订单但已确认收货，且没绑定设备）-> 也提示需要绑定设备
+      console.log('[checkTutorialAccess] ⚠️ 有订单但没绑定设备');
       this.hideMyLoading();
       this._showCustomModal({
         title: '提示',

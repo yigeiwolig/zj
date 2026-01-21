@@ -237,13 +237,13 @@ Page({
     this.checkAdminPrivilege();
     
     // 缓存系统信息，避免拖拽时重复调用
-    const systemInfo = wx.getSystemInfoSync();
-    this._systemInfo = systemInfo;
-    this._cardHeightPx = DRAG_CONFIG.CARD_HEIGHT_RPX * (systemInfo.screenWidth / 750);
+    const winInfo = wx.getWindowInfo();
+    this._systemInfo = winInfo;
+    this._cardHeightPx = DRAG_CONFIG.CARD_HEIGHT_RPX * (winInfo.windowWidth / 750);
     
     // 获取状态栏高度，用于适配导航栏
     // 如果没有状态栏高度，使用安全区域，如果都没有，默认 44px（iPhone X 系列）
-    const statusBarHeight = systemInfo.statusBarHeight || 44;
+    const statusBarHeight = winInfo.statusBarHeight || 44;
     this.setData({ statusBarHeight });
     console.log('状态栏高度:', statusBarHeight);
   },
@@ -487,12 +487,43 @@ Page({
   },
 
   // 页面卸载时清理
+  onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+    
+    // 🔴 检查录屏状态
+    if (wx.getScreenRecordingState) {
+      wx.getScreenRecordingState({
+        success: (res) => {
+          if (res.state === 'on' || res.recording) {
+            this.handleIntercept('record');
+          }
+        }
+      });
+    }
+  },
+
   onUnload() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+    
     this._cleanupDrag();
   },
 
   // 页面隐藏时清理（防止拖拽过程中切换页面）
   onHide() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+    
     this._cleanupDrag();
   },
 
@@ -4200,28 +4231,28 @@ Page({
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    console.log('[shouhou] 🔴 截屏/录屏检测，立即设置封禁状态');
+    console.log('[shouhou] 🔴 截屏/录屏检测，立即跳转');
     
-    // 🔴 关键修复：立即调用云函数设置 isBanned = true，不等待位置信息
-    try {
-      const sysInfo = wx.getSystemInfoSync();
-      const immediateRes = await wx.cloud.callFunction({
-        name: 'banUserByScreenshot',
-        data: {
-          type: type,
-          banPage: 'shouhou',
-          deviceInfo: sysInfo.system || '',
-          phoneModel: sysInfo.model || ''
-        }
-      });
-      console.log('[shouhou] ✅ 立即设置封禁状态成功:', immediateRes);
-    } catch (err) {
-      console.error('[shouhou] ⚠️ 立即设置封禁状态失败:', err);
-        }
-
-    // 🔴 跳转到封禁页面
-    console.log('[shouhou] 🔴 跳转到封禁页');
+    // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
+
+    // 🔴 异步调用云函数（不阻塞跳转）
+    const sysInfo = wx.getSystemInfoSync();
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: {
+        type: type,
+        banPage: 'shouhou',
+        deviceInfo: sysInfo.system || '',
+        phoneModel: sysInfo.model || ''
+      },
+      success: (res) => {
+        console.log('[shouhou] ✅ 设置封禁状态成功:', res);
+      },
+      fail: (err) => {
+        console.error('[shouhou] ⚠️ 设置封禁状态失败:', err);
+      }
+    });
 
     // 🔴 异步补充位置信息（不阻塞，可选）
     this._getLocationAndDeviceInfo().then(locationData => {

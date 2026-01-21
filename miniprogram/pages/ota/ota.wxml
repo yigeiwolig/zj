@@ -1,7 +1,7 @@
 <!-- 顶部导航 -->
 <view class="header">
-  <view class="back-icon" catchtap="goBack">
-    <text style="font-size: 48rpx; font-weight: 300; color: #fff; line-height: 1;">‹</text>
+  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 8}}px;">
+    <text class="back-arrow">‹</text>
   </view>
 </view>
 

@@ -379,7 +379,7 @@ Page({
       wx.__mt_oldHideLoading();
     }
     wx.hideLoading();
-
+    
     wx.cloud.callFunction({
       name: 'verifyNickname',
       data: {
@@ -414,19 +414,19 @@ Page({
         }
         // 🔴 封禁状态已完全由 login_logbutton 管理，不再检查 login_logs.isBanned
         // 如果 verifyNickname 返回 success，说明已经通过验证，直接放行
-              wx.setStorageSync('has_permanent_auth', true);
-              wx.setStorageSync('user_nickname', name);
-              wx.removeStorageSync('is_user_banned');
-              this.setData({ isAuthorized: true, isShowNicknameUI: false });
-              // 显示自定义成功弹窗
-              this.setData({ 
-                showCustomSuccessModal: true,
-                successModalTitle: '验证通过',
-                successModalContent: ''
-              });
-              setTimeout(() => {
-                this.setData({ showCustomSuccessModal: false });
-              }, 2000);
+        wx.setStorageSync('has_permanent_auth', true);
+        wx.setStorageSync('user_nickname', name);
+        wx.removeStorageSync('is_user_banned');
+        this.setData({ isAuthorized: true, isShowNicknameUI: false });
+        // 显示自定义成功弹窗
+        this.setData({ 
+          showCustomSuccessModal: true,
+          successModalTitle: '验证通过',
+          successModalContent: ''
+        });
+        setTimeout(() => {
+          this.setData({ showCustomSuccessModal: false });
+        }, 2000);
       } else {
         // --- 失败 ---
         // 🔴 关键修复：验证失败时也要隐藏加载弹窗
@@ -488,14 +488,14 @@ Page({
         
         // 🔴 延迟800ms后显示自定义弹窗
         setTimeout(() => {
-        // 复制成功后关闭错误弹窗
-        this.setData({ showCustomErrorModal: false });
+          // 复制成功后关闭错误弹窗
+          this.setData({ showCustomErrorModal: false });
           // 显示自定义"内容已复制"弹窗
-        this.setData({ showCopySuccessModal: true });
-        // 2秒后自动关闭
-        setTimeout(() => {
-          this.setData({ showCopySuccessModal: false });
-        }, 2000);
+          this.setData({ showCopySuccessModal: true });
+          // 2秒后自动关闭
+          setTimeout(() => {
+            this.setData({ showCopySuccessModal: false });
+          }, 2000);
         }, 800);
       }
     });
@@ -514,7 +514,7 @@ Page({
     console.log('[handleAccess] isAuthorized:', this.data.isAuthorized);
     
     const app = getApp();
-    
+
     // 如果动画已经开始，不允许重复点击
     if (this.data.step > 0) {
       console.log('[handleAccess] 动画已开始，忽略点击');
@@ -572,7 +572,7 @@ Page({
   _doGetLocation(phoneModel) {
     // 🔴 先获取定位（会弹授权窗），授权成功后才播放动画
     console.log('[handleAccess] 开始请求定位授权...');
-
+    
     wx.getLocation({
       type: 'gcj02',
       isHighAccuracy: true,
@@ -584,8 +584,8 @@ Page({
         // 🔴 定位成功后立即播放动画
         this.runAnimation();
         
-        // 🔴 并行进行地址解析和拦截判断，并保存 Promise 引用
-        this._analyzePromise = this.analyzeRegion(res.latitude, res.longitude, phoneModel).then(() => {
+        // 🔴 并行进行地址解析和拦截判断（不用 await，真正的并行）
+        this.analyzeRegion(res.latitude, res.longitude, phoneModel).then(() => {
           console.log('[handleAccess] 地址分析完成，等待动画结束后跳转');
         }).catch(err => {
           console.error('[handleAccess] 地址分析失败:', err);
@@ -703,23 +703,11 @@ Page({
     this.addAnimationTimer(t1);
   },
 
-  async doFallAndSwitch() {
+  doFallAndSwitch() {
     this.setData({ step: 5 });
 
     // ✅ 小齿轮掉落动画结束后执行跳转（0.8s + 少量缓冲）
-    const jumpTimer = setTimeout(async () => {
-      // 🔴 先等待地址解析完成（如果正在进行中）
-      if (this._analyzePromise) {
-        console.log('[index] 动画完成，等待地址解析完成...');
-        try {
-          await this._analyzePromise;
-          console.log('[index] 地址解析已完成');
-        } catch (err) {
-          console.error('[index] 地址解析异常:', err);
-        }
-        this._analyzePromise = null; // 清理引用
-      }
-
+    const jumpTimer = setTimeout(() => {
       // 🔴 检查是否有待跳转的目标（由地址检查结果决定）
       if (this.data.pendingJumpTarget) {
         console.log('[index] 动画完成，执行待跳转:', this.data.pendingJumpTarget);
@@ -844,11 +832,10 @@ Page({
         return;
       }
 
-      console.log('[index] 🔍 解析后的地址数据 - city:', locData.city, ', district:', locData.district);
-      console.log('[index] 🔍 完整地址数据:', JSON.stringify(locData));
+      console.log('[index] 解析后的地址数据:', locData);
 
       // 🔴 调用统一的拦截判断方法
-      await this._checkLocationBlocking(locData);
+      this._checkLocationBlocking(locData);
     } catch (err) {
       console.error('[index] analyzeRegion 异常:', err);
       // 异常情况下，至少保存经纬度并放行
@@ -902,10 +889,10 @@ Page({
       }
 
       const blockedCities = Array.isArray(config.blocked_cities) ? config.blocked_cities : [];
-      console.log('[index] 🔍 拦截城市列表:', JSON.stringify(blockedCities));
-      console.log('[index] 🔍 当前城市:', locData.city, '(类型:', typeof locData.city, ')');
-      console.log('[index] 🔍 当前省份:', locData.province);
-      console.log('[index] 🔍 当前区县:', locData.district);
+      console.log('[index] 拦截城市列表:', blockedCities);
+      console.log('[index] 当前城市:', locData.city);
+      console.log('[index] 当前省份:', locData.province);
+      console.log('[index] 当前区县:', locData.district);
       
       // 🔴 新的拦截判断逻辑：支持对象数组格式 {city, district}，同时兼容旧格式字符串数组
       const isBlockedCity = blockedCities.some(blockedItem => {
@@ -945,10 +932,10 @@ Page({
         }
       });
 
-      console.log('[index] 🔍 是否命中拦截城市:', isBlockedCity, '(类型:', typeof isBlockedCity, ')');
+      console.log('[index] 是否命中拦截城市:', isBlockedCity);
 
       if (isBlockedCity) {
-        console.log(`[index] ⚠️ ⚠️ ⚠️ 命中拦截城市: ${locData.city}，正在检查免死金牌...`);
+        console.log(`[index] ⚠️ 命中拦截城市: ${locData.city}，正在检查免死金牌...`);
         
         // 获取 OpenID
         let openid = null;
@@ -1402,15 +1389,8 @@ Page({
   // ================== 管理员权限检查 ==================
   async checkAdminPrivilege() {
     try {
-      console.log("[index] 开始检查管理员权限...");
-      const res = await Promise.race([
-        wx.cloud.callFunction({ name: "login" }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("admin check timeout")), 5000))
-      ]);
-      
+      const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
-      console.log('[index] 查询管理员表...');
-      
       const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
       if (adminCheck.data.length > 0) {
         this.setData({ isAdmin: true });
@@ -1432,17 +1412,9 @@ Page({
       console.log('[index] isAdmin:', this.data.isAdmin);
       console.log('[index] isAdminMode:', this.data.isAdminMode);
       
-      // 🔴 防抖：如果正在动画中，不响应
-      if (this.data.step > 0) {
-        console.log('[index] 动画进行中，忽略管理员入口点击');
-        return;
-      }
-      
       // 只有管理员才能切换模式
       if (this.data.isAdmin) {
         this.toggleAdminMode();
-      } else {
-        console.log('[index] 非管理员用户，无权限切换模式');
       }
     } catch (error) {
       console.error('[index] onAdminTap 发生错误:', error);

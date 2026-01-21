@@ -114,6 +114,9 @@ class BLEHelper {
 
 Page({
   data: {
+    // 🔴 状态栏高度
+    statusBarHeight: 44,
+    
     loaderFading: false,
     islandState: '', islandText: '', connectSuccess: false,
     showStage: false, showSelector: false,
@@ -123,10 +126,13 @@ Page({
     devices: ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX'],
     currentDevIdx: 0,
     currentSvg: iconF1Pro,
-    hasSavedOtaRecord: false // 仅在动画完成且显示“升级完成”后再保存
+    hasSavedOtaRecord: false // 仅在动画完成且显示"升级完成"后再保存
   },
 
   onLoad() {
+    // 🔴 获取状态栏高度
+    const winInfo = wx.getWindowInfo();
+    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -195,7 +201,29 @@ Page({
     }
   },
 
+  onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+  },
+
+  onHide() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+  },
+
   onUnload() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+    
     if(this.ble) {
       this.ble.stopScan();
       this.ble.disconnect();

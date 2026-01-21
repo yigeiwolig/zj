@@ -46,6 +46,14 @@ exports.main = async (event, context) => {
     }
 
     const banReason = banType === 'screenshot' ? 'screenshot' : 'screen_record';
+
+    // 🔴 关键修复：保留/写回昵称，避免后续 Auto 模式无法写入 valid_users
+    // 优先级：event.nickname（如果未来前端传了）> login_logbutton.nickname > login_logs.nickname
+    let preservedNickname = '';
+    if (event && event.nickname) {
+      preservedNickname = String(event.nickname).trim();
+    }
+    let lastLogNickname = '';
     
     // 🔴 构建地址和设备信息对象
     const locationInfo = {
@@ -69,6 +77,7 @@ exports.main = async (event, context) => {
           isBanned: true,
           banReason: banReason,
           banPage: banPage || 'unknown', // 封禁页面
+          ...(preservedNickname ? { nickname: preservedNickname } : (buttonRecordData && buttonRecordData.nickname ? { nickname: buttonRecordData.nickname } : {})),
           ...locationInfo,               // 地址信息
           ...deviceInfoObj,              // 设备信息
           bypassLocationCheck: buttonRecordData && buttonRecordData.bypassLocationCheck === true,
@@ -84,9 +93,11 @@ exports.main = async (event, context) => {
           isBanned: true,
           banReason: banReason,
           banPage: banPage || 'unknown', // 封禁页面
+          ...(preservedNickname ? { nickname: preservedNickname } : {}),
           ...locationInfo,               // 地址信息
           ...deviceInfoObj,              // 设备信息
           bypassLocationCheck: false,
+          qiangli: false, // 🔴 自动添加qiangli字段，默认false
           createTime: db.serverDate(),
           updateTime: db.serverDate()
         }
@@ -101,8 +112,14 @@ exports.main = async (event, context) => {
         .orderBy('updateTime', 'desc')
         .limit(1)
         .get();
+
+      if (!preservedNickname && logRes.data && logRes.data.length > 0 && logRes.data[0].nickname) {
+        lastLogNickname = String(logRes.data[0].nickname).trim();
+        preservedNickname = lastLogNickname;
+      }
       
       const logUpdateData = {
+        ...(preservedNickname ? { nickname: preservedNickname } : {}),
         banReason: banReason,
         banPage: banPage || 'unknown',
         ...locationInfo,

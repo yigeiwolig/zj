@@ -84,12 +84,34 @@ Page({
   },
 
   onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+    
     const cache = wx.getStorageSync('admin-lite-latest');
     if (cache) {
       this.setData({ lastSubmission: cache });
     }
     // 重新加载产品列表（可能在其他页面有更新）
     this.loadProductList();
+  },
+
+  onHide() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
+  },
+
+  onUnload() {
+    // 🔴 停止定时检查
+    const app = getApp();
+    if (app && app.stopQiangliCheck) {
+      app.stopQiangliCheck();
+    }
   },
 
   // ========================================================

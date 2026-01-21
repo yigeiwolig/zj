@@ -294,8 +294,17 @@
               </view>
             </view>
 
-            <!-- 4. 已完成：回顾教程 -->
+            <!-- 4. 已完成：回顾教程 + 安装教程查看码 -->
             <view wx:if="{{item.realStatus === 'SIGNED'}}" class="action-row-right">
+              <!-- 安装教程查看码按钮 -->
+              <view 
+                class="btn-mini outline" 
+                catchtap="generateShareCode" 
+                data-id="{{item.id}}"
+                data-orderid="{{item.orderId}}">
+                安装教程查看码
+              </view>
+              <!-- 回顾教程按钮 -->
               <view 
                 class="btn-mini outline" 
                 catchtap="viewTutorialOnly">

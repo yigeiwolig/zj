@@ -1,57 +1,59 @@
 <!-- miniprogram/pages/blocked/blocked.wxml -->
 <view class="container">
-  
-  <!-- 图标区域 -->
-  <view class="icon-box">
-    <image class="shield-icon" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgMjJDMTIgMjIgMjAgMTggMjAgMTJWNUwxMiAyTDQgNVYxMkM0IDE4IDEyIDIyIDEyIDIyWiIgZmlsbD0iYmxhY2siLz48cGF0aCBkPSJNMTIgNkMxMi41NSA2IDEzIDYuNDUgMTMgN1YxM0MxMyAxMy41NSAxMi41NSAxNCAxMiAxNEMxMS40NSAxNCAxMSAxMy41NSAxMSAxM1Y3QzExIDYuNDUgMTEuNDUgNiAxMiA2WiIgZmlsbD0id2hpdGUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjE3IiByPSIxIiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPgo=" mode="aspectFit"></image>
-  </view>
-  
-  <view class="title">{{type === 'pc' ? '不支持PC端' : '访问受限'}}</view>
-  
-  <view class="desc" wx:if="{{type !== 'pc'}}">
-    <view>为了防止恶意攻击服务器</view>
-    <view>请联系管理员录入信息</view>
-  </view>
-  <view class="desc" wx:if="{{type === 'pc'}}">
-    <view>本小程序仅支持在手机上使用</view>
-    <view>请在微信手机端打开小程序</view>
+  <view class="center-content">
+    <!-- 1. 核心图标区 -->
+    <view class="icon-container">
+      <!-- 动态旋转的断点圆环 -->
+      <view class="spinner-ring"></view>
+      <!-- 静态图标：感叹号 (代表系统异常/崩溃) -->
+      <view class="error-icon">!</view>
+    </view>
+
+    <!-- 2. 文字提示区 -->
+    <view class="text-area">
+      <view class="title">系统数据异常</view>
+      <view class="subtitle">System Data Error</view>
+      
+      <view class="error-desc">
+        <text>检测到关键配置丢失</text>
+        <text>为保护数据安全，服务已自动暂停</text>
+      </view>
+    </view>
   </view>
 
-  <view class="btn-area" wx:if="{{type !== 'pc'}}">
-    <button class="copy-btn" hover-class="btn-hover" bindtap="handleCopyWechat">
-      联系管理员开通
+  <!-- 3. 底部操作区 -->
+  <view class="footer">
+    <button class="action-btn" hover-class="btn-hover" bindtap="handleCopyWechat">
+      联系管理员修复
     </button>
-    <view class="tips">点击按钮复制微信号，进行人工核验</view>
-  </view>
-
-  <!-- 底部状态栏 -->
-  <view class="loading-area">
-    <view class="status-dot"></view>
-    <text>正在云端校验权限...</text>
+    
+    <view class="debug-info">
+      <text>Error Code: 0x000000F4_CRITICAL</text>
+      <text>Session ID: {{randomSessionId}}</text>
+    </view>
   </view>
 </view>
 
-<!-- 自定义"内容已复制"弹窗（白底黑字样式） -->
-<view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}">
+<!-- 自定义弹窗组件 (重构版) -->
+<view class="custom-modal-mask {{showCopySuccessModal ? 'active' : ''}} {{copySuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCopySuccessModal}}">
   <view class="custom-modal-box copy-success-modal">
-    <view class="modal-icon-new success-icon">✓</view>
-    <view class="modal-title-new">内容已复制</view>
+    <!-- 动态绘制的勾选图标 -->
+    <view class="check-icon">
+      <view class="check-line line-tip"></view>
+      <view class="check-line line-long"></view>
+    </view>
+    <view class="modal-title-new">已复制</view>
   </view>
 </view>
 
-<!-- 【新增】自定义成功提示弹窗 - 白底黑字样式 -->
-<view class="custom-modal-mask {{customSuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCustomSuccessModal}}" catchtouchmove="noop">
+<view class="custom-modal-mask active {{customSuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCustomSuccessModal}}" catchtouchmove="noop">
   <view class="custom-modal-box success-modal">
-    <!-- 图标：使用 Unicode 字符 -->
     <view class="modal-icon-new success-icon">✓</view>
-    <!-- 标题 -->
     <view class="modal-title-new">{{successModalTitle}}</view>
-    <!-- 内容（如果有） -->
     <view class="modal-content-new" wx:if="{{successModalContent}}">
       <view class="content-main">{{successModalContent}}</view>
     </view>
   </view>
 </view>
 
-<!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />

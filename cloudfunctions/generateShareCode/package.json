@@ -1,0 +1,9 @@
+{
+  "name": "generateShareCode",
+  "version": "1.0.0",
+  "description": "生成安装教程分享码",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

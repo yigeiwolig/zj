@@ -8,51 +8,18 @@ page {
 
 /* === 1. 顶部导航 === */
 .nav-header {
-  padding-top: 80rpx;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 100rpx);
   padding-bottom: 20rpx;
-  padding-left: 40rpx;
-  padding-right: 40rpx;
+  padding-left: 30rpx;
+  padding-right: 30rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  position: relative; z-index: 50;
+  position: relative; 
+  z-index: 50;
 }
 
-/* 统一返回键位置样式 */
-.header {
-  position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
-  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
-  box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 100; pointer-events: none;
-  background: transparent; 
-}
-
-.back-icon {
-  width: 70rpx; 
-  height: 70rpx;
-  display: flex; 
-  align-items: center; 
-  justify-content: center;
-  pointer-events: auto;
-  transition: all 0.2s;
-}
-.back-icon:active {
-  transform: scale(0.95);
-  opacity: 0.7;
-}
-.back-icon::before {
-  display: none;
-}
-
-/* 统一返回箭头样式 */
-.back-arrow {
-  font-size: 48rpx; 
-  font-weight: 300; 
-  color: #000; 
-  line-height: 1;
-}
-
-/* 兼容旧类名 */
+/* 返回键样式 */
 .nav-back {
   width: 60rpx; 
   height: 60rpx;

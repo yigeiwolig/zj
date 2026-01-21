@@ -4,7 +4,8 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .container.modal-open {
   height: 100vh;
   overflow: hidden;
-  position: fixed;
+  /* 🔴 修复：移除 position: fixed，改用其他方式锁定滚动，避免页面卡住 */
+  /* position: fixed; */
   width: 100%;
   touch-action: none;
 }
@@ -100,6 +101,13 @@ page { background: #F7F7F7; color: #1D1D1F; }
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
   z-index: 100; pointer-events: none;
   background: transparent; 
+}
+/* 管理员切换按钮居中 */
+.admin-toggle-wrapper {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
 }
 .back-icon {
   width: 70rpx;
@@ -674,6 +682,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   border-radius: 40rpx;
   font-size: 26rpx;
   font-weight: 600;
+  transition: all 0.2s; /* 🔴 添加过渡效果 */
 }
 .btn-mini.gray {
   background: #f0f0f0;
@@ -684,6 +693,26 @@ page { background: #F7F7F7; color: #1D1D1F; }
   color: #fff;
   box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.2);
 }
+/* 🔴 添加按下反馈效果 */
+.btn-mini.black:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+  box-shadow: 0 2rpx 6rpx rgba(0,0,0,0.15);
+}
+
+/* --- outline 按钮（灰边框）--- */
+.btn-mini.outline {
+  background: #fff;
+  border: 1rpx solid #E5E5EA;
+  color: #000;
+}
+/* 🔴 添加按下反馈效果 */
+.btn-mini.outline:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+  background: #F5F5F5;
+  border-color: #D1D1D6;
+}
 
 /* --- 取消按钮 (红边框) --- */
 .btn-mini.outline-red {
@@ -691,6 +720,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
   border: 1rpx solid #FF3B30;
   color: #FF3B30;
   margin-right: auto; /* 【关键】让它靠左，和其他按钮分开 */
+}
+/* 🔴 添加按下反馈效果 */
+.btn-mini.outline-red:active {
+  transform: scale(0.95);
+  opacity: 0.8;
+  background: rgba(255, 59, 48, 0.1);
 }
 
 /* --- 改价样式提示 --- */

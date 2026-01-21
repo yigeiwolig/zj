@@ -41,13 +41,45 @@ exports.main = async (event, context) => {
 
   try {
     // 1. 读取配置 (auto 模式)
+    // 🔴 支持两种 auto 模式：
+    //    - app_config.nickname_settings.auto (全局配置)
+    //    - login_logs.auto (用户级配置，优先级更高)
     let autoMode = false;
+    
+    // 1.1 先检查 login_logs 中的 auto 字段（用户级，优先级更高）
     try {
-      const cfgDoc = await db.collection('app_config').doc('nickname_settings').get();
-      if (cfgDoc && cfgDoc.data && cfgDoc.data.auto === true) {
-        autoMode = true;
+      const lastRes = await db.collection('login_logs')
+        .where({ _openid: openid })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+      if (lastRes.data.length > 0) {
+        const lastLog = lastRes.data[0];
+        const autoValue = lastLog.auto;
+        console.log('[verifyNickname] 📋 login_logs.auto 值:', autoValue, ', 类型:', typeof autoValue);
+        if (autoValue === true || autoValue === 1 || autoValue === 'true' || autoValue === '1') {
+          autoMode = true;
+          console.log('[verifyNickname] ✅ 从 login_logs 检测到 Auto 模式开启');
+        }
       }
-    } catch (e) {} // 忽略配置不存在的错误
+    } catch (e) {
+      console.error('[verifyNickname] 查询 login_logs.auto 失败:', e);
+    }
+    
+    // 1.2 如果 login_logs 中没有 auto，再检查全局配置
+    if (!autoMode) {
+      try {
+        const cfgDoc = await db.collection('app_config').doc('nickname_settings').get();
+        if (cfgDoc && cfgDoc.data && cfgDoc.data.auto === true) {
+          autoMode = true;
+          console.log('[verifyNickname] ✅ 从 app_config 检测到 Auto 模式开启');
+        }
+      } catch (e) {
+        console.log('[verifyNickname] app_config 不存在或查询失败:', e.message);
+      }
+    }
+    
+    console.log('[verifyNickname] 📋 最终 autoMode 状态:', autoMode);
 
     // 2. 查找最新的 login_logs (获取上次失败次数)
     // 🔴 必须按 updateTime 倒序
@@ -195,20 +227,30 @@ exports.main = async (event, context) => {
     // 5. 自动录入模式 (Auto Mode)
     // 如果开启了自动模式，且没在白名单，自动加白
     if (autoMode && !isWhitelisted) {
+      console.log('[verifyNickname] 🚀 Auto 模式开启，开始自动添加白名单...');
+      console.log('[verifyNickname] 当前状态 - nickname:', nickname, ', openid:', openid, ', isWhitelisted:', isWhitelisted);
       try {
-          await db.collection('valid_users').add({
-            data: {
-              nickname,
-              _openid: openid,
-              desc: 'auto 模式自动录入',
-              createTime: db.serverDate(),
+        const addResult = await db.collection('valid_users').add({
+          data: {
+            nickname,
+            _openid: openid,
+            desc: 'auto 模式自动录入',
+            createTime: db.serverDate(),
             updateTime: db.serverDate()
           }
         });
         isWhitelisted = true;
-        console.log('[verifyNickname] auto 模式自动加白');
+        console.log('[verifyNickname] ✅ Auto 模式自动加白成功，记录ID:', addResult._id);
       } catch (e) {
-        console.error('[verifyNickname] auto 模式写入失败:', e);
+        console.error('[verifyNickname] ❌ Auto 模式写入失败:', e);
+        console.error('[verifyNickname] 错误详情:', JSON.stringify(e, null, 2));
+        // 即使写入失败，也继续执行后续逻辑
+      }
+    } else {
+      if (!autoMode) {
+        console.log('[verifyNickname] ⚠️ Auto 模式未开启，跳过自动加白');
+      } else if (isWhitelisted) {
+        console.log('[verifyNickname] ⚠️ 用户已在白名单，无需自动加白');
       }
     }
 
@@ -235,6 +277,7 @@ exports.main = async (event, context) => {
 
       // 尝试解除 login_logbutton 的昵称封禁（如果存在）
       // 注意：我们不解除地址封禁，只解除昵称封禁
+      // 🔴 但是：qiangli 强制封禁不能被自动解封（最高优先级）
       try {
          const btnRes = await db.collection('login_logbutton')
           .where({ _openid: openid })
@@ -244,6 +287,14 @@ exports.main = async (event, context) => {
          
          if (btnRes.data.length > 0) {
              const btn = btnRes.data[0];
+             // 🔴 最高优先级：如果 qiangli 强制封禁开启，不能自动解封
+             const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
+             if (qiangli) {
+                 console.log('[verifyNickname] 🚫 qiangli 强制封禁开启，不能自动解封昵称封禁');
+                 // 即使验证通过，也不解封
+                 return { success: true, isBlocked: true, type: 'banned', qiangliBlocked: true };
+             }
+             
              // 只有当原因是昵称验证失败时，才解封。如果是地址拦截，保持原样（反正金牌能过）
              if (btn.banReason === 'nickname_verify_fail') {
                  await db.collection('login_logbutton').doc(btn._id).update({
@@ -311,6 +362,7 @@ exports.main = async (event, context) => {
             ...locationInfo,  // 地址信息
             ...deviceInfoObj, // 设备信息
             bypassLocationCheck: false, // 默认没金牌
+            qiangli: false, // 🔴 自动添加qiangli字段，默认false
             createTime: db.serverDate(),
             updateTime: db.serverDate()
           }

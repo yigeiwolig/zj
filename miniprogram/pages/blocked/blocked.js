@@ -14,29 +14,42 @@ Page({
   },
 
   onLoad(options) {
+    // 🔴 1. 隐藏左上角返回首页按钮（极为重要）
+    if (wx.hideHomeButton) {
+      wx.hideHomeButton();
+    }
+    
+    // 🔴 2. 禁用右上角胶囊菜单的转发分享功能，防止用户分享出去
+    if (wx.hideShareMenu) {
+      wx.hideShareMenu();
+    }
+
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('blocked');
     }
     
+    
     const type = options.type || '';
     this.setData({ type });
     
     // 🔴 重置跳转标志，允许后续跳转
     app.globalData._isJumpingToBlocked = false;
-    
-    wx.hideHomeButton();
 
     // 🔴 PC端不需要自动检查，直接返回
-    if (type === 'pc') {
+    if (type === 'pc' || type === 'pc_banned') {
       console.log('[blocked] PC端访问，停止自动检查');
       return;
     }
 
-    // 🔴 关键修复：截屏/录屏封禁需要延迟更长时间，等待 banUserByScreenshot 云函数执行完成
+    // 🔴 已移除开发工具环境限制，允许在开发工具中也能正常检查 Auto 模式
+    // 之前代码：开发环境下不启动云函数检查，避免自动解封
+    // 现在允许开发工具环境也执行检查，方便调试 Auto 功能
+
+    // 🔴 优化：减少延迟时间，让截屏封禁响应更快
     const isScreenshotType = type === 'screenshot' || type === 'record';
-    const initialDelay = type === 'location' ? 3000 : (isScreenshotType ? 3000 : 0);
+    const initialDelay = type === 'location' ? 2000 : (isScreenshotType ? 500 : 0); // 截屏从3000ms改为500ms
     
     if (initialDelay > 0) {
       if (isScreenshotType) {
@@ -53,7 +66,29 @@ Page({
     }, initialDelay);
   },
 
+  onShow() {
+    // 🔴 每次页面显示时，再次确保隐藏返回按钮和分享功能
+    if (wx.hideHomeButton) {
+      wx.hideHomeButton();
+    }
+    if (wx.hideShareMenu) {
+      wx.hideShareMenu();
+    }
+  },
+
+  onHide() {
+    // 🔴 关键修复：页面隐藏/切页时也停止定时轮询，避免 setInterval 在页面销毁边缘继续执行
+    this._isPageDestroyed = true;
+    this.stopAutoCheck();
+  },
+
+  // 🔴 3. 禁用下拉刷新，防止用户试图操作
+  onPullDownRefresh() {
+    wx.stopPullDownRefresh();
+  },
+
   onUnload() {
+    this._isPageDestroyed = true;
     this.stopAutoCheck();
   },
 
@@ -67,6 +102,7 @@ Page({
 
     this.setData({
       checkTimer: setInterval(() => {
+        if (this._isPageDestroyed) return;
         if (this.data.canCheck) {
         this.callCheckCloud();
         }
@@ -83,6 +119,7 @@ Page({
 
   // === 核心：呼叫云函数查询指令 ===
   callCheckCloud() {
+    if (this._isPageDestroyed) return;
     if (!this.data.canCheck) {
       console.log('⌛ 写入保护期内，跳过检测');
       return;
@@ -127,23 +164,30 @@ Page({
           }, 1500);
         } else {
           // 其他情况：设置永久授权和昵称，直接放行
+          console.log('[blocked] 非地址拦截解封，设置永久授权，nickname:', nickname);
         wx.setStorageSync('has_permanent_auth', true);
         if (nickname) {
           wx.setStorageSync('user_nickname', nickname);
         }
         
         // 🔴 使用自定义弹窗替代微信官方弹窗
+          console.log('[blocked] 显示"验证通过"弹窗');
         this.setData({ 
           showCustomSuccessModal: true,
           successModalTitle: '验证通过',
-          successModalContent: ''
+          successModalContent: '',
+          customSuccessModalClosing: false
         });
 
         setTimeout(() => {
-          this.setData({ showCustomSuccessModal: false });
-          // 直接跳回首页，用户已通过验证，不需要重新输入昵称
-          wx.reLaunch({ url: '/pages/index/index' });
-        }, 1500);
+            console.log('[blocked] 弹窗即将关闭，准备跳转到首页');
+          this.setData({ customSuccessModalClosing: true });
+          setTimeout(() => {
+            this.setData({ showCustomSuccessModal: false });
+            // 直接跳回首页，用户已通过验证，不需要重新输入昵称
+            wx.reLaunch({ url: '/pages/index/index' });
+          }, 400); // 关闭动画时间
+        }, 2000); // 显示2秒
         }
       } 
       
@@ -207,26 +251,70 @@ Page({
   },
 
   handleCopyWechat() {
+    // 🔴 复制前先关闭所有可能的弹窗和自动检测
+    try {
+      wx.hideToast();
+      wx.hideLoading();
+    } catch (e) {}
+    
+    // 🔴 关键修复：暂时关闭自动检测，避免"验证通过"弹窗和"复制成功"弹窗冲突
+    this.stopAutoCheck();
+    
+    // 🔴 清除可能正在显示的验证通过弹窗
+    if (this.data.showCustomSuccessModal) {
+      this.setData({ 
+        showCustomSuccessModal: false,
+        customSuccessModalClosing: false
+      });
+    }
+    
     wx.setClipboardData({ 
       data: 'MT-mogaishe',
       success: () => {
-        // 立即隐藏微信原生的"内容已复制"提示（多次尝试确保隐藏）
-        wx.hideToast();
-        setTimeout(() => { wx.hideToast(); }, 50);
-        setTimeout(() => { wx.hideToast(); }, 100);
-        setTimeout(() => { wx.hideToast(); }, 150);
+        // 🔴 立即疯狂隐藏微信官方弹窗（多次尝试，不同时机）
+        const hideOfficialToast = () => {
+          try {
+            wx.hideToast();
+            wx.hideLoading();
+          } catch (e) {}
+        };
         
-        // 显示自定义"内容已复制"弹窗
-        this.setData({ showCopySuccessModal: true });
+        // 立即执行多次
+        hideOfficialToast();
+        setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 30);
+        setTimeout(hideOfficialToast, 50);
+        setTimeout(hideOfficialToast, 80);
+        setTimeout(hideOfficialToast, 120);
+        setTimeout(hideOfficialToast, 180);
+        setTimeout(hideOfficialToast, 250);
+        setTimeout(hideOfficialToast, 350);
+        setTimeout(hideOfficialToast, 500);
+        
+        // 🔴 延迟800ms后显示自定义弹窗（微信官方弹窗已被强制关闭）
         setTimeout(() => {
-          this.setData({ copySuccessModalClosing: true });
+          // 显示自定义"内容已复制"弹窗
+          this.setData({ 
+            showCopySuccessModal: true,
+            copySuccessModalClosing: false 
+          });
+          
+          // 2秒后关闭复制成功弹窗
           setTimeout(() => {
-            this.setData({ 
-              showCopySuccessModal: false,
-              copySuccessModalClosing: false
-            });
-          }, 420);
-        }, 2000);
+            this.setData({ copySuccessModalClosing: true });
+            setTimeout(() => {
+              this.setData({ 
+                showCopySuccessModal: false,
+                copySuccessModalClosing: false
+              });
+              
+              // 🔴 复制弹窗完全关闭后，恢复自动检测
+              if (!this._isPageDestroyed) {
+                this.startAutoCheck();
+              }
+            }, 420); // CSS transition duration
+          }, 2000); // Display duration
+        }, 800); // Delay to wait for official toast to disappear
       }
     });
   }

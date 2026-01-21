@@ -1725,28 +1725,28 @@ Page({
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    console.log('[home] 🔴 截屏/录屏检测，立即设置封禁状态');
+    console.log('[home] 🔴 截屏/录屏检测，立即跳转');
     
-    // 🔴 关键修复：立即调用云函数设置 isBanned = true，不等待位置信息
-    try {
-      const sysInfo = wx.getSystemInfoSync();
-      const immediateRes = await wx.cloud.callFunction({
-        name: 'banUserByScreenshot',
-        data: {
-          type: type,
-          banPage: 'home',
-          deviceInfo: sysInfo.system || '',
-          phoneModel: sysInfo.model || ''
-        }
-      });
-      console.log('[home] ✅ 立即设置封禁状态成功:', immediateRes);
-    } catch (err) {
-      console.error('[home] ⚠️ 立即设置封禁状态失败:', err);
-    }
-
-    // 🔴 跳转到封禁页面
-    console.log('[home] 🔴 跳转到封禁页');
+    // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
+
+    // 🔴 异步调用云函数（不阻塞跳转）
+    const sysInfo = wx.getSystemInfoSync();
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: {
+        type: type,
+        banPage: 'home',
+        deviceInfo: sysInfo.system || '',
+        phoneModel: sysInfo.model || ''
+      },
+      success: (res) => {
+        console.log('[home] ✅ 设置封禁状态成功:', res);
+      },
+      fail: (err) => {
+        console.error('[home] ⚠️ 设置封禁状态失败:', err);
+      }
+    });
 
     // 🔴 异步补充位置信息（不阻塞，可选）
     this._getLocationAndDeviceInfo().then(locationData => {

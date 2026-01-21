@@ -281,10 +281,10 @@ Page({
 
   // 🔴 获取位置和设备信息的辅助函数（必须解析出详细地址）
   async _getLocationAndDeviceInfo() {
-    const sysInfo = wx.getSystemInfoSync();
+    const devInfo = wx.getDeviceInfo();
     const deviceInfo = {
-      deviceInfo: sysInfo.system || '',
-      phoneModel: sysInfo.model || ''
+      deviceInfo: devInfo.system || '',
+      phoneModel: devInfo.model || ''
     };
     
     // 🔴 循环检查权限，直到用户授权
@@ -349,28 +349,28 @@ Page({
       wx.setStorageSync('is_screenshot_banned', true);
     }
 
-    console.log('[my] 🔴 截屏/录屏检测，立即设置封禁状态');
+    console.log('[my] 🔴 截屏/录屏检测，立即跳转');
     
-    // 🔴 关键修复：立即调用云函数设置 isBanned = true，不等待位置信息
-    try {
-      const sysInfo = wx.getSystemInfoSync();
-      const immediateRes = await wx.cloud.callFunction({
-        name: 'banUserByScreenshot',
-        data: {
-          type: type,
-          banPage: 'my',
-          deviceInfo: sysInfo.system || '',
-          phoneModel: sysInfo.model || ''
-        }
-      });
-      console.log('[my] ✅ 立即设置封禁状态成功:', immediateRes);
-    } catch (err) {
-      console.error('[my] ⚠️ 立即设置封禁状态失败:', err);
-    }
-
-    // 🔴 跳转到封禁页面
-    console.log('[my] 🔴 跳转到封禁页');
+    // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
+
+    // 🔴 异步调用云函数（不阻塞跳转）
+    const devInfo = wx.getDeviceInfo();
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: {
+        type: type,
+        banPage: 'my',
+        deviceInfo: devInfo.system || '',
+        phoneModel: sysInfo.model || ''
+      },
+      success: (res) => {
+        console.log('[my] ✅ 设置封禁状态成功:', res);
+      },
+      fail: (err) => {
+        console.error('[my] ⚠️ 设置封禁状态失败:', err);
+      }
+    });
 
     // 🔴 异步补充位置信息（不阻塞，可选）
     this._getLocationAndDeviceInfo().then(locationData => {
@@ -442,6 +442,26 @@ Page({
 
   // --- 1. 页面显示时，加载云端数据 ---
   onShow() {
+    // 🔴 检查录屏状态
+    if (wx.getScreenRecordingState) {
+      wx.getScreenRecordingState({
+        success: (res) => {
+          if (res.state === 'on' || res.recording) {
+            this.handleIntercept('record');
+          }
+        }
+      });
+    }
+
+    // 🔴 启动定时检查 qiangli 强制封禁
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+
+    // 🔴 修复：页面显示时重置滚动锁定状态，防止页面卡住
+    this.updateModalState();
+
     // 🔴 立即显示 loading，提升用户体验
     this.showMyLoading('同步中...');
     
@@ -473,23 +493,41 @@ Page({
         this.loadMyActivitiesPromise()
       ]).then(() => {
         this.hideMyLoading();
-      }).catch(() => {
+      }).catch((err) => {
+        console.error('[onShow] 加载数据失败:', err);
         this.hideMyLoading();
       });
-    }).catch(() => {
-      // 如果权限检查失败，也尝试加载（可能只是普通用户）
-      if (this.data.myOpenid) {
+    }).catch((err) => {
+      console.warn('[onShow] 权限检查失败，尝试作为普通用户加载:', err);
+      // 🔴 修复：即使权限检查失败，也要尝试获取 openid 并加载订单
+      if (!this.data.myOpenid) {
+        // 如果还没有 openid，先获取
+        wx.cloud.callFunction({ name: 'login' }).then(res => {
+          const myOpenid = res.result.openid;
+          this.setData({ myOpenid: myOpenid });
+          console.log('[onShow] 权限检查失败后获取 openid:', myOpenid.substring(0, 10) + '...');
+          // 获取到 openid 后加载数据
+          return Promise.all([
+            this.loadMyOrdersPromise(),
+            this.loadMyActivitiesPromise()
+          ]);
+        }).then(() => {
+          this.hideMyLoading();
+        }).catch((loadErr) => {
+          console.error('[onShow] 获取 openid 后加载数据失败:', loadErr);
+          this.hideMyLoading();
+        });
+      } else {
+        // 如果已经有 openid，直接加载数据
         Promise.all([
           this.loadMyOrdersPromise(),
           this.loadMyActivitiesPromise()
         ]).then(() => {
           this.hideMyLoading();
-        }).catch(() => {
+        }).catch((loadErr) => {
+          console.error('[onShow] 加载数据失败:', loadErr);
           this.hideMyLoading();
         });
-      } else {
-        // 如果连 openid 都没有，隐藏 loading
-        this.hideMyLoading();
       }
     });
   },
@@ -536,6 +574,12 @@ Page({
     const nextState = !this.data.isAdmin;
     this.setData({ isAdmin: nextState });
     this.showAutoToast('提示', nextState ? '管理模式开启' : '已回到用户模式');
+    
+    // 🔴 修复：切换模式后重新加载订单，确保订单正确显示
+    // 特别是从管理员模式切换到用户模式时，需要重新加载所有订单到 orders 数组
+    this.loadMyOrdersPromise().catch(err => {
+      console.error('[toggleAdminMode] 重新加载订单失败:', err);
+    });
   },
 
   // ================== 管理员物料发出功能 ==================
@@ -612,7 +656,20 @@ Page({
                 .where({ _openid: this.data.myOpenid }) // 🔴 明确指定当前用户的 openid
                 .orderBy('createTime', 'desc')
                 .get()
-            : Promise.resolve({ data: [] })); // 如果还没获取到 openid，返回空数组
+                .then(res => {
+                  // 🔴 调试日志：记录查询详情
+                  console.log('[loadMyOrdersPromise] 数据库查询结果:', {
+                    myOpenid: this.data.myOpenid ? this.data.myOpenid.substring(0, 10) + '...' : '未获取',
+                    queryCount: res.data ? res.data.length : 0,
+                    orderIds: res.data ? res.data.map(o => o.orderId) : []
+                  });
+                  return res;
+                })
+            : (() => {
+                // 🔴 如果还没获取到 openid，记录警告并返回空数组
+                console.warn('[loadMyOrdersPromise] ⚠️ 普通用户模式但 myOpenid 未获取，无法查询订单');
+                return Promise.resolve({ data: [] });
+              })()); // 如果还没获取到 openid，返回空数组
 
       const promise = this.data.isAdmin ? getAction.then(res => res.result) : getAction;
 
@@ -622,6 +679,15 @@ Page({
         // 数据清洗 (保持之前的逻辑不变)
         // 注意：管理员模式下 res.data 是数组，普通用户模式下 res.data 也是数组
         const orderData = Array.isArray(res.data) ? res.data : (res.data || []);
+        
+        // 🔴 调试日志：记录查询结果
+        console.log('[loadMyOrdersPromise] 查询结果:', {
+          isAdmin: this.data.isAdmin,
+          myOpenid: this.data.myOpenid ? this.data.myOpenid.substring(0, 10) + '...' : '未获取',
+          orderCount: orderData.length,
+          rawData: orderData
+        });
+        
         const formatted = orderData.map(item => {
           return {
             id: item._id,
@@ -681,6 +747,7 @@ Page({
           console.log('待物料发出:', pending.length);
         } else {
           // 普通用户看所有
+          console.log('[loadMyOrdersPromise] 普通用户模式，设置订单数量:', formatted.length);
           this.setData({ orders: formatted }, () => {
              // 【修改】
              this.calcSwiperHeight(0);
@@ -702,7 +769,7 @@ Page({
           });
         }
       }).catch(err => {
-        console.error(err);
+        console.error('[loadMyOrdersPromise] 查询订单失败:', err);
         reject(err); // 🔴 Promise 失败
       });
     });
@@ -957,15 +1024,31 @@ Page({
           this.confirmReceiptAndViewTutorial(id, modelName)
         } else {
           console.log('[viewTutorialAndSign] 用户取消或关闭')
-          // 用户点了取消或关闭，不做操作
-          this.showAutoToast('提示', '需要确认收货才能观看哦');
+          // 🔴 修复：用户点击关闭按钮时，显示自定义弹窗提示
+          this.showMyDialog({
+            title: '提示',
+            content: '需要确认收货后才能查看教程',
+            showCancel: false,
+            confirmText: '知道了',
+            success: () => {
+              // 用户点击确定后，不做任何操作
+            }
+          });
         }
       },
       fail: (err) => {
         console.error('[viewTutorialAndSign] ❌ 组件唤起失败:', err)
         console.error('[viewTutorialAndSign] 错误详情:', JSON.stringify(err))
-        // 常见错误：订单未发货(shipped)，或者 transaction_id 错误
-        this.showAutoToast('提示', '无法唤起确认组件(请检查是否已发货)');
+        // 🔴 修复：组件唤起失败时，也显示自定义弹窗提示
+        this.showMyDialog({
+          title: '提示',
+          content: '无法唤起确认收货组件，请检查订单是否已发货',
+          showCancel: false,
+          confirmText: '知道了',
+          success: () => {
+            // 用户点击确定后，不做任何操作
+          }
+        });
       }
     })
   },
@@ -1038,6 +1121,119 @@ Page({
         url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '')
       });
     }, 3000);
+  },
+
+  // 🔴 生成安装教程分享码
+  async generateShareCode(e) {
+    const orderId = e.currentTarget.dataset.orderid
+    const orderDbId = e.currentTarget.dataset.id
+
+    if (!orderId) {
+      this.showAutoToast('提示', '订单信息异常')
+      return
+    }
+
+    this.showMyLoading('生成分享码中...')
+
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'generateShareCode',
+        data: {
+          orderId: orderId
+        }
+      })
+
+      this.hideMyLoading()
+
+      if (res.result.success) {
+        const shareCode = res.result.code
+        const expiresAt = res.result.expiresAt
+
+        // 显示分享码并允许复制
+        wx.showModal({
+          title: '分享码已生成',
+          content: `分享码：${shareCode}\n\n有效期：10天\n查看次数：3次\n\n点击确定复制分享码`,
+          showCancel: false,
+          confirmText: '复制分享码',
+          success: (modalRes) => {
+            if (modalRes.confirm) {
+              // 🔴 复制前先关闭微信官方弹窗
+              try { wx.hideToast(); wx.hideLoading(); } catch (e) {}
+              
+              wx.setClipboardData({
+                data: shareCode,
+                success: () => {
+                  // 🔴 立即疯狂隐藏微信官方弹窗
+                  const hide = () => { try { wx.hideToast(); wx.hideLoading(); } catch (e) {} };
+                  hide();
+                  setTimeout(hide, 10);
+                  setTimeout(hide, 30);
+                  setTimeout(hide, 50);
+                  setTimeout(hide, 80);
+                  setTimeout(hide, 120);
+                  setTimeout(hide, 180);
+                  setTimeout(hide, 250);
+                  setTimeout(hide, 350);
+                  setTimeout(hide, 500);
+                  
+                  // 🔴 延迟800ms后显示自定义提示
+                  setTimeout(() => {
+                    this.showAutoToast('成功', '分享码已复制到剪贴板')
+                  }, 800)
+                }
+              })
+            }
+          }
+        })
+      } else {
+        // 如果用户已生成过，显示已存在的分享码
+        if (res.result.existingCode) {
+          const existingCode = res.result.existingCode
+          wx.showModal({
+            title: '提示',
+            content: `您已生成过分享码：${existingCode}\n\n无法重复生成`,
+            showCancel: true,
+            confirmText: '复制分享码',
+            cancelText: '关闭',
+            success: (modalRes) => {
+              if (modalRes.confirm) {
+                // 🔴 复制前先关闭微信官方弹窗
+                try { wx.hideToast(); wx.hideLoading(); } catch (e) {}
+                
+                wx.setClipboardData({
+                  data: existingCode,
+                  success: () => {
+                    // 🔴 立即疯狂隐藏微信官方弹窗
+                    const hide = () => { try { wx.hideToast(); wx.hideLoading(); } catch (e) {} };
+                    hide();
+                    setTimeout(hide, 10);
+                    setTimeout(hide, 30);
+                    setTimeout(hide, 50);
+                    setTimeout(hide, 80);
+                    setTimeout(hide, 120);
+                    setTimeout(hide, 180);
+                    setTimeout(hide, 250);
+                    setTimeout(hide, 350);
+                    setTimeout(hide, 500);
+                    
+                    // 🔴 延迟800ms后显示自定义提示
+                    setTimeout(() => {
+                      this.showAutoToast('成功', '分享码已复制到剪贴板')
+                    }, 800)
+                  }
+                })
+              }
+            }
+          })
+        } else {
+          this.showAutoToast('失败', res.result.errMsg || '生成分享码失败')
+        }
+      }
+    } catch (err) {
+      this.hideMyLoading()
+      console.error('[generateShareCode] 错误:', err)
+      this.showAutoToast('错误', err.errMsg || '生成分享码失败，请重试')
+    }
   },
 
   // [修改] 调试状态切换
@@ -1114,8 +1310,16 @@ Page({
     const sn = String(e.currentTarget.dataset.sn || '').trim().toUpperCase();
     const expressCompany = String(e.currentTarget.dataset.company || '').trim();
     
+    console.log('[物流查询] 尝试跳转查运单号:', sn);
+    
     if (!sn) {
-      this.showAutoToast('提示', '无运单号');
+      this.showMyDialog({
+        title: '提示',
+        content: '运单号为空，无法查询物流信息',
+        showCancel: false,
+        confirmText: '知道了',
+        success: () => {}
+      });
       return;
     }
 
@@ -1132,18 +1336,42 @@ Page({
       },
       fail: (err) => {
         console.error('[物流查询] 跳转失败:', err);
-        // 更详细的错误提示
-        let errorMsg = '跳转失败';
+        console.error('[物流查询] 错误详情:', JSON.stringify(err));
+        
+        // 🔴 修复：使用自定义弹窗显示更详细的错误提示
+        let errorMsg = '无法打开物流查询页面';
+        let errorDetail = '';
+        
         if (err.errMsg) {
-          if (err.errMsg.includes('plugin')) {
-            errorMsg = '插件未启用，请在微信小程序后台添加快递100插件';
+          // 解析错误信息
+          if (err.errMsg.includes('plugin') || err.errMsg.includes('plugin://')) {
+            errorMsg = '插件未启用或配置错误';
+            errorDetail = '请在微信小程序后台配置并启用以"wx6885acbedba59c14"为提供商的快递100插件';
+          } else if (err.errMsg.includes('navigateToMiniProgram')) {
+            errorMsg = '插件跳转失败';
+            errorDetail = '请检查快递100插件是否已正确配置，或联系管理员处理';
+          } else if (err.errMsg.includes('jump miniprogram banded')) {
+            errorMsg = '插件跳转被限制';
+            errorDetail = '可能是插件未启用或小程序版本过低，请联系管理员';
           } else if (err.errMsg.includes('navigateTo')) {
-            errorMsg = '跳转失败，请检查网络连接';
+            errorMsg = '页面跳转失败';
+            errorDetail = '请检查网络连接或稍后重试';
           } else {
-            errorMsg = err.errMsg;
+            errorMsg = '查询失败';
+            errorDetail = err.errMsg || '未知错误';
           }
         }
-        this.showAutoToast('提示', errorMsg);
+        
+        // 显示自定义弹窗
+        this.showMyDialog({
+          title: '物流查询失败',
+          content: `${errorMsg}\n\n${errorDetail}\n\n运单号：${sn}`,
+          showCancel: false,
+          confirmText: '知道了',
+          success: () => {
+            // 用户点击确定后，不做任何操作
+          }
+        });
       }
     });
   },
@@ -2191,6 +2419,7 @@ Page({
         'inputDialog.show': false,
         inputDialogClosing: false
       });
+      this.updateModalState();
       this.updateModalState();
     }, 420);
   },
