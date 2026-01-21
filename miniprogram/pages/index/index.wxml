@@ -41,6 +41,8 @@
     <view class="auth-btn-new" bindtap="handleLogin">
       立即开启
     </view>
+    
+    <view class="auth-hint-text">安装人员请在上方输入安装码以获得权限</view>
   </view>
 </view>
 
@@ -259,20 +261,13 @@
   </view>
 </view>
 
-<!-- 【全局通用】自定义黑白极简弹窗 - 成功类型 -->
+<!-- 【全局通用】自定义黑白极简弹窗 - 成功类型（统一使用 copy-success-modal 样式） -->
 <view class="custom-modal-mask" wx:if="{{showCustomSuccessModal}}">
-  <view class="custom-modal-box success-modal">
-    
-    <!-- 1. 图标：使用 Unicode 字符，无需加载图片 -->
+  <view class="custom-modal-box copy-success-modal">
+    <!-- 图标：使用 Unicode 字符 -->
     <view class="modal-icon-new success-icon">✓</view>
-    
-    <!-- 2. 标题 -->
+    <!-- 标题 -->
     <view class="modal-title-new">{{successModalTitle}}</view>
-    
-    <!-- 3. 内容（如果有） -->
-    <view class="modal-content-new" wx:if="{{successModalContent}}">
-      <view class="content-main">{{successModalContent}}</view>
-    </view>
   </view>
 </view>
 
@@ -316,6 +311,21 @@
     <view class="cd-btn-row">
       <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText || '取消'}}</view>
       <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText || '确定'}}</view>
+    </view>
+  </view>
+</view>
+
+<!-- 定位权限提示弹窗（白底黑字） -->
+<view class="custom-modal-mask {{showLocationPermissionModal ? 'active' : ''}}" wx:if="{{showLocationPermissionModal}}" catchtouchmove="noop">
+  <view class="custom-modal-box location-permission-modal" catchtouchmove="noop">
+    <view class="modal-icon-new">📍</view>
+    <view class="modal-title-new">需要定位权限</view>
+    <view class="modal-content-new">
+      <view class="content-main">请在设置中允许小程序获取位置信息</view>
+    </view>
+    <view class="modal-btns-row">
+      <view class="modal-btn-cancel" bindtap="hideLocationPermissionModal">暂不</view>
+      <view class="modal-btn-confirm" bindtap="openLocationSetting">去设置</view>
     </view>
   </view>
 </view>

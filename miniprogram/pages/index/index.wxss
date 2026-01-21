@@ -500,6 +500,15 @@ input, textarea { text-align: left; }
   opacity: 0.9;
 }
 
+.auth-hint-text {
+  margin-top: 24rpx;
+  font-size: 22rpx;
+  color: #86868b;
+  text-align: center;
+  line-height: 1.4;
+  padding: 0 20rpx;
+}
+
 /* ================= 授权引导弹窗样式 ================= */
 .setting-modal-mask {
   position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -592,6 +601,46 @@ input, textarea { text-align: left; }
 
 @keyframes springPop {
   to { transform: scale(1); opacity: 1; }
+}
+
+/* 定位权限提示弹窗样式（白底黑字） */
+.location-permission-modal {
+  width: 560rpx;
+  background: #ffffff;
+  border-radius: 40rpx;
+  padding: 60rpx 40rpx;
+  box-shadow: 0 40rpx 80rpx rgba(0, 0, 0, 0.15);
+}
+
+.location-permission-modal .modal-icon-new {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  background: #f2f2f7;
+  color: #1d1d1f;
+  font-size: 50rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30rpx;
+}
+
+.location-permission-modal .modal-title-new {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  margin-bottom: 20rpx;
+}
+
+.location-permission-modal .modal-content-new {
+  margin-bottom: 40rpx;
+}
+
+.location-permission-modal .content-main {
+  font-size: 30rpx;
+  color: #424245;
+  line-height: 1.6;
+  text-align: center;
 }
 
 /* 3. 图标：大而黑，无背景 */

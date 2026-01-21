@@ -5,7 +5,6 @@ Page({
     type: '', // 封禁类型
     canCheck: false, // 冷却期间禁止检查
     showCopySuccessModal: false, // 自定义"内容已复制"弹窗
-    copySuccessModalClosing: false, // 复制成功弹窗退出动画中
     // 【新增】自定义成功提示弹窗
     showCustomSuccessModal: false,
     customSuccessModalClosing: false, // 成功提示弹窗退出动画中
@@ -291,30 +290,21 @@ Page({
         setTimeout(hideOfficialToast, 350);
         setTimeout(hideOfficialToast, 500);
         
-        // 🔴 延迟800ms后显示自定义弹窗（微信官方弹窗已被强制关闭）
+        // 🔴 延迟显示自定义"内容已复制"弹窗（等待微信官方弹窗消失）
         setTimeout(() => {
           // 显示自定义"内容已复制"弹窗
-          this.setData({ 
-            showCopySuccessModal: true,
-            copySuccessModalClosing: false 
-          });
+          this.setData({ showCopySuccessModal: true });
           
-          // 2秒后关闭复制成功弹窗
+          // 1.5秒后自动消失
           setTimeout(() => {
-            this.setData({ copySuccessModalClosing: true });
-            setTimeout(() => {
-              this.setData({ 
-                showCopySuccessModal: false,
-                copySuccessModalClosing: false
-              });
-              
-              // 🔴 复制弹窗完全关闭后，恢复自动检测
-              if (!this._isPageDestroyed) {
-                this.startAutoCheck();
-              }
-            }, 420); // CSS transition duration
-          }, 2000); // Display duration
-        }, 800); // Delay to wait for official toast to disappear
+            this.setData({ showCopySuccessModal: false });
+            
+            // 🔴 复制弹窗完全关闭后，恢复自动检测
+            if (!this._isPageDestroyed) {
+              this.startAutoCheck();
+            }
+          }, 1500);
+        }, 800); // 等待 800ms，确保微信官方弹窗已消失
       }
     });
   }

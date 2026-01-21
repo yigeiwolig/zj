@@ -89,6 +89,10 @@ Page({
     // 统一的"内容已复制"弹窗（和首页一致）
     showCopySuccessModal: false,
     
+    // 【新增】分享码生成弹窗
+    showShareCodeGenerateModal: false,
+    shareCodeValue: '',
+    
     // 【新增】自动消失提示（无按钮，2秒后自动消失）
     autoToast: { show: false, title: '', content: '' },
     
@@ -1136,10 +1140,31 @@ Page({
     this.showMyLoading('生成分享码中...')
 
     try {
+      // 🔴 获取用户昵称
+      let creatorNickname = '';
+      try {
+        const userInfo = wx.getStorageSync('userInfo');
+        creatorNickname = userInfo?.nickName || '';
+        
+        // 如果缓存中没有，尝试获取
+        if (!creatorNickname) {
+          const userProfile = await wx.getUserProfile({
+            desc: '用于生成分享码'
+          }).catch(() => null);
+          if (userProfile && userProfile.userInfo) {
+            creatorNickname = userProfile.userInfo.nickName || '';
+            wx.setStorageSync('userInfo', userProfile.userInfo);
+          }
+        }
+      } catch (e) {
+        console.log('[generateShareCode] 获取用户昵称失败:', e);
+      }
+
       const res = await wx.cloud.callFunction({
         name: 'generateShareCode',
         data: {
-          orderId: orderId
+          orderId: orderId,
+          creatorNickname: creatorNickname // 🔴 传递分享用户昵称
         }
       })
 
@@ -1149,82 +1174,21 @@ Page({
         const shareCode = res.result.code
         const expiresAt = res.result.expiresAt
 
-        // 显示分享码并允许复制
-        wx.showModal({
-          title: '分享码已生成',
-          content: `分享码：${shareCode}\n\n有效期：10天\n查看次数：3次\n\n点击确定复制分享码`,
-          showCancel: false,
-          confirmText: '复制分享码',
-          success: (modalRes) => {
-            if (modalRes.confirm) {
-              // 🔴 复制前先关闭微信官方弹窗
-              try { wx.hideToast(); wx.hideLoading(); } catch (e) {}
-              
-              wx.setClipboardData({
-                data: shareCode,
-                success: () => {
-                  // 🔴 立即疯狂隐藏微信官方弹窗
-                  const hide = () => { try { wx.hideToast(); wx.hideLoading(); } catch (e) {} };
-                  hide();
-                  setTimeout(hide, 10);
-                  setTimeout(hide, 30);
-                  setTimeout(hide, 50);
-                  setTimeout(hide, 80);
-                  setTimeout(hide, 120);
-                  setTimeout(hide, 180);
-                  setTimeout(hide, 250);
-                  setTimeout(hide, 350);
-                  setTimeout(hide, 500);
-                  
-                  // 🔴 延迟800ms后显示自定义提示
-                  setTimeout(() => {
-                    this.showAutoToast('成功', '分享码已复制到剪贴板')
-                  }, 800)
-                }
-              })
-            }
-          }
+        // 🔴 显示自定义分享码生成弹窗（白底黑字，清晰排版）
+        this.setData({
+          showShareCodeGenerateModal: true,
+          shareCodeValue: shareCode
         })
+        this.updateModalState();
       } else {
-        // 如果用户已生成过，显示已存在的分享码
+        // 如果用户已生成过，显示已存在的分享码（使用自定义弹窗）
         if (res.result.existingCode) {
           const existingCode = res.result.existingCode
-          wx.showModal({
-            title: '提示',
-            content: `您已生成过分享码：${existingCode}\n\n无法重复生成`,
-            showCancel: true,
-            confirmText: '复制分享码',
-            cancelText: '关闭',
-            success: (modalRes) => {
-              if (modalRes.confirm) {
-                // 🔴 复制前先关闭微信官方弹窗
-                try { wx.hideToast(); wx.hideLoading(); } catch (e) {}
-                
-                wx.setClipboardData({
-                  data: existingCode,
-                  success: () => {
-                    // 🔴 立即疯狂隐藏微信官方弹窗
-                    const hide = () => { try { wx.hideToast(); wx.hideLoading(); } catch (e) {} };
-                    hide();
-                    setTimeout(hide, 10);
-                    setTimeout(hide, 30);
-                    setTimeout(hide, 50);
-                    setTimeout(hide, 80);
-                    setTimeout(hide, 120);
-                    setTimeout(hide, 180);
-                    setTimeout(hide, 250);
-                    setTimeout(hide, 350);
-                    setTimeout(hide, 500);
-                    
-                    // 🔴 延迟800ms后显示自定义提示
-                    setTimeout(() => {
-                      this.showAutoToast('成功', '分享码已复制到剪贴板')
-                    }, 800)
-                  }
-                })
-              }
-            }
+          this.setData({
+            showShareCodeGenerateModal: true,
+            shareCodeValue: existingCode
           })
+          this.updateModalState();
         } else {
           this.showAutoToast('失败', res.result.errMsg || '生成分享码失败')
         }
@@ -1710,6 +1674,89 @@ Page({
         this.showAutoToast('提示', '复制失败，请手动复制');
       }
     });
+  },
+
+  // 🔴 从分享码生成弹窗复制分享码
+  copyShareCodeFromModal() {
+    const shareCode = this.data.shareCodeValue
+    if (!shareCode) {
+      this.showAutoToast('提示', '分享码不存在')
+      return
+    }
+
+    // 🔴 复制前先关闭微信官方弹窗 (使用原生API)
+    const hideOfficialToast = () => {
+      try {
+        // 优先使用原生方法
+        if (wx.__mt_oldHideToast) {
+          wx.__mt_oldHideToast()
+        } else {
+          // 兜底（虽然 wx.hideToast 可能被拦截，但也没办法）
+          // @ts-ignore
+          wx.hideToast()
+        }
+        
+        if (wx.__mt_oldHideLoading) {
+          wx.__mt_oldHideLoading()
+        } else {
+          // @ts-ignore
+          wx.hideLoading()
+        }
+      } catch (e) {}
+    }
+    
+    hideOfficialToast()
+    setTimeout(hideOfficialToast, 5)
+    setTimeout(hideOfficialToast, 10)
+    setTimeout(hideOfficialToast, 15)
+    
+    wx.setClipboardData({
+      data: shareCode,
+      success: () => {
+        // 🔴 复制后疯狂隐藏微信官方弹窗
+        hideOfficialToast()
+        setTimeout(hideOfficialToast, 5)
+        setTimeout(hideOfficialToast, 10)
+        setTimeout(hideOfficialToast, 15)
+        setTimeout(hideOfficialToast, 20)
+        setTimeout(hideOfficialToast, 30)
+        setTimeout(hideOfficialToast, 40)
+        setTimeout(hideOfficialToast, 50)
+        setTimeout(hideOfficialToast, 60)
+        setTimeout(hideOfficialToast, 80)
+        setTimeout(hideOfficialToast, 100)
+        setTimeout(hideOfficialToast, 120)
+        setTimeout(hideOfficialToast, 150)
+        setTimeout(hideOfficialToast, 180)
+        setTimeout(hideOfficialToast, 200)
+        setTimeout(hideOfficialToast, 250)
+        setTimeout(hideOfficialToast, 300)
+        setTimeout(hideOfficialToast, 350)
+        setTimeout(hideOfficialToast, 400)
+        setTimeout(hideOfficialToast, 450)
+        setTimeout(hideOfficialToast, 500)
+        setTimeout(hideOfficialToast, 600)
+
+        // 🔴 关闭分享码生成弹窗，显示"内容已复制"弹窗
+        this.setData({ 
+          showShareCodeGenerateModal: false 
+        })
+        this.updateModalState()
+        
+        // 显示统一的"内容已复制"弹窗
+        this.setData({ showCopySuccessModal: true })
+        this.updateModalState()
+        setTimeout(() => {
+          this.setData({ showCopySuccessModal: false })
+          this.updateModalState()
+        }, 800)
+      },
+      fail: (err) => {
+        console.error('[copyShareCodeFromModal] 复制失败', err)
+        hideOfficialToast() // 失败也要隐藏可能的loading
+        this.showAutoToast('复制失败', '请手动复制分享码')
+      }
+    })
   },
 
   // 【新增】打开需寄回订单确认弹窗

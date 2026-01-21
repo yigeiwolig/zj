@@ -34,15 +34,11 @@
   </view>
 </view>
 
-<!-- 自定义弹窗组件 (重构版) -->
-<view class="custom-modal-mask {{showCopySuccessModal ? 'active' : ''}} {{copySuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCopySuccessModal}}">
-  <view class="custom-modal-box copy-success-modal">
-    <!-- 动态绘制的勾选图标 -->
-    <view class="check-icon">
-      <view class="check-line line-tip"></view>
-      <view class="check-line line-long"></view>
-    </view>
-    <view class="modal-title-new">已复制</view>
+<!-- 统一的"内容已复制"弹窗（样式和首页一致） -->
+<view class="custom-modal-mask {{showCopySuccessModal ? 'active' : ''}}" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop">
+    <view class="modal-icon-new success-icon">✓</view>
+    <view class="modal-title-new">内容已复制</view>
   </view>
 </view>
 

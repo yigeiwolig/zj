@@ -287,3 +287,26 @@
 
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />
+
+<!-- 自定义分享码剩余次数弹窗 -->
+<view class="custom-modal-mask {{showShareCodeModal ? 'active' : ''}}" wx:if="{{showShareCodeModal}}" catchtouchmove="noop">
+  <view class="custom-modal-box share-code-modal" catchtouchmove="noop">
+    
+    <block wx:if="{{shareCodeExhausted}}">
+      <view class="modal-icon-warn">⚠️</view>
+      <view class="modal-title-large">次数已用完</view>
+      <view class="modal-desc">您已无法继续查看安装教程</view>
+      <view class="modal-sub-desc">如需帮助，请联系管理员</view>
+    </block>
+    
+    <block wx:else>
+      <view class="modal-header-label">剩余查看次数</view>
+      <view class="modal-big-number">{{shareCodeRemaining}}</view>
+      <view class="modal-footer-label">总计 {{shareCodeTotal}} 次机会</view>
+    </block>
+
+    <view class="modal-btn-new {{shareCodeExhausted ? 'btn-red' : 'btn-black'}}" bindtap="closeShareCodeModal">
+      我知道了
+    </view>
+  </view>
+</view>

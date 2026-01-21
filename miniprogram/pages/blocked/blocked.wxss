@@ -215,18 +215,41 @@ page {
   transition: all 0.3s ease-out;
 }
 
-/* 复制成功弹窗特化 */
+/* ================= 统一的"内容已复制"弹窗（样式和首页一致） ================= */
 .copy-success-modal {
-  width: 260rpx;
-  height: 260rpx;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 0;
+  width: 400rpx !important;
+  padding: 60rpx 40rpx !important;
+  min-height: auto;
 }
 
-/* 动态勾选图标 */
+.copy-success-modal .modal-icon-new {
+  width: 80rpx !important;
+  height: 80rpx !important;
+  margin-bottom: 30rpx !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 60rpx !important;
+  font-weight: 900 !important;
+  color: #000000 !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  animation: checkmarkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
+}
+
+.copy-success-modal .modal-title-new {
+  font-size: 36rpx !important;
+  margin-bottom: 0 !important;
+  letter-spacing: 0 !important;
+  font-weight: 600 !important;
+}
+
+.copy-success-modal .modal-content-new {
+  margin-bottom: 0 !important;
+  display: none !important;
+}
+
+/* 旧样式保留（如果其他地方用到） */
 .check-icon {
   width: 80rpx;
   height: 80rpx;

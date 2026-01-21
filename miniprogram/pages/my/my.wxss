@@ -999,6 +999,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   color: #000000;
 }
 
+/* ================= 统一的"内容已复制"弹窗（样式和首页一致） ================= */
 .copy-success-modal {
   width: 400rpx !important;
   padding: 60rpx 40rpx !important;
@@ -1009,13 +1010,125 @@ page { background: #F7F7F7; color: #1D1D1F; }
   width: 80rpx !important;
   height: 80rpx !important;
   margin-bottom: 30rpx !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   font-size: 60rpx !important;
+  font-weight: 900 !important;
+  color: #000000 !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  animation: checkmarkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
 }
 
 .copy-success-modal .modal-title-new {
   font-size: 36rpx !important;
   margin-bottom: 0 !important;
+  letter-spacing: 0 !important;
   font-weight: 600 !important;
+}
+
+.copy-success-modal .modal-content-new {
+  margin-bottom: 0 !important;
+  display: none !important;
+}
+
+@keyframes checkmarkPop {
+  0% {
+    transform: scale(0) rotate(-45deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+/* ========================================= */
+/* 分享码生成弹窗样式（白底黑字，清晰排版） */
+/* ========================================= */
+.share-code-generate-modal {
+  width: 560rpx !important;
+  padding: 60rpx 40rpx 50rpx !important;
+}
+
+/* MT 黑框白底卡片图标 */
+.mt-icon-card {
+  width: 100rpx;
+  height: 60rpx;
+  background: #ffffff;
+  border: 4rpx solid #1d1d1f;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 30rpx;
+  
+  font-size: 32rpx;
+  font-weight: 900;
+  color: #1d1d1f;
+  letter-spacing: 2rpx;
+}
+
+.share-code-generate-modal .modal-title-new {
+  font-size: 36rpx;
+  font-weight: 700;
+  margin-bottom: 50rpx;
+  color: #1d1d1f;
+}
+
+.share-code-content {
+  width: 100%;
+  margin-bottom: 50rpx;
+}
+
+.share-code-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.share-code-item:last-child {
+  border-bottom: none;
+}
+
+.share-code-item .label {
+  font-size: 28rpx;
+  color: #86868b;
+  font-weight: 400;
+}
+
+.share-code-item .value {
+  font-size: 28rpx;
+  color: #1d1d1f;
+  font-weight: 600;
+}
+
+.share-code-item .code-value {
+  font-size: 32rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+  color: #007aff;
+}
+
+.share-code-generate-modal .modal-btn-new {
+  width: 100%;
+  height: 96rpx;
+  line-height: 96rpx;
+  border-radius: 48rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  text-align: center;
+  background: #1d1d1f;
+  color: #ffffff;
+  margin-top: 0;
+  box-shadow: 0 10rpx 20rpx rgba(0, 0, 0, 0.1);
+}
+
+.share-code-generate-modal .modal-btn-new:active {
+  opacity: 0.8;
 }
 
 /* ========================================= */

@@ -294,9 +294,9 @@
               </view>
             </view>
 
-            <!-- 4. 已完成：回顾教程 + 安装教程查看码 -->
+            <!-- 4. 已完成：安装教程查看码 + 回顾教程 -->
             <view wx:if="{{item.realStatus === 'SIGNED'}}" class="action-row-right">
-              <!-- 安装教程查看码按钮 -->
+              <!-- 安装教程查看码按钮（左侧，边框样式） -->
               <view 
                 class="btn-mini outline" 
                 catchtap="generateShareCode" 
@@ -304,9 +304,9 @@
                 data-orderid="{{item.orderId}}">
                 安装教程查看码
               </view>
-              <!-- 回顾教程按钮 -->
+              <!-- 回顾教程按钮（右侧，黑底白字） -->
               <view 
-                class="btn-mini outline" 
+                class="btn-mini black" 
                 catchtap="viewTutorialOnly">
                 回顾教程
               </view>
@@ -799,6 +799,33 @@
     <view class="custom-modal-box copy-success-modal" catchtouchmove="noop">
       <view class="modal-icon-new success-icon">✓</view>
       <view class="modal-title-new">内容已复制</view>
+    </view>
+  </view>
+
+  <!-- 分享码生成弹窗（白底黑字，清晰排版） -->
+  <view class="custom-modal-mask {{showShareCodeGenerateModal ? 'active' : ''}}" wx:if="{{showShareCodeGenerateModal}}" catchtouchmove="noop">
+    <view class="custom-modal-box share-code-generate-modal" catchtouchmove="noop">
+      <view class="mt-icon-card">MT</view>
+      <view class="modal-title-new">分享码已生成</view>
+      
+      <view class="share-code-content">
+        <view class="share-code-item">
+          <text class="label">分享码</text>
+          <text class="value code-value">{{shareCodeValue}}</text>
+        </view>
+        <view class="share-code-item">
+          <text class="label">有效期</text>
+          <text class="value">10 天</text>
+        </view>
+        <view class="share-code-item">
+          <text class="label">查看次数</text>
+          <text class="value">3 次</text>
+        </view>
+      </view>
+
+      <view class="modal-btn-new btn-black" bindtap="copyShareCodeFromModal">
+        复制分享码
+      </view>
     </view>
   </view>
 

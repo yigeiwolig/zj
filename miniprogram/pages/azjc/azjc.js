@@ -7,6 +7,7 @@ Page({
     
     // 🔴 分享码用户标识
     isShareCodeUser: false,
+    shareCodeViewsExhausted: false, // 分享码查看次数是否已用完（用于隐藏教程内容）
     
     // 基础交互数据
     isVideoFullScreen: false,
@@ -90,7 +91,17 @@ Page({
     sectionClicks: {},             // 各板块点击次数 { 'product-1': 3, 'type-2': 1, 'video-0': 5 }
     sectionDurations: {},          // 各板块停留时间 { 'video-0': 12000, 'graphic-1': 5000 } (毫秒)
     currentSectionKey: null,       // 当前停留的板块key
-    currentSectionStartTime: 0     // 当前板块进入时间
+    currentSectionStartTime: 0,    // 当前板块进入时间
+    autoSaveTimer: null,           // 🔴 定时保存定时器
+    shareCodeLocationInfo: null,   // 🔴 分享码用户地址信息（仅在进入时获取一次）
+    shareCodeRecordCreated: false  // 🔴 是否已创建分享码记录（用于区分首次保存和更新）
+  },
+
+  // 关闭分享码提示弹窗
+  closeShareCodeModal() {
+    this.setData({
+      showShareCodeModal: false
+    });
   },
 
   // 页面加载时从云数据库读取数据
@@ -107,17 +118,45 @@ Page({
       isShareCodeUser: isShareCodeUser
     })
 
-    // 🔴 如果是分享码用户，更新查看次数并开始计时
+    // 🔴 如果是分享码用户，开始计时（次数更新在 checkAccessPermission 中处理）
     if (isShareCodeUser) {
-      if (app.updateShareCodeViews) {
-        app.updateShareCodeViews()
-      }
       // 开始整体计时
+      const startTime = Date.now();
+      
+      // 🔴 只在进入页面时获取一次地址信息，之后不再更新
+      let locationInfo = {
+        province: '',
+        city: '',
+        district: '',
+        address: '',
+        latitude: null,
+        longitude: null
+      };
+      try {
+        const cachedLocation = wx.getStorageSync('last_location') || {};
+        locationInfo = {
+          province: cachedLocation.province || '',
+          city: cachedLocation.city || '',
+          district: cachedLocation.district || '',
+          address: cachedLocation.address || '',
+          latitude: cachedLocation.latitude || null,
+          longitude: cachedLocation.longitude || null
+        };
+        console.log('[azjc] onLoad: 分享码用户获取地址信息（仅此一次）:', locationInfo);
+      } catch (e) {
+        console.log('[azjc] 获取地址信息失败:', e);
+      }
+      
       this.setData({
-        sessionStartTime: Date.now(),
+        sessionStartTime: startTime,
         sectionClicks: {},
-        sectionDurations: {}
-      })
+        sectionDurations: {},
+        shareCodeLocationInfo: locationInfo // 🔴 保存地址信息到页面数据，之后不再更新
+      });
+      console.log('[azjc] onLoad: 分享码用户开始计时，sessionStartTime:', startTime);
+      
+      // 🔴 启动定时保存（每30秒保存一次，防止数据丢失）
+      this._startAutoSave();
     }
     
     // 🔴 启动定时检查 qiangli 强制封禁
@@ -159,31 +198,46 @@ Page({
     }
   },
 
-  onHide() {
+  async onHide() {
     // 🔴 停止定时检查
     const app = getApp();
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
     }
     
+    // 🔴 停止定时保存
+    this._stopAutoSave();
+    
     // 🔴 如果是分享码用户，记录当前板块时长并上传统计
-    if (this.data.isShareCodeUser) {
-      this._recordCurrentSectionDuration()
-      this._uploadSessionStats()
+    if (this.data.isShareCodeUser && this.data.sessionStartTime > 0) {
+      console.log('[azjc] onHide: 开始上传统计数据');
+      await this._uploadSessionStats();
+    } else {
+      console.log('[azjc] onHide: 不是分享码用户或未开始计时，跳过上传统计');
     }
   },
 
-  onUnload() {
+  async onUnload() {
     // 🔴 停止定时检查
     const app = getApp();
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
     }
     
+    // 🔴 停止定时保存
+    this._stopAutoSave();
+    
     // 🔴 如果是分享码用户，记录当前板块时长并上传统计
-    if (this.data.isShareCodeUser) {
-      this._recordCurrentSectionDuration()
-      this._uploadSessionStats()
+    if (this.data.isShareCodeUser && this.data.sessionStartTime > 0) {
+      console.log('[azjc] onUnload: 开始上传统计数据');
+      // 注意：onUnload 中的异步操作可能无法完成，但至少尝试保存
+      try {
+        await this._uploadSessionStats();
+      } catch (err) {
+        console.error('[azjc] onUnload: 上传统计数据失败:', err);
+      }
+    } else {
+      console.log('[azjc] onUnload: 不是分享码用户或未开始计时，跳过上传统计');
     }
   },
 
@@ -213,13 +267,166 @@ Page({
   async checkAccessPermission() {
     const app = getApp();
 
-    // 🔴 分享码用户：完全跳过订单/设备等复杂权限检查，只加载数据
+    // 🔴 分享码用户：先检查云数据库中的剩余次数，次数用完后禁止访问
     if (app && app.globalData && app.globalData.isShareCodeUser) {
-      console.log('[azjc checkAccessPermission] 分享码用户，跳过权限检查，直接加载数据');
-      this.hideMyLoading && this.hideMyLoading();
-      this.setData({ isAuthorized: true });
-      this.loadDataFromCloud();
-      return;
+      console.log('[azjc checkAccessPermission] 分享码用户，检查剩余次数');
+      
+      // 🔴 从云数据库检查剩余次数（不更新次数，只检查）
+      try {
+        const codeInfo = app.globalData.shareCodeInfo;
+        if (!codeInfo || !codeInfo._id) {
+          console.error('[azjc checkAccessPermission] 分享码信息不存在');
+          this.hideMyLoading && this.hideMyLoading();
+          this.showRejectModal('分享码信息无效');
+          return;
+        }
+
+        // 直接查询云数据库获取最新次数
+        const db = wx.cloud.database();
+        const codeRes = await db.collection('chakan').doc(codeInfo._id).get();
+        
+        if (!codeRes.data) {
+          console.error('[azjc checkAccessPermission] 分享码记录不存在');
+          this.hideMyLoading && this.hideMyLoading();
+          this.showRejectModal('分享码记录不存在');
+          return;
+        }
+
+        const shareCodeData = codeRes.data;
+        const currentUsedViews = shareCodeData.usedViews || 0;
+        const totalViews = shareCodeData.totalViews || 3;
+        const remaining = totalViews - currentUsedViews;
+
+        console.log('[azjc checkAccessPermission] 分享码剩余次数:', remaining, '/', totalViews, '(已使用:', currentUsedViews, ')');
+
+        // 🔴 如果次数已用完，允许进入但隐藏教程内容，显示次数已用完弹窗
+        if (remaining <= 0) {
+          console.log('[azjc checkAccessPermission] 分享码查看次数已用完，允许进入但隐藏内容');
+          this.hideMyLoading && this.hideMyLoading(); // 🔴 先隐藏 loading
+          this.setData({ 
+            isAuthorized: true,
+            shareCodeViewsExhausted: true // 标记次数已用完，隐藏教程内容
+          });
+          // 显示次数已用完弹窗
+          this.setData({
+            showShareCodeModal: true,
+            shareCodeRemaining: 0,
+            shareCodeTotal: totalViews,
+            shareCodeExhausted: true // 显示"次数已用完"样式
+          });
+          // 不加载教程内容，页面保持空白
+          return;
+        }
+
+        // 🔴 次数未用完，先更新次数（调用云函数），然后允许访问
+        console.log('[azjc checkAccessPermission] 分享码用户，剩余次数充足，开始更新次数');
+        
+        // 防止重复计数：检查是否已经在这个会话中计数过
+        const sessionKey = `shareCodeCounted_${codeInfo._id}`;
+        const hasCounted = wx.getStorageSync(sessionKey) || false;
+        
+        if (!hasCounted && app.updateShareCodeViews) {
+          // 标记已计数，防止重复
+          wx.setStorageSync(sessionKey, true);
+          
+          // 调用云函数更新次数
+          app.updateShareCodeViews().then(res => {
+            // 🔴 先隐藏 loading，确保弹窗能正常显示
+            this.hideMyLoading && this.hideMyLoading();
+            
+            if (res && res.success) {
+              console.log('[azjc checkAccessPermission] 查看次数更新成功，剩余:', res.remaining);
+              
+              // 更新全局数据
+              if (app.globalData.shareCodeInfo) {
+                app.globalData.shareCodeInfo.usedViews = res.usedViews;
+                app.globalData.shareCodeInfo.totalViews = res.total;
+              }
+              
+              // 🔴 如果次数已用完，允许进入但隐藏教程内容，显示次数已用完弹窗
+              if (res.isExhausted || res.remaining <= 0) {
+                console.log('[azjc checkAccessPermission] 更新后次数已用完，允许进入但隐藏教程内容');
+                this.setData({ 
+                  isAuthorized: true,
+                  shareCodeViewsExhausted: true // 标记次数已用完，隐藏教程内容
+                });
+                // 显示次数已用完弹窗
+                this.setData({
+                  showShareCodeModal: true,
+                  shareCodeRemaining: 0,
+                  shareCodeTotal: res.total,
+                  shareCodeExhausted: true // 显示"次数已用完"的弹窗样式
+                });
+                // 不加载教程内容，页面保持空白
+                return;
+              }
+              
+              // 🔴 显示剩余次数弹窗（先隐藏 loading 再显示弹窗）
+              this.setData({
+                showShareCodeModal: true,
+                shareCodeRemaining: res.remaining,
+                shareCodeTotal: res.total,
+                shareCodeExhausted: false
+              });
+              
+              // 允许访问并加载教程内容
+              this.setData({ isAuthorized: true });
+              this.loadDataFromCloud();
+            } else {
+              console.error('[azjc checkAccessPermission] 查看次数更新失败:', res);
+              this.showRejectModal('更新查看次数失败，请重试');
+            }
+          }).catch(err => {
+            console.error('[azjc checkAccessPermission] 更新查看次数异常:', err);
+            wx.removeStorageSync(sessionKey); // 清除标记，允许下次重试
+            this.hideMyLoading && this.hideMyLoading();
+            this.showRejectModal('更新查看次数失败，请重试');
+          });
+        } else {
+          // 已计数过，直接允许访问（显示剩余次数）
+          console.log('[azjc checkAccessPermission] 本次会话已计数，直接允许访问');
+          this.hideMyLoading && this.hideMyLoading(); // 🔴 先隐藏 loading
+          
+          const codeInfo = app.globalData.shareCodeInfo;
+          if (codeInfo) {
+            const remaining = codeInfo.totalViews - codeInfo.usedViews;
+            
+            // 🔴 检查剩余次数，如果已用完则显示弹窗并隐藏内容
+            if (remaining <= 0) {
+              console.log('[azjc checkAccessPermission] 已计数过但次数已用完，允许进入但隐藏内容');
+              this.setData({ 
+                isAuthorized: true,
+                shareCodeViewsExhausted: true // 标记次数已用完，隐藏教程内容
+              });
+              // 显示次数已用完弹窗
+              this.setData({
+                showShareCodeModal: true,
+                shareCodeRemaining: 0,
+                shareCodeTotal: codeInfo.totalViews,
+                shareCodeExhausted: true // 显示"次数已用完"样式
+              });
+              // 不加载教程内容，页面保持空白
+              return;
+            }
+            
+            // 🔴 显示剩余次数弹窗
+            this.setData({
+              showShareCodeModal: true,
+              shareCodeRemaining: remaining,
+              shareCodeTotal: codeInfo.totalViews,
+              shareCodeExhausted: false
+            });
+          }
+          this.setData({ isAuthorized: true });
+          this.loadDataFromCloud();
+        }
+        return;
+      } catch (err) {
+        console.error('[azjc checkAccessPermission] 检查分享码次数失败:', err);
+        this.hideMyLoading && this.hideMyLoading();
+        this.showRejectModal('检查分享码次数失败，请重试');
+        return;
+      }
     }
 
     this.showMyLoading('验证权限中...');
@@ -383,6 +590,12 @@ Page({
 
   // 从云数据库加载数据
   loadDataFromCloud: function() {
+    // 🔴 如果分享码次数已用完，不加载教程内容（保持页面空白）
+    if (this.data.shareCodeViewsExhausted) {
+      console.log('[azjc loadDataFromCloud] 分享码次数已用完，跳过加载教程内容');
+      return;
+    }
+    
     // 1. 读取产品型号
     db.collection('azjc').where({
       type: 'product'
@@ -2089,17 +2302,95 @@ Page({
   },
 
   // 🔴 上传统计数据到云数据库
-  _uploadSessionStats() {
-    if (!this.data.isShareCodeUser) return
+  async _uploadSessionStats() {
+    if (!this.data.isShareCodeUser) {
+      console.log('[azjc] 不是分享码用户，跳过上传统计');
+      return
+    }
     
     const app = getApp()
-    if (!app || !app.recordShareCodeSession) return
+    if (!app || !app.recordShareCodeSession) {
+      console.warn('[azjc] app.recordShareCodeSession 不存在，无法上传统计数据');
+      return
+    }
+    
+    // 确保记录当前板块时长
+    this._recordCurrentSectionDuration()
     
     const totalDuration = Date.now() - this.data.sessionStartTime
-    app.recordShareCodeSession({
+    
+    // 🔴 使用页面保存的地址信息（仅在进入时获取一次，之后不再更新）
+    const locationInfo = this.data.shareCodeLocationInfo || {
+      province: '',
+      city: '',
+      district: '',
+      address: '',
+      latitude: null,
+      longitude: null
+    };
+    
+    const stats = {
       durationMs: totalDuration,
-      sectionClicks: this.data.sectionClicks,
-      sectionDurations: this.data.sectionDurations
-    })
+      sectionClicks: this.data.sectionClicks || {},
+      sectionDurations: this.data.sectionDurations || {},
+      locationInfo: locationInfo // 🔴 传递固定地址信息（不会重复获取）
+    }
+    
+    console.log('[azjc] 准备上传统计数据:', stats);
+    console.log('[azjc] sessionStartTime:', this.data.sessionStartTime);
+    console.log('[azjc] 总时长:', totalDuration, 'ms');
+    console.log('[azjc] 板块点击次数:', stats.sectionClicks);
+    console.log('[azjc] 板块停留时长:', stats.sectionDurations);
+    console.log('[azjc] 地址信息（固定，不再更新）:', locationInfo);
+    
+    try {
+      // 🔴 根据是否已创建记录决定是创建新记录还是更新现有记录
+      const isUpdate = this.data.shareCodeRecordCreated;
+      console.log('[azjc] 调用 recordShareCodeSession，isUpdate:', isUpdate);
+      
+      await app.recordShareCodeSession(stats, isUpdate);
+      
+      // 🔴 标记已创建记录，后续调用都是更新
+      if (!isUpdate) {
+        this.setData({ shareCodeRecordCreated: true });
+      }
+      
+      console.log('[azjc] ✅ 统计数据上传成功');
+    } catch (err) {
+      console.error('[azjc] ❌ 统计数据上传失败:', err);
+    }
+  },
+
+  // 🔴 启动定时自动保存
+  _startAutoSave() {
+    if (!this.data.isShareCodeUser) {
+      return;
+    }
+    
+    // 清除旧的定时器
+    this._stopAutoSave();
+    
+    console.log('[azjc] 启动定时自动保存（每30秒）');
+    
+    // 每30秒保存一次
+    const timer = setInterval(() => {
+      if (this.data.isShareCodeUser && this.data.sessionStartTime > 0) {
+        console.log('[azjc] 定时自动保存触发');
+        this._uploadSessionStats().catch(err => {
+          console.error('[azjc] 定时自动保存失败:', err);
+        });
+      }
+    }, 30000); // 30秒
+    
+    this.setData({ autoSaveTimer: timer });
+  },
+
+  // 🔴 停止定时自动保存
+  _stopAutoSave() {
+    if (this.data.autoSaveTimer) {
+      console.log('[azjc] 停止定时自动保存');
+      clearInterval(this.data.autoSaveTimer);
+      this.setData({ autoSaveTimer: null });
+    }
   }
 });

@@ -39,6 +39,10 @@ Page({
     confirmModalContent: '',
     _pendingUnbanData: null, // 存储待执行的放行数据
     
+    // 【新增】控制定位权限提示弹窗（白底黑字）
+    showLocationPermissionModal: false,
+    _pendingLocationAction: null, // 存储待执行的定位操作类型
+    
     // Loading 状态（合并重复定义）
     isLoading: false,
     loadingText: '加载中...',
@@ -62,6 +66,9 @@ Page({
   },
 
   onLoad(options) {
+    console.log('[index onLoad] 页面加载开始');
+    console.log('[index onLoad] handleLogin 方法是否存在:', typeof this.handleLogin);
+    
     // 🔴 更新页面访问统计
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('index');
@@ -222,13 +229,27 @@ Page({
   },
 
   // === 核心验证逻辑 ===
-  async handleLogin() {
-    if (this.data.isLoading) return;
-    const raw = this.data.inputNickName.trim();
+  async handleLogin(e) {
+    console.log('[handleLogin] ========== 方法被调用 ==========');
+    console.log('[handleLogin] 事件对象:', e);
+    console.log('[handleLogin] isLoading:', this.data.isLoading);
+    console.log('[handleLogin] inputNickName:', this.data.inputNickName);
+    
+    if (this.data.isLoading) {
+      console.log('[handleLogin] ⚠️ 正在加载中，忽略点击');
+      return;
+    }
+    
+    const raw = this.data.inputNickName ? this.data.inputNickName.trim() : '';
+    console.log('[handleLogin] 输入内容 (trim后):', raw);
+    
     if (!raw) {
+      console.log('[handleLogin] ⚠️ 输入为空');
       this.showAutoToast('提示', '请输入昵称或MT开头的分享码');
       return;
     }
+    
+    console.log('[handleLogin] ✅ 开始验证流程');
 
     const app = getApp();
     const upper = raw.toUpperCase();
@@ -240,19 +261,91 @@ Page({
       this.setData({ isLoading: true });
       this.showMyLoading('验证分享码...');
 
-      // 确保在云函数调用前关闭任何官方 loading
-      if (wx.__mt_oldHideLoading) {
-        wx.__mt_oldHideLoading();
+      // 🔴 确保在云函数调用前关闭任何官方 loading（疯狂执行）
+      const hideOfficialLoading = () => {
+        try {
+          wx.hideToast();
+          wx.hideLoading();
+          if (wx.__mt_oldHideLoading) {
+            wx.__mt_oldHideLoading();
+          }
+        } catch (e) {}
+      };
+      
+      hideOfficialLoading();
+      setTimeout(hideOfficialLoading, 5);
+      setTimeout(hideOfficialLoading, 10);
+      setTimeout(hideOfficialLoading, 15);
+
+      let verifyResult = { success: false };
+      try {
+        // 🔴 添加超时保护（8秒总超时）
+        const verifyPromise = app.verifyShareCode(upper);
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('验证分享码超时')), 8000);
+        });
+        
+        verifyResult = await Promise.race([verifyPromise, timeoutPromise]);
+      } catch (err) {
+        console.error('[handleLogin] 验证分享码异常:', err);
+        // 确保状态重置
+        this.setData({ isLoading: false });
+        this.hideMyLoading();
+        // 隐藏官方 loading
+        hideOfficialLoading();
+        setTimeout(hideOfficialLoading, 5);
+        setTimeout(hideOfficialLoading, 10);
+        setTimeout(hideOfficialLoading, 15);
+        setTimeout(hideOfficialLoading, 20);
+        setTimeout(hideOfficialLoading, 30);
+        
+        // 🔴 等待所有 loading 完全隐藏后再显示错误弹窗，避免冲突
+        setTimeout(() => {
+          // 再次确保隐藏所有官方 loading
+          hideOfficialLoading();
+          setTimeout(hideOfficialLoading, 10);
+          setTimeout(hideOfficialLoading, 30);
+          
+          // 显示错误提示
+          this.showAutoToast('错误', err.message || '验证分享码失败，请重试');
+        }, 500); // 等待 500ms，确保 loading 完全消失
+        
+        return;
       }
 
-      const ok = await app.verifyShareCode(upper);
+      // 🔴 分享码验证完成后，疯狂隐藏微信官方 loading
+      hideOfficialLoading();
+      setTimeout(hideOfficialLoading, 5);
+      setTimeout(hideOfficialLoading, 10);
+      setTimeout(hideOfficialLoading, 15);
+      setTimeout(hideOfficialLoading, 20);
+      setTimeout(hideOfficialLoading, 30);
+      setTimeout(hideOfficialLoading, 50);
+      setTimeout(hideOfficialLoading, 80);
+      setTimeout(hideOfficialLoading, 120);
+      setTimeout(hideOfficialLoading, 180);
+      setTimeout(hideOfficialLoading, 250);
 
       this.setData({ isLoading: false });
       this.hideMyLoading();
 
-      if (!ok) {
-        // 分享码验证失败时，verifyShareCode 已经弹出对应提示，这里就不再继续按昵称验证，直接返回
-        console.log('[handleLogin] 分享码验证失败');
+      // 🔴 检查验证结果，如果失败则显示错误弹窗
+      console.log('[handleLogin] 验证结果:', verifyResult);
+      if (!verifyResult || !verifyResult.success) {
+        const errorMsg = (verifyResult && verifyResult.error) ? verifyResult.error : '分享码验证失败';
+        console.log('[handleLogin] 分享码验证失败:', errorMsg);
+        
+        // 🔴 等待所有 loading 完全隐藏后再显示错误弹窗，避免冲突
+        setTimeout(() => {
+          // 再次确保隐藏所有官方 loading
+          hideOfficialLoading();
+          setTimeout(hideOfficialLoading, 10);
+          setTimeout(hideOfficialLoading, 30);
+          
+          // 显示错误提示
+          this.showAutoToast('提示', errorMsg);
+        }, 500); // 等待 500ms，确保 loading 完全消失
+        
         return;
       }
 
@@ -272,87 +365,9 @@ Page({
         successModalContent: ''
       });
       
-      // 3）验证通过弹窗1.5秒后消失，然后请求定位权限
+      // 3）验证通过弹窗1.5秒后消失（不自动请求定位权限，等待用户点击 MT RIDE 按钮）
       setTimeout(() => {
         this.setData({ showCustomSuccessModal: false });
-        
-        // 🔴 完整的定位权限请求流程（适配体验版）
-        wx.getSetting({
-          success: (settingRes) => {
-            const locationAuth = settingRes.authSetting['scope.userLocation'];
-            console.log('[index] 定位权限状态:', locationAuth);
-            
-            if (locationAuth === true) {
-              // 已授权，直接获取定位
-              wx.getLocation({
-                type: 'gcj02',
-                success: (res) => {
-                  console.log('[index] 分享码用户定位成功:', res);
-                  wx.setStorageSync('last_location', {
-                    latitude: res.latitude,
-                    longitude: res.longitude
-                  });
-                },
-                fail: (err) => {
-                  console.log('[index] 分享码用户定位失败（不拦截）:', err);
-                }
-              });
-            } else if (locationAuth === false) {
-              // 曾经拒绝过，引导用户去设置
-              wx.showModal({
-                title: '需要定位权限',
-                content: '请在设置中允许小程序获取位置信息',
-                confirmText: '去设置',
-                cancelText: '暂不',
-                success: (modalRes) => {
-                  if (modalRes.confirm) {
-                    wx.openSetting({
-                      success: (openRes) => {
-                        if (openRes.authSetting['scope.userLocation']) {
-                          // 用户在设置页开启了权限，重新获取定位
-                          wx.getLocation({
-                            type: 'gcj02',
-                            success: (res) => {
-                              console.log('[index] 分享码用户定位成功:', res);
-                              wx.setStorageSync('last_location', {
-                                latitude: res.latitude,
-                                longitude: res.longitude
-                              });
-                            }
-                          });
-                        }
-                      }
-                    });
-                  }
-                }
-              });
-            } else {
-              // undefined，首次请求，先尝试授权
-              wx.authorize({
-                scope: 'scope.userLocation',
-                success: () => {
-                  wx.getLocation({
-                    type: 'gcj02',
-                    success: (res) => {
-                      console.log('[index] 分享码用户定位成功:', res);
-                      wx.setStorageSync('last_location', {
-                        latitude: res.latitude,
-                        longitude: res.longitude
-                      });
-                    }
-                  });
-                },
-                fail: () => {
-                  // 用户拒绝授权
-                  console.log('[index] 用户拒绝定位授权');
-                }
-              });
-            }
-          },
-          fail: (err) => {
-            console.error('[index] 获取设置失败:', err);
-          }
-        });
       }, 1500);
 
       return;
@@ -374,13 +389,24 @@ Page({
     // 🔴 尝试获取位置信息（从缓存或实时获取）
     const cachedLocation = wx.getStorageSync('last_location') || {};
 
-    // 🔴 在云函数调用前，确保关闭微信官方 loading
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
-    wx.hideLoading();
+    // 🔴 在云函数调用前，确保关闭微信官方 loading（疯狂执行）
+    const hideOfficialLoading = () => {
+      try {
+        wx.hideToast();
+        wx.hideLoading();
+        if (wx.__mt_oldHideLoading) {
+          wx.__mt_oldHideLoading();
+        }
+      } catch (e) {}
+    };
+    
+    hideOfficialLoading();
+    setTimeout(hideOfficialLoading, 5);
+    setTimeout(hideOfficialLoading, 10);
+    setTimeout(hideOfficialLoading, 15);
 
-    wx.cloud.callFunction({
+    // 🔴 添加超时保护（8秒超时）
+    const verifyNicknamePromise = wx.cloud.callFunction({
       name: 'verifyNickname',
       data: {
         nickname: name,
@@ -393,12 +419,25 @@ Page({
         deviceInfo: sysInfo.system || '',
         phoneModel: sysInfo.model || ''
       }
-    }).then(res => {
-      // 🔴 云函数返回后，再次确保关闭微信官方 loading
-      if (wx.__mt_oldHideLoading) {
-        wx.__mt_oldHideLoading();
-      }
-      wx.hideLoading();
+    });
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('验证昵称超时')), 8000);
+    });
+
+    Promise.race([verifyNicknamePromise, timeoutPromise]).then(res => {
+      // 🔴 云函数返回后，疯狂隐藏微信官方 loading
+      hideOfficialLoading();
+      setTimeout(hideOfficialLoading, 5);
+      setTimeout(hideOfficialLoading, 10);
+      setTimeout(hideOfficialLoading, 15);
+      setTimeout(hideOfficialLoading, 20);
+      setTimeout(hideOfficialLoading, 30);
+      setTimeout(hideOfficialLoading, 50);
+      setTimeout(hideOfficialLoading, 80);
+      setTimeout(hideOfficialLoading, 120);
+      setTimeout(hideOfficialLoading, 180);
+      setTimeout(hideOfficialLoading, 250);
       this.setData({ isLoading: false });
       this.hideMyLoading();
       
@@ -445,6 +484,24 @@ Page({
         }
       }
     }).catch(err => {
+      // 🔴 出错时也疯狂隐藏微信官方 loading
+      const hideOfficialLoading = () => {
+        try {
+          wx.hideToast();
+          wx.hideLoading();
+          if (wx.__mt_oldHideLoading) {
+            wx.__mt_oldHideLoading();
+          }
+        } catch (e) {}
+      };
+      
+      hideOfficialLoading();
+      setTimeout(hideOfficialLoading, 5);
+      setTimeout(hideOfficialLoading, 10);
+      setTimeout(hideOfficialLoading, 15);
+      setTimeout(hideOfficialLoading, 20);
+      setTimeout(hideOfficialLoading, 30);
+      
       this.setData({ isLoading: false });
       this.hideMyLoading();
       this.showAutoToast('错误', '网络错误，请重试');
@@ -475,28 +532,41 @@ Page({
           } catch (e) {}
         };
         
+        // 立即执行 + 前 200ms 内疯狂执行
         hideOfficialToast();
+        setTimeout(hideOfficialToast, 5);
         setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 15);
+        setTimeout(hideOfficialToast, 20);
         setTimeout(hideOfficialToast, 30);
+        setTimeout(hideOfficialToast, 40);
         setTimeout(hideOfficialToast, 50);
+        setTimeout(hideOfficialToast, 60);
         setTimeout(hideOfficialToast, 80);
+        setTimeout(hideOfficialToast, 100);
         setTimeout(hideOfficialToast, 120);
+        setTimeout(hideOfficialToast, 150);
         setTimeout(hideOfficialToast, 180);
+        setTimeout(hideOfficialToast, 200);
         setTimeout(hideOfficialToast, 250);
+        setTimeout(hideOfficialToast, 300);
         setTimeout(hideOfficialToast, 350);
+        setTimeout(hideOfficialToast, 400);
+        setTimeout(hideOfficialToast, 450);
         setTimeout(hideOfficialToast, 500);
+        setTimeout(hideOfficialToast, 600);
         
-        // 🔴 延迟800ms后显示自定义弹窗
+        // 🔴 延迟显示自定义"内容已复制"弹窗（等待微信官方弹窗消失）
         setTimeout(() => {
-        // 复制成功后关闭错误弹窗
-        this.setData({ showCustomErrorModal: false });
-          // 显示自定义"内容已复制"弹窗
-        this.setData({ showCopySuccessModal: true });
-        // 2秒后自动关闭
-        setTimeout(() => {
-          this.setData({ showCopySuccessModal: false });
-        }, 2000);
-        }, 800);
+          // 关闭错误弹窗
+          this.setData({ showCustomErrorModal: false });
+          
+          // 显示"内容已复制"弹窗
+          this.setData({ showCopySuccessModal: true });
+          setTimeout(() => {
+            this.setData({ showCopySuccessModal: false });
+          }, 1500); // 1.5秒后自动消失
+        }, 800); // 等待 800ms，确保微信官方弹窗已消失
       }
     });
   },
@@ -528,16 +598,136 @@ Page({
       return; 
     }
 
-    // 🔴 分享码用户的专用流程：只播放动画，结束后直接跳到安装教程页，不再做地址拦截
+    // 🔴 分享码用户的专用流程：也需要先授权位置，然后播放动画，最后跳到安装教程页
     if (app && app.globalData && app.globalData.isShareCodeUser) {
-      console.log('[handleAccess] ✅ 检测到分享码用户，跳过地址拦截');
+      console.log('[handleAccess] ✅ 检测到分享码用户，需要先授权位置');
       console.log('[handleAccess] app.globalData.isShareCodeUser:', app.globalData.isShareCodeUser);
       console.log('[handleAccess] app.globalData.shareCodeInfo:', app.globalData.shareCodeInfo);
-      this.setData({
-        pendingJumpTarget: '/pages/azjc/azjc',
-        pendingJumpData: null
+      
+      // 🔴 分享码用户也需要先授权位置才能点击 MT RIDE
+      // 先检查位置授权状态
+      wx.getSetting({
+        success: (settingRes) => {
+          const locationAuth = settingRes.authSetting['scope.userLocation'];
+          console.log('[handleAccess] 分享码用户定位权限状态:', locationAuth);
+          
+          if (locationAuth === true) {
+            // 已授权，获取位置并播放动画
+            wx.getLocation({
+              type: 'gcj02',
+              isHighAccuracy: false,
+              success: async (res) => {
+                console.log('[handleAccess] 分享码用户位置获取成功:', res);
+                // 🔴 保存经纬度
+                wx.setStorageSync('last_location', {
+                  latitude: res.latitude,
+                  longitude: res.longitude
+                });
+                // 🔴 解析地址并保存完整信息
+                try {
+                  const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
+                  const addressData = await reverseGeocodeWithRetry(res.latitude, res.longitude, {
+                    maxRetries: 2,
+                    timeout: 5000,
+                    retryDelay: 500
+                  });
+                  // 🔴 保存完整地址信息
+                  wx.setStorageSync('last_location', {
+                    latitude: res.latitude,
+                    longitude: res.longitude,
+                    province: addressData.province || '',
+                    city: addressData.city || '',
+                    district: addressData.district || '',
+                    address: addressData.address || addressData.full_address || ''
+                  });
+                  console.log('[handleAccess] 分享码用户地址解析成功:', addressData);
+                } catch (e) {
+                  console.log('[handleAccess] 分享码用户地址解析失败（不拦截）:', e);
+                }
+                // 设置跳转目标为安装教程页
+                this.setData({
+                  pendingJumpTarget: '/pages/azjc/azjc',
+                  pendingJumpData: null
+                });
+                // 播放动画
+                this.runAnimation();
+              },
+              fail: (err) => {
+                console.error('[handleAccess] 分享码用户位置获取失败:', err);
+                this.showAutoToast('提示', '无法获取位置信息，请检查手机定位服务');
+              }
+            });
+          } else if (locationAuth === false) {
+            // 曾经拒绝过，引导用户去设置
+            this.setData({
+              showLocationPermissionModal: true,
+              _pendingLocationAction: 'shareCode'
+            });
+          } else {
+            // undefined，首次请求，先尝试授权
+              wx.authorize({
+                scope: 'scope.userLocation',
+                success: () => {
+                  // 授权成功，获取位置并播放动画
+                  wx.getLocation({
+                    type: 'gcj02',
+                    isHighAccuracy: false,
+                    success: async (res) => {
+                      console.log('[handleAccess] 分享码用户位置获取成功:', res);
+                      // 🔴 保存经纬度
+                      wx.setStorageSync('last_location', {
+                        latitude: res.latitude,
+                        longitude: res.longitude
+                      });
+                      // 🔴 解析地址并保存完整信息
+                      try {
+                        const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
+                        const addressData = await reverseGeocodeWithRetry(res.latitude, res.longitude, {
+                          maxRetries: 2,
+                          timeout: 5000,
+                          retryDelay: 500
+                        });
+                        // 🔴 保存完整地址信息
+                        wx.setStorageSync('last_location', {
+                          latitude: res.latitude,
+                          longitude: res.longitude,
+                          province: addressData.province || '',
+                          city: addressData.city || '',
+                          district: addressData.district || '',
+                          address: addressData.address || addressData.full_address || ''
+                        });
+                        console.log('[handleAccess] 分享码用户地址解析成功:', addressData);
+                      } catch (e) {
+                        console.log('[handleAccess] 分享码用户地址解析失败（不拦截）:', e);
+                      }
+                      this.setData({
+                        pendingJumpTarget: '/pages/azjc/azjc',
+                        pendingJumpData: null
+                      });
+                      this.runAnimation();
+                    },
+                    fail: (err) => {
+                      console.error('[handleAccess] 分享码用户位置获取失败:', err);
+                      this.showAutoToast('提示', '无法获取位置信息，请检查手机定位服务');
+                    }
+                  });
+                },
+              fail: () => {
+                // 用户拒绝授权
+                console.log('[handleAccess] 分享码用户拒绝定位授权');
+                this.setData({
+                  showLocationPermissionModal: true,
+                  _pendingLocationAction: 'shareCode'
+                });
+              }
+            });
+          }
+        },
+        fail: (err) => {
+          console.error('[handleAccess] 获取设置失败:', err);
+          this.showAutoToast('提示', '无法检查定位权限，请稍后重试');
+        }
       });
-      this.runAnimation();
       return;
     }
     
@@ -1348,8 +1538,129 @@ Page({
     }, wait);
   },
 
+  // 🔴 显示自动消失的提示（使用自定义弹窗）
+  showAutoToast(title, content) {
+    const message = content || title;
+    console.log('[showAutoToast] 显示提示:', message);
+    
+    // 直接使用 custom-toast 组件
+    try {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && typeof toast.showToast === 'function') {
+        console.log('[showAutoToast] 使用 custom-toast 组件');
+        toast.showToast({
+          title: message,
+          icon: 'none',
+          duration: 2000
+        });
+      } else {
+        console.log('[showAutoToast] custom-toast 组件未找到，使用 wx.showToast');
+        // 降级使用 wx.showToast
+        wx.showToast({
+          title: message,
+          icon: 'none',
+          duration: 2000
+        });
+      }
+    } catch (err) {
+      console.error('[showAutoToast] 显示提示失败:', err);
+      // 降级使用 wx.showToast
+      wx.showToast({
+        title: message,
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  },
+
   handleDeny() { 
     this.showAutoToast('提示', '需要授权才能使用');
+  },
+
+  // 关闭定位权限提示弹窗
+  hideLocationPermissionModal() {
+    this.setData({
+      showLocationPermissionModal: false,
+      _pendingLocationAction: null
+    });
+  },
+
+  // 打开设置页
+  openLocationSetting() {
+    const isShareCodeUser = this.data._pendingLocationAction === 'shareCode';
+    this.setData({ showLocationPermissionModal: false });
+    
+    wx.openSetting({
+      success: (openRes) => {
+        if (openRes.authSetting['scope.userLocation']) {
+          // 用户在设置页开启了权限，重新获取定位
+          wx.getLocation({
+            type: 'gcj02',
+            success: async (res) => {
+              console.log('[index] 定位权限已开启，获取位置成功:', res);
+              // 🔴 保存经纬度
+              wx.setStorageSync('last_location', {
+                latitude: res.latitude,
+                longitude: res.longitude
+              });
+              
+              // 🔴 解析地址并保存完整信息
+              try {
+                const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
+                const addressData = await reverseGeocodeWithRetry(res.latitude, res.longitude, {
+                  maxRetries: 2,
+                  timeout: 5000,
+                  retryDelay: 500
+                });
+                // 🔴 保存完整地址信息
+                wx.setStorageSync('last_location', {
+                  latitude: res.latitude,
+                  longitude: res.longitude,
+                  province: addressData.province || '',
+                  city: addressData.city || '',
+                  district: addressData.district || '',
+                  address: addressData.address || addressData.full_address || ''
+                });
+                console.log('[index] 地址解析成功:', addressData);
+              } catch (e) {
+                console.log('[index] 地址解析失败:', e);
+              }
+              
+              // 🔴 如果是分享码用户，继续执行动画和跳转
+              if (isShareCodeUser) {
+                console.log('[index] 分享码用户定位成功，继续执行动画');
+                const app = getApp();
+                if (app && app.globalData && app.globalData.isShareCodeUser) {
+                  // 设置跳转目标为安装教程页
+                  this.setData({
+                    pendingJumpTarget: '/pages/azjc/azjc',
+                    pendingJumpData: null
+                  });
+                  // 播放动画
+                  this.runAnimation();
+                }
+              } else {
+                // 普通用户，重新触发 handleAccess
+                console.log('[index] 普通用户定位成功，重新触发 handleAccess');
+                this.handleAccess();
+              }
+            },
+            fail: (err) => {
+              console.log('[index] 获取位置失败:', err);
+              this.showAutoToast('提示', '无法获取位置信息，请检查手机定位服务');
+            }
+          });
+        } else {
+          // 用户在设置页未开启权限
+          console.log('[index] 用户在设置页未开启定位权限');
+        }
+      },
+      fail: (err) => {
+        console.error('[index] 打开设置页失败:', err);
+      }
+    });
+    
+    this.setData({ _pendingLocationAction: null });
   },
   onOpenSettingResult(e) {
     if (e.detail.authSetting && e.detail.authSetting['scope.userLocation']) {

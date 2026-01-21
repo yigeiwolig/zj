@@ -11,7 +11,7 @@ const db = cloud.database()
  */
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
-  const { orderId } = event
+  const { orderId, creatorNickname } = event // 🔴 新增：接收分享用户昵称
   
   if (!orderId) {
     return { success: false, errMsg: '缺少订单号' }
@@ -80,12 +80,14 @@ exports.main = async (event, context) => {
       data: {
         code: shareCode,
         creatorOpenid: openid,
+        creatorNickname: creatorNickname || '', // 🔴 保存分享用户昵称
         creatorOrderId: orderId,
         createdAt: db.serverDate(),
         expiresAt: expiresAt,
         totalViews: 3,
         usedViews: 0,
-        status: 'active'
+        status: 'active',
+        viewers: [] // 🔴 初始化 viewers 数组
       }
     })
 

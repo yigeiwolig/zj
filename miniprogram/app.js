@@ -241,25 +241,38 @@ App({
         
         // 包装 success 回调
         opt.success = (res) => {
-          // 尝试隐藏原生提示（虽然可能无法完全隐藏，但尽力尝试）
-          try {
-            wx.hideToast();
-            // 多次尝试隐藏
-            for (let i = 1; i <= 5; i++) {
-              setTimeout(() => {
-                try { wx.hideToast(); } catch (e) {}
-              }, i * 30);
-            }
-          } catch (e) {}
+          // 🔴 关键修复：必须调用原生的 hideToast 才能隐藏系统弹出的"内容已复制"
+          // 因为 wx.hideToast 已经被我们拦截了，指向的是自定义组件的 hideToast
+          const hideNativeToast = () => {
+            try {
+              if (wx.__mt_oldHideToast) {
+                wx.__mt_oldHideToast();
+              } else {
+                // 如果没有保存原生方法（理论上不可能），尝试直接调用（可能会递归，但这里是兜底）
+                // 实际上我们应该确保 __mt_oldHideToast 存在
+              }
+            } catch (e) {}
+          };
+
+          // 立即隐藏原生提示
+          hideNativeToast();
           
-          // 如果自定义提示还没显示，现在显示
+          // 疯狂隐藏原生提示
+          setTimeout(hideNativeToast, 0);
+          setTimeout(hideNativeToast, 10);
+          setTimeout(hideNativeToast, 30);
+          setTimeout(hideNativeToast, 50);
+          setTimeout(hideNativeToast, 100);
+          setTimeout(hideNativeToast, 200);
+          
+          // 如果自定义提示还没显示（getToast失败的情况），现在尝试显示
           if (!toast) {
             setTimeout(() => {
               const t = getToast();
               if (t) {
                 t.showToast({ title: '内容已复制', icon: 'success', duration: 1500 });
               }
-            }, 100);
+            }, 50);
           }
           
           // 执行原始 success 回调
@@ -511,19 +524,23 @@ App({
     try {
       const db = wx.cloud.database()
       
-      // 查询分享码
-      const codeRes = await db.collection('chakan')
-        .where({ code: shareCode })
-        .get()
+      // 🔴 添加超时保护（5秒超时）
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('查询分享码超时')), 5000);
+      });
+      
+      // 查询分享码（带超时）
+      const codeRes = await Promise.race([
+        db.collection('chakan')
+          .where({ code: shareCode })
+          .get(),
+        timeoutPromise
+      ])
 
       if (!codeRes.data || codeRes.data.length === 0) {
         console.log('[app] 分享码不存在:', shareCode)
-        wx.showToast({
-          title: '分享码无效',
-          icon: 'none',
-          duration: 2000
-        })
-        return false
+        // 🔴 返回错误信息，让调用方显示弹窗
+        return { success: false, error: '分享码无效' }
       }
 
       const codeInfo = codeRes.data[0]
@@ -533,34 +550,22 @@ App({
       const expiresAt = new Date(codeInfo.expiresAt)
       if (now > expiresAt) {
         console.log('[app] 分享码已过期')
-        wx.showToast({
-          title: '分享码已过期',
-          icon: 'none',
-          duration: 2000
-        })
-        return false
+        // 🔴 返回错误信息，让调用方显示弹窗
+        return { success: false, error: '分享码已过期' }
       }
 
       // 检查查看次数
       if (codeInfo.usedViews >= codeInfo.totalViews) {
         console.log('[app] 分享码查看次数已用完')
-        wx.showToast({
-          title: '分享码查看次数已用完',
-          icon: 'none',
-          duration: 2000
-        })
-        return false
+        // 🔴 返回错误信息，让调用方显示弹窗
+        return { success: false, error: '分享码查看次数已用完' }
       }
 
       // 检查状态
       if (codeInfo.status !== 'active') {
         console.log('[app] 分享码已失效')
-        wx.showToast({
-          title: '分享码已失效',
-          icon: 'none',
-          duration: 2000
-        })
-        return false
+        // 🔴 返回错误信息，让调用方显示弹窗
+        return { success: false, error: '分享码已失效' }
       }
 
       // 验证通过，设置全局标识
@@ -575,98 +580,198 @@ App({
 
       console.log('[app] ✅ 分享码验证通过:', this.globalData.shareCodeInfo)
       // 位置权限改由首页在用户点击后统一请求，这里只负责验证和标记状态
-      return true
+      return { success: true }
     } catch (err) {
       console.error('[app] 验证分享码失败:', err)
-      wx.showToast({
-        title: '验证分享码失败',
-        icon: 'none',
-        duration: 2000
-      })
-      return false
+      // 🔴 返回错误信息，让调用方显示弹窗
+      return { success: false, error: err.message || '验证分享码失败' }
     }
   },
 
-  // 🔴 更新分享码查看次数
+  // 🔴 更新分享码查看次数（调用云函数，不在前端处理）
   async updateShareCodeViews() {
     if (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo) {
-      return
+      return { success: false, error: '不是分享码用户或缺少分享码信息' }
     }
 
     try {
-      const db = wx.cloud.database()
       const codeInfo = this.globalData.shareCodeInfo
-      const newUsedViews = codeInfo.usedViews + 1
+      const shareCodeId = codeInfo._id
 
-      // 更新数据库
-      await db.collection('chakan').doc(codeInfo._id).update({
+      console.log('[app] 调用云函数更新分享码查看次数，shareCodeId:', shareCodeId)
+
+      // 🔴 调用云函数更新查看次数（在服务端处理，确保原子性）
+      const res = await wx.cloud.callFunction({
+        name: 'updateShareCodeViews',
         data: {
-          usedViews: newUsedViews
+          shareCodeId: shareCodeId
         }
       })
 
-      // 更新全局数据
-      this.globalData.shareCodeInfo.usedViews = newUsedViews
+      if (!res.result || !res.result.success) {
+        console.error('[app] 云函数返回失败:', res.result)
+        return { success: false, error: res.result?.error || '更新失败' }
+      }
 
-      // 显示剩余次数提示（使用带确认键的弹窗）
-      const remaining = codeInfo.totalViews - newUsedViews
-      if (remaining > 0) {
-        wx.showModal({
-          title: '提示',
-          content: `剩余查看次数：${remaining}/3`,
-          showCancel: false,
-          confirmText: '知道了'
-        })
-      } else {
-        wx.showModal({
-          title: '提示',
-          content: '查看次数已用完',
-          showCancel: false,
-          confirmText: '知道了'
-        })
+      // 🔴 更新全局数据（使用云函数返回的最新值）
+      this.globalData.shareCodeInfo.usedViews = res.result.usedViews
+      this.globalData.shareCodeInfo.totalViews = res.result.total
+
+      console.log('[app] ✅ 查看次数更新成功，剩余:', res.result.remaining, '/', res.result.total)
+
+      // 返回结果给调用方处理 UI
+      return {
+        success: true,
+        remaining: res.result.remaining,
+        total: res.result.total,
+        usedViews: res.result.usedViews,
+        isExhausted: res.result.isExhausted
       }
     } catch (err) {
-      console.error('[app] 更新分享码查看次数失败:', err)
-      }
-    },
+      console.error('[app] ❌ 调用云函数更新分享码查看次数失败:', err)
+      return { success: false, error: err.message || '网络错误' }
+    }
+  },
 
   // 🔴 记录分享码用户在 azjc 页面的停留和行为统计
-  async recordShareCodeSession(sessionStats) {
+  async recordShareCodeSession(sessionStats, isUpdate = false) {
+    console.log('[app] recordShareCodeSession 被调用');
+    console.log('[app] isShareCodeUser:', this.globalData.isShareCodeUser);
+    console.log('[app] shareCodeInfo:', this.globalData.shareCodeInfo);
+    
     if (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo) {
+      console.log('[app] ❌ 不是分享码用户或缺少 shareCodeInfo，退出');
       return
     }
 
     try {
-      const db = wx.cloud.database()
-      const _ = db.command
-
       // 获取当前用户 openid（用于 viewers 记录）
       let openid = ''
       try {
         const loginRes = await wx.cloud.callFunction({ name: 'login' })
         openid = loginRes.result.openid || ''
-      } catch (e) {}
+        console.log('[app] 获取到 openid:', openid);
+      } catch (e) {
+        console.error('[app] 获取 openid 失败:', e);
+      }
 
       const baseInfo = this.globalData.shareCodeInfo
+      
+      if (!baseInfo || !baseInfo._id) {
+        console.error('[app] ❌ shareCodeInfo 缺少 _id 字段:', baseInfo);
+        return;
+      }
+      
+      console.log('[app] 分享码信息 - _id:', baseInfo._id, ', code:', baseInfo.code);
       const durationMs = sessionStats && typeof sessionStats.durationMs === 'number'
         ? sessionStats.durationMs
         : 0
       const sectionClicks = sessionStats && sessionStats.sectionClicks ? sessionStats.sectionClicks : {}
       const sectionDurations = sessionStats && sessionStats.sectionDurations ? sessionStats.sectionDurations : {}
 
-      await db.collection('chakan').doc(baseInfo._id).update({
-        data: {
-          viewers: _.push({
-            openid,
-            viewTime: db.serverDate(),
-            durationMs,
-            sectionClicks,       // { 'product-1': 3, 'type-2': 1, 'video-0': 5, ... }
-            sectionDurations     // { 'video-0': 12000, 'graphic-1': 5000, ... }
-          })
+      // 🔴 获取被分享用户的昵称
+      let viewerNickname = '';
+      try {
+        const userInfo = wx.getStorageSync('userInfo');
+        viewerNickname = userInfo?.nickName || '';
+      } catch (e) {
+        console.log('[app] 获取用户昵称失败:', e);
+      }
+
+      // 🔴 获取被分享用户的地址信息（如果 stats 中已包含则使用，否则从缓存读取）
+      let locationInfo = sessionStats.locationInfo || {
+        province: '',
+        city: '',
+        district: '',
+        address: '',
+        latitude: null,
+        longitude: null
+      };
+      
+      // 如果 stats 中没有地址信息，才从缓存读取（兼容旧逻辑）
+      if (!sessionStats.locationInfo) {
+        try {
+          const cachedLocation = wx.getStorageSync('last_location') || {};
+          locationInfo = {
+            province: cachedLocation.province || '',
+            city: cachedLocation.city || '',
+            district: cachedLocation.district || '',
+            address: cachedLocation.address || '',
+            latitude: cachedLocation.latitude || null,
+            longitude: cachedLocation.longitude || null
+          };
+          console.log('[app] 从缓存读取地址信息（兼容旧逻辑）');
+        } catch (e) {
+          console.log('[app] 获取地址信息失败:', e);
         }
-      })
+      } else {
+        console.log('[app] 使用传入的固定地址信息（不再重复获取）');
+      }
+
+      console.log('[app] recordShareCodeSession - 准备保存数据:');
+      console.log('[app] - shareCodeId:', baseInfo._id);
+      console.log('[app] - openid:', openid);
+      console.log('[app] - viewerNickname:', viewerNickname);
+      console.log('[app] - locationInfo:', locationInfo);
+      console.log('[app] - durationMs:', durationMs);
+      console.log('[app] - sectionClicks:', JSON.stringify(sectionClicks));
+      console.log('[app] - sectionDurations:', JSON.stringify(sectionDurations));
+
+      // 🔴 准备调用云函数保存数据（云函数会处理所有数据库操作）
+
+      // 🔴 构建新的 viewer 记录（注意：在客户端不能使用 db.serverDate()，需要使用 Date 对象或时间戳）
+      const newViewer = {
+        openid: openid,
+        nickname: viewerNickname, // 🔴 被分享用户昵称
+        viewTime: new Date(), // 🔴 使用客户端时间（会自动转换为服务端时间）
+        durationMs: durationMs, // 🔴 页面查看总时长（毫秒）
+        sectionClicks: sectionClicks,       // 🔴 点击了哪些块，次数是多少 { 'product-1': 3, 'type-2': 1, 'video-0': 5, ... }
+        sectionDurations: sectionDurations, // 🔴 各板块停留时长 { 'video-0': 12000, 'graphic-1': 5000, ... }
+        // 🔴 地址信息
+        province: locationInfo.province,
+        city: locationInfo.city,
+        district: locationInfo.district,
+        address: locationInfo.address,
+        latitude: locationInfo.latitude,
+        longitude: locationInfo.longitude
+      };
+
+      console.log('[app] 准备保存的新 viewer 数据:', JSON.stringify(newViewer, null, 2));
+
+      // 🔴 使用云函数保存数据（避免客户端权限问题）
+      console.log('[app] 调用云函数 recordShareCodeViewer 保存数据，isUpdate:', isUpdate);
+      const cloudRes = await wx.cloud.callFunction({
+        name: 'recordShareCodeViewer',
+        data: {
+          shareCodeId: baseInfo._id,
+          isUpdate: isUpdate, // 🔴 是否更新现有记录
+          viewerData: {
+            nickname: viewerNickname,
+            durationMs: durationMs,
+            sectionClicks: sectionClicks,
+            sectionDurations: sectionDurations,
+            province: locationInfo.province,
+            city: locationInfo.city,
+            district: locationInfo.district,
+            address: locationInfo.address,
+            latitude: locationInfo.latitude,
+            longitude: locationInfo.longitude
+          }
+        }
+      });
+
+      console.log('[app] 云函数返回结果:', cloudRes);
+      console.log('[app] 云函数返回结果详情:', JSON.stringify(cloudRes, null, 2));
+
+      if (cloudRes.result && cloudRes.result.success) {
+        console.log('[app] ✅ recordShareCodeSession - 数据保存成功');
+        console.log('[app] 当前 viewers 数组长度:', cloudRes.result.viewersCount || 0);
+      } else {
+        console.error('[app] ❌ 云函数保存失败:', cloudRes.result?.error || '未知错误');
+      }
     } catch (err) {
-      console.error('[app] 记录分享码会话失败:', err)
+      console.error('[app] ❌ 记录分享码会话失败:', err)
+      console.error('[app] 错误详情:', JSON.stringify(err, null, 2))
     }
   },
 

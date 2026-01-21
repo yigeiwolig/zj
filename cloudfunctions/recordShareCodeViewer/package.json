@@ -1,0 +1,9 @@
+{
+  "name": "recordShareCodeViewer",
+  "version": "1.0.0",
+  "description": "记录分享码查看者浏览数据",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

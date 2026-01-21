@@ -334,6 +334,7 @@ page {
   color: #000000;
 }
 
+/* ================= 统一的"内容已复制"弹窗（样式和首页一致） ================= */
 .copy-success-modal {
   width: 400rpx !important;
   padding: 60rpx 40rpx !important;
@@ -344,11 +345,36 @@ page {
   width: 80rpx !important;
   height: 80rpx !important;
   margin-bottom: 30rpx !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   font-size: 60rpx !important;
+  font-weight: 900 !important;
+  color: #000000 !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  animation: checkmarkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
 }
 
 .copy-success-modal .modal-title-new {
   font-size: 36rpx !important;
   margin-bottom: 0 !important;
+  letter-spacing: 0 !important;
   font-weight: 600 !important;
+}
+
+.copy-success-modal .modal-content-new {
+  margin-bottom: 0 !important;
+  display: none !important;
+}
+
+@keyframes checkmarkPop {
+  0% {
+    transform: scale(0) rotate(-45deg);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
 }
