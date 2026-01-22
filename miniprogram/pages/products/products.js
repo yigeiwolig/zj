@@ -43,6 +43,9 @@ Page({
     // 🔴 自定义加载动画
     showLoadingAnimation: false,
     
+    // 【新增】底部抽屉控制
+    isDrawerOpen: false,
+    
     // 按照你的要求 1-12 顺序排列
     // === 在这里单独调整每个图标的大小 ===
     list: [
@@ -836,5 +839,45 @@ Page({
       }
     };
     tryShow();
+  },
+
+  // ================= 底部抽屉交互 =================
+
+  // 切换抽屉状态
+  toggleDrawer() {
+    this.setData({ isDrawerOpen: !this.data.isDrawerOpen });
+  },
+
+  // 关闭抽屉
+  closeDrawer() {
+    this.setData({ isDrawerOpen: false });
+  },
+
+  // 触摸开始
+  onDrawerTouchStart(e) {
+    this.drawerTouchStartY = e.changedTouches[0].clientY;
+  },
+
+  // 触摸结束
+  onDrawerTouchEnd(e) {
+    const touchEndY = e.changedTouches[0].clientY;
+    const diff = touchEndY - this.drawerTouchStartY;
+    
+    // 上滑 (diff < -50) -> 展开
+    if (diff < -50 && !this.data.isDrawerOpen) {
+      this.setData({ isDrawerOpen: true });
+    }
+    // 下滑 (diff > 50) -> 收起
+    else if (diff > 50 && this.data.isDrawerOpen) {
+      this.setData({ isDrawerOpen: false });
+    }
+  },
+
+  // 点击功能卡片
+  onFunctionTap(e) {
+    const id = e.currentTarget.dataset.id;
+    // 添加震动反馈
+    wx.vibrateShort({ type: 'light' });
+    this.executeNavigation(id);
   }
 });

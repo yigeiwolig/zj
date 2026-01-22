@@ -6,6 +6,9 @@ var qqmapsdk = new QQMapWX({
 });
 const db = wx.cloud.database();
 
+// --- 图标数据 (从 products.js 复用) ---
+// const iconRepair = ... (已移除)
+
 Page({
   data: {
     // 页面状态控制

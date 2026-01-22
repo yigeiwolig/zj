@@ -113,6 +113,35 @@ module.exports = {
     </view>
   </block>
 </view>
+
+<!-- 底部抽屉功能区 -->
+<view class="bottom-drawer {{isDrawerOpen ? 'open' : ''}}"
+      bindtouchstart="onDrawerTouchStart" 
+      bindtouchend="onDrawerTouchEnd">
+  <!-- 把手区域 -->
+  <view class="drawer-handle-area" catchtap="toggleDrawer">
+    <view class="drawer-handle-bar"></view>
+    <view class="drawer-hint-text {{isDrawerOpen ? 'fade' : ''}}">点击或上滑查看全部功能</view>
+  </view>
+  
+  <!-- 内容区域 -->
+  <view class="drawer-content">
+    <view class="function-grid">
+      <block wx:for="{{list}}" wx:key="id">
+        <view class="function-card" catchtap="onFunctionTap" data-id="{{item.id}}">
+          <view class="fc-icon-box">
+            <image class="fc-icon" src="{{item.iconSvg}}" mode="aspectFit"></image>
+          </view>
+          <view class="fc-info">
+            <text class="fc-title">{{item.title}}</text>
+            <text class="fc-sub">{{item.en}}</text>
+          </view>
+        </view>
+      </block>
+    </view>
+  </view>
+</view>
+
 <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
 <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
   <view class="auto-toast-box">
