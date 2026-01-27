@@ -106,9 +106,9 @@
     </view>
   </view>
 
-  <!-- 统一的“内容已复制”弹窗（样式跟首页一致） -->
-  <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}">
-    <view class="custom-modal-box copy-success-modal">
+  <!-- 统一的"内容已复制"弹窗（样式跟首页一致） -->
+  <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
       <view class="modal-icon-new success-icon">✓</view>
       <view class="modal-title-new">内容已复制</view>
     </view>

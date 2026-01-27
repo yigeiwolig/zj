@@ -277,18 +277,19 @@ page { background-color: #000; color: #fff; box-sizing: border-box; font-family:
   background: transparent; 
 }
 
-/* 🔴 统一返回键样式 - 确保可点击 */
+/* 🔴 统一返回键样式 - 全局标准 */
 .back-icon {
-  position: relative;
+  position: absolute;
+  left: 40rpx;
+  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: auto !important;
+  pointer-events: auto;
   transition: all 0.2s;
-  z-index: 10001; /* 比 header 更高 */
-  cursor: pointer;
+  z-index: 10001;
 }
 .back-icon:active {
   transform: scale(0.95);
@@ -303,7 +304,7 @@ page { background-color: #000; color: #fff; box-sizing: border-box; font-family:
 .back-arrow {
   font-size: 48rpx;
   font-weight: 300;
-  color: var(--text-main);
+  color: #000;
   line-height: 1;
 }
 

@@ -114,14 +114,25 @@ module.exports = {
   </block>
 </view>
 
+<!-- 遮罩层 (点击关闭) -->
+<view class="drawer-mask" bindtap="closeDrawer" wx:if="{{isDrawerOpen}}" 
+  style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 450; backdrop-filter: blur(4px); animation: fadeIn 0.3s;"></view>
+
+<!-- 底部触发按钮 (当抽屉关闭时显示) -->
+<view class="trigger-button {{isTriggerBtnVisible ? 'visible' : ''}} {{isTriggerBtnFaded ? 'faded' : ''}}" catchtap="toggleDrawer" wx:if="{{!isDrawerOpen}}">
+  <text class="trigger-text">查看全部功能</text>
+  <image src="{{iconArrowUp}}" class="trigger-icon" mode="aspectFit"></image>
+</view>
+
 <!-- 底部抽屉功能区 -->
-<view class="bottom-drawer {{isDrawerOpen ? 'open' : ''}}"
-      bindtouchstart="onDrawerTouchStart" 
-      bindtouchend="onDrawerTouchEnd">
-  <!-- 把手区域 -->
-  <view class="drawer-handle-area" catchtap="toggleDrawer">
+<view class="bottom-drawer {{isDrawerOpen ? 'open' : ''}}">
+  <!-- 把手区域 (仅用于下拉关闭) - 只有这里可以滑动关闭 -->
+  <view class="drawer-handle-area" 
+        bindtouchstart="onDrawerTouchStart" 
+        bindtouchmove="onDrawerTouchMove"
+        bindtouchend="onDrawerTouchEnd"
+        catchtap="closeDrawer">
     <view class="drawer-handle-bar"></view>
-    <view class="drawer-hint-text {{isDrawerOpen ? 'fade' : ''}}">点击或上滑查看全部功能</view>
   </view>
   
   <!-- 内容区域 -->
@@ -143,16 +154,16 @@ module.exports = {
 </view>
 
 <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
-<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
-  <view class="auto-toast-box">
+<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" catchtap="noop">
+  <view class="auto-toast-box" catchtouchmove="noop" catchtap="noop">
     <view class="at-title">{{autoToast.title}}</view>
     <view class="at-content">{{autoToast.content}}</view>
   </view>
 </view>
 
 <!-- 自定义加载动画 -->
-<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
-  <view class="loader">
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
+  <view class="loader" catchtouchmove="noop" catchtap="noop">
     <text class="loader-label">请稍候...</text>
     <view class="loading-bar"></view>
   </view>

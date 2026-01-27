@@ -46,7 +46,7 @@ exports.main = async (event, context) => {
     }
 
     const banReason = banType === 'screenshot' ? 'screenshot' : 'screen_record';
-
+    
     // 🔴 关键修复：保留/写回昵称，避免后续 Auto 模式无法写入 valid_users
     // 优先级：event.nickname（如果未来前端传了）> login_logbutton.nickname > login_logs.nickname
     let preservedNickname = '';

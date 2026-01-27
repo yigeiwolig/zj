@@ -35,6 +35,8 @@ exports.main = async (event, context) => {
     // B. 是我自己的设备 (防抖，防止重复点)
     if (device.openid === myOpenid) {
       if (device.isActive) {
+        // 🔴 绑定成功：检查是否有待生效延保记录
+        await applyPendingWarranty(db, _, myOpenid, sn)
         return { success: true, status: 'AUTO_APPROVED', msg: '设备已连接' }
       } else {
         return { success: true, status: 'NEED_AUDIT', msg: '审核未通过，请继续' }
@@ -57,6 +59,9 @@ exports.main = async (event, context) => {
         }
       })
       
+      // 🔴 绑定成功：检查是否有待生效延保记录
+      await applyPendingWarranty(db, _, myOpenid, sn)
+      
       // 【修改】文案统一改为"绑定成功"，不提"二手"
       return { success: true, status: 'AUTO_APPROVED', msg: '绑定成功' }
     } else {
@@ -68,5 +73,65 @@ exports.main = async (event, context) => {
   } catch (err) {
     console.error('[bindDevice] 云函数执行失败:', err);
     return { success: false, msg: err.message || err.errMsg || '网络校验失败，请重试' }
+  }
+}
+
+// 🔴 新增：应用待生效延保记录
+async function applyPendingWarranty(db, _, openid, sn) {
+  try {
+    // 1. 查询该 openid 的所有待生效延保记录
+    const pendingRes = await db.collection('pending_warranty')
+      .where({
+        openid: openid,
+        status: 'pending'
+      })
+      .get()
+    
+    if (pendingRes.data.length === 0) {
+      console.log('[bindDevice] 该用户无待生效延保记录')
+      return
+    }
+    
+    // 2. 计算总延保天数（累加所有待生效记录）
+    let totalDays = 0
+    pendingRes.data.forEach(record => {
+      totalDays += record.warrantyDays || 30
+    })
+    
+    // 3. 给设备增加延保时间
+    const devRes = await db.collection('sn').where({ sn: sn }).get()
+    if (devRes.data.length > 0) {
+      const device = devRes.data[0]
+      const oldDate = new Date(device.expiryDate)
+      const newDate = new Date(oldDate.getTime() + totalDays * 24 * 60 * 60 * 1000)
+      const newDateStr = newDate.toISOString().split('T')[0]
+      
+      await db.collection('sn').doc(device._id).update({
+        data: {
+          expiryDate: newDateStr,
+          hasReward: true,
+          totalDays: _.inc(totalDays)
+        }
+      })
+      
+      console.log('[bindDevice] 已应用待生效延保，总天数:', totalDays)
+    }
+    
+    // 4. 更新所有待生效记录状态为"已生效"
+    const recordIds = pendingRes.data.map(r => r._id)
+    for (const recordId of recordIds) {
+      await db.collection('pending_warranty').doc(recordId).update({
+        data: {
+          status: 'applied',
+          appliedAt: db.serverDate(),
+          appliedSn: sn
+        }
+      })
+    }
+    
+    console.log('[bindDevice] 已更新', recordIds.length, '条待生效延保记录为已生效')
+  } catch (err) {
+    console.error('[bindDevice] 应用待生效延保失败:', err)
+    // 不抛出错误，避免影响绑定流程
   }
 }

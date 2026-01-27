@@ -622,7 +622,7 @@ page {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
   padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 100; pointer-events: none;
+  z-index: 10000; pointer-events: none; /* 🔴 提高 z-index 确保返回键显示 */
   background: transparent; 
 }
 
@@ -769,7 +769,11 @@ page {
 .cd-btn { flex: 1; height: 88rpx; line-height: 88rpx; border-radius: 44rpx; font-size: 30rpx; font-weight: 600; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
+/* 🔴 统一返回键样式 - 全局标准 */
 .back-icon {
+  position: absolute;
+  left: 40rpx;
+  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -777,10 +781,12 @@ page {
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
+  z-index: 10001;
 }
 .back-icon:active {
   transform: scale(0.95);
   opacity: 0.7;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 .back-icon::before {
   display: none;

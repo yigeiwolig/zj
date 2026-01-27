@@ -9,10 +9,14 @@ page {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
   padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 100; pointer-events: none;
+  z-index: 10000; pointer-events: none; /* 🔴 提高 z-index 确保返回键显示 */
   background: transparent; 
 }
+/* 🔴 统一返回键样式 - 全局标准 */
 .back-icon {
+  position: absolute;
+  left: 40rpx;
+  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -20,10 +24,12 @@ page {
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
+  z-index: 10001;
 }
 .back-icon:active {
   transform: scale(0.95);
   opacity: 0.7;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 .back-icon::before {
   display: none;
@@ -297,28 +303,54 @@ page {
   to { opacity: 1; transform: scale(1); }
 }
 
-/* 统一的“内容已复制”弹窗样式（复用首页设计） */
+/* 统一的"内容已复制"弹窗样式 - 统一和 shop 页面一样 */
 .custom-modal-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(5px); /* 统一背景色，和 shop 页面一样 */
   z-index: 12000;
   display: flex; align-items: center; justify-content: center;
+  animation: cartMaskFadeIn 0.25s ease-out forwards; /* 统一动画名称 */
+}
+.custom-modal-mask.closing {
+  animation: cartMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; /* 统一动画名称 */
+}
+.custom-modal-mask.closing .custom-modal-box {
+  animation: cartBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; /* 统一动画名称 */
 }
 
 .custom-modal-box {
-  width: 620rpx;
+  width: 600rpx; /* 统一宽度，和 shop 页面一样 */
   background: #ffffff;
-  border-radius: 48rpx;
-  padding: 70rpx 50rpx;
+  border-radius: 50rpx; /* 统一圆角，和 shop 页面一样 */
+  padding: 70rpx 50rpx; /* 统一内边距，和 shop 页面一样 */
   display: flex; flex-direction: column; align-items: center;
-  box-shadow: 0 40rpx 80rpx rgba(0, 0, 0, 0.2);
-  transform: scale(0.8); opacity: 0;
-  animation: callSpringPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.15); /* 统一阴影，和 shop 页面一样 */
+  animation: cartBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; /* 统一动画名称 */
 }
 
-@keyframes callSpringPop {
-  to { transform: scale(1); opacity: 1; }
+@keyframes cartMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cartMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes cartBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes cartBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
+    opacity: 0;
+    filter: blur(12rpx);
+  }
 }
 
 .modal-icon-new {

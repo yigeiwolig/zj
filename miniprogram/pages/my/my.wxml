@@ -1,4 +1,10 @@
 <!-- pages/my/my.wxml -->
+<wxs module="tools">
+  module.exports.firstChar = function(str) {
+    if (!str || str.length === 0) return '快';
+    return str.substring(0, 1);
+  }
+</wxs>
 
 <view class="container {{hasModalOpen ? 'modal-open' : ''}}">
 
@@ -19,7 +25,7 @@
     <view class="header-content">
       <view class="user-identity">
         <text class="rank-tag">PLATINUM MEMBER</text>
-        <text class="user-name">{{userName}}</text>
+        <text class="user-name" style="font-size: {{userNameFontSize}}rpx;">{{userName}}</text>
       </view>
       <view class="header-stats">
         <view class="stat-item">
@@ -86,10 +92,20 @@
           <!-- 【关键】买家信息栏：显示昵称、电话、地址 -->
           <view class="buyer-info-box">
             <view class="b-row">
-              <text class="b-name">{{item.userName || '匿名用户'}}</text>
+              <text class="b-name" style="font-size: {{item.userNameFontSize || 30}}rpx;">{{item.userName || '匿名用户'}}</text>
               <text class="b-phone">{{item.userPhone}}</text>
             </view>
-            <view class="b-addr">{{item.userAddr}}</view>
+            <!-- 🔴 显示用户昵称（仅管理员可见） -->
+            <view class="b-nickname-row" wx:if="{{isAdmin && item.userNickname}}">
+              <text class="b-nickname-label">用户昵称：</text>
+              <text class="b-nickname">{{item.userNickname}}</text>
+            </view>
+            <view class="b-addr-row">
+              <text class="b-addr">{{item.userAddr}}</text>
+              <view class="b-copy-btn" wx:if="{{isAdmin}}" bindtap="copyOrderAddress" data-index="{{idx}}" data-address="{{item.userAddr}}" data-name="{{item.userName}}" data-phone="{{item.userPhone}}">
+                <text class="b-copy-text">复制</text>
+              </view>
+            </view>
           </view>
 
           <!-- 2. 中间商品列表 -->
@@ -220,10 +236,20 @@
           <!-- 买家信息栏 -->
           <view class="buyer-info-box">
             <view class="b-row">
-              <text class="b-name">{{item.userName || '匿名用户'}}</text>
+              <text class="b-name" style="font-size: {{item.userNameFontSize || 30}}rpx;">{{item.userName || '匿名用户'}}</text>
               <text class="b-phone">{{item.userPhone}}</text>
             </view>
-            <view class="b-addr">{{item.userAddr}}</view>
+            <!-- 🔴 显示用户昵称（仅管理员可见） -->
+            <view class="b-nickname-row" wx:if="{{isAdmin && item.userNickname}}">
+              <text class="b-nickname-label">用户昵称：</text>
+              <text class="b-nickname">{{item.userNickname}}</text>
+            </view>
+            <view class="b-addr-row">
+              <text class="b-addr">{{item.userAddr}}</text>
+              <view class="b-copy-btn" wx:if="{{isAdmin}}" bindtap="copyOrderAddress" data-index="{{idx}}" data-address="{{item.userAddr}}" data-name="{{item.userName}}" data-phone="{{item.userPhone}}">
+                <text class="b-copy-text">复制</text>
+              </view>
+            </view>
           </view>
 
           <!-- 商品列表 -->
@@ -328,7 +354,7 @@
         <view class="empty-title">开启您的改装之旅</view>
         <view class="empty-desc">下单后，此处将实时追踪您的物料进度</view>
         
-        <view class="go-shop-btn">去选购配件 ➔</view>
+        <view class="go-shop-btn">去选购商品 ➔</view>
       </view>
     </view>
   </block>
@@ -613,8 +639,8 @@
 
     <!-- 4. 底部服务按钮 -->
     <view class="footer-bar">
-      <view class="f-btn">预约维修服务</view>
-      <view class="f-btn dark">联系在线客服</view>
+      <view class="f-btn" bindtap="goToRepairService">预约维修服务</view>
+      <view class="f-btn dark" bindtap="goToCustomerService">联系在线客服</view>
     </view>
   </block>
 
@@ -744,8 +770,8 @@
   </view>
 
   <!-- ================= 全局自定义弹窗 (替代原生，带收缩退出动画) ================= -->
-  <view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop">
-    <view class="custom-dialog-box" catchtouchmove="noop">
+  <view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop" catchtap="noop">
+    <view class="custom-dialog-box" catchtouchmove="noop" catchtap="noop">
       <view class="cd-title">{{dialog.title}}</view>
       <view class="cd-content">{{dialog.content}}</view>
       
@@ -758,9 +784,9 @@
     </view>
   </view>
 
-  <!-- ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= -->
-  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
-    <view class="auto-toast-box" catchtouchmove="noop">
+  <!-- ================= 自动消失提示（无按钮，2秒后自动消失，带收缩退出动画） ================= -->
+  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" catchtap="noop">
+    <view class="auto-toast-box" catchtouchmove="noop" catchtap="noop">
       <view class="at-title">{{autoToast.title}}</view>
       <view class="at-content">{{autoToast.content}}</view>
     </view>
@@ -775,8 +801,8 @@
   </view>
 
   <!-- ================= 输入弹窗 (替代 editable modal，带收缩退出动画) ================= -->
-  <view class="custom-dialog-mask {{inputDialogClosing ? 'closing' : ''}}" wx:if="{{inputDialog.show}}" catchtouchmove="noop">
-    <view class="custom-dialog-box" catchtouchmove="noop">
+  <view class="custom-dialog-mask {{inputDialogClosing ? 'closing' : ''}}" wx:if="{{inputDialog.show}}" catchtouchmove="noop" catchtap="noop">
+    <view class="custom-dialog-box" catchtouchmove="noop" catchtap="noop">
       <view class="cd-title">{{inputDialog.title}}</view>
       <input 
         class="cd-input" 
@@ -795,16 +821,16 @@
   </view>
 
   <!-- 统一的"内容已复制"弹窗（样式和首页一致） -->
-  <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop">
-    <view class="custom-modal-box copy-success-modal" catchtouchmove="noop">
+  <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
       <view class="modal-icon-new success-icon">✓</view>
       <view class="modal-title-new">内容已复制</view>
     </view>
   </view>
 
   <!-- 分享码生成弹窗（白底黑字，清晰排版） -->
-  <view class="custom-modal-mask {{showShareCodeGenerateModal ? 'active' : ''}}" wx:if="{{showShareCodeGenerateModal}}" catchtouchmove="noop">
-    <view class="custom-modal-box share-code-generate-modal" catchtouchmove="noop">
+  <view class="custom-modal-mask {{showShareCodeGenerateModal ? 'active' : ''}}" wx:if="{{showShareCodeGenerateModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="custom-modal-box share-code-generate-modal" catchtouchmove="noop" catchtap="noop">
       <view class="mt-icon-card">MT</view>
       <view class="modal-title-new">分享码已生成</view>
       
@@ -872,7 +898,7 @@
                 <text class="rr-info-value">{{item.description}}</text>
               </view>
               <view class="rr-info-row">
-                <text class="rr-info-label">配件发出时间：</text>
+                <text class="rr-info-label">商品发出时间：</text>
                 <text class="rr-info-value">{{item.shipTime}}</text>
               </view>
               
@@ -914,7 +940,7 @@
   </view>
 
   <!-- ================= 地址信息填写弹窗（管理员填写用户地址，带收缩退出动画） ================= -->
-  <view class="custom-dialog-mask {{returnAddressDialogClosing ? 'closing' : ''}}" wx:if="{{showReturnAddressDialog}}" bindtap="closeReturnAddressDialog" catchtouchmove="noop">
+  <view class="custom-dialog-mask {{returnAddressDialogClosing ? 'closing' : ''}}" wx:if="{{showReturnAddressDialog}}" bindtap="closeReturnAddressDialog" catchtouchmove="noop" catchtap="noop">
     <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop" style="max-width: 680rpx; padding: 50rpx 40rpx;">
       <view class="cd-title">填写用户地址信息</view>
       <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
@@ -1078,7 +1104,7 @@
 <custom-toast id="custom-toast" />
 
 <!-- ================= 测试密码输入弹窗（带收缩退出动画） ================= -->
-<view class="custom-dialog-mask {{testPasswordModalClosing ? 'closing' : ''}}" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal" catchtouchmove="noop">
+<view class="custom-dialog-mask {{testPasswordModalClosing ? 'closing' : ''}}" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal" catchtouchmove="noop" catchtap="noop">
   <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop" style="max-width: 600rpx;">
     <view class="cd-title">请输入测试密码</view>
     <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
@@ -1154,7 +1180,8 @@
 
 <!-- ================= 物流查询弹窗 ================= -->
 <view class="logistics-modal-mask" wx:if="{{showLogisticsModal}}" bindtap="closeLogisticsModal" catchtouchmove="noop">
-  <view class="logistics-modal-box" catchtap="noop" catchtouchmove="noop">
+  <!-- 🔴 移除了 catchtouchmove="noop"，允许内部 scroll-view 滚动 -->
+  <view class="logistics-modal-box" catchtap="noop">
     
     <!-- 1. 品牌头部 -->
     <view class="logistics-header">
@@ -1164,15 +1191,22 @@
 
     <view class="logistics-modal-content">
       
-      <!-- 2. 核心信息区 -->
-      <view class="logistics-info-card">
-        <view class="info-row-main">
-          <text class="tracking-number">{{currentTrackingId}}</text>
-          <view class="copy-btn" bindtap="copyTrackingId" data-sn="{{currentTrackingId}}">复制</view>
-        </view>
-        <view class="info-row-sub">
-          <text class="company-name">{{logisticsData.express_company_name || '查询中...'}}</text>
-          <view class="status-tag" wx:if="{{logisticsData.status_text}}">{{logisticsData.status_text}}</view>
+      <!-- 2. 核心信息区 (新版卡片样式) -->
+      <view class="logistics-card-container">
+        <view class="logistics-info-card">
+          <view class="card-header-row">
+            <view class="company-info">
+              <view class="company-icon-placeholder">{{tools.firstChar(logisticsData.express_company_name)}}</view>
+              <text class="company-name">{{logisticsData.express_company_name || '查询中...'}}</text>
+            </view>
+            <view class="status-badge {{logisticsData.status === '3' ? 'success' : ''}}" wx:if="{{logisticsData.status_text}}">
+              {{logisticsData.status_text}}
+            </view>
+          </view>
+          <view class="card-body-row">
+            <text class="tracking-number">{{currentTrackingId}}</text>
+            <view class="copy-btn" bindtap="copyTrackingId" data-sn="{{currentTrackingId}}">复制</view>
+          </view>
         </view>
       </view>
       
@@ -1188,7 +1222,14 @@
       </view>
       
       <!-- 5. 物流轨迹 (优化版：轴线左置，内容全宽) -->
-      <scroll-view scroll-y class="logistics-scroll" enable-back-to-top="{{true}}" wx:if="{{logisticsData && !logisticsLoading}}">
+      <!-- 🔴 关键修复：确保 scroll-view 可以滚动，添加 enhanced 属性 -->
+      <scroll-view 
+        scroll-y 
+        class="logistics-scroll" 
+        enable-back-to-top="{{true}}" 
+        enhanced="{{true}}"
+        show-scrollbar="{{false}}"
+        wx:if="{{logisticsData && !logisticsLoading}}">
         <view class="timeline-container">
           <view class="timeline-item" wx:for="{{logisticsData.path_list}}" wx:key="index">
             

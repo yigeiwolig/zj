@@ -7,7 +7,7 @@
   </view>
   <!-- 顶部标题保持固定 -->
   <view class="fixed-nav" wx:if="{{!isVideoFullScreen}}">
-    <view class="back-btn" bindtap="handleBack" style="display: none;">
+    <view class="back-btn" catchtap="handleBack" wx:if="{{!isShareCodeUser}}">
       <text class="back-icon">‹</text>
     </view>
     <view class="brand">
@@ -254,8 +254,8 @@
 </view>
 
 <!-- 🔴 全屏视频遮罩层：覆盖在整个页面上，不改变 stepIndex -->
-<view class="fullscreen-video-mask {{isVideoFullScreen ? 'active' : ''}} {{fullScreenVideoMaskClosing ? 'closing' : ''}}" wx:if="{{isVideoFullScreen}}" catchtouchmove="noop">
-  <view class="fullscreen-video-container {{fullScreenVideoTransform}}" style="{{fullScreenVideoInitialStyle}}" catchtap="toggleFullScreenVideoPlay">
+<view class="fullscreen-video-mask {{isVideoFullScreen ? 'active' : ''}} {{fullScreenVideoMaskClosing ? 'closing' : ''}}" wx:if="{{isVideoFullScreen}}" catchtouchmove="noop" catchtap="noop">
+  <view class="fullscreen-video-container {{fullScreenVideoTransform}}" style="{{fullScreenVideoInitialStyle}}" catchtap="toggleFullScreenVideoPlay" catchtouchmove="noop">
     <view class="fullscreen-close-btn" catchtap="closeFullScreenVideo">✕</view>
     <video 
       class="fullscreen-video-player" 
@@ -278,8 +278,8 @@
 </view>
 
 <!-- 自定义加载动画 -->
-<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
-  <view class="loader">
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
+  <view class="loader" catchtouchmove="noop" catchtap="noop">
     <text class="loader-label">请稍候...</text>
     <view class="loading-bar"></view>
   </view>
@@ -289,8 +289,8 @@
 <custom-toast id="custom-toast" />
 
 <!-- 自定义分享码剩余次数弹窗 -->
-<view class="custom-modal-mask {{showShareCodeModal ? 'active' : ''}}" wx:if="{{showShareCodeModal}}" catchtouchmove="noop">
-  <view class="custom-modal-box share-code-modal" catchtouchmove="noop">
+<view class="custom-modal-mask {{showShareCodeModal ? 'active' : ''}}" wx:if="{{showShareCodeModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box share-code-modal" catchtouchmove="noop" catchtap="noop">
     
     <block wx:if="{{shareCodeExhausted}}">
       <view class="modal-icon-warn">⚠️</view>

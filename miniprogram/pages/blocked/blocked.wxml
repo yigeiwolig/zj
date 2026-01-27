@@ -7,8 +7,8 @@
       <view class="spinner-ring"></view>
       <!-- 静态图标：感叹号 (代表系统异常/崩溃) -->
       <view class="error-icon">!</view>
-    </view>
-
+  </view>
+  
     <!-- 2. 文字提示区 -->
     <view class="text-area">
       <view class="title">系统数据异常</view>
@@ -18,12 +18,12 @@
         <text>检测到关键配置丢失</text>
         <text>为保护数据安全，服务已自动暂停</text>
       </view>
-    </view>
+  </view>
   </view>
 
   <!-- 3. 底部操作区 -->
   <view class="footer">
-    <button class="action-btn" hover-class="btn-hover" bindtap="handleCopyWechat">
+      <button class="action-btn" hover-class="btn-hover" bindtap="handleCopyWechat">
       联系管理员修复
     </button>
     
@@ -35,15 +35,15 @@
 </view>
 
 <!-- 统一的"内容已复制"弹窗（样式和首页一致） -->
-<view class="custom-modal-mask {{showCopySuccessModal ? 'active' : ''}}" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop">
-  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop">
+<view class="custom-modal-mask {{showCopySuccessModal ? 'active' : ''}}" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
     <view class="modal-icon-new success-icon">✓</view>
     <view class="modal-title-new">内容已复制</view>
   </view>
 </view>
 
-<view class="custom-modal-mask active {{customSuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCustomSuccessModal}}" catchtouchmove="noop">
-  <view class="custom-modal-box success-modal">
+<view class="custom-modal-mask active {{customSuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCustomSuccessModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box success-modal" catchtouchmove="noop" catchtap="noop">
     <view class="modal-icon-new success-icon">✓</view>
     <view class="modal-title-new">{{successModalTitle}}</view>
     <view class="modal-content-new" wx:if="{{successModalContent}}">

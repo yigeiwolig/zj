@@ -256,16 +256,16 @@
 </view> <!-- 容器结束 -->
 
 <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
-<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
-  <view class="auto-toast-box">
+<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" catchtap="noop">
+  <view class="auto-toast-box" catchtouchmove="noop" catchtap="noop">
     <view class="at-title">{{autoToast.title}}</view>
     <view class="at-content">{{autoToast.content}}</view>
   </view>
 </view>
 
 <!-- ================= 自定义对话框 ================= -->
-<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="closeCustomDialog" catchtouchmove="noop">
-  <view class="custom-dialog-box" catchtap="">
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="closeCustomDialog" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop">
     <view class="cd-title">{{dialog.title}}</view>
     <view class="cd-content">{{dialog.content}}</view>
     <view class="cd-btn-row">

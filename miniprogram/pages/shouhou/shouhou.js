@@ -312,7 +312,7 @@ Page({
     }, 420);
   },
 
-  // 【新增】自动消失提示（无按钮，3秒后自动消失，带收缩退出动画）
+  // 【新增】自动消失提示（无按钮，2秒后自动消失，带收缩退出动画）
   showAutoToast(title = '提示', content = '') {
     // 如果已有toast在显示，先关闭它
     if (this.data.autoToast.show) {
@@ -333,10 +333,10 @@ Page({
       'autoToast.content': content,
       autoToastClosing: false
     });
-    // 3秒后自动消失（带退出动画）
+    // 2秒后自动消失（带退出动画）
     setTimeout(() => {
       this._closeAutoToastWithAnimation();
-    }, 3000);
+    }, 2000);
   },
 
   // 关闭自动提示（带收缩退出动画）
@@ -1844,7 +1844,20 @@ Page({
             return;
           }
           console.error('❌ 选择视频失败:', err);
-          this._showCustomToast('选择失败: ' + (err.errMsg || '未知错误'), 'none', 3000);
+          // 根据错误类型显示友好的中文提示
+          let errorMsg = '选择失败';
+          if (err && err.errMsg) {
+            if (err.errMsg.includes('cancel')) {
+              return; // 用户取消，不提示
+            } else if (err.errMsg.includes('permission') || err.errMsg.includes('权限')) {
+              errorMsg = '需要相册权限，请在设置中开启';
+            } else if (err.errMsg.includes('size') || err.errMsg.includes('大小')) {
+              errorMsg = '视频文件过大，请选择较小的视频';
+            } else if (err.errMsg.includes('format') || err.errMsg.includes('格式')) {
+              errorMsg = '视频格式不支持，请选择其他视频';
+            }
+          }
+          this._showCustomToast(errorMsg, 'none', 3000);
         }
       });
     }, 300);
@@ -2249,107 +2262,158 @@ Page({
     this._showCustomToast('解析完成', 'success');
   },
   
-  // 🔴 优化：高级解析算法（解析姓名、电话、地址）
+  // 🔴 优化：高级解析算法（解析姓名、电话、地址）- 更精准版本
   parseAddress(text) {
     if (!text || !text.trim()) {
       return { name: '', phone: '', address: '' };
     }
     
-    let cleanText = text.trim();
     let name = '';
     let phone = '';
     let address = '';
     
-    // 1. 提取手机号（更严格）
-    const phonePattern = /\b1[3-9]\d{9}\b/;
-    const phoneMatch = cleanText.match(phonePattern);
-    if (phoneMatch) {
-      phone = phoneMatch[0];
-      cleanText = cleanText.replace(phonePattern, ' ').trim();
-    }
-
-    // 2. 提取固定电话（带区号的）
-    if (!phone) {
-      const telPattern = /\b0\d{2,3}-?\d{7,8}\b/;
-      const telMatch = cleanText.match(telPattern);
-      if (telMatch) {
-        phone = telMatch[0];
-        cleanText = cleanText.replace(telPattern, ' ').trim();
-      }
-    }
+    // 保存原始文本用于后续分析
+    const originalText = text;
     
-    // 3. 🔴 优化：更彻底地清理杂质，移除所有标签和无用词汇
-    cleanText = cleanText
-      // 移除所有地址相关标签
-      .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
-      // 移除号码、编号等无用词汇
-      .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
-      // 移除所有括号和特殊符号
-      .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
-      // 移除多余空格
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // 4. 提取姓名（更智能的判断）
-    const addressKeywords = ['省', '市', '区', '县', '镇', '街道', '路', '街', '道', '号', '室', '楼', '苑', '村', '组', '栋', '单元', '层', '房'];
-    const namePattern = /^([\u4e00-\u9fa5]{2,4})/;
-    const nameMatch = cleanText.match(namePattern);
+    // 🔴 改进1：更精准的电话提取（支持多种格式）
+    // 1.1 提取手机号（支持多种格式：13800138000、138-0013-8000、138 0013 8000、138.0013.8000）
+    const phonePatterns = [
+      /1[3-9]\d[\s\-\.]?\d{4}[\s\-\.]?\d{4}/g,  // 带分隔符的
+      /\b1[3-9]\d{9}\b/g,                        // 标准11位
+      /\+?86[\s\-]?1[3-9]\d{9}/g,               // 带国家码
+    ];
     
-    if (nameMatch) {
-      const candidateName = nameMatch[1];
-      // 检查候选姓名是否包含地址关键词
-      const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
-      
-      // 如果候选姓名不包含地址关键词，且长度合理，则认为是姓名
-      if (!hasAddressKeyword && candidateName.length >= 2 && candidateName.length <= 4) {
-        name = candidateName;
-        cleanText = cleanText.replace(new RegExp('^' + candidateName), '').trim();
-      }
-    }
-    
-    // 5. 如果姓名没提取到，尝试从电话前后提取
-    if (!name && phone && text.includes(phone)) {
-      const phoneIndex = text.indexOf(phone);
-      const beforePhone = text.substring(0, phoneIndex).trim();
-      const afterPhone = text.substring(phoneIndex + phone.length).trim();
-      
-      // 检查电话前面的内容
-      const nameBeforeMatch = beforePhone.match(/([\u4e00-\u9fa5]{2,4})\s*$/);
-      if (nameBeforeMatch) {
-        const candidateName = nameBeforeMatch[1];
-        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
-        if (!hasAddressKeyword) {
-          name = candidateName;
-          cleanText = cleanText.replace(new RegExp(candidateName), '').trim();
+    for (const pattern of phonePatterns) {
+      const matches = originalText.match(pattern);
+      if (matches && matches.length > 0) {
+        // 取第一个匹配的电话，移除所有非数字字符
+        phone = matches[0].replace(/[\s\-\.\+86]/g, '');
+        if (phone.length === 11 && phone.startsWith('1') && /^1[3-9]\d{9}$/.test(phone)) {
+          break;
         }
       }
+    }
+    
+    // 1.2 提取固定电话（支持多种格式）
+    if (!phone) {
+      const telPatterns = [
+        /0\d{2,3}[\s\-]?\d{7,8}/g,              // 标准格式
+        /\(0\d{2,3}\)[\s\-]?\d{7,8}/g,          // 带括号
+      ];
       
-      // 检查电话后面的内容（通常是地址）
-      if (!name) {
-        const nameAfterMatch = afterPhone.match(/^\s*([\u4e00-\u9fa5]{2,4})/);
-        if (nameAfterMatch) {
-          const candidateName = nameAfterMatch[1];
+      for (const pattern of telPatterns) {
+        const matches = originalText.match(pattern);
+        if (matches && matches.length > 0) {
+          phone = matches[0].replace(/[\s\-\(\)]/g, '');
+          break;
+        }
+      }
+    }
+    
+    // 🔴 改进2：更精准的姓名提取（支持更多位置和格式）
+    const addressKeywords = ['省', '市', '区', '县', '镇', '街道', '路', '街', '道', '号', '室', '楼', '苑', '村', '组', '栋', '单元', '层', '房', '门', '座', '广场', '大厦', '中心', '花园', '小区'];
+    const commonSurnames = ['欧阳', '太史', '端木', '上官', '司马', '东方', '独孤', '南宫', '万俟', '闻人', '夏侯', '诸葛', '尉迟', '公羊', '赫连', '澹台', '皇甫', '宗政', '濮阳', '公冶', '太叔', '申屠', '公孙', '慕容', '仲孙', '钟离', '长孙', '宇文', '司徒', '鲜于', '司空', '闾丘', '子车', '亓官', '司寇', '巫马', '公西', '颛孙', '壤驷', '公良', '漆雕', '乐正', '宰父', '谷梁', '拓跋', '夹谷', '轩辕', '令狐', '段干', '百里', '呼延', '东郭', '南门', '羊舌', '微生', '公户', '公玉', '公仪', '梁丘', '公仲', '公上', '公门', '公山', '公坚', '左丘', '公伯', '西门', '公祖', '第五', '公乘', '贯丘', '公皙', '南荣', '东里', '东宫', '仲长', '子书', '子桑', '即墨', '达奚', '褚师'];
+    
+    // 2.1 从标签后提取姓名（如"收件人：张三"）
+    const labelPatterns = [
+      /(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]+([\u4e00-\u9fa5]{2,5})/i,
+      /([\u4e00-\u9fa5]{2,5})[:：\s]*(?:收件人|收货人|姓名|联系人)/i,
+    ];
+    
+    for (const pattern of labelPatterns) {
+      const match = originalText.match(pattern);
+      if (match) {
+        const candidateName = match[1];
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        if (!hasAddressKeyword && candidateName.length >= 2 && candidateName.length <= 5) {
+          name = candidateName;
+          break;
+        }
+      }
+    }
+    
+    // 2.2 从电话前后提取姓名
+    if (!name && phone) {
+      const phoneInText = originalText.replace(/[\s\-\.]/g, '').indexOf(phone);
+      if (phoneInText !== -1) {
+        // 提取电话前的2-5个汉字
+        const beforePhone = originalText.substring(0, phoneInText).trim();
+        const nameBeforeMatch = beforePhone.match(/([\u4e00-\u9fa5]{2,5})\s*$/);
+        if (nameBeforeMatch) {
+          const candidateName = nameBeforeMatch[1];
           const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
           if (!hasAddressKeyword) {
             name = candidateName;
-            cleanText = cleanText.replace(new RegExp(candidateName), '').trim();
-      }
+          }
+        }
+        
+        // 如果还没找到，提取电话后的2-5个汉字（但要排除地址关键词）
+        if (!name) {
+          const afterPhone = originalText.substring(phoneInText + phone.length).trim();
+          const nameAfterMatch = afterPhone.match(/^\s*([\u4e00-\u9fa5]{2,5})/);
+          if (nameAfterMatch) {
+            const candidateName = nameAfterMatch[1];
+            const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+            // 检查是否是复姓
+            const isCompoundSurname = commonSurnames.some(surname => candidateName.startsWith(surname));
+            if (!hasAddressKeyword && (candidateName.length <= 4 || isCompoundSurname)) {
+              name = candidateName;
+            }
+          }
         }
       }
     }
-
-    // 6. 🔴 优化：剩余部分作为地址，再次清理后解析
-    if (cleanText) {
-      // 再次清理地址文本，移除可能的残留标签
-      let addressText = cleanText
-        .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
+    
+    // 2.3 从文本开头提取姓名（如果还没找到）
+    if (!name) {
+      let cleanText = originalText
+        .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
+        .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
+        .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
+        .replace(/\d+/g, ' ')  // 移除所有数字
         .replace(/\s+/g, ' ')
         .trim();
       
+      const namePattern = /^([\u4e00-\u9fa5]{2,5})/;
+      const nameMatch = cleanText.match(namePattern);
+      if (nameMatch) {
+        const candidateName = nameMatch[1];
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        const isCompoundSurname = commonSurnames.some(surname => candidateName.startsWith(surname));
+        if (!hasAddressKeyword && (candidateName.length <= 4 || isCompoundSurname)) {
+          name = candidateName;
+        }
+      }
+    }
+    
+    // 🔴 改进3：更精准的地址提取
+    let addressText = originalText;
+    
+    // 移除已提取的姓名和电话
+    if (name) {
+      addressText = addressText.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ');
+    }
+    if (phone) {
+      // 移除所有格式的电话号码
+      addressText = addressText.replace(new RegExp(phone.replace(/(\d)/g, '\\$1'), 'g'), ' ');
+      addressText = addressText.replace(/1[3-9]\d[\s\-\.]?\d{4}[\s\-\.]?\d{4}/g, ' ');
+      addressText = addressText.replace(/\+?86[\s\-]?1[3-9]\d{9}/g, ' ');
+    }
+    
+    // 清理地址文本
+    addressText = addressText
+      .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
+      .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
+      .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // 使用现有的地址解析函数
+    if (addressText) {
       const parsedAddress = this.parseAddressForShipping(addressText);
       address = parsedAddress.fullAddress || addressText;
     }
-
+    
     return {
       name: name.trim(),
       phone: phone.trim(),
@@ -2901,6 +2965,23 @@ Page({
   // 统一的云函数调用
   doCloudSubmit(action, goods, addr, total, fee, method) {
     this.showMyLoading('处理中...');
+    
+    // 🔴 获取用户昵称
+    let userNickname = '';
+    try {
+      const savedNickname = wx.getStorageSync('user_nickname');
+      if (savedNickname) {
+        userNickname = savedNickname;
+      } else {
+        const userInfo = wx.getStorageSync('userInfo');
+        if (userInfo && userInfo.nickName) {
+          userNickname = userInfo.nickName;
+        }
+      }
+    } catch (e) {
+      console.error('[doCloudSubmit] 获取用户昵称失败:', e);
+    }
+    
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
@@ -2909,7 +2990,8 @@ Page({
         goods,
         addressData: addr,
         shippingFee: fee,
-        shippingMethod: method
+        shippingMethod: method,
+        userNickname: userNickname // 🔴 传递用户昵称
       },
       success: res => {
         this.hideMyLoading();
@@ -3046,12 +3128,29 @@ Page({
   doPayment(goodsList, totalPrice, addressData) {
     this.showMyLoading('正在下单...');
 
+    // 🔴 获取用户昵称
+    let userNickname = '';
+    try {
+      const savedNickname = wx.getStorageSync('user_nickname');
+      if (savedNickname) {
+        userNickname = savedNickname;
+      } else {
+        const userInfo = wx.getStorageSync('userInfo');
+        if (userInfo && userInfo.nickName) {
+          userNickname = userInfo.nickName;
+        }
+      }
+    } catch (e) {
+      console.error('[doPayment] 获取用户昵称失败:', e);
+    }
+
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
         totalPrice: totalPrice,
         goods: goodsList, // 直接传购物车数组
-        addressData: addressData
+        addressData: addressData,
+        userNickname: userNickname // 🔴 传递用户昵称
       },
       success: res => {
         this.hideMyLoading();

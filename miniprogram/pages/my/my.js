@@ -15,6 +15,7 @@ Page({
     modelIndex: null,
     buyDate: '',
     userName: 'Alexander', // 用户昵称，从存储中读取
+    userNameFontSize: 64, // 顶部昵称字体大小（动态调整）
     
     // 蓝牙相关状态
     isScanning: false,      // 是否正在扫描(控制动画)
@@ -136,13 +137,21 @@ Page({
       app.globalData.updatePageVisit('my');
     }
     
-    // 🔴 截屏/录屏封禁
-    this.initScreenshotProtection();
+    // 🔴 my页面不启用截屏/录屏封禁
+    // this.initScreenshotProtection();
     
     // 读取用户昵称
     const savedNickname = wx.getStorageSync('user_nickname');
     if (savedNickname) {
-      this.setData({ userName: savedNickname });
+      this.setData({ 
+        userName: savedNickname,
+        userNameFontSize: this.calculateNameFontSize(savedNickname, 64) // 顶部昵称默认64rpx
+      });
+    } else {
+      // 即使没有保存的昵称，也要计算默认昵称的字体大小
+      this.setData({ 
+        userNameFontSize: this.calculateNameFontSize(this.data.userName, 64)
+      });
     }
     
     this.checkAdminPrivilege();
@@ -159,16 +168,16 @@ Page({
   },
 
   onShow() {
-    // 🔴 检查录屏状态
-    if (wx.getScreenRecordingState) {
-      wx.getScreenRecordingState({
-        success: (res) => {
-          if (res.state === 'on' || res.recording) {
-            this.handleIntercept('record');
-          }
-        }
-      });
-    }
+    // 🔴 my页面不检查录屏状态
+    // if (wx.getScreenRecordingState) {
+    //   wx.getScreenRecordingState({
+    //     success: (res) => {
+    //       if (res.state === 'on' || res.recording) {
+    //         this.handleIntercept('record');
+    //       }
+    //     }
+    //   });
+    // }
   },
 
   // 🔴 初始化截屏/录屏保护
@@ -446,6 +455,37 @@ Page({
 
   // --- 1. 页面显示时，加载云端数据 ---
   onShow() {
+    // #region agent log
+    try {
+      const logData = {
+        location: 'miniprogram/pages/my/my.js:onShow',
+        message: 'onShow called',
+        data: { 
+          timestamp: Date.now(),
+          hasLoading: this.data.showLoadingAnimation
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'scroll-performance',
+        hypothesisId: 'onShow-freq'
+      };
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: logData,
+        success: () => {},
+        fail: () => {}
+      });
+    } catch (err) {}
+    // #endregion
+
+    // 🔴 防抖：如果正在加载，不重复加载
+    if (this._isLoading) {
+      console.log('[onShow] 正在加载中，跳过重复加载');
+      return;
+    }
+
     // 🔴 检查录屏状态
     if (wx.getScreenRecordingState) {
       wx.getScreenRecordingState({
@@ -468,11 +508,20 @@ Page({
 
     // 🔴 立即显示 loading，提升用户体验
     this.showMyLoading('同步中...');
+    this._isLoading = true;
     
     // 每次显示时重新读取昵称（可能在其他页面修改了）
     const savedNickname = wx.getStorageSync('user_nickname');
     if (savedNickname) {
-      this.setData({ userName: savedNickname });
+      this.setData({ 
+        userName: savedNickname,
+        userNameFontSize: this.calculateNameFontSize(savedNickname, 64) // 顶部昵称默认64rpx
+      });
+    } else {
+      // 即使没有保存的昵称，也要计算默认昵称的字体大小
+      this.setData({ 
+        userNameFontSize: this.calculateNameFontSize(this.data.userName, 64)
+      });
     }
     
     // 🔴 清理表单数据，避免残留
@@ -497,9 +546,11 @@ Page({
         this.loadMyActivitiesPromise()
       ]).then(() => {
         this.hideMyLoading();
+        this._isLoading = false;
       }).catch((err) => {
         console.error('[onShow] 加载数据失败:', err);
         this.hideMyLoading();
+        this._isLoading = false;
       });
     }).catch((err) => {
       console.warn('[onShow] 权限检查失败，尝试作为普通用户加载:', err);
@@ -517,9 +568,11 @@ Page({
           ]);
         }).then(() => {
           this.hideMyLoading();
+          this._isLoading = false;
         }).catch((loadErr) => {
           console.error('[onShow] 获取 openid 后加载数据失败:', loadErr);
           this.hideMyLoading();
+          this._isLoading = false;
         });
       } else {
         // 如果已经有 openid，直接加载数据
@@ -528,9 +581,11 @@ Page({
           this.loadMyActivitiesPromise()
         ]).then(() => {
           this.hideMyLoading();
+          this._isLoading = false;
         }).catch((loadErr) => {
           console.error('[onShow] 加载数据失败:', loadErr);
           this.hideMyLoading();
+          this._isLoading = false;
         });
       }
     });
@@ -637,6 +692,31 @@ Page({
   // --- 2. 从云数据库拉取订单 ---
   // 🔴 将 loadMyOrders 改为返回 Promise 的版本
   loadMyOrdersPromise() {
+    // #region agent log
+    try {
+      const logData = {
+        location: 'miniprogram/pages/my/my.js:loadMyOrdersPromise',
+        message: 'loadMyOrdersPromise called',
+        data: { 
+          isAdmin: this.data.isAdmin,
+          myOpenid: this.data.myOpenid ? this.data.myOpenid.substring(0, 10) + '...' : 'none'
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'scroll-performance',
+        hypothesisId: 'load-data-freq'
+      };
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: logData,
+        success: () => {},
+        fail: () => {}
+      });
+    } catch (err) {}
+    // #endregion
+
     return new Promise(async (resolve, reject) => {
       // 🔴 如果是普通用户且还没有 myOpenid，先获取 openid
       if (!this.data.isAdmin && !this.data.myOpenid) {
@@ -693,6 +773,8 @@ Page({
         });
         
         const formatted = orderData.map(item => {
+          const userName = item.address ? item.address.name : '匿名';
+          const userNickname = item.userNickname || ''; // 🔴 获取用户昵称
           return {
             id: item._id,
             orderId: item.orderId,
@@ -700,7 +782,9 @@ Page({
             realStatus: item.status, 
             statusText: this.getStatusText(item.status),
             amount: item.totalFee,
-            userName: item.address ? item.address.name : '匿名',
+            userName: userName,
+            userNickname: userNickname, // 🔴 保存用户昵称
+            userNameFontSize: this.calculateNameFontSize(userName, 30), // 🔴 订单卡片昵称默认30rpx
             userPhone: item.address ? item.address.phone : '',
             userAddr: item.address ? item.address.address : '',
             goodsList: item.goodsList || [],
@@ -813,9 +897,9 @@ Page({
   // 辅助：状态转中文 (确保这里的对应关系正确)
   getStatusText(status) {
     if (status === 'UNPAID') return '待付款';
-    if (status === 'PAID') return '待物料发出';   // 只有这个状态才显示"录入运单号"
+    if (status === 'PAID') return '产品待发出';   // 只有这个状态才显示"录入运单号"
     if (status === 'SHIPPED') return '运输中';
-    if (status === 'SIGNED') return '确认件齐';
+    if (status === 'SIGNED') return '已确认收货';
     return '状态未知'; // 调试用
   },
 
@@ -1060,6 +1144,32 @@ Page({
   // 🔴 新增：确认收货并查看教程的统一处理函数
   // 确认收货并跳转的实际执行逻辑
   confirmReceiptAndViewTutorial(id, modelName) {
+    // #region agent log
+    try {
+      const logData = {
+        location: 'miniprogram/pages/my/my.js:confirmReceiptAndViewTutorial',
+        message: 'confirmReceiptAndViewTutorial called',
+        data: { 
+          id,
+          modelName,
+          timestamp: Date.now()
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'confirm-receipt-issue',
+        hypothesisId: 'timing-issue'
+      };
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: logData,
+        success: () => {},
+        fail: () => {}
+      });
+    } catch (err) {}
+    // #endregion
+
     this.showMyLoading('解锁教程中...')
     
     console.log('[confirmReceiptAndViewTutorial] 开始调用云函数，订单ID:', id)
@@ -1072,8 +1182,33 @@ Page({
         action: 'sign' // 你的云函数里要有处理 'sign' 的逻辑
       },
       success: (r) => {
-        this.hideMyLoading()
-        
+        // #region agent log
+        try {
+          const logData = {
+            location: 'miniprogram/pages/my/my.js:confirmReceiptAndViewTutorial:success',
+            message: '云函数调用成功',
+            data: { 
+              id,
+              result: r.result,
+              success: r.result?.success,
+              timestamp: Date.now()
+            },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'confirm-receipt-issue',
+            hypothesisId: 'cloud-function-success'
+          };
+          wx.request({
+            url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            data: logData,
+            success: () => {},
+            fail: () => {}
+          });
+        } catch (err) {}
+        // #endregion
+
         console.log('[confirmReceiptAndViewTutorial] 云函数返回:', r)
         
         // 只要云函数不报错，就认为成功
@@ -1083,27 +1218,91 @@ Page({
           const newOrders = this.data.orders.map(item => {
              if(item.id === id) {
                 item.realStatus = 'SIGNED'; 
-                item.statusText = '确认件齐';
+                item.statusText = '已确认收货';
              }
              return item;
           });
           this.setData({ orders: newOrders });
 
-          // 3. 跳转到教程页面
-          wx.navigateTo({
-            url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : ''),
-            success: () => {
-              this.showAutoToast('成功', '教程已解锁');
-            }
-          })
+          // 🔴 关键修复：等待数据库更新完成后再跳转，避免时序问题
+          // 等待 800ms 确保数据库更新完成
+          setTimeout(() => {
+            this.hideMyLoading();
+            
+            // #region agent log
+            try {
+              const logData = {
+                location: 'miniprogram/pages/my/my.js:confirmReceiptAndViewTutorial:navigate',
+                message: '准备跳转到教程页面',
+                data: { 
+                  id,
+                  modelName,
+                  waitTime: 800,
+                  timestamp: Date.now()
+                },
+                timestamp: Date.now(),
+                sessionId: 'debug-session',
+                runId: 'confirm-receipt-issue',
+                hypothesisId: 'navigation-timing'
+              };
+              wx.request({
+                url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+                method: 'POST',
+                header: { 'Content-Type': 'application/json' },
+                data: logData,
+                success: () => {},
+                fail: () => {}
+              });
+            } catch (err) {}
+            // #endregion
+
+            // 3. 跳转到教程页面，传递参数告诉教程页面"刚确认收货"
+            wx.navigateTo({
+              url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '') + '&justConfirmed=1',
+              success: () => {
+                this.showAutoToast('成功', '教程已解锁');
+              },
+              fail: (err) => {
+                console.error('[confirmReceiptAndViewTutorial] 跳转失败:', err);
+                this.showAutoToast('提示', '跳转失败，请重试');
+              }
+            })
+          }, 800); // 等待 800ms
           
         } else {
+          this.hideMyLoading();
           console.error('[confirmReceiptAndViewTutorial] 云函数返回失败:', r)
           this.showAutoToast('操作失败', r.result.errMsg || '同步状态失败');
         }
       },
       fail: (err) => {
         this.hideMyLoading()
+        // #region agent log
+        try {
+          const logData = {
+            location: 'miniprogram/pages/my/my.js:confirmReceiptAndViewTutorial:fail',
+            message: '云函数调用失败',
+            data: { 
+              id,
+              error: err.errMsg || err,
+              timestamp: Date.now()
+            },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'confirm-receipt-issue',
+            hypothesisId: 'cloud-function-fail'
+          };
+          wx.request({
+            url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            data: logData,
+            success: () => {},
+            fail: () => {}
+          });
+        } catch (err) {}
+        // #endregion
+
         console.error('[confirmReceiptAndViewTutorial] 云函数调用失败:', err)
         // 即使同步失败，如果用户已经在微信组件里确认了，也可以考虑让他跳转
         // 这里偏向严格，失败就不跳
@@ -1236,6 +1435,34 @@ Page({
   
   // 【核心函数】测量高度 (防报错增强版)
   calcSwiperHeight(index) {
+    // #region agent log
+    try {
+      const logData = {
+        location: 'miniprogram/pages/my/my.js:calcSwiperHeight',
+        message: 'calcSwiperHeight called',
+        data: { 
+          index,
+          isAdmin: this.data.isAdmin,
+          pendingListLength: this.data.pendingList?.length || 0,
+          ordersLength: this.data.orders?.length || 0,
+          showShippedMode: this.data.showShippedMode
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'scroll-performance',
+        hypothesisId: 'calc-height-freq'
+      };
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: logData,
+        success: () => {},
+        fail: () => {}
+      });
+    } catch (err) {}
+    // #endregion
+
     // 1. 先判断当前应该查哪个列表
     // 如果是管理员，查待物料发出(pendingList)；如果是用户，查全部(orders)
     const currentList = this.data.isAdmin ? this.data.pendingList : this.data.orders;
@@ -1248,8 +1475,13 @@ Page({
       return;
     }
 
+    // 🔴 防抖：如果已经有定时器在运行，取消它
+    if (this._calcHeightTimer) {
+      clearTimeout(this._calcHeightTimer);
+    }
+
     // 3. 延迟执行，确保界面渲染完毕
-    setTimeout(() => {
+    this._calcHeightTimer = setTimeout(() => {
       const query = wx.createSelectorQuery().in(this);
       const id = '#card-' + index;
       
@@ -1265,16 +1497,94 @@ Page({
           console.warn(`未找到元素 ${id}，尝试重新测量第0个...`);
           if (index !== 0) this.calcSwiperHeight(0);
         }
+        this._calcHeightTimer = null;
       }).exec();
     }, 200); // 延迟加大到 200ms，更稳
   },
+
+  // 🔴 下拉刷新处理
+  onPullDownRefresh() {
+    // #region agent log
+    try {
+      const logData = {
+        location: 'miniprogram/pages/my/my.js:onPullDownRefresh',
+        message: 'onPullDownRefresh called',
+        data: { 
+          isAdmin: this.data.isAdmin,
+          isLoading: this._isLoading
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'scroll-performance',
+        hypothesisId: 'pull-refresh'
+      };
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: logData,
+        success: () => {},
+        fail: () => {}
+      });
+    } catch (err) {}
+    // #endregion
+
+    // 如果正在加载，不重复加载
+    if (this._isLoading) {
+      wx.stopPullDownRefresh();
+      return;
+    }
+
+    this._isLoading = true;
+    this.showMyLoading('刷新中...');
+    
+    Promise.all([
+      this.loadMyOrdersPromise(),
+      this.loadMyActivitiesPromise()
+    ]).then(() => {
+      this.hideMyLoading();
+      this._isLoading = false;
+      wx.stopPullDownRefresh();
+    }).catch((err) => {
+      console.error('[onPullDownRefresh] 刷新失败:', err);
+      this.hideMyLoading();
+      this._isLoading = false;
+      wx.stopPullDownRefresh();
+    });
+  },
   
-  // 使用快递100插件查询物流
+  // 使用探数API查询物流（通过云函数）
   viewLogisticsDetail(e) {
+    // #region agent log
+    try {
+      const logData = {
+        location: 'miniprogram/pages/my/my.js:viewLogisticsDetail',
+        message: 'viewLogisticsDetail called',
+        data: { 
+          dataset: e.currentTarget.dataset,
+          logisticsData: this.data.logisticsData
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'fix-wxml-error',
+        hypothesisId: 'wxml-syntax'
+      };
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: logData,
+        success: () => {},
+        fail: () => {}
+      });
+    } catch (err) {}
+    // #endregion
+
     const sn = String(e.currentTarget.dataset.sn || '').trim().toUpperCase();
     const expressCompany = String(e.currentTarget.dataset.company || '').trim();
+    const phone = String(e.currentTarget.dataset.phone || '').trim();
     
-    console.log('[物流查询] 尝试跳转查运单号:', sn);
+    console.log('[物流查询] 开始查询运单号:', sn);
     
     if (!sn) {
       this.showMyDialog({
@@ -1287,54 +1597,67 @@ Page({
       return;
     }
 
-    // 构建跳转URL（不传递手机尾号，让用户自己填写）
-    const url = `plugin://kuaidi100/index?num=${encodeURIComponent(sn)}&appName=${encodeURIComponent('MT-摩改社')}`;
-    
-    console.log('[物流查询] 跳转快递100插件URL:', url);
-    
-    // 直接跳转快递100插件页面
-    wx.navigateTo({
-      url: url,
-      success: () => {
-        console.log('[物流查询] 跳转成功');
+    // 显示物流查询弹窗并开始加载
+    this.setData({
+      showLogisticsModal: true,
+      currentTrackingId: sn,
+      logisticsData: null,
+      logisticsLoading: true,
+      logisticsError: null
+    });
+    this.updateModalState();
+
+    // 调用云函数查询物流
+    wx.cloud.callFunction({
+      name: 'queryLogistics',
+      data: {
+        trackingId: sn,
+        expressCompany: expressCompany || '',
+        receiverPhone: phone || ''
+      },
+      success: (res) => {
+        console.log('[物流查询] 云函数返回:', res);
+        
+        if (res.result && res.result.success) {
+          // 查询成功
+          const logisticsData = res.result.data;
+          
+          // 🔴 格式化时间，拆分日期和时间，适配 WXML
+          if (logisticsData && logisticsData.path_list) {
+            logisticsData.path_list.forEach(item => {
+              if (item.time && item.time.indexOf(' ') > -1) {
+                const parts = item.time.split(' ');
+                item._dateStr = parts[0]; // "2026-01-26"
+                item.time = parts[1];     // "04:41:58"
+              } else {
+                // 如果格式不对，或者只有时间/日期，保持原样，_dateStr 为空
+                // 这样 WXML 会走 wx:else 显示完整的 item.time
+                item._dateStr = ''; 
+              }
+            });
+          }
+
+          this.setData({
+            logisticsData: logisticsData,
+            logisticsLoading: false,
+            logisticsError: null
+          });
+        } else {
+          // 查询失败
+          const errorMsg = res.result?.errMsg || '查询失败，请稍后重试';
+          this.setData({
+            logisticsData: null,
+            logisticsLoading: false,
+            logisticsError: errorMsg
+          });
+        }
       },
       fail: (err) => {
-        console.error('[物流查询] 跳转失败:', err);
-        console.error('[物流查询] 错误详情:', JSON.stringify(err));
-        
-        // 🔴 修复：使用自定义弹窗显示更详细的错误提示
-        let errorMsg = '无法打开物流查询页面';
-        let errorDetail = '';
-        
-        if (err.errMsg) {
-          // 解析错误信息
-          if (err.errMsg.includes('plugin') || err.errMsg.includes('plugin://')) {
-            errorMsg = '插件未启用或配置错误';
-            errorDetail = '请在微信小程序后台配置并启用以"wx6885acbedba59c14"为提供商的快递100插件';
-          } else if (err.errMsg.includes('navigateToMiniProgram')) {
-            errorMsg = '插件跳转失败';
-            errorDetail = '请检查快递100插件是否已正确配置，或联系管理员处理';
-          } else if (err.errMsg.includes('jump miniprogram banded')) {
-            errorMsg = '插件跳转被限制';
-            errorDetail = '可能是插件未启用或小程序版本过低，请联系管理员';
-          } else if (err.errMsg.includes('navigateTo')) {
-            errorMsg = '页面跳转失败';
-            errorDetail = '请检查网络连接或稍后重试';
-          } else {
-            errorMsg = '查询失败';
-            errorDetail = err.errMsg || '未知错误';
-          }
-        }
-        
-        // 显示自定义弹窗
-        this.showMyDialog({
-          title: '物流查询失败',
-          content: `${errorMsg}\n\n${errorDetail}\n\n运单号：${sn}`,
-          showCancel: false,
-          confirmText: '知道了',
-          success: () => {
-            // 用户点击确定后，不做任何操作
-          }
+        console.error('[物流查询] 云函数调用失败:', err);
+        this.setData({
+          logisticsData: null,
+          logisticsLoading: false,
+          logisticsError: err.errMsg || '网络错误，请稍后重试'
         });
       }
     });
@@ -1676,6 +1999,43 @@ Page({
     });
   },
 
+  // 🔴 新增：复制订单地址（在订单卡片中）
+  copyOrderAddress(e) {
+    const address = e.currentTarget.dataset.address || '';
+    const name = e.currentTarget.dataset.name || '匿名用户';
+    const phone = e.currentTarget.dataset.phone || '';
+    
+    if (!address) {
+      this.showAutoToast('提示', '地址信息不存在');
+      return;
+    }
+    
+    // 格式化地址文本：姓名 电话 地址
+    const addressText = `${name} ${phone}\n${address}`;
+    
+    wx.setClipboardData({
+      data: addressText,
+      success: (res) => {
+        console.log('[copyOrderAddress] 复制成功', res);
+        // 立即隐藏官方的"内容已复制" Toast
+        wx.hideToast();
+        setTimeout(() => { wx.hideToast(); }, 50);
+        // 使用统一的"内容已复制"自定义弹窗
+        this.setData({ showCopySuccessModal: true });
+        this.updateModalState();
+        setTimeout(() => {
+          this.setData({ showCopySuccessModal: false });
+          this.updateModalState();
+        }, 2000);
+      },
+      fail: (err) => {
+        console.error('[copyOrderAddress] 复制失败', err);
+        wx.hideToast();
+        this.showAutoToast('提示', '复制失败，请手动复制');
+      }
+    });
+  },
+  
   // 🔴 从分享码生成弹窗复制分享码
   copyShareCodeFromModal() {
     const shareCode = this.data.shareCodeValue
@@ -2275,7 +2635,7 @@ Page({
     tryShow();
   },
 
-  // 【新增】自动消失提示（无按钮，3秒后自动消失，带收缩退出动画）
+  // 【新增】自动消失提示（无按钮，2秒后自动消失，带收缩退出动画）
   showAutoToast(title = '提示', content = '') {
     // 如果已有toast在显示，先关闭它
     if (this.data.autoToast.show) {
@@ -2297,10 +2657,10 @@ Page({
       autoToastClosing: false
     });
     this.updateModalState();
-    // 3秒后自动消失（带退出动画）
+    // 2秒后自动消失（带退出动画）
     setTimeout(() => {
       this._closeAutoToastWithAnimation();
-    }, 3000);
+    }, 2000);
   },
 
   // 关闭自动提示（带收缩退出动画）
@@ -2976,6 +3336,25 @@ Page({
     const { currentAuditItem, adminSetDate, adminSetDaysIndex, warrantyValues } = this.data;
     const days = warrantyValues[adminSetDaysIndex];
 
+    // #region agent log
+    wx.request({
+      url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+      method: 'POST',
+      header: { 'Content-Type': 'application/json' },
+      data: {
+        location: 'miniprogram/pages/my/my.js:confirmApprove',
+        message: '准备调用 adminAuditDevice 云函数',
+        data: { id: currentAuditItem._id, action: 'approve', customDate: adminSetDate, customDays: days, sn: currentAuditItem.sn },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'warranty-debug',
+        hypothesisId: 'E'
+      },
+      success: () => {},
+      fail: () => {}
+    });
+    // #endregion
+
     this.showMyLoading('正在同步...');
 
     wx.cloud.callFunction({
@@ -2987,6 +3366,25 @@ Page({
         customDays: days          // 传选择的天数
       },
       success: res => {
+        // #region agent log
+        wx.request({
+          url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          data: {
+            location: 'miniprogram/pages/my/my.js:confirmApprove:success',
+            message: 'adminAuditDevice 云函数调用成功',
+            data: { success: res.result.success, msg: res.result.msg, errMsg: res.result.errMsg },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'warranty-debug',
+            hypothesisId: 'E'
+          },
+          success: () => {},
+          fail: () => {}
+        });
+        // #endregion
+        
         this.hideMyLoading();
         if (res.result.success) {
           
@@ -3007,6 +3405,25 @@ Page({
         }
       },
       fail: err => {
+        // #region agent log
+        wx.request({
+          url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          data: {
+            location: 'miniprogram/pages/my/my.js:confirmApprove:fail',
+            message: 'adminAuditDevice 云函数调用失败',
+            data: { errMsg: err.errMsg, error: err.toString() },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'warranty-debug',
+            hypothesisId: 'E'
+          },
+          success: () => {},
+          fail: () => {}
+        });
+        // #endregion
+        
         this.hideMyLoading();
         console.error(err);
         this.showAutoToast('操作失败', err.errMsg || '网络错误，请重试');
@@ -3466,81 +3883,155 @@ Page({
     }
   },
   
-  // 5. 智能解析地址（解析姓名、电话、地址）
+  // 5. 智能解析地址（解析姓名、电话、地址）- 更精准版本
   parseSmartAddress(text) {
     if (!text || !text.trim()) {
       return { name: '', phone: '', address: '' };
     }
     
-    let cleanText = text.trim();
     let name = '';
     let phone = '';
     let address = '';
     
-    // 1. 提取手机号（更严格）
-    const phonePattern = /\b1[3-9]\d{9}\b/;
-    const phoneMatch = cleanText.match(phonePattern);
-    if (phoneMatch) {
-      phone = phoneMatch[0];
-      cleanText = cleanText.replace(phonePattern, ' ').trim();
-    }
+    // 保存原始文本用于后续分析
+    const originalText = text;
     
-    // 2. 提取固定电话（带区号的）
-    if (!phone) {
-      const telPattern = /\b0\d{2,3}-?\d{7,8}\b/;
-      const telMatch = cleanText.match(telPattern);
-      if (telMatch) {
-        phone = telMatch[0];
-        cleanText = cleanText.replace(telPattern, ' ').trim();
+    // 🔴 改进1：更精准的电话提取（支持多种格式）
+    // 1.1 提取手机号（支持多种格式：13800138000、138-0013-8000、138 0013 8000、138.0013.8000）
+    const phonePatterns = [
+      /1[3-9]\d[\s\-\.]?\d{4}[\s\-\.]?\d{4}/g,  // 带分隔符的
+      /\b1[3-9]\d{9}\b/g,                        // 标准11位
+      /\+?86[\s\-]?1[3-9]\d{9}/g,               // 带国家码
+    ];
+    
+    for (const pattern of phonePatterns) {
+      const matches = originalText.match(pattern);
+      if (matches && matches.length > 0) {
+        // 取第一个匹配的电话，移除所有非数字字符
+        phone = matches[0].replace(/[\s\-\.\+86]/g, '');
+        if (phone.length === 11 && phone.startsWith('1') && /^1[3-9]\d{9}$/.test(phone)) {
+          break;
+        }
       }
     }
     
-    // 3. 清理杂质，移除所有标签和无用词汇
-    cleanText = cleanText
+    // 1.2 提取固定电话（支持多种格式）
+    if (!phone) {
+      const telPatterns = [
+        /0\d{2,3}[\s\-]?\d{7,8}/g,              // 标准格式
+        /\(0\d{2,3}\)[\s\-]?\d{7,8}/g,          // 带括号
+      ];
+      
+      for (const pattern of telPatterns) {
+        const matches = originalText.match(pattern);
+        if (matches && matches.length > 0) {
+          phone = matches[0].replace(/[\s\-\(\)]/g, '');
+          break;
+        }
+      }
+    }
+    
+    // 🔴 改进2：更精准的姓名提取（支持更多位置和格式）
+    const addressKeywords = ['省', '市', '区', '县', '镇', '街道', '路', '街', '道', '号', '室', '楼', '苑', '村', '组', '栋', '单元', '层', '房', '门', '座', '广场', '大厦', '中心', '花园', '小区'];
+    const commonSurnames = ['欧阳', '太史', '端木', '上官', '司马', '东方', '独孤', '南宫', '万俟', '闻人', '夏侯', '诸葛', '尉迟', '公羊', '赫连', '澹台', '皇甫', '宗政', '濮阳', '公冶', '太叔', '申屠', '公孙', '慕容', '仲孙', '钟离', '长孙', '宇文', '司徒', '鲜于', '司空', '闾丘', '子车', '亓官', '司寇', '巫马', '公西', '颛孙', '壤驷', '公良', '漆雕', '乐正', '宰父', '谷梁', '拓跋', '夹谷', '轩辕', '令狐', '段干', '百里', '呼延', '东郭', '南门', '羊舌', '微生', '公户', '公玉', '公仪', '梁丘', '公仲', '公上', '公门', '公山', '公坚', '左丘', '公伯', '西门', '公祖', '第五', '公乘', '贯丘', '公皙', '南荣', '东里', '东宫', '仲长', '子书', '子桑', '即墨', '达奚', '褚师'];
+    
+    // 2.1 从标签后提取姓名（如"收件人：张三"）
+    const labelPatterns = [
+      /(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]+([\u4e00-\u9fa5]{2,5})/i,
+      /([\u4e00-\u9fa5]{2,5})[:：\s]*(?:收件人|收货人|姓名|联系人)/i,
+    ];
+    
+    for (const pattern of labelPatterns) {
+      const match = originalText.match(pattern);
+      if (match) {
+        const candidateName = match[1];
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        if (!hasAddressKeyword && candidateName.length >= 2 && candidateName.length <= 5) {
+          name = candidateName;
+          break;
+        }
+      }
+    }
+    
+    // 2.2 从电话前后提取姓名
+    if (!name && phone) {
+      const phoneInText = originalText.replace(/[\s\-\.]/g, '').indexOf(phone);
+      if (phoneInText !== -1) {
+        // 提取电话前的2-5个汉字
+        const beforePhone = originalText.substring(0, phoneInText).trim();
+        const nameBeforeMatch = beforePhone.match(/([\u4e00-\u9fa5]{2,5})\s*$/);
+        if (nameBeforeMatch) {
+          const candidateName = nameBeforeMatch[1];
+          const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+          if (!hasAddressKeyword) {
+            name = candidateName;
+          }
+        }
+        
+        // 如果还没找到，提取电话后的2-5个汉字（但要排除地址关键词）
+        if (!name) {
+          const afterPhone = originalText.substring(phoneInText + phone.length).trim();
+          const nameAfterMatch = afterPhone.match(/^\s*([\u4e00-\u9fa5]{2,5})/);
+          if (nameAfterMatch) {
+            const candidateName = nameAfterMatch[1];
+            const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+            // 检查是否是复姓
+            const isCompoundSurname = commonSurnames.some(surname => candidateName.startsWith(surname));
+            if (!hasAddressKeyword && (candidateName.length <= 4 || isCompoundSurname)) {
+              name = candidateName;
+            }
+          }
+        }
+      }
+    }
+    
+    // 2.3 从文本开头提取姓名（如果还没找到）
+    if (!name) {
+      let cleanText = originalText
+        .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
+        .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
+        .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
+        .replace(/\d+/g, ' ')  // 移除所有数字
+        .replace(/\s+/g, ' ')
+        .trim();
+      
+      const namePattern = /^([\u4e00-\u9fa5]{2,5})/;
+      const nameMatch = cleanText.match(namePattern);
+      if (nameMatch) {
+        const candidateName = nameMatch[1];
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        const isCompoundSurname = commonSurnames.some(surname => candidateName.startsWith(surname));
+        if (!hasAddressKeyword && (candidateName.length <= 4 || isCompoundSurname)) {
+          name = candidateName;
+        }
+      }
+    }
+    
+    // 🔴 改进3：更精准的地址提取
+    let addressText = originalText;
+    
+    // 移除已提取的姓名和电话
+    if (name) {
+      addressText = addressText.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ');
+    }
+    if (phone) {
+      // 移除所有格式的电话号码
+      addressText = addressText.replace(new RegExp(phone.replace(/(\d)/g, '\\$1'), 'g'), ' ');
+      addressText = addressText.replace(/1[3-9]\d[\s\-\.]?\d{4}[\s\-\.]?\d{4}/g, ' ');
+      addressText = addressText.replace(/\+?86[\s\-]?1[3-9]\d{9}/g, ' ');
+    }
+    
+    // 清理地址文本
+    addressText = addressText
       .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
       .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
       .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     
-    // 4. 提取姓名（更智能的判断）
-    const addressKeywords = ['省', '市', '区', '县', '镇', '街道', '路', '街', '道', '号', '室', '楼', '苑', '村', '组', '栋', '单元', '层', '房'];
-    const namePattern = /^([\u4e00-\u9fa5]{2,4})/;
-    const nameMatch = cleanText.match(namePattern);
+    address = addressText;
     
-    if (nameMatch) {
-      const candidateName = nameMatch[1];
-      const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
-      
-      if (!hasAddressKeyword && candidateName.length >= 2 && candidateName.length <= 4) {
-        name = candidateName;
-        cleanText = cleanText.replace(new RegExp('^' + candidateName), '').trim();
-      }
-    }
-    
-    // 5. 如果姓名没提取到，尝试从电话前后提取
-    if (!name && phone && text.includes(phone)) {
-      const phoneIndex = text.indexOf(phone);
-      const beforePhone = text.substring(0, phoneIndex).trim();
-      const afterPhone = text.substring(phoneIndex + phone.length).trim();
-      
-      const nameBeforeMatch = beforePhone.match(/([\u4e00-\u9fa5]{2,4})\s*$/);
-      if (nameBeforeMatch) {
-        const candidateName = nameBeforeMatch[1];
-        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
-        if (!hasAddressKeyword) {
-          name = candidateName;
-        }
-      }
-    }
-    
-    // 6. 剩余部分作为地址
-    address = cleanText
-      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    
-    return { name, phone, address };
+    return { name: name.trim(), phone: phone.trim(), address: address.trim() };
   },
   
   // 运单号输入
@@ -3548,6 +4039,30 @@ Page({
     this.setData({
       returnTrackingIdInput: e.detail.value
     });
+  },
+  
+  // 🔴 计算昵称字体大小（根据昵称长度动态调整）
+  calculateNameFontSize(name, defaultSize) {
+    if (!name) return defaultSize;
+    
+    const length = name.length;
+    let fontSize = defaultSize;
+    
+    // 根据长度调整字体大小
+    if (length <= 4) {
+      fontSize = defaultSize; // 4个字以内，使用默认大小
+    } else if (length <= 6) {
+      fontSize = defaultSize * 0.85; // 5-6个字，缩小到85%
+    } else if (length <= 8) {
+      fontSize = defaultSize * 0.7; // 7-8个字，缩小到70%
+    } else if (length <= 10) {
+      fontSize = defaultSize * 0.6; // 9-10个字，缩小到60%
+    } else {
+      fontSize = defaultSize * 0.5; // 10个字以上，缩小到50%
+    }
+    
+    // 确保最小字体大小（至少24rpx）
+    return Math.max(fontSize, 24);
   },
 
   // 【新增】提交寄回运单号（保留原来的逻辑，支持可选回调）
@@ -4034,6 +4549,34 @@ Page({
   },
 
   // [新增] 跳转去商城
+  // 跳转到预约维修服务
+  goToRepairService() {
+    wx.navigateTo({
+      url: '/pages/shouhou/shouhou',
+      success: () => {
+        console.log('[my.js] 跳转到预约维修服务成功');
+      },
+      fail: (err) => {
+        console.error('[my.js] 跳转到预约维修服务失败:', err);
+        this.showAutoToast('提示', '跳转失败，请稍后重试');
+      }
+    });
+  },
+
+  // 跳转到联系在线客服
+  goToCustomerService() {
+    wx.navigateTo({
+      url: '/pages/call/call',
+      success: () => {
+        console.log('[my.js] 跳转到联系在线客服成功');
+      },
+      fail: (err) => {
+        console.error('[my.js] 跳转到联系在线客服失败:', err);
+        this.showAutoToast('提示', '跳转失败，请稍后重试');
+      }
+    });
+  },
+
   goToShop() {
     // 使用 reLaunch 确保跳转成功，并清除页面栈
     wx.reLaunch({

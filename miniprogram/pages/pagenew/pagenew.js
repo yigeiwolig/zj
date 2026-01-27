@@ -21,6 +21,9 @@ Page({
   },
 
   onLoad: function() {
+    // #region agent log
+    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:onLoad',message:'onLoad called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'loading-trace',hypothesisId:'A'},fail:()=>{}});
+    // #endregion
     // 🔴 获取状态栏高度
     const winInfo = wx.getWindowInfo();
     this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
@@ -66,6 +69,9 @@ Page({
 
   // ================== 权限检查逻辑 ==================
   async checkAdminPrivilege() {
+    // #region agent log
+    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:checkAdminPrivilege',message:'checkAdminPrivilege called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'loading-trace',hypothesisId:'C'},fail:()=>{}});
+    // #endregion
     try {
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
@@ -86,11 +92,18 @@ Page({
 
   // 管理员模式手动切换开关
   toggleAdminMode() {
+    // #region agent log
+    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:toggleAdminMode',message:'toggleAdminMode called',data:{isAuthorized:this.data.isAuthorized,isAdmin:this.data.isAdmin},timestamp:Date.now(),sessionId:'debug-session',runId:'admin-toggle',hypothesisId:'A'},fail:()=>{}});
+    // #endregion
+    console.log('[pagenew] toggleAdminMode called, isAuthorized:', this.data.isAuthorized, 'isAdmin:', this.data.isAdmin);
+    
     if (!this.data.isAuthorized) {
+      console.log('[pagenew] 无权限，显示提示');
       this._showCustomToast('无权限', 'none');
       return;
     }
     const nextState = !this.data.isAdmin;
+    console.log('[pagenew] 切换管理员模式，新状态:', nextState);
     this.setData({ isAdmin: nextState });
     this._showCustomToast(nextState ? '管理模式开启' : '已回到用户模式', 'none');
   },
@@ -104,6 +117,9 @@ Page({
 
   // 读取数据
   fetchProducts: function() {
+    // #region agent log
+    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:fetchProducts',message:'fetchProducts called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'loading-trace',hypothesisId:'B'},fail:()=>{}});
+    // #endregion
     var _this = this;
     this.db.collection('products').get().then(res => {
       // 确保每个产品都有jumpNumber字段

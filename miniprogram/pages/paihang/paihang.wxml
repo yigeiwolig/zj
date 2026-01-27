@@ -242,8 +242,8 @@
   </view>
 
   <!-- 用户上传弹窗 -->
-  <view class="modal-mask" wx:if="{{showUserUpload}}">
-    <view class="admin-modal user-upload-modal">
+  <view class="modal-mask" wx:if="{{showUserUpload}}" catchtouchmove="noop" catchtap="noop">
+    <view class="admin-modal user-upload-modal" catchtouchmove="noop" catchtap="noop">
       <view class="modal-title">上传成绩</view>
       <view class="modal-close" bindtap="closeUserUpload" hover-class="btn-hover">×</view>
 
@@ -294,8 +294,8 @@
   </view>
 
   <!-- 管理员编辑弹窗 -->
-  <view class="modal-mask" wx:if="{{showEditModal}}">
-    <view class="admin-modal edit-modal">
+  <view class="modal-mask" wx:if="{{showEditModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="admin-modal edit-modal" catchtouchmove="noop" catchtap="noop">
       <view class="modal-title">{{isEdit ? '编辑记录' : '添加新记录'}}</view>
       <view class="modal-close" bindtap="closeEditModal" hover-class="btn-hover">×</view>
       <scroll-view scroll-y style="max-height: 60vh;">
@@ -325,8 +325,8 @@
   </view>
 
   <!-- ================= 更好看的自定义弹窗（复用 my 页风格） ================= -->
-  <view class="custom-dialog-mask {{devDialogClosing ? 'closing' : ''}}" wx:if="{{showDevDialog}}" bindtap="closeDevDialog" catchtouchmove="noop">
-    <view class="custom-dialog-box" catchtap="noop">
+  <view class="custom-dialog-mask {{devDialogClosing ? 'closing' : ''}}" wx:if="{{showDevDialog}}" bindtap="closeDevDialog" catchtouchmove="noop" catchtap="noop">
+    <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop">
       <view class="cd-title">提示</view>
       <view class="cd-content">产品正在开发中，敬请期待</view>
       <view class="cd-btn-row">
@@ -365,16 +365,16 @@
 
 
 <!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
-<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
-  <view class="auto-toast-box">
+<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" catchtap="noop">
+  <view class="auto-toast-box" catchtouchmove="noop" catchtap="noop">
     <view class="at-title">{{autoToast.title}}</view>
     <view class="at-content">{{autoToast.content}}</view>
   </view>
 </view>
 
 <!-- ================= 自定义对话框 ================= -->
-<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="closeCustomDialog" catchtouchmove="noop">
-  <view class="custom-dialog-box" catchtap="">
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="closeCustomDialog" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop">
     <view class="cd-title">{{dialog.title}}</view>
     <view class="cd-content">{{dialog.content}}</view>
     <view class="cd-btn-row">
@@ -385,8 +385,8 @@
 </view>
 
 <!-- ================= 自定义加载动画 ================= -->
-<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
-  <view class="loader">
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
+  <view class="loader" catchtouchmove="noop" catchtap="noop">
     <text class="loader-label">{{loadingText}}</text>
     <view class="loading-bar"></view>
   </view>

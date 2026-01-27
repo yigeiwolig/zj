@@ -23,6 +23,8 @@ const iconProfile = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53M
 const iconNew = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9InBpbmtCb3giIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiNGRjkzQUMiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNGRjRCN0QiLz48L2xpbmVhckdyYWRpZW50PjxsaW5lYXJHcmFkaWVudCBpZD0icmliYm9uR29sZCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI0ZGRDU0RiIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI0ZGNkYwMCIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjwhLS0gQm94IEJvZHkgKFBpbmspIC0tPjxwYXRoIGQ9Ik0xMCAyNEwyNCAzMEwzOCAyNFYzOEwyNCA0NEwxMCAzOFYyNFoiIGZpbGw9InVybCgjcGlua0JveCkiLz48IS0tIFRvcCBmYWNlIChEYXJrZXIgUGluaykgLS0+PHBhdGggZD0iTTEwIDI0TDI0IDE4TDM4IDI0IiBmaWxsPSIjRDMzRTY2Ii8+PCEtLSBCdXJzdGluZyBSaWJib25zIChHb2xkKSAtLT48cGF0aCBkPSJNMjQgMjRDMjQgMTggMjAgMTQgMTYgMTgiIHN0cm9rZT0idXJsKCNyaWJib25Hb2xkKSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMjQgMjRDMjYgMTggMzIgMTQgMzYgMTgiIHN0cm9rZT0idXJsKCNyaWJib25Hb2xkKSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMjQgMjRDMjQgMTYgMjggMTAgMzIgMTIiIHN0cm9rZT0idXJsKCNyaWJib25Hb2xkKSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMjQgMjRDMjQgMTggMjAgMTAgMTYgMTAiIHN0cm9rZT0idXJsKCNyaWJib25Hb2xkKSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMjQgMzBWNDQiIHN0cm9rZT0idXJsKCNyaWJib25Hb2xkKSIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxNCIgY3k9IjEyIiByPSIyIiBmaWxsPSIjRkZDMTA3Ii8+PGNpcmNsZSBjeD0iMzYiIGN5PSIxMCIgcj0iMiIgZmlsbD0iI0ZGQzEwNyIvPjwvc3ZnPg==";
 const iconRank = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJncmFkNiIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI2ZhNzA5YSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iI2ZlZTE0MCIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGZpbGw9InVybCgjZ3JhZDYpIiBkPSJNNCwxOFYxM0g5VjE4SDRNMTAsMThWOUgxNVYxOEgxME0xNiwxOFYxNEgyMVYxOEgxNloiLz48L3N2Zz4=";
 const iconShop = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJncmFkNyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzY2N2VlYSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzc2NGJhMiIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGZpbGw9InVybCgjZ3JhZDcpIiBkPSJNMTcsMThBMiwyIDAgMCwxIDE5LDIwQTIsMiAwIDAsMSAxNywyMkMxNS44OSwyMiAxNSwyMS4xIDE1LDIwQzE1LDE4Ljg5IDE1Ljg5LDE4IDE3LDE4TTEsMlY0SDJMNi42LDExLjU5TDUuMjQsMTQuMDRDNS4wOSwxNC4zMiA1LDE0LjY1IDUsMTVBMiwyIDAgMCwwIDcsMTdIMTlWMTVINy40MkEwLjI1LDAuMjUgMCAwLDEgNy4xNywxNC43NUM3LjE3LDE0LjcgNy4xOCwxNC42NiA3LjIsMTQuNjNMOC4xLDEzSDE1LjU1QzE2LjMsMTMgMTYuOTYsMTIuNTggMTcuMywxMS45N0wyMC44OCw1LjVDMjAuOTUsNS4zNCAyMSw1LjE3IDIxLDVBMSwxIDAgMCwwIDIwLDRINS4yMUw0LjI3LDJNNywxOEEyLDIgMCAwLDEgOSwyMEEyLDIgMCAwLDEgNywyMkM1Ljg5LDIyIDUsMjEuMSA1LDIwQzUsMTguODkgNS44OSwxOCA3LDE4WiIvPjwvc3ZnPg==";
+// ⬆️ 向上箭头 (用于底部触发按钮)
+const iconArrowUp = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgNVYxOU01IDEyTDEyIDVNMTkgMTJMMTIgNSIgc3Ryb2tlPSIjMzMzMzMzIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==";
 
 Page({
   data: {
@@ -36,7 +38,7 @@ Page({
     dragOffset: 0,
     currentIndex: 0, // 默认选中第0个，即"产品上新"
     
-    // 【新增】自动消失提示（无按钮，3秒后自动消失）
+    // 【新增】自动消失提示（无按钮，2秒后自动消失）
     autoToast: { show: false, title: '', content: '' },
     autoToastClosing: false, // 自动提示退出动画中
     
@@ -45,9 +47,14 @@ Page({
     
     // 【新增】底部抽屉控制
     isDrawerOpen: false,
+
+    // 【新增】按钮动画控制
+    isTriggerBtnVisible: false, // 按钮是否可见（弹起）
+    isTriggerBtnFaded: false,   // 按钮是否变淡沉下
     
     // 按照你的要求 1-12 顺序排列
     // === 在这里单独调整每个图标的大小 ===
+    iconArrowUp, // ⬆️ 注册新图标
     list: [
       { 
         id: 3, 
@@ -161,6 +168,21 @@ Page({
     // 1. 进页面 300ms 后触发入场
     setTimeout(() => {
       this.setData({ hasEntered: true });
+
+      // 2. 再延迟 800ms (等卡片动画稳定)，让底部按钮弹上来
+      setTimeout(() => {
+        this.setData({ isTriggerBtnVisible: true });
+
+        // 3. 按钮弹起后等待 3000ms，然后变淡沉下
+        setTimeout(() => {
+          // 只有当抽屉没打开时才变淡
+          if (!this.data.isDrawerOpen) {
+            this.setData({ isTriggerBtnFaded: true });
+          }
+        }, 3000);
+
+      }, 800);
+
     }, 300);
   },
 
@@ -597,7 +619,7 @@ Page({
         hasDevice
       });
 
-      // 🔴 修改逻辑：检查是否有未确认收货的订单
+      // 🔴 修改逻辑：检查订单状态
       // 过滤出真正未确认收货的订单（status 是 1 或 'SHIPPED'，且不是 'SIGNED' 或 'COMPLETED'）
       const realPendingOrders = allOrdersRes.data.filter(order => {
         const status = order.status;
@@ -608,13 +630,23 @@ Page({
             && realStatus !== 'SIGNED' && realStatus !== 'COMPLETED';
       });
 
+      // 🔴 检查是否有已确认收货的订单
+      const confirmedOrders = allOrdersRes.data.filter(order => {
+        const status = order.status;
+        const realStatus = order.realStatus;
+        // 已确认收货的订单：status 或 realStatus 是 'SIGNED' 或 'COMPLETED'
+        return status === 'SIGNED' || status === 'COMPLETED' 
+            || realStatus === 'SIGNED' || realStatus === 'COMPLETED';
+      });
+
       console.log('[checkTutorialAccess] 订单检查结果:', {
         totalOrders: allOrdersRes.data.length,
         pendingOrders: realPendingOrders.length,
+        confirmedOrders: confirmedOrders.length,
         orders: allOrdersRes.data.map(o => ({ id: o.orderId, status: o.status, realStatus: o.realStatus }))
       });
 
-      // 🔴 新逻辑：
+      // 🔴 新逻辑（修复）：
       // 1. 如果绑定了设备（不管有没有订单或订单状态）-> 直接放行
       if (hasDevice) {
         console.log('[checkTutorialAccess] ✅ 用户已绑定设备，直接放行');
@@ -623,7 +655,15 @@ Page({
         return; 
       }
 
-      // 2. 如果有未确认收货的订单 -> 提示先确认收货
+      // 2. 🔴 关键修复：如果有已确认收货的订单 -> 直接放行（不需要绑定设备）
+      if (confirmedOrders.length > 0) {
+        console.log('[checkTutorialAccess] ✅ 用户有已确认收货的订单，直接放行');
+        this.hideMyLoading();
+        wx.navigateTo({ url: '/pages/azjc/azjc' });
+        return;
+      }
+
+      // 3. 如果有未确认收货的订单 -> 提示先确认收货
       if (realPendingOrders.length > 0) {
         console.log('[checkTutorialAccess] ⚠️ 有未确认收货的订单:', realPendingOrders.length);
         this.hideMyLoading();
@@ -636,7 +676,7 @@ Page({
         return;
       }
 
-      // 3. 既没订单也没绑定设备 -> 显示提示（只给这种情况）
+      // 4. 既没订单也没绑定设备 -> 显示提示（只给这种情况）
       // 🔴 这个提示只显示给：没下过单，并且没绑定设备的用户
       if (allOrdersRes.data.length === 0 && !hasDevice) {
         console.log('[checkTutorialAccess] ⚠️ 既没订单也没绑定设备');
@@ -650,12 +690,12 @@ Page({
         return;
       }
 
-      // 4. 其他情况（有订单但已确认收货，且没绑定设备）-> 也提示需要绑定设备
-      console.log('[checkTutorialAccess] ⚠️ 有订单但没绑定设备');
+      // 5. 其他情况（理论上不应该到这里，但保留兜底逻辑）
+      console.log('[checkTutorialAccess] ⚠️ 未知情况，拒绝访问');
       this.hideMyLoading();
       this._showCustomModal({
         title: '提示',
-        content: '检测到您并未绑定设备，请在个人中心页面绑定设备后查看',
+        content: '请前往个人中心-我的订单\n确认收货后解锁教程',
         showCancel: false,
         confirmText: '知道了'
       });
@@ -723,7 +763,7 @@ Page({
       });
   },
 
-  // 【新增】自动消失提示（无按钮，3秒后自动消失，带收缩退出动画）
+  // 【新增】自动消失提示（无按钮，2秒后自动消失，带收缩退出动画）
   showAutoToast(title = '提示', content = '') {
     // 如果已有toast在显示，先关闭它
     if (this.data.autoToast.show) {
@@ -744,10 +784,10 @@ Page({
       'autoToast.content': content,
       autoToastClosing: false
     });
-    // 3秒后自动消失（带退出动画）
+    // 2秒后自动消失（带退出动画）
     setTimeout(() => {
       this._closeAutoToastWithAnimation();
-    }, 3000);
+    }, 2000);
   },
 
   // 关闭自动提示（带收缩退出动画）
@@ -850,27 +890,58 @@ Page({
 
   // 关闭抽屉
   closeDrawer() {
-    this.setData({ isDrawerOpen: false });
+    this.setData({ 
+      isDrawerOpen: false,
+      // 关闭抽屉后，按钮恢复显示，并直接进入变淡沉下状态（不打扰用户）
+      isTriggerBtnVisible: true,
+      isTriggerBtnFaded: true 
+    });
   },
 
-  // 触摸开始
+  // 触摸开始（只在把手区域触发）
   onDrawerTouchStart(e) {
     this.drawerTouchStartY = e.changedTouches[0].clientY;
+    this.drawerTouchStartTime = Date.now();
   },
 
-  // 触摸结束
+  // 触摸移动（用于实时判断滑动方向）
+  onDrawerTouchMove(e) {
+    // 可以在这里添加实时反馈，但暂时不处理，避免影响滚动
+  },
+
+  // 触摸结束（只在把手区域触发）
   onDrawerTouchEnd(e) {
-    const touchEndY = e.changedTouches[0].clientY;
-    const diff = touchEndY - this.drawerTouchStartY;
+    if (!this.drawerTouchStartY) return;
     
-    // 上滑 (diff < -50) -> 展开
-    if (diff < -50 && !this.data.isDrawerOpen) {
+    const touchEndY = e.changedTouches[0].clientY;
+    const touchEndTime = Date.now();
+    const diff = touchEndY - this.drawerTouchStartY;
+    const duration = touchEndTime - this.drawerTouchStartTime;
+    
+    // 计算滑动速度 (px/ms)
+    const velocity = Math.abs(diff) / duration;
+    
+    // 🔴 优化：只在把手区域响应，提高关闭阈值
+    // 1. 增加关闭阈值：从 50px 增加到 100px
+    // 2. 添加速度判断：快速滑动 (> 0.3 px/ms) 时降低阈值到 80px
+    
+    // 上滑 (diff < -100) -> 展开（提高阈值）
+    if (diff < -100 && !this.data.isDrawerOpen) {
       this.setData({ isDrawerOpen: true });
     }
-    // 下滑 (diff > 50) -> 收起
-    else if (diff > 50 && this.data.isDrawerOpen) {
-      this.setData({ isDrawerOpen: false });
+    // 下滑关闭：需要满足以下条件
+    // 1. 下滑距离 > 100px（或快速滑动时 > 80px）
+    // 2. 抽屉已打开
+    else if (this.data.isDrawerOpen) {
+      const threshold = velocity > 0.3 ? 80 : 100; // 快速滑动时降低阈值
+      if (diff > threshold) {
+        this.setData({ isDrawerOpen: false });
+      }
     }
+    
+    // 清理
+    this.drawerTouchStartY = null;
+    this.drawerTouchStartTime = null;
   },
 
   // 点击功能卡片

@@ -14,7 +14,8 @@
     <view 
       wx:if="{{isAuthorized}}" 
       class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
-      catchtap="toggleAdminMode">
+      catchtap="toggleAdminMode"
+      style="pointer-events: auto; z-index: 10002; position: relative;">
       {{isAdmin ? 'EXIT' : 'EDIT'}}
     </view>
   </view>
@@ -103,8 +104,8 @@
 </view>
 
 <!-- ================= 自定义编辑弹窗 ================= -->
-<view class="custom-modal-mask {{customEditModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" bindtap="closeCustomEditModal" catchtouchmove="noop">
-  <view class="custom-modal-box" catchtap="">
+<view class="custom-modal-mask {{customEditModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" bindtap="closeCustomEditModal" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box" catchtap="noop" catchtouchmove="noop">
     <view class="modal-title">{{customEditTitle}}</view>
     <input 
       class="modal-input" 

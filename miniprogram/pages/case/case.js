@@ -784,16 +784,8 @@ Page({
       isRecording: false // 确保录制状态也关闭
     });
     
-    // 校验：必须先绑定设备
-    if (!this.data.myDevices || this.data.myDevices.length === 0) {
-      console.log('⚠️ 没有绑定设备，显示自定义弹窗');
-      setTimeout(() => {
-        this.showBindDeviceTip();
-      }, 300);
-      return;
-    }
-
-    console.log('✅ 设备检查通过，准备打开相册');
+    // 🔴 移除绑定设备检查：允许用户先上传视频，后续绑定设备后再审核
+    console.log('✅ 准备打开相册');
     setTimeout(() => {
       console.log('📂 调用 wx.chooseVideo');
       wx.chooseVideo({
@@ -830,8 +822,25 @@ Page({
           }, 100);
         },
         fail: (err) => {
+          // 用户取消不提示
+          if (err && (err.errMsg || '').includes('cancel')) {
+            return;
+          }
           console.error('❌ 选择视频失败:', err);
-          this._showCustomToast('选择失败: ' + (err.errMsg || '未知错误'), 'none', 3000);
+          // 根据错误类型显示友好的中文提示
+          let errorMsg = '选择失败';
+          if (err && err.errMsg) {
+            if (err.errMsg.includes('cancel')) {
+              return; // 用户取消，不提示
+            } else if (err.errMsg.includes('permission') || err.errMsg.includes('权限')) {
+              errorMsg = '需要相册权限，请在设置中开启';
+            } else if (err.errMsg.includes('size') || err.errMsg.includes('大小')) {
+              errorMsg = '视频文件过大，请选择较小的视频';
+            } else if (err.errMsg.includes('format') || err.errMsg.includes('格式')) {
+              errorMsg = '视频格式不支持，请选择其他视频';
+            }
+          }
+          this._showCustomToast(errorMsg, 'none', 3000);
         }
       });
     }, 300);
@@ -846,15 +855,7 @@ Page({
     // 🔴 致命修复：确保关闭上传选项弹窗，避免层级冲突
     this.setData({ showUploadOptions: false });
     
-    // 校验：必须先绑定设备
-    if (!this.data.myDevices || this.data.myDevices.length === 0) {
-      console.log('⚠️ 没有绑定设备，显示自定义弹窗');
-      setTimeout(() => {
-        this.showBindDeviceTip();
-      }, 300);
-      return;
-    }
-    
+    // 🔴 移除绑定设备检查：允许用户先录制视频，后续绑定设备后再审核
     // 先请求摄像头和麦克风权限
     this.requestCameraAndMicrophonePermission().then(() => {
       // 权限获取成功，延迟一下让弹窗关闭动画完成
@@ -1324,20 +1325,7 @@ Page({
   },
 
   openCamera() { 
-    // 校验：必须先绑定设备
-    if (this.data.myDevices.length === 0) {
-      this._showCustomModal({
-        title: '无法上传',
-        content: '您尚未绑定任何 MT 设备，无法参与延保活动。请先去"我的"页面绑定设备。',
-        confirmText: '去绑定',
-        success: (res) => {
-          if(res.confirm) {
-             wx.navigateTo({ url: '/pages/my/my' }); // 跳转去绑定
-          }
-        }
-      });
-      return;
-    }
+    // 🔴 移除绑定设备检查：允许用户先录制视频，后续绑定设备后再上传审核
     
     // 1. 🔴 优化：先设置显示状态
     this.setData({ 
@@ -1411,9 +1399,23 @@ Page({
     }
   },
   startRecordLogic() { 
+    // 🔴 设置最大录制时长为 60 秒，防止文件过大
+    const MAX_RECORD_DURATION = 60; // 最大录制时长（秒）
+    
     // 这里的 startRecord 不需要改动太多，只要确保不调用 getApp().hideLoading 即可
     this.ctx.startRecord({ 
-      timeoutCallback: { duration: 60 },
+      timeoutCallback: () => {
+        // 🔴 超时回调：达到最大时长时自动停止
+        console.log('⏰ [超时回调] 达到最大录制时长，自动停止录制');
+        if (this.data.timer) {
+          clearInterval(this.data.timer);
+          this.setData({ timer: null });
+        }
+        // 自动保存并停止
+        if (this.data.isRecording) {
+          this.stopRecordLogic(true);
+        }
+      },
       success:()=>{
         // 录制状态改变，WXML 里的 class 会自动变化，触发 CSS 动画
         this.setData({isRecording: true, recTimeStr: "00:00"});
@@ -1423,86 +1425,95 @@ Page({
         let seconds = 0;
         this.data.timer = setInterval(() => {
           seconds++;
+          
+          // 🔴 双重保护：在计时器中也检查是否达到最大时长
+          if (seconds >= MAX_RECORD_DURATION) {
+            console.log('⏰ [计时器检查] 达到最大录制时长，自动停止录制');
+            clearInterval(this.data.timer);
+            this.setData({ timer: null });
+            // 自动保存并停止
+            this.stopRecordLogic(true);
+            return;
+          }
+          
           const min = Math.floor(seconds / 60).toString().padStart(2, '0');
           const sec = (seconds % 60).toString().padStart(2, '0');
           this.setData({ recTimeStr: `${min}:${sec}` });
         }, 1000);
       },
       fail: (err) => {
-        console.error('录制失败', err);
+        console.error('❌ 录制启动失败', err);
         this._showCustomToast('录制启动失败', 'none');
         this.setData({ isRecording: false });
-      }
-    }); 
-  },
-  stopRecordLogic(save) { 
-    if (!this.data.isRecording) {
-      console.log('⚠️ [警告] 当前未在录制，无需停止');
-      return;
-    }
-    
-    // 🔴 设置停止标志，防止重复点击
-    this.setData({ isStopping: true });
-    
-    // 🔴 添加震动反馈
-    wx.vibrateShort();
-    
-    // 🔴 确保 ctx 存在
-    if (!this.ctx) {
-      console.error('❌ camera context 不存在');
-      this.setData({ 
-        isRecording: false, 
-        isStopping: false 
-      });
-      return;
-    }
-    
-    console.log('🔄 开始停止录制...');
-    
-    this.ctx.stopRecord({ 
-      success:(res)=>{
-        console.log('✅ 录制结束，返回结果:', res);
-        
-        // 1. 先清除计时器
+        // 清除计时器
         if (this.data.timer) {
           clearInterval(this.data.timer);
           this.setData({ timer: null });
         }
-
-        // 2. 🔴 关键一步：先只改变 UI 状态，让方块变回圆形
-        // 设置 isRecording 为 false，WXML 里的 class 会移除 'recording'，触发 CSS 动画
-        this.setData({
-          isRecording: false, 
-          recTimeStr: "00:00",
-          isStopping: false // 🔴 重置停止标志
-        }); 
-
-        // 3. 🔴 延迟跳转：给动画留出时间 (500ms > CSS transition 0.4s)
-        setTimeout(() => {
-            if(save && res.tempVideoPath) {
-              // 🔴 致命修复：必须彻底关闭相机层，防止 z-index 遮挡表单
-              this.setData({
-                showCamera: false, 
-                cameraAnimating: false, // 确保动画状态也关闭
-                showForm: true, 
-                videoPath: res.tempVideoPath
-                // 🔴 修复：按照 zj4 的写法，不重置 categoryIndex 和 modelIndex
-              }); 
-            } else if (save) {
-              this._showCustomToast('录制无效', 'none');
-            }
-        }, 250); // 🔴 优化：从 500ms 缩短到 250ms，加快响应
-      },
-      fail: (err) => {
-        console.error('❌ 停止失败', err);
-        // 🔴 失败时也要重置状态
-        this.setData({
-          isRecording: false,
-          isStopping: false
-        });
-        this._showCustomToast('停止录制失败', 'none');
       }
     }); 
+  },
+  stopRecordLogic(save) { 
+    // 🔴 先清除计时器
+    if (this.data.timer) {
+      clearInterval(this.data.timer);
+      this.setData({ timer: null });
+    }
+    
+    // 🔴 立即重置 UI 状态，不依赖 stopRecord 的成功回调
+    this.setData({
+      isRecording: false,
+      isStopping: false,
+      recTimeStr: "00:00"
+    });
+    
+    // 🔴 确保 ctx 存在，如果不存在则重新创建
+    if (!this.ctx) {
+      this.ctx = wx.createCameraContext();
+    }
+    
+    // 🔴 尝试停止录制，但不依赖成功回调
+    try {
+      this.ctx.stopRecord({
+        success: (res) => {
+          console.log('✅ 录制结束，返回结果:', res);
+          if (save && res.tempVideoPath) {
+            setTimeout(() => {
+              this.setData({
+                showCamera: false,
+                cameraAnimating: false,
+                showForm: true,
+                videoPath: res.tempVideoPath
+              });
+            }, 250);
+          } else if (save) {
+            this._showCustomToast('录制无效', 'none');
+          }
+        },
+        fail: (err) => {
+          console.error('❌ stopRecord 失败，但已重置状态', err);
+          // 即使失败，也尝试处理保存逻辑
+          if (save) {
+            // 如果 stopRecord 失败，直接关闭相机，不保存视频
+            setTimeout(() => {
+              this.setData({
+                showCamera: false,
+                cameraAnimating: false
+              });
+            }, 250);
+          }
+        }
+      });
+    } catch (e) {
+      console.error('❌ stopRecord 调用异常', e);
+      // 即使异常，也要关闭相机
+      setTimeout(() => {
+        this.setData({
+          showCamera: false,
+          cameraAnimating: false
+        });
+      }, 250);
+    } 
   },
   
   // 🔴 新增：关闭表单错误提示
@@ -1564,19 +1575,12 @@ Page({
       this.showFormErrorWithShake('请选择产品型号');
       return;
     }
-    if (selectedSnIndex === null || selectedSnIndex === undefined) {
-      console.error('❌ [提交] 未选择设备');
-      this.showFormErrorWithShake('请选择关联设备');
-      return;
+    // 🔴 设备选择变为可选：如果用户没有绑定设备，targetSn 可以为空
+    let targetSn = null;
+    if (selectedSnIndex !== null && selectedSnIndex !== undefined && myDevices && myDevices[selectedSnIndex]) {
+      targetSn = myDevices[selectedSnIndex].sn;
     }
-    if (!myDevices || !myDevices[selectedSnIndex]) {
-      console.error('❌ [提交] 设备数据异常');
-      this.showFormErrorWithShake('设备数据异常，请重新选择');
-      return;
-    }
-    
-    const targetSn = myDevices[selectedSnIndex].sn; // 获取选中的 SN
-    console.log('🔵 [提交] 准备提交，targetSn:', targetSn);
+    console.log('🔵 [提交] 准备提交，targetSn:', targetSn || '未绑定设备');
     
     // 🔴 修复：防止重复提交
     if (this.data.isSubmitting) {
@@ -1597,12 +1601,27 @@ Page({
         // 🆕 记录用户投稿次数：每次提交自增 1（管理员后台可见）
         // 方案：先查询该 openid 历史投稿次数 count，再写入本次的 applyCount = count + 1
         // 注意：这里用云函数 login 获取 openid（与项目现有逻辑保持一致）
-        // 🆕 按设备 SN 统计投稿次数（口径A：只按 sn 计数）
-        // 同一个 sn 无论哪个用户投稿，次数都累加
-        // 只统计“仍存在的投稿记录”。用户在 my 页撤销会直接 remove 掉记录，因此天然不计入。
-        // 为了避免把旧的已删除记录算进去，这里按 sn 维度 count 当前集合中仍存在的记录即可。
-        const countRes = await db.collection('video').where({ sn: targetSn }).count();
-        const applyCount = (countRes.total || 0) + 1;
+        // 🔴 获取用户 openid（用于未绑定设备时的延保记录）
+        let userOpenid = null;
+        try {
+          const loginRes = await wx.cloud.callFunction({ name: 'login' });
+          userOpenid = loginRes.result?.openid;
+        } catch (err) {
+          console.error('❌ [提交] 获取 openid 失败:', err);
+        }
+
+        // 🆕 按设备 SN 统计投稿次数（如果有 sn）
+        let applyCount = 1;
+        if (targetSn) {
+          const countRes = await db.collection('video').where({ sn: targetSn }).count();
+          applyCount = (countRes.total || 0) + 1;
+        } else {
+          // 如果没有 sn，按 openid 统计投稿次数
+          if (userOpenid) {
+            const countRes = await db.collection('video').where({ openid: userOpenid }).count();
+            applyCount = (countRes.total || 0) + 1;
+          }
+        }
 
         const submitData = {
           vehicleName, 
@@ -1612,7 +1631,8 @@ Page({
           videoFileID: res.fileID, 
           createTime: db.serverDate(), 
           status: 0, // 0:审核中
-          sn: targetSn, // 【新增】关联 SN
+          sn: targetSn || null, // 🔴 关联 SN（可为空）
+          openid: userOpenid || null, // 🔴 新增：保存 openid（用于未绑定设备时的延保记录）
           applyCount: applyCount // 🆕 第几次申请/投稿
         };
         console.log('🔵 [提交] 准备写入数据库，data:', submitData);
@@ -1628,6 +1648,13 @@ Page({
               showSuccess: true, 
               videoPath: null 
             }); 
+            
+            // 🔴 如果用户没有绑定设备，提交成功后显示提示弹窗
+            if (!targetSn && (!myDevices || myDevices.length === 0)) {
+              setTimeout(() => {
+                this.setData({ showBindDeviceTip: true });
+              }, 500); // 延迟500ms，等成功弹窗显示后再显示绑定提示
+            }
           },
           fail: (dbErr) => {
             console.error('❌ [提交] 数据库写入失败:', dbErr);

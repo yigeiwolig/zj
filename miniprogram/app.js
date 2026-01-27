@@ -213,6 +213,23 @@ App({
 
       // 3) showLoading/hideLoading
       wx.showLoading = (opt = {}) => {
+        // #region agent log
+        try {
+          const logData = {
+            location: 'miniprogram/app.js:wx.showLoading',
+            message: 'wx.showLoading intercepted',
+            data: { 
+              opt: typeof opt === 'string' ? opt : (opt.title || ''),
+              page: getCurrentPages().length > 0 ? getCurrentPages()[getCurrentPages().length - 1].route : 'unknown'
+            },
+            timestamp: Date.now(),
+            sessionId: 'debug-session',
+            runId: 'loading-trace',
+            hypothesisId: 'D'
+          };
+          wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:logData,fail:()=>{}});
+        } catch (e) {}
+        // #endregion
         const toast = getToast();
         if (toast) {
           toast.showLoading(opt);
@@ -250,8 +267,8 @@ App({
               } else {
                 // 如果没有保存原生方法（理论上不可能），尝试直接调用（可能会递归，但这里是兜底）
                 // 实际上我们应该确保 __mt_oldHideToast 存在
-              }
-            } catch (e) {}
+            }
+          } catch (e) {}
           };
 
           // 立即隐藏原生提示
@@ -532,7 +549,7 @@ App({
       // 查询分享码（带超时）
       const codeRes = await Promise.race([
         db.collection('chakan')
-          .where({ code: shareCode })
+        .where({ code: shareCode })
           .get(),
         timeoutPromise
       ])

@@ -560,7 +560,7 @@ Page({
     // 直接复用 onLoad 中写入的 statusBarHeight，避免重复声明变量
     // const winInfo2 = wx.getWindowInfo();
     // this.setData({ statusBarHeight: winInfo2.statusBarHeight || 44 });
-  
+    
     const sys = wx.getSystemInfoSync();
     // 注意：CSS中使用的是px单位，所以直接计算px
     this.tickWidthPx = 20; // 每个刻度总宽度20px

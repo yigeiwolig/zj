@@ -106,6 +106,32 @@ Page({
 
   // 页面加载时从云数据库读取数据
   onLoad: function(options) {
+    // #region agent log
+    try {
+      const logData = {
+        location: 'miniprogram/pages/azjc/azjc.js:onLoad',
+        message: 'azjc page onLoad',
+        data: { 
+          options,
+          justConfirmed: options.justConfirmed,
+          timestamp: Date.now()
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'confirm-receipt-issue',
+        hypothesisId: 'page-load-timing'
+      };
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: logData,
+        success: () => {},
+        fail: () => {}
+      });
+    } catch (err) {}
+    // #endregion
+
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -185,8 +211,16 @@ Page({
       this.loadDataFromCloud();
       });
     } else {
-      // 否则进行权限检查
-      this.checkAccessPermission();
+      // 🔴 关键修复：如果刚确认收货，延迟检查权限，确保数据库更新完成
+      if (options && options.justConfirmed === '1') {
+        console.log('[azjc] onLoad: 刚确认收货，延迟 1000ms 后检查权限');
+        setTimeout(() => {
+          this.checkAccessPermission();
+        }, 1000); // 延迟 1 秒，确保数据库更新完成
+      } else {
+        // 否则进行权限检查
+        this.checkAccessPermission();
+      }
     }
   },
 
@@ -265,6 +299,30 @@ Page({
   
   // 🔴 核心入口检查：限制普通用户访问
   async checkAccessPermission() {
+    // #region agent log
+    try {
+      const logData = {
+        location: 'miniprogram/pages/azjc/azjc.js:checkAccessPermission',
+        message: 'checkAccessPermission called',
+        data: { 
+          timestamp: Date.now()
+        },
+        timestamp: Date.now(),
+        sessionId: 'debug-session',
+        runId: 'confirm-receipt-issue',
+        hypothesisId: 'permission-check'
+      };
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: logData,
+        success: () => {},
+        fail: () => {}
+      });
+    } catch (err) {}
+    // #endregion
+
     const app = getApp();
 
     // 🔴 分享码用户：先检查云数据库中的剩余次数，次数用完后禁止访问
@@ -480,7 +538,7 @@ Page({
         hasDevice
       });
 
-      // 🔴 修改逻辑：检查是否有未确认收货的订单
+      // 🔴 修改逻辑：检查订单状态
       // 过滤出真正未确认收货的订单（status 是 1 或 'SHIPPED'，且不是 'SIGNED' 或 'COMPLETED'）
       const realPendingOrders = allOrdersRes.data.filter(order => {
         const status = order.status;
@@ -491,12 +549,54 @@ Page({
             && realStatus !== 'SIGNED' && realStatus !== 'COMPLETED';
       });
 
-      console.log('[azjc checkAccessPermission] 订单检查结果:', {
-        totalOrders: allOrdersRes.data.length,
-        pendingOrders: realPendingOrders.length
+      // 🔴 检查是否有已确认收货的订单
+      const confirmedOrders = allOrdersRes.data.filter(order => {
+        const status = order.status;
+        const realStatus = order.realStatus;
+        // 已确认收货的订单：status 或 realStatus 是 'SIGNED' 或 'COMPLETED'
+        return status === 'SIGNED' || status === 'COMPLETED' 
+            || realStatus === 'SIGNED' || realStatus === 'COMPLETED';
       });
 
-      // 🔴 新逻辑：
+      // #region agent log
+      try {
+        const logData = {
+          location: 'miniprogram/pages/azjc/azjc.js:checkAccessPermission:order-check',
+          message: '订单检查结果',
+          data: { 
+            totalOrders: allOrdersRes.data.length,
+            pendingOrders: realPendingOrders.length,
+            confirmedOrders: confirmedOrders.length,
+            orders: allOrdersRes.data.map(o => ({ 
+              orderId: o.orderId, 
+              status: o.status, 
+              realStatus: o.realStatus 
+            })),
+            timestamp: Date.now()
+          },
+          timestamp: Date.now(),
+          sessionId: 'debug-session',
+          runId: 'confirm-receipt-issue',
+          hypothesisId: 'order-status-check'
+        };
+        wx.request({
+          url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          data: logData,
+          success: () => {},
+          fail: () => {}
+        });
+      } catch (err) {}
+      // #endregion
+
+      console.log('[azjc checkAccessPermission] 订单检查结果:', {
+        totalOrders: allOrdersRes.data.length,
+        pendingOrders: realPendingOrders.length,
+        confirmedOrders: confirmedOrders.length
+      });
+
+      // 🔴 新逻辑（修复）：
       // 1. 如果绑定了设备（不管有没有订单或订单状态）-> 直接放行
       if (hasDevice) {
         console.log('[azjc checkAccessPermission] ✅ 用户已绑定设备，直接放行');
@@ -506,7 +606,16 @@ Page({
         return; 
       }
 
-      // 2. 如果有未确认收货的订单 -> 提示先确认收货
+      // 2. 🔴 关键修复：如果有已确认收货的订单 -> 直接放行（不需要绑定设备）
+      if (confirmedOrders.length > 0) {
+        console.log('[azjc checkAccessPermission] ✅ 用户有已确认收货的订单，直接放行');
+        this.hideMyLoading();
+        await this.checkAdminPrivilege(); // 🔴 等待管理员权限检查完成
+        this.loadDataFromCloud();
+        return;
+      }
+
+      // 3. 如果有未确认收货的订单 -> 提示先确认收货
       if (realPendingOrders.length > 0) {
         console.log('[azjc checkAccessPermission] ⚠️ 有未确认收货的订单:', realPendingOrders.length);
         this.hideMyLoading();
@@ -514,7 +623,7 @@ Page({
         return;
       }
 
-      // 3. 既没订单也没绑定设备 -> 显示提示（只给这种情况）
+      // 4. 既没订单也没绑定设备 -> 显示提示（只给这种情况）
       // 🔴 这个提示只显示给：没下过单，并且没绑定设备的用户
       if (allOrdersRes.data.length === 0 && !hasDevice) {
         console.log('[azjc checkAccessPermission] ⚠️ 既没订单也没绑定设备');
@@ -523,10 +632,10 @@ Page({
         return;
       }
 
-      // 4. 其他情况（有订单但已确认收货，且没绑定设备）-> 提示需要绑定设备或下单
-      console.log('[azjc checkAccessPermission] ⚠️ 有订单但没绑定设备');
+      // 5. 其他情况（理论上不应该到这里，但保留兜底逻辑）
+      console.log('[azjc checkAccessPermission] ⚠️ 未知情况，拒绝访问');
       this.hideMyLoading();
-      this.showRejectModal('下单后，在个人中心点击查看教程进入');
+      this.showRejectModal('请前往个人中心-我的订单\n确认收货后解锁教程');
 
     } catch (err) {
       console.error('权限检查异常', err);

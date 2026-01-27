@@ -48,6 +48,9 @@
               controls="{{false}}"
               bindplay="onVideoPlay"
               bindpause="onVideoPause"
+              binderror="onVideoError"
+              data-index="{{index}}"
+              data-location="hero"
             ></video>
             <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.url}}" data-location="hero">
               <view class="play-icon">
@@ -89,7 +92,9 @@
         <view class="p-info">
            <view class="p-row">
              <text class="p-title {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSeriesName':''}}" data-index="{{index}}">{{item.name}}</text>
-             <text class="p-price">¥{{item.models[0].price}} 起</text>
+             <view class="p-price-wrapper {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditSeriesPrice' : ''}}" data-index="{{index}}">
+               <text class="p-price">{{item.priceDisplay || '¥' + item.models[0].price + ' 起'}}</text>
+             </view>
            </view>
         </view>
       </view>
@@ -105,7 +110,7 @@
 <view class="full-modal {{showDetail ? 'active' : ''}}">
   <!-- 弹窗头 -->
   <view class="modal-nav">
-    <view class="nav-close" bindtap="closeDetail">✕</view>
+    <view class="nav-close" catchtap="closeDetail">✕</view>
     <!-- 管理员模式下：标题可点击编辑 -->
     <view 
       class="modal-title {{isAdmin ? 'editable' : ''}}" 
@@ -127,7 +132,7 @@
                 <video 
                   src="{{item.url}}" 
                   class="dimg" 
-                  style="height:400rpx; width:100%;" 
+                  style="height:422rpx; width:100%;" 
                   id="detail-video-{{index}}"
                   muted 
                   loop 
@@ -136,6 +141,9 @@
                   controls="{{false}}"
                   bindplay="onVideoPlay"
                   bindpause="onVideoPause"
+                  binderror="onVideoError"
+                  data-index="{{index}}"
+                  data-location="detail"
                 ></video>
                 <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.url}}" data-location="detail">
                   <view class="play-icon">
@@ -143,7 +151,7 @@
                   </view>
                 </view>
               </view>
-              <image wx:else src="{{item.url}}" mode="widthFix" class="dimg" />
+              <image wx:else src="{{item.url}}" mode="aspectFill" class="dimg" />
               
               <view wx:if="{{isAdmin}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
            </view>
@@ -354,7 +362,7 @@
   <scroll-view scroll-y class="modal-scroll">
      <view class="acc-detail-hero">
         <image wx:if="{{accessoryList[currentAccIdx].detailImages.length>0}}" 
-               src="{{accessoryList[currentAccIdx].detailImages[0]}}" mode="widthFix" class="dimg"/>
+               src="{{accessoryList[currentAccIdx].detailImages[0]}}" mode="aspectFill" class="dimg"/>
         <view wx:else style="padding:100rpx; text-align:center; color:#ccc;">点击下方添加详情图</view>
         
         <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddAccDetailImg">+ 添加/更换图片</view>
@@ -374,8 +382,8 @@
 </view>
 
 <!-- ================= 6. 加入购物车成功弹窗（弹出+收缩退出动画） ================= -->
-<view class="success-mask {{cartSuccessClosing ? 'closing' : ''}}" wx:if="{{showCartSuccess}}" catchtouchmove="noop">
-  <view class="success-box">
+<view class="success-mask {{cartSuccessClosing ? 'closing' : ''}}" wx:if="{{showCartSuccess}}" catchtouchmove="noop" catchtap="noop">
+  <view class="success-box" catchtouchmove="noop" catchtap="noop">
     <view class="s-icon">✔</view>
     <view class="s-title">已加入购物车</view>
     <view class="s-desc">商品已保存，您可以继续选购或去结算</view>
@@ -514,8 +522,8 @@
 </view>
 
 <!-- ================= 8. 自定义编辑弹窗 ================= -->
-<view class="custom-modal-mask {{customModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" catchtouchmove="noop">
-  <view class="custom-modal-box">
+<view class="custom-modal-mask {{customModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box" catchtouchmove="noop" catchtap="noop">
     <view class="custom-modal-title">{{customEditTitle}}</view>
     <input class="custom-modal-input" value="{{customEditVal}}" bindinput="onCustomEditInput" focus="{{showCustomEditModal}}" cursor-spacing="100"/>
     <view class="custom-modal-btn-row">
@@ -526,8 +534,8 @@
 </view>
 
 <!-- ================= 自定义弹窗（替换 wx.showModal，带收缩退出动画） ================= -->
-<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop">
-  <view class="custom-dialog-box">
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-dialog-box" catchtouchmove="noop" catchtap="noop">
     <view class="cd-title">{{dialog.title}}</view>
     <rich-text class="cd-content" nodes="{{dialog.content}}"></rich-text>
     <view class="cd-btn-row">
@@ -537,25 +545,25 @@
   </view>
 </view>
 
-<!-- ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= -->
-<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
-  <view class="auto-toast-box">
+<!-- ================= 自动消失提示（无按钮，2秒后自动消失，带收缩退出动画） ================= -->
+<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" catchtap="noop">
+  <view class="auto-toast-box" catchtouchmove="noop" catchtap="noop">
     <view class="at-title">{{autoToast.title}}</view>
     <view class="at-content">{{autoToast.content}}</view>
   </view>
 </view>
 
 <!-- ================= 9. 屏幕中间提示气泡 ================= -->
-<view class="center-toast-mask {{centerToastClosing ? 'closing' : ''}}" wx:if="{{centerToast.show}}" catchtouchmove="noop">
-  <view class="center-toast-box">
+<view class="center-toast-mask {{centerToastClosing ? 'closing' : ''}}" wx:if="{{centerToast.show}}" catchtouchmove="noop" catchtap="noop">
+  <view class="center-toast-box" catchtouchmove="noop" catchtap="noop">
     <view class="ct-icon">!</view> 
     <view class="ct-text">{{centerToast.text}}</view>
   </view>
 </view>
 
 <!-- ================= 10. 智能粘贴输入弹窗 ================= -->
-<view class="smart-paste-mask {{smartPasteClosing ? 'closing' : ''}}" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;" catchtouchmove="noop">
-  <view class="smart-paste-box">
+<view class="smart-paste-mask {{smartPasteClosing ? 'closing' : ''}}" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;" catchtouchmove="noop" catchtap="noop">
+  <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
     <view class="sp-title">智能粘贴</view>
     <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
     <textarea 
@@ -574,8 +582,8 @@
 </view>
 
 <!-- ================= 自定义操作菜单（替代 wx.showActionSheet） ================= -->
-<view class="action-sheet-mask {{actionSheetClosing ? 'closing' : ''}}" wx:if="{{actionSheet.show}}" bindtap="closeActionSheet" catchtouchmove="noop">
-  <view class="action-sheet-box" catchtap="">
+<view class="action-sheet-mask {{actionSheetClosing ? 'closing' : ''}}" wx:if="{{actionSheet.show}}" bindtap="closeActionSheet" catchtouchmove="noop" catchtap="noop">
+  <view class="action-sheet-box" catchtap="noop" catchtouchmove="noop">
     <view 
       class="action-sheet-item" 
       wx:for="{{actionSheet.itemList}}" 
@@ -590,7 +598,7 @@
 </view>
 
 <!-- ================= 11. 自定义全屏视频播放器 ================= -->
-<view class="video-modal-mask" wx:if="{{showVideoPlayer}}" style="z-index: 99999;" bindtap="toggleVideoPlayPause">
+<view class="video-modal-mask" wx:if="{{showVideoPlayer}}" style="z-index: 99999;" bindtap="toggleVideoPlayPause" catchtouchmove="noop">
   <view class="video-close-btn" catchtap="closeVideoPlayer">✕</view>
   <video 
     src="{{currentVideoUrl}}" 
@@ -614,8 +622,8 @@
 </view>
 
 <!-- ================= 自定义加载动画（白色背景进度条） ================= -->
-<view class="loading-mask" wx:if="{{showLoadingAnimation}}">
-  <view class="loader">
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
+  <view class="loader" catchtouchmove="noop" catchtap="noop">
     <text class="loader-label">{{loadingText}}</text>
     <view class="loading-bar"></view>
   </view>

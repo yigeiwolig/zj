@@ -210,8 +210,8 @@
 <!-- ================= 弹窗区域 ================= -->
 
 <!-- 5. 初始福利弹窗 -->
-<view class="modal-overlay active {{introClosing ? 'closing' : ''}}" wx:if="{{showIntro}}" catchtouchmove="noop">
-  <view class="ios-dialog">
+<view class="modal-overlay active {{introClosing ? 'closing' : ''}}" wx:if="{{showIntro}}" catchtouchmove="noop" catchtap="noop">
+  <view class="ios-dialog" catchtouchmove="noop" catchtap="noop">
     <view class="emoji-icon">🎁</view>
     <view class="dialog-title">上传视频赢延保</view>
     <view class="dialog-desc">上传案例视频，审核通过后即可获得 <text class="highlight">1个月延保服务</text>。</view>
@@ -220,8 +220,8 @@
 </view>
 
 <!-- 6. 用户表单 -->
-<view class="modal-overlay active {{formClosing ? 'closing' : ''}}" wx:if="{{showForm}}" catchtouchmove="noop">
-  <view class="ios-dialog left-align {{formShake ? 'shake' : ''}}">
+<view class="modal-overlay active {{formClosing ? 'closing' : ''}}" wx:if="{{showForm}}" catchtouchmove="noop" catchtap="noop">
+  <view class="ios-dialog left-align {{formShake ? 'shake' : ''}}" catchtouchmove="noop" catchtap="noop">
     
     <!-- 🆕 新增：左上角关闭按钮 -->
     <view class="dialog-close-x" bindtap="closeForm">×</view>
@@ -242,8 +242,8 @@
         <view class="ios-select" bindtap="showCategoryPicker">
           {{categoryIndex!==null?categoryArray[categoryIndex]:'请选择'}}
         </view>
-        <view class="custom-picker-modal" wx:if="{{showCategoryPickerModal}}" catchtap="closeCategoryPicker">
-          <view class="custom-picker-content" catchtap="preventBubble">
+        <view class="custom-picker-modal" wx:if="{{showCategoryPickerModal}}" catchtap="closeCategoryPicker" catchtouchmove="noop">
+          <view class="custom-picker-content" catchtap="preventBubble" catchtouchmove="noop">
             <view class="picker-header">
               <text class="picker-cancel" bindtap="closeCategoryPicker">取消</text>
               <text class="picker-title">选择车型分类</text>
@@ -269,8 +269,8 @@
         <view class="ios-select" bindtap="showModelPicker">
           {{modelIndex!==null?modelArray[modelIndex]:'请选择'}}
         </view>
-        <view class="custom-picker-modal" wx:if="{{showModelPickerModal}}" catchtap="closeModelPicker">
-          <view class="custom-picker-content" catchtap="preventBubble">
+        <view class="custom-picker-modal" wx:if="{{showModelPickerModal}}" catchtap="closeModelPicker" catchtouchmove="noop">
+          <view class="custom-picker-content" catchtap="preventBubble" catchtouchmove="noop">
             <view class="picker-header">
               <text class="picker-cancel" bindtap="closeModelPicker">取消</text>
               <text class="picker-title">选择产品型号</text>
@@ -288,18 +288,24 @@
     <view class="form-group">
       <text class="form-label">关联设备 (审核通过赠送延保)</text>
       <!-- 真机：使用原生 picker -->
-      <picker wx:if="{{!useCustomPicker}}" bindchange="bindSnChange" value="{{selectedSnIndex !== null ? selectedSnIndex : 0}}" range="{{myDevices}}" range-key="displaySn" style="width: 100%;">
+      <picker wx:if="{{!useCustomPicker && myDevices && myDevices.length > 0}}" bindchange="bindSnChange" value="{{selectedSnIndex !== null ? selectedSnIndex : 0}}" range="{{myDevices}}" range-key="displaySn" style="width: 100%;">
         <view class="ios-select">
-          {{selectedSnIndex !== null ? myDevices[selectedSnIndex].displaySn : '请选择设备'}}
+          {{selectedSnIndex !== null ? myDevices[selectedSnIndex].displaySn : '请选择设备（可选）'}}
         </view>
       </picker>
+      <view wx:if="{{!myDevices || myDevices.length === 0}}" class="ios-select" style="color: #999;">
+        设备可后续绑定
+      </view>
       <!-- 模拟器：使用自定义选择器 -->
       <view wx:else>
-        <view class="ios-select" bindtap="showDevicePicker">
-          {{selectedSnIndex !== null ? myDevices[selectedSnIndex].displaySn : '请选择设备'}}
+        <view wx:if="{{myDevices && myDevices.length > 0}}" class="ios-select" bindtap="showDevicePicker">
+          {{selectedSnIndex !== null ? myDevices[selectedSnIndex].displaySn : '请选择设备（可选）'}}
         </view>
-        <view class="custom-picker-modal" wx:if="{{showDevicePickerModal}}" catchtap="closeDevicePicker">
-          <view class="custom-picker-content" catchtap="preventBubble">
+        <view wx:else class="ios-select" style="color: #999;">
+          设备可后续绑定
+        </view>
+        <view class="custom-picker-modal" wx:if="{{showDevicePickerModal}}" catchtap="closeDevicePicker" catchtouchmove="noop">
+          <view class="custom-picker-content" catchtap="preventBubble" catchtouchmove="noop">
             <view class="picker-header">
               <text class="picker-cancel" bindtap="closeDevicePicker">取消</text>
               <text class="picker-title">选择关联设备</text>
@@ -319,8 +325,8 @@
 </view>
 
 <!-- 🔴 自定义提示框 -->
-<view class="modal-overlay active" wx:if="{{showFormError}}" bindtap="closeFormError">
-  <view class="ios-dialog" catchtap="preventBubble">
+<view class="modal-overlay active" wx:if="{{showFormError}}" bindtap="closeFormError" catchtouchmove="noop" catchtap="noop">
+  <view class="ios-dialog" catchtap="preventBubble" catchtouchmove="noop">
     <view class="dialog-title center">提示</view>
     <view class="dialog-desc">{{formErrorMsg}}</view>
     <button class="dialog-btn" bindtap="closeFormError">我知道了</button>
@@ -328,8 +334,8 @@
 </view>
 
 <!-- 7. 成功提示 -->
-<view class="modal-overlay active" wx:if="{{showSuccess}}">
-  <view class="ios-dialog">
+<view class="modal-overlay active" wx:if="{{showSuccess}}" catchtouchmove="noop" catchtap="noop">
+  <view class="ios-dialog" catchtouchmove="noop" catchtap="noop">
     <view class="success-content">
       <view class="emoji-icon">🎉</view>
       <view class="user-name">提交成功</view>
@@ -342,8 +348,8 @@
 
 
 <!-- 9. 管理员上传表单 -->
-<view class="modal-overlay active" wx:if="{{showAdminForm}}">
-  <view class="ios-dialog left-align">
+<view class="modal-overlay active" wx:if="{{showAdminForm}}" catchtouchmove="noop" catchtap="noop">
+  <view class="ios-dialog left-align" catchtouchmove="noop" catchtap="noop">
     <view class="dialog-title center">{{isEditing ? '修改案例' : '发布官方案例'}}</view>
     <view style="display: flex; gap: 20rpx; margin-bottom: 30rpx;">
       <view class="upload-box" bindtap="chooseAdminVideo">
@@ -371,8 +377,8 @@
         <view class="ios-select" bindtap="showCategoryPicker">
           {{categoryIndex!==null?categoryArray[categoryIndex]:'请选择'}}
         </view>
-        <view class="custom-picker-modal" wx:if="{{showCategoryPickerModal}}" catchtap="closeCategoryPicker">
-          <view class="custom-picker-content" catchtap="preventBubble">
+        <view class="custom-picker-modal" wx:if="{{showCategoryPickerModal}}" catchtap="closeCategoryPicker" catchtouchmove="noop">
+          <view class="custom-picker-content" catchtap="preventBubble" catchtouchmove="noop">
             <view class="picker-header">
               <text class="picker-cancel" bindtap="closeCategoryPicker">取消</text>
               <text class="picker-title">选择车型分类</text>
@@ -398,8 +404,8 @@
         <view class="ios-select" bindtap="showModelPicker">
           {{modelIndex!==null?modelArray[modelIndex]:'请选择'}}
         </view>
-        <view class="custom-picker-modal" wx:if="{{showModelPickerModal}}" catchtap="closeModelPicker">
-          <view class="custom-picker-content" catchtap="preventBubble">
+        <view class="custom-picker-modal" wx:if="{{showModelPickerModal}}" catchtap="closeModelPicker" catchtouchmove="noop">
+          <view class="custom-picker-content" catchtap="preventBubble" catchtouchmove="noop">
             <view class="picker-header">
               <text class="picker-cancel" bindtap="closeModelPicker">取消</text>
               <text class="picker-title">选择产品型号</text>
@@ -423,8 +429,8 @@
 </view>
 
 <!-- 9. 上传选项弹窗（选择相册/录制） -->
-<view class="modal-overlay active" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions">
-  <view class="ios-dialog" catchtap="preventBubble">
+<view class="modal-overlay active" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions" catchtouchmove="noop" catchtap="noop">
+  <view class="ios-dialog" catchtap="preventBubble" catchtouchmove="noop">
     <view class="dialog-title center">选择上传方式</view>
     <view class="upload-options">
       <view class="option-item" bindtap="chooseVideoFromAlbum" data-action="album">
@@ -441,10 +447,10 @@
 </view>
 
 <!-- 10. 绑定设备提示弹窗 -->
-<view class="modal-overlay active" wx:if="{{showBindDeviceTip}}" bindtap="closeBindDeviceTip">
-  <view class="ios-dialog" catchtap="preventBubble">
-    <view class="dialog-title center">需要绑定设备</view>
-    <view class="dialog-desc">您尚未绑定任何 MT 设备，无法参与延保活动。请先去"我的"页面绑定设备。</view>
+<view class="modal-overlay active" wx:if="{{showBindDeviceTip}}" bindtap="closeBindDeviceTip" catchtouchmove="noop" catchtap="noop">
+  <view class="ios-dialog" catchtap="preventBubble" catchtouchmove="noop">
+    <view class="dialog-title center">提示</view>
+    <view class="dialog-desc">您尚未绑定设备。\n\n请尽快前往"我的"页面绑定设备，视频审核通过后即可延长设备延保时间。</view>
     <view style="display: flex; gap: 20rpx; margin-top: 40rpx;">
       <button class="dialog-btn" style="background:#eee; color:#000; flex: 1;" bindtap="closeBindDeviceTip">取消</button>
       <button class="dialog-btn" style="flex: 1;" bindtap="goToBindDevice">去绑定</button>

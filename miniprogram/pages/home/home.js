@@ -36,7 +36,7 @@ Page({
     // 测试模式
     isTestMode: false,
     
-    // 【新增】自动消失提示（无按钮，3秒后自动消失）
+    // 【新增】自动消失提示（无按钮，2秒后自动消失）
     autoToast: { show: false, title: '', content: '' },
     autoToastClosing: false, // 自动提示退出动画中
     
@@ -1803,7 +1803,7 @@ Page({
     });
   },
   
-  // 【新增】自动消失提示（无按钮，3秒后自动消失，带收缩退出动画）
+  // 【新增】自动消失提示（无按钮，2秒后自动消失，带收缩退出动画）
   showAutoToast(title = '提示', content = '') {
     // 如果已有toast在显示，先关闭它
     if (this.data.autoToast.show) {
@@ -1824,10 +1824,10 @@ Page({
       'autoToast.content': content,
       autoToastClosing: false
     });
-    // 3秒后自动消失（带退出动画）
+    // 2秒后自动消失（带退出动画）
     setTimeout(() => {
       this._closeAutoToastWithAnimation();
-    }, 3000);
+    }, 2000);
   },
 
   // 关闭自动提示（带收缩退出动画）

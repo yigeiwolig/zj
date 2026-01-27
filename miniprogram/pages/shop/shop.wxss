@@ -89,10 +89,14 @@ page {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
   padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 100; pointer-events: none;
+  z-index: 10000; pointer-events: none; /* 🔴 提高 z-index 确保返回键显示 */
   background: transparent; 
 }
+/* 🔴 统一返回键样式 - 全局标准 */
 .back-icon {
+  position: absolute;
+  left: 40rpx;
+  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -100,16 +104,18 @@ page {
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
+  z-index: 10001;
 }
 .back-icon:active {
   transform: scale(0.95);
   opacity: 0.7;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 .back-icon::before {
   display: none;
 }
 
-/* 与 my 页统一：箭头文字样式 */
+/* 统一返回箭头样式 */
 .back-arrow {
   font-size: 48rpx;
   font-weight: 300;
@@ -194,7 +200,7 @@ page {
 .main-scroll { height: 100vh; padding-top: 180rpx; box-sizing: border-box; }
 
 /* Hero 轮播 */
-.hero-swiper-box { height: 500rpx; width: 100%; background: #000; position: relative; margin-bottom: 40rpx; }
+.hero-swiper-box { height: 422rpx; width: 100%; background: #000; position: relative; margin-bottom: 40rpx; }
 .hero-swiper, .hero-media { width: 100%; height: 100%; object-fit: cover; }
 .admin-del-media { position: absolute; top: 20rpx; right: 20rpx; background: red; color: #fff; width: 50rpx; height: 50rpx; border-radius: 50%; text-align: center; line-height: 50rpx; }
 
@@ -221,11 +227,29 @@ page {
 .product-cover-wrapper {
   position: relative;
   width: 100%;
-  height: 400rpx;
+  height: 422rpx;
 }
-.p-img { width: 100%; height: 400rpx; object-fit: cover; }
+.p-img { width: 100%; height: 422rpx; object-fit: cover; }
 .p-info { padding: 40rpx; }
-.p-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 34rpx; }
+.p-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 34rpx; align-items: center; }
+.p-price-wrapper { 
+  padding: 8rpx 16rpx; 
+  border-radius: 8rpx; 
+  transition: all 0.2s;
+}
+.p-price-wrapper.editable {
+  background: rgba(0, 113, 227, 0.08);
+  border: 2rpx dashed rgba(0, 113, 227, 0.3);
+}
+.p-price-wrapper.editable:active {
+  background: rgba(0, 113, 227, 0.15);
+  transform: scale(0.98);
+}
+.p-price { 
+  font-weight: 700; 
+  font-size: 34rpx; 
+  color: #000;
+}
 .add-series-btn { text-align: center; padding: 60rpx; border: 4rpx dashed #ccc; border-radius: 30rpx; color: #999; font-weight: 600; }
 /* 2. 移动相机图标（上传封面）到右下角，避免和删除按钮打架 */
 .admin-float {
@@ -268,7 +292,19 @@ page {
 .full-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; z-index: 200; display: flex; flex-direction: column; transform: translateY(100%); transition: 0.4s cubic-bezier(0.19, 1, 0.22, 1); }
 .full-modal.active { transform: translateY(0); }
 .modal-nav { height: 180rpx; padding: 0 30rpx 20rpx; display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 1rpx solid #eee; flex-shrink: 0; }
-.nav-close { font-size: 44rpx; padding: 10rpx; color: #888; }
+.nav-close { 
+  font-size: 44rpx; 
+  padding: 20rpx; 
+  color: #888; 
+  z-index: 10001;
+  position: relative;
+  pointer-events: auto;
+  min-width: 64rpx;
+  min-height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .modal-title { font-weight: 700; font-size: 32rpx; }
 
 .modal-scroll { flex: 1; overflow-y: scroll; background: #fff; position: relative; z-index: 1; }
@@ -279,15 +315,15 @@ page {
   margin-bottom: 0;
 }
 .detail-images { margin-bottom: 40rpx; }
-.dimg-box { position: relative; }
-.dimg { width: 100%; display: block; }
+.dimg-box { position: relative; width: 100%; height: 422rpx; overflow: hidden; }
+.dimg { width: 100%; height: 100%; display: block; object-fit: cover; }
 .admin-del-abs { position: absolute; top: 20rpx; right: 20rpx; background: red; color: #fff; width: 50rpx; height: 50rpx; border-radius: 50%; text-align: center; line-height: 50rpx; }
 .add-txt-btn { text-align: center; padding: 40rpx; color: #0071E3; font-weight: 600; font-size: 26rpx; }
 
 /* 选购配置 Header */
 .config-sec { padding: 0 40rpx; }
 .sec-header-row { display: flex; justify-content: space-between; align-items: center; margin: 60rpx 0 30rpx; }
-.sec-title { font-size: 34rpx; font-weight: 800; margin: 0; }
+.sec-title { font-size: 36rpx; font-weight: 800; margin: 0; color: #1D1D1F; }
 /* 修改 2：参数对比按钮改成纯黑色，简约风格 */
 .btn-compare {
   background: #000000;  /* 纯黑背景 */
@@ -299,14 +335,14 @@ page {
   box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.2);
 }
 .cfg-group { margin-bottom: 60rpx; }
-.cfg-label { font-size: 24rpx; color: #86868b; font-weight: 600; margin-bottom: 20rpx; }
+.cfg-label { font-size: 28rpx; color: #1D1D1F; font-weight: 700; margin-bottom: 24rpx; }
 
 /* 型号列表 */
 .model-item { padding: 30rpx; border: 2rpx solid #eee; border-radius: 16rpx; margin-bottom: 20rpx; display: flex; justify-content: space-between; align-items: center; position: relative; }
 .model-item.selected { border-color: #0071E3; background: rgba(0,113,227,0.03); }
-.m-name { font-weight: 600; font-size: 30rpx; }
-.m-desc { font-size: 24rpx; color: #888; display: block; margin-top: 6rpx; }
-.m-price { font-weight: 600; }
+.m-name { font-weight: 700; font-size: 32rpx; color: #1D1D1F; }
+.m-desc { font-size: 26rpx; color: #666; display: block; margin-top: 8rpx; }
+.m-price { font-weight: 700; font-size: 32rpx; color: #1D1D1F; }
 /* 修改 1：加大管理员删除按钮的间距，防止点错 */
 .admin-del-mini {
   position: absolute;
@@ -652,7 +688,8 @@ page {
 }
 
 /* ============ 5. 配件详情 ============ */
-.acc-detail-hero { width: 100%; min-height: 400rpx; background: #fff; display: flex; flex-direction: column; align-items: center; }
+.acc-detail-hero { width: 100%; height: 422rpx; background: #fff; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
+.acc-detail-hero .dimg { width: 100%; height: 100%; object-fit: cover; }
 .acc-detail-info { padding: 40rpx; }
 .acc-d-name { font-size: 40rpx; font-weight: 800; margin-bottom: 10rpx; }
 .acc-d-price { font-size: 32rpx; color: #333; font-weight: 600; margin-bottom: 30rpx; }
@@ -1363,6 +1400,7 @@ page {
 /* ============================================================== */
 /* 中间提示气泡 (Center Toast) */
 /* ============================================================== */
+/* ================= 屏幕中间提示气泡（白底黑字） ================= */
 .center-toast-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   z-index: 2000; /* 最高层级 */
@@ -1375,12 +1413,12 @@ page {
 }
 
 .center-toast-box {
-  background: rgba(0,0,0,0.8); 
+  background: #ffffff; 
   padding: 30rpx 50rpx;
   border-radius: 20rpx;
   display: flex; flex-direction: column; align-items: center;
   min-width: 200rpx;
-  backdrop-filter: blur(10px);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.15);
   animation: fadeInOut 0.2s ease-out forwards;
 }
 .center-toast-mask.closing .center-toast-box {
@@ -1388,14 +1426,14 @@ page {
 }
 
 .ct-icon {
-  font-size: 40rpx; font-weight: 800; color: #fff;
-  border: 4rpx solid #fff; width: 50rpx; height: 50rpx; border-radius: 50%;
+  font-size: 40rpx; font-weight: 800; color: #000;
+  border: 4rpx solid #000; width: 50rpx; height: 50rpx; border-radius: 50%;
   text-align: center; line-height: 44rpx;
   margin-bottom: 16rpx;
 }
 
 .ct-text {
-  color: #fff; font-size: 28rpx; font-weight: 600; letter-spacing: 2rpx;
+  color: #000; font-size: 28rpx; font-weight: 600; letter-spacing: 2rpx;
 }
 
 @keyframes fadeInOut {
@@ -2210,7 +2248,7 @@ page {
   width: 100%;
 }
 
-.disclaimer-checkbox checkbox {
+.disclaimer-checkbox .checkbox {
   margin-right: 12rpx;
   margin-top: 2rpx; /* 🔴 往上移一点 */
   transform: scale(0.9);

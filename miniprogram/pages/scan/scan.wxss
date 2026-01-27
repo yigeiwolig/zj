@@ -21,13 +21,17 @@ page {
   display: flex; 
   justify-content: space-between; 
   align-items: center;
-  z-index: 100; 
+  z-index: 10000; /* 🔴 提高 z-index 确保返回键显示 */
   pointer-events: none;
   background: transparent; 
 }
 
 /* 🔴 统一返回键样式 - 恢复原来的实现方式 */
+/* 🔴 统一返回键样式 - 全局标准 */
 .back-icon {
+  position: absolute;
+  left: 40rpx;
+  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -35,6 +39,7 @@ page {
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
+  z-index: 10001;
 }
 .back-icon:active {
   transform: scale(0.95);

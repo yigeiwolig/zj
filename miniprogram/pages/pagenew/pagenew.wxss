@@ -14,34 +14,42 @@ page {
   padding-right: 30rpx;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   position: relative; 
-  z-index: 50;
+  z-index: 10000; /* 🔴 提高 z-index 确保返回键显示 */
 }
 
-/* 返回键样式 */
-.nav-back {
-  width: 60rpx; 
-  height: 60rpx;
-  display: flex; 
-  align-items: center; 
+/* 🔴 统一返回键样式 - 全局标准 */
+.nav-back,
+.back-icon {
+  position: absolute;
+  left: 40rpx;
+  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
+  width: 70rpx;
+  height: 70rpx;
+  display: flex;
+  align-items: center;
   justify-content: center;
   transition: all 0.2s;
+  z-index: 10001;
+  pointer-events: auto;
 }
-.nav-back:active {
+.nav-back:active,
+.back-icon:active {
   transform: scale(0.95);
   opacity: 0.7;
+  background-color: rgba(0, 0, 0, 0.05);
 }
-.icon-back { 
+.icon-back,
+.back-arrow { 
   font-size: 48rpx; 
   font-weight: 300; 
   color: #000; 
   line-height: 1;
-  padding: 0;
 }
 .nav-placeholder { width: 80rpx; }
 
-/* Logo */
+/* Logo - 绝对居中 */
 .brand-box { 
   text-align: center; 
   display: flex;
@@ -49,7 +57,16 @@ page {
   align-items: center;
   justify-content: center;
   gap: 10rpx;
-  position: relative;
+  position: absolute;
+  left: 50%;
+  top: calc(env(safe-area-inset-top, 0px) + 100rpx);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* 管理员按钮需要可点击 */
+.brand-box .admin-toggle-btn {
+  pointer-events: auto !important;
 }
 
 /* 管理员切换按钮 */
@@ -64,6 +81,9 @@ page {
   border: 1rpx solid #E5E5EA;
   transition: all 0.3s;
   font-weight: 600;
+  pointer-events: auto;
+  z-index: 10002;
+  position: relative;
 }
 
 /* 开启状态的颜色 */

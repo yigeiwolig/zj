@@ -109,7 +109,11 @@ page { background: #F7F7F7; color: #1D1D1F; }
   transform: translateX(-50%);
   pointer-events: auto;
 }
+/* 🔴 统一返回键样式 - 全局标准 */
 .back-icon {
+  position: absolute;
+  left: 40rpx;
+  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -117,10 +121,12 @@ page { background: #F7F7F7; color: #1D1D1F; }
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
+  z-index: 10001;
 }
 .back-icon:active {
   transform: scale(0.95);
   opacity: 0.7;
+  background-color: rgba(0, 0, 0, 0.05);
 }
 .back-icon::before {
   display: none;
@@ -228,7 +234,16 @@ page { background: #F7F7F7; color: #1D1D1F; }
   margin-top: 60rpx; /* 名字往下移 */
 }
 .rank-tag { font-size: 20rpx; color: #AF9567; letter-spacing: 4rpx; font-weight: 700; display: block; margin-bottom: 12rpx; }
-.user-name { font-size: 64rpx; font-weight: 600; letter-spacing: -2rpx; }
+.user-name { 
+  font-size: 64rpx; 
+  font-weight: 600; 
+  letter-spacing: -2rpx; 
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: break-all;
+}
 
 /* 数据统计区域 */
 .header-stats { 
@@ -509,7 +524,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   align-items: center;           /* 垂直居中对齐，让状态标签和订单号对齐 */
   margin-bottom: 20rpx;
   padding-bottom: 20rpx;
-  border-bottom: 1rpx solid #f5f5f5;
+  /* 移除了 border-bottom: 1rpx solid #f5f5f5; */
 }
 
 .order-id-group {
@@ -552,7 +567,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 }
 
 /* 颜色方案 (保持不变) */
-.status-tag.UNPAID { background: #FFF5F5; color: #FF3B30; } 
+.status-tag.UNPAID { background: #FFEBEE; color: #FF3B30; border: 1rpx solid rgba(255, 59, 48, 0.2); } /* 待付款：红色背景 */ 
 
 .status-tag.PAID   { background: #F0F8FF; color: #0071E3; }   
 
@@ -629,9 +644,68 @@ page { background: #F7F7F7; color: #1D1D1F; }
   background: #F2F2F7; border-radius: 20rpx; padding: 24rpx; margin: 20rpx 0;
 }
 .b-row { display: flex; justify-content: space-between; margin-bottom: 8rpx; }
-.b-name { font-size: 30rpx; font-weight: 700; }
+.b-name { 
+  font-size: 32rpx; 
+  font-weight: 700; 
+  color: #000;
+  max-width: 200rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  word-break: break-all;
+}
 .b-phone { font-size: 26rpx; color: #0071E3; font-weight: 600; }
-.b-addr { font-size: 24rpx; color: #666; line-height: 1.4; }
+.b-nickname-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 4rpx;
+  margin-bottom: 8rpx;
+}
+.b-nickname-label {
+  font-size: 22rpx;
+  color: #8E8E93;
+  font-weight: 400;
+}
+.b-nickname {
+  font-size: 22rpx;
+  color: #666;
+  font-weight: 400;
+}
+.b-addr-row { 
+  display: flex; 
+  align-items: flex-start; 
+  gap: 12rpx; 
+  margin-top: 8rpx;
+}
+.b-addr { 
+  font-size: 24rpx; 
+  color: #333; 
+  line-height: 1.5; 
+  flex: 1;
+  word-break: break-all;
+}
+.b-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6rpx 16rpx;
+  background: #E5E5EA;
+  border-radius: 8rpx;
+  color: #000;
+  font-size: 22rpx;
+  font-weight: 500;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+  border: 1rpx solid rgba(0,0,0,0.05);
+}
+.b-copy-btn:active {
+  background: #D1D1D6;
+  opacity: 1;
+}
+.b-copy-text {
+  font-size: 22rpx;
+}
 
 /* 商品清单 */
 .goods-detail-list { flex: 1; margin: 20rpx 0; }
@@ -655,7 +729,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 /* --- 底部优化 --- */
 .card-footer-new {
   margin-top: 20rpx;
-  border-top: 1rpx dashed #eee;
+  /* 移除了 border-top: 1rpx dashed #eee; */
   padding-top: 20rpx;
 }
 
@@ -961,29 +1035,30 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 
-/* 统一的“内容已复制”弹窗样式（和首页一致） */
+/* 统一的"内容已复制"弹窗样式 - 统一和 shop 页面一样 */
 .custom-modal-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(5px); /* 统一背景色，和 shop 页面一样 */
   z-index: 99999999; /* 🔴 确保显示在需寄回订单确认弹窗之上 */
   display: flex; align-items: center; justify-content: center;
   overflow: hidden; /* 防止页面滚动 */
+  animation: cartMaskFadeIn 0.25s ease-out forwards; /* 统一动画名称 */
+}
+.custom-modal-mask.closing {
+  animation: cartMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; /* 统一动画名称 */
+}
+.custom-modal-mask.closing .custom-modal-box {
+  animation: cartBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; /* 统一动画名称 */
 }
 
 .custom-modal-box {
-  width: 620rpx;
+  width: 600rpx; /* 统一宽度，和 shop 页面一样 */
   background: #ffffff;
-  border-radius: 48rpx;
-  padding: 70rpx 50rpx;
+  border-radius: 50rpx; /* 统一圆角，和 shop 页面一样 */
+  padding: 70rpx 50rpx; /* 统一内边距，和 shop 页面一样 */
   display: flex; flex-direction: column; align-items: center;
-  box-shadow: 0 40rpx 80rpx rgba(0, 0, 0, 0.2);
-  transform: scale(0.8); opacity: 0;
-  animation: mySpringPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-@keyframes mySpringPop {
-  to { transform: scale(1); opacity: 1; }
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.15); /* 统一阴影，和 shop 页面一样 */
+  animation: cartBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; /* 统一动画名称 */
 }
 
 .modal-icon-new {
@@ -5284,34 +5359,35 @@ page { background: #F7F7F7; color: #1D1D1F; }
   }
 }
 
-/* ================= 物流查询弹窗样式 ================= */
+/* ================= 物流查询弹窗样式 (2026 高级重构版) ================= */
 .logistics-modal-mask {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.45); /* 稍微降低透明度，更清透 */
   z-index: 100000000;
   display: flex;
   align-items: flex-end;
   justify-content: center;
   overflow: hidden;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(12px); /* 加重毛玻璃 */
   animation: fadeIn 0.3s ease;
 }
 
 .logistics-modal-box {
   width: 100%;
   max-height: 85vh;
-  background: #fff;
-  border-radius: 32rpx 32rpx 0 0;
+  height: 85vh; /* 🔴 关键修复：给明确的高度，让 flex 子元素可以正确计算 */
+  background: #FFFFFF;
+  border-radius: 40rpx 40rpx 0 0; /* 更大的圆角 */
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.15);
+  box-shadow: 0 -10rpx 40rpx rgba(0, 0, 0, 0.08); /* 更柔和的投影 */
   transform: translateY(100%);
-  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: slideUp 0.35s cubic-bezier(0.32, 1.05, 0.35, 1) forwards; /* 更高级的弹跳曲线 */
 }
 
 @keyframes fadeIn {
@@ -5329,34 +5405,44 @@ page { background: #F7F7F7; color: #1D1D1F; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 40rpx 40rpx 20rpx;
+  padding: 48rpx 48rpx 32rpx; /* 增加留白 */
   background: #fff;
   z-index: 10;
+  position: relative;
+}
+
+.logistics-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 48rpx;
+  right: 48rpx;
+  height: 1rpx;
+  background: rgba(0,0,0,0.05); /* 极细的分隔线 */
 }
 
 .brand-tag {
-  font-size: 28rpx; /* 稍微调小以适应更长文字 */
+  font-size: 32rpx;
   font-weight: 700;
-  color: #000;
-  letter-spacing: 0.5rpx;
-  line-height: 1.3;
+  color: #1D1D1F;
+  letter-spacing: -0.5rpx;
 }
 
 .close-btn {
-  width: 56rpx;
-  height: 56rpx;
+  width: 60rpx;
+  height: 60rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 30rpx;
-  color: #666;
-  background: #F5F5F7;
+  font-size: 32rpx;
+  color: #8E8E93;
+  background: rgba(142, 142, 147, 0.12); /* 苹果风格的灰色背景 */
   border-radius: 50%;
   transition: all 0.2s;
 }
 .close-btn:active {
-  background: #E5E5E7;
-  transform: scale(0.95);
+  background: rgba(142, 142, 147, 0.24);
+  transform: scale(0.92);
 }
 
 .logistics-modal-content {
@@ -5365,68 +5451,113 @@ page { background: #F7F7F7; color: #1D1D1F; }
   flex-direction: column;
   overflow: hidden;
   position: relative;
-  min-height: 0; /* 关键：允许 flex 子元素收缩 */
+  min-height: 0;
+  /* 🔴 关键修复：确保 flex 子元素可以正确计算高度 */
+  height: 0; /* 在 flex 布局中，设置为 0 让 flex: 1 生效 */
+  background: #F5F5F7; /* 整体背景改为浅灰，突出卡片 */
+  /* 🔴 确保内容区域可以滚动 */
+  flex-shrink: 1;
 }
 
 /* 2. 核心信息区 */
-.logistics-info-card {
-  padding: 0 40rpx 40rpx;
-  background: #fff;
-  /* border-bottom: 1rpx solid #F0F0F0; */ /* 去掉分割线，用留白分割 */
+.logistics-card-container {
+  padding: 32rpx 32rpx 0;
+  background: #F5F5F7;
   z-index: 5;
+  flex-shrink: 0;
 }
 
-.info-row-main {
+.logistics-info-card {
+  background: #fff;
+  border-radius: 32rpx;
+  padding: 32rpx; /* 减小内边距 40rpx -> 32rpx */
+  position: relative;
+  box-shadow: 0 4rpx 24rpx rgba(0,0,0,0.04);
+}
+
+.card-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16rpx;
+  margin-bottom: 24rpx; /* 减小间距 32rpx -> 24rpx */
 }
 
-.tracking-number {
-  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
-  font-size: 44rpx; /* 更大 */
-  font-weight: 700;
-  color: #000;
-  letter-spacing: 1rpx;
-}
-
-.copy-btn {
-  font-size: 22rpx;
-  color: #007AFF;
-  padding: 8rpx 20rpx;
-  border-radius: 8rpx;
-  background: rgba(0, 122, 255, 0.1);
-  font-weight: 600;
-  border: 1rpx solid rgba(0, 122, 255, 0.2);
-  transition: all 0.2s;
-}
-.copy-btn:active {
-  background: rgba(0, 122, 255, 0.15);
-  transform: scale(0.98);
-}
-
-.info-row-sub {
+.company-info {
   display: flex;
   align-items: center;
   gap: 16rpx;
 }
 
+.company-icon-placeholder {
+  width: 64rpx; /* 减小图标 72rpx -> 64rpx */
+  height: 64rpx;
+  background: linear-gradient(135deg, #007AFF, #0055FF);
+  border-radius: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx; /* 减小字号 36rpx -> 32rpx */
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 8rpx 16rpx rgba(0, 122, 255, 0.25);
+}
+
 .company-name {
-  font-size: 28rpx;
-  color: #333;
+  font-size: 30rpx; /* 减小字号 34rpx -> 30rpx */
+  color: #1D1D1F;
   font-weight: 600;
 }
 
-.status-tag {
-  font-size: 20rpx;
+.status-badge {
+  font-size: 22rpx; /* 减小字号 24rpx -> 22rpx */
   color: #fff;
-  background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
-  padding: 6rpx 14rpx;
-  border-radius: 6rpx;
+  background: #007AFF;
+  padding: 6rpx 20rpx;
+  border-radius: 100rpx;
   font-weight: 600;
+  letter-spacing: 0.5rpx;
+  box-shadow: 0 4rpx 10rpx rgba(0, 122, 255, 0.2);
+}
+
+.status-badge.success {
+  background: #34C759;
+  box-shadow: 0 4rpx 10rpx rgba(52, 199, 89, 0.2);
+}
+
+.card-body-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #F5F7FA;
+  padding: 20rpx 24rpx; /* 减小内边距 */
+  border-radius: 20rpx;
+}
+
+.tracking-number {
+  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
+  font-size: 32rpx; /* 减小字号 36rpx -> 32rpx */
+  font-weight: 700;
+  color: #1D1D1F;
   letter-spacing: 1rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 122, 255, 0.25);
+}
+
+.copy-btn {
+  font-size: 22rpx; /* 减小字号 24rpx -> 22rpx */
+  color: #1D1D1F;
+  padding: 8rpx 24rpx;
+  border-radius: 24rpx;
+  background: #fff;
+  font-weight: 600;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.08);
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6rpx;
+}
+
+.copy-btn:active {
+  background: #f2f2f2;
+  transform: scale(0.95);
 }
 
 /* 3. 加载状态 */
@@ -5435,14 +5566,15 @@ page { background: #F7F7F7; color: #1D1D1F; }
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 400rpx;
 }
 .mt-loader {
-  width: 40rpx;
-  height: 40rpx;
-  border: 4rpx solid rgba(0, 122, 255, 0.1);
-  border-top: 4rpx solid #007AFF;
+  width: 50rpx;
+  height: 50rpx;
+  border: 5rpx solid rgba(0, 122, 255, 0.1);
+  border-top: 5rpx solid #007AFF;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
 /* 4. 错误提示 */
@@ -5452,114 +5584,134 @@ page { background: #F7F7F7; color: #1D1D1F; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40rpx;
+  padding: 60rpx;
 }
 .error-icon {
-  font-size: 64rpx;
-  margin-bottom: 20rpx;
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+  opacity: 0.5;
 }
 .error-text {
-  font-size: 26rpx;
-  color: #666;
+  font-size: 28rpx;
+  color: #8E8E93;
 }
 
-/* 5. 物流轨迹列表 (优化版：轴线左置，内容全宽) */
+/* 5. 物流轨迹列表 (高级时间轴) */
 .logistics-scroll {
   flex: 1;
-  height: 100%; /* 关键：设置高度 */
-  padding: 30rpx 40rpx 0;
+  /* 🔴 关键修复：scroll-view 需要明确的高度才能滚动 */
+  height: 0; /* 在 flex 布局中，设置为 0 让 flex: 1 生效 */
+  min-height: 0; /* 允许收缩 */
+  padding: 20rpx 32rpx 0;
   box-sizing: border-box;
-  border-top: 1rpx solid #F5F5F5;
-  -webkit-overflow-scrolling: touch; /* iOS 平滑滚动 */
+  -webkit-overflow-scrolling: touch;
+  /* 🔴 确保可以滚动 */
+  overflow-y: auto;
+  /* 🔴 关键：确保 scroll-view 可以接收触摸事件 */
+  touch-action: pan-y;
 }
 
 .timeline-container {
   position: relative;
-  padding-bottom: 40rpx;
+  padding-bottom: 80rpx;
+  padding-left: 0; /* 取消左边距，完全靠布局撑开 */
 }
 
 .timeline-item {
   display: flex;
   position: relative;
   margin-bottom: 0;
+  padding-bottom: 40rpx; /* 调整卡片间距 48rpx -> 40rpx */
+}
+.timeline-item:last-child {
+  padding-bottom: 0;
 }
 .timeline-item:last-child .line {
   display: none;
 }
-.timeline-item:last-child .timeline-content-wrapper {
-  padding-bottom: 0;
-}
-
 /* 左侧：轴线 */
 .timeline-axis {
-  width: 32rpx;
+  width: 48rpx; /* 减小宽度 60rpx -> 48rpx */
   display: flex;
   flex-direction: column;
   align-items: center;
   position: relative;
-  margin-right: 24rpx;
+  margin-right: 16rpx; /* 减小间距 20rpx -> 16rpx */
   flex-shrink: 0;
+  padding-top: 24rpx;
 }
 
 .dot {
-  width: 12rpx;
+  width: 12rpx; /* 减小圆点 14rpx -> 12rpx */
   height: 12rpx;
-  background: #D0D0D0;
+  background: #D1D1D6;
   border-radius: 50%;
   z-index: 2;
-  margin-top: 6rpx;
-  flex-shrink: 0;
-  border: 2rpx solid #fff;
-  box-sizing: border-box;
+  position: relative;
+  transition: all 0.3s;
 }
+
+/* 最新节点样式 */
 .dot.active {
-  width: 18rpx;
-  height: 18rpx;
-  background: linear-gradient(135deg, #007AFF 0%, #0051D5 100%);
-  border-color: #fff;
-  box-shadow: 0 0 0 4rpx rgba(0, 122, 255, 0.15);
-  margin-top: 4rpx;
+  width: 20rpx; /* 减小激活圆点 24rpx -> 20rpx */
+  height: 20rpx;
+  background: #007AFF;
+  border: 4rpx solid #fff;
+  box-shadow: 0 0 0 4rpx rgba(0, 122, 255, 0.2); /* 减小光环 */
+  transform: scale(1.0);
 }
 
 .line {
-  width: 1.5rpx;
-  background: linear-gradient(to bottom, #E8E8E8 0%, rgba(0, 122, 255, 0.1) 50%, #E8E8E8 100%);
-  flex: 1;
-  margin-top: 6rpx;
-  margin-bottom: 6rpx;
-  min-height: 50rpx;
+  position: absolute;
+  top: 36rpx;
+  bottom: -20rpx;
+  width: 2rpx;
+  background: #E5E5EA;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
 }
 
 /* 右侧：内容容器 */
 .timeline-content-wrapper {
   flex: 1;
-  padding-bottom: 56rpx;
-  opacity: 0.45;
-  transition: opacity 0.3s;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 24rpx 28rpx; /* 调整内边距 */
+  box-shadow: 0 2rpx 10rpx rgba(0,0,0,0.02);
+  border: 1rpx solid rgba(0,0,0,0.02);
 }
+
+/* 激活状态文本（最新一条） */
 .timeline-content-wrapper.active {
-  opacity: 1;
+  background: #fff;
+  box-shadow: 0 8rpx 24rpx rgba(0, 122, 255, 0.08); /* 减淡阴影 */
+  border: 1rpx solid rgba(0, 122, 255, 0.08);
+}
+
+.timeline-content-wrapper.active .time-full {
+  color: #007AFF;
+  font-weight: 600;
+}
+.timeline-content-wrapper.active .desc-text {
+  color: #1D1D1F;
+  font-weight: 500;
 }
 
 /* 时间行 */
 .timeline-header {
-  margin-bottom: 10rpx;
+  margin-bottom: 12rpx;
   display: flex;
   align-items: center;
 }
 
 .time-full {
-  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
-  font-size: 20rpx;
-  color: #999;
-  line-height: 1.3;
-  font-weight: 400;
-  letter-spacing: 0.5rpx;
-}
-.timeline-content-wrapper.active .time-full {
-  color: #007AFF;
-  font-weight: 600;
-  font-size: 21rpx;
+  font-size: 22rpx; /* 减小字号 26rpx -> 22rpx */
+  color: #8E8E93;
+  font-family: 'SF Pro Text', sans-serif;
+  letter-spacing: 0;
 }
 
 /* 内容行 */
@@ -5568,26 +5720,19 @@ page { background: #F7F7F7; color: #1D1D1F; }
 }
 
 .desc-text {
-  font-size: 30rpx;
-  color: #2C2C2C;
-  line-height: 1.75;
-  text-align: left;
-  letter-spacing: 0.2rpx;
+  font-size: 26rpx; /* 减小字号 28rpx -> 26rpx */
+  color: #3A3A3C;
+  text-align: justify;
+  line-height: 1.5; /* 增加行高 */
+  letter-spacing: 0;
   display: block;
-  font-weight: 400;
   word-break: break-all;
-}
-.timeline-content-wrapper.active .desc-text {
-  font-weight: 500;
-  color: #000;
-  font-size: 32rpx;
-  line-height: 1.8;
 }
 
 /* 无轨迹信息 */
 .logistics-empty {
+  padding: 100rpx 0;
   text-align: center;
   color: #999;
-  font-size: 26rpx;
-  padding: 100rpx 0;
+  font-size: 28rpx;
 }

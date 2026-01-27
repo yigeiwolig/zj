@@ -6,9 +6,6 @@ var qqmapsdk = new QQMapWX({
 });
 const db = wx.cloud.database();
 
-// --- 图标数据 (从 products.js 复用) ---
-// const iconRepair = ... (已移除)
-
 Page({
   data: {
     // 页面状态控制
@@ -42,10 +39,6 @@ Page({
     confirmModalContent: '',
     _pendingUnbanData: null, // 存储待执行的放行数据
     
-    // 【新增】控制定位权限提示弹窗（白底黑字）
-    showLocationPermissionModal: false,
-    _pendingLocationAction: null, // 存储待执行的定位操作类型
-    
     // Loading 状态（合并重复定义）
     isLoading: false,
     loadingText: '加载中...',
@@ -69,9 +62,6 @@ Page({
   },
 
   onLoad(options) {
-    console.log('[index onLoad] 页面加载开始');
-    console.log('[index onLoad] handleLogin 方法是否存在:', typeof this.handleLogin);
-    
     // 🔴 更新页面访问统计
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('index');
@@ -93,16 +83,10 @@ Page({
     
     if (hasAuth && savedNickname) {
       // 缓存中有授权和昵称，直接使用
-      console.log('[index] 从缓存恢复授权状态，nickname:', savedNickname);
       this.setData({ isAuthorized: true, isShowNicknameUI: false });
     } else {
       // 缓存中没有，先检查 valid_users 集合
-      console.log('[index] 缓存中无授权信息，开始检查 valid_users...');
-      this.checkValidUserFromDatabase().catch(err => {
-        console.error('[index] checkValidUserFromDatabase 失败:', err);
-        // 确保即使失败也显示昵称输入界面
-        this.setData({ isShowNicknameUI: true });
-      });
+      this.checkValidUserFromDatabase();
     }
     
     // 2. 异步检查全局黑名单（避免死循环）
@@ -137,14 +121,8 @@ Page({
   // 🔴 从 valid_users 集合检查用户是否有记录
   async checkValidUserFromDatabase() {
     try {
-      console.log('[index] 开始检查 valid_users...');
-      
-      // 1. 获取当前用户 openid（添加超时）
-      const loginRes = await Promise.race([
-        wx.cloud.callFunction({ name: 'login' }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('login timeout')), 5000))
-      ]);
-      
+      // 1. 获取当前用户 openid
+      const loginRes = await wx.cloud.callFunction({ name: 'login' });
       const openid = loginRes.result?.openid;
       
       if (!openid) {
@@ -153,14 +131,14 @@ Page({
         return;
       }
 
-      console.log('[index] openid 获取成功，查询 valid_users...');
-
-      // 2. 查询 valid_users 集合，查找该用户的记录（添加超时）
+      // 2. 查询 valid_users 集合，查找该用户的记录
       const db = wx.cloud.database();
-      const validUserRes = await Promise.race([
-        db.collection('valid_users').where({ _openid: openid }).limit(1).get(),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('valid_users query timeout')), 5000))
-      ]);
+      const validUserRes = await db.collection('valid_users')
+        .where({
+          _openid: openid
+        })
+        .limit(1)
+        .get();
 
       if (validUserRes.data && validUserRes.data.length > 0) {
         // 找到了记录，自动获取昵称
@@ -232,152 +210,13 @@ Page({
   },
 
   // === 核心验证逻辑 ===
-  async handleLogin(e) {
-    console.log('[handleLogin] ========== 方法被调用 ==========');
-    console.log('[handleLogin] 事件对象:', e);
-    console.log('[handleLogin] isLoading:', this.data.isLoading);
-    console.log('[handleLogin] inputNickName:', this.data.inputNickName);
-    
-    if (this.data.isLoading) {
-      console.log('[handleLogin] ⚠️ 正在加载中，忽略点击');
+  handleLogin() {
+    if (this.data.isLoading) return;
+    const name = this.data.inputNickName.trim();
+    if (!name) {
+      this.showAutoToast('提示', '请输入昵称');
       return;
     }
-    
-    const raw = this.data.inputNickName ? this.data.inputNickName.trim() : '';
-    console.log('[handleLogin] 输入内容 (trim后):', raw);
-    
-    if (!raw) {
-      console.log('[handleLogin] ⚠️ 输入为空');
-      this.showAutoToast('提示', '请输入昵称或MT开头的分享码');
-      return;
-    }
-    
-    console.log('[handleLogin] ✅ 开始验证流程');
-
-    const app = getApp();
-    const upper = raw.toUpperCase();
-    // 🔴 判断是不是分享码：必须以 MT 开头（不区分大小写），后面跟6位字母数字
-    const isShareCode = upper.startsWith('MT') && /^MT[A-Z0-9]{6}$/.test(upper);
-
-    if (isShareCode && app && typeof app.verifyShareCode === 'function') {
-      // 按分享码验证（只校验 shareCode，有效性和次数/过期）
-      this.setData({ isLoading: true });
-      this.showMyLoading('验证分享码...');
-
-      // 🔴 确保在云函数调用前关闭任何官方 loading（疯狂执行）
-      const hideOfficialLoading = () => {
-        try {
-          wx.hideToast();
-          wx.hideLoading();
-          if (wx.__mt_oldHideLoading) {
-            wx.__mt_oldHideLoading();
-          }
-        } catch (e) {}
-      };
-      
-      hideOfficialLoading();
-      setTimeout(hideOfficialLoading, 5);
-      setTimeout(hideOfficialLoading, 10);
-      setTimeout(hideOfficialLoading, 15);
-
-      let verifyResult = { success: false };
-      try {
-        // 🔴 添加超时保护（8秒总超时）
-        const verifyPromise = app.verifyShareCode(upper);
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('验证分享码超时')), 8000);
-        });
-        
-        verifyResult = await Promise.race([verifyPromise, timeoutPromise]);
-      } catch (err) {
-        console.error('[handleLogin] 验证分享码异常:', err);
-        // 确保状态重置
-        this.setData({ isLoading: false });
-        this.hideMyLoading();
-        // 隐藏官方 loading
-        hideOfficialLoading();
-        setTimeout(hideOfficialLoading, 5);
-        setTimeout(hideOfficialLoading, 10);
-        setTimeout(hideOfficialLoading, 15);
-        setTimeout(hideOfficialLoading, 20);
-        setTimeout(hideOfficialLoading, 30);
-        
-        // 🔴 等待所有 loading 完全隐藏后再显示错误弹窗，避免冲突
-        setTimeout(() => {
-          // 再次确保隐藏所有官方 loading
-          hideOfficialLoading();
-          setTimeout(hideOfficialLoading, 10);
-          setTimeout(hideOfficialLoading, 30);
-          
-          // 显示错误提示
-          this.showAutoToast('错误', err.message || '验证分享码失败，请重试');
-        }, 500); // 等待 500ms，确保 loading 完全消失
-        
-        return;
-      }
-
-      // 🔴 分享码验证完成后，疯狂隐藏微信官方 loading
-      hideOfficialLoading();
-      setTimeout(hideOfficialLoading, 5);
-      setTimeout(hideOfficialLoading, 10);
-      setTimeout(hideOfficialLoading, 15);
-      setTimeout(hideOfficialLoading, 20);
-      setTimeout(hideOfficialLoading, 30);
-      setTimeout(hideOfficialLoading, 50);
-      setTimeout(hideOfficialLoading, 80);
-      setTimeout(hideOfficialLoading, 120);
-      setTimeout(hideOfficialLoading, 180);
-      setTimeout(hideOfficialLoading, 250);
-
-      this.setData({ isLoading: false });
-      this.hideMyLoading();
-
-      // 🔴 检查验证结果，如果失败则显示错误弹窗
-      console.log('[handleLogin] 验证结果:', verifyResult);
-      if (!verifyResult || !verifyResult.success) {
-        const errorMsg = (verifyResult && verifyResult.error) ? verifyResult.error : '分享码验证失败';
-        console.log('[handleLogin] 分享码验证失败:', errorMsg);
-        
-        // 🔴 等待所有 loading 完全隐藏后再显示错误弹窗，避免冲突
-        setTimeout(() => {
-          // 再次确保隐藏所有官方 loading
-          hideOfficialLoading();
-          setTimeout(hideOfficialLoading, 10);
-          setTimeout(hideOfficialLoading, 30);
-          
-          // 显示错误提示
-          this.showAutoToast('提示', errorMsg);
-        }, 500); // 等待 500ms，确保 loading 完全消失
-        
-        return;
-      }
-
-      // 分享码验证通过：
-      console.log('[handleLogin] ✅ 分享码验证通过，isShareCodeUser:', app.globalData.isShareCodeUser);
-      
-      // 1）标记首页已授权（让主界面显示出来）
-      this.setData({
-        isAuthorized: true,
-        isShowNicknameUI: false
-      });
-
-      // 2）弹出"验证通过"提示
-      this.setData({
-        showCustomSuccessModal: true,
-        successModalTitle: '验证通过',
-        successModalContent: ''
-      });
-      
-      // 3）验证通过弹窗1.5秒后消失（不自动请求定位权限，等待用户点击 MT RIDE 按钮）
-      setTimeout(() => {
-        this.setData({ showCustomSuccessModal: false });
-      }, 1500);
-
-      return;
-    }
-
-    // 否则按昵称走原来的验证逻辑
-    const name = raw;
 
     this.setData({ isLoading: true });
     this.showMyLoading('验证身份...');
@@ -392,24 +231,7 @@ Page({
     // 🔴 尝试获取位置信息（从缓存或实时获取）
     const cachedLocation = wx.getStorageSync('last_location') || {};
 
-    // 🔴 在云函数调用前，确保关闭微信官方 loading（疯狂执行）
-    const hideOfficialLoading = () => {
-      try {
-        wx.hideToast();
-        wx.hideLoading();
-        if (wx.__mt_oldHideLoading) {
-          wx.__mt_oldHideLoading();
-        }
-      } catch (e) {}
-    };
-    
-    hideOfficialLoading();
-    setTimeout(hideOfficialLoading, 5);
-    setTimeout(hideOfficialLoading, 10);
-    setTimeout(hideOfficialLoading, 15);
-
-    // 🔴 添加超时保护（8秒超时）
-    const verifyNicknamePromise = wx.cloud.callFunction({
+    wx.cloud.callFunction({
       name: 'verifyNickname',
       data: {
         nickname: name,
@@ -422,25 +244,7 @@ Page({
         deviceInfo: sysInfo.system || '',
         phoneModel: sysInfo.model || ''
       }
-    });
-
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('验证昵称超时')), 8000);
-    });
-
-    Promise.race([verifyNicknamePromise, timeoutPromise]).then(res => {
-      // 🔴 云函数返回后，疯狂隐藏微信官方 loading
-      hideOfficialLoading();
-      setTimeout(hideOfficialLoading, 5);
-      setTimeout(hideOfficialLoading, 10);
-      setTimeout(hideOfficialLoading, 15);
-      setTimeout(hideOfficialLoading, 20);
-      setTimeout(hideOfficialLoading, 30);
-      setTimeout(hideOfficialLoading, 50);
-      setTimeout(hideOfficialLoading, 80);
-      setTimeout(hideOfficialLoading, 120);
-      setTimeout(hideOfficialLoading, 180);
-      setTimeout(hideOfficialLoading, 250);
+    }).then(res => {
       this.setData({ isLoading: false });
       this.hideMyLoading();
       
@@ -478,33 +282,13 @@ Page({
           wx.setStorageSync('is_user_banned', true);
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
         } else {
-          // 🔴 检查是否有成功弹窗正在显示，如果有则等它结束（2秒）再显示错误弹窗
-          const delay = this.data.showCustomSuccessModal ? 2200 : 200;
-          console.log('[handleLogin] 验证失败，延迟', delay, 'ms 后显示错误弹窗');
+          // 【核心修改】验证失败，显示自定义黑白弹窗
           setTimeout(() => {
             this.setData({ showCustomErrorModal: true });
-          }, delay);
+          }, 200);
         }
       }
     }).catch(err => {
-      // 🔴 出错时也疯狂隐藏微信官方 loading
-      const hideOfficialLoading = () => {
-        try {
-          wx.hideToast();
-          wx.hideLoading();
-          if (wx.__mt_oldHideLoading) {
-            wx.__mt_oldHideLoading();
-          }
-        } catch (e) {}
-      };
-      
-      hideOfficialLoading();
-      setTimeout(hideOfficialLoading, 5);
-      setTimeout(hideOfficialLoading, 10);
-      setTimeout(hideOfficialLoading, 15);
-      setTimeout(hideOfficialLoading, 20);
-      setTimeout(hideOfficialLoading, 30);
-      
       this.setData({ isLoading: false });
       this.hideMyLoading();
       this.showAutoToast('错误', '网络错误，请重试');
@@ -518,58 +302,21 @@ Page({
       wx.__mt_oldHideLoading();
     }
     
-    // 🔴 复制前先尝试关闭可能存在的微信官方弹窗
-    try {
-      wx.hideToast();
-      wx.hideLoading();
-    } catch (e) {}
-    
     wx.setClipboardData({
       data: 'MT-mogaishe',
       success: () => {
-        // 🔴 立即疯狂隐藏微信官方弹窗（多次尝试）
-        const hideOfficialToast = () => {
-          try {
-            wx.hideToast();
-            wx.hideLoading();
-          } catch (e) {}
-        };
-        
-        // 立即执行 + 前 200ms 内疯狂执行
-        hideOfficialToast();
-        setTimeout(hideOfficialToast, 5);
-        setTimeout(hideOfficialToast, 10);
-        setTimeout(hideOfficialToast, 15);
-        setTimeout(hideOfficialToast, 20);
-        setTimeout(hideOfficialToast, 30);
-        setTimeout(hideOfficialToast, 40);
-        setTimeout(hideOfficialToast, 50);
-        setTimeout(hideOfficialToast, 60);
-        setTimeout(hideOfficialToast, 80);
-        setTimeout(hideOfficialToast, 100);
-        setTimeout(hideOfficialToast, 120);
-        setTimeout(hideOfficialToast, 150);
-        setTimeout(hideOfficialToast, 180);
-        setTimeout(hideOfficialToast, 200);
-        setTimeout(hideOfficialToast, 250);
-        setTimeout(hideOfficialToast, 300);
-        setTimeout(hideOfficialToast, 350);
-        setTimeout(hideOfficialToast, 400);
-        setTimeout(hideOfficialToast, 450);
-        setTimeout(hideOfficialToast, 500);
-        setTimeout(hideOfficialToast, 600);
-        
-        // 🔴 延迟显示自定义"内容已复制"弹窗（等待微信官方弹窗消失）
+        // 复制成功后关闭错误弹窗
+        this.setData({ showCustomErrorModal: false });
+        // 🔴 再次确保关闭微信官方 toast（如果被触发）
+        if (wx.__mt_oldHideLoading) {
+          wx.__mt_oldHideLoading();
+        }
+        // 显示自定义"内容已复制"弹窗（白色，大一点）
+        this.setData({ showCopySuccessModal: true });
+        // 2秒后自动关闭
         setTimeout(() => {
-          // 关闭错误弹窗
-          this.setData({ showCustomErrorModal: false });
-          
-          // 显示"内容已复制"弹窗
-          this.setData({ showCopySuccessModal: true });
-          setTimeout(() => {
-            this.setData({ showCopySuccessModal: false });
-          }, 1500); // 1.5秒后自动消失
-        }, 800); // 等待 800ms，确保微信官方弹窗已消失
+          this.setData({ showCopySuccessModal: false });
+        }, 2000);
       }
     });
   },
@@ -586,8 +333,6 @@ Page({
     console.log('[handleAccess] step:', this.data.step);
     console.log('[handleAccess] isAuthorized:', this.data.isAuthorized);
     
-    const app = getApp();
-    
     // 如果动画已经开始，不允许重复点击
     if (this.data.step > 0) {
       console.log('[handleAccess] 动画已开始，忽略点击');
@@ -601,212 +346,26 @@ Page({
       return; 
     }
 
-    // 🔴 分享码用户的专用流程：也需要先授权位置，然后播放动画，最后跳到安装教程页
-    if (app && app.globalData && app.globalData.isShareCodeUser) {
-      console.log('[handleAccess] ✅ 检测到分享码用户，需要先授权位置');
-      console.log('[handleAccess] app.globalData.isShareCodeUser:', app.globalData.isShareCodeUser);
-      console.log('[handleAccess] app.globalData.shareCodeInfo:', app.globalData.shareCodeInfo);
-      
-      // 🔴 分享码用户也需要先授权位置才能点击 MT RIDE
-      // 先检查位置授权状态
-      wx.getSetting({
-        success: (settingRes) => {
-          const locationAuth = settingRes.authSetting['scope.userLocation'];
-          console.log('[handleAccess] 分享码用户定位权限状态:', locationAuth);
-          
-          if (locationAuth === true) {
-            // 已授权，获取位置并播放动画
-            wx.getLocation({
-              type: 'gcj02',
-              isHighAccuracy: false,
-              success: async (res) => {
-                console.log('[handleAccess] 分享码用户位置获取成功:', res);
-                // 🔴 保存经纬度
-                wx.setStorageSync('last_location', {
-                  latitude: res.latitude,
-                  longitude: res.longitude
-                });
-                // 🔴 解析地址并保存完整信息
-                try {
-                  const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
-                  const addressData = await reverseGeocodeWithRetry(res.latitude, res.longitude, {
-                    maxRetries: 2,
-                    timeout: 5000,
-                    retryDelay: 500
-                  });
-                  // 🔴 保存完整地址信息
-                  wx.setStorageSync('last_location', {
-                    latitude: res.latitude,
-                    longitude: res.longitude,
-                    province: addressData.province || '',
-                    city: addressData.city || '',
-                    district: addressData.district || '',
-                    address: addressData.address || addressData.full_address || ''
-                  });
-                  console.log('[handleAccess] 分享码用户地址解析成功:', addressData);
-                } catch (e) {
-                  console.log('[handleAccess] 分享码用户地址解析失败（不拦截）:', e);
-                }
-                // 设置跳转目标为安装教程页
-                this.setData({
-                  pendingJumpTarget: '/pages/azjc/azjc',
-                  pendingJumpData: null
-                });
-                // 播放动画
-                this.runAnimation();
-              },
-              fail: (err) => {
-                console.error('[handleAccess] 分享码用户位置获取失败:', err);
-                this.showAutoToast('提示', '无法获取位置信息，请检查手机定位服务');
-              }
-            });
-          } else if (locationAuth === false) {
-            // 曾经拒绝过，引导用户去设置
-            this.setData({
-              showLocationPermissionModal: true,
-              _pendingLocationAction: 'shareCode'
-            });
-          } else {
-            // undefined，首次请求，先尝试授权
-              wx.authorize({
-                scope: 'scope.userLocation',
-                success: () => {
-                  // 授权成功，获取位置并播放动画
-                  wx.getLocation({
-                    type: 'gcj02',
-                    isHighAccuracy: false,
-                    success: async (res) => {
-                      console.log('[handleAccess] 分享码用户位置获取成功:', res);
-                      // 🔴 保存经纬度
-                      wx.setStorageSync('last_location', {
-                        latitude: res.latitude,
-                        longitude: res.longitude
-                      });
-                      // 🔴 解析地址并保存完整信息
-                      try {
-                        const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
-                        const addressData = await reverseGeocodeWithRetry(res.latitude, res.longitude, {
-                          maxRetries: 2,
-                          timeout: 5000,
-                          retryDelay: 500
-                        });
-                        // 🔴 保存完整地址信息
-                        wx.setStorageSync('last_location', {
-                          latitude: res.latitude,
-                          longitude: res.longitude,
-                          province: addressData.province || '',
-                          city: addressData.city || '',
-                          district: addressData.district || '',
-                          address: addressData.address || addressData.full_address || ''
-                        });
-                        console.log('[handleAccess] 分享码用户地址解析成功:', addressData);
-                      } catch (e) {
-                        console.log('[handleAccess] 分享码用户地址解析失败（不拦截）:', e);
-                      }
-                      this.setData({
-                        pendingJumpTarget: '/pages/azjc/azjc',
-                        pendingJumpData: null
-                      });
-                      this.runAnimation();
-                    },
-                    fail: (err) => {
-                      console.error('[handleAccess] 分享码用户位置获取失败:', err);
-                      this.showAutoToast('提示', '无法获取位置信息，请检查手机定位服务');
-                    }
-                  });
-                },
-              fail: () => {
-                // 用户拒绝授权
-                console.log('[handleAccess] 分享码用户拒绝定位授权');
-                this.setData({
-                  showLocationPermissionModal: true,
-                  _pendingLocationAction: 'shareCode'
-                });
-              }
-            });
-          }
-        },
-        fail: (err) => {
-          console.error('[handleAccess] 获取设置失败:', err);
-          this.showAutoToast('提示', '无法检查定位权限，请稍后重试');
-        }
-      });
-      return;
-    }
-    
-    console.log('[handleAccess] ⚠️ 不是分享码用户，走正常地址拦截流程');
-
     console.log('[handleAccess] 开始获取位置...');
     const sysInfo = wx.getSystemInfoSync();
     const phoneModel = sysInfo.model || '未知机型';
 
-    // 🔴 先检查隐私协议是否需要弹出
-    if (wx.getPrivacySetting) {
-      wx.getPrivacySetting({
-        success: res => {
-          console.log('[handleAccess] 隐私协议状态:', res);
-          if (res.needAuthorization) {
-            // 需要用户同意隐私协议
-            console.log('[handleAccess] 需要用户同意隐私协议');
-            // 微信会自动弹出隐私协议弹窗，等待用户同意后再继续
-          }
-          this._doGetLocation(phoneModel);
-        },
-        fail: () => {
-          console.log('[handleAccess] 不支持隐私协议检查，直接获取位置');
-          this._doGetLocation(phoneModel);
-        }
-      });
-    } else {
-      this._doGetLocation(phoneModel);
-    }
-  },
-
-  _doGetLocation(phoneModel) {
-    // 🔴 先获取定位（会弹授权窗），授权成功后才播放动画
-    console.log('[handleAccess] 开始请求定位授权...');
-
     wx.getLocation({
       type: 'gcj02',
       isHighAccuracy: true,
-      timeout: 10000, // 10秒超时
       success: (res) => {
-        console.log('[handleAccess] ✅ 定位授权成功，位置获取成功:', res);
-        console.log('[handleAccess] latitude:', res.latitude, 'longitude:', res.longitude);
-        
-        // 🔴 定位成功后立即播放动画
+        console.log('[handleAccess] 位置获取成功:', res);
         this.runAnimation();
-        
-        // 🔴 并行进行地址解析和拦截判断，并保存 Promise 引用
-        this._analyzePromise = this.analyzeRegion(res.latitude, res.longitude, phoneModel).then(() => {
-          console.log('[handleAccess] 地址分析完成，等待动画结束后跳转');
-        }).catch(err => {
-          console.error('[handleAccess] 地址分析失败:', err);
-          // 解析失败也设置默认跳转，不阻塞用户
-          if (!this.data.pendingJumpTarget) {
-            this.setData({
-              pendingJumpTarget: '/pages/products/products',
-              pendingJumpData: null
-            });
-          }
-        });
+        this.analyzeRegion(res.latitude, res.longitude, phoneModel);
       },
       fail: (err) => {
-        console.error('[handleAccess] ❌ 位置获取失败，完整错误信息:', JSON.stringify(err));
-        console.error('[handleAccess] errMsg:', err.errMsg);
-        console.error('[handleAccess] errCode:', err.errCode);
-        
-        // 🔴 定位失败：立即中断动画和跳转
-        this.clearAnimationTimers(); // 停止所有动画定时器
-        this.setData({ step: 0 }); // 重置动画状态
-        console.log('[handleAccess] 定位失败，已中断动画');
+        console.error('[handleAccess] 位置获取失败:', err);
         
         // 🔴 关键修复：先检查定位权限状态
         wx.getSetting({
           success: (settingRes) => {
             const locationAuth = settingRes.authSetting['scope.userLocation'];
             console.log('[handleAccess] 定位权限状态:', locationAuth);
-            console.log('[handleAccess] 完整权限设置:', JSON.stringify(settingRes.authSetting));
             
             if (locationAuth === false) {
               // 用户拒绝了定位权限，必须要求用户开启
@@ -828,27 +387,13 @@ Page({
               return;
             } else {
               // 权限已开启，但获取位置失败（可能是GPS信号弱、网络问题等）
-              console.log('[handleAccess] 定位权限已开启，但获取位置失败，尝试重新获取...');
-              
-              // 🔴 尝试重新获取一次（降低精度要求）
-              wx.getLocation({
-                type: 'gcj02',
-                isHighAccuracy: false, // 降低精度
-                altitude: false,
-                timeout: 5000,
-                success: async (retryRes) => {
-                  console.log('[handleAccess] ✅ 重试获取位置成功:', retryRes);
-                  await this.analyzeRegion(retryRes.latitude, retryRes.longitude, phoneModel);
-                  console.log('[handleAccess] 重试成功，重新播放动画');
-                  this.runAnimation();
-                },
-                fail: (retryErr) => {
-                  console.error('[handleAccess] ❌ 重试获取位置也失败:', retryErr.errMsg);
-                  // 🔴 两次都失败，提示用户并要求重新点击
-                  this.showAutoToast('提示', '无法获取位置信息，请检查手机定位服务');
-                  console.log('[handleAccess] 两次获取位置都失败，不允许进入');
-                }
-              });
+              // 这种情况下可以允许进入，但给出提示
+              console.log('[handleAccess] 定位权限已开启，但获取位置失败，允许进入');
+              this.showAutoToast('提示', '无法获取当前位置，将使用默认设置');
+              // 延迟跳转，给用户看到提示的时间
+              setTimeout(() => {
+                wx.reLaunch({ url: '/pages/products/products' });
+              }, 1500);
             }
           },
           fail: () => {
@@ -896,23 +441,11 @@ Page({
     this.addAnimationTimer(t1);
   },
 
-  async doFallAndSwitch() {
+  doFallAndSwitch() {
     this.setData({ step: 5 });
 
     // ✅ 小齿轮掉落动画结束后执行跳转（0.8s + 少量缓冲）
-    const jumpTimer = setTimeout(async () => {
-      // 🔴 先等待地址解析完成（如果正在进行中）
-      if (this._analyzePromise) {
-        console.log('[index] 动画完成，等待地址解析完成...');
-        try {
-          await this._analyzePromise;
-          console.log('[index] 地址解析已完成');
-        } catch (err) {
-          console.error('[index] 地址解析异常:', err);
-        }
-        this._analyzePromise = null; // 清理引用
-      }
-
+    const jumpTimer = setTimeout(() => {
       // 🔴 检查是否有待跳转的目标（由地址检查结果决定）
       if (this.data.pendingJumpTarget) {
         console.log('[index] 动画完成，执行待跳转:', this.data.pendingJumpTarget);
@@ -1007,19 +540,15 @@ Page({
 
   async analyzeRegion(lat, lng, phoneModel) {
     console.log('[index] analyzeRegion 开始，位置:', lat, lng);
-    const startTime = Date.now();
     
     try {
-      // 🔴 使用带重试机制的逆地理编码函数，缩短超时时间加快解析
+      // 🔴 使用带重试机制的逆地理编码函数
       const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
       const addressData = await reverseGeocodeWithRetry(lat, lng, {
-        maxRetries: 2,  // 减少重试次数：2次
-        timeout: 5000,   // 缩短超时：5秒
-        retryDelay: 500  // 缩短重试间隔：500ms
+        maxRetries: 3,
+        timeout: 10000,
+        retryDelay: 1000
       });
-      
-      const elapsedTime = Date.now() - startTime;
-      console.log('[index] 地址解析耗时:', elapsedTime, 'ms');
 
       const locData = {
         ...addressData,
@@ -1037,11 +566,10 @@ Page({
         return;
       }
 
-      console.log('[index] 🔍 解析后的地址数据 - city:', locData.city, ', district:', locData.district);
-      console.log('[index] 🔍 完整地址数据:', JSON.stringify(locData));
+      console.log('[index] 解析后的地址数据:', locData);
 
       // 🔴 调用统一的拦截判断方法
-      await this._checkLocationBlocking(locData);
+      this._checkLocationBlocking(locData);
     } catch (err) {
       console.error('[index] analyzeRegion 异常:', err);
       // 异常情况下，至少保存经纬度并放行
@@ -1095,10 +623,10 @@ Page({
       }
 
       const blockedCities = Array.isArray(config.blocked_cities) ? config.blocked_cities : [];
-      console.log('[index] 🔍 拦截城市列表:', JSON.stringify(blockedCities));
-      console.log('[index] 🔍 当前城市:', locData.city, '(类型:', typeof locData.city, ')');
-      console.log('[index] 🔍 当前省份:', locData.province);
-      console.log('[index] 🔍 当前区县:', locData.district);
+      console.log('[index] 拦截城市列表:', blockedCities);
+      console.log('[index] 当前城市:', locData.city);
+      console.log('[index] 当前省份:', locData.province);
+      console.log('[index] 当前区县:', locData.district);
       
       // 🔴 新的拦截判断逻辑：支持对象数组格式 {city, district}，同时兼容旧格式字符串数组
       const isBlockedCity = blockedCities.some(blockedItem => {
@@ -1138,10 +666,10 @@ Page({
         }
       });
 
-      console.log('[index] 🔍 是否命中拦截城市:', isBlockedCity, '(类型:', typeof isBlockedCity, ')');
+      console.log('[index] 是否命中拦截城市:', isBlockedCity);
 
       if (isBlockedCity) {
-        console.log(`[index] ⚠️ ⚠️ ⚠️ 命中拦截城市: ${locData.city}，正在检查免死金牌...`);
+        console.log(`[index] ⚠️ 命中拦截城市: ${locData.city}，正在检查免死金牌...`);
         
         // 获取 OpenID
         let openid = null;
@@ -1541,129 +1069,8 @@ Page({
     }, wait);
   },
 
-  // 🔴 显示自动消失的提示（使用自定义弹窗）
-  showAutoToast(title, content) {
-    const message = content || title;
-    console.log('[showAutoToast] 显示提示:', message);
-    
-    // 直接使用 custom-toast 组件
-    try {
-      const toast = this.selectComponent('#custom-toast');
-      if (toast && typeof toast.showToast === 'function') {
-        console.log('[showAutoToast] 使用 custom-toast 组件');
-        toast.showToast({
-          title: message,
-          icon: 'none',
-          duration: 2000
-        });
-      } else {
-        console.log('[showAutoToast] custom-toast 组件未找到，使用 wx.showToast');
-        // 降级使用 wx.showToast
-        wx.showToast({
-          title: message,
-          icon: 'none',
-          duration: 2000
-        });
-      }
-    } catch (err) {
-      console.error('[showAutoToast] 显示提示失败:', err);
-      // 降级使用 wx.showToast
-      wx.showToast({
-        title: message,
-        icon: 'none',
-        duration: 2000
-      });
-    }
-  },
-
   handleDeny() { 
     this.showAutoToast('提示', '需要授权才能使用');
-  },
-
-  // 关闭定位权限提示弹窗
-  hideLocationPermissionModal() {
-    this.setData({
-      showLocationPermissionModal: false,
-      _pendingLocationAction: null
-    });
-  },
-
-  // 打开设置页
-  openLocationSetting() {
-    const isShareCodeUser = this.data._pendingLocationAction === 'shareCode';
-    this.setData({ showLocationPermissionModal: false });
-    
-    wx.openSetting({
-      success: (openRes) => {
-        if (openRes.authSetting['scope.userLocation']) {
-          // 用户在设置页开启了权限，重新获取定位
-          wx.getLocation({
-            type: 'gcj02',
-            success: async (res) => {
-              console.log('[index] 定位权限已开启，获取位置成功:', res);
-              // 🔴 保存经纬度
-              wx.setStorageSync('last_location', {
-                latitude: res.latitude,
-                longitude: res.longitude
-              });
-              
-              // 🔴 解析地址并保存完整信息
-              try {
-                const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
-                const addressData = await reverseGeocodeWithRetry(res.latitude, res.longitude, {
-                  maxRetries: 2,
-                  timeout: 5000,
-                  retryDelay: 500
-                });
-                // 🔴 保存完整地址信息
-                wx.setStorageSync('last_location', {
-                  latitude: res.latitude,
-                  longitude: res.longitude,
-                  province: addressData.province || '',
-                  city: addressData.city || '',
-                  district: addressData.district || '',
-                  address: addressData.address || addressData.full_address || ''
-                });
-                console.log('[index] 地址解析成功:', addressData);
-              } catch (e) {
-                console.log('[index] 地址解析失败:', e);
-              }
-              
-              // 🔴 如果是分享码用户，继续执行动画和跳转
-              if (isShareCodeUser) {
-                console.log('[index] 分享码用户定位成功，继续执行动画');
-                const app = getApp();
-                if (app && app.globalData && app.globalData.isShareCodeUser) {
-                  // 设置跳转目标为安装教程页
-                  this.setData({
-                    pendingJumpTarget: '/pages/azjc/azjc',
-                    pendingJumpData: null
-                  });
-                  // 播放动画
-                  this.runAnimation();
-                }
-              } else {
-                // 普通用户，重新触发 handleAccess
-                console.log('[index] 普通用户定位成功，重新触发 handleAccess');
-                this.handleAccess();
-              }
-            },
-            fail: (err) => {
-              console.log('[index] 获取位置失败:', err);
-              this.showAutoToast('提示', '无法获取位置信息，请检查手机定位服务');
-            }
-          });
-        } else {
-          // 用户在设置页未开启权限
-          console.log('[index] 用户在设置页未开启定位权限');
-        }
-      },
-      fail: (err) => {
-        console.error('[index] 打开设置页失败:', err);
-      }
-    });
-    
-    this.setData({ _pendingLocationAction: null });
   },
   onOpenSettingResult(e) {
     if (e.detail.authSetting && e.detail.authSetting['scope.userLocation']) {
@@ -1716,15 +1123,8 @@ Page({
   // ================== 管理员权限检查 ==================
   async checkAdminPrivilege() {
     try {
-      console.log("[index] 开始检查管理员权限...");
-      const res = await Promise.race([
-        wx.cloud.callFunction({ name: "login" }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error("admin check timeout")), 5000))
-      ]);
-      
+      const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
-      console.log('[index] 查询管理员表...');
-      
       const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
       if (adminCheck.data.length > 0) {
         this.setData({ isAdmin: true });
@@ -1746,17 +1146,9 @@ Page({
       console.log('[index] isAdmin:', this.data.isAdmin);
       console.log('[index] isAdminMode:', this.data.isAdminMode);
       
-      // 🔴 防抖：如果正在动画中，不响应
-      if (this.data.step > 0) {
-        console.log('[index] 动画进行中，忽略管理员入口点击');
-        return;
-      }
-      
       // 只有管理员才能切换模式
       if (this.data.isAdmin) {
         this.toggleAdminMode();
-      } else {
-        console.log('[index] 非管理员用户，无权限切换模式');
       }
     } catch (error) {
       console.error('[index] onAdminTap 发生错误:', error);

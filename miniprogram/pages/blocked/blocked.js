@@ -181,10 +181,10 @@ Page({
         setTimeout(() => {
             console.log('[blocked] 弹窗即将关闭，准备跳转到首页');
           this.setData({ customSuccessModalClosing: true });
-          setTimeout(() => {
-            this.setData({ showCustomSuccessModal: false });
-            // 直接跳回首页，用户已通过验证，不需要重新输入昵称
-            wx.reLaunch({ url: '/pages/index/index' });
+        setTimeout(() => {
+          this.setData({ showCustomSuccessModal: false });
+          // 直接跳回首页，用户已通过验证，不需要重新输入昵称
+          wx.reLaunch({ url: '/pages/index/index' });
           }, 400); // 关闭动画时间
         }, 2000); // 显示2秒
         }
@@ -273,7 +273,7 @@ Page({
         // 🔴 立即疯狂隐藏微信官方弹窗（多次尝试，不同时机）
         const hideOfficialToast = () => {
           try {
-            wx.hideToast();
+        wx.hideToast();
             wx.hideLoading();
           } catch (e) {}
         };

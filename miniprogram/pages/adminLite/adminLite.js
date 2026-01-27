@@ -98,6 +98,16 @@ Page({
     this.loadProductList();
   },
 
+  // 🔴 返回按钮
+  goBack() {
+    const pages = getCurrentPages();
+    if (pages.length > 1) {
+      wx.navigateBack();
+    } else {
+      wx.redirectTo({ url: '/pages/products/products' });
+    }
+  },
+
   onHide() {
     // 🔴 停止定时检查
     const app = getApp();

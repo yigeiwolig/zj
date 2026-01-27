@@ -11,8 +11,8 @@
   <!-- ======================= -->
   <!-- 新增：蓝牙未开启弹窗（全屏样式） -->
   <!-- ======================= -->
-  <view class="password-modal-mask" wx:if="{{showBluetoothAlert}}">
-    <view class="password-box">
+  <view class="password-modal-mask" wx:if="{{showBluetoothAlert}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
       <view class="bluetooth-icon-wrap">
         <image class="bt-icon-img" src="{{icons.btSmall}}" mode="aspectFit"></image>
       </view>
@@ -27,8 +27,8 @@
   <!-- ======================= -->
   <!-- 新增：自动校准中弹窗 -->
   <!-- ======================= -->
-  <view class="password-modal-mask {{calibratingModalClosing ? 'closing' : ''}}" wx:if="{{showCalibratingModal}}" catchtouchmove="noop">
-    <view class="password-box">
+  <view class="password-modal-mask {{calibratingModalClosing ? 'closing' : ''}}" wx:if="{{showCalibratingModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
       <view class="calibrating-icon-wrap">
         <view class="calibrating-spinner"></view>
       </view>
@@ -44,8 +44,8 @@
   <!-- ======================= -->
   <!-- 1. 密码验证弹窗 -->
   <!-- ======================= -->
-  <view class="password-modal-mask {{passwordModalClosing ? 'closing' : ''}}" wx:if="{{showPasswordModal}}" catchtouchmove="noop">
-    <view class="password-box">
+  <view class="password-modal-mask {{passwordModalClosing ? 'closing' : ''}}" wx:if="{{showPasswordModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
       <view class="pass-title">安全验证</view>
       <view class="pass-desc">调节折叠角度需要管理员权限</view>
       <input class="pass-input" type="number" password="true" maxlength="4" placeholder="请输入密码" bindinput="onPasswordInput" value="{{passwordInput}}"/>
@@ -59,8 +59,8 @@
   <!-- ======================= -->
   <!-- 2. 操作指引弹窗 -->
   <!-- ======================= -->
-  <view class="password-modal-mask {{tutorialModalClosing ? 'closing' : ''}}" wx:if="{{showTutorialModal}}" catchtouchmove="noop">
-    <view class="password-box">
+  <view class="password-modal-mask {{tutorialModalClosing ? 'closing' : ''}}" wx:if="{{showTutorialModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
       <view class="pass-title" style="margin-bottom: 60rpx;">操作指引</view>
       <view class="anim-stage">
         <view class="ring-btn-wrapper {{animIsPressing ? 'pressing' : ''}}">
@@ -80,8 +80,8 @@
   <!-- ======================= -->
   <!-- 3. 关钥匙动画弹窗 -->
   <!-- ======================= -->
-  <view class="password-modal-mask {{keyModalClosing ? 'closing' : ''}}" wx:if="{{showKeyModal}}" catchtouchmove="noop">
-    <view class="password-box">
+  <view class="password-modal-mask {{keyModalClosing ? 'closing' : ''}}" wx:if="{{showKeyModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
       <view class="pass-title" style="margin-bottom: 60rpx;">操作完成</view>
       <view class="anim-stage">
         <view class="key-circle {{keyAnimState === 'grey' ? 'key-grey' : ''}}">
@@ -383,8 +383,8 @@
         </view>
 
         <!-- 6. 教学引导弹窗 -->
-        <view class="tutorial-mask" wx:if="{{showAngleHint && filters.isF1Series(currentModel.name)}}" catchtouchmove="true">
-          <view class="guide-modal">
+        <view class="tutorial-mask" wx:if="{{showAngleHint && filters.isF1Series(currentModel.name)}}" catchtouchmove="noop" catchtap="noop">
+          <view class="guide-modal" catchtouchmove="noop" catchtap="noop">
             <view class="guide-title" style="margin-bottom: 40rpx;">操作指引</view>
             <view class="anim-stage">
                <view class="ring-btn-wrapper {{openAngleAnimIsPressing ? 'pressing' : ''}}" bindtap="toggleOpenAngleLight">
@@ -404,9 +404,9 @@
     </view> <!-- 结束 device-stage -->
 
     <!-- 高级设置弹窗 -->
-    <view class="modal-mask-new {{showSettingsModal ? 'show' : ''}}" bindtap="closeSettings">
+    <view class="modal-mask-new {{showSettingsModal ? 'show' : ''}}" bindtap="closeSettings" catchtouchmove="noop" catchtap="noop">
       <view class="ui-toast {{toastClass}}">请点击需要更改的设置</view>
-      <view class="modal-body-new" catchtap="preventBubble">
+      <view class="modal-body-new" catchtap="preventBubble" catchtouchmove="noop">
         <view class="modal-header">
           <text class="m-title">高级配置</text>
           <view class="m-close" bindtap="closeSettings">✕</view>
@@ -456,8 +456,8 @@
   <!-- ======================= -->
   <!-- F1PRO/MAX 第二步：全新产品 170度 滑动提示 (最终版) -->
   <!-- ======================= -->
-  <view class="tutorial-mask" wx:if="{{showNewProductHint}}" catchtouchmove="true">
-    <view class="guide-modal">
+  <view class="tutorial-mask" wx:if="{{showNewProductHint}}" catchtouchmove="noop" catchtap="noop">
+    <view class="guide-modal" catchtouchmove="noop" catchtap="noop">
       <view class="guide-title">全新产品提示</view>
       
       <view class="guide-desc" style="margin-bottom: 40rpx;">如果是全新产品\n请<text style="color:#007AFF; font-weight:bold;">往右滑动</text>波轮\n将角度调整到 170° 左右使用</view>

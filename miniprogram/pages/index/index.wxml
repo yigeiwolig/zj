@@ -1,6 +1,6 @@
 <!-- 强制授权弹窗 (蓝牙/定位失败时显示) - 黑白风格 -->
-<view class="custom-modal-mask" wx:if="{{showAuthForceModal}}" catchtouchmove="noop">
-  <view class="custom-modal-box" catchtouchmove="noop">
+<view class="custom-modal-mask" wx:if="{{showAuthForceModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box" catchtouchmove="noop" catchtap="noop">
     <!-- 图标：使用 Unicode 字符，无需加载图片 -->
     <view class="modal-icon-new">📍</view>
     
@@ -216,8 +216,8 @@
 </view>
 
 <!-- 【新增】强制授权弹窗 - 黑白风格 -->
-<view class="custom-modal-mask" wx:if="{{showAuthModal}}">
-  <view class="custom-modal-box">
+<view class="custom-modal-mask" wx:if="{{showAuthModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box" catchtouchmove="noop" catchtap="noop">
     <!-- 图标：使用 Unicode 字符，无需加载图片 -->
     <view class="modal-icon-new">📍</view>
     
@@ -237,8 +237,8 @@
 </view>
 
 <!-- 【全局通用】自定义黑白极简弹窗 - 错误类型 -->
-<view class="custom-modal-mask" wx:if="{{showCustomErrorModal}}">
-  <view class="custom-modal-box">
+<view class="custom-modal-mask" wx:if="{{showCustomErrorModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box" catchtouchmove="noop" catchtap="noop">
     
     <!-- 1. 图标：使用 CSS 绘制的圆形图标，无需加载图片 -->
     <view class="modal-icon-new error-icon">
@@ -262,8 +262,8 @@
 </view>
 
 <!-- 【全局通用】自定义黑白极简弹窗 - 成功类型（统一使用 copy-success-modal 样式） -->
-<view class="custom-modal-mask" wx:if="{{showCustomSuccessModal}}">
-  <view class="custom-modal-box copy-success-modal">
+<view class="custom-modal-mask" wx:if="{{showCustomSuccessModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
     <!-- 图标：使用 Unicode 字符 -->
     <view class="modal-icon-new success-icon">✓</view>
     <!-- 标题 -->
@@ -272,8 +272,8 @@
 </view>
 
 <!-- 【新增】自定义二次确认弹窗 - 白底黑字 -->
-<view class="custom-modal-mask" wx:if="{{showConfirmModal}}">
-  <view class="custom-modal-box confirm-modal">
+<view class="custom-modal-mask" wx:if="{{showConfirmModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box confirm-modal" catchtouchmove="noop" catchtap="noop">
     <view class="modal-title-new">确认操作</view>
     <view class="modal-content-new">
       <view class="content-main">{{confirmModalContent}}</view>
@@ -286,8 +286,8 @@
 </view>
 
 <!-- 【新增】自定义"内容已复制"弹窗 - 白色，大一点 -->
-<view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}">
-  <view class="custom-modal-box copy-success-modal">
+<view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
     <!-- 图标：使用 Unicode 字符 -->
     <view class="modal-icon-new success-icon">✓</view>
     <!-- 标题 -->
@@ -304,8 +304,8 @@
 </view>
 
 <!-- ================= 自定义弹窗（替换 wx.showModal） ================= -->
-<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="closeCustomDialog" catchtouchmove="noop">
-  <view class="custom-dialog-box" catchtap="noop">
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="closeCustomDialog" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop">
     <view class="cd-title">{{dialog.title}}</view>
     <view class="cd-content">{{dialog.content}}</view>
     <view class="cd-btn-row">
@@ -316,8 +316,8 @@
 </view>
 
 <!-- 定位权限提示弹窗（白底黑字） -->
-<view class="custom-modal-mask {{showLocationPermissionModal ? 'active' : ''}}" wx:if="{{showLocationPermissionModal}}" catchtouchmove="noop">
-  <view class="custom-modal-box location-permission-modal" catchtouchmove="noop">
+<view class="custom-modal-mask {{showLocationPermissionModal ? 'active' : ''}}" wx:if="{{showLocationPermissionModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box location-permission-modal" catchtouchmove="noop" catchtap="noop">
     <view class="modal-icon-new">📍</view>
     <view class="modal-title-new">需要定位权限</view>
     <view class="modal-content-new">

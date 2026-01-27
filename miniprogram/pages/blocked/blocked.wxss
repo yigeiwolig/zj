@@ -141,7 +141,7 @@ page {
   color: #a1a1a6;
   font-family: 'SF Mono', monospace; /* 等宽字体，像代码 */
   letter-spacing: 0.5rpx;
-}
+  }
 
 /* 动画 */
 @keyframes spin {
@@ -188,31 +188,56 @@ page {
 }
 
 .custom-modal-box {
-  width: 620rpx; /* 稍微宽一点 */
+  width: 600rpx; /* 统一宽度，和 shop 页面一样 */
   background: #ffffff;
-  border-radius: 48rpx; /* 超大圆角 */
-  padding: 70rpx 50rpx; /* 增加内边距 */
+  border-radius: 50rpx; /* 统一圆角，和 shop 页面一样 */
+  padding: 70rpx 50rpx; /* 统一内边距，和 shop 页面一样 */
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  box-shadow: 0 40rpx 80rpx rgba(0, 0, 0, 0.2); /* 悬浮感投影 */
-  
-  /* 🔴 弹性弹出动画 */
-  transform: scale(0.8);
-  opacity: 0;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.15); /* 统一阴影，和 shop 页面一样 */
+  animation: cartBoxPopIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; /* 统一动画名称 */
 }
 
-.custom-modal-mask.active .custom-modal-box {
-  transform: scale(1);
+.custom-modal-mask {
+  background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(5px); /* 统一背景色，和 shop 页面一样 */
+  animation: cartMaskFadeIn 0.25s ease-out forwards; /* 统一动画名称 */
+}
+.custom-modal-mask.active {
   opacity: 1;
+  pointer-events: auto;
+}
+.custom-modal-mask.closing {
+  animation: cartMaskFadeOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; /* 统一动画名称 */
+}
+.custom-modal-mask.closing .custom-modal-box {
+  animation: cartBoxShrinkOut 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards; /* 统一动画名称 */
 }
 
-.custom-modal-mask.closing .custom-modal-box {
-  transform: scale(0.9);
+@keyframes cartMaskFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes cartMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes cartBoxPopIn {
+  from { opacity: 0; transform: scale(0.88); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes cartBoxShrinkOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(0.6) translateY(-60rpx);
   opacity: 0;
-  transition: all 0.3s ease-out;
+    filter: blur(12rpx);
+  }
 }
 
 /* ================= 统一的"内容已复制"弹窗（样式和首页一致） ================= */
@@ -306,45 +331,47 @@ page {
   color: #1d1d1f;
 }
 
-/* 🔴 验证通过弹窗特化样式 - 白底黑字，简洁大气 */
+/* 🔴 验证通过弹窗特化样式 - 白底黑字，简洁大气，统一和内容已复制一样 */
 .success-modal {
   background: #FFFFFF !important;
-  width: 480rpx !important; /* 缩小宽度 620→480 */
-  padding: 60rpx 40rpx !important; /* 缩小内边距 80→60, 60→40 */
+  width: 400rpx !important; /* 统一宽度，和内容已复制一样 */
+  padding: 60rpx 40rpx !important; /* 统一内边距 */
   box-shadow: 0 30rpx 80rpx rgba(0, 0, 0, 0.2) !important; /* 减轻阴影 */
 }
 
-.success-icon {
-  width: 100rpx; /* 缩小图标 120→100 */
-  height: 100rpx;
-  font-size: 80rpx; /* 缩小对勾 100→80 */
-  line-height: 120rpx;
-  color: #000000;
-  margin-bottom: 30rpx;
-  font-weight: 300;
-  /* 添加进入动画 */
-  animation: checkmarkPop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.2s backwards;
+.success-modal .modal-icon-new.success-icon {
+  width: 80rpx !important; /* 统一图标大小，和内容已复制一样 */
+  height: 80rpx !important;
+  margin-bottom: 30rpx !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 60rpx !important; /* 统一字体大小，和内容已复制一样 */
+  font-weight: 900 !important; /* 统一字体粗细 */
+  color: #000000 !important;
+  line-height: 1 !important;
+  opacity: 1 !important;
+  /* 统一动画 */
+  animation: checkmarkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards !important;
 }
 
 @keyframes checkmarkPop {
-  0% {
-    transform: scale(0) rotate(-45deg);
+  from {
+    transform: scale(0) rotate(-180deg);
     opacity: 0;
   }
-  100% {
+  to {
     transform: scale(1) rotate(0deg);
     opacity: 1;
   }
 }
 
 .success-modal .modal-title-new {
-  font-size: 36rpx; /* 缩小字号 40→36 */
-  font-weight: 700;
+  font-size: 36rpx !important; /* 统一标题字体大小，和内容已复制一样 */
+  margin-bottom: 0 !important;
+  letter-spacing: 0 !important;
+  font-weight: 600 !important;
   color: #000000;
-  letter-spacing: 3rpx; /* 减小字间距 4→3 */
-  margin-top: 8rpx; /* 减小间距 10→8 */
-  /* 添加淡入动画 */
-  animation: fadeInUp 0.4s ease 0.3s backwards;
 }
 
 @keyframes fadeInUp {

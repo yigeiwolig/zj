@@ -111,7 +111,11 @@ page {
   background: transparent; 
 }
 /* 🔴 统一返回键样式 - 恢复原来的实现方式 */
+/* 🔴 统一返回键样式 - 全局标准 */
 .back-icon {
+  position: absolute;
+  left: 40rpx;
+  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -119,6 +123,7 @@ page {
   justify-content: center;
   pointer-events: auto;
   transition: all 0.2s;
+  z-index: 10001;
 }
 .back-icon:active {
   transform: scale(0.95);
@@ -316,6 +321,79 @@ page {
   to   { opacity: 1; }
 }
 
+/* ================= 底部触发按钮 (New) ================= */
+.trigger-button {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom) + 40rpx); /* 适配全面屏 */
+  left: 50%;
+  
+  /* 初始状态：隐藏在下方，透明 */
+  transform: translateX(-50%) translateY(200%);
+  opacity: 0;
+
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 24rpx 48rpx;
+  border-radius: 60rpx;
+  box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.1);
+  z-index: 400; /* 低于抽屉 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1rpx solid rgba(255,255,255,0.5);
+  
+  /* 移除原来的 animation，改用 transition 控制所有状态变化 */
+  transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+/* 状态1：弹起可见 */
+.trigger-button.visible {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+/* 状态2：变淡沉下 (闲置状态) */
+.trigger-button.faded {
+  transform: translateX(-50%) translateY(30%); /* 下沉 30% */
+  opacity: 0.6; /* 变半透明 */
+  background: rgba(255, 255, 255, 0.75); /* 背景也淡一点 */
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.05); /* 阴影减弱 */
+  filter: grayscale(0.2); /* 轻微置灰 */
+}
+
+/* 交互反馈：即使是 faded 状态，按下去也要变清楚 */
+.trigger-button:active,
+.trigger-button.faded:active {
+  transform: translateX(-50%) scale(0.95) translateY(0); /* 按下时回弹一点 */
+  background: rgba(255, 255, 255, 1);
+  opacity: 1;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.08);
+  filter: grayscale(0);
+}
+
+.trigger-text {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+  margin-right: 8rpx;
+  line-height: 1; /* 🔴 修正：强制行高为1，确保垂直居中 */
+  padding-top: 2rpx; /* 微调：汉字视觉中心修正 */
+}
+
+.trigger-icon {
+  width: 24rpx;
+  height: 24rpx;
+  opacity: 0.6;
+}
+
+/* 移除原来的关键帧动画，不再需要 */
+/* @keyframes btnFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20rpx); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+} */
+
+
 /* ================= 底部抽屉样式 ================= */
 .bottom-drawer {
   position: fixed;
@@ -327,7 +405,10 @@ page {
   border-radius: 40rpx 40rpx 0 0;
   box-shadow: 0 -10rpx 40rpx rgba(0, 0, 0, 0.08);
   z-index: 500; /* 高于其他元素 */
-  transform: translateY(calc(100% - 160rpx)); /* 初始只露出把手部分 */
+  
+  /* 🔴 修改：初始完全隐藏 */
+  transform: translateY(100%); 
+  
   transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
   display: flex;
   flex-direction: column;
@@ -337,13 +418,12 @@ page {
   transform: translateY(0);
 }
 
-/* 把手区域 */
+/* 把手区域 - 仅用于关闭和指示 */
 .drawer-handle-area {
-  height: 160rpx;
+  height: 80rpx; /* 减小高度，不再需要承载文字 */
   width: 100%;
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  justify-content: center;
   padding-top: 30rpx;
   box-sizing: border-box;
   flex-shrink: 0;
@@ -354,19 +434,10 @@ page {
   height: 10rpx;
   background: #E5E5EA;
   border-radius: 10rpx;
-  margin-bottom: 20rpx;
 }
 
 .drawer-hint-text {
-  font-size: 26rpx;
-  color: #8E8E93;
-  font-weight: 600;
-  letter-spacing: 1rpx;
-  transition: opacity 0.3s;
-}
-
-.drawer-hint-text.fade {
-  opacity: 0;
+  display: none; /* 隐藏原来的提示文字 */
 }
 
 /* 内容区域 */
@@ -379,36 +450,39 @@ page {
   -webkit-overflow-scrolling: touch;
 }
 
-/* 功能网格 */
+/* 功能网格 - 改为长条形列表布局 */
 .function-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 30rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
   padding-bottom: 40rpx;
 }
 
-/* 功能卡片 */
+/* 功能卡片 - 长条形样式 */
 .function-card {
   background: #ffffff;
   border: 2rpx solid #F2F2F7;
   border-radius: 32rpx;
-  padding: 30rpx;
+  padding: 36rpx 48rpx; /* 增加水平内边距 */
   display: flex;
   align-items: center;
-  gap: 20rpx;
-  /* box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.03); */
+  gap: 32rpx; /* 增加图标和文字的间距 */
   transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+  /* 添加微阴影增加层次感 */
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.02);
 }
 
 .function-card:active {
   background: #F9F9F9;
-  transform: scale(0.98);
+  transform: scale(0.99); /* 微调按压缩放比例 */
 }
 
 /* 图标区域 */
 .fc-icon-box {
-  width: 80rpx;
-  height: 80rpx;
+  width: 88rpx; /* 稍微加大图标区域 */
+  height: 88rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -425,22 +499,24 @@ page {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  flex: 1; /* 让文字区域占据剩余空间 */
+  justify-content: center;
 }
 
 .fc-title {
-  font-size: 30rpx;
+  font-size: 32rpx; /* 稍微加大标题 */
   font-weight: 700;
   color: #1d1d1f;
-  margin-bottom: 4rpx;
+  margin-bottom: 6rpx;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .fc-sub {
-  font-size: 18rpx;
+  font-size: 20rpx;
   font-weight: 600;
   color: #86868b;
-  letter-spacing: 1rpx;
+  letter-spacing: 2rpx;
   text-transform: uppercase;
 }

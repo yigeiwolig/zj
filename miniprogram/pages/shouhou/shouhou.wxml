@@ -7,12 +7,9 @@
   <view class="nav-header">
     <!-- 顶部导航 -->
     <view class="header">
-      <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 8}}px;">
+      <view class="back-icon" catchtap="goBack">
         <text class="back-arrow">‹</text>
       </view>
-    </view>
-    <view class="nav-back-btn" bindtap="goBack" style="display: none;">
-      <text class="back-icon">‹</text>
     </view>
     <view class="header-title-row">
       <view class="large-title">
@@ -285,8 +282,8 @@
 <!-- ================= 核心弹窗区域 ================= -->
 
 <!-- 1. 加入购物车成功弹窗 -->
-<view class="success-mask" wx:if="{{showCartSuccess}}" catchtouchmove="noop">
-  <view class="success-box">
+<view class="success-mask" wx:if="{{showCartSuccess}}" catchtouchmove="noop" catchtap="noop">
+  <view class="success-box" catchtouchmove="noop" catchtap="noop">
     <view class="s-icon">✔</view>
     <view class="s-title">已加入购物车</view>
     <view class="s-desc">商品已保存，您可以继续选购或去结算</view>
@@ -468,8 +465,8 @@
   </view>
 
   <!-- 4. 智能粘贴弹窗 -->
-  <view class="smart-paste-mask" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;">
-    <view class="smart-paste-box">
+  <view class="smart-paste-mask" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;" catchtouchmove="noop" catchtap="noop">
+    <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
       <view class="sp-title">智能粘贴</view>
       <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
       <textarea 
@@ -488,8 +485,8 @@
   </view>
 
   <!-- 5. 全局自定义弹窗（带收缩退出动画） -->
-  <view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="onDialogMaskTap" catchtouchmove="noop">
-    <view class="custom-dialog-box" catchtap="noop">
+  <view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="onDialogMaskTap" catchtouchmove="noop" catchtap="noop">
+    <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop">
       <view class="cd-title">{{dialog.title}}</view>
       <view class="cd-content">{{dialog.content}}</view>
       <view class="cd-btn-row">
@@ -499,9 +496,9 @@
     </view>
   </view>
 
-  <!-- ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= -->
-  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
-    <view class="auto-toast-box">
+  <!-- ================= 自动消失提示（无按钮，2秒后自动消失，带收缩退出动画） ================= -->
+  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" catchtap="noop">
+    <view class="auto-toast-box" catchtouchmove="noop" catchtap="noop">
       <view class="at-title">{{autoToast.title}}</view>
       <view class="at-content">{{autoToast.content}}</view>
     </view>

@@ -4,6 +4,43 @@
   padding-bottom: 40rpx;
 }
 
+/* 🔴 顶部导航 - 返回键 */
+.header {
+  position: relative;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+/* 🔴 统一返回键样式 - 全局标准（adminLite页面使用半透明背景） */
+.back-icon {
+  position: absolute;
+  left: 40rpx;
+  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
+  width: 70rpx;
+  height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10rpx);
+  border-radius: 50%;
+  z-index: 10001;
+  pointer-events: auto;
+  transition: all 0.2s;
+}
+
+.back-icon:active {
+  background: rgba(0, 0, 0, 0.7);
+  transform: scale(0.95);
+}
+
+.back-arrow {
+  font-size: 48rpx;
+  font-weight: 300;
+  color: #fff;
+  line-height: 1;
+}
+
 .page-header {
   display: flex;
   align-items: center;
