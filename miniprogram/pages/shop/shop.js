@@ -1293,7 +1293,7 @@ Page({
     
     this.calcTotal();
   },
-  closeDetail() {
+  closeDetail() { 
     // #region agent log
     wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/shop/shop.js:closeDetail',message:'closeDetail called',data:{showDetail:this.data.showDetail},timestamp:Date.now(),sessionId:'debug-session',runId:'close-button',hypothesisId:'A'},fail:()=>{}});
     // #endregion
@@ -2437,9 +2437,9 @@ Page({
       const match = originalText.match(pattern);
       if (match) {
         const candidateName = match[1];
-        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+      const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
         if (!hasAddressKeyword && candidateName.length >= 2 && candidateName.length <= 5) {
-          name = candidateName;
+        name = candidateName;
           break;
         }
       }
@@ -2454,9 +2454,9 @@ Page({
         const nameBeforeMatch = beforePhone.match(/([\u4e00-\u9fa5]{2,5})\s*$/);
         if (nameBeforeMatch) {
           const candidateName = nameBeforeMatch[1];
-          const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
-          if (!hasAddressKeyword) {
-            name = candidateName;
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        if (!hasAddressKeyword) {
+          name = candidateName;
           }
         }
         
@@ -2466,11 +2466,11 @@ Page({
           const nameAfterMatch = afterPhone.match(/^\s*([\u4e00-\u9fa5]{2,5})/);
           if (nameAfterMatch) {
             const candidateName = nameAfterMatch[1];
-            const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
             // 检查是否是复姓
             const isCompoundSurname = commonSurnames.some(surname => candidateName.startsWith(surname));
             if (!hasAddressKeyword && (candidateName.length <= 4 || isCompoundSurname)) {
-              name = candidateName;
+          name = candidateName;
             }
           }
         }

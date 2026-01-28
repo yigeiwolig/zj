@@ -80,6 +80,18 @@
         />
       </view>
       
+      <!-- 🔴 放行开关 -->
+      <view class="nickname-bypass-wrapper">
+        <view class="nickname-bypass-label">地域放行开关</view>
+        <view class="nickname-bypass-desc">开启后，该昵称对应的用户将不受地域拦截限制</view>
+        <switch 
+          class="nickname-bypass-switch"
+          checked="{{nicknameBypassLocation}}"
+          bindchange="toggleNicknameBypass"
+          color="#07C160"
+        />
+      </view>
+      
       <button 
         class="nickname-submit-btn" 
         hover-class="btn-hover" 

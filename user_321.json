@@ -1,0 +1,13 @@
+{
+  "nickName": "321",
+  "device": "unknown",
+  "address": "未知地址",
+  "building": "未知楼栋",
+  "province": "",
+  "city": "",
+  "district": "",
+  "locationDesc": "未知区域",
+  "latitude": 0,
+  "longitude": 0,
+  "bypassLocationCheck": false
+}

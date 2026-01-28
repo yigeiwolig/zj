@@ -58,7 +58,8 @@ Page({
     // 🔴 昵称录入相关状态
     isNicknameMode: false, // false=封禁管理, true=昵称录入
     nicknameInput: '',    // 昵称输入
-    isSubmittingNickname: false // 是否正在提交昵称
+    isSubmittingNickname: false, // 是否正在提交昵称
+    nicknameBypassLocation: false // 放行开关（是否跳过地域拦截）
   },
 
   onLoad(options) {
@@ -1436,7 +1437,8 @@ Page({
   toggleNicknameMode() {
     this.setData({
       isNicknameMode: !this.data.isNicknameMode,
-      nicknameInput: '' // 切换时清空输入
+      nicknameInput: '', // 切换时清空输入
+      nicknameBypassLocation: false // 重置开关
     });
   },
 
@@ -1447,9 +1449,17 @@ Page({
     });
   },
 
+  // 🔴 切换放行开关
+  toggleNicknameBypass(e) {
+    this.setData({
+      nicknameBypassLocation: e.detail.value
+    });
+  },
+
   // 🔴 提交昵称到 valid_users
   async submitNickname() {
     const nickname = this.data.nicknameInput.trim();
+    const bypassLocation = this.data.nicknameBypassLocation;
     
     if (!nickname) {
       this.showMyDialog({
@@ -1471,7 +1481,8 @@ Page({
       const res = await wx.cloud.callFunction({
         name: 'addNicknameToWhitelist',
         data: {
-          nickname: nickname
+          nickname: nickname,
+          bypassLocationCheck: bypassLocation // 传递放行开关状态
         }
       });
 
@@ -1482,9 +1493,12 @@ Page({
 
       if (res.result && res.result.success) {
         // 录入成功
-        const message = res.result.message || `昵称 "${nickname}" 已同步到白名单`;
-        // 清空输入框
-        this.setData({ nicknameInput: '' });
+        const message = res.result.message || `昵称 "${nickname}" 已同步到白名单${bypassLocation ? '（已开启地域放行）' : ''}`;
+        // 清空输入框和重置开关
+        this.setData({ 
+          nicknameInput: '',
+          nicknameBypassLocation: false
+        });
         
         this.showMyDialog({
           title: '录入成功',

@@ -1141,6 +1141,35 @@ input, textarea { text-align: left; }
   opacity: 0.6;
 }
 
+/* 🔴 放行开关样式 */
+.nickname-bypass-wrapper {
+  width: 100%;
+  margin-bottom: 40rpx;
+  padding: 30rpx;
+  background: #f8f8f8;
+  border-radius: 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.nickname-bypass-label {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #000000;
+}
+
+.nickname-bypass-desc {
+  font-size: 26rpx;
+  color: #666666;
+  line-height: 1.5;
+}
+
+.nickname-bypass-switch {
+  align-self: flex-end;
+  margin-top: 10rpx;
+}
+
 /* ================= 自定义弹窗样式 ================= */
 .custom-dialog-mask {
   position: fixed;

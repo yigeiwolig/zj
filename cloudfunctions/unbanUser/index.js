@@ -28,6 +28,70 @@ exports.main = async (event, context) => {
 
     console.log('[unbanUser] ✅ 已更新 login_logbutton，buttonId:', buttonId, 'updateData:', updateButtonData);
 
+    // 🔴 如果设置了 bypassLocationCheck: true，同步更新 valid_users 白名单和 user_list 中对应记录的 bypassLocationCheck
+    if (updateButtonData.bypassLocationCheck === true) {
+      try {
+        // 先获取 login_logbutton 记录，获取 nickname
+        const buttonRes = await db.collection('login_logbutton').doc(buttonId).get();
+        const buttonData = buttonRes.data;
+        const nickname = buttonData?.nickname;
+
+        if (nickname) {
+          // 1. 更新 valid_users 白名单中的 bypassLocationCheck
+          try {
+            const validUsersRes = await db.collection('valid_users')
+              .where({ nickname: nickname })
+              .get();
+            
+            if (validUsersRes.data && validUsersRes.data.length > 0) {
+              const updateValidPromises = validUsersRes.data.map(valid => 
+                db.collection('valid_users').doc(valid._id).update({
+                  data: {
+                    bypassLocationCheck: true,
+                    updateTime: db.serverDate()
+                  }
+                })
+              );
+              await Promise.all(updateValidPromises);
+              console.log(`[unbanUser] ✅ 已同步更新 ${validUsersRes.data.length} 条 valid_users 记录的 bypassLocationCheck 为 true`);
+            }
+          } catch (e) {
+            console.error('[unbanUser] ❌ 同步更新 valid_users 失败:', e);
+          }
+
+          // 2. 更新 user_list 中所有匹配该 openid 或 nickname 的记录
+          if (openid) {
+            const userListRes = await db.collection('user_list')
+              .where({
+                $or: [
+                  { _openid: openid },
+                  { nickName: nickname }
+                ]
+              })
+              .get();
+            
+            if (userListRes.data && userListRes.data.length > 0) {
+              const updateUserPromises = userListRes.data.map(user => 
+                db.collection('user_list').doc(user._id).update({
+                  data: {
+                    bypassLocationCheck: true,
+                    updateTime: db.serverDate()
+                  }
+                })
+              );
+              await Promise.all(updateUserPromises);
+              console.log(`[unbanUser] ✅ 已同步更新 ${userListRes.data.length} 条 user_list 记录的 bypassLocationCheck 为 true`);
+            }
+          }
+        } else {
+          console.log(`[unbanUser] ⚠️ login_logbutton 中未找到 nickname，跳过同步更新`);
+        }
+      } catch (e) {
+        console.error('[unbanUser] ❌ 同步更新失败:', e);
+        // 不影响主流程，继续返回成功
+      }
+    }
+
     // 🔴 如果需要更新 login_logs 的 auto 字段
     if (updateLoginLogsAuto && openid) {
       try {

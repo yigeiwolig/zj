@@ -50,9 +50,18 @@ exports.main = async (event, context) => {
       .orderBy('updateTime', 'desc')
       .limit(1)
       .get();
+    
+    // 🔴 检查 valid_users 白名单中是否有该昵称对应的记录且 bypassLocationCheck 为 true
+    const validUsersBypassPromise = nickName ? db.collection('valid_users')
+      .where({ 
+        nickname: nickName,
+        bypassLocationCheck: true
+      })
+      .limit(1)
+      .get() : Promise.resolve({ data: [] });
 
-    const [blockedLogRecord, userRecord, buttonRecordRes] =
-      await Promise.all([blockedLogPromise, userPromise, buttonPromise]);
+    const [blockedLogRecord, userRecord, buttonRecordRes, validUsersBypassRes] =
+      await Promise.all([blockedLogPromise, userPromise, buttonPromise, validUsersBypassPromise]);
 
     let historyIsAllowed = false;
     let globalBan = false;               // 对应 nickname_verify_fail
@@ -64,6 +73,12 @@ exports.main = async (event, context) => {
       historyIsAllowed = blockedLogRecord.data[0].isAllowed; 
     }
 
+    // 🔴 1.5. 检查 valid_users 白名单中是否有该昵称对应的记录且 bypassLocationCheck 为 true（白名单放行）
+    if (validUsersBypassRes.data && validUsersBypassRes.data.length > 0) {
+      bypassLocationCheck = true;
+      console.log('[accessControl] ✅ 检测到白名单放行（valid_users 中昵称匹配且放行开关已开启）:', nickName);
+    }
+
     // 2. 🔴 核心：从 login_logbutton 检查所有封禁状态
     if (buttonRecordRes.data && buttonRecordRes.data.length > 0) {
       const btn = buttonRecordRes.data[0];
@@ -71,7 +86,8 @@ exports.main = async (event, context) => {
       const isBannedFlag = rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
 
       const existingBypass = btn.bypassLocationCheck === true;
-      bypassLocationCheck = existingBypass;
+      // 🔴 如果 user_list 中已经有放行标记，或者 login_logbutton 中有放行标记，都算放行
+      bypassLocationCheck = bypassLocationCheck || existingBypass;
 
       if (isBannedFlag) {
         // 🔴 截屏/录屏封禁：最高优先级，不允许任何方式绕过
@@ -312,34 +328,47 @@ exports.main = async (event, context) => {
       createTime: now 
     };
     
-    if (logRecord.data.length > 0) {
-      await db.collection('blocked_logs').doc(logRecord.data[0]._id).update({ data: logData });
+    if (blockedLogRecord.data.length > 0) {
+      await db.collection('blocked_logs').doc(blockedLogRecord.data[0]._id).update({ data: logData });
     } else {
       await db.collection('blocked_logs').add({ data: logData });
     }
 
     // 存用户表
     if (userRecord.data.length > 0) {
+      const existingUser = userRecord.data[0];
+      // 🔴 如果 user_list 中已经有 bypassLocationCheck 字段，保留它；否则不设置
+      const updateData = {
+        nickName: userInfo.nickName,
+        address: userInfo.address,
+        building: userInfo.building,
+        province: userInfo.province,
+        city: userInfo.city,
+        district: userInfo.district,
+        locationDesc: userInfo.locationDesc,
+        ...(geoPointData ? { geography: geoPointData } : {}),
+        latitude: userInfo.latitude,
+        longitude: userInfo.longitude,
+        updateTime: now
+      };
+      // 🔴 如果已有 bypassLocationCheck 字段，保留它
+      if (existingUser.bypassLocationCheck !== undefined) {
+        updateData.bypassLocationCheck = existingUser.bypassLocationCheck;
+      }
       await db.collection('user_list').doc(userRecord.data[0]._id).update({ 
-        data: {
-          nickName: userInfo.nickName,
-          address: userInfo.address,
-          building: userInfo.building,
-          province: userInfo.province,
-          city: userInfo.city,
-          district: userInfo.district,
-          locationDesc: userInfo.locationDesc,
-          ...(geoPointData ? { geography: geoPointData } : {}),
-          latitude: userInfo.latitude,
-          longitude: userInfo.longitude,
-          updateTime: now
-        }
+        data: updateData
       });
     } else {
       // 🔴 移除 isBanned 字段，封禁状态统一在 login_logs 中管理
+      // 🔴 检查 valid_users 白名单中是否有该昵称对应的记录且 bypassLocationCheck 为 true
+      let inheritBypass = false;
+      if (validUsersBypassRes.data && validUsersBypassRes.data.length > 0) {
+        inheritBypass = true;
+      }
       await db.collection('user_list').add({ 
         data: { 
-          ...userInfo, 
+          ...userInfo,
+          bypassLocationCheck: inheritBypass, // 🔴 如果 valid_users 中昵称匹配且放行开关打开，继承该设置
           createTime: now 
         } 
       });
