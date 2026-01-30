@@ -102,7 +102,13 @@ async function applyPendingWarranty(db, _, openid, sn) {
     const devRes = await db.collection('sn').where({ sn: sn }).get()
     if (devRes.data.length > 0) {
       const device = devRes.data[0]
-      const oldDate = new Date(device.expiryDate)
+      
+      // 🔴 检查设备是否有到期日，如果没有则使用当前时间作为基准
+      if (!device.expiryDate) {
+        console.warn('[bindDevice] 设备没有到期日，使用当前时间作为基准:', sn)
+      }
+      
+      const oldDate = device.expiryDate ? new Date(device.expiryDate) : new Date()
       const newDate = new Date(oldDate.getTime() + totalDays * 24 * 60 * 60 * 1000)
       const newDateStr = newDate.toISOString().split('T')[0]
       

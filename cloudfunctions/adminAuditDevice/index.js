@@ -88,12 +88,6 @@ exports.main = async (event, context) => {
       const expiryDateObj = new Date(finalDate.getTime() + days * 24 * 60 * 60 * 1000)
       const expiryDateStr = expiryDateObj.toISOString().split('T')[0]
 
-      // === D. 计算剩余天数 ===
-      const now = new Date()
-      // 如果购买日期是未来的，或者刚买，剩余天数就是总天数；否则减去已过天数
-      const diffTime = expiryDateObj - now
-      const remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-
       // === E. 更新 sn 集合 ===
       // 🔴 获取申请人的 openid（从 my_read 文档的 _openid 字段）
       const userOpenid = applicantOpenid
@@ -128,8 +122,14 @@ exports.main = async (event, context) => {
       const finalExpiryDateObj = new Date(finalDate.getTime() + finalTotalDays * 24 * 60 * 60 * 1000)
       const finalExpiryDateStr = finalExpiryDateObj.toISOString().split('T')[0]
       
+      // === D. 计算剩余天数（使用包含待生效延保的最终日期） ===
+      const now = new Date()
+      // 如果购买日期是未来的，或者刚买，剩余天数就是总天数；否则减去已过天数
+      const diffTime = finalExpiryDateObj - now
+      const remainingDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      
       // #region agent log
-      sendDebugLog('cloudfunctions/adminAuditDevice/index.js:approve', '计算最终延保信息', { userOpenid, sn: applyData.sn, baseDays: days, pendingWarrantyDays, finalTotalDays, finalExpiryDate: finalExpiryDateStr }, 'E')
+      sendDebugLog('cloudfunctions/adminAuditDevice/index.js:approve', '计算最终延保信息', { userOpenid, sn: applyData.sn, baseDays: days, pendingWarrantyDays, finalTotalDays, finalExpiryDate: finalExpiryDateStr, remainingDays }, 'E')
       // #endregion
       
       // 更新 sn 集合，确保设置 openid
@@ -242,7 +242,16 @@ async function applyPendingWarranty(db, _, openid, sn) {
     
     if (devRes.data.length > 0) {
       const device = devRes.data[0]
-      const oldDate = new Date(device.expiryDate)
+      
+      // 🔴 检查设备是否有到期日，如果没有则使用当前时间作为基准
+      if (!device.expiryDate) {
+        console.warn('[adminAuditDevice] 设备没有到期日，使用当前时间作为基准:', sn)
+        // #region agent log
+        sendDebugLog('cloudfunctions/adminAuditDevice/index.js:applyPendingWarranty', '设备没有到期日，使用当前时间', { openid, sn }, 'D')
+        // #endregion
+      }
+      
+      const oldDate = device.expiryDate ? new Date(device.expiryDate) : new Date()
       const newDate = new Date(oldDate.getTime() + totalDays * 24 * 60 * 60 * 1000)
       const newDateStr = newDate.toISOString().split('T')[0]
       

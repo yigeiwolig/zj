@@ -129,6 +129,16 @@ exports.main = async (event, context) => {
         
         console.log(`[deductWarrantyForOverdue] 找到设备: sn=${device.sn}, productModel=${device.productModel}, repairModel=${repairModel}, isActive=${device.isActive}`)
         
+        // 🔴 检查设备是否有到期日
+        if (!device.expiryDate) {
+          console.warn(`[deductWarrantyForOverdue] 设备没有到期日，跳过扣除: sn=${device.sn}`)
+          results.failed.push({
+            repairId: repair._id,
+            reason: '设备没有到期日，无法扣除质保'
+          })
+          continue
+        }
+        
         const currentExpiryDate = new Date(device.expiryDate)
         
         // 扣除30天质保

@@ -169,10 +169,21 @@ exports.main = async (event, context) => {
 
 // 辅助函数：赠送延保（已绑定设备）
 async function giveReward(db, _, sn) {
-  const devRes = await db.collection('sn').where({ sn: sn }).get()
-  if (devRes.data.length > 0) {
+  try {
+    const devRes = await db.collection('sn').where({ sn: sn }).get()
+    if (devRes.data.length === 0) {
+      console.warn('[adminAuditVideo] 设备不存在，无法赠送延保:', sn)
+      return
+    }
+    
     const device = devRes.data[0]
-    const oldDate = new Date(device.expiryDate)
+    
+    // 🔴 检查设备是否有到期日，如果没有则使用当前时间作为基准
+    if (!device.expiryDate) {
+      console.warn('[adminAuditVideo] 设备没有到期日，使用当前时间作为基准:', sn)
+    }
+    
+    const oldDate = device.expiryDate ? new Date(device.expiryDate) : new Date()
     const newDate = new Date(oldDate.getTime() + 30 * 24 * 60 * 60 * 1000)
     const newDateStr = newDate.toISOString().split('T')[0]
 
@@ -183,6 +194,11 @@ async function giveReward(db, _, sn) {
         totalDays: _.inc(30)
       }
     })
+    
+    console.log('[adminAuditVideo] 已成功赠送延保:', sn)
+  } catch (err) {
+    console.error('[adminAuditVideo] 赠送延保失败:', sn, err)
+    // 不抛出错误，避免影响审核流程
   }
 }
 
