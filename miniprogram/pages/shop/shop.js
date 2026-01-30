@@ -1294,9 +1294,6 @@ Page({
     this.calcTotal();
   },
   closeDetail() { 
-    // #region agent log
-    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/shop/shop.js:closeDetail',message:'closeDetail called',data:{showDetail:this.data.showDetail},timestamp:Date.now(),sessionId:'debug-session',runId:'close-button',hypothesisId:'A'},fail:()=>{}});
-    // #endregion
     console.log('[shop] closeDetail called'); 
     this.setData({ 
       showDetail: false,
@@ -2153,6 +2150,15 @@ Page({
   // 打开配件详情页（点击卡片主体）
   openAccessoryDetail(e) {
     const idx = e.currentTarget.dataset.index;
+    // 清理并验证配件数据，确保价格是有效数字
+    const acc = this.data.accessoryList[idx];
+    if (acc) {
+      // 确保价格是有效数字
+      if (acc.price == null || isNaN(acc.price) || acc.price < 0) {
+        acc.price = 0;
+        this.setData({ [`accessoryList[${idx}].price`]: 0 });
+      }
+    }
     this.setData({ showAccDetail: true, currentAccIdx: idx });
   },
   closeAccessoryDetail() { this.setData({ showAccDetail: false }); },
@@ -2170,27 +2176,46 @@ Page({
   adminEditAccName() {
     const idx = this.data.currentAccIdx;
     const acc = this.data.accessoryList[idx];
-    this._input(acc.name, (v) => {
-      acc.name = v;
-      this.setData({ [`accessoryList[${idx}].name`]: v });
+    const currentName = acc.name || '';
+    this._input(currentName, (v) => {
+      // 清理输入内容，去除首尾空格
+      const cleanedName = (v || '').trim();
+      if (!cleanedName) {
+        this.showAutoToast('提示', '名称不能为空');
+        return;
+      }
+      acc.name = cleanedName;
+      this.setData({ [`accessoryList[${idx}].name`]: cleanedName });
       this.saveAccessoryToCloud(acc, idx);
     });
   },
   adminEditAccDesc() {
     const idx = this.data.currentAccIdx;
     const acc = this.data.accessoryList[idx];
-    this._input(acc.desc, (v) => {
-      acc.desc = v;
-      this.setData({ [`accessoryList[${idx}].desc`]: v });
+    const currentDesc = acc.desc || '';
+    this._input(currentDesc, (v) => {
+      // 清理输入内容，去除首尾空格
+      const cleanedDesc = (v || '').trim();
+      acc.desc = cleanedDesc;
+      this.setData({ [`accessoryList[${idx}].desc`]: cleanedDesc });
       this.saveAccessoryToCloud(acc, idx);
     });
   },
   adminEditAccPrice() {
     const idx = this.data.currentAccIdx;
     const acc = this.data.accessoryList[idx];
-    this._input(acc.price+'', (v) => {
-      acc.price = Number(v);
-      this.setData({ [`accessoryList[${idx}].price`]: Number(v) });
+    // 确保价格是有效数字，如果不是则使用0
+    const currentPrice = (acc.price && !isNaN(acc.price)) ? acc.price : 0;
+    this._input(currentPrice+'', (v) => {
+      // 移除所有非数字字符（保留小数点）
+      const cleaned = v.replace(/[^\d.]/g, '');
+      const newPrice = Number(cleaned);
+      if (isNaN(newPrice) || newPrice < 0) {
+        this.showAutoToast('提示', '请输入有效的价格数字');
+        return;
+      }
+      acc.price = newPrice;
+      this.setData({ [`accessoryList[${idx}].price`]: newPrice });
       this.calcTotal();
       this.saveAccessoryToCloud(acc, idx);
     });

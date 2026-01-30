@@ -33,9 +33,10 @@
         <view class="calibrating-spinner"></view>
       </view>
       <view class="pass-title">正在校准中</view>
+      <view class="pass-title" style="margin-top: 10rpx; color: #FF3B30;">请观察后方装置</view>
       <view class="pass-desc">请等待校准完成</view>
       <view class="pass-btns">
-        <view class="p-btn confirm full-width" bindtap="closeCalibratingModal">知道了</view>
+        <view class="p-btn confirm full-width {{calibratingBtnDisabled ? 'disabled' : ''}}" bindtap="closeCalibratingModal">知道了</view>
       </view>
     </view>
   </view>
@@ -216,26 +217,52 @@
             <!-- 按钮代码保持不变 -->
             <view class="split-btn-group">
               <view class="split-item" bindtap="enterEdit" data-type="fold">
-                <view class="btn-icon-circle"><image class="svg-icon" src="{{icons.lock}}"></image></view>
+                <view class="btn-icon-circle"><image class="svg-icon bounce-icon" src="{{icons.lock}}"></image></view>
                 <text class="btn-text">折叠角度</text>
               </view>
               <view class="btn-divider"></view>
               <view class="split-item" bindtap="enterEdit" data-type="open">
-                <view class="btn-icon-circle"><image class="svg-icon" src="{{icons.arrowUp}}"></image></view>
+                <view class="btn-icon-circle"><image class="svg-icon bounce-icon" src="{{icons.arrowUp}}"></image></view>
                 <text class="btn-text">打开角度</text>
+              </view>
+            </view>
+
+            <!-- 🔴 隐蔽模式教学入口（非Max型号显示） -->
+            <view class="split-btn-group" wx:if="{{currentModel.type !== 'Max' && currentModel.type !== 'Max Long'}}">
+              <view class="split-item" bindtap="openStealthTutorial">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
+                <text class="btn-text">开启隐蔽模式</text>
+              </view>
+              <view class="btn-divider"></view>
+              <view class="split-item" bindtap="openExitStealthTutorial">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
+                <text class="btn-text">退出隐蔽模式</text>
               </view>
             </view>
 
             <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Max Long'}}">
                <view class="split-item" style="{{currentModel.name === 'F1' ? 'opacity:0.3; pointer-events:none;' : ''}}" bindtap="handleAutoCalibrate">
-                 <view class="btn-icon-circle"><image class="svg-icon" src="{{icons.cali}}"></image></view>
+                 <view class="btn-icon-circle"><image class="svg-icon rotate-icon" src="{{icons.cali}}"></image></view>
                  <text class="btn-text">自动校准</text>
                </view>
                <view class="btn-divider"></view>
                <view class="split-item" bindtap="openSettings">
-                 <view class="btn-icon-circle"><image class="svg-icon" src="{{icons.gear}}"></image></view>
+                 <view class="btn-icon-circle"><image class="svg-icon rotate-icon" src="{{icons.gear}}"></image></view>
                  <text class="btn-text">高级设置</text>
                </view>
+            </view>
+
+            <!-- 🔴 隐蔽模式教学入口（在自动校准/高级设置下面） -->
+            <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Max Long'}}">
+              <view class="split-item" bindtap="openStealthTutorial">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
+                <text class="btn-text">开启隐蔽模式</text>
+              </view>
+              <view class="btn-divider"></view>
+              <view class="split-item" bindtap="openExitStealthTutorial">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
+                <text class="btn-text">退出隐蔽模式</text>
+              </view>
             </view>
           </view>
 
@@ -484,6 +511,34 @@
       <!-- 按钮：带倒计时 -->
       <view class="guide-close-btn {{newProductBtnLocked ? 'btn-locked' : ''}}" bindtap="closeNewProductHint">
         {{newProductBtnText}}
+      </view>
+    </view>
+  </view>
+
+  <!-- ======================= -->
+  <!-- 7. 隐蔽模式教学弹窗 -->
+  <!-- ======================= -->
+  <view class="password-modal-mask" wx:if="{{showStealthTutorial}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
+      <view class="pass-title" style="margin-bottom: 60rpx;">{{stealthTutorialMode === 'enter' ? '隐蔽模式教学' : '退出隐蔽模式教学'}}</view>
+      
+      <!-- 动画演示区域 -->
+      <view class="anim-stage">
+        <!-- 模拟车把按钮结构 -->
+        <view class="ring-btn-wrapper {{stealthAnimPressing ? 'pressing' : ''}}">
+           <view class="ring-outer {{stealthAnimLight ? 'light-on' : ''}}">
+             <view class="ring-inner"></view>
+           </view>
+           <!-- 手指按压提示 -->
+           <view class="sim-finger-tap" wx:if="{{stealthAnimPressing}}"></view>
+        </view>
+        <!-- 动态文案 -->
+        <text class="anim-desc" style="color: {{stealthAnimTextColor}}; transform: scale({{stealthAnimTextScale}});">{{stealthAnimText}}</text>
+      </view>
+
+      <view class="pass-btns">
+        <view class="p-btn confirm full-width {{stealthTutorialBtnDisabled ? 'disabled' : ''}}" bindtap="closeStealthTutorial" wx:if="{{!stealthTutorialBtnDisabled}}">知道了</view>
+        <view class="p-btn confirm full-width disabled" wx:else>知道了</view>
       </view>
     </view>
   </view>

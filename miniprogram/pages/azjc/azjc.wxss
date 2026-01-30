@@ -68,9 +68,8 @@ page { height: 100%; background: #fff; overflow: hidden; }
 
 /* 🔴 统一返回键样式 - 全局标准 */
 .back-icon {
-  position: absolute;
+  position: fixed;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -92,16 +91,15 @@ page { height: 100%; background: #fff; overflow: hidden; }
 /* 统一返回箭头样式 */
 .back-arrow {
   font-size: 48rpx;
-  font-weight: 300;
+  font-weight: 600;
   color: #000;
   line-height: 1;
 }
 
 /* 返回键 - 统一样式（兼容 back-btn 类名） */
 .back-btn {
-  position: absolute;
+  position: fixed;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -110,6 +108,14 @@ page { height: 100%; background: #fff; overflow: hidden; }
   z-index: 10001;
   pointer-events: auto;
   transition: all 0.2s;
+}
+
+/* 返回键内的文本样式 */
+.back-btn .back-icon {
+  font-size: 48rpx;
+  font-weight: 600;
+  color: #000;
+  line-height: 1;
 }
 
 .back-btn:active {

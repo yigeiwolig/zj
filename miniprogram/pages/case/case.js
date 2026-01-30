@@ -24,7 +24,16 @@ Page({
     formClosing: false, // 表单弹窗退出动画中
     showSuccess: false,
     showUploadOptions: false, // 显示上传选项弹窗（选择相册/录制）
+    showShootingGuide: false, // 显示拍摄角度演示弹窗
+    shootingGuideMode: 'guide', // 拍摄指南弹窗模式：'guide' 编辑教学页面，'publish' 发布官方案例
+    shootingGuideVideoUrl: '', // 拍摄角度演示视频URL（用于播放的临时URL）
+    shootingGuideVideoFileID: '', // 拍摄角度演示视频的云存储 fileID（用于删除）
     showBindDeviceTip: false, // 显示绑定设备提示弹窗
+    
+    // 拍摄指南按钮状态
+    guideBtnDisabled: true,
+    guideBtnText: '我知道了 (5s)',
+    guideTimer: null,
     showCategoryPickerModal: false,
     categoryPickerClosing: false, // 分类选择器退出动画中   
     
@@ -115,6 +124,9 @@ Page({
     const winInfo = wx.getWindowInfo();
     this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
     this.ctx = wx.createCameraContext();
+    
+    // 加载拍摄指南视频
+    this.loadShootingGuideVideo();
 
     // 🔴 物理防线：确保录屏、截屏出来的全是黑屏 (这是最稳的)
     if (wx.setVisualEffectOnCapture) {
@@ -753,20 +765,92 @@ Page({
   // ==========================================
   handleFabTap() {
     if (this.data.isAdmin && this.data.adminSubMode === 'edit') {
-      // 管理员编辑模式：直接打开上传表单 (新增模式)
+      // 管理员编辑模式：显示拍摄指南弹窗（带切换功能）
+      this.setData({ 
+        showShootingGuide: true,
+        shootingGuideMode: 'guide' // 默认显示教学页面
+      });
+      // 管理员不需要倒计时，直接启用按钮
       this.setData({
+        guideBtnDisabled: false,
+        guideBtnText: '关闭'
+      });
+      // 弹窗渲染完成后立刻播放视频，尽量消除等待感
+      wx.nextTick(() => {
+        this.playShootingGuideVideo();
+      });
+    } else {
+      // 普通用户：先显示拍摄角度演示，然后显示选择弹窗
+      this.setData({ 
+        showShootingGuide: true,
+        shootingGuideMode: 'guide',
+        guideBtnDisabled: true,
+        guideBtnText: '我知道了 (5s)'
+      });
+      this.startGuideTimer();
+      // 弹窗渲染完成后立刻播放视频，尽量消除等待感
+      wx.nextTick(() => {
+        this.playShootingGuideVideo();
+      });
+    }
+  },
+
+  // 拍摄指南倒计时
+  startGuideTimer() {
+    let seconds = 5;
+    if (this.data.guideTimer) clearInterval(this.data.guideTimer);
+    
+    const timer = setInterval(() => {
+      seconds--;
+      if (seconds <= 0) {
+        clearInterval(timer);
+        this.setData({
+          guideBtnDisabled: false,
+          guideBtnText: '我知道了',
+          guideTimer: null
+        });
+      } else {
+        this.setData({
+          guideBtnText: `我知道了 (${seconds}s)`
+        });
+      }
+    }, 1000);
+    
+    this.setData({ guideTimer: timer });
+  },
+
+  // 切换拍摄指南弹窗模式
+  switchShootingGuideMode(e) {
+    const mode = e.currentTarget.dataset.mode;
+    this.setData({ shootingGuideMode: mode });
+    
+    if (mode === 'publish') {
+      // 切换到发布模式：关闭拍摄指南弹窗，打开管理员表单
+      if (this.data.guideTimer) clearInterval(this.data.guideTimer); // 清除倒计时
+      this.setData({ 
+        showShootingGuide: false,
         isEditing: false,
         editingId: null,
         vehicleName: '',
-        categoryIndex: null, // 🔴 修复：按照 zj4 的写法，使用 null
-        modelIndex: null, // 🔴 修复：按照 zj4 的写法，使用 null
+        categoryIndex: null,
+        modelIndex: null,
         adminVideoPath: null,
         adminThumbPath: null,
         showAdminForm: true
       });
-    } else {
-      // 普通用户：显示选择弹窗（选择相册/录制）
-      this.setData({ showUploadOptions: true });
+    } else if (mode === 'guide') {
+      // 切换到教学模式：关闭管理员表单，打开拍摄指南弹窗
+      this.setData({ 
+        showAdminForm: false,
+        showShootingGuide: true,
+        // 管理员切换回来不需要倒计时
+        guideBtnDisabled: false,
+        guideBtnText: '关闭'
+      });
+      // 弹窗渲染完成后立刻播放视频
+      wx.nextTick(() => {
+        this.playShootingGuideVideo();
+      });
     }
   },
 
@@ -981,6 +1065,427 @@ Page({
   // 关闭上传选项弹窗
   closeUploadOptions() {
     this.setData({ showUploadOptions: false });
+  },
+
+  // 关闭拍摄指南弹窗
+  closeShootingGuide() {
+    if (this.data.guideTimer) clearInterval(this.data.guideTimer);
+    this.setData({ showShootingGuide: false });
+  },
+
+  // 跳过拍摄指南，直接进入上传选项
+  skipShootingGuide() {
+    if (this.data.guideBtnDisabled) return; // 禁用时不可点击
+    
+    if (this.data.guideTimer) clearInterval(this.data.guideTimer);
+    this.setData({ 
+      showShootingGuide: false 
+    });
+    setTimeout(() => {
+      this.setData({ showUploadOptions: true });
+    }, 300);
+  },
+
+  // 手动触发视频播放
+  playShootingGuideVideo() {
+    if (!this.data.shootingGuideVideoUrl) {
+      console.log('📝 没有视频URL，跳过播放');
+      // #region agent log
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: {
+          sessionId: 'debug-session',
+          runId: 'run1',
+          hypothesisId: 'H1',
+          location: 'case.js:playShootingGuideVideo',
+          message: 'no video url, skip play',
+          data: { shootingGuideVideoUrl: this.data.shootingGuideVideoUrl },
+          timestamp: Date.now()
+        },
+        fail: () => {}
+      });
+      // #endregion
+      return;
+    }
+    const videoContext = wx.createVideoContext('shootingGuideVideo', this);
+    if (videoContext) {
+      videoContext.play();
+      console.log('▶️ 手动触发视频播放');
+      // #region agent log
+      wx.request({
+        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: {
+          sessionId: 'debug-session',
+          runId: 'run1',
+          hypothesisId: 'H1',
+          location: 'case.js:playShootingGuideVideo',
+          message: 'called videoContext.play',
+          data: { shootingGuideVideoUrl: this.data.shootingGuideVideoUrl },
+          timestamp: Date.now()
+        },
+        fail: () => {}
+      });
+      // #endregion
+    }
+  },
+
+  // 视频播放事件处理
+  onShootingGuideVideoPlay(e) {
+    console.log('✅ 拍摄指南视频开始播放', e);
+    // #region agent log
+    wx.request({
+      url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+      method: 'POST',
+      header: { 'Content-Type': 'application/json' },
+      data: {
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'H2',
+        location: 'case.js:onShootingGuideVideoPlay',
+        message: 'video play event',
+        data: {},
+        timestamp: Date.now()
+      },
+      fail: () => {}
+    });
+    // #endregion
+  },
+
+  onShootingGuideVideoError(e) {
+    console.error('❌ 拍摄指南视频播放错误:', e.detail);
+    // #region agent log
+    wx.request({
+      url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+      method: 'POST',
+      header: { 'Content-Type': 'application/json' },
+      data: {
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'H3',
+        location: 'case.js:onShootingGuideVideoError',
+        message: 'video error event',
+        data: { err: e.detail && e.detail.errMsg },
+        timestamp: Date.now()
+      },
+      fail: () => {}
+    });
+    // #endregion
+    const errMsg = e.detail.errMsg || '';
+    if (errMsg.includes('MEDIA_ERR_SRC_NOT_SUPPORTED')) {
+      wx.showToast({
+        title: '视频格式不支持',
+        icon: 'none',
+        duration: 2000
+      });
+    } else if (errMsg.includes('MEDIA_ERR_NETWORK')) {
+      wx.showToast({
+        title: '网络错误，请检查网络',
+        icon: 'none',
+        duration: 2000
+      });
+    } else {
+      wx.showToast({
+        title: '视频播放失败',
+        icon: 'none',
+        duration: 2000
+      });
+    }
+  },
+
+  onShootingGuideVideoLoadStart(e) {
+    console.log('📹 拍摄指南视频开始加载', e);
+  },
+
+  // 上传拍摄指南演示视频（管理员功能）
+  uploadShootingGuideVideo() {
+    wx.chooseVideo({
+      sourceType: ['album', 'camera'],
+      maxDuration: 60,
+      camera: 'back',
+      success: (res) => {
+        const tempFilePath = res.tempFilePath;
+        this.showMyLoading('上传中...');
+        
+        // 1. 先读取旧的视频 fileID
+        db.collection('config').doc('shooting_guide').get().then(oldRes => {
+          const oldFileID = oldRes.data && oldRes.data.videoFileID;
+          
+          // 2. 上传新视频到云存储
+          const cloudPath = `case/shooting-guide/${Date.now()}_guide.mp4`;
+          wx.cloud.uploadFile({
+            cloudPath: cloudPath,
+            filePath: tempFilePath,
+            success: (uploadRes) => {
+              console.log('✅ 演示视频上传成功:', uploadRes.fileID);
+              
+              // 3. 更新数据库配置
+              db.collection('config').doc('shooting_guide').set({
+                data: {
+                  videoFileID: uploadRes.fileID,
+                  updateTime: db.serverDate()
+                }
+              }).then(() => {
+                console.log('✅ 配置已保存到数据库');
+                
+                // 4. 更新页面显示
+                // 保存原始 fileID 用于删除
+                this.setData({ shootingGuideVideoFileID: uploadRes.fileID });
+                
+                // 如果是云存储路径，需要转换为临时 URL
+                if (uploadRes.fileID.startsWith('cloud://')) {
+                  wx.cloud.getTempFileURL({
+                    fileList: [uploadRes.fileID],
+                    success: (urlRes) => {
+                      if (urlRes.fileList && urlRes.fileList[0]) {
+                        this.setData({
+                          shootingGuideVideoUrl: urlRes.fileList[0].tempFileURL
+                        });
+                      }
+                    }
+                  });
+                } else {
+                  this.setData({
+                    shootingGuideVideoUrl: uploadRes.fileID
+                  });
+                }
+                
+                // 5. 删除旧视频文件（如果存在）
+                if (oldFileID && oldFileID.startsWith('cloud://') && oldFileID !== uploadRes.fileID) {
+                  wx.cloud.deleteFile({
+                    fileList: [oldFileID],
+                    success: (deleteRes) => {
+                      console.log('✅ 旧视频已删除:', oldFileID);
+                      if (deleteRes.fileList && deleteRes.fileList[0] && deleteRes.fileList[0].status === 'success') {
+                        console.log('🗑️ 旧视频文件删除成功');
+                      }
+                    },
+                    fail: (deleteErr) => {
+                      console.warn('⚠️ 删除旧视频失败（不影响使用）:', deleteErr);
+                      // 删除失败不影响新视频的使用，只记录警告
+                    }
+                  });
+                }
+                
+                this.hideMyLoading();
+                this._showCustomToast('上传成功', 'success');
+              }).catch(err => {
+                console.error('❌ 保存配置失败:', err);
+                this.hideMyLoading();
+                this._showCustomToast('上传成功，但保存配置失败', 'none');
+              });
+            },
+            fail: (err) => {
+              console.error('❌ 上传失败:', err);
+              this.hideMyLoading();
+              this._showCustomToast('上传失败，请重试', 'none');
+            }
+          });
+        }).catch(err => {
+          // 如果读取旧配置失败（可能是第一次上传），直接上传新视频
+          console.log('📝 未找到旧配置，直接上传新视频');
+          const cloudPath = `case/shooting-guide/${Date.now()}_guide.mp4`;
+          wx.cloud.uploadFile({
+            cloudPath: cloudPath,
+            filePath: tempFilePath,
+            success: (uploadRes) => {
+              console.log('✅ 演示视频上传成功:', uploadRes.fileID);
+              this.setData({ 
+                shootingGuideVideoUrl: uploadRes.fileID 
+              });
+              
+              db.collection('config').doc('shooting_guide').set({
+                data: {
+                  videoFileID: uploadRes.fileID,
+                  updateTime: db.serverDate()
+                }
+              }).then(() => {
+                console.log('✅ 配置已保存到数据库');
+                this.hideMyLoading();
+                this._showCustomToast('上传成功', 'success');
+              }).catch(setErr => {
+                console.error('❌ 保存配置失败:', setErr);
+                this.hideMyLoading();
+                this._showCustomToast('上传成功，但保存配置失败', 'none');
+              });
+            },
+            fail: (uploadErr) => {
+              console.error('❌ 上传失败:', uploadErr);
+              this.hideMyLoading();
+              this._showCustomToast('上传失败，请重试', 'none');
+            }
+          });
+        });
+      },
+      fail: (err) => {
+        console.error('❌ 选择视频失败:', err);
+        if (err.errMsg && !err.errMsg.includes('cancel')) {
+          this._showCustomToast('选择视频失败', 'none');
+        }
+      }
+    });
+  },
+
+  // 从数据库加载拍摄指南视频（页面加载时调用）
+  loadShootingGuideVideo() {
+    db.collection('config').doc('shooting_guide').get().then(res => {
+      if (res.data && res.data.videoFileID) {
+        // 保存原始 fileID 用于删除
+        this.setData({ shootingGuideVideoFileID: res.data.videoFileID });
+        // #region agent log
+        wx.request({
+          url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+          method: 'POST',
+          header: { 'Content-Type': 'application/json' },
+          data: {
+            sessionId: 'debug-session',
+            runId: 'run1',
+            hypothesisId: 'H4',
+            location: 'case.js:loadShootingGuideVideo',
+            message: 'loaded config',
+            data: { videoFileID: res.data.videoFileID },
+            timestamp: Date.now()
+          },
+          fail: () => {}
+        });
+        // #endregion
+        
+        // 如果是云存储路径，需要转换为临时 URL
+        if (res.data.videoFileID.startsWith('cloud://')) {
+          wx.cloud.getTempFileURL({
+            fileList: [res.data.videoFileID],
+            success: (urlRes) => {
+              if (urlRes.fileList && urlRes.fileList[0]) {
+                this.setData({
+                  shootingGuideVideoUrl: urlRes.fileList[0].tempFileURL
+                });
+                // #region agent log
+                wx.request({
+                  url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+                  method: 'POST',
+                  header: { 'Content-Type': 'application/json' },
+                  data: {
+                    sessionId: 'debug-session',
+                    runId: 'run1',
+                    hypothesisId: 'H4',
+                    location: 'case.js:loadShootingGuideVideo',
+                    message: 'got temp file url',
+                    data: { tempUrl: urlRes.fileList[0].tempFileURL },
+                    timestamp: Date.now()
+                  },
+                  fail: () => {}
+                });
+                // #endregion
+              }
+            }
+          });
+        } else {
+          this.setData({
+            shootingGuideVideoUrl: res.data.videoFileID
+          });
+          // #region agent log
+          wx.request({
+            url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+            method: 'POST',
+            header: { 'Content-Type': 'application/json' },
+            data: {
+              sessionId: 'debug-session',
+              runId: 'run1',
+              hypothesisId: 'H4',
+              location: 'case.js:loadShootingGuideVideo',
+              message: 'use direct fileID as url',
+              data: { directUrl: res.data.videoFileID },
+              timestamp: Date.now()
+            },
+            fail: () => {}
+          });
+          // #endregion
+        }
+      }
+    }).catch(err => {
+      console.log('📝 未找到拍摄指南配置，使用默认值');
+    });
+  },
+
+  // 删除拍摄指南视频（管理员功能）
+  deleteShootingGuideVideo() {
+    wx.showModal({
+      title: '确认删除',
+      content: '确定要删除演示视频吗？删除后需要重新上传才能显示。',
+      confirmText: '删除',
+      confirmColor: '#FF3B30',
+      success: (res) => {
+        if (res.confirm) {
+          this.showMyLoading('删除中...');
+          
+          // 1. 从数据库读取 fileID
+          db.collection('config').doc('shooting_guide').get().then(configRes => {
+            const fileID = configRes.data && configRes.data.videoFileID;
+            
+            // 2. 删除云存储文件
+            if (fileID && fileID.startsWith('cloud://')) {
+              wx.cloud.deleteFile({
+                fileList: [fileID],
+                success: (deleteRes) => {
+                  console.log('✅ 视频文件删除成功');
+                  
+                  // 3. 删除数据库配置
+                  db.collection('config').doc('shooting_guide').remove().then(() => {
+                    console.log('✅ 配置已删除');
+                    this.setData({
+                      shootingGuideVideoUrl: '',
+                      shootingGuideVideoFileID: ''
+                    });
+                    this.hideMyLoading();
+                    this._showCustomToast('删除成功', 'success');
+                  }).catch(err => {
+                    console.error('❌ 删除配置失败:', err);
+                    this.hideMyLoading();
+                    this._showCustomToast('文件已删除，但删除配置失败', 'none');
+                  });
+                },
+                fail: (deleteErr) => {
+                  console.error('❌ 删除文件失败:', deleteErr);
+                  // 即使文件删除失败，也尝试删除数据库配置
+                  db.collection('config').doc('shooting_guide').remove().then(() => {
+                    this.setData({
+                      shootingGuideVideoUrl: '',
+                      shootingGuideVideoFileID: ''
+                    });
+                    this.hideMyLoading();
+                    this._showCustomToast('配置已删除，但文件删除失败', 'none');
+                  }).catch(err => {
+                    this.hideMyLoading();
+                    this._showCustomToast('删除失败，请重试', 'none');
+                  });
+                }
+              });
+            } else {
+              // 如果没有 fileID 或不是云存储路径，只删除数据库配置
+              db.collection('config').doc('shooting_guide').remove().then(() => {
+                this.setData({
+                  shootingGuideVideoUrl: '',
+                  shootingGuideVideoFileID: ''
+                });
+                this.hideMyLoading();
+                this._showCustomToast('删除成功', 'success');
+              }).catch(err => {
+                console.error('❌ 删除配置失败:', err);
+                this.hideMyLoading();
+                this._showCustomToast('删除失败，请重试', 'none');
+              });
+            }
+          }).catch(err => {
+            console.error('❌ 读取配置失败:', err);
+            this.hideMyLoading();
+            this._showCustomToast('删除失败，请重试', 'none');
+          });
+        }
+      }
+    });
   },
 
   // 显示绑定设备提示弹窗
@@ -1758,7 +2263,9 @@ Page({
       isEditing: false,
       // 🔴 关闭所有选择器弹窗
       showCategoryPickerModal: false,
-      showModelPickerModal: false
+      showModelPickerModal: false,
+      // 如果是从切换按钮关闭的，重置模式为教学
+      shootingGuideMode: 'guide'
     }); 
   },
   closeIntro() { 

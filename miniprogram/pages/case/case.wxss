@@ -521,6 +521,42 @@ page {
 
 .emoji-icon { font-size: 80rpx; margin-bottom: 20rpx; }
 .dialog-title { font-size: 36rpx; font-weight: 700; margin-bottom: 30rpx; color: #000; }
+
+/* 管理员表单头部（带切换按钮） */
+.admin-form-header {
+  position: relative;
+  margin-bottom: 30rpx;
+}
+
+.admin-form-mode-switch {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  background: #f5f5f5;
+  border-radius: 40rpx;
+  padding: 4rpx;
+  gap: 4rpx;
+}
+
+.admin-form-mode-switch .mode-switch-item {
+  padding: 8rpx 20rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #666;
+  border-radius: 36rpx;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.admin-form-mode-switch .mode-switch-item.active {
+  background: #000;
+  color: #fff;
+}
+
+.admin-form-mode-switch .mode-switch-item:active {
+  opacity: 0.7;
+}
 .dialog-desc { font-size: 28rpx; color: #666; line-height: 1.6; margin-bottom: 40rpx; }
 .highlight { color: #007AFF; font-weight: 700; }
 
@@ -1534,4 +1570,256 @@ page {
   font-size: 28rpx;
   font-weight: 600;
   color: #1D1D1F;
+}
+
+/* ================= 拍摄角度演示弹窗（模块化卡片版 v3.0） ================= */
+.shooting-guide-dialog {
+  position: relative;
+  background: #FFFFFF;
+  width: 640rpx; /* 回归标准宽度，更精致 */
+  border-radius: 48rpx; /* 更大的圆角 */
+  overflow: hidden;
+  transform: scale(0.95);
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 40rpx 80rpx rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-overlay.active .shooting-guide-dialog {
+  transform: scale(1);
+}
+
+/* 头部：增加顶部空间 */
+.shooting-guide-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 40rpx 40rpx 20rpx;
+  background: #fff;
+}
+
+.shooting-guide-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #1D1D1F;
+}
+
+.shooting-guide-header-right {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.shooting-guide-close {
+  width: 56rpx;
+  height: 56rpx;
+  background: #F5F5F7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32rpx;
+  color: #8E8E93;
+  transition: all 0.2s;
+}
+
+.shooting-guide-close:active {
+  background: #E5E5EA;
+  color: #1D1D1F;
+}
+
+/* 内容区域：统一左右间距 */
+.shooting-guide-content {
+  padding: 0 30rpx; /* 关键：左右留白 */
+  display: flex;
+  flex-direction: column;
+}
+
+/* 描述文字 */
+.shooting-guide-desc {
+  font-size: 26rpx;
+  color: #86868B;
+  margin-bottom: 24rpx;
+  padding: 0 10rpx;
+}
+
+/* 视频容器：卡片化 - 影院级质感 */
+.shooting-guide-video-wrapper {
+  width: 100%;
+  height: 460rpx;
+  background: #000;
+  border-radius: 32rpx; /* 更圆润 */
+  overflow: hidden;
+  margin-bottom: 30rpx;
+  /* 关键：使用多重投影增加深邃感，不再干巴巴 */
+  box-shadow: 
+    0 24rpx 48rpx -12rpx rgba(0, 0, 0, 0.25), /* 主投影：深沉 */
+    0 0 0 1rpx rgba(0, 0, 0, 0.05); /* 1px 边框线：精致 */
+  position: relative;
+  /* 增加一点入场动画，更有灵动感 */
+  animation: videoFadeIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@keyframes videoFadeIn {
+  from { opacity: 0; transform: translateY(20rpx) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.shooting-guide-video {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* 占位符 */
+.shooting-guide-placeholder {
+  width: 100%;
+  height: 100%;
+  background: #1c1c1e;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.shooting-guide-placeholder-icon {
+  font-size: 60rpx;
+  margin-bottom: 16rpx;
+  opacity: 0.5;
+}
+
+.shooting-guide-placeholder-text {
+  font-size: 26rpx;
+  color: #8E8E93;
+}
+
+/* 提示列表：独立的灰色卡片模块 */
+.shooting-guide-tips {
+  width: 100%;
+  background: #F5F5F7; /* 浅灰背景 */
+  border-radius: 24rpx;
+  padding: 30rpx 36rpx; /* 增加内边距 */
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx; /* 拉开间距，适配图标 */
+  /* 增加一点入场动画 */
+  animation: videoFadeIn 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s backwards;
+}
+
+.shooting-guide-tip-item {
+  font-size: 26rpx;
+  color: #424245; /* 深灰文字 */
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  font-weight: 500;
+  letter-spacing: 0.5rpx;
+}
+
+/* 勾选图标 */
+.shooting-guide-tip-item::before {
+  content: '';
+  display: inline-block;
+  width: 10rpx;
+  height: 18rpx;
+  border-bottom: 4rpx solid #34C759; /* 苹果绿 */
+  border-right: 4rpx solid #34C759;
+  transform: rotate(45deg);
+  margin-top: 4rpx; /* 微调对齐 */
+  margin-right: 24rpx; /* 增加图标与文字间距 */
+  flex-shrink: 0;
+  /* 增加一点小动画 */
+  animation: checkmark 0.4s ease-out backwards;
+}
+
+@keyframes checkmark {
+  from { opacity: 0; transform: rotate(45deg) scale(0); }
+  to { opacity: 1; transform: rotate(45deg) scale(1); }
+}
+
+/* 底部按钮 */
+.shooting-guide-footer {
+  padding: 40rpx;
+  background: #fff;
+}
+
+.shooting-guide-btn {
+  height: 90rpx;
+  line-height: 90rpx;
+  border-radius: 45rpx; /* 全圆角 */
+  font-size: 30rpx;
+  font-weight: 600;
+  border: none;
+  padding: 0;
+  margin: 0;
+  transition: all 0.2s;
+}
+
+.shooting-guide-btn.confirm {
+  background: #000;
+  color: #fff;
+  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.15);
+}
+
+.shooting-guide-btn.confirm:active {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.shooting-guide-btn.disabled {
+  background: #F2F2F7;
+  color: #AEAEB2;
+  box-shadow: none;
+}
+
+/* 删除按钮 */
+.shooting-guide-delete-btn {
+  position: absolute;
+  top: 16rpx;
+  right: 16rpx;
+  padding: 8rpx 20rpx;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.shooting-guide-upload-btn {
+  margin-top: 20rpx;
+  padding: 10rpx 24rpx;
+  background: rgba(255,255,255,0.1);
+  border: 1rpx solid rgba(255,255,255,0.2);
+  border-radius: 24rpx;
+  font-size: 24rpx;
+  color: #fff;
+}
+
+/* 模式切换 */
+.shooting-guide-mode-switch {
+  display: flex;
+  background: #F5F5F7;
+  border-radius: 28rpx;
+  padding: 4rpx;
+}
+
+.mode-switch-item {
+  padding: 6rpx 20rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #8E8E93;
+  border-radius: 24rpx;
+  transition: all 0.2s;
+}
+
+.mode-switch-item.active {
+  background: #fff;
+  color: #000;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.08);
 }

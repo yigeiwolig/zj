@@ -1,0 +1,15 @@
+// 格式化价格，确保是有效数字
+function formatPrice(price) {
+  if (price == null || price === '' || isNaN(price)) {
+    return 0;
+  }
+  var num = parseFloat(price);
+  if (isNaN(num) || num < 0) {
+    return 0;
+  }
+  return num;
+}
+
+module.exports = {
+  formatPrice: formatPrice
+};

@@ -217,9 +217,9 @@ Page({
         setTimeout(() => {
           this.checkAccessPermission();
         }, 1000); // 延迟 1 秒，确保数据库更新完成
-      } else {
-        // 否则进行权限检查
-        this.checkAccessPermission();
+    } else {
+      // 否则进行权限检查
+      this.checkAccessPermission();
       }
     }
   },

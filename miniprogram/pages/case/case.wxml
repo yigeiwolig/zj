@@ -350,7 +350,24 @@
 <!-- 9. 管理员上传表单 -->
 <view class="modal-overlay active" wx:if="{{showAdminForm}}" catchtouchmove="noop" catchtap="noop">
   <view class="ios-dialog left-align" catchtouchmove="noop" catchtap="noop">
-    <view class="dialog-title center">{{isEditing ? '修改案例' : '发布官方案例'}}</view>
+    <view class="admin-form-header">
+      <view class="dialog-title center">{{isEditing ? '修改案例' : '发布官方案例'}}</view>
+      <!-- 管理员切换按钮 -->
+      <view wx:if="{{isAdmin}}" class="admin-form-mode-switch">
+        <view 
+          class="mode-switch-item {{shootingGuideMode === 'guide' ? 'active' : ''}}" 
+          bindtap="switchShootingGuideMode" 
+          data-mode="guide">
+          教学
+        </view>
+        <view 
+          class="mode-switch-item {{shootingGuideMode === 'publish' ? 'active' : ''}}" 
+          bindtap="switchShootingGuideMode" 
+          data-mode="publish">
+          发布
+        </view>
+      </view>
+    </view>
     <view style="display: flex; gap: 20rpx; margin-bottom: 30rpx;">
       <view class="upload-box" bindtap="chooseAdminVideo">
         <block wx:if="{{!adminVideoPath}}"><view class="upload-icon">📹</view><text class="upload-text">选视频</text></block>
@@ -428,7 +445,90 @@
   </view>
 </view>
 
-<!-- 9. 上传选项弹窗（选择相册/录制） -->
+<!-- 9. 拍摄角度演示弹窗（视频演示） -->
+<view class="modal-overlay active shooting-guide-overlay" wx:if="{{showShootingGuide}}" bindtap="closeShootingGuide" catchtouchmove="noop">
+  <view class="shooting-guide-dialog" catchtap="preventBubble" catchtouchmove="noop">
+    <view class="shooting-guide-header">
+      <view class="shooting-guide-title">拍摄角度演示</view>
+      <view class="shooting-guide-header-right">
+        <!-- 管理员切换按钮 -->
+        <view wx:if="{{isAdmin}}" class="shooting-guide-mode-switch">
+          <view 
+            class="mode-switch-item {{shootingGuideMode === 'guide' ? 'active' : ''}}" 
+            bindtap="switchShootingGuideMode" 
+            data-mode="guide">
+            教学
+          </view>
+          <view 
+            class="mode-switch-item {{shootingGuideMode === 'publish' ? 'active' : ''}}" 
+            bindtap="switchShootingGuideMode" 
+            data-mode="publish">
+            发布
+          </view>
+        </view>
+        <view class="shooting-guide-close" bindtap="closeShootingGuide">×</view>
+      </view>
+    </view>
+    
+    <view class="shooting-guide-content">
+      <view class="shooting-guide-desc">请参考以下视频进行拍摄，确保视频清晰完整</view>
+      
+      <!-- 视频播放器 -->
+      <view class="shooting-guide-video-wrapper">
+        <block wx:if="{{shootingGuideVideoUrl}}">
+          <video 
+            id="shootingGuideVideo"
+            src="{{shootingGuideVideoUrl}}" 
+            class="shooting-guide-video"
+            controls="{{false}}"
+            autoplay="{{true}}"
+            loop="{{true}}"
+            show-center-play-btn="{{false}}"
+            show-fullscreen-btn="{{false}}"
+            show-play-btn="{{false}}"
+            enable-progress-gesture="{{false}}"
+            enable-play-gesture="{{true}}"
+            object-fit="cover"
+            bindplay="onShootingGuideVideoPlay"
+            binderror="onShootingGuideVideoError"
+            bindloadstart="onShootingGuideVideoLoadStart"
+          ></video>
+          <!-- 管理员删除按钮 -->
+          <view wx:if="{{isAdmin}}" class="shooting-guide-delete-btn" bindtap="deleteShootingGuideVideo">
+            <text>🗑️ 删除视频</text>
+          </view>
+        </block>
+        
+        <view wx:else class="shooting-guide-placeholder">
+          <view class="shooting-guide-placeholder-icon">📹</view>
+          <view class="shooting-guide-placeholder-text">暂无演示视频</view>
+          <view wx:if="{{isAdmin}}" class="shooting-guide-upload-btn" bindtap="uploadShootingGuideVideo">
+            <text>上传演示视频</text>
+          </view>
+        </view>
+      </view>
+      
+      <view class="shooting-guide-tips">
+        <view class="shooting-guide-tip-item">保持设备稳定，避免画面剧烈抖动</view>
+        <view class="shooting-guide-tip-item">确保光线充足，拍摄主体清晰可见</view>
+        <view class="shooting-guide-tip-item">多角度展示产品细节与整体外观</view>
+        <view class="shooting-guide-tip-item">视频时长建议控制在 10-30 秒之间</view>
+      </view>
+    </view>
+    
+    <!-- 普通用户：显示我知道了按钮（带倒计时） -->
+    <view class="shooting-guide-footer" wx:if="{{!isAdmin}}">
+      <button class="shooting-guide-btn confirm full-width {{guideBtnDisabled ? 'disabled' : ''}}" bindtap="skipShootingGuide" disabled="{{guideBtnDisabled}}">{{guideBtnText}}</button>
+    </view>
+    
+    <!-- 管理员：显示关闭按钮 -->
+    <view class="shooting-guide-footer" wx:if="{{isAdmin}}">
+      <button class="shooting-guide-btn confirm full-width" bindtap="closeShootingGuide">关闭</button>
+    </view>
+  </view>
+</view>
+
+<!-- 10. 上传选项弹窗（选择相册/录制） -->
 <view class="modal-overlay active" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions" catchtouchmove="noop" catchtap="noop">
   <view class="ios-dialog" catchtap="preventBubble" catchtouchmove="noop">
     <view class="dialog-title center">选择上传方式</view>

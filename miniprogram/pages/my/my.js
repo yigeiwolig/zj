@@ -1208,7 +1208,7 @@ Page({
           });
         } catch (err) {}
         // #endregion
-
+        
         console.log('[confirmReceiptAndViewTutorial] 云函数返回:', r)
         
         // 只要云函数不报错，就认为成功
@@ -1257,16 +1257,16 @@ Page({
             // #endregion
 
             // 3. 跳转到教程页面，传递参数告诉教程页面"刚确认收货"
-            wx.navigateTo({
+          wx.navigateTo({
               url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '') + '&justConfirmed=1',
-              success: () => {
-                this.showAutoToast('成功', '教程已解锁');
+            success: () => {
+              this.showAutoToast('成功', '教程已解锁');
               },
               fail: (err) => {
                 console.error('[confirmReceiptAndViewTutorial] 跳转失败:', err);
                 this.showAutoToast('提示', '跳转失败，请重试');
-              }
-            })
+            }
+          })
           }, 800); // 等待 800ms
           
         } else {
@@ -1501,7 +1501,7 @@ Page({
       }).exec();
     }, 200); // 延迟加大到 200ms，更稳
   },
-
+  
   // 🔴 下拉刷新处理
   onPullDownRefresh() {
     // #region agent log
@@ -1606,7 +1606,7 @@ Page({
       logisticsError: null
     });
     this.updateModalState();
-
+    
     // 调用云函数查询物流
     wx.cloud.callFunction({
       name: 'queryLogistics',
@@ -1629,7 +1629,7 @@ Page({
                 const parts = item.time.split(' ');
                 item._dateStr = parts[0]; // "2026-01-26"
                 item.time = parts[1];     // "04:41:58"
-              } else {
+          } else {
                 // 如果格式不对，或者只有时间/日期，保持原样，_dateStr 为空
                 // 这样 WXML 会走 wx:else 显示完整的 item.time
                 item._dateStr = ''; 
@@ -3988,21 +3988,21 @@ Page({
     // 2.3 从文本开头提取姓名（如果还没找到）
     if (!name) {
       let cleanText = originalText
-        .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
-        .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
-        .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
+      .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
+      .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
+      .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
         .replace(/\d+/g, ' ')  // 移除所有数字
-        .replace(/\s+/g, ' ')
-        .trim();
-      
+      .replace(/\s+/g, ' ')
+      .trim();
+    
       const namePattern = /^([\u4e00-\u9fa5]{2,5})/;
-      const nameMatch = cleanText.match(namePattern);
-      if (nameMatch) {
-        const candidateName = nameMatch[1];
-        const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
+    const nameMatch = cleanText.match(namePattern);
+    if (nameMatch) {
+      const candidateName = nameMatch[1];
+      const hasAddressKeyword = addressKeywords.some(keyword => candidateName.includes(keyword));
         const isCompoundSurname = commonSurnames.some(surname => candidateName.startsWith(surname));
         if (!hasAddressKeyword && (candidateName.length <= 4 || isCompoundSurname)) {
-          name = candidateName;
+        name = candidateName;
         }
       }
     }

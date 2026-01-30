@@ -42,6 +42,12 @@ const iconF2ProLong = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ
 // F2 MAX Long 图标（独立）
 const iconF2MaxLong = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDI5SDE5MEMxOTUgMjkgMTk1IDM0LjE0NjQgMTk1IDM0LjE0NjRWNDcuNTI2OUMxOTUgNTIuNjczMiAxOTAgNTIuNjczMiAxOTAgNTIuNjczMkgxMjFWMTEwLjVIMTIyLjVDMTMwLjg0NSAxMTAuNSAxMzAuODQ1IDExNy40NiAxMzAuODQ1IDExNy40NlYxMzcuNzI5QzEzMC44NDUgMTQ0LjUgMTIyLjUgMTQ0LjUgMTIyLjUgMTQ0LjVIODIuNUM3NC4xNTQ1IDE0NC41IDc0LjE1NDUgMTM3LjcyOSA3NC4xNTQ1IDEzNy43MjlWMTE3LjQ2Qzc0LjE1NDUgMTEwLjUgODIuNSAxMTAuNSA4Mi41IDExMC41VjUyLjY3MzJIMTVDMTAgNTIuNjczMiAxMCA0Ny41MjY5IDEwIDQ3LjUyNjlWMzQuMTQ2NEMxMCAyOSAxNSAyOSAxNSAyOVoiIGZpbGw9IiMxQzFDMUUiLz48cGF0aCBkPSJNNTYgMzdINDBDMzcuMjM4NiAzNyAzNSAzOC43OTA5IDM1IDQxQzM1IDQzLjIwOTEgMzcuMjM4NiA0NSA0MCA0NUg1NkM1OC43NjE0IDQ1IDYxIDQzLjIwOTEgNjEgNDFDNjEgMzguNzkwOSA1OC43NjE0IDM3IDU2IDM3WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTY1IDM3SDE0OUMxNDYuMjM5IDM3IDE0NCAzOC43OTA5IDE0NCA0MUMxNDQgNDMuMjA5MSAxNDYuMjM5IDQ1IDE0OSA0NUgxNjVDMTY3Ljc2MSA0NSAxNzAgNDMuMjA5MSAxNzAgNDFDMTcwIDM4Ljc5MDkgMTY3Ljc2MSAzNyAxNjUgMzdaIiBmaWxsPSJ3aGl0ZSIvPjxwYXRoIGQ9Ik04NCA4N0gxMjEiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMTAyLjUgNjRDMTA0LjQzMyA2NCAxMDYgNjIuNDMzIDEwNiA2MC41QzEwNiA1OC41NjcgMTA0LjQzMyA1NyAxMDIuNSA1N0MxMDAuNTY3IDU3IDk5IDU4LjU2NyA5OSA2MC41Qzk5IDYyLjQzMyAxMDAuNTY3IDY0IDEwMi41IDY0WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgODJDMTA0LjQzMyA4MiAxMDYgODAuNDMzIDEwNiA3OC41QzEwNiA3Ni41NjcgMTA0LjQzMyA3NSAxMDIuNSA3NUMxMDAuNTY3IDc1IDk5IDc2LjU2NyA5OSA3OC41Qzk5IDgwLjQzMyAxMDAuNTY3IDgyIDEwMi41IDgyWiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgMTAxQzEwNC40MzMgMTAxIDEwNiA5OS40MzMgMTA2IDk3LjVDMTA2IDk1LjU2NyAxMDQuNDMzIDk0IDEwMi41IDk0QzEwMC41NjcgOTQgOTkgOTUuNTY3IDk5IDk3LjVDOTkgOTkuNDMzIDEwMC41NjcgMTAxIDEwMi41IDEwMVoiIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTkwLjMzOTggMTE5LjA5MUg5My4xODQyTDk2LjE4ODUgMTI2LjQySDk2LjMxNjNMOTkuMzIwNiAxMTkuMDkxSDEwMi4xNjVWMTMwSDk5LjkyNzhWMTIyLjlIOTkuODM3M0w5Ny4wMTQxIDEyOS45NDdIOTUuNDkwN0w5Mi42Njc1IDEyMi44NzNIOTIuNTc3VjEzMEg5MC4zMzk4VjExOS4wOTFaTTEwNy4xMjIgMTIwLjk5M1YxMTkuMDkxSDExNi4wODFWMTIwLjk5M0gxMTIuNzQxVjEzMEgxMTAuNDYxVjEyMC45OTNIMTA3LjEyMloiIGZpbGw9IndoaXRlIi8+PC9zdmc+';
 
+// 小幽灵图标（睁眼 - 开启隐蔽模式）
+const iconGhostOpen = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMjAgMTFWMTlDMjAgMjAuNiAxOCAyMS41IDE3IDIwLjVMMTYgMTkuNUwxNCAyMS41QzEzLjIgMjIuMyAxMiAyMS44IDEyIDIwLjhWMjAuOEMxMiAyMS44IDEwLjggMjIuMyAxMCAyMS41TDggMTkuNUw3IDIwLjVDNiAyMS41IDQgMjAuNiA0IDE5VjExQzQgNi41OCA3LjU4IDMgMTIgM0MxNi40MiAzIDIwIDYuNTggMjAgMTFaIiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48Y2lyY2xlIGN4PSI5IiBjeT0iMTEiIHI9IjEuNSIgZmlsbD0iYmxhY2siLz48Y2lyY2xlIGN4PSIxNSIgY3k9IjExIiByPSIxLjUiIGZpbGw9ImJsYWNrIi8+PC9zdmc+';
+
+// 小幽灵图标（闭眼 - 退出隐蔽模式）
+const iconGhostClose = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMjAgMTFWMTlDMjAgMjAuNiAxOCAyMS41IDE3IDIwLjVMMTYgMTkuNUwxNCAyMS41QzEzLjIgMjIuMyAxMiAyMS44IDEyIDIwLjhWMjAuOEMxMiAyMS44IDEwLjggMjIuMyAxMCAyMS41TDggMTkuNUw3IDIwLjVDNiAyMS41IDQgMjAuNiA0IDE5VjExQzQgNi41OCA3LjU4IDMgMTIgM0MxNi40MiAzIDIwIDYuNTggMjAgMTFaIiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48bGluZSB4MT0iNy41IiB5MT0iMTEiIHgyPSIxMC41IiB5Mj0iMTEiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGxpbmUgeDE9IjEzLjUiIHkxPSIxMSIgeDI9IjE2LjUiIHkyPSIxMSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=';
+
 // ==========================================
 // 蓝牙连接工具类 (你提供的代码融合)
 // ==========================================
@@ -348,6 +354,7 @@ Page({
 
     // === 权限控制 ===
     isAuthorized: false, // 密码验证一次后有效
+    isAdmin: false, // 管理员身份
 
     // === 弹窗控制 ===
     showPasswordModal: false, 
@@ -363,6 +370,7 @@ Page({
     // 新增：自动校准中弹窗
     showCalibratingModal: false,
     calibratingModalClosing: false, // 校准弹窗退出动画中
+    calibratingBtnDisabled: true, // 校准弹窗按钮禁用状态
     
     // 弹窗退出动画状态
     passwordModalClosing: false, // 密码弹窗退出动画中
@@ -466,6 +474,8 @@ Page({
       gear: iconGear,
       reset: iconReset,
       gearSmall: iconGearSmall,
+      ghostOpen: iconGhostOpen,
+      ghostClose: iconGhostClose,
       btSmall: iconBtSmall
     },
     
@@ -475,7 +485,20 @@ Page({
       selfRepair: 'mid',
       powerOn: 'mid',
       shutdown: 'mid'
-    }
+    },
+    
+    // === 隐蔽模式相关 ===
+    showStealthTutorial: false, // 是否显示隐蔽模式教学
+    stealthTutorialMode: 'enter', // 教学模式：'enter'=进入, 'exit'=退出
+    stealthAnimPressing: false, // 按钮是否按下
+    stealthAnimLight: false,    // 灯光状态（用于闪烁）
+    stealthAnimText: '请在车把上\n长按按键 3 秒', // 提示文字
+    stealthAnimTextColor: 'black', // 文字颜色
+    stealthAnimTextScale: 1, // 文字缩放（用于动画）
+    stealthTutorialBtnDisabled: true, // 按钮是否禁用
+    stealthTutorialTimer: null, // 动画定时器
+    stealthBlinkInterval: null, // 闪烁定时器
+    stealthTextBlinkInterval: null, // 文字闪烁定时器（用于退出模式后5次）
   },
 
   onLoad() {
@@ -576,6 +599,33 @@ Page({
 
     // 强制更新一次视图到 0度
     this.updateRuler(0, false);
+    
+    // 🔴 检查管理员权限
+    this.checkAdminPrivilege();
+  },
+
+  // ================== 管理员权限检查 ==================
+  async checkAdminPrivilege() {
+    try {
+      const res = await wx.cloud.callFunction({ name: 'login' });
+      const myOpenid = res.result.openid;
+      const db = wx.cloud.database();
+      let adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      if (adminCheck.data.length === 0) {
+        adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
+      }
+      if (adminCheck.data.length > 0) {
+        this.setData({ isAdmin: true });
+        console.log('[scan.js] 身份验证成功：合法管理员');
+      } else {
+        this.setData({ isAdmin: false });
+        console.log('[scan.js] 未在管理员白名单中');
+      }
+    } catch (err) {
+      console.error('[scan.js] 权限检查失败', err);
+      this.setData({ isAdmin: false });
+    }
   },
 
   onShow() {
@@ -604,6 +654,7 @@ Page({
     // 停止所有动画循环
     this.stopTutorialLoop();
     this.stopOpenAngleTutorialLoop();
+    this.stopStealthAnim();
     // 释放弹窗延迟定时器
     if (this.modalDelayTimer) clearTimeout(this.modalDelayTimer);
     if (this.ble) this.ble.disconnect();
@@ -611,6 +662,220 @@ Page({
   },
 
   preventBubble() { return; },
+
+  // ===============================================
+  // 隐蔽模式教学逻辑
+  // ===============================================
+  
+  // 1. 点击入口：显示教学弹窗（进入模式）
+  openStealthTutorial() {
+    this.openStealthTutorialWithMode('enter');
+  },
+
+  // 1-1. 显示退出隐蔽模式教学弹窗
+  openExitStealthTutorial() {
+    this.openStealthTutorialWithMode('exit');
+  },
+
+  // 1-2. 通用打开教学弹窗函数
+  openStealthTutorialWithMode(mode) {
+    const isEnter = mode === 'enter';
+    // 步骤1：第一帧（初始状态）
+    this.setData({ 
+      showStealthTutorial: true,
+      stealthTutorialMode: mode,
+      stealthAnimPressing: false,  // 按钮：未按下
+      stealthAnimLight: false,     // 灯光：红色（不亮）
+      stealthAnimText: isEnter ? '请在车把上\n长按按键 3 秒' : '长按车把按钮\n8 秒',
+      stealthAnimTextColor: 'black', // 文字颜色：黑色
+      stealthAnimTextScale: 1, // 文字缩放：正常
+      stealthTutorialBtnDisabled: true // 按钮禁用
+    });
+    
+    // 第一帧停留时间：进入模式5秒，退出模式2秒
+    const firstFrameDuration = isEnter ? 5000 : 2000;
+    setTimeout(() => {
+      this.step2_ButtonPress();
+    }, firstFrameDuration);
+  },
+
+  // 2. 关闭教学弹窗
+  closeStealthTutorial() {
+    this.stopStealthAnim();
+    this.setData({ 
+      showStealthTutorial: false,
+      stealthTutorialMode: 'enter',
+      stealthAnimPressing: false,
+      stealthAnimLight: false,
+      stealthAnimText: '请在车把上\n长按按键 3 秒',
+      stealthAnimTextColor: 'black',
+      stealthAnimTextScale: 1,
+      stealthTutorialBtnDisabled: true
+    });
+  },
+
+  // 步骤2：按钮按下
+  step2_ButtonPress() {
+    this.stopStealthAnim();
+    
+    const isEnter = this.data.stealthTutorialMode === 'enter';
+    const pressDuration = isEnter ? 3000 : 8000; // 进入3秒，退出8秒
+    const pressText = isEnter ? '长按按钮3秒' : '长按车把按钮8秒';
+    
+    this.setData({
+      stealthAnimPressing: true,  // 按钮：按下
+      stealthAnimLight: true,     // 灯光：红色（亮）
+      stealthAnimText: pressText
+    });
+    
+    // 根据模式使用不同的时间后进入步骤4（闪烁）
+    this.stealthTutorialTimer = setTimeout(() => {
+      this.step4_StartBlinking();
+    }, pressDuration);
+  },
+
+  // 步骤4：灯闪烁
+  step4_StartBlinking() {
+    const isEnter = this.data.stealthTutorialMode === 'enter';
+    const blinkTimes = isEnter ? 3 : 5; // 进入闪烁3次，退出闪烁5次
+    const totalBlinks = blinkTimes * 2; // 每次闪烁需要2次切换（亮→灭）
+    const blinkInterval = isEnter ? 200 : 500; // 进入0.2秒，退出0.5秒
+    const halfPoint = isEnter ? 3 : 5; // 闪烁一半的点：进入3次切换，退出5次切换
+    
+    // 按钮回到第一帧状态，设置闪烁文字
+    this.setData({
+      stealthAnimPressing: false, // 按钮：未按下（回到第一帧）
+      stealthAnimLight: false,     // 灯光：红色（不亮）
+      stealthAnimText: `按钮闪烁${blinkTimes}次`
+    });
+    
+    let blinkCount = 0;
+    
+    // 灯光闪烁定时器（一直保持0.5秒间隔）
+    this.stealthBlinkInterval = setInterval(() => {
+      blinkCount++;
+      
+      // 切换灯光状态
+      this.setData({ 
+        stealthAnimLight: !this.data.stealthAnimLight 
+      });
+      
+      // 退出模式：闪烁一半时，文字改成红色"请松开手指！！"，并开始文字闪烁
+      if (!isEnter && blinkCount === halfPoint) {
+        this.setData({
+          stealthAnimText: '请松开手指！！',
+          stealthAnimTextColor: 'red'
+        });
+        // 开始文字闪烁（爆闪，0.1秒间隔）
+        this.stealthTextBlinkInterval = setInterval(() => {
+          this.setData({
+            stealthAnimTextColor: this.data.stealthAnimTextColor === 'red' ? 'transparent' : 'red'
+          });
+        }, 100); // 文字闪烁间隔0.1秒
+      }
+      
+      // 闪烁完成后
+      if (blinkCount >= totalBlinks) {
+        clearInterval(this.stealthBlinkInterval);
+        this.stealthBlinkInterval = null;
+        // 停止文字闪烁
+        if (this.stealthTextBlinkInterval) {
+          clearInterval(this.stealthTextBlinkInterval);
+          this.stealthTextBlinkInterval = null;
+        }
+        // 恢复文字颜色为红色
+        if (!isEnter) {
+          this.setData({
+            stealthAnimTextColor: 'red'
+          });
+        }
+        // 步骤5：闪烁完成
+        this.step5_Complete();
+      }
+    }, blinkInterval);
+  },
+
+  // 步骤5：闪烁完成
+  step5_Complete() {
+    const isEnter = this.data.stealthTutorialMode === 'enter';
+    
+    this.setData({
+      stealthAnimPressing: false, // 按钮：未按下
+      stealthAnimLight: false,    // 灯光：红色（不亮）
+      stealthAnimText: isEnter ? '已进入隐蔽模式' : '此时退出',
+      stealthAnimTextColor: 'black', // 保持黑色
+      stealthAnimTextScale: 1 // 正常大小
+    });
+    
+    if (isEnter) {
+      // 进入模式：3秒后进入步骤6（警告）
+      this.stealthTutorialTimer = setTimeout(() => {
+        this.step6_Warning();
+      }, 3000);
+    } else {
+      // 退出模式：4秒后直接启用按钮
+      this.stealthTutorialTimer = setTimeout(() => {
+        this.setData({
+          stealthTutorialBtnDisabled: false
+        });
+      }, 4000);
+    }
+  },
+
+  // 步骤6：警告提示（红色文字，放大缩小2次）
+  step6_Warning() {
+    // 更新文字为警告，颜色改为红色
+    this.setData({
+      stealthAnimText: '请注意\n不能开启该模式长时间停放！！',
+      stealthAnimTextColor: 'red'
+    });
+    
+    // 放大缩小动画（2次）
+    let scaleCount = 0;
+    const animateScale = () => {
+      // 放大到1.2倍
+      this.setData({ stealthAnimTextScale: 1.2 });
+      
+      setTimeout(() => {
+        // 缩小回1倍
+        this.setData({ stealthAnimTextScale: 1 });
+        scaleCount++;
+        
+        if (scaleCount < 2) {
+          // 如果还没完成2次，继续下一次
+          setTimeout(() => {
+            animateScale();
+          }, 300); // 间隔300ms
+        } else {
+          // 动画完成，启用按钮
+          this.setData({
+            stealthTutorialBtnDisabled: false
+          });
+        }
+      }, 300); // 放大持续时间300ms
+    };
+    
+    // 开始第一次动画
+    setTimeout(() => {
+      animateScale();
+    }, 200);
+  },
+
+  // 停止动画
+  stopStealthAnim() {
+    if (this.stealthTutorialTimer) {
+      clearTimeout(this.stealthTutorialTimer);
+      this.stealthTutorialTimer = null;
+    }
+    if (this.stealthBlinkInterval) {
+      clearInterval(this.stealthBlinkInterval);
+      this.stealthBlinkInterval = null;
+    }
+    if (this.stealthTextBlinkInterval) {
+      clearInterval(this.stealthTextBlinkInterval);
+      this.stealthTextBlinkInterval = null;
+    }
+  },
 
   // ===============================================
   // 【新增】弹窗防误触核心逻辑
@@ -711,6 +976,14 @@ Page({
   // 🔴 检查指定设备是否有OTA连接记录（根据设备ID判断）
   async checkOtaConnection(deviceId) {
     try {
+      // 对于 F2 LONG 系列设备（F2 Pro Long / F2 Max Long），无需强制OTA，直接放行
+      const cur = this.data.currentModel || {};
+      const isF2Long = cur.name === 'F2' && cur.type && cur.type.indexOf('Long') !== -1;
+      if (isF2Long) {
+        console.log('🔍 [checkOtaConnection] 当前为 F2 LONG 系列，跳过 OTA 校验');
+        return true;
+      }
+      
       if (!deviceId) {
         console.warn('⚠️ [checkOtaConnection] 设备ID不存在');
         return false;
@@ -917,8 +1190,8 @@ Page({
   // 进入编辑模式 (入口分发)
   // ===============================================
   enterEdit(e) {
-    // 🔴 检查蓝牙连接状态：未连接时不允许进入编辑模式
-    if (!this.data.isConnected) {
+    // 🔴 检查蓝牙连接状态：未连接时不允许进入编辑模式（管理员除外）
+    if (!this.data.isConnected && !this.data.isAdmin) {
       // 显示"请先连接蓝牙"小胶囊提示
       this.setData({ showConnectBluetoothTip: true });
       // 2秒后自动隐藏
@@ -1725,8 +1998,8 @@ Page({
   // 🔴 自动校准功能
   // ===============================================
   handleAutoCalibrate() {
-    // 🔴 检查蓝牙连接状态：未连接时不允许使用
-    if (!this.data.isConnected) {
+    // 🔴 检查蓝牙连接状态：未连接时不允许使用（管理员除外）
+    if (!this.data.isConnected && !this.data.isAdmin) {
       // 显示"请先连接蓝牙"小胶囊提示
       this.setData({ showConnectBluetoothTip: true });
       // 2秒后自动隐藏
@@ -1742,20 +2015,35 @@ Page({
     // 只有 F2 PRO/MAX 可以点击
     if (!isF2) return;
     
-    console.log('📤 [蓝牙] 发送"自动调平"');
-    this.sendData('自动调平');
+    console.log('📤 [蓝牙] 发送"自动调平"（5次，间隔0.5秒）');
+    // 发送5次数据，间隔0.5秒（500ms）
+    this.sendDataMultiple('自动调平', 5, 500);
     
-    // 🔴 显示校准中弹窗
-    this.setData({ showCalibratingModal: true });
+    // 🔴 显示校准中弹窗，并禁用按钮
+    this.setData({ 
+      showCalibratingModal: true,
+      calibratingBtnDisabled: true
+    });
+    
+    // 3秒后启用按钮
+    setTimeout(() => {
+      this.setData({ calibratingBtnDisabled: false });
+    }, 3000);
   },
   
   // 🔴 关闭校准弹窗（带收缩退出动画）
   closeCalibratingModal() {
+    // 如果按钮禁用，不允许关闭
+    if (this.data.calibratingBtnDisabled) {
+      return;
+    }
+    
     this.setData({ calibratingModalClosing: true });
     setTimeout(() => {
       this.setData({ 
         showCalibratingModal: false,
-        calibratingModalClosing: false
+        calibratingModalClosing: false,
+        calibratingBtnDisabled: true // 重置按钮状态
       });
     }, 420);
   },
@@ -1772,8 +2060,8 @@ Page({
 
   // 打开设置弹窗
   openSettings() {
-    // 🔴 检查蓝牙连接状态：未连接时不允许使用
-    if (!this.data.isConnected) {
+    // 🔴 检查蓝牙连接状态：未连接时不允许使用（管理员除外）
+    if (!this.data.isConnected && !this.data.isAdmin) {
       // 显示"请先连接蓝牙"小胶囊提示
       this.setData({ showConnectBluetoothTip: true });
       // 2秒后自动隐藏
@@ -1843,7 +2131,7 @@ Page({
                     currentModel.name && currentModel.name.includes('F1') && 
                     currentModel.type === 'Max';
     
-    if (isF2Max && this.data.isConnected) {
+    if (isF2Max && (this.data.isConnected || this.data.isAdmin)) {
       let sendText = '';
       
       if (key === 'faultDetect') {
@@ -1870,13 +2158,13 @@ Page({
       }
       
       if (sendText) {
-        console.log(`📤 [蓝牙] F2 MAX 发送"${sendText}"`);
-        this.sendData(sendText);
+        console.log(`📤 [蓝牙] F2 MAX 发送"${sendText}"（连续3次，间隔0.5秒）`);
+        this.sendDataMultiple(sendText, 3, 500);
       }
     }
     
     // 🔴 F1 MAX：高级配置发送对应数据
-    if (isF1Max && this.data.isConnected) {
+    if (isF1Max && (this.data.isConnected || this.data.isAdmin)) {
       let sendText = '';
       
       if (key === 'powerOn') {
@@ -1896,8 +2184,8 @@ Page({
       }
       
       if (sendText) {
-        console.log(`📤 [蓝牙] F1 MAX 发送"${sendText}"`);
-        this.sendData(sendText);
+        console.log(`📤 [蓝牙] F1 MAX 发送"${sendText}"（连续3次，间隔0.5秒）`);
+        this.sendDataMultiple(sendText, 3, 500);
       }
     }
     
@@ -2190,6 +2478,15 @@ Page({
   sendData(text) {
     const arrayBuffer = this.stringToArrayBuffer(text);
     this.writeBleData(arrayBuffer);
+  },
+
+  // 连续发送三次信号（用于 Max 版本）
+  sendDataMultiple(text, times = 3, interval = 300) {
+    for (let i = 0; i < times; i++) {
+      setTimeout(() => {
+        this.sendData(text);
+      }, i * interval);
+    }
   },
 
   // ===============================================

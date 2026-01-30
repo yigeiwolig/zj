@@ -1193,7 +1193,7 @@
       
       <!-- 2. 核心信息区 (新版卡片样式) -->
       <view class="logistics-card-container">
-        <view class="logistics-info-card">
+      <view class="logistics-info-card">
           <view class="card-header-row">
             <view class="company-info">
               <view class="company-icon-placeholder">{{tools.firstChar(logisticsData.express_company_name)}}</view>
@@ -1204,9 +1204,9 @@
             </view>
           </view>
           <view class="card-body-row">
-            <text class="tracking-number">{{currentTrackingId}}</text>
-            <view class="copy-btn" bindtap="copyTrackingId" data-sn="{{currentTrackingId}}">复制</view>
-          </view>
+          <text class="tracking-number">{{currentTrackingId}}</text>
+          <view class="copy-btn" bindtap="copyTrackingId" data-sn="{{currentTrackingId}}">复制</view>
+        </view>
         </view>
       </view>
       

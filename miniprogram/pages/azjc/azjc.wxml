@@ -1,13 +1,13 @@
 <view class="app-container">
   <!-- 顶部导航 - 分享码用户隐藏返回键 -->
   <view class="header" wx:if="{{!isVideoFullScreen && !isShareCodeUser}}">
-    <view class="back-icon" catchtap="handleBack">
+    <view class="back-icon" catchtap="handleBack" style="top: {{statusBarHeight + 8}}px;">
       <text class="back-arrow">‹</text>
     </view>
   </view>
   <!-- 顶部标题保持固定 -->
   <view class="fixed-nav" wx:if="{{!isVideoFullScreen}}">
-    <view class="back-btn" catchtap="handleBack" wx:if="{{!isShareCodeUser}}">
+    <view class="back-btn" catchtap="handleBack" wx:if="{{!isShareCodeUser}}" style="top: {{statusBarHeight + 8}}px;">
       <text class="back-icon">‹</text>
     </view>
     <view class="brand">
@@ -127,7 +127,7 @@
                   enable-play-gesture="{{true}}"
                   vslide-gesture="{{true}}"
                   vslide-gesture-in-fullscreen="{{true}}"
-                  binderror="onVideoError"
+                  binderror="onVideoError" 
                   bindplay="onVideoPlay"
                   data-index="{{index}}"
                   data-fileid="{{item.fileID}}"

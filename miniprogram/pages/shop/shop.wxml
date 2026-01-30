@@ -1,4 +1,5 @@
 <!-- pages/shop/shop.wxml -->
+<wxs module="utils" src="./shop.wxs"></wxs>
 <view class="container">
 
 <!-- ================= 1. 顶部导航 ================= -->
@@ -363,15 +364,35 @@
      <view class="acc-detail-hero">
         <image wx:if="{{accessoryList[currentAccIdx].detailImages.length>0}}" 
                src="{{accessoryList[currentAccIdx].detailImages[0]}}" mode="aspectFill" class="dimg"/>
-        <view wx:else style="padding:100rpx; text-align:center; color:#ccc;">点击下方添加详情图</view>
+        <view wx:else class="acc-hero-placeholder">
+          <view class="acc-hero-placeholder-icon">📷</view>
+          <text class="acc-hero-placeholder-text">暂无图片</text>
+        </view>
         
-        <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddAccDetailImg">+ 添加/更换图片</view>
+        <view wx:if="{{isAdmin}}" class="acc-hero-upload-btn" bindtap="adminAddAccDetailImg">
+          <text class="acc-hero-upload-icon">📷</text>
+          <text class="acc-hero-upload-text">添加图片</text>
+        </view>
      </view>
      
      <view class="acc-detail-info">
-        <view class="acc-d-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccName':''}}">{{accessoryList[currentAccIdx].name}}</view>
-        <view class="acc-d-price {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccPrice':''}}">¥{{accessoryList[currentAccIdx].price}}</view>
-        <view class="acc-d-desc {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccDesc':''}}">{{accessoryList[currentAccIdx].desc || '暂无描述'}}</view>
+        <!-- 名称 -->
+        <view class="acc-d-row">
+          <text class="acc-d-label">配件名称</text>
+          <view class="acc-d-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccName':''}}">{{accessoryList[currentAccIdx] ? accessoryList[currentAccIdx].name : ''}}</view>
+        </view>
+        
+        <!-- 价格 -->
+        <view class="acc-d-row">
+          <text class="acc-d-label">价格</text>
+          <view class="acc-d-price {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccPrice':''}}">¥{{accessoryList[currentAccIdx] ? utils.formatPrice(accessoryList[currentAccIdx].price) : '0'}}</view>
+        </view>
+
+        <!-- 描述 -->
+        <view class="acc-d-row">
+          <text class="acc-d-label">详细描述</text>
+          <view class="acc-d-desc {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccDesc':''}}">{{accessoryList[currentAccIdx] ? (accessoryList[currentAccIdx].desc || '暂无描述') : ''}}</view>
+        </view>
      </view>
   </scroll-view>
   
