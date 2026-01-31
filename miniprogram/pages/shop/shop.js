@@ -141,6 +141,12 @@ Page({
     // 新增：记录通过"立即购买"添加的临时商品ID，用于覆盖
     tempBuyItemIds: [],
 
+    // 🔴 新增：从维修单跳转过来的配件信息
+    fromRepair: false,
+    repairId: null,
+    requiredParts: [], // 需要购买的配件列表 [{model: 'F1 MAX', parts: ['主板', '按钮']}]
+    requiredPartsMap: {}, // 快速查找用的Map，格式：{'F1 MAX': ['主板', '按钮']}
+
     // 新增：对比模式相关
     isCompareMode: false,      // 是否处于首页对比模式
     compareList: [],           // 选中的产品列表（用于首页对比）
@@ -202,6 +208,34 @@ Page({
       // 标记是从其他页面跳转过来的（需要特殊处理返回逻辑）
       this.fromOtherPage = true;
       console.log('[shop.js] 接收到跳转号码:', this.jumpNumber);
+    }
+    
+    // 🔴 检查是否从维修单跳转过来
+    if (options && options.repairId) {
+      this.setData({
+        fromRepair: true,
+        repairId: options.repairId
+      });
+      
+      // 解析配件信息
+      if (options.parts) {
+        try {
+          const partsList = JSON.parse(decodeURIComponent(options.parts));
+          const partsMap = {};
+          partsList.forEach(item => {
+            partsMap[item.model] = item.parts || [];
+          });
+          
+          this.setData({
+            requiredParts: partsList,
+            requiredPartsMap: partsMap
+          });
+          
+          console.log('[shop.js] 从维修单跳转，需要购买的配件:', partsList);
+        } catch (e) {
+          console.error('[shop.js] 解析配件信息失败:', e);
+        }
+      }
     }
 
     // 立即加载数据
@@ -655,8 +689,18 @@ Page({
       
       if (res.data && res.data.length > 0) {
         // 【关键修改】强制把所有配件设为"未选中"，防止数据库脏数据导致自动加购
+        // 🔴 同时检查是否需要高亮显示（从维修单跳转过来的配件）
+        const requiredPartsMap = this.data.requiredPartsMap || {};
+        const currentModel = this.data.currentSeries?.name || '';
+        const requiredPartsForModel = requiredPartsMap[currentModel] || [];
+        
         const cleanList = res.data.map(item => {
-          return { ...item, selected: false };
+          const isRequired = requiredPartsForModel.includes(item.name);
+          return { 
+            ...item, 
+            selected: false,
+            isRequired: isRequired // 🔴 标记是否需要高亮
+          };
         });
 
         console.log('[shop.js] 设置 accessoryList (已重置选中状态)');
@@ -2364,7 +2408,8 @@ Page({
   // ========================================================
   // 智能分析：解析姓名、电话、地址
   // ========================================================
-  confirmSmartPaste() {
+  // 智能分析：解析姓名、电话、地址 - 使用腾讯地图API精准解析
+  async confirmSmartPaste() {
     const text = this.data.smartPasteVal.trim();
     
     if (!text) {
@@ -2372,29 +2417,92 @@ Page({
       return;
     }
     
-    // 解析文本
-    const parsed = this.parseSmartText(text);
-    
-    // 更新订单信息
-    this.setData({
-      'orderInfo.name': parsed.name || '',
-      'orderInfo.phone': parsed.phone || '',
-      detailAddress: parsed.address || ''
+    // 显示加载提示
+    wx.showLoading({
+      title: '智能解析中...',
+      mask: true
     });
     
-    // 如果解析到了地址，重新计算运费
-    if (parsed.address && parsed.address.trim()) {
-      this.reCalcFinalPrice();
-    }
-    
-    // 关闭弹窗
-    this.closeSmartPasteModal();
-    
-    // 提示用户
-    if (parsed.name && parsed.phone && parsed.address) {
-      this.showAutoToast('成功', '解析成功');
-    } else {
-      this.showAutoToast('提示', `已解析：${parsed.name ? '姓名✓' : ''}${parsed.phone ? '电话✓' : ''}${parsed.address ? '地址✓' : ''}`);
+    try {
+      // 使用腾讯地图API进行精准解析
+      const { parseSmartAddress } = require('../../utils/smartAddressParser.js');
+      const parsed = await parseSmartAddress(text);
+      
+      // 组装完整地址
+      let fullAddress = '';
+      const addressParts = [];
+      if (parsed.province) addressParts.push(parsed.province);
+      if (parsed.city) addressParts.push(parsed.city);
+      if (parsed.district) addressParts.push(parsed.district);
+      if (parsed.detail) addressParts.push(parsed.detail);
+      
+      fullAddress = addressParts.join(' ').trim() || parsed.address || '';
+      
+      // 更新订单信息
+      this.setData({
+        'orderInfo.name': parsed.name || '',
+        'orderInfo.phone': parsed.phone || '',
+        detailAddress: fullAddress
+      });
+      
+      // 如果解析到了地址，重新计算运费
+      if (fullAddress && fullAddress.trim()) {
+        this.reCalcFinalPrice();
+      }
+      
+      // 关闭弹窗
+      this.closeSmartPasteModal();
+      
+      wx.hideLoading();
+      
+      // 提示用户
+      if (parsed.name && parsed.phone && fullAddress) {
+        this.showAutoToast('成功', '解析成功');
+      } else {
+        this.showAutoToast('提示', `已解析：${parsed.name ? '姓名✓' : ''}${parsed.phone ? '电话✓' : ''}${fullAddress ? '地址✓' : ''}`);
+      }
+    } catch (error) {
+      console.error('[shop] 智能地址解析失败:', error);
+      wx.hideLoading();
+      
+      // 🔴 修复：parseSmartAddress 内部已经有备用方案，如果还是失败，说明是其他错误
+      // 尝试再次调用，如果还是失败，提示用户手动填写
+      try {
+        const { parseSmartAddress } = require('../../utils/smartAddressParser.js');
+        const parsed = await parseSmartAddress(text);
+        
+        // 组装完整地址
+        let fullAddress = '';
+        const addressParts = [];
+        if (parsed.province) addressParts.push(parsed.province);
+        if (parsed.city) addressParts.push(parsed.city);
+        if (parsed.district) addressParts.push(parsed.district);
+        if (parsed.detail) addressParts.push(parsed.detail);
+        fullAddress = addressParts.join(' ').trim() || parsed.address || '';
+        
+        this.setData({
+          'orderInfo.name': parsed.name || '',
+          'orderInfo.phone': parsed.phone || '',
+          detailAddress: fullAddress
+        });
+        
+        if (fullAddress && fullAddress.trim()) {
+          this.reCalcFinalPrice();
+        }
+        
+        this.closeSmartPasteModal();
+        
+        if (parsed.name && parsed.phone && fullAddress) {
+          this.showAutoToast('成功', '解析成功（使用备用方案）');
+        } else {
+          this.showAutoToast('提示', `已解析：${parsed.name ? '姓名✓' : ''}${parsed.phone ? '电话✓' : ''}${fullAddress ? '地址✓' : ''}`);
+        }
+      } catch (fallbackError) {
+        console.error('[shop] 备用解析也失败:', fallbackError);
+        wx.hideLoading();
+        this.closeSmartPasteModal();
+        this.showAutoToast('提示', '解析失败，请手动填写');
+      }
     }
   },
   
@@ -2524,25 +2632,38 @@ Page({
       }
     }
     
-    // 🔴 改进3：更精准的地址提取
+    // 🔴 改进3：更精准的地址提取（保留更多地址信息）
     let addressText = originalText;
     
-    // 移除已提取的姓名和电话
-    if (name) {
-      addressText = addressText.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ');
+    // 🔴 优化：先移除标签和分隔符，再移除姓名和电话（避免误删地址信息）
+    // 第一步：移除明显的标签和分隔符
+    addressText = addressText
+      .replace(/(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]*/gi, ' ')
+      .replace(/(?:联系电话|电话|手机|号码)[:：\s]*/gi, ' ')
+      .replace(/(?:地址|详细地址|收件地址|收货地址)[:：\s]*/gi, ' ')
+      .replace(/[()（）【】\[\]<>《》""''""'']/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // 第二步：移除已提取的姓名（只移除完全匹配的，避免误删地址中的相同字）
+    if (name && name.length >= 2) {
+      // 只在姓名前后有空格或标点时移除，避免误删地址中的字
+      const namePattern = new RegExp(`(?:^|\\s)${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`, 'g');
+      addressText = addressText.replace(namePattern, ' ').trim();
     }
+    
+    // 第三步：移除电话号码（保留地址中的数字，只移除11位手机号）
     if (phone) {
-      // 移除所有格式的电话号码
+      // 移除所有格式的手机号
       addressText = addressText.replace(new RegExp(phone.replace(/(\d)/g, '\\$1'), 'g'), ' ');
       addressText = addressText.replace(/1[3-9]\d[\s\-\.]?\d{4}[\s\-\.]?\d{4}/g, ' ');
       addressText = addressText.replace(/\+?86[\s\-]?1[3-9]\d{9}/g, ' ');
     }
     
-    // 清理地址文本
+    // 第四步：最后清理（只移除明显的无用词汇，保留地址信息）
     addressText = addressText
-      .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
-      .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
-      .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
+      .replace(/(?:号码|编号|单号|订单号|运单号)[:：\s]*/g, ' ')
+      .replace(/[、，。；：！？]/g, ' ')  // 只移除标点，保留地址中的分隔符
       .replace(/\s+/g, ' ')
       .trim();
     
@@ -2612,24 +2733,24 @@ Page({
     let district = '';
     let detail = '';
     
-    // 🔴 优化：更彻底地清理地址文本，移除所有标签和无用词汇
+    // 🔴 优化：更智能地清理地址文本（保留更多有用信息）
     text = text
-      // 移除所有地址相关标签
-      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|收件地址|收货地址/g, ' ')
+      // 移除明显的标签（但保留地址关键词）
+      .replace(/(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]*/gi, ' ')
+      .replace(/(?:电话|手机|联系电话|号码)[:：\s]*/gi, ' ')
+      .replace(/(?:地址|详细地址|收件地址|收货地址)[:：\s]*/gi, ' ')
       // 移除号码、编号等无用词汇
-      .replace(/号码|编号|单号|订单号|运单号/g, ' ')
-      // 移除常见分隔符
-      .replace(/[\/、，。；：！？]/g, ' ')
-      // 移除所有括号
+      .replace(/(?:编号|单号|订单号|运单号)[:：\s]*/g, ' ')
+      // 移除所有括号（但保留地址内容）
       .replace(/[()（）【】\[\]<>《》""'']/g, ' ')
-      // 统一空格
+      // 统一空格（保留地址中的分隔符）
       .replace(/\s+/g, ' ')
       .trim();
     
-    // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
+    // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 镇/街道 -> 详细地址
     let remaining = text;
     
-    // 识别省（必须包含"省"字，但不能是"省市区"这样的组合）
+    // 🔴 改进：识别省（支持带"省"字和不带"省"字的省份）
     const provincePattern = /([\u4e00-\u9fa5]{1,10}省)/;
     const provinceMatch = remaining.match(provincePattern);
     if (provinceMatch) {
@@ -2638,6 +2759,18 @@ Page({
       if (!candidate.includes('市') && !candidate.includes('区') && !candidate.includes('县')) {
         province = candidate;
         remaining = remaining.replace(new RegExp(province.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
+    }
+    
+    // 🔴 改进：如果没识别到省，尝试识别不带"省"字的省份（如"广东"、"江苏"）
+    if (!province) {
+      const provinceNames = ['广东', '江苏', '浙江', '山东', '河南', '四川', '湖北', '湖南', '安徽', '河北', '福建', '江西', '陕西', '山西', '云南', '贵州', '辽宁', '黑龙江', '吉林', '内蒙古', '新疆', '西藏', '青海', '甘肃', '宁夏', '海南', '广西'];
+      for (const pName of provinceNames) {
+        if (remaining.startsWith(pName) || remaining.includes(' ' + pName + ' ') || remaining.includes(pName + '省')) {
+          province = pName + '省';
+          remaining = remaining.replace(new RegExp(pName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+          break;
+        }
       }
     }
     
@@ -2653,13 +2786,25 @@ Page({
       }
     }
     
-    // 识别区/县（必须包含"区"或"县"字，排除已识别的省市）
+    // 🔴 改进：识别区/县/镇（支持更多行政级别）
     const districtPattern = /([\u4e00-\u9fa5]{1,10}[区县])/;
     const districtMatch = remaining.match(districtPattern);
     if (districtMatch) {
       const candidate = districtMatch[1].trim();
       // 确保不是"省市区"这样的错误匹配
       if (!candidate.includes('省') && !candidate.includes('市')) {
+        district = candidate;
+        remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
+    }
+    
+    // 🔴 新增：识别镇/街道（如果前面没有识别到区县）
+    if (!district) {
+      const townPattern = /([\u4e00-\u9fa5]{1,10}(?:镇|街道|乡))/;
+      const townMatch = remaining.match(townPattern);
+      if (townMatch) {
+        const candidate = townMatch[1].trim();
+        // 镇/街道可以作为区县的一部分
         district = candidate;
         remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
       }
@@ -2688,13 +2833,16 @@ Page({
       }
     }
     
-    // 🔴 优化：剩余部分作为详细地址，再次清理无用词汇
+    // 🔴 优化：剩余部分作为详细地址（保留更多信息，只清理明显无用词汇）
     detail = remaining
-      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
+      .replace(/(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]*/gi, ' ')
+      .replace(/(?:电话|手机|联系电话|号码)[:：\s]*/gi, ' ')
+      .replace(/(?:地址|详细地址|收件地址|收货地址)[:：\s]*/gi, ' ')
+      .replace(/(?:编号|单号|订单号|运单号)[:：\s]*/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     
-    // 组装完整地址（格式化输出）
+    // 组装完整地址（格式化输出，用空格连接）
     let fullAddress = '';
     const parts = [];
     if (province) parts.push(province);
@@ -2704,9 +2852,16 @@ Page({
     
     fullAddress = parts.join(' ').trim();
     
-    // 如果解析失败，使用原始文本
-    if (!fullAddress) {
-      fullAddress = addressText;
+    // 🔴 改进：如果解析失败或地址不完整，使用原始文本（但清理明显标签）
+    if (!fullAddress || (!province && !city)) {
+      // 如果原始地址有内容，使用原始地址（只清理标签）
+      const cleanedOriginal = addressText
+        .replace(/(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]*/gi, ' ')
+        .replace(/(?:电话|手机|联系电话|号码)[:：\s]*/gi, ' ')
+        .replace(/(?:地址|详细地址|收件地址|收货地址)[:：\s]*/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      fullAddress = cleanedOriginal || addressText;
     }
     
     return {
@@ -3420,6 +3575,21 @@ Page({
             this.showAutoToast('成功', '支付成功');
             this.closeOrderModal();
             
+            // 🔴 如果是从维修单跳转过来的，更新维修单状态
+            const { repairId } = this.data;
+            if (repairId) {
+              const db = wx.cloud.database();
+              db.collection('shouhou_repair').doc(repairId).update({
+                data: {
+                  purchasePartsStatus: 'completed'
+                }
+              }).then(() => {
+                console.log('[doRealPayment] 维修单配件购买状态已更新');
+              }).catch(err => {
+                console.error('[doRealPayment] 更新维修单状态失败:', err);
+              });
+            }
+            
             // 清理购物车
             this.setData({ cart: [], cartTotalPrice: 0 });
             wx.removeStorageSync('my_cart');
@@ -3439,13 +3609,25 @@ Page({
               wx.redirectTo({ 
                 url: '/pages/my/my',
                 success: () => {
-                  // 通知 my 页面刷新订单列表
+                  // 通知 my 页面刷新订单列表和活动列表
                   setTimeout(() => {
                     const pages = getCurrentPages();
                     const myPage = pages[pages.length - 1];
-                    if (myPage && typeof myPage.loadMyOrders === 'function') {
-                      console.log('[doRealPayment] 刷新 my 页面订单列表');
-                      myPage.loadMyOrders();
+                    if (myPage) {
+                      // 🔴 修复：同时刷新订单列表和活动列表（活动列表包含需要购买配件的维修单）
+                      if (typeof myPage.loadMyOrders === 'function') {
+                        console.log('[doRealPayment] 刷新 my 页面订单列表');
+                        myPage.loadMyOrders();
+                      }
+                      if (typeof myPage.loadMyActivitiesPromise === 'function') {
+                        console.log('[doRealPayment] 刷新 my 页面活动列表（包含购买配件状态）');
+                        myPage.loadMyActivitiesPromise();
+                      }
+                      // 🔴 如果是管理员，还需要刷新待处理维修工单列表
+                      if (myPage.data.isAdmin && typeof myPage.loadPendingRepairs === 'function') {
+                        console.log('[doRealPayment] 刷新管理员待处理维修工单列表');
+                        myPage.loadPendingRepairs();
+                      }
                     }
                   }, 500);
                 }
@@ -3771,6 +3953,11 @@ Page({
         }
       }
     } catch (err) {
+      const msg = (err.errMsg || err.message || '') + '';
+      if (msg.indexOf('access_token') !== -1) {
+        console.warn('[shop] 云会话未就绪，跳过封禁检查（请确保已登录/选择云环境）');
+        return;
+      }
       console.error('[shop] 检查封禁状态失败:', err);
     }
   },

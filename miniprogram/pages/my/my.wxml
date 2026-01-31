@@ -154,7 +154,7 @@
     </swiper>
 
     <!-- [新增] 维修工单处理区 -->
-    <view class="section-label" wx:if="{{repairList.length > 0}}">PENDING REPAIRS / 待处理报修</view>
+    <view class="section-label repair-section-label" wx:if="{{repairList.length > 0}}">PENDING REPAIRS / 待处理报修</view>
     
     <view class="repair-list-admin">
       <block wx:for="{{repairList}}" wx:key="_id">
@@ -167,6 +167,14 @@
             <view class="r-title">{{item.model}} - {{item.contact.name}}</view>
             <view class="r-desc">"{{item.description}}"</view>
             <view class="r-addr">{{item.contact.address}}</view>
+            <!-- 🔴 新增：质保状态显示，无质保时显示「用户质保已过期」 -->
+            <view class="r-warranty-status" wx:if="{{item.warrantyExpired || item.remainingDays === 0}}">
+              <text class="warranty-expired-tag">用户质保已过期</text>
+              <text class="warranty-expired-info" wx:if="{{item.expiryDate}}">到期日：{{item.expiryDate}}</text>
+            </view>
+            <view class="r-warranty-status" wx:elif="{{item.remainingDays !== undefined && item.remainingDays > 0}}">
+              <text class="warranty-normal-tag">剩余质保：{{item.remainingDays}}天</text>
+            </view>
           </view>
           
           <!-- 需要寄回开关 -->
@@ -195,11 +203,16 @@
               <text class="repair-status-text">维修完成已寄出</text>
               <text class="repair-tracking-id" wx:if="{{item.trackingId}}">运单号：{{item.trackingId}}</text>
             </view>
-            <!-- 其他状态显示原有按钮 -->
+            <!-- 其他状态：主按钮 + 次要操作（竖向排列，便于点击） -->
             <block wx:if="{{item.returnStatus !== 'USER_SENT' && item.status !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
-              <view class="r-btn return" bindtap="requestUserReturn" data-id="{{item._id}}">需要用户寄回</view>
-              <view class="r-btn tutorial" bindtap="resolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
-              <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单备件寄出</view>
+              <view class="repair-actions-primary">
+                <view class="r-btn return" bindtap="requestUserReturn" data-id="{{item._id}}">需要用户寄回</view>
+              </view>
+              <view class="repair-actions-secondary">
+                <view class="r-btn purchase" bindtap="openPurchasePartsModal" data-item="{{item}}">请购买配件</view>
+                <view class="r-btn tutorial" bindtap="resolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
+                <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单备件寄出</view>
+              </view>
             </block>
           </view>
         </view>
@@ -411,8 +424,9 @@
         <view class="spec-row">
           <text class="label">总剩余质保</text>
           <view class="warranty-val">
-            <!-- 剩余天数 -->
-            <text class="days-num {{item.days < 30 ? 'warning' : ''}}">{{item.days}} Days</text>
+            <!-- 剩余天数或已过期 -->
+            <text class="days-num {{item.days < 30 ? 'warning' : ''}} {{item.isExpired ? 'expired' : ''}}" wx:if="{{!item.isExpired}}">{{item.days}}天</text>
+            <text class="days-num expired" wx:if="{{item.isExpired}}">已过质保</text>
             
             <!-- 👇👇👇 [新增] 赠送质保标记 👇👇👇 -->
             <view class="reward-tag" wx:if="{{item.hasReward}}">
@@ -448,6 +462,39 @@
     </view>
 
     <!-- 👇👇👇【核心补全】在这里插入申请记录列表 👇👇👇 -->
+    <!-- 【新增】仅需购买配件卡片（needPurchaseParts 且无 needReturn） -->
+    <view class="return-required-card purchase-parts-only-card" wx:if="{{myPurchasePartsRepair && !isAdmin}}">
+      <view class="rr-card-header">
+        <view class="rr-card-title">需要购买配件</view>
+        <view class="rr-card-badge {{myPurchasePartsRepair.purchasePartsStatus === 'completed' ? 'success' : 'pending'}}">{{myPurchasePartsRepair.purchasePartsStatus === 'completed' ? '配件已购买' : '待购买'}}</view>
+      </view>
+      <view class="rr-card-purchase-parts" wx:if="{{myPurchasePartsRepair.needPurchaseParts}}">
+        <view class="rr-card-purchase-title">需要购买的配件：</view>
+        <block wx:for="{{myPurchasePartsRepair.purchasePartsList}}" wx:key="model">
+          <view class="rr-card-purchase-group">
+            <text class="rr-card-purchase-model">{{item.model}}：</text>
+            <text class="rr-card-purchase-list">{{item.parts.join('、')}}</text>
+          </view>
+        </block>
+        <view class="rr-card-purchase-note" wx:if="{{myPurchasePartsRepair.purchasePartsNote}}">
+          <text class="rr-card-purchase-note-label">备注：</text>
+          <text class="rr-card-purchase-note-text">{{myPurchasePartsRepair.purchasePartsNote}}</text>
+        </view>
+        <view class="rr-card-purchase-btn" wx:if="{{myPurchasePartsRepair.purchasePartsStatus !== 'completed'}}" bindtap="goToShouhouForParts">去购买配件</view>
+        <view class="rr-card-purchase-tip" wx:if="{{myPurchasePartsRepair.purchasePartsStatus === 'completed'}}">到货后请点击维修教程查看</view>
+      </view>
+      <view class="rr-card-info">
+        <view class="rr-card-info-item">
+          <text class="rr-card-info-label">产品型号</text>
+          <text class="rr-card-model">{{myPurchasePartsRepair.model}}</text>
+        </view>
+        <view class="rr-card-info-item">
+          <text class="rr-card-info-label">报修时间</text>
+          <text class="rr-card-time">{{myPurchasePartsRepair.createTime}}</text>
+        </view>
+      </view>
+    </view>
+
     <!-- 【新增】需寄回配件维修卡片（仅当未录入单号时显示） -->
     <view class="return-required-card" wx:if="{{myReturnRequiredRepair && !isAdmin && !myReturnRequiredRepair.returnTrackingId}}">
       <view class="rr-card-header">
@@ -459,6 +506,30 @@
       <view class="rr-card-note" wx:if="{{myReturnRequiredRepair.returnNote}}">
         <text class="rr-card-note-label">备注：</text>
         <text class="rr-card-note-text">{{myReturnRequiredRepair.returnNote}}</text>
+      </view>
+      
+      <!-- 🔴 新增：显示需要购买配件信息 -->
+      <view class="rr-card-purchase-parts" wx:if="{{myReturnRequiredRepair.needPurchaseParts}}">
+        <view class="rr-card-purchase-title">需要购买配件：</view>
+        <block wx:for="{{myReturnRequiredRepair.purchasePartsList}}" wx:key="model">
+          <view class="rr-card-purchase-group">
+            <text class="rr-card-purchase-model">{{item.model}}：</text>
+            <text class="rr-card-purchase-list">{{item.parts.join('、')}}</text>
+          </view>
+        </block>
+        <view class="rr-card-purchase-note" wx:if="{{myReturnRequiredRepair.purchasePartsNote}}">
+          <text class="rr-card-purchase-note-label">备注：</text>
+          <text class="rr-card-purchase-note-text">{{myReturnRequiredRepair.purchasePartsNote}}</text>
+        </view>
+        <view class="rr-card-purchase-btn" bindtap="goToShouhouForParts">去购买配件</view>
+        <view class="rr-card-purchase-tip" wx:if="{{myReturnRequiredRepair.purchasePartsStatus === 'completed'}}">
+          到货后请点击维修教程查看
+        </view>
+      </view>
+      
+      <!-- 🔴 新增：显示已同意付费维修标识 -->
+      <view class="rr-card-paid-agreed" wx:if="{{myReturnRequiredRepair.paidRepairAgreed === true}}">
+        <text class="rr-card-paid-text">已同意付费维修（维修费30元+配件费）</text>
       </view>
       <view class="rr-card-info">
         <view class="rr-card-info-item">
@@ -701,7 +772,7 @@
           
           <view class="form-item">
             <text class="form-label">选择产品型号</text>
-            <picker bindchange="onModelChange" range="{{modelOptions}}">
+            <picker bindchange="onModelChange" range="{{modelOptions}}" value="{{modelIndex}}">
               <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
             </picker>
           </view>
@@ -1062,8 +1133,8 @@
               <view class="ra-info-section">
                 <view class="ra-info-title">已填写地址信息：</view>
                 <view class="ra-info-content">
-                  <text>{{myReturnRequiredRepair.returnAddress.name}} {{myReturnRequiredRepair.returnAddress.phone}}</text>
-                  <text>{{myReturnRequiredRepair.returnAddress.address}}</text>
+                  <text class="ra-info-text">{{myReturnRequiredRepair.returnAddress.name}} {{myReturnRequiredRepair.returnAddress.phone}}</text>
+                  <text class="ra-info-text">{{myReturnRequiredRepair.returnAddress.address}}</text>
                 </view>
               </view>
             </view>
@@ -1085,7 +1156,7 @@
           <view class="ra-info-section" style="margin-top: 40rpx;" wx:if="{{myReturnRequiredRepair.returnTrackingId}}">
             <view class="ra-info-title">已录入运单号：</view>
             <view class="ra-info-content">
-              <text>{{myReturnRequiredRepair.returnTrackingId}}</text>
+              <text class="ra-info-text">{{myReturnRequiredRepair.returnTrackingId}}</text>
             </view>
           </view>
           
@@ -1102,6 +1173,68 @@
 
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />
+
+<!-- ================= 购买配件弹窗 ================= -->
+<view class="custom-dialog-mask purchase-parts-mask" wx:if="{{showPurchasePartsModal}}" bindtap="closePurchasePartsModal" catchtouchmove="noop">
+  <view class="custom-dialog-box purchase-parts-dialog" catchtap="noop" catchtouchmove="noop">
+    <view class="pp-header">
+      <view class="pp-title">请购买配件</view>
+      <view class="pp-subtitle" wx:if="{{purchasePartsList[0]}}">{{purchasePartsList[0].model}}</view>
+    </view>
+    <view class="cd-content purchase-parts-content">
+      <scroll-view class="parts-scroll" scroll-y>
+        <block wx:for="{{purchasePartsList}}" wx:key="model">
+          <view class="parts-group">
+            <view class="parts-group-title">{{item.model}}</view>
+            <view class="parts-list">
+              <view 
+                class="parts-item {{part.selected ? 'selected' : ''}}" 
+                wx:for="{{item.parts}}" 
+                wx:key="name"
+                wx:for-item="part"
+                data-model="{{item.model}}"
+                data-part-name="{{part.name}}"
+                bindtap="togglePartSelection"
+              >
+                <text class="parts-checkbox">{{part.selected ? '✓' : ''}}</text>
+                <text class="parts-name">{{part.name}}</text>
+              </view>
+            </view>
+          </view>
+        </block>
+      </scroll-view>
+      
+      <view class="parts-note-section">
+        <text class="parts-note-label">备注说明：</text>
+        <textarea 
+          class="parts-note-input" 
+          placeholder="请输入备注信息（选填）"
+          value="{{purchasePartsNote}}"
+          bindinput="onPurchasePartsNoteInput"
+          maxlength="200"
+        />
+      </view>
+    </view>
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel" bindtap="closePurchasePartsModal">取消</view>
+      <view class="cd-btn confirm" bindtap="submitPurchaseParts">确定</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 付费维修确认弹窗 ================= -->
+<view class="custom-dialog-mask" wx:if="{{showPaidRepairConfirmModal}}" bindtap="rejectPaidRepair" catchtouchmove="noop">
+  <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop">
+    <view class="cd-title">维修费用确认</view>
+    <view class="cd-content">
+      <text>维修完成后需要支付维修费用30元+配件费用，是否同意？</text>
+    </view>
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel" bindtap="rejectPaidRepair">取消</view>
+      <view class="cd-btn confirm" bindtap="confirmPaidRepair">同意</view>
+    </view>
+  </view>
+</view>
 
 <!-- ================= 测试密码输入弹窗（带收缩退出动画） ================= -->
 <view class="custom-dialog-mask {{testPasswordModalClosing ? 'closing' : ''}}" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal" catchtouchmove="noop" catchtap="noop">

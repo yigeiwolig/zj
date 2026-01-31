@@ -1,4 +1,10 @@
-page { background: #F7F7F7; color: #1D1D1F; }
+/* 页面背景（避免使用 page 标签选择器以符合组件 WXSS 规范） */
+.container {
+  background: #F7F7F7;
+  color: #1D1D1F;
+  padding-bottom: 40rpx;
+  box-sizing: border-box;
+}
 
 /* 弹窗显示时锁定页面滚动和点击 */
 .container.modal-open {
@@ -9,7 +15,6 @@ page { background: #F7F7F7; color: #1D1D1F; }
   width: 100%;
   touch-action: none;
 }
-.container { padding-bottom: 40rpx; }
 
 /* ================= 本页自定义加载动画（白色虚化 + 你的 loader） ================= */
 .loading-mask {
@@ -578,7 +583,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .product-title { font-size: 34rpx; font-weight: bold; margin: 10rpx 0 20rpx; color: #1A1A1A; }
 
 .info-row { display: flex; justify-content: space-between; margin-bottom: 12rpx; font-size: 26rpx; }
-.info-row text:first-child { color: #8E8E93; }
+.info-row .info-label { color: #8E8E93; }
 .info-row .val { color: #1D1D1F; font-weight: 500; font-family: "PingFang SC"; }
 .info-row .val.price { font-weight: 700; color: #1D1D1F; font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, sans-serif; }
 
@@ -866,6 +871,280 @@ page { background: #F7F7F7; color: #1D1D1F; }
 .warranty-val { display: flex; align-items: center; }
 .days-num { font-size: 36rpx; font-weight: 700; color: #34C759; margin-right: 10rpx; }
 .days-num.warning { color: #FF9500; }
+.days-num.expired { color: #FF3B30; }
+
+/* 质保状态显示（管理员端维修卡片） */
+.r-warranty-status {
+  margin-top: 16rpx;
+  padding: 12rpx 20rpx;
+  background: #FFF5F5;
+  border-radius: 12rpx;
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+}
+.warranty-expired-tag {
+  font-size: 24rpx;
+  color: #FF3B30;
+  font-weight: 600;
+}
+.warranty-expired-info {
+  font-size: 22rpx;
+  color: #8E8E93;
+}
+.warranty-normal-tag {
+  font-size: 24rpx;
+  color: #34C759;
+  font-weight: 500;
+}
+
+/* 🔴 购买配件弹窗 - 精致版样式 */
+.purchase-parts-mask .custom-dialog-box.purchase-parts-dialog {
+  max-width: 720rpx;
+  width: 90vw;
+  max-height: 85vh;
+  padding: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.purchase-parts-dialog .pp-header {
+  padding: 44rpx 40rpx 24rpx;
+  background: linear-gradient(180deg, #F8FAFC 0%, #fff 100%);
+  border-bottom: 1rpx solid #F0F0F0;
+}
+
+.purchase-parts-dialog .pp-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  letter-spacing: -0.5rpx;
+}
+
+.purchase-parts-dialog .pp-subtitle {
+  font-size: 26rpx;
+  color: #8E8E93;
+  margin-top: 8rpx;
+}
+
+.purchase-parts-content {
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  padding: 24rpx 32rpx 0;
+  margin-bottom: 0;
+  text-align: left;
+}
+
+.parts-scroll {
+  flex: 1;
+  max-height: 360rpx;
+}
+
+.parts-group {
+  margin-bottom: 28rpx;
+}
+
+.parts-group:last-child {
+  margin-bottom: 0;
+}
+
+.parts-group-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #8E8E93;
+  margin-bottom: 16rpx;
+  text-transform: uppercase;
+  letter-spacing: 0.5rpx;
+}
+
+/* 配件列表 - 左右两列排布 */
+.parts-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16rpx;
+}
+
+/* 配件按钮 - 气泡样式 + 左右排布 */
+.parts-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  background: #fff;
+  border: 2rpx solid #E8E8ED;
+  border-radius: 50rpx;
+  font-size: 26rpx;
+  color: #3A3A3C;
+  transition: all 0.2s ease;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+}
+
+.parts-item:active {
+  transform: scale(0.97);
+}
+
+.parts-item.selected {
+  background: #E8F4FF;
+  border-color: #007AFF;
+  color: #007AFF;
+  box-shadow: 0 2rpx 8rpx rgba(0,122,255,0.15);
+}
+
+.parts-checkbox {
+  width: 32rpx;
+  height: 32rpx;
+  margin-right: 10rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20rpx;
+  font-weight: 700;
+  color: inherit;
+}
+
+.parts-item.selected .parts-checkbox {
+  color: #007AFF;
+}
+
+.parts-name {
+  flex: 1;
+}
+
+/* 备注区 - 拉宽输入框 */
+.parts-note-section {
+  margin-top: 28rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #F0F0F0;
+  width: 100%;
+}
+
+.parts-note-label {
+  font-size: 26rpx;
+  color: #8E8E93;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.parts-note-input {
+  width: 100%;
+  min-height: 180rpx;
+  padding: 24rpx;
+  background: #F8F8F8;
+  border: 2rpx solid #E8E8ED;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  color: #1D1D1F;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+/* 购买配件弹窗底部按钮 - 防止溢出 */
+.purchase-parts-dialog .cd-btn-row {
+  display: flex;
+  width: 100%;
+  padding: 24rpx 32rpx 40rpx;
+  gap: 20rpx;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.purchase-parts-dialog .cd-btn {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.purchase-parts-dialog .cd-btn.cancel {
+  background: #F2F2F7;
+  color: #8E8E93;
+}
+
+.purchase-parts-dialog .cd-btn.confirm {
+  background: #000;
+  color: #fff;
+}
+
+.purchase-parts-dialog .cd-btn:active {
+  opacity: 0.9;
+}
+
+/* 🔴 新增：用户端购买配件显示 */
+.rr-card-purchase-parts {
+  margin-top: 20rpx;
+  padding: 20rpx;
+  background: #FFF9E6;
+  border-radius: 12rpx;
+  border: 1px solid #F0E6CC;
+}
+.rr-card-purchase-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #AF9567;
+  margin-bottom: 12rpx;
+}
+.rr-card-purchase-group {
+  margin-bottom: 8rpx;
+  font-size: 24rpx;
+  color: #1D1D1F;
+}
+.rr-card-purchase-model {
+  font-weight: 600;
+  color: #AF9567;
+}
+.rr-card-purchase-list {
+  color: #1D1D1F;
+}
+.rr-card-purchase-note {
+  margin-top: 12rpx;
+  padding-top: 12rpx;
+  border-top: 1px solid #F0E6CC;
+  font-size: 22rpx;
+  color: #8E8E93;
+}
+.rr-card-purchase-note-label {
+  font-weight: 500;
+  color: #AF9567;
+}
+.rr-card-purchase-note-text {
+  color: #8E8E93;
+}
+.rr-card-purchase-btn {
+  margin-top: 16rpx;
+  padding: 16rpx;
+  background: #FF9500;
+  color: #FFF;
+  text-align: center;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+.rr-card-purchase-btn:active {
+  background: #E68900;
+}
+.rr-card-purchase-tip {
+  margin-top: 12rpx;
+  padding: 12rpx;
+  background: #E3F2FD;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  color: #007AFF;
+  text-align: center;
+}
+
+/* 🔴 新增：已同意付费维修标识 */
+.rr-card-paid-agreed {
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  background: #E3F2FD;
+  border-radius: 8rpx;
+  text-align: center;
+}
+.rr-card-paid-text {
+  font-size: 24rpx;
+  color: #007AFF;
+  font-weight: 500;
+}
 .ext-tag { font-size: 18rpx; padding: 4rpx 10rpx; background: #FFF9E6; color: #AF9567; border: 1px solid #F0E6CC; border-radius: 6rpx; }
 
 .device-card.add-mode {
@@ -4278,7 +4557,6 @@ page { background: #F7F7F7; color: #1D1D1F; }
 }
 
 .rr-card-badge {
-  /* 徽章保持红色 */
   background: #FF3B30;
   color: #fff;
   font-size: 20rpx;
@@ -4288,6 +4566,15 @@ page { background: #F7F7F7; color: #1D1D1F; }
   flex-shrink: 0;
   box-shadow: 0 4rpx 10rpx rgba(255, 59, 48, 0.25);
   letter-spacing: 1rpx;
+}
+
+.rr-card-badge.pending {
+  background: #FF9500;
+}
+
+.rr-card-badge.success {
+  background: #34C759;
+  box-shadow: 0 4rpx 10rpx rgba(52, 199, 89, 0.25);
 }
 
 .rr-card-desc {
@@ -4551,45 +4838,58 @@ page { background: #F7F7F7; color: #1D1D1F; }
   display: inline;
 }
 
-/* ================= 维修工单卡片 (管理员) ================= */
+/* ================= 维修工单卡片 (管理员) - 优化版 ================= */
 .repair-list-admin {
-  padding: 0 40rpx 40rpx;
+  padding: 0 32rpx 40rpx;
+}
+
+.repair-section-label {
+  padding: 24rpx 32rpx 16rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #8E8E93;
+  letter-spacing: 1rpx;
 }
 
 .repair-admin-card {
   background: #fff; 
-  margin-bottom: 30rpx; 
-  border-radius: 24rpx; 
+  margin-bottom: 24rpx; 
+  border-radius: 20rpx; 
   overflow: hidden;
-  box-shadow: 0 8rpx 20rpx rgba(0,0,0,0.05);
+  box-shadow: 0 4rpx 24rpx rgba(0,0,0,0.06);
 }
 
 .repair-video { 
   width: 100%; 
-  height: 350rpx; 
-  background: #000; 
+  height: 360rpx; 
+  background: #1C1C1E; 
+  display: block;
 }
 
 .repair-info { 
-  padding: 30rpx; 
+  padding: 28rpx 28rpx 20rpx; 
 }
 
 .r-title { 
   font-weight: 700; 
-  font-size: 32rpx; 
-  margin-bottom: 10rpx; 
+  font-size: 34rpx; 
+  margin-bottom: 10rpx;
+  color: #1D1D1F;
 }
 
 .r-desc { 
-  font-size: 28rpx; 
-  color: #333; 
-  margin-bottom: 20rpx; 
+  font-size: 26rpx; 
+  color: #666; 
+  margin-bottom: 12rpx; 
   font-style: italic; 
+  line-height: 1.5;
 }
 
 .r-addr { 
-  font-size: 24rpx; 
-  color: #999; 
+  font-size: 26rpx; 
+  color: #8E8E93;
+  line-height: 1.5;
+  word-break: break-all;
 }
 
 /* 需要寄回开关 */
@@ -4597,32 +4897,32 @@ page { background: #F7F7F7; color: #1D1D1F; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20rpx 30rpx;
+  padding: 24rpx 28rpx;
+  min-height: 88rpx;
+  background: #FAFAFA;
   border-top: 1rpx solid #F0F0F0;
-  border-bottom: 1rpx solid #F0F0F0;
-  margin: 20rpx 0;
 }
 
 .repair-return-switch .switch-label {
   font-size: 28rpx;
   font-weight: 600;
-  color: #333;
+  color: #1D1D1F;
 }
 
 .repair-status-info {
-  padding: 20rpx;
+  padding: 20rpx 28rpx;
   background: #F5F5F7;
   border-radius: 12rpx;
-  margin-bottom: 20rpx;
+  margin: 16rpx 28rpx;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 6rpx;
 }
 
 .repair-status-text {
   font-size: 28rpx;
   font-weight: 600;
-  color: #000;
+  color: #1D1D1F;
 }
 
 .repair-tracking-id {
@@ -4632,41 +4932,99 @@ page { background: #F7F7F7; color: #1D1D1F; }
 
 .repair-actions { 
   position: relative;
-  z-index: 10; /* ✅ 避免 video 控件层覆盖按钮点击 */
+  z-index: 10;
   display: flex; 
-  border-top: 1rpx solid #eee; 
+  flex-direction: column;
+  padding: 24rpx 28rpx 28rpx;
+  gap: 16rpx;
+  border-top: 1rpx solid #F0F0F0;
+}
+
+/* 主操作：需要用户寄回 - 长椭圆 */
+.repair-actions-primary {
+  width: 100%;
+}
+
+.repair-actions-primary .r-btn {
+  width: 100%;
+  min-height: 88rpx;
+  padding: 28rpx 32rpx;
+  border-radius: 44rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 次要操作区：竖向排列 - 长椭圆 */
+.repair-actions-secondary {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  background: transparent;
+}
+
+.repair-actions-secondary .r-btn { 
+  width: 100%;
+  min-height: 80rpx;
+  padding: 24rpx 32rpx;
+  border-radius: 40rpx;
+  text-align: center;
+  font-size: 28rpx; 
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid #E8E8ED;
+  background: #fff;
+}
+
+.repair-actions-secondary .r-btn:last-child {
+  border-bottom: 2rpx solid #E8E8ED;
 }
 
 .r-btn { 
-  flex: 1; 
   text-align: center; 
-  padding: 30rpx 0; 
-  font-size: 28rpx; 
-  font-weight: 600; 
+  padding: 28rpx 32rpx; 
+  font-size: 30rpx; 
+  font-weight: 600;
+  box-sizing: border-box;
 }
 
 .r-btn.tutorial { 
-  color: #007AFF; 
-  border-right: 1rpx solid #eee; 
+  color: #007AFF;
+  border-color: #E8E8ED;
 }
 
 .r-btn.ship { 
-  color: #000; 
+  color: #333;
+}
+
+.r-btn.purchase {
+  color: #333;
 }
 
 .r-btn.return { 
   background: #FF9500; 
-  color: #fff; 
-  border-right: 1rpx solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  border: none;
 }
 
 .r-btn.complete { 
   background: #34C759; 
   color: #fff; 
+  width: 100%;
+  min-height: 88rpx;
+  border-radius: 44rpx;
+  border: none;
 }
 
 .r-btn:active { 
-  background: #f9f9f9; 
+  opacity: 0.85;
+}
+
+.r-btn.complete:active,
+.r-btn.return:active {
+  opacity: 0.9;
 }
 
 
@@ -5250,7 +5608,7 @@ page { background: #F7F7F7; color: #1D1D1F; }
   overflow-wrap: break-word;
 }
 
-.bottom-modal-form .ra-info-content text {
+.bottom-modal-form .ra-info-content .ra-info-text {
   display: block;
   width: 100%;
   word-wrap: break-word;

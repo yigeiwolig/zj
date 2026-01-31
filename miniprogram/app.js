@@ -30,6 +30,11 @@ App({
     isShareCodeUser: false, // 是否是通过分享码进入的用户
     shareCodeInfo: null,     // 分享码信息 { code, usedViews, totalViews, expiresAt }
     
+    // 🔴 「去购买配件」跳转：进入售后中心时要打开的型号（如 'F1 MAX'），shouhou 读后清空
+    shouhouOpenModel: '',
+    // 🔴 需要预选高亮的配件名列表（如 ['固定牌支架','固定车上支架']），shouhou 读后清空
+    shouhouPreselectParts: [],
+    
     // 🔴 更新页面访问统计的辅助函数
     updatePageVisit: function(pageRoute) {
       // 异步调用，不阻塞页面加载
@@ -213,23 +218,6 @@ App({
 
       // 3) showLoading/hideLoading
       wx.showLoading = (opt = {}) => {
-        // #region agent log
-        try {
-          const logData = {
-            location: 'miniprogram/app.js:wx.showLoading',
-            message: 'wx.showLoading intercepted',
-            data: { 
-              opt: typeof opt === 'string' ? opt : (opt.title || ''),
-              page: getCurrentPages().length > 0 ? getCurrentPages()[getCurrentPages().length - 1].route : 'unknown'
-            },
-            timestamp: Date.now(),
-            sessionId: 'debug-session',
-            runId: 'loading-trace',
-            hypothesisId: 'D'
-          };
-          wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:logData,fail:()=>{}});
-        } catch (e) {}
-        // #endregion
         const toast = getToast();
         if (toast) {
           toast.showLoading(opt);
@@ -455,6 +443,11 @@ App({
         }
       }
     } catch (err) {
+      const msg = (err.errMsg || err.message || '') + '';
+      if (msg.indexOf('access_token') !== -1) {
+        console.warn('[app] 云会话未就绪，跳过启动封禁检查（请确保已登录/选择云环境）');
+        return;
+      }
       console.error('[app] 启动时检查封禁状态失败:', err);
     }
   },

@@ -252,7 +252,7 @@
           </view>
           <view class="acc-list-v">
             <block wx:for="{{accessoryList}}" wx:key="id">
-               <view class="acc-row-card {{item.selected ? 'selected' : ''}}" 
+               <view class="acc-row-card {{item.selected ? 'selected' : ''}} {{item.isRequired ? 'required-highlight' : ''}} {{item.isRequired && item.selected ? 'required-selected' : ''}}" 
                      bindtap="openAccessoryDetail" data-index="{{index}}">
             
             <image class="acc-thumb" src="{{item.img}}" mode="aspectFill" />
@@ -261,9 +261,11 @@
             <view class="acc-info">
                 <text class="acc-n">{{item.name}}</text>
                 <text class="acc-p">¥{{item.price}}</text>
+                <!-- 🔴 新增：需要购买的标识 -->
+                <text class="acc-required-tag" wx:if="{{item.isRequired && !item.selected}}">需要购买</text>
             </view>
 
-            <view class="acc-add-btn {{item.selected ? 'checked' : ''}}" 
+            <view class="acc-add-btn {{item.selected ? 'checked' : ''}} {{item.isRequired ? 'required-btn' : ''}}" 
                   catchtap="toggleAccessorySelection" 
                   data-index="{{index}}">
                {{item.selected ? '已选' : '添加'}}

@@ -487,6 +487,45 @@ page {
   overflow: hidden; /* 防止溢出 */
 }
 .acc-row-card.selected { border-color: #0071E3; background: rgba(0,113,227,0.02); }
+
+/* 🔴 新增：需要购买的配件高亮样式 */
+.acc-row-card.required-highlight {
+  border-color: #FF9500;
+  background: rgba(255, 149, 0, 0.08);
+  border-width: 2rpx;
+  box-shadow: 0 0 0 2rpx rgba(255, 149, 0, 0.2);
+}
+
+/* 🔴 新增：需要购买的配件已选中样式（与高亮不同） */
+.acc-row-card.required-selected {
+  border-color: #34C759;
+  background: rgba(52, 199, 89, 0.1);
+  box-shadow: 0 0 0 2rpx rgba(52, 199, 89, 0.3);
+}
+
+/* 🔴 新增：需要购买的配件按钮样式 */
+.acc-add-btn.required-btn {
+  background: #FF9500;
+  color: #FFF;
+  font-weight: 600;
+}
+
+.acc-add-btn.required-btn.checked {
+  background: #34C759;
+  color: #FFF;
+}
+
+/* 🔴 新增：需要购买标识 */
+.acc-required-tag {
+  display: inline-block;
+  padding: 4rpx 12rpx;
+  background: #FF9500;
+  color: #FFF;
+  font-size: 20rpx;
+  border-radius: 4rpx;
+  margin-left: 12rpx;
+  font-weight: 500;
+}
 .acc-thumb { width: 100rpx; height: 100rpx; border-radius: 12rpx; background: #eee; margin-right: 20rpx; }
 .acc-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .acc-n { font-size: 28rpx; font-weight: 600; }

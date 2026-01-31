@@ -38,15 +38,14 @@ page {
   align-items: center;
   z-index: 10000; /* 🔴 提高 z-index 确保返回键显示 */
   pointer-events: none;
-  background: transparent; 
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
-/* 🔴 统一返回键样式 - 恢复原来的实现方式 */
 /* 🔴 统一返回键样式 - 全局标准 */
-.back-icon {
-  position: absolute;
+.header .back-icon {
+  position: fixed;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -55,20 +54,38 @@ page {
   pointer-events: auto;
   transition: all 0.2s;
   z-index: 10001;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
 }
-.back-icon:active {
+.header .back-icon:active {
   transform: scale(0.95);
   opacity: 0.7;
-  background-color: rgba(0, 0, 0, 0.05);
+  background: transparent !important;
+  background-color: transparent !important;
 }
-.back-icon::before {
-  display: none;
+.header .back-icon::before {
+  display: none !important;
+  background: none !important;
+  background-color: transparent !important;
+  content: none !important;
+}
+.header .back-icon::after {
+  display: none !important;
+  background: none !important;
+  background-color: transparent !important;
+  content: none !important;
 }
 
 /* 统一返回箭头样式 */
 .back-arrow {
   font-size: 48rpx;
-  font-weight: 300;
+  font-weight: 600;
   color: #000;
   line-height: 1;
 }
@@ -362,6 +379,7 @@ page {
 
 .detail-view.slide-in {
   transform: translateX(0);
+  z-index: 200; /* 确保从「去购买配件」进入时盖住首页 */
 }
 
 .detail-nav {
@@ -376,21 +394,20 @@ page {
   z-index: 999; /* 确保层级最高 */
   flex-shrink: 0; /* 防止被压缩 */
 }
-/* 返回按钮 - 仅图标 */
+/* 返回按钮 - 仅图标，无背景 */
 .nav-back-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 64rpx;
   height: 64rpx;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.04);
+  background: transparent;
   transition: all 0.2s;
   cursor: pointer;
 }
 
 .nav-back-btn:active {
-  background: rgba(0, 0, 0, 0.08);
+  opacity: 0.6;
   transform: scale(0.96);
 }
 
@@ -1741,6 +1758,80 @@ page {
 .picker-view { flex: 1; text-align: right; font-size: 28rpx; color: #000; }
 .picker-view.ph-style { color: #ccc; }
 .arrow-right { margin-left: 10rpx; color: #ccc; font-size: 24rpx; }
+
+/* [新增] 省市区选择器样式 - 优雅的下划线风格 */
+.address-picker-row {
+  flex: 1;
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.address-picker-btn {
+  flex: 1;
+  min-width: 0;
+  max-width: 200rpx;
+}
+
+.address-picker-btn-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16rpx 0;
+  background-color: transparent;
+  border: none;
+  border-bottom: 2rpx solid #E5E5EA;
+  border-radius: 0;
+  transition: all 0.2s;
+  min-height: 60rpx;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.address-picker-btn-inner.placeholder {
+  border-bottom-color: #E5E5EA;
+}
+
+.address-picker-btn-inner.placeholder::after {
+  content: '';
+  position: absolute;
+  bottom: -2rpx;
+  left: 0;
+  right: 0;
+  height: 2rpx;
+  background-color: #E5E5EA;
+}
+
+.address-picker-btn-inner:not(.placeholder):not(.disabled) {
+  border-bottom-color: #000;
+}
+
+.address-picker-btn-inner.disabled {
+  border-bottom-color: #F0F0F0;
+  opacity: 0.5;
+}
+
+.address-picker-text {
+  text-align: center;
+  font-size: 28rpx;
+  color: #000;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  font-weight: 400;
+}
+
+.address-picker-btn-inner.placeholder .address-picker-text {
+  color: #999;
+  font-weight: 400;
+}
+
+.address-picker-btn-inner.disabled .address-picker-text {
+  color: #999;
+}
 
 /* 清空购物车按钮 */
 .cart-header-row {

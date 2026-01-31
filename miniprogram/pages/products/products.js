@@ -237,6 +237,11 @@ Page({
         }
       }
     } catch (err) {
+      const msg = (err.errMsg || err.message || '') + '';
+      if (msg.indexOf('access_token') !== -1) {
+        console.warn('[products] 云会话未就绪，跳过封禁检查（请确保已登录/选择云环境）');
+        return;
+      }
       console.error('[products] 检查封禁状态失败:', err);
     }
   },
@@ -758,6 +763,11 @@ Page({
         }
       })
       .catch(err => {
+        const msg = (err.errMsg || err.message || '') + '';
+        if (msg.indexOf('access_token') !== -1) {
+          console.warn('[products] 云会话未就绪，跳过寄回订单检查');
+          return;
+        }
         console.error('检查寄回订单失败:', err);
         // 检查失败不显示错误，避免影响用户体验
       });

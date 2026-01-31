@@ -1,7 +1,17 @@
 // pages/shouhou/shouhou.js
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
+// 🔴 使用专门的行政区key（用于省市区选择器 - getCityList）
+const MAP_KEY = 'CGRBZ-FLLLL-CNCPC-MQ6YK-YENYT-2MFCD'; // 行政区key（专门用于省市区选择器）
+console.log('[shouhou] ✅ 初始化腾讯地图SDK（城市列表），使用的key:', MAP_KEY);
 var qqmapsdk = new QQMapWX({
-    key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
+    key: MAP_KEY
+});
+
+// 🔴 使用专门的行政区划子key（用于区县选择器 - getDistrictByCityId）
+const DISTRICT_KEY = 'ICRBZ-VEELI-CQZGO-UE5G6-BHRMS-VQBIK'; // 行政区划子key（专门用于区县选择器）
+console.log('[shouhou] ✅ 初始化腾讯地图SDK（区县列表），使用的key:', DISTRICT_KEY);
+var qqmapsdkDistrict = new QQMapWX({
+    key: DISTRICT_KEY
 });
 
 // 通用测试视频地址（可替换为你自己的云存储链接）
@@ -171,8 +181,8 @@ Page({
     lastSwapIndex: -1,    // 上次交换的位置，避免重复交换
     lastVibrateTime: 0,   // 上次震动时间，用于节流
     
-    // 状态栏高度
-    statusBarHeight: 0,
+    // 状态栏高度（默认 44，与 azjc 一致，避免首屏顶得太高）
+    statusBarHeight: 44,
 
     // [新增] 智能粘贴弹窗相关
     showSmartPasteModal: false,
@@ -188,7 +198,18 @@ Page({
     showCartSuccess: false, // [新增] 控制成功弹窗
 
     // [新增] 运费与地址逻辑
-    detailAddress: '',    // 详细地址，如 '广东省 佛山市 南海区 某某街道101号'
+    detailAddress: '',    // 详细地址，如 '某某街道101号'
+    
+    // [新增] 省市区选择
+    selectedProvince: '',  // 选中的省份
+    selectedCity: '',      // 选中的城市
+    selectedDistrict: '',  // 选中的区县
+    provinceList: [],      // 省份列表
+    cityList: [],          // 城市列表
+    districtList: [],      // 区县列表
+    provinceIndex: -1,     // 省份选择索引
+    cityIndex: -1,         // 城市选择索引
+    districtIndex: -1,     // 区县选择索引
 
     shippingMethod: 'zto',// 默认中通
     shippingFee: 0,
@@ -198,12 +219,706 @@ Page({
   },
 
   // 页面加载时初始化
-  onLoad() {
+  onLoad(options) {
+    // 🔴 尽早设置状态栏高度，避免详情页顶得太高
+    const winInfo = wx.getWindowInfo();
+    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
+    
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('shouhou');
     }
+    
+    // 🔴 从「我的」页「去购买配件」跳转：优先用全局变量，其次用 URL 参数，进入对应型号卡
+    let modelToOpen = '';
+    if (app && app.globalData && app.globalData.shouhouOpenModel) {
+      modelToOpen = String(app.globalData.shouhouOpenModel).trim();
+      app.globalData.shouhouOpenModel = '';
+    }
+    if (!modelToOpen && options && options.model != null) {
+      const rawModel = String(options.model);
+      modelToOpen = rawModel ? decodeURIComponent(rawModel) : '';
+    }
+    if (modelToOpen) {
+      const baseModel = modelToOpen.split(/\s*-\s*/)[0].trim();
+      if (MODEL_TO_GROUP[baseModel]) {
+        this._openModelFromQuery = baseModel;
+      } else if (MODEL_TO_GROUP[modelToOpen]) {
+        this._openModelFromQuery = modelToOpen;
+      }
+      // 兜底：若 onShow/onReady 未触发进卡，50ms 后在此直接进卡
+      const self = this;
+      setTimeout(() => {
+        if (self._openModelFromQuery && MODEL_TO_GROUP[self._openModelFromQuery]) {
+          const name = self._openModelFromQuery;
+          self._openModelFromQuery = null;
+          self.enterModelByModelName(name);
+        }
+      }, 50);
+    }
+    
+    // [新增] 加载省份列表（延迟加载，避免与其他API冲突）
+    // 🔴 优化：延迟500ms加载，避免页面加载时与其他API并发调用
+    setTimeout(() => {
+      this.loadProvinceList();
+    }, 500);
+  },
+  
+  onReady() {
+    // 🔴 从「去购买配件」带 model 进入时，先让详情滑入再加载配件数据
+    if (this._openModelFromQuery) {
+      const modelName = this._openModelFromQuery;
+      this._openModelFromQuery = null;
+      if (modelName && MODEL_TO_GROUP[modelName]) {
+        this.enterModelByModelName(modelName);
+      }
+    }
+  },
+  
+  // [新增] 加载省份列表
+  loadProvinceList() {
+    // 🔴 优化：先检查缓存，避免频繁调用API
+    const cachedProvinceList = wx.getStorageSync('province_list');
+    const cacheTime = wx.getStorageSync('province_list_time') || 0;
+    const now = Date.now();
+    const cacheValidTime = 24 * 60 * 60 * 1000; // 24小时有效期
+    
+    // 如果缓存存在且未过期，直接使用
+    if (cachedProvinceList && cachedProvinceList.length > 0 && (now - cacheTime) < cacheValidTime) {
+      console.log('[shouhou] 使用缓存的省份列表（未过期）');
+      this.setData({
+        provinceList: cachedProvinceList
+      });
+      return;
+    }
+    
+    // 如果缓存过期，清除旧缓存
+    if (cachedProvinceList && (now - cacheTime) >= cacheValidTime) {
+      console.log('[shouhou] 省份列表缓存已过期，重新加载');
+      wx.removeStorageSync('province_list');
+      wx.removeStorageSync('province_list_time');
+    }
+    
+    // 🔴 修复：如果API配额用完，直接使用本地数据，不调用API
+    // 先尝试使用默认省份列表（不依赖API）
+    console.log('[shouhou] 使用本地省份列表（避免API配额限制）');
+    this.setDefaultProvinceList();
+    
+    // 可选：如果需要从API获取最新数据，可以取消下面的注释
+    // 但建议在配额充足时再启用
+    /*
+    console.log('[shouhou] 准备调用getCityList，使用的key:', MAP_KEY);
+    qqmapsdk.getCityList({
+      success: (res) => {
+        if (res.status === 0 && res.result) {
+          // 提取省份列表（result[0]是省份）
+          const provinces = res.result[0] || [];
+          const provinceList = provinces.map(p => ({
+            id: p.id,
+            name: p.fullname || p.name
+          }));
+          
+          // 保存到缓存（有效期24小时）
+          wx.setStorageSync('province_list', provinceList);
+          wx.setStorageSync('province_list_time', Date.now());
+          
+          this.setData({
+            provinceList: provinceList
+          });
+          console.log('[shouhou] 省份列表加载成功:', provinceList.length, '个省份');
+        }
+      },
+      fail: (err) => {
+        console.error('[shouhou] 加载省份列表失败:', err);
+        // 失败时使用默认省份列表
+        this.setDefaultProvinceList();
+      }
+    });
+*/
+  },
+  
+  // [新增] 默认省份列表（备用方案，不依赖API）
+  setDefaultProvinceList() {
+    const defaultProvinces = [
+      { name: '北京市', id: '110000' },
+      { name: '天津市', id: '120000' },
+      { name: '河北省', id: '130000' },
+      { name: '山西省', id: '140000' },
+      { name: '内蒙古自治区', id: '150000' },
+      { name: '辽宁省', id: '210000' },
+      { name: '吉林省', id: '220000' },
+      { name: '黑龙江省', id: '230000' },
+      { name: '上海市', id: '310000' },
+      { name: '江苏省', id: '320000' },
+      { name: '浙江省', id: '330000' },
+      { name: '安徽省', id: '340000' },
+      { name: '福建省', id: '350000' },
+      { name: '江西省', id: '360000' },
+      { name: '山东省', id: '370000' },
+      { name: '河南省', id: '410000' },
+      { name: '湖北省', id: '420000' },
+      { name: '湖南省', id: '430000' },
+      { name: '广东省', id: '440000' },
+      { name: '广西壮族自治区', id: '450000' },
+      { name: '海南省', id: '460000' },
+      { name: '重庆市', id: '500000' },
+      { name: '四川省', id: '510000' },
+      { name: '贵州省', id: '520000' },
+      { name: '云南省', id: '530000' },
+      { name: '西藏自治区', id: '540000' },
+      { name: '陕西省', id: '610000' },
+      { name: '甘肃省', id: '620000' },
+      { name: '青海省', id: '630000' },
+      { name: '宁夏回族自治区', id: '640000' },
+      { name: '新疆维吾尔自治区', id: '650000' }
+    ];
+    
+    // 保存到缓存
+    wx.setStorageSync('province_list', defaultProvinces);
+    
+    this.setData({
+      provinceList: defaultProvinces
+    });
+    console.log('[shouhou] 使用默认省份列表（不依赖API）');
+  },
+  
+  // [新增] 省份选择变化
+  onProvinceChange(e) {
+    const index = parseInt(e.detail.value);
+    const province = this.data.provinceList[index];
+    
+    if (!province) return;
+    
+    this.setData({
+      provinceIndex: index,
+      selectedProvince: province.name,
+      selectedCity: '',
+      selectedDistrict: '',
+      cityList: [],
+      districtList: [],
+      cityIndex: -1,
+      districtIndex: -1
+    });
+    
+    // 加载该省份下的城市列表
+    if (province.id) {
+      this.loadCityList(province.id);
+    }
+    
+    // 重新计算运费
+    this.reCalcFinalPrice();
+  },
+  
+  // [新增] 加载城市列表
+  loadCityList(provinceId) {
+    // 🔴 优化：先检查缓存
+    const cacheKey = `city_list_${provinceId}`;
+    const cachedCityList = wx.getStorageSync(cacheKey);
+    if (cachedCityList && cachedCityList.length > 0) {
+      console.log('[shouhou] 使用缓存的城市列表');
+      this.setData({
+        cityList: cachedCityList
+      });
+      return;
+    }
+    
+    // 🔴 修复：使用 getCityList 获取所有城市，然后筛选出该省份的城市
+    qqmapsdk.getCityList({
+      success: (res) => {
+        if (res.status === 0 && res.result && res.result.length > 1) {
+          // result[1] 是所有城市列表
+          const allCities = res.result[1] || [];
+          
+          // 🔴 筛选出属于该省份的城市（通过城市ID的前2位匹配省份ID的前2位）
+          const provincePrefix = provinceId.substring(0, 2);
+          const cityList = allCities
+            .filter(c => {
+              const cityId = (c.id || '').toString();
+              return cityId.substring(0, 2) === provincePrefix;
+            })
+            .map(c => ({
+              id: c.id,
+              name: c.fullname || c.name
+            }));
+          
+          // 保存到缓存
+          wx.setStorageSync(cacheKey, cityList);
+          
+          this.setData({
+            cityList: cityList
+          });
+          console.log('[shouhou] 城市列表加载成功:', cityList.length, '个城市');
+        } else {
+          // 如果 getCityList 失败，尝试使用 getDistrictByCityId（备用方案）
+          // 🔴 使用行政区划子key作为备用方案
+          qqmapsdkDistrict.getDistrictByCityId({
+            id: provinceId,
+            success: (res2) => {
+              if (res2.status === 0 && res2.result && res2.result.length > 0) {
+                const cities = res2.result[0] || [];
+                const cityList = cities.map(c => ({
+                  id: c.id,
+                  name: c.fullname || c.name
+                }));
+                
+                // 保存到缓存
+                wx.setStorageSync(cacheKey, cityList);
+                
+                this.setData({
+                  cityList: cityList
+                });
+                console.log('[shouhou] 城市列表加载成功（备用方案）:', cityList.length, '个城市');
+              }
+            },
+            fail: (err) => {
+              console.error('[shouhou] 加载城市列表失败:', err);
+            }
+          });
+        }
+      },
+      fail: (err) => {
+        console.error('[shouhou] getCityList 失败，尝试备用方案:', err);
+        // 备用方案：使用 getDistrictByCityId
+        // 🔴 使用行政区划子key作为备用方案
+        qqmapsdkDistrict.getDistrictByCityId({
+          id: provinceId,
+          success: (res2) => {
+            if (res2.status === 0 && res2.result && res2.result.length > 0) {
+              const cities = res2.result[0] || [];
+              const cityList = cities.map(c => ({
+                id: c.id,
+                name: c.fullname || c.name
+              }));
+              
+              // 保存到缓存
+              wx.setStorageSync(cacheKey, cityList);
+              
+              this.setData({
+                cityList: cityList
+              });
+              console.log('[shouhou] 城市列表加载成功（备用方案）:', cityList.length, '个城市');
+            }
+          },
+          fail: (err2) => {
+            console.error('[shouhou] 加载城市列表失败:', err2);
+          }
+        });
+      }
+    });
+  },
+  
+  // [新增] 为智能粘贴加载城市列表（并自动匹配城市和区县）
+  loadCityListForSmartPaste(provinceId, targetCity, targetDistrict) {
+    // 🔴 优化：先检查缓存
+    const cacheKey = `city_list_${provinceId}`;
+    const cachedCityList = wx.getStorageSync(cacheKey);
+    if (cachedCityList && cachedCityList.length > 0) {
+      console.log('[shouhou] 使用缓存的城市列表（智能粘贴）');
+      // 🔴 修复：只更新 cityList，不覆盖其他字段（如 detailAddress）
+      this.setData({
+        cityList: cachedCityList
+      });
+      
+      // 🔴 优化：尝试匹配城市（改进匹配逻辑，提高准确度）
+      if (targetCity) {
+        console.log('[shouhou] 开始匹配城市，目标城市:', targetCity, '城市列表长度:', cachedCityList.length);
+        
+        // 方法1：精确匹配（包含"市"字）
+        let cityIndex = cachedCityList.findIndex(c => c.name === targetCity);
+        
+        // 方法2：去除"市"字后匹配
+        if (cityIndex === -1) {
+          const cityName = targetCity.replace('市', '').replace('自治州', '').replace('地区', '');
+          cityIndex = cachedCityList.findIndex(c => {
+            const cName = c.name.replace('市', '').replace('自治州', '').replace('地区', '');
+            return cName === cityName;
+          });
+        }
+        
+        // 方法3：包含匹配（更宽松）
+        if (cityIndex === -1) {
+          const cityName = targetCity.replace('市', '');
+          cityIndex = cachedCityList.findIndex(c => {
+            return c.name.includes(cityName) || cityName.includes(c.name.replace('市', ''));
+          });
+        }
+        
+        if (cityIndex !== -1) {
+          console.log('[shouhou] ✅ 城市匹配成功，索引:', cityIndex, '城市名:', cachedCityList[cityIndex].name);
+          // 🔴 修复：使用 wx.nextTick 确保 setData 立即生效
+          wx.nextTick(() => {
+            this.setData({
+              cityIndex: cityIndex,
+              selectedCity: cachedCityList[cityIndex].name
+            }, () => {
+              console.log('[shouhou] ✅ 城市数据已更新到UI（缓存）');
+              
+              // 加载区县列表
+              if (cachedCityList[cityIndex].id && targetDistrict) {
+                this.loadDistrictListForSmartPaste(cachedCityList[cityIndex].id, targetDistrict);
+              }
+            });
+          });
+        } else {
+          console.log('[shouhou] ⚠️ 城市匹配失败，目标城市:', targetCity, '可用城市:', cachedCityList.map(c => c.name).slice(0, 10));
+          this.setData({
+            selectedCity: targetCity
+          });
+        }
+      }
+      return;
+    }
+    
+    // 🔴 修复：使用 getCityList 获取所有城市，然后筛选出该省份的城市
+    qqmapsdk.getCityList({
+      success: (res) => {
+        if (res.status === 0 && res.result && res.result.length > 1) {
+          // result[1] 是所有城市列表
+          const allCities = res.result[1] || [];
+          
+          // 🔴 筛选出属于该省份的城市（通过城市ID的前2位匹配省份ID的前2位）
+          const provincePrefix = provinceId.substring(0, 2);
+          const cityList = allCities
+            .filter(c => {
+              const cityId = (c.id || '').toString();
+              return cityId.substring(0, 2) === provincePrefix;
+            })
+            .map(c => ({
+              id: c.id,
+              name: c.fullname || c.name
+            }));
+          
+          // 保存到缓存
+          wx.setStorageSync(cacheKey, cityList);
+          
+          this.setData({
+            cityList: cityList
+          });
+          
+          // 🔴 优化：尝试匹配城市（改进匹配逻辑，提高准确度）
+          if (targetCity) {
+            console.log('[shouhou] 开始匹配城市，目标城市:', targetCity, '城市列表长度:', cityList.length);
+            
+            // 方法1：精确匹配（包含"市"字）
+            let cityIndex = cityList.findIndex(c => c.name === targetCity);
+            
+            // 方法2：去除"市"字后匹配
+            if (cityIndex === -1) {
+              const cityName = targetCity.replace('市', '').replace('自治州', '').replace('地区', '');
+              cityIndex = cityList.findIndex(c => {
+                const cName = c.name.replace('市', '').replace('自治州', '').replace('地区', '');
+                return cName === cityName;
+              });
+            }
+            
+            // 方法3：包含匹配（更宽松）
+            if (cityIndex === -1) {
+              const cityName = targetCity.replace('市', '');
+              cityIndex = cityList.findIndex(c => {
+                return c.name.includes(cityName) || cityName.includes(c.name.replace('市', ''));
+              });
+            }
+            
+            if (cityIndex !== -1) {
+              console.log('[shouhou] ✅ 城市匹配成功，索引:', cityIndex, '城市名:', cityList[cityIndex].name);
+              // 🔴 修复：使用 wx.nextTick 确保 setData 立即生效
+              wx.nextTick(() => {
+                this.setData({
+                  cityIndex: cityIndex,
+                  selectedCity: cityList[cityIndex].name
+                }, () => {
+                  console.log('[shouhou] ✅ 城市数据已更新到UI（API加载）');
+                  
+                  // 加载区县列表
+                  if (cityList[cityIndex].id && targetDistrict) {
+                    this.loadDistrictListForSmartPaste(cityList[cityIndex].id, targetDistrict);
+                  }
+                });
+              });
+            } else {
+              console.log('[shouhou] ⚠️ 城市匹配失败，目标城市:', targetCity, '可用城市:', cityList.map(c => c.name).slice(0, 10));
+              this.setData({
+                selectedCity: targetCity
+              });
+            }
+          }
+        } else {
+          // 如果 getCityList 失败，尝试使用 getDistrictByCityId（备用方案）
+          // 🔴 使用行政区划子key作为备用方案
+          qqmapsdkDistrict.getDistrictByCityId({
+            id: provinceId,
+            success: (res2) => {
+              if (res2.status === 0 && res2.result && res2.result.length > 0) {
+                const cities = res2.result[0] || [];
+                const cityList = cities.map(c => ({
+                  id: c.id,
+                  name: c.fullname || c.name
+                }));
+                
+                // 保存到缓存
+                wx.setStorageSync(cacheKey, cityList);
+                
+                this.setData({
+                  cityList: cityList
+                });
+                
+                // 🔴 优化：尝试匹配城市（改进匹配逻辑，提高准确度）
+                if (targetCity) {
+                  console.log('[shouhou] 开始匹配城市（备用方案），目标城市:', targetCity, '城市列表长度:', cityList.length);
+                  
+                  // 方法1：精确匹配（包含"市"字）
+                  let cityIndex = cityList.findIndex(c => c.name === targetCity);
+                  
+                  // 方法2：去除"市"字后匹配
+                  if (cityIndex === -1) {
+                    const cityName = targetCity.replace('市', '').replace('自治州', '').replace('地区', '');
+                    cityIndex = cityList.findIndex(c => {
+                      const cName = c.name.replace('市', '').replace('自治州', '').replace('地区', '');
+                      return cName === cityName;
+                    });
+                  }
+                  
+                  // 方法3：包含匹配（更宽松）
+                  if (cityIndex === -1) {
+                    const cityName = targetCity.replace('市', '');
+                    cityIndex = cityList.findIndex(c => {
+                      return c.name.includes(cityName) || cityName.includes(c.name.replace('市', ''));
+                    });
+                  }
+                  
+                  if (cityIndex !== -1) {
+                    console.log('[shouhou] ✅ 城市匹配成功（备用方案），索引:', cityIndex, '城市名:', cityList[cityIndex].name);
+                    this.setData({
+                      cityIndex: cityIndex,
+                      selectedCity: cityList[cityIndex].name
+                    });
+                    
+                    // 加载区县列表
+                    if (cityList[cityIndex].id && targetDistrict) {
+                      this.loadDistrictListForSmartPaste(cityList[cityIndex].id, targetDistrict);
+                    }
+                  } else {
+                    console.log('[shouhou] ⚠️ 城市匹配失败（备用方案），目标城市:', targetCity, '可用城市:', cityList.map(c => c.name).slice(0, 10));
+                    this.setData({
+                      selectedCity: targetCity
+                    });
+                  }
+                }
+              }
+            },
+            fail: (err) => {
+              console.error('[shouhou] 加载城市列表失败:', err);
+            }
+          });
+        }
+      },
+      fail: (err) => {
+        console.error('[shouhou] getCityList 失败，尝试备用方案:', err);
+        // 备用方案：使用 getDistrictByCityId
+        // 🔴 使用行政区划子key作为备用方案
+        qqmapsdkDistrict.getDistrictByCityId({
+          id: provinceId,
+          success: (res2) => {
+            if (res2.status === 0 && res2.result && res2.result.length > 0) {
+              const cities = res2.result[0] || [];
+              const cityList = cities.map(c => ({
+                id: c.id,
+                name: c.fullname || c.name
+              }));
+              
+              // 保存到缓存
+              wx.setStorageSync(cacheKey, cityList);
+              
+              this.setData({
+                cityList: cityList
+              });
+              
+              // 尝试匹配城市
+              if (targetCity) {
+                const cityName = targetCity.replace('市', '');
+                const cityIndex = cityList.findIndex(c => {
+                  const cName = c.name.replace('市', '').replace('自治州', '').replace('地区', '');
+                  return c.name === targetCity || 
+                         c.name.includes(cityName) || 
+                         cityName.includes(cName) ||
+                         cName === cityName;
+                });
+                
+                if (cityIndex !== -1) {
+                  this.setData({
+                    cityIndex: cityIndex,
+                    selectedCity: cityList[cityIndex].name
+                  });
+                  
+                  // 加载区县列表
+                  if (cityList[cityIndex].id && targetDistrict) {
+                    this.loadDistrictListForSmartPaste(cityList[cityIndex].id, targetDistrict);
+                  }
+                } else {
+                  this.setData({
+                    selectedCity: targetCity
+                  });
+                }
+              }
+            }
+          },
+          fail: (err2) => {
+            console.error('[shouhou] 加载城市列表失败（备用方案也失败）:', err2);
+            // 🔴 修复：如果API都失败，至少设置城市文本，让用户知道解析到了什么
+            if (targetCity) {
+              this.setData({
+                selectedCity: targetCity,
+                cityList: [] // 清空列表，避免显示错误数据
+              });
+              console.log('[shouhou] ⚠️ API调用失败，已设置城市文本:', targetCity);
+            }
+          }
+        });
+      }
+    });
+  },
+  
+  // [新增] 为智能粘贴加载区县列表（并自动匹配区县）
+  loadDistrictListForSmartPaste(cityId, targetDistrict) {
+    // 🔴 使用专门的行政区划子key来获取区县列表
+    qqmapsdkDistrict.getDistrictByCityId({
+      id: cityId,
+      success: (res) => {
+        if (res.status === 0 && res.result && res.result.length > 0) {
+          const districts = res.result[0] || [];
+          const districtList = districts.map(d => ({
+            id: d.id,
+            name: d.fullname || d.name
+          }));
+          
+          this.setData({
+            districtList: districtList
+          });
+          
+          // 尝试匹配区县
+          if (targetDistrict) {
+            const districtName = targetDistrict.replace('区', '').replace('县', '').replace('镇', '').replace('街道', '');
+            const districtIndex = districtList.findIndex(d => {
+              const dName = d.name.replace('区', '').replace('县', '').replace('自治县', '').replace('市辖区', '');
+              return d.name === targetDistrict || 
+                     d.name.includes(districtName) || 
+                     districtName.includes(dName) ||
+                     dName === districtName;
+            });
+            
+            if (districtIndex !== -1) {
+              this.setData({
+                districtIndex: districtIndex,
+                selectedDistrict: districtList[districtIndex].name
+              });
+            } else {
+              this.setData({
+                selectedDistrict: targetDistrict
+              });
+            }
+          }
+        }
+      },
+      fail: (err) => {
+        console.error('[shouhou] 加载区县列表失败:', err);
+        // 🔴 修复：如果API失败，至少设置区县文本，让用户知道解析到了什么
+        if (targetDistrict) {
+          this.setData({
+            selectedDistrict: targetDistrict,
+            districtList: [] // 清空列表，避免显示错误数据
+          });
+          console.log('[shouhou] ⚠️ API调用失败，已设置区县文本:', targetDistrict);
+        }
+      }
+    });
+  },
+  
+  // [新增] 城市选择变化
+  onCityChange(e) {
+    const index = parseInt(e.detail.value);
+    const city = this.data.cityList[index];
+    
+    if (!city) return;
+    
+    this.setData({
+      cityIndex: index,
+      selectedCity: city.name,
+      selectedDistrict: '',
+      districtList: [],
+      districtIndex: -1
+    });
+    
+    // 加载该城市下的区县列表
+    if (city.id) {
+      this.loadDistrictList(city.id);
+    }
+    
+    // 重新计算运费
+    this.reCalcFinalPrice();
+  },
+  
+  // [新增] 加载区县列表
+  loadDistrictList(cityId) {
+    // 🔴 优化：先检查缓存
+    const cacheKey = `district_list_${cityId}`;
+    const cachedDistrictList = wx.getStorageSync(cacheKey);
+    if (cachedDistrictList && cachedDistrictList.length > 0) {
+      console.log('[shouhou] 使用缓存的区县列表');
+      this.setData({
+        districtList: cachedDistrictList
+      });
+      return;
+    }
+    
+    // 🔴 使用专门的行政区划子key来获取区县列表
+    qqmapsdkDistrict.getDistrictByCityId({
+      id: cityId,
+      success: (res) => {
+        if (res.status === 0 && res.result && res.result.length > 0) {
+          const districts = res.result[0] || [];
+          const districtList = districts.map(d => ({
+            id: d.id,
+            name: d.fullname || d.name
+          }));
+          
+          // 保存到缓存
+          wx.setStorageSync(cacheKey, districtList);
+          
+          this.setData({
+            districtList: districtList
+          });
+          console.log('[shouhou] 区县列表加载成功:', districtList.length, '个区县');
+        }
+      },
+      fail: (err) => {
+        console.error('[shouhou] 加载区县列表失败:', err);
+        // 🔴 修复：如果API失败，清空区县列表，但保留已选择的区县文本（如果有）
+        this.setData({
+          districtList: []
+        });
+        // 如果已经有选择的区县文本，保留它
+        if (this.data.selectedDistrict) {
+          console.log('[shouhou] ⚠️ API调用失败，保留已选择的区县文本:', this.data.selectedDistrict);
+        }
+      }
+    });
+  },
+  
+  // [新增] 区县选择变化
+  onDistrictChange(e) {
+    const index = parseInt(e.detail.value);
+    const district = this.data.districtList[index];
+    
+    if (!district) return;
+    
+    this.setData({
+      districtIndex: index,
+      selectedDistrict: district.name
+    });
+    
+    // 重新计算运费
+    this.reCalcFinalPrice();
   },
 
   // 🔴 新增：页面准备就绪，初始化 camera context（参考 case 页面）
@@ -241,11 +956,8 @@ Page({
     this._systemInfo = winInfo;
     this._cardHeightPx = DRAG_CONFIG.CARD_HEIGHT_RPX * (winInfo.windowWidth / 750);
     
-    // 获取状态栏高度，用于适配导航栏
-    // 如果没有状态栏高度，使用安全区域，如果都没有，默认 44px（iPhone X 系列）
-    const statusBarHeight = winInfo.statusBarHeight || 44;
-    this.setData({ statusBarHeight });
-    console.log('状态栏高度:', statusBarHeight);
+    // 再次确认状态栏高度（onLoad 已设，此处兜底）
+    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
   },
 
   // ================== 权限检查逻辑 ==================
@@ -552,20 +1264,28 @@ Page({
 
   enterModel(e) {
     const { name, series } = e.currentTarget.dataset;
-    // 使用 modelName 作为唯一标识，每个型号数据完全独立
+    this.enterModelByModelName(name, series);
+  },
+
+  // 按型号名直接进入对应卡（用于从「我的」页「去购买配件」带 model 参数跳转）
+  enterModelByModelName(modelName, series) {
+    const name = modelName || '';
+    const seriesVal = series || (MODEL_TO_GROUP[name] || '');
+    // 先只更新页面状态，让详情视图立即滑入，避免被后续 setData 覆盖或延迟
     this.setData({
       currentModelName: name,
-      currentSeries: series, // 保留 series 用于显示，但数据查询使用 modelName
+      currentSeries: seriesVal,
       inDetail: true,
       activeTab: 'order',
       serviceType: 'parts',
       playingIndex: -1,
-      currentVideoList: [], // 立即清空视频列表，避免显示旧数据
+      currentVideoList: [],
       selectedCount: 0,
-      totalPrice: 0 // 重置总价
+      totalPrice: 0
+    }, () => {
+      this.loadParts(name);
+      this.resetLock();
     });
-    this.loadParts(name); // 改用新的 loadParts 函数
-    this.resetLock();
   },
 
   exitModel() {
@@ -712,7 +1432,12 @@ Page({
         this.setData({ serviceType: 'repair' });
       })
       .catch(err => {
-        console.error('检查寄回订单失败:', err);
+        const msg = (err.errMsg || err.message || '') + '';
+        if (msg.indexOf('access_token') !== -1) {
+          console.warn('[shouhou] 云会话未就绪，跳过寄回订单检查');
+        } else {
+          console.error('检查寄回订单失败:', err);
+        }
         // 检查失败也允许切换，避免阻塞用户
         this.setData({ serviceType: 'repair' });
       });
@@ -762,7 +1487,17 @@ Page({
       }
 
       console.log(`[loadParts] ${modelName} 最终加载 ${parts.length} 个配件:`, parts.map(p => p.name));
-      this.setData({ currentPartsList: parts });
+      // 🔴 从「去购买配件」带来的需购配件：预选并高亮
+      const app = getApp();
+      const preselect = (app && app.globalData && app.globalData.shouhouPreselectParts) ? app.globalData.shouhouPreselectParts : [];
+      if (preselect.length) {
+        const set = new Set(preselect.map(p => String(p).trim()));
+        parts.forEach(p => { p.selected = set.has(String(p.name).trim()); });
+        app.globalData.shouhouPreselectParts = [];
+      }
+      const selectedCount = parts.filter(p => p.selected).length;
+      const totalPrice = parts.filter(p => p.selected).reduce((sum, p) => sum + (p.price || 0), 0);
+      this.setData({ currentPartsList: parts, selectedCount, totalPrice });
       
       // 动态计算占位高度：最小化空白
       // 底部按钮高度约120rpx，只需要少量缓冲即可
@@ -782,7 +1517,16 @@ Page({
         order: index,
         selected: false
       }));
-      this.setData({ currentPartsList: parts });
+      const app = getApp();
+      const preselect = (app && app.globalData && app.globalData.shouhouPreselectParts) ? app.globalData.shouhouPreselectParts : [];
+      if (preselect.length) {
+        const set = new Set(preselect.map(p => String(p).trim()));
+        parts.forEach(p => { p.selected = set.has(String(p.name).trim()); });
+        app.globalData.shouhouPreselectParts = [];
+      }
+      const selectedCount = parts.filter(p => p.selected).length;
+      const totalPrice = parts.filter(p => p.selected).reduce((sum, p) => sum + (p.price || 0), 0);
+      this.setData({ currentPartsList: parts, selectedCount, totalPrice });
       
       // 动态计算占位高度
       const rows = Math.ceil(parts.length / 3);
@@ -2179,31 +2923,49 @@ Page({
   captureRepairVideoFrame() {
     const videoContext = wx.createVideoContext('repairVideoPreview', this);
     
+    // 🔴 检查 snapshot 方法是否存在
+    if (!videoContext || typeof videoContext.snapshot !== 'function') {
+      console.warn('[captureRepairVideoFrame] snapshot 方法不可用，跳过封面提取');
+      this.setData({
+        extractingThumb: false
+      });
+      getApp().hideDialog();
+      return;
+    }
+    
     // 先定位到第一帧
     videoContext.seek(0);
     
     // 等待定位完成后再截图
     setTimeout(() => {
-      videoContext.snapshot({
-        success: (res) => {
-          // 截图成功，保存封面路径
-          this.setData({
-            tempVideoThumb: res.tempImagePath,
-            extractingThumb: false
-          });
-          // 关闭提示弹窗
-          getApp().hideDialog();
-        },
-        fail: (err) => {
-          // 截图失败，使用占位提示
-          console.error('截图失败:', err);
-          this.setData({
-            extractingThumb: false
-          });
-          getApp().hideDialog();
-          // 封面失败也不弹原生提示
-        }
-      });
+      try {
+        videoContext.snapshot({
+          success: (res) => {
+            // 截图成功，保存封面路径
+            this.setData({
+              tempVideoThumb: res.tempImagePath,
+              extractingThumb: false
+            });
+            // 关闭提示弹窗
+            getApp().hideDialog();
+          },
+          fail: (err) => {
+            // 截图失败，使用占位提示
+            console.error('截图失败:', err);
+            this.setData({
+              extractingThumb: false
+            });
+            getApp().hideDialog();
+            // 封面失败也不弹原生提示
+          }
+        });
+      } catch (error) {
+        console.error('[captureRepairVideoFrame] snapshot 调用异常:', error);
+        this.setData({
+          extractingThumb: false
+        });
+        getApp().hideDialog();
+      }
     }, 500);
   },
 
@@ -2230,36 +2992,220 @@ Page({
     this.setData({ smartPasteVal: e.detail.value });
   },
 
-  // [修改] 高级智能粘贴 (复用 shop.js 逻辑)
-  confirmSmartPaste() {
+  // [修改] 高级智能粘贴 - 使用腾讯地图API精准解析
+  async confirmSmartPaste() {
     const text = this.data.smartPasteVal.trim();
     if (!text) {
       this._showCustomToast('内容不能为空', 'none');
       return;
     }
 
-    const result = this.parseAddress(text);
+    // 显示加载提示
+    wx.showLoading({
+      title: '智能解析中...',
+      mask: true
+    });
 
-    // 构造更新数据
-    let updateData = {
-      showSmartPasteModal: false
-    };
+    try {
+      // 使用腾讯地图API进行精准解析
+      const { parseSmartAddress } = require('../../utils/smartAddressParser.js');
+      const result = await parseSmartAddress(text);
+      
+      // 🔴 调试：打印完整的解析结果
+      console.log('[confirmSmartPaste] 完整解析结果:', JSON.stringify(result, null, 2));
+      console.log('[confirmSmartPaste] result.detail:', result.detail);
+      console.log('[confirmSmartPaste] result.address:', result.address);
 
-    if (result.name) updateData['orderInfo.name'] = result.name;
-    if (result.phone) updateData['orderInfo.phone'] = result.phone;
-    if (result.address) {
-      updateData['detailAddress'] = result.address;
-      updateData['orderInfo.address'] = result.address;
+      // 构造更新数据
+      let updateData = {
+        showSmartPasteModal: false
+      };
+
+      if (result.name) updateData['orderInfo.name'] = result.name;
+      if (result.phone) updateData['orderInfo.phone'] = result.phone;
+      
+      // 🔴 修改：将省市区和详细地址分开填充
+      // 省市区填充到选择器
+      
+      // 🔴 修复：如果解析结果中没有省份，但有城市，尝试从城市推断省份
+      let finalProvince = result.province;
+      if (!finalProvince && result.city) {
+        // 常见城市到省份的映射
+        const cityToProvince = {
+          '东莞市': '广东省', '深圳市': '广东省', '广州市': '广东省', '佛山市': '广东省', '中山市': '广东省',
+          '珠海市': '广东省', '惠州市': '广东省', '江门市': '广东省', '肇庆市': '广东省', '汕头市': '广东省',
+          '潮州市': '广东省', '揭阳市': '广东省', '汕尾市': '广东省', '湛江市': '广东省', '茂名市': '广东省',
+          '阳江市': '广东省', '韶关市': '广东省', '清远市': '广东省', '云浮市': '广东省', '梅州市': '广东省',
+          '河源市': '广东省', '北京市': '北京市', '上海市': '上海市', '天津市': '天津市', '重庆市': '重庆市',
+          '杭州市': '浙江省', '宁波市': '浙江省', '温州市': '浙江省', '嘉兴市': '浙江省', '湖州市': '浙江省',
+          '绍兴市': '浙江省', '金华市': '浙江省', '衢州市': '浙江省', '舟山市': '浙江省', '台州市': '浙江省',
+          '丽水市': '浙江省', '南京市': '江苏省', '苏州市': '江苏省', '无锡市': '江苏省', '常州市': '江苏省',
+          '镇江市': '江苏省', '扬州市': '江苏省', '泰州市': '江苏省', '南通市': '江苏省', '盐城市': '江苏省',
+          '淮安市': '江苏省', '宿迁市': '江苏省', '连云港市': '江苏省', '徐州市': '江苏省', '成都市': '四川省',
+          '武汉市': '湖北省', '长沙市': '湖南省', '郑州市': '河南省', '西安市': '陕西省', '济南市': '山东省',
+          '青岛市': '山东省', '石家庄市': '河北省', '太原市': '山西省', '沈阳市': '辽宁省', '长春市': '吉林省',
+          '哈尔滨市': '黑龙江省', '合肥市': '安徽省', '福州市': '福建省', '厦门市': '福建省', '南昌市': '江西省',
+          '南宁市': '广西壮族自治区', '海口市': '海南省', '昆明市': '云南省', '贵阳市': '贵州省', '拉萨市': '西藏自治区',
+          '兰州市': '甘肃省', '西宁市': '青海省', '银川市': '宁夏回族自治区', '乌鲁木齐市': '新疆维吾尔自治区',
+          '呼和浩特市': '内蒙古自治区'
+        };
+        
+        finalProvince = cityToProvince[result.city] || '';
+        if (finalProvince) {
+          console.log('[confirmSmartPaste] 从城市推断省份:', result.city, '->', finalProvince);
+        }
+      }
+      
+      // 🔴 修复：如果还是没有省份，清空之前的选择，让用户手动选择
+      if (!finalProvince) {
+        updateData['provinceIndex'] = -1;
+        updateData['selectedProvince'] = '';
+        updateData['cityList'] = [];
+        updateData['districtList'] = [];
+        updateData['cityIndex'] = -1;
+        updateData['districtIndex'] = -1;
+        updateData['selectedCity'] = '';
+        updateData['selectedDistrict'] = '';
+        console.log('[confirmSmartPaste] ⚠️ 无法确定省份，已清空省市区选择，请用户手动选择');
+      } else if (finalProvince) {
+        // 尝试匹配省份
+        const provinceName = finalProvince.replace('省', '').replace('市', '').replace('自治区', '').replace('特别行政区', '');
+        const provinceIndex = this.data.provinceList.findIndex(p => {
+          const pName = p.name.replace('省', '').replace('自治区', '').replace('市', '').replace('特别行政区', '');
+          return p.name === finalProvince || 
+                 p.name.includes(provinceName) || 
+                 provinceName.includes(pName) ||
+                 pName === provinceName;
+        });
+        
+        if (provinceIndex !== -1) {
+          updateData['provinceIndex'] = provinceIndex;
+          updateData['selectedProvince'] = this.data.provinceList[provinceIndex].name;
+          // 🔴 修复：先清空城市和区县，然后立即加载并匹配
+          updateData['cityList'] = [];
+          updateData['districtList'] = [];
+          updateData['cityIndex'] = -1;
+          updateData['districtIndex'] = -1;
+          updateData['selectedCity'] = '';
+          updateData['selectedDistrict'] = '';
+          
+          // 🔴 修复：先设置详细地址，然后再执行 setData
+          // 详细地址只填充详细部分（优先使用detail字段）
+          if (result.detail && result.detail.trim()) {
+            console.log('[confirmSmartPaste] 使用result.detail填充详细地址:', result.detail);
+            updateData['detailAddress'] = result.detail.trim();
+          } else if (result.address && result.address.trim()) {
+            // 如果没有detail，从address中移除省市区
+            console.log('[confirmSmartPaste] 从result.address提取详细地址:', result.address);
+            let detail = result.address;
+            if (result.province) detail = detail.replace(result.province, '').trim();
+            if (result.city) detail = detail.replace(result.city, '').trim();
+            if (result.district) detail = detail.replace(result.district, '').trim();
+            updateData['detailAddress'] = detail.trim() || result.address.trim();
+            console.log('[confirmSmartPaste] 提取后的详细地址:', updateData['detailAddress']);
+          }
+          
+          // 组装完整地址用于orderInfo.address（兼容旧逻辑）
+          const fullAddressParts = [];
+          if (result.province) fullAddressParts.push(result.province);
+          if (result.city) fullAddressParts.push(result.city);
+          if (result.district) fullAddressParts.push(result.district);
+          if (result.detail) fullAddressParts.push(result.detail);
+          const fullAddress = fullAddressParts.join(' ').trim() || result.address || '';
+          if (fullAddress) {
+            updateData['orderInfo.address'] = fullAddress;
+          }
+          
+          // 🔴 修复：先执行 setData，然后立即加载城市列表（异步，但会在加载完成后自动匹配）
+          this.setData(updateData, () => {
+            console.log('[confirmSmartPaste] ✅ setData完成，详细地址已更新:', this.data.detailAddress);
+            // 在 setData 回调中加载城市列表，确保数据已更新
+            if (this.data.provinceList[provinceIndex].id) {
+              this.loadCityListForSmartPaste(this.data.provinceList[provinceIndex].id, result.city, result.district);
+            }
+            
+            // 如果解析到了地址，重新计算运费
+            if (fullAddress && fullAddress.trim()) {
+              this.reCalcFinalPrice();
+            }
+          });
+          
+          // 🔴 修复：不在这里继续执行，等待 loadCityListForSmartPaste 完成
+          wx.hideLoading();
+          this._showCustomToast('解析完成', 'success');
+          return;
+        } else {
+          // 如果找不到匹配的省份，清空选择
+          updateData['provinceIndex'] = -1;
+          updateData['selectedProvince'] = '';
+          updateData['cityList'] = [];
+          updateData['districtList'] = [];
+          updateData['cityIndex'] = -1;
+          updateData['districtIndex'] = -1;
+          updateData['selectedCity'] = '';
+          updateData['selectedDistrict'] = '';
+          console.log('[confirmSmartPaste] ⚠️ 无法匹配省份:', finalProvince);
+        }
+      }
+      
+      // 🔴 修复：详细地址只填充详细部分（优先使用detail字段）
+      if (result.detail && result.detail.trim()) {
+        console.log('[confirmSmartPaste] 使用result.detail填充详细地址:', result.detail);
+        updateData['detailAddress'] = result.detail.trim();
+      } else if (result.address && result.address.trim()) {
+        // 如果没有detail，从address中移除省市区
+        console.log('[confirmSmartPaste] 从result.address提取详细地址:', result.address);
+        let detail = result.address;
+        if (result.province) detail = detail.replace(result.province, '').trim();
+        if (result.city) detail = detail.replace(result.city, '').trim();
+        if (result.district) detail = detail.replace(result.district, '').trim();
+        updateData['detailAddress'] = detail.trim() || result.address.trim();
+        console.log('[confirmSmartPaste] 提取后的详细地址:', updateData['detailAddress']);
+      } else {
+        console.log('[confirmSmartPaste] ⚠️ 没有找到详细地址，result.detail和result.address都为空');
+      }
+      
+      // 组装完整地址用于orderInfo.address（兼容旧逻辑）
+      const fullAddressParts = [];
+      if (result.province) fullAddressParts.push(result.province);
+      if (result.city) fullAddressParts.push(result.city);
+      if (result.district) fullAddressParts.push(result.district);
+      if (result.detail) fullAddressParts.push(result.detail);
+      const fullAddress = fullAddressParts.join(' ').trim() || result.address || '';
+      if (fullAddress) {
+        updateData['orderInfo.address'] = fullAddress;
+      }
+
+      this.setData(updateData);
+      
+      // 如果解析到了地址，重新计算运费
+      if (fullAddress && fullAddress.trim()) {
+        this.reCalcFinalPrice();
+      }
+      
+      wx.hideLoading();
+      this._showCustomToast('解析完成', 'success');
+    } catch (error) {
+      console.error('[shouhou] 智能地址解析失败:', error);
+      wx.hideLoading();
+      
+      // 失败时使用本地解析作为备用方案
+      const result = this.parseAddress(text);
+      let updateData = {
+        showSmartPasteModal: false
+      };
+      if (result.name) updateData['orderInfo.name'] = result.name;
+      if (result.phone) updateData['orderInfo.phone'] = result.phone;
+      if (result.address) {
+        updateData['detailAddress'] = result.address;
+        updateData['orderInfo.address'] = result.address;
+      }
+      this.setData(updateData);
+      if (result.address && result.address.trim()) {
+        this.reCalcFinalPrice();
+      }
+      this._showCustomToast('解析完成（使用备用方案）', 'success');
     }
-
-    this.setData(updateData);
-    
-    // 如果解析到了地址，重新计算运费
-    if (result.address && result.address.trim()) {
-      this.reCalcFinalPrice();
-    }
-    
-    this._showCustomToast('解析完成', 'success');
   },
   
   // 🔴 优化：高级解析算法（解析姓名、电话、地址）- 更精准版本
@@ -2386,25 +3332,38 @@ Page({
       }
     }
     
-    // 🔴 改进3：更精准的地址提取
+    // 🔴 改进3：更精准的地址提取（保留更多地址信息）
     let addressText = originalText;
     
-    // 移除已提取的姓名和电话
-    if (name) {
-      addressText = addressText.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ');
+    // 🔴 优化：先移除标签和分隔符，再移除姓名和电话（避免误删地址信息）
+    // 第一步：移除明显的标签和分隔符
+    addressText = addressText
+      .replace(/(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]*/gi, ' ')
+      .replace(/(?:联系电话|电话|手机|号码)[:：\s]*/gi, ' ')
+      .replace(/(?:地址|详细地址|收件地址|收货地址)[:：\s]*/gi, ' ')
+      .replace(/[()（）【】\[\]<>《》""''""'']/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // 第二步：移除已提取的姓名（只移除完全匹配的，避免误删地址中的相同字）
+    if (name && name.length >= 2) {
+      // 只在姓名前后有空格或标点时移除，避免误删地址中的字
+      const namePattern = new RegExp(`(?:^|\\s)${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\s|$)`, 'g');
+      addressText = addressText.replace(namePattern, ' ').trim();
     }
+    
+    // 第三步：移除电话号码（保留地址中的数字，只移除11位手机号）
     if (phone) {
-      // 移除所有格式的电话号码
+      // 移除所有格式的手机号
       addressText = addressText.replace(new RegExp(phone.replace(/(\d)/g, '\\$1'), 'g'), ' ');
       addressText = addressText.replace(/1[3-9]\d[\s\-\.]?\d{4}[\s\-\.]?\d{4}/g, ' ');
       addressText = addressText.replace(/\+?86[\s\-]?1[3-9]\d{9}/g, ' ');
     }
     
-    // 清理地址文本
+    // 第四步：最后清理（只移除明显的无用词汇，保留地址信息）
     addressText = addressText
-      .replace(/收件人[:：]?|收货人[:：]?|姓名[:：]?|联系人[:：]?|联系电话[:：]?|电话[:：]?|手机[:：]?|地址[:：]?|详细地址[:：]?|收件地址[:：]?|收货地址[:：]?/g, ' ')
-      .replace(/号码[:：]?|编号[:：]?|单号[:：]?|订单号[:：]?|运单号[:：]?/g, ' ')
-      .replace(/[()（）【】\[\]<>《》""''""''、，。；：！？]/g, ' ')
+      .replace(/(?:号码|编号|单号|订单号|运单号)[:：\s]*/g, ' ')
+      .replace(/[、，。；：！？]/g, ' ')  // 只移除标点，保留地址中的分隔符
       .replace(/\s+/g, ' ')
       .trim();
     
@@ -2434,24 +3393,24 @@ Page({
     let district = '';
     let detail = '';
     
-    // 🔴 优化：更彻底地清理地址文本，移除所有标签和无用词汇
+    // 🔴 优化：更智能地清理地址文本（保留更多有用信息）
     text = text
-      // 移除所有地址相关标签
-      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|收件地址|收货地址/g, ' ')
+      // 移除明显的标签（但保留地址关键词）
+      .replace(/(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]*/gi, ' ')
+      .replace(/(?:电话|手机|联系电话|号码)[:：\s]*/gi, ' ')
+      .replace(/(?:地址|详细地址|收件地址|收货地址)[:：\s]*/gi, ' ')
       // 移除号码、编号等无用词汇
-      .replace(/号码|编号|单号|订单号|运单号/g, ' ')
-      // 移除常见分隔符
-      .replace(/[\/、，。；：！？]/g, ' ')
-      // 移除所有括号
+      .replace(/(?:编号|单号|订单号|运单号)[:：\s]*/g, ' ')
+      // 移除所有括号（但保留地址内容）
       .replace(/[()（）【】\[\]<>《》""'']/g, ' ')
-      // 统一空格
+      // 统一空格（保留地址中的分隔符）
       .replace(/\s+/g, ' ')
       .trim();
     
-    // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 详细地址
+    // 方法1: 按顺序识别 省 -> 市 -> 区/县 -> 镇/街道 -> 详细地址
     let remaining = text;
     
-    // 识别省（必须包含"省"字，但不能是"省市区"这样的组合）
+    // 🔴 改进：识别省（支持带"省"字和不带"省"字的省份）
     const provincePattern = /([\u4e00-\u9fa5]{1,10}省)/;
     const provinceMatch = remaining.match(provincePattern);
     if (provinceMatch) {
@@ -2460,6 +3419,18 @@ Page({
       if (!candidate.includes('市') && !candidate.includes('区') && !candidate.includes('县')) {
         province = candidate;
         remaining = remaining.replace(new RegExp(province.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
+    }
+    
+    // 🔴 改进：如果没识别到省，尝试识别不带"省"字的省份（如"广东"、"江苏"）
+    if (!province) {
+      const provinceNames = ['广东', '江苏', '浙江', '山东', '河南', '四川', '湖北', '湖南', '安徽', '河北', '福建', '江西', '陕西', '山西', '云南', '贵州', '辽宁', '黑龙江', '吉林', '内蒙古', '新疆', '西藏', '青海', '甘肃', '宁夏', '海南', '广西'];
+      for (const pName of provinceNames) {
+        if (remaining.startsWith(pName) || remaining.includes(' ' + pName + ' ') || remaining.includes(pName + '省')) {
+          province = pName + '省';
+          remaining = remaining.replace(new RegExp(pName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+          break;
+        }
       }
     }
     
@@ -2475,7 +3446,7 @@ Page({
       }
     }
     
-    // 识别区/县（必须包含"区"或"县"字，排除已识别的省市）
+    // 🔴 改进：识别区/县/镇（支持更多行政级别）
     const districtPattern = /([\u4e00-\u9fa5]{1,10}[区县])/;
     const districtMatch = remaining.match(districtPattern);
     if (districtMatch) {
@@ -2484,7 +3455,19 @@ Page({
       if (!candidate.includes('省') && !candidate.includes('市')) {
         district = candidate;
         remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
     }
+    
+    // 🔴 新增：识别镇/街道（如果前面没有识别到区县）
+    if (!district) {
+      const townPattern = /([\u4e00-\u9fa5]{1,10}(?:镇|街道|乡))/;
+      const townMatch = remaining.match(townPattern);
+      if (townMatch) {
+        const candidate = townMatch[1].trim();
+        // 镇/街道可以作为区县的一部分
+        district = candidate;
+        remaining = remaining.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), '').trim();
+      }
     }
     
     // 方法2: 如果没识别到省市，尝试识别特殊格式（直辖市）
@@ -2510,13 +3493,16 @@ Page({
       }
     }
     
-    // 🔴 优化：剩余部分作为详细地址，再次清理无用词汇
+    // 🔴 优化：剩余部分作为详细地址（保留更多信息，只清理明显无用词汇）
     detail = remaining
-      .replace(/收件人|收货人|姓名|联系人|电话|手机|地址|详细地址|号码|编号/g, ' ')
+      .replace(/(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]*/gi, ' ')
+      .replace(/(?:电话|手机|联系电话|号码)[:：\s]*/gi, ' ')
+      .replace(/(?:地址|详细地址|收件地址|收货地址)[:：\s]*/gi, ' ')
+      .replace(/(?:编号|单号|订单号|运单号)[:：\s]*/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     
-    // 组装完整地址（格式化输出）
+    // 组装完整地址（格式化输出，用空格连接）
     let fullAddress = '';
     const parts = [];
     if (province) parts.push(province);
@@ -2526,9 +3512,16 @@ Page({
     
     fullAddress = parts.join(' ').trim();
     
-    // 如果解析失败，使用原始文本
-    if (!fullAddress) {
-      fullAddress = addressText;
+    // 🔴 改进：如果解析失败或地址不完整，使用原始文本（但清理明显标签）
+    if (!fullAddress || (!province && !city)) {
+      // 如果原始地址有内容，使用原始地址（只清理标签）
+      const cleanedOriginal = addressText
+        .replace(/(?:收件人|收货人|姓名|联系人|名字|称呼)[:：\s]*/gi, ' ')
+        .replace(/(?:电话|手机|联系电话|号码)[:：\s]*/gi, ' ')
+        .replace(/(?:地址|详细地址|收件地址|收货地址)[:：\s]*/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      fullAddress = cleanedOriginal || addressText;
     }
     
     return {
@@ -2744,34 +3737,34 @@ Page({
     this.reCalcFinalPrice();
   },
 
-  // [新增] 计算含运费的总价（从详细地址解析省市区）
+  // [新增] 计算含运费的总价（从省市区选择器获取省市区）
   reCalcFinalPrice(cart = this.data.cart) {
     console.log('[shouhou] reCalcFinalPrice 开始计算，购物车数据:', cart);
     const goodsTotal = cart.reduce((sum, item) => sum + item.total, 0);
-    const { shippingMethod, detailAddress } = this.data;
+    const { shippingMethod, detailAddress, selectedProvince, selectedCity, selectedDistrict } = this.data;
     let fee = 0;
 
     if (shippingMethod === 'zto') {
       fee = 12; // 中通运费12元
     } else if (shippingMethod === 'sf') {
-      // 顺丰逻辑：从详细地址中解析省市区
-      if (!detailAddress || !detailAddress.trim()) {
-        fee = 0; // 没填地址，运费暂计为0
-      } else {
-        // 解析地址，提取省份信息
+      // 顺丰逻辑：优先使用省市区选择器的值
+      let province = selectedProvince || '';
+      
+      // 如果选择器没有值，尝试从详细地址解析
+      if (!province && detailAddress && detailAddress.trim()) {
         const parsed = this.parseAddressForShipping(detailAddress);
-        const province = parsed.province || '';
-        
-        // 判断是否广东
-        if (province.indexOf('广东') > -1) {
-          fee = 13;
-        } else if (province) {
-          // 如果解析到了省份但不是广东，则按省外计算
-          fee = 22;
-        } else {
-          // 如果解析不到省份，运费暂计为0（待用户完善地址）
-          fee = 0;
-        }
+        province = parsed.province || '';
+      }
+      
+      // 判断是否广东
+      if (province && province.indexOf('广东') > -1) {
+        fee = 13;
+      } else if (province) {
+        // 如果解析到了省份但不是广东，则按省外计算
+        fee = 22;
+      } else {
+        // 如果解析不到省份，运费暂计为0（待用户完善地址）
+        fee = 0;
       }
     }
 
@@ -2868,12 +3861,31 @@ Page({
         this.showAutoToast('提示', '请上传故障视频');
         return;
       }
-      // 检查地址：优先使用 detailAddress，如果没有则使用 orderInfo.address
-      const address = this.data.detailAddress || orderInfo.address;
-      if (!orderInfo.name || !orderInfo.phone || !address) {
+      // 🔴 修改：检查省市区和详细地址
+      const { selectedProvince, selectedCity, selectedDistrict, detailAddress } = this.data;
+      
+      if (!orderInfo.name || !orderInfo.phone) {
         this.showAutoToast('提示', '请完善联系信息');
         return;
       }
+      
+      if (!selectedProvince || !selectedCity) {
+        this.showAutoToast('提示', '请选择省市区');
+        return;
+      }
+      
+      if (!detailAddress || !detailAddress.trim()) {
+        this.showAutoToast('提示', '请填写详细地址');
+        return;
+      }
+      
+      // 组装完整地址
+      const addressParts = [];
+      if (selectedProvince) addressParts.push(selectedProvince);
+      if (selectedCity) addressParts.push(selectedCity);
+      if (selectedDistrict) addressParts.push(selectedDistrict);
+      if (detailAddress) addressParts.push(detailAddress);
+      const address = addressParts.join(' ').trim();
       
       // 手机号格式验证
       if (!/^1[3-9]\d{9}$/.test(orderInfo.phone)) {
@@ -2890,20 +3902,8 @@ Page({
         }
       }
 
-      // 先关闭可能存在的自动提示，确保确认弹窗能正常显示
-      this.setData({ 'autoToast.show': false });
-      
-      // 支付/提交之前先弹出确认：定制维修服务不支持退款
-      this.showMyDialog({
-        title: '维修服务确认',
-        content: '此为定制维修配件服务，下单后不支持退款。',
-        showCancel: true,
-        confirmText: '提交',
-        cancelText: '取消',
-        callback: () => {
-          this.submitRepairTicket();
-        }
-      });
+      // 故障报修直接提交，不需要确认弹窗（因为不涉及支付和退款）
+      this.submitRepairTicket();
       return;
     }
 
@@ -3991,31 +4991,51 @@ Page({
   captureVideoFrame() {
     const videoContext = wx.createVideoContext('thumbVideo', this);
     
+    // 🔴 检查 snapshot 方法是否存在
+    if (!videoContext || typeof videoContext.snapshot !== 'function') {
+      console.warn('[captureVideoFrame] snapshot 方法不可用，跳过封面提取');
+      this.setData({
+        extractingThumb: false
+      });
+      this.hideMyLoading();
+      this._showCustomToast('视频已选择（封面提取不可用）', 'none', 2000);
+      return;
+    }
+    
     // 先定位到第一帧
     videoContext.seek(0);
     
     // 等待定位完成后再截图
     setTimeout(() => {
-      videoContext.snapshot({
-        success: (res) => {
-          // 截图成功，保存封面路径
-          this.setData({
-            tempVideoThumb: res.tempImagePath,
-            extractingThumb: false
-          });
-          this.hideMyLoading();
-          this._showCustomToast('视频已选择', 'success');
-        },
-        fail: (err) => {
-          // 截图失败，使用占位提示
-          console.error('截图失败:', err);
-          this.setData({
-            extractingThumb: false
-          });
-          this.hideMyLoading();
-          this._showCustomToast('视频已选择（封面提取失败）', 'none', 2000);
-        }
-      });
+      try {
+        videoContext.snapshot({
+          success: (res) => {
+            // 截图成功，保存封面路径
+            this.setData({
+              tempVideoThumb: res.tempImagePath,
+              extractingThumb: false
+            });
+            this.hideMyLoading();
+            this._showCustomToast('视频已选择', 'success');
+          },
+          fail: (err) => {
+            // 截图失败，使用占位提示
+            console.error('截图失败:', err);
+            this.setData({
+              extractingThumb: false
+            });
+            this.hideMyLoading();
+            this._showCustomToast('视频已选择（封面提取失败）', 'none', 2000);
+          }
+        });
+      } catch (error) {
+        console.error('[captureVideoFrame] snapshot 调用异常:', error);
+        this.setData({
+          extractingThumb: false
+        });
+        this.hideMyLoading();
+        this._showCustomToast('视频已选择（封面提取失败）', 'none', 2000);
+      }
     }, 500);
   },
 
@@ -4097,15 +5117,22 @@ Page({
       this.showAutoToast('提示', '请上传故障视频');
       return;
     }
-    // 检查地址：优先使用 detailAddress，如果没有则使用 orderInfo.address
-    const address = this.data.detailAddress || orderInfo.address;
-    if (!orderInfo.name || !orderInfo.phone || !address) {
-      console.warn('[submitRepairTicket] 校验失败：联系信息不完整', {
-        name: orderInfo.name,
-        phone: orderInfo.phone,
-        address: address ? '已设置' : '未设置'
-      });
+    // 🔴 修改：检查省市区和详细地址
+    const { selectedProvince, selectedCity, selectedDistrict, detailAddress } = this.data;
+    
+    if (!orderInfo.name || !orderInfo.phone) {
+      console.warn('[submitRepairTicket] 校验失败：联系信息不完整');
       this.showAutoToast('提示', '请完善联系信息');
+      return;
+    }
+    
+    if (!selectedProvince || !selectedCity) {
+      this.showAutoToast('提示', '请选择省市区');
+      return;
+    }
+    
+    if (!detailAddress || !detailAddress.trim()) {
+      this.showAutoToast('提示', '请填写详细地址');
       return;
     }
     
@@ -4115,14 +5142,13 @@ Page({
       return;
     }
     
-    // 地址格式验证
-    if (address && address.trim()) {
-      const parsed = this.parseAddressForShipping(address);
-      if (!parsed.province && !parsed.city) {
-        this.showAutoToast('提示', '地址格式不正确，请包含省市区信息，如：广东省 佛山市 南海区 某某街道101号');
-        return;
-      }
-    }
+    // 组装完整地址
+    const addressParts = [];
+    if (selectedProvince) addressParts.push(selectedProvince);
+    if (selectedCity) addressParts.push(selectedCity);
+    if (selectedDistrict) addressParts.push(selectedDistrict);
+    if (detailAddress) addressParts.push(detailAddress);
+    const address = addressParts.join(' ').trim();
 
     console.log('[doSubmitRepairTicket] 所有校验通过，开始上传流程');
     // 显示自定义加载动画（立即显示，确保在系统提示之前）
@@ -4137,14 +5163,21 @@ Page({
       wx.cloud.uploadFile({
       cloudPath: cloudPath,
       filePath: tempVideoPath,
-      success: res => {
+      success: async (res) => {
         console.log('[submitRepairTicket] 视频上传成功，fileID:', res.fileID);
         const fileID = res.fileID;
         
         // 3. 写入数据库
         const db = wx.cloud.database();
-        // 确保地址字段正确（优先使用 detailAddress）
-        const finalAddress = this.data.detailAddress || orderInfo.address || '';
+        // 🔴 修改：组装完整地址（省市区 + 详细地址）
+        const { selectedProvince, selectedCity, selectedDistrict, detailAddress } = this.data;
+        const addressParts = [];
+        if (selectedProvince) addressParts.push(selectedProvince);
+        if (selectedCity) addressParts.push(selectedCity);
+        if (selectedDistrict) addressParts.push(selectedDistrict);
+        if (detailAddress) addressParts.push(detailAddress);
+        const finalAddress = addressParts.join(' ').trim();
+        
         const finalContact = {
           ...orderInfo,
           address: finalAddress,
@@ -4160,19 +5193,180 @@ Page({
         // 🔴 注意：_openid 是系统自动管理的字段，不能手动设置
         // 系统会自动根据当前登录用户设置 _openid
         
-        // 先检查集合是否存在，如果不存在则先创建一条记录
-        db.collection('shouhou_repair').add({
-          data: {
-            // 不设置 _openid，系统会自动设置
-            type: 'repair', // 类型标记
-            model: currentModelName,
-            description: repairDescription.trim(),
-            videoFileID: fileID,
-            contact: finalContact, // 存入联系人信息（包含完整地址）
-            status: 'PENDING',  // 初始状态
-            createTime: db.serverDate()
-          },
+        // 🔴 获取 openid：getWXContext 只能在云函数中调用，客户端必须通过云函数获取
+        let userOpenid = this.data.myOpenid;
+        if (!userOpenid) {
+          try {
+            const loginRes = await wx.cloud.callFunction({ name: 'login' });
+            userOpenid = loginRes.result?.openid;
+            if (userOpenid) this.setData({ myOpenid: userOpenid });
+          } catch (e) {
+            console.warn('[submitRepairTicket] 获取openid失败:', e);
+          }
+        }
+        
+        // 设置超时：如果查询设备超过10秒，直接跳过查询，使用默认质保信息
+        const deviceQueryTimeout = setTimeout(() => {
+          console.warn('[submitRepairTicket] 查询设备超时，使用默认质保信息');
+          // 使用默认质保信息直接写入数据库
+          db.collection('shouhou_repair').add({
+            data: {
+              type: 'repair',
+              model: currentModelName,
+              description: repairDescription.trim(),
+              videoFileID: fileID,
+              contact: finalContact,
+              status: 'PENDING',
+              warrantyExpired: false,
+              expiryDate: null,
+              remainingDays: 0,
+              createTime: db.serverDate()
+            },
+            success: (addRes) => {
+              console.log('[submitRepairTicket] 数据库写入成功（超时分支），_id:', addRes._id);
+              this.setData({ showLoadingAnimation: false });
+              this.setData({ showOrderModal: false });
+              setTimeout(() => {
+                this.showAutoToast('提交成功', '售后工程师将在后台查看您的视频并进行评估。');
+                setTimeout(() => {
+                  this.setData({ 
+                    repairDescription: '', 
+                    videoFileName: '', 
+                    tempVideoPath: '',
+                    tempVideoThumb: '',
+                    orderInfo: { name: '', phone: '', address: '' },
+                    detailAddress: '',
+                    selectedProvince: '',
+                    selectedCity: '',
+                    selectedDistrict: '',
+                    provinceIndex: -1,
+                    cityIndex: -1,
+                    districtIndex: -1,
+                    cityList: [],
+                    districtList: []
+                  });
+                }, 3000);
+              }, 300);
+            },
+            fail: addErr => {
+              this.setData({ showLoadingAnimation: false });
+              console.error('[submitRepairTicket] 数据库写入失败（超时分支）:', addErr);
+              if (addErr.errCode === -502005 || addErr.errMsg.includes('collection not exists')) {
+                this.showAutoToast('提示', '数据库集合不存在，请联系管理员创建 shouhou_repair 集合');
+              } else {
+                this.showAutoToast('提交失败', addErr.errMsg || '未知错误');
+              }
+            }
+          });
+        }, 10000); // 10秒超时
+        
+        // 无 openid 时跳过设备查询，直接使用默认质保
+        const doAddWithWarranty = (warrantyInfo) => {
+          clearTimeout(deviceQueryTimeout);
+          const writeTimeout = setTimeout(() => {
+            this.setData({ showLoadingAnimation: false });
+            this.showAutoToast('提交失败', '数据库操作超时，请检查网络后重试');
+          }, 15000);
+          db.collection('shouhou_repair').add({
+            data: {
+              type: 'repair',
+              model: currentModelName,
+              description: repairDescription.trim(),
+              videoFileID: fileID,
+              contact: finalContact,
+              status: 'PENDING',
+              warrantyExpired: warrantyInfo.warrantyExpired,
+              expiryDate: warrantyInfo.expiryDate,
+              remainingDays: warrantyInfo.remainingDays,
+              createTime: db.serverDate()
+            },
+            success: (addRes) => {
+              clearTimeout(writeTimeout);
+              this.setData({ showLoadingAnimation: false, showOrderModal: false });
+              setTimeout(() => {
+                this.showAutoToast('提交成功', '售后工程师将在后台查看您的视频并进行评估。');
+                setTimeout(() => {
+                  this.setData({
+                    repairDescription: '', videoFileName: '', tempVideoPath: '', tempVideoThumb: '',
+                    orderInfo: { name: '', phone: '', address: '' }, detailAddress: '',
+                    selectedProvince: '', selectedCity: '', selectedDistrict: '',
+                    provinceIndex: -1, cityIndex: -1, districtIndex: -1, cityList: [], districtList: []
+                  });
+                }, 3000);
+              }, 300);
+            },
+            fail: (err) => {
+              clearTimeout(writeTimeout);
+              this.setData({ showLoadingAnimation: false });
+              if (err.errCode === -502005 || err.errMsg?.includes('collection not exists')) {
+                this.showAutoToast('提示', '数据库集合不存在，请联系管理员创建 shouhou_repair 集合');
+              } else {
+                this.showAutoToast('提交失败', err.errMsg || '未知错误');
+              }
+            }
+          });
+        };
+
+        if (!userOpenid) {
+          doAddWithWarranty({ warrantyExpired: false, expiryDate: null, remainingDays: 0 });
+          return;
+        }
+        
+        // 查询用户设备（匹配当前型号）
+        db.collection('sn').where({
+          openid: userOpenid,
+          productModel: currentModelName,
+          isActive: true
+        }).get().then(deviceRes => {
+          // 清除超时定时器
+          clearTimeout(deviceQueryTimeout);
+          
+          let warrantyInfo = {
+            warrantyExpired: false,
+            expiryDate: null,
+            remainingDays: 0
+          };
+          
+          if (deviceRes.data.length > 0) {
+            const device = deviceRes.data[0];
+            if (device.expiryDate) {
+              const now = new Date();
+              const exp = new Date(device.expiryDate);
+              const diff = Math.ceil((exp - now) / (86400000));
+              warrantyInfo = {
+                warrantyExpired: diff <= 0,
+                expiryDate: device.expiryDate,
+                remainingDays: diff > 0 ? diff : 0
+              };
+            }
+          }
+          
+          // 写入数据库（添加超时处理）
+          const writeTimeout = setTimeout(() => {
+            console.error('[submitRepairTicket] 数据库写入超时');
+            this.setData({ showLoadingAnimation: false });
+            this.showAutoToast('提交失败', '数据库操作超时，请检查网络后重试');
+          }, 15000); // 15秒超时
+          
+          db.collection('shouhou_repair').add({
+            data: {
+              // 不设置 _openid，系统会自动设置
+              type: 'repair', // 类型标记
+              model: currentModelName,
+              description: repairDescription.trim(),
+              videoFileID: fileID,
+              contact: finalContact, // 存入联系人信息（包含完整地址）
+              status: 'PENDING',  // 初始状态
+              // 🔴 新增：质保信息
+              warrantyExpired: warrantyInfo.warrantyExpired,
+              expiryDate: warrantyInfo.expiryDate,
+              remainingDays: warrantyInfo.remainingDays,
+              createTime: db.serverDate()
+            },
           success: (addRes) => {
+            // 清除写入超时定时器
+            clearTimeout(writeTimeout);
+            
             console.log('[submitRepairTicket] 数据库写入成功，_id:', addRes._id);
             // 隐藏自定义加载动画
             this.setData({ showLoadingAnimation: false });
@@ -4195,16 +5389,28 @@ Page({
                   tempVideoPath: '',
                   tempVideoThumb: '',
                   orderInfo: { name: '', phone: '', address: '' },
-                  detailAddress: ''
+                  detailAddress: '',
+                  // [新增] 清空省市区选择
+                  selectedProvince: '',
+                  selectedCity: '',
+                  selectedDistrict: '',
+                  provinceIndex: -1,
+                  cityIndex: -1,
+                  districtIndex: -1,
+                  cityList: [],
+                  districtList: []
                 });
                 // 不自动跳转到个人页，停留在当前页面（订单弹窗已经在上面关闭了）
               }, 3000);
             }, 300); // 等待订单弹窗关闭动画完成
           },
           fail: err => {
+            // 清除写入超时定时器
+            clearTimeout(writeTimeout);
+            
             // 隐藏自定义加载动画
             this.setData({ showLoadingAnimation: false });
-            console.error('提交失败:', err);
+            console.error('[submitRepairTicket] 数据库写入失败:', err);
             
             // 如果是集合不存在错误，提示用户（使用自定义弹窗）
             if (err.errCode === -502005 || err.errMsg.includes('collection not exists')) {
@@ -4213,6 +5419,73 @@ Page({
               this.showAutoToast('提交失败', err.errMsg || '未知错误');
             }
           }
+          });
+        }).catch(deviceErr => {
+          // 清除查询超时定时器
+          clearTimeout(deviceQueryTimeout);
+          
+          console.error('[submitRepairTicket] 查询设备失败:', deviceErr);
+          // 即使查询失败，也继续提交维修单（质保信息为空）
+          const writeTimeout = setTimeout(() => {
+            console.error('[submitRepairTicket] 数据库写入超时（catch分支）');
+            this.setData({ showLoadingAnimation: false });
+            this.showAutoToast('提交失败', '数据库操作超时，请检查网络后重试');
+          }, 15000); // 15秒超时
+          
+          db.collection('shouhou_repair').add({
+            data: {
+              type: 'repair',
+              model: currentModelName,
+              description: repairDescription.trim(),
+              videoFileID: fileID,
+              contact: finalContact,
+              status: 'PENDING',
+              warrantyExpired: false,
+              expiryDate: null,
+              remainingDays: 0,
+              createTime: db.serverDate()
+            },
+            success: (addRes) => {
+              // 清除写入超时定时器
+              clearTimeout(writeTimeout);
+              
+              this.setData({ showLoadingAnimation: false });
+              this.setData({ showOrderModal: false });
+              setTimeout(() => {
+                this.showAutoToast('提交成功', '售后工程师将在后台查看您的视频并进行评估。');
+                setTimeout(() => {
+                  this.setData({ 
+                    repairDescription: '', 
+                    videoFileName: '', 
+                    tempVideoPath: '',
+                    tempVideoThumb: '',
+                    orderInfo: { name: '', phone: '', address: '' },
+                    detailAddress: '',
+                    selectedProvince: '',
+                    selectedCity: '',
+                    selectedDistrict: '',
+                    provinceIndex: -1,
+                    cityIndex: -1,
+                    districtIndex: -1,
+                    cityList: [],
+                    districtList: []
+                  });
+                }, 3000);
+              }, 300);
+            },
+            fail: addErr => {
+              // 清除写入超时定时器
+              clearTimeout(writeTimeout);
+              
+              this.setData({ showLoadingAnimation: false });
+              console.error('[submitRepairTicket] 数据库写入失败（catch分支）:', addErr);
+              if (addErr.errCode === -502005 || addErr.errMsg.includes('collection not exists')) {
+                this.showAutoToast('提示', '数据库集合不存在，请联系管理员创建 shouhou_repair 集合');
+              } else {
+                this.showAutoToast('提交失败', addErr.errMsg || '未知错误');
+              }
+            }
+          });
         });
       },
       fail: err => {
@@ -4226,6 +5499,14 @@ Page({
   },
 
   onShow() {
+    // 🔴 从「去购买配件」带 model 进入：onShow 比 onReady 更早/稳定，在此处打开对应型号卡
+    if (this._openModelFromQuery) {
+      const modelName = this._openModelFromQuery;
+      this._openModelFromQuery = null;
+      if (modelName && MODEL_TO_GROUP[modelName]) {
+        this.enterModelByModelName(modelName);
+      }
+    }
     // 🔴 检查录屏状态
     if (wx.getScreenRecordingState) {
       wx.getScreenRecordingState({
