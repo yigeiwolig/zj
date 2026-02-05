@@ -177,6 +177,36 @@ App({
         return null;
       };
 
+      // 互斥：尝试关闭页面上可能存在的自定义弹窗/遮罩，避免与 custom-toast 重叠
+      const hideKnownPagePopups = () => {
+        try {
+          const pages = getCurrentPages();
+          const curPage = pages[pages.length - 1];
+          if (!curPage || !curPage.setData || !curPage.data) return;
+          const d = curPage.data || {};
+          const patch = {};
+          const knownFlags = [
+            'showCustomSuccessModal',
+            'customSuccessModalClosing',
+            'showCopySuccessModal',
+            'showShareCodeGenerateModal',
+            'showConfirmModal',
+            'showModal', // my 页底部自定义 modal
+            'autoToastClosing' // my 页自动提示退出动画
+          ];
+          knownFlags.forEach(k => {
+            if (d[k]) patch[k] = false;
+          });
+          // 🔴 特殊处理：autoToast 是对象，需要单独处理
+          if (d.autoToast && d.autoToast.show) {
+            patch['autoToast.show'] = false;
+          }
+          if (Object.keys(patch).length) curPage.setData(patch);
+        } catch (e) {
+          // ignore
+        }
+      };
+
       // 1) showModal
       wx.showModal = (opt = {}) => {
         // 如果使用了 editable 等高级特性，直接调用官方原方法（组件暂不支持）
@@ -186,6 +216,7 @@ App({
         
         const toast = getToast();
         if (toast) {
+          hideKnownPagePopups();
           toast.showModal(opt);
         } else {
           // 降级回退到原生
@@ -204,6 +235,7 @@ App({
         const toast = getToast();
         if (toast) {
           console.log('[app] 使用自定义弹窗显示 Toast:', opt);
+          hideKnownPagePopups();
           toast.showToast(opt);
         } else {
           console.warn('[app] 当前页面未找到 #custom-toast 组件，降级使用原生 showToast', opt);
@@ -220,6 +252,7 @@ App({
       wx.showLoading = (opt = {}) => {
         const toast = getToast();
         if (toast) {
+          hideKnownPagePopups();
           toast.showLoading(opt);
         } else {
           console.warn('[app] 当前页面未找到 #custom-toast 组件，降级使用原生 showLoading');
@@ -237,9 +270,14 @@ App({
         const originalSuccess = opt.success;
         const originalFail = opt.fail;
         
-        // 🔴 策略：在复制前就显示自定义提示，抢占显示时机
+        // 🔴 检查页面是否有自定义复制弹窗（通过检查 success 回调中是否调用了页面方法）
+        // 如果页面有自定义处理，就不显示 global toast，让页面自己控制
+        const hasPageCustomHandler = originalSuccess && originalSuccess.toString().includes('_showCopySuccessOnce');
+        
+        // 🔴 策略：只有在页面没有自定义处理时才显示 global toast
         const toast = getToast();
-        if (toast) {
+        if (toast && !hasPageCustomHandler) {
+          hideKnownPagePopups();
           // 立即显示自定义提示（抢占显示时机）
           toast.showToast({ title: '内容已复制', icon: 'success', duration: 2000 });
         }
@@ -270,8 +308,8 @@ App({
           setTimeout(hideNativeToast, 100);
           setTimeout(hideNativeToast, 200);
           
-          // 如果自定义提示还没显示（getToast失败的情况），现在尝试显示
-          if (!toast) {
+          // 如果自定义提示还没显示（getToast失败的情况），且页面没有自定义处理，现在尝试显示
+          if (!toast && !hasPageCustomHandler) {
             setTimeout(() => {
               const t = getToast();
               if (t) {
@@ -280,7 +318,7 @@ App({
             }, 50);
           }
           
-          // 执行原始 success 回调
+          // 执行原始 success 回调（页面会在这里调用 _showCopySuccessOnce()）
           if (originalSuccess) originalSuccess(res);
         };
         

@@ -68,58 +68,82 @@ exports.main = async (event, context) => {
         });
       }
 
-      // 格式化封禁原因
+      // 格式化封禁原因（英文，用于后台）
       let banReasonText = '';
       switch (button.banReason) {
         case 'screenshot':
-          banReasonText = '截屏封禁';
+          banReasonText = 'Screenshot';
           break;
         case 'screen_record':
-          banReasonText = '录屏封禁';
+          banReasonText = 'Screen Record';
           break;
         case 'location_blocked':
-          banReasonText = '地址拦截';
+          banReasonText = 'Location Blocked';
           break;
         case 'nickname_verify_fail':
-          banReasonText = '昵称验证失败';
+          banReasonText = 'Nickname Verify Fail';
           break;
         default:
-          banReasonText = button.banReason || '未知原因';
+          banReasonText = button.banReason || 'Unknown';
       }
 
-      // 格式化封禁页面
+      // 格式化封禁页面（英文，用于后台）
       let banPageText = '';
       switch (button.banPage) {
         case 'case':
-          banPageText = '案例页';
+          banPageText = 'Case';
           break;
         case 'my':
-          banPageText = '个人中心';
+          banPageText = 'My';
           break;
         case 'products':
-          banPageText = '产品页';
+          banPageText = 'Products';
           break;
         case 'shop':
-          banPageText = '商店页';
+          banPageText = 'Shop';
           break;
         case 'home':
-          banPageText = '首页';
+          banPageText = 'Home';
           break;
         case 'paihang':
-          banPageText = '排行榜';
+          banPageText = 'Ranking';
           break;
         case 'shouhou':
-          banPageText = '维修中心';
+          banPageText = 'Repair';
           break;
         case 'index':
-          banPageText = '登录页';
+          banPageText = 'Login';
+          break;
+        case 'blocked':
+          banPageText = 'Blocked';
+          break;
+        case 'admin':
+          banPageText = 'Admin';
+          break;
+        case 'adminLite':
+          banPageText = 'AdminLite';
+          break;
+        case 'azjc':
+          banPageText = 'Tutorial';
+          break;
+        case 'call':
+          banPageText = 'Contact';
+          break;
+        case 'scan':
+          banPageText = 'Scan';
+          break;
+        case 'ota':
+          banPageText = 'OTA';
+          break;
+        case 'pagenew':
+          banPageText = 'NewPage';
           break;
         default:
-          banPageText = button.banPage || '未知页面';
+          banPageText = button.banPage || 'Unknown';
       }
 
       // 格式化时间
-      let formattedTime = '未知时间';
+      let formattedTime = 'Unknown Time';
       if (button.updateTime) {
         try {
           let date;
@@ -148,14 +172,14 @@ exports.main = async (event, context) => {
         } catch (e) {
           console.warn('[getBannedUsers] 时间格式化失败:', button.updateTime, e);
           // 如果格式化失败，尝试直接转换为字符串
-          formattedTime = String(button.updateTime || '未知时间');
+          formattedTime = String(button.updateTime || 'Unknown Time');
         }
       }
 
       return {
         _openid: button._openid,
         _id: button._id, // login_logbutton 的 _id，用于更新
-        nickname: log?.nickname || '未知用户',
+        nickname: log?.nickname || 'Unknown User',
         banReason: button.banReason,
         banReasonText: banReasonText,
         banPage: button.banPage,

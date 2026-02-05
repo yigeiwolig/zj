@@ -12,6 +12,32 @@ Page({
     successModalContent: ''
   },
 
+  // 互斥：确保同一时间只显示一个弹窗/提示
+  _closeAllPopups() {
+    try { wx.hideToast(); } catch (e) {}
+    try { wx.hideLoading(); } catch (e) {}
+    const patch = {};
+    if (this.data.showCustomSuccessModal) patch.showCustomSuccessModal = false;
+    if (this.data.customSuccessModalClosing) patch.customSuccessModalClosing = false;
+    if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
+    if (Object.keys(patch).length) this.setData(patch);
+  },
+
+  // 统一方法：显示"内容已复制"弹窗（互斥）
+  _showCopySuccessOnce() {
+    // 🔴 清理之前的定时器，避免快速连续调用时状态混乱
+    if (this._copySuccessTimer) {
+      clearTimeout(this._copySuccessTimer);
+      this._copySuccessTimer = null;
+    }
+    this._closeAllPopups();
+    this.setData({ showCopySuccessModal: true });
+    this._copySuccessTimer = setTimeout(() => {
+      this.setData({ showCopySuccessModal: false });
+      this._copySuccessTimer = null;
+    }, 1500);
+  },
+
   onLoad(options) {
     // 🔴 1. 隐藏左上角返回首页按钮（极为重要）
     if (wx.hideHomeButton) {
@@ -146,6 +172,7 @@ Page({
           // 🔴 地址拦截解封：直接返回 index 页面，不设置永久授权（让用户重新走流程）
           console.log('[blocked] 地址拦截解封，返回 index 页面');
           // 🔴 使用自定义弹窗替代微信官方弹窗
+          this._closeAllPopups();
           this.setData({ 
             showCustomSuccessModal: true,
             successModalTitle: '已解封',
@@ -171,6 +198,7 @@ Page({
         
         // 🔴 使用自定义弹窗替代微信官方弹窗
           console.log('[blocked] 显示"验证通过"弹窗');
+        this._closeAllPopups();
         this.setData({ 
           showCustomSuccessModal: true,
           successModalTitle: '验证通过',
@@ -208,7 +236,8 @@ Page({
           // 保持 has_permanent_auth 和 user_nickname，不清除
           
           // 🔴 使用自定义弹窗替代微信官方弹窗
-          this.setData({ 
+            this._closeAllPopups();
+            this.setData({ 
             showCustomSuccessModal: true,
             successModalTitle: '已解封',
             successModalContent: ''
@@ -220,7 +249,8 @@ Page({
         } else {
           // 其他情况：需要重新验证昵称
           // 🔴 使用自定义弹窗替代微信官方弹窗
-          this.setData({ 
+            this._closeAllPopups();
+            this.setData({ 
             showCustomSuccessModal: true,
             successModalTitle: '请重新验证',
             successModalContent: ''
@@ -292,14 +322,11 @@ Page({
         
         // 🔴 延迟显示自定义"内容已复制"弹窗（等待微信官方弹窗消失）
         setTimeout(() => {
-          // 显示自定义"内容已复制"弹窗
-          this.setData({ showCopySuccessModal: true });
+          // 显示自定义"内容已复制"弹窗（互斥）
+          this._showCopySuccessOnce();
           
-          // 1.5秒后自动消失
+          // 🔴 复制弹窗完全关闭后，恢复自动检测
           setTimeout(() => {
-            this.setData({ showCopySuccessModal: false });
-            
-            // 🔴 复制弹窗完全关闭后，恢复自动检测
             if (!this._isPageDestroyed) {
               this.startAutoCheck();
             }

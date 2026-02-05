@@ -109,7 +109,7 @@
           <block wx:for="{{currentPartsList}}" wx:key="index">
             <view class="part-tag-wrapper" 
                   data-index="{{index}}">
-              <view class="part-tag {{item.selected ? 'active' : ''}} {{isDragging && dragIndex === index ? 'dragging' : ''}}" 
+<view class="part-tag {{item.selected ? 'active' : ''}} {{item.preselected ? 'preselected' : ''}} {{item.preselected && !item.selected ? 'preselected-unchecked' : ''}} {{isDragging && dragIndex === index ? 'dragging' : ''}}"
                     bindtap="togglePart" 
                     bindlongpress="handleLongPress"
                     bindtouchmove="handleTouchMove"
@@ -281,6 +281,16 @@
 
 <!-- ================= 核心弹窗区域 ================= -->
 
+<!-- 0. 购买配件过来时的预选完成提示小弹窗 -->
+<view class="preselect-tip-mask" wx:if="{{showPreselectTip}}" catchtouchmove="noop" bindtap="closePreselectTip">
+  <view class="preselect-tip-box" catchtap="noop">
+    <view class="preselect-tip-title">已预选完成</view>
+    <view class="preselect-tip-desc">点击下方「立即购买」购买配件</view>
+    <view class="preselect-tip-btn" catchtap="closePreselectTip">知道了</view>
+  </view>
+  <view class="preselect-tip-arrow-to-buy" style="transform: translateX(50%) translateY({{arrowTranslateY}}rpx); transition: transform 0.4s ease-in-out;" catchtap="closePreselectTip">▼</view>
+</view>
+
 <!-- 1. 加入购物车成功弹窗 -->
 <view class="success-mask" wx:if="{{showCartSuccess}}" catchtouchmove="noop" catchtap="noop">
   <view class="success-box" catchtouchmove="noop" catchtap="noop">
@@ -371,17 +381,14 @@
       <view class="shipping-box">
         <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
           <view class="ship-name">中通快递</view>
-          <!-- 购买配件：显示运费；维修工单：包邮 -->
-          <view class="ship-price">{{serviceType === 'repair' ? '包邮' : '¥12'}}</view>
+          <!-- 购买配件/维修工单：售后页统一包邮 -->
+          <view class="ship-price">包邮</view>
         </view>
         <!-- 顺丰选项 -->
         <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
           <view class="ship-name">顺丰速运</view>
-          <!-- 购买配件：按地址计算；维修工单：到付 -->
-          <view class="ship-price">
-             {{serviceType === 'repair' ? '到付' : (!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee)}}
-             <text wx:if="{{serviceType !== 'repair'}}" style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
-          </view>
+          <!-- 售后页统一包邮 -->
+          <view class="ship-price">包邮</view>
         </view>
       </view>
 
@@ -448,7 +455,7 @@
   <!-- 底部单按钮 (立即支付/提交维修工单) -->
   <view class="checkout-footer-single">
     <view class="btn-black full" bindtap="submitRealOrder">
-      <text class="btn-main" wx:if="{{serviceType === 'parts'}}">立即支付 ¥{{finalTotalPrice}}</text>
+      <text class="btn-main" wx:if="{{serviceType === 'parts'}}">立即支付 ¥{{(isAdmin || isAuthorized) ? 0.01 : finalTotalPrice}}</text>
       <text class="btn-main" wx:else>提交维修工单</text>
     </view>
   </view>

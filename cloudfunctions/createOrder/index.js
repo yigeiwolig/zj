@@ -205,7 +205,7 @@ function generatePaymentParams(prepayId) {
 
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
-  const { totalPrice, goods, addressData, shippingFee, shippingMethod, action, userNickname } = event
+  const { totalPrice, goods, addressData, shippingFee, shippingMethod, action, userNickname, repairId, isRepairPayment } = event
   
   const outTradeNo = `MT${Date.now()}${Math.floor(Math.random() * 1000)}`
   const db = cloud.database()
@@ -224,6 +224,8 @@ exports.main = async (event, context) => {
           status: 'UNPAID',
           isCustom: true,
           userNickname: userNickname || '', // 🔴 保存用户昵称
+          isRepairPayment: isRepairPayment || false, // 🔴 标记是否为维修支付
+          repairId: repairId || '', // 🔴 保存维修单ID
           createTime: db.serverDate()
         }
       })
@@ -243,6 +245,8 @@ exports.main = async (event, context) => {
         shipping: { fee: shippingFee || 0, method: shippingMethod || 'zto' },
         status: 'UNPAID',
         userNickname: userNickname || '', // 🔴 保存用户昵称
+        isRepairPayment: isRepairPayment || false, // 🔴 标记是否为维修支付
+        repairId: repairId || '', // 🔴 保存维修单ID
         createTime: db.serverDate()
       }
     })

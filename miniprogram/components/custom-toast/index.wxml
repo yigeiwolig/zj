@@ -19,11 +19,7 @@
 
 <!-- Toast (透明遮罩，允许交互但防止误触，带收缩退出动画) -->
 <view class="ct-toast-mask {{toastClosing ? 'closing' : ''}}" wx:if="{{toast.show}}" catchtouchmove="preventTouchMove">
-  <view class="ct-toast {{toast.icon === 'success' ? 'success' : ''}}">
-    <view class="ct-toast-icon" wx:if="{{toast.icon === 'success'}}">✓</view>
-    <view class="ct-toast-icon error" wx:if="{{toast.icon === 'error'}}">✕</view>
-    <!-- 加载图标 (当 icon='loading' 时) -->
-    <view class="ct-loading-spinner small" wx:if="{{toast.icon === 'loading'}}"></view>
+  <view class="ct-toast">
     <view class="ct-toast-text">{{toast.title}}</view>
   </view>
 </view>

@@ -183,19 +183,27 @@ async function giveReward(db, _, sn) {
       console.warn('[adminAuditVideo] 设备没有到期日，使用当前时间作为基准:', sn)
     }
     
-    const oldDate = device.expiryDate ? new Date(device.expiryDate) : new Date()
-    const newDate = new Date(oldDate.getTime() + 30 * 24 * 60 * 60 * 1000)
+    const now = new Date()
+    const oldDate = device.expiryDate ? new Date(device.expiryDate) : now
+    // 🔴 如果设备已过期，从当前时间开始计算30天；否则从原到期日增加30天
+    const baseDate = oldDate < now ? now : oldDate
+    const newDate = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000)
     const newDateStr = newDate.toISOString().split('T')[0]
+    
+    // 🔴 重新计算剩余天数
+    const remainingDays = Math.ceil((newDate - now) / (1000 * 60 * 60 * 24))
 
     await db.collection('sn').doc(device._id).update({
       data: {
         expiryDate: newDateStr,
         hasReward: true, 
-        totalDays: _.inc(30)
+        totalDays: _.inc(30),
+        remainingDays: remainingDays > 0 ? remainingDays : 0,
+        warrantyExpired: false // 🔴 增加延保后，标记为未过期
       }
     })
     
-    console.log('[adminAuditVideo] 已成功赠送延保:', sn)
+    console.log('[adminAuditVideo] 已成功赠送延保:', sn, '新到期日:', newDateStr, '剩余天数:', remainingDays)
   } catch (err) {
     console.error('[adminAuditVideo] 赠送延保失败:', sn, err)
     // 不抛出错误，避免影响审核流程

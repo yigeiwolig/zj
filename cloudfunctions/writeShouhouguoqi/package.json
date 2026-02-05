@@ -1,0 +1,9 @@
+{
+  "name": "writeShouhouguoqi",
+  "version": "1.0.0",
+  "description": "写入 shouhouguoqi 集合，记录用户购买配件信息",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

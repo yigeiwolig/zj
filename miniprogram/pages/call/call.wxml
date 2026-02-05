@@ -12,9 +12,6 @@
   
   <!-- 自定义高级 Toast (顶部提示条) -->
   <view class="custom-toast {{toastVisible ? 'show' : ''}}">
-    <view class="toast-icon-box" wx:if="{{toastIcon === 'success'}}">
-      <icon type="success" size="18" color="#07C160"/>
-    </view>
     <view class="toast-text">{{toastMsg}}</view>
   </view>
   

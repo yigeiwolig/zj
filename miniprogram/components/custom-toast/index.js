@@ -14,6 +14,14 @@ Component({
     
     // Modal
     showModal(opts) {
+      // 互斥：关闭 toast/loading，避免重叠
+      if (this._toastTimer) clearTimeout(this._toastTimer);
+      if (this._loadingTimer) clearTimeout(this._loadingTimer);
+      this.setData({
+        toastClosing: false,
+        'toast.show': false,
+        'loading.show': false
+      });
       this.setData({
         modal: {
           show: true,
@@ -64,6 +72,9 @@ Component({
     // Toast（带收缩退出动画）
     showToast(opts) {
       const duration = opts.duration || 1500;
+      // 互斥：关闭 modal/loading，避免重叠
+      if (this.data.modal.show) this.hideModal();
+      if (this.data.loading.show) this.hideLoading();
       // 如果已有toast在显示，先关闭它
       if (this.data.toast.show) {
         this._closeToastWithAnimation();
@@ -112,6 +123,10 @@ Component({
 
     // Loading
     showLoading(opts) {
+      // 互斥：关闭 toast/modal，避免重叠
+      if (this._toastTimer) clearTimeout(this._toastTimer);
+      if (this.data.toast.show) this._closeToastWithAnimation();
+      if (this.data.modal.show) this.hideModal();
       this.setData({
         loading: {
           show: true,

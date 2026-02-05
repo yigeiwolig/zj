@@ -62,6 +62,32 @@ Page({
     nicknameBypassLocation: false // 放行开关（是否跳过地域拦截）
   },
 
+  // 互斥：确保同一时间只显示一个弹窗/提示
+  _closeAllPopups() {
+    try { wx.hideToast(); } catch (e) {}
+    try { wx.hideLoading(); } catch (e) {}
+    const patch = {};
+    if (this.data.showCustomSuccessModal) patch.showCustomSuccessModal = false;
+    if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
+    if (this.data.showConfirmModal) patch.showConfirmModal = false;
+    if (Object.keys(patch).length) this.setData(patch);
+  },
+
+  // 统一方法：显示"内容已复制"弹窗（互斥）
+  _showCopySuccessOnce() {
+    // 🔴 清理之前的定时器，避免快速连续调用时状态混乱
+    if (this._copySuccessTimer) {
+      clearTimeout(this._copySuccessTimer);
+      this._copySuccessTimer = null;
+    }
+    this._closeAllPopups();
+    this.setData({ showCopySuccessModal: true });
+    this._copySuccessTimer = setTimeout(() => {
+      this.setData({ showCopySuccessModal: false });
+      this._copySuccessTimer = null;
+    }, 1500);
+  },
+
   onLoad(options) {
     // 🔴 更新页面访问统计
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -266,7 +292,8 @@ Page({
               wx.removeStorageSync('is_user_banned');
               this.setData({ isAuthorized: true, isShowNicknameUI: false });
               // 显示自定义成功弹窗
-              this.setData({ 
+                this._closeAllPopups();
+                this.setData({ 
                 showCustomSuccessModal: true,
                 successModalTitle: '验证通过',
                 successModalContent: ''
@@ -312,12 +339,8 @@ Page({
         if (wx.__mt_oldHideLoading) {
           wx.__mt_oldHideLoading();
         }
-        // 显示自定义"内容已复制"弹窗（白色，大一点）
-        this.setData({ showCopySuccessModal: true });
-        // 2秒后自动关闭
-        setTimeout(() => {
-          this.setData({ showCopySuccessModal: false });
-        }, 2000);
+        // 显示自定义"内容已复制"弹窗（互斥）
+        this._showCopySuccessOnce();
       }
     });
   },
@@ -1077,7 +1100,8 @@ Page({
     if (e.detail.authSetting && e.detail.authSetting['scope.userLocation']) {
       this.setData({ showAuthForceModal: false });
       // 显示自定义成功弹窗
-      this.setData({ 
+      this._closeAllPopups();
+      this.setData({
         showCustomSuccessModal: true,
         successModalTitle: '定位已开启',
         successModalContent: ''
@@ -1101,7 +1125,8 @@ Page({
      if (e.detail.authSetting && e.detail.authSetting['scope.userLocation']) {
       this.setData({ showAuthModal: false });
       // 显示自定义成功弹窗
-      this.setData({ 
+      this._closeAllPopups();
+      this.setData({
         showCustomSuccessModal: true,
         successModalTitle: '授权成功',
         successModalContent: ''
@@ -1316,6 +1341,7 @@ Page({
       this.hideMyLoading();
 
       // 🔴 2. 使用自定义白底黑字弹窗显示成功
+      this._closeAllPopups();
       this.setData({
         showCustomSuccessModal: true,
         successModalTitle: '已解除封禁',

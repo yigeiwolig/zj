@@ -486,7 +486,7 @@
       <!-- 总价显示区 -->
       <view class="final-total-row">
         <text class="ft-label">共 {{cart.length}} 件，总计</text>
-        <text class="ft-price">¥{{finalTotalPrice}}</text>
+        <text class="ft-price">¥{{(isAdmin || isAuthorized) ? 0.01 : finalTotalPrice}}</text>
       </view>
 
       <!-- 收货信息 -->
@@ -509,11 +509,32 @@
           <input class="form-input" type="number" maxlength="11" placeholder="请填写11位手机号" placeholder-class="ph-style" bindinput="onInput" data-key="phone" value="{{orderInfo.phone}}"/>
         </view>
 
+        <!-- 🔴 新增：省市区选择（复制自 shouhou 页面） -->
+        <view class="form-item">
+          <view class="form-label">省市区</view>
+          <view class="address-picker-row">
+            <picker mode="selector" range="{{provinceList}}" range-key="name" value="{{provinceIndex}}" bindchange="onProvinceChange" class="address-picker-btn">
+              <view class="address-picker-btn-inner {{!selectedProvince ? 'placeholder' : ''}}">
+                <text class="address-picker-text">{{selectedProvince || '请选择省份'}}</text>
+              </view>
+            </picker>
+            <picker mode="selector" range="{{cityList}}" range-key="name" value="{{cityIndex}}" bindchange="onCityChange" class="address-picker-btn" disabled="{{!selectedProvince}}">
+              <view class="address-picker-btn-inner {{!selectedCity ? 'placeholder' : ''}} {{!selectedProvince ? 'disabled' : ''}}">
+                <text class="address-picker-text">{{selectedCity || '请选择城市'}}</text>
+              </view>
+            </picker>
+            <picker mode="selector" range="{{districtList}}" range-key="name" value="{{districtIndex}}" bindchange="onDistrictChange" class="address-picker-btn" disabled="{{!selectedCity}}">
+              <view class="address-picker-btn-inner {{!selectedDistrict ? 'placeholder' : ''}} {{!selectedCity ? 'disabled' : ''}}">
+                <text class="address-picker-text">{{selectedDistrict || '请选择区县'}}</text>
+              </view>
+            </picker>
+          </view>
+        </view>
 
         <!-- [修改] 详细地址 -->
         <view class="form-item">
           <view class="form-label">详细地址</view>
-          <input class="form-input" placeholder="如：广东省 佛山市 南海区 某某街道101号" placeholder-class="ph-style" bindinput="onInput" data-key="detailAddress" value="{{detailAddress}}"/>
+          <input class="form-input" placeholder="如：某某街道101号" placeholder-class="ph-style" bindinput="onInput" data-key="detailAddress" value="{{detailAddress}}"/>
         </view>
 
       </view>
@@ -539,7 +560,7 @@
   <!-- 底部单按钮 (立即支付) -->
   <view class="checkout-footer-single">
     <view class="btn-black full {{!agreedToDisclaimer ? 'grayed' : ''}}" catchtap="submitOrder" data-agreed="{{agreedToDisclaimer}}">
-      <text class="btn-main">立即支付 ¥{{finalTotalPrice}}</text>
+      <text class="btn-main">立即支付 ¥{{(isAdmin || isAuthorized) ? 0.01 : finalTotalPrice}}</text>
     </view>
   </view>
 </view>

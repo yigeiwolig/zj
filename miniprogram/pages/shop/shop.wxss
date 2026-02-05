@@ -1051,17 +1051,17 @@ page {
 }
 .big-price { font-size: 40rpx; font-weight: 800; color: #0071E3; }
 
-/* --- 表单样式 (iOS List Style) - 优化 --- */
-.form-group { padding: 0 0 0 30rpx; /* 左边距留给分割线 */ }
+/* --- 表单样式 (iOS List Style) - 完全复制自 shouhou 页面 --- */
+.form-group { background: #fff; border-radius: 24rpx; padding: 0 30rpx; margin-bottom: 100rpx; }
 .form-item {
-  display: flex; align-items: center; height: 110rpx; /* 更高，手指好点 */
-  border-bottom: 1rpx solid #f5f5f5; padding-right: 30rpx;
+  display: flex; align-items: center; height: 100rpx;
+  border-bottom: 1rpx solid #f5f5f5; padding-right: 10rpx;
 }
 .form-item:last-child { border-bottom: none; }
 
-.form-label { width: 140rpx; font-size: 28rpx; font-weight: 600; color: #1D1D1F; }
-.form-input { flex: 1; height: 100%; font-size: 28rpx; text-align: right; color: #333; }
-.ph-style { color: #ccc; }
+.form-label { width: 140rpx; font-size: 28rpx; font-weight: 600; }
+.form-input { flex: 1; text-align: right; font-size: 28rpx; height: 100%; }
+.ph-style { color: #AEAEB2; }
 /* 粘贴按钮（地址行右侧） */
 .paste-btn {
   margin-left: 16rpx;
@@ -1647,6 +1647,80 @@ page {
 @keyframes fadeInOut {
   from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
+}
+
+/* 🔴 新增：省市区选择器样式（复制自 shouhou 页面） */
+.address-picker-row {
+  flex: 1;
+  display: flex;
+  gap: 16rpx;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.address-picker-btn {
+  flex: 1;
+  min-width: 0;
+  max-width: 200rpx;
+}
+
+.address-picker-btn-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16rpx 0;
+  background-color: transparent;
+  border: none;
+  border-bottom: 2rpx solid #E5E5EA;
+  border-radius: 0;
+  transition: all 0.2s;
+  min-height: 60rpx;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.address-picker-btn-inner.placeholder {
+  border-bottom-color: #E5E5EA;
+}
+
+.address-picker-btn-inner.placeholder::after {
+  content: '';
+  position: absolute;
+  bottom: -2rpx;
+  left: 0;
+  right: 0;
+  height: 2rpx;
+  background-color: #E5E5EA;
+}
+
+.address-picker-btn-inner:not(.placeholder):not(.disabled) {
+  border-bottom-color: #000;
+}
+
+.address-picker-btn-inner.disabled {
+  border-bottom-color: #F0F0F0;
+  opacity: 0.5;
+}
+
+.address-picker-text {
+  text-align: center;
+  font-size: 28rpx;
+  color: #000;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  font-weight: 400;
+}
+
+.address-picker-btn-inner.placeholder .address-picker-text {
+  color: #999;
+  font-weight: 400;
+}
+
+.address-picker-btn-inner.disabled .address-picker-text {
+  color: #999;
 }
 
 /* ============================================== */
@@ -2384,16 +2458,17 @@ page {
 .ft-label { font-size: 24rpx; color: #86868B; margin-right: 16rpx; }
 .ft-price { font-size: 40rpx; font-weight: 800; color: #000; }
 
-/* 6. 地址表单样式 */
-.form-group { background: #fff; border-radius: 24rpx; padding: 0 30rpx; margin-bottom: 60rpx; }
+/* 6. 地址表单样式（完全复制自 shouhou 页面） */
+.form-group { background: #fff; border-radius: 24rpx; padding: 0 30rpx; margin-bottom: 100rpx; }
 .form-item {
   display: flex; align-items: center; height: 100rpx;
   border-bottom: 1rpx solid #f5f5f5; padding-right: 10rpx;
 }
 .form-label { width: 140rpx; font-size: 28rpx; font-weight: 600; }
 .form-input { flex: 1; text-align: right; font-size: 28rpx; height: 100%; }
-.picker-view { flex: 1; text-align: right; font-size: 28rpx; color: #333; }
+.picker-view { flex: 1; text-align: right; font-size: 28rpx; color: #000; }
 .picker-view.ph-style { color: #ccc; }
+.ph-style { color: #AEAEB2; }
 .arrow-right { margin-left: 10rpx; color: #ccc; font-size: 24rpx; }
 
 /* 清空购物车按钮 */

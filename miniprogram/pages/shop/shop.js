@@ -5,8 +5,18 @@ const log = DEBUG ? console.log.bind(console) : () => {};
 
 const app = getApp();
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
+// 🔴 使用专门的行政区key（用于省市区选择器 - getCityList）
+const MAP_KEY = 'CGRBZ-FLLLL-CNCPC-MQ6YK-YENYT-2MFCD'; // 行政区key（专门用于省市区选择器）
+console.log('[shop] ✅ 初始化腾讯地图SDK（城市列表），使用的key:', MAP_KEY);
 var qqmapsdk = new QQMapWX({
-    key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
+    key: MAP_KEY
+});
+
+// 🔴 使用专门的行政区划子key（用于区县选择器 - getDistrictByCityId）
+const DISTRICT_KEY = 'ICRBZ-VEELI-CQZGO-UE5G6-BHRMS-VQBIK'; // 行政区划子key（专门用于区县选择器）
+console.log('[shop] ✅ 初始化腾讯地图SDK（区县列表），使用的key:', DISTRICT_KEY);
+var qqmapsdkDistrict = new QQMapWX({
+    key: DISTRICT_KEY
 });
 
 Page({
@@ -22,6 +32,17 @@ Page({
     // [修改] 地址相关数据
     orderInfo: { name: '', phone: '' }, // 这里不再存 address 字符串
     detailAddress: '', // 存放完整地址，如 '广东省 佛山市 南海区 某某街道101号'
+    
+    // 🔴 新增：省市区选择（复制自 shouhou 页面）
+    selectedProvince: '',  // 选中的省份
+    selectedCity: '',      // 选中的城市
+    selectedDistrict: '',  // 选中的区县
+    provinceList: [],      // 省份列表
+    cityList: [],          // 城市列表
+    districtList: [],      // 区县列表
+    provinceIndex: -1,     // 省份选择索引
+    cityIndex: -1,         // 城市选择索引
+    districtIndex: -1,      // 区县选择索引
 
     // [修改] 运费相关
     shippingMethod: 'zto', // 默认中通
@@ -241,6 +262,9 @@ Page({
     // 立即加载数据
     this.loadDataFromCloud();
     this.calcTotal();
+    
+    // 🔴 加载省份列表（省市区选择器）
+    this.loadProvinceList();
   },
 
   // 1. 页面每次显示时，读取本地缓存的购物车
@@ -2408,10 +2432,9 @@ Page({
   // ========================================================
   // 智能分析：解析姓名、电话、地址
   // ========================================================
-  // 智能分析：解析姓名、电话、地址 - 使用腾讯地图API精准解析
+  // 智能分析：解析姓名、电话、地址 - 使用腾讯地图API精准解析（完整版，复制自 shouhou 页面）
   async confirmSmartPaste() {
     const text = this.data.smartPasteVal.trim();
-    
     if (!text) {
       this.showAutoToast('提示', '请输入内容');
       return;
@@ -2426,83 +2449,206 @@ Page({
     try {
       // 使用腾讯地图API进行精准解析
       const { parseSmartAddress } = require('../../utils/smartAddressParser.js');
-      const parsed = await parseSmartAddress(text);
+      const result = await parseSmartAddress(text);
       
-      // 组装完整地址
-      let fullAddress = '';
-      const addressParts = [];
-      if (parsed.province) addressParts.push(parsed.province);
-      if (parsed.city) addressParts.push(parsed.city);
-      if (parsed.district) addressParts.push(parsed.district);
-      if (parsed.detail) addressParts.push(parsed.detail);
+      // 🔴 调试：打印完整的解析结果
+      console.log('[confirmSmartPaste] 完整解析结果:', JSON.stringify(result, null, 2));
+      console.log('[confirmSmartPaste] result.detail:', result.detail);
+      console.log('[confirmSmartPaste] result.address:', result.address);
+
+      // 构造更新数据
+      let updateData = {};
+
+      if (result.name) updateData['orderInfo.name'] = result.name;
+      if (result.phone) updateData['orderInfo.phone'] = result.phone;
       
-      fullAddress = addressParts.join(' ').trim() || parsed.address || '';
+      // 🔴 修复：如果解析结果中没有省份，但有城市，尝试从城市推断省份
+      let finalProvince = result.province;
+      if (!finalProvince && result.city) {
+        // 常见城市到省份的映射
+        const cityToProvince = {
+          '东莞市': '广东省', '深圳市': '广东省', '广州市': '广东省', '佛山市': '广东省', '中山市': '广东省',
+          '珠海市': '广东省', '惠州市': '广东省', '江门市': '广东省', '肇庆市': '广东省', '汕头市': '广东省',
+          '潮州市': '广东省', '揭阳市': '广东省', '汕尾市': '广东省', '湛江市': '广东省', '茂名市': '广东省',
+          '阳江市': '广东省', '韶关市': '广东省', '清远市': '广东省', '云浮市': '广东省', '梅州市': '广东省',
+          '河源市': '广东省', '北京市': '北京市', '上海市': '上海市', '天津市': '天津市', '重庆市': '重庆市',
+          '杭州市': '浙江省', '宁波市': '浙江省', '温州市': '浙江省', '嘉兴市': '浙江省', '湖州市': '浙江省',
+          '绍兴市': '浙江省', '金华市': '浙江省', '衢州市': '浙江省', '舟山市': '浙江省', '台州市': '浙江省',
+          '丽水市': '浙江省', '南京市': '江苏省', '苏州市': '江苏省', '无锡市': '江苏省', '常州市': '江苏省',
+          '镇江市': '江苏省', '扬州市': '江苏省', '泰州市': '江苏省', '南通市': '江苏省', '盐城市': '江苏省',
+          '淮安市': '江苏省', '宿迁市': '江苏省', '连云港市': '江苏省', '徐州市': '江苏省', '成都市': '四川省',
+          '武汉市': '湖北省', '长沙市': '湖南省', '郑州市': '河南省', '西安市': '陕西省', '济南市': '山东省',
+          '青岛市': '山东省', '石家庄市': '河北省', '太原市': '山西省', '沈阳市': '辽宁省', '长春市': '吉林省',
+          '哈尔滨市': '黑龙江省', '合肥市': '安徽省', '福州市': '福建省', '厦门市': '福建省', '南昌市': '江西省',
+          '南宁市': '广西壮族自治区', '海口市': '海南省', '昆明市': '云南省', '贵阳市': '贵州省', '拉萨市': '西藏自治区',
+          '兰州市': '甘肃省', '西宁市': '青海省', '银川市': '宁夏回族自治区', '乌鲁木齐市': '新疆维吾尔自治区',
+          '呼和浩特市': '内蒙古自治区'
+        };
+        
+        finalProvince = cityToProvince[result.city] || '';
+        if (finalProvince) {
+          console.log('[confirmSmartPaste] 从城市推断省份:', result.city, '->', finalProvince);
+        }
+      }
       
-      // 更新订单信息
-      this.setData({
-        'orderInfo.name': parsed.name || '',
-        'orderInfo.phone': parsed.phone || '',
-        detailAddress: fullAddress
-      });
+      // 🔴 修复：如果还是没有省份，清空之前的选择，让用户手动选择
+      if (!finalProvince) {
+        updateData['provinceIndex'] = -1;
+        updateData['selectedProvince'] = '';
+        updateData['cityList'] = [];
+        updateData['districtList'] = [];
+        updateData['cityIndex'] = -1;
+        updateData['districtIndex'] = -1;
+        updateData['selectedCity'] = '';
+        updateData['selectedDistrict'] = '';
+        console.log('[confirmSmartPaste] ⚠️ 无法确定省份，已清空省市区选择，请用户手动选择');
+      } else if (finalProvince) {
+        // 尝试匹配省份
+        const provinceName = finalProvince.replace('省', '').replace('市', '').replace('自治区', '').replace('特别行政区', '');
+        const provinceIndex = this.data.provinceList.findIndex(p => {
+          const pName = p.name.replace('省', '').replace('自治区', '').replace('市', '').replace('特别行政区', '');
+          return p.name === finalProvince || 
+                 p.name.includes(provinceName) || 
+                 provinceName.includes(pName) ||
+                 pName === provinceName;
+        });
+        
+        if (provinceIndex !== -1) {
+          updateData['provinceIndex'] = provinceIndex;
+          updateData['selectedProvince'] = this.data.provinceList[provinceIndex].name;
+          // 🔴 修复：先清空城市和区县，然后立即加载并匹配
+          updateData['cityList'] = [];
+          updateData['districtList'] = [];
+          updateData['cityIndex'] = -1;
+          updateData['districtIndex'] = -1;
+          updateData['selectedCity'] = '';
+          updateData['selectedDistrict'] = '';
+          
+          // 🔴 修复：先设置详细地址，然后再执行 setData
+          // 详细地址只填充详细部分（优先使用detail字段）
+          if (result.detail && result.detail.trim()) {
+            console.log('[confirmSmartPaste] 使用result.detail填充详细地址:', result.detail);
+            updateData['detailAddress'] = result.detail.trim();
+          } else if (result.address && result.address.trim()) {
+            // 如果没有detail，从address中移除省市区
+            console.log('[confirmSmartPaste] 从result.address提取详细地址:', result.address);
+            let detail = result.address;
+            if (result.province) detail = detail.replace(result.province, '').trim();
+            if (result.city) detail = detail.replace(result.city, '').trim();
+            if (result.district) detail = detail.replace(result.district, '').trim();
+            updateData['detailAddress'] = detail.trim() || result.address.trim();
+            console.log('[confirmSmartPaste] 提取后的详细地址:', updateData['detailAddress']);
+          }
+          
+          // 组装完整地址用于orderInfo.address（兼容旧逻辑）
+          const fullAddressParts = [];
+          if (result.province) fullAddressParts.push(result.province);
+          if (result.city) fullAddressParts.push(result.city);
+          if (result.district) fullAddressParts.push(result.district);
+          if (result.detail) fullAddressParts.push(result.detail);
+          const fullAddress = fullAddressParts.join(' ').trim() || result.address || '';
+          if (fullAddress) {
+            updateData['orderInfo.address'] = fullAddress;
+          }
+          
+          // 🔴 修复：先执行 setData，然后立即加载城市列表（异步，但会在加载完成后自动匹配）
+          this.setData(updateData, () => {
+            console.log('[confirmSmartPaste] ✅ setData完成，详细地址已更新:', this.data.detailAddress);
+            // 在 setData 回调中加载城市列表，确保数据已更新
+            if (this.data.provinceList[provinceIndex].id) {
+              this.loadCityListForSmartPaste(this.data.provinceList[provinceIndex].id, result.city, result.district);
+            }
       
       // 如果解析到了地址，重新计算运费
       if (fullAddress && fullAddress.trim()) {
         this.reCalcFinalPrice();
       }
+          });
       
-      // 关闭弹窗
+          // 🔴 修复：不在这里继续执行，等待 loadCityListForSmartPaste 完成
+          wx.hideLoading();
       this.closeSmartPasteModal();
-      
-      wx.hideLoading();
-      
-      // 提示用户
-      if (parsed.name && parsed.phone && fullAddress) {
-        this.showAutoToast('成功', '解析成功');
-      } else {
-        this.showAutoToast('提示', `已解析：${parsed.name ? '姓名✓' : ''}${parsed.phone ? '电话✓' : ''}${fullAddress ? '地址✓' : ''}`);
+          this.showAutoToast('成功', '解析完成');
+          return;
+        } else {
+          // 如果找不到匹配的省份，清空选择
+          updateData['provinceIndex'] = -1;
+          updateData['selectedProvince'] = '';
+          updateData['cityList'] = [];
+          updateData['districtList'] = [];
+          updateData['cityIndex'] = -1;
+          updateData['districtIndex'] = -1;
+          updateData['selectedCity'] = '';
+          updateData['selectedDistrict'] = '';
+          console.log('[confirmSmartPaste] ⚠️ 无法匹配省份:', finalProvince);
+        }
       }
-    } catch (error) {
-      console.error('[shop] 智能地址解析失败:', error);
-      wx.hideLoading();
       
-      // 🔴 修复：parseSmartAddress 内部已经有备用方案，如果还是失败，说明是其他错误
-      // 尝试再次调用，如果还是失败，提示用户手动填写
-      try {
-        const { parseSmartAddress } = require('../../utils/smartAddressParser.js');
-        const parsed = await parseSmartAddress(text);
-        
-        // 组装完整地址
-        let fullAddress = '';
-        const addressParts = [];
-        if (parsed.province) addressParts.push(parsed.province);
-        if (parsed.city) addressParts.push(parsed.city);
-        if (parsed.district) addressParts.push(parsed.district);
-        if (parsed.detail) addressParts.push(parsed.detail);
-        fullAddress = addressParts.join(' ').trim() || parsed.address || '';
-        
-        this.setData({
-          'orderInfo.name': parsed.name || '',
-          'orderInfo.phone': parsed.phone || '',
-          detailAddress: fullAddress
-        });
-        
+      // 🔴 修复：详细地址只填充详细部分（优先使用detail字段）
+      if (result.detail && result.detail.trim()) {
+        console.log('[confirmSmartPaste] 使用result.detail填充详细地址:', result.detail);
+        updateData['detailAddress'] = result.detail.trim();
+      } else if (result.address && result.address.trim()) {
+        // 如果没有detail，从address中移除省市区
+        console.log('[confirmSmartPaste] 从result.address提取详细地址:', result.address);
+        let detail = result.address;
+        if (result.province) detail = detail.replace(result.province, '').trim();
+        if (result.city) detail = detail.replace(result.city, '').trim();
+        if (result.district) detail = detail.replace(result.district, '').trim();
+        updateData['detailAddress'] = detail.trim() || result.address.trim();
+        console.log('[confirmSmartPaste] 提取后的详细地址:', updateData['detailAddress']);
+      } else {
+        console.log('[confirmSmartPaste] ⚠️ 没有找到详细地址，result.detail和result.address都为空');
+      }
+      
+      // 组装完整地址用于orderInfo.address（兼容旧逻辑）
+      const fullAddressParts = [];
+      if (result.province) fullAddressParts.push(result.province);
+      if (result.city) fullAddressParts.push(result.city);
+      if (result.district) fullAddressParts.push(result.district);
+      if (result.detail) fullAddressParts.push(result.detail);
+      const fullAddress = fullAddressParts.join(' ').trim() || result.address || '';
+      if (fullAddress) {
+        updateData['orderInfo.address'] = fullAddress;
+      }
+
+      this.setData(updateData);
+      
+      // 如果解析到了地址，重新计算运费
         if (fullAddress && fullAddress.trim()) {
           this.reCalcFinalPrice();
         }
         
+      // 关闭弹窗
         this.closeSmartPasteModal();
         
-        if (parsed.name && parsed.phone && fullAddress) {
-          this.showAutoToast('成功', '解析成功（使用备用方案）');
+      wx.hideLoading();
+      
+      // 提示用户
+      if (result.name && result.phone && updateData['detailAddress']) {
+        this.showAutoToast('成功', '解析成功');
         } else {
-          this.showAutoToast('提示', `已解析：${parsed.name ? '姓名✓' : ''}${parsed.phone ? '电话✓' : ''}${fullAddress ? '地址✓' : ''}`);
+        this.showAutoToast('提示', `已解析：${result.name ? '姓名✓' : ''}${result.phone ? '电话✓' : ''}${updateData['detailAddress'] ? '地址✓' : ''}`);
         }
-      } catch (fallbackError) {
-        console.error('[shop] 备用解析也失败:', fallbackError);
+    } catch (error) {
+      console.error('[shop] 智能地址解析失败:', error);
         wx.hideLoading();
-        this.closeSmartPasteModal();
-        this.showAutoToast('提示', '解析失败，请手动填写');
+      
+      // 失败时使用本地解析作为备用方案
+      const result = this.parseSmartText(text);
+      let updateData = {};
+      if (result.name) updateData['orderInfo.name'] = result.name;
+      if (result.phone) updateData['orderInfo.phone'] = result.phone;
+      if (result.address) {
+        updateData['detailAddress'] = result.address;
+        updateData['orderInfo.address'] = result.address;
       }
+      this.setData(updateData);
+      if (result.address && result.address.trim()) {
+        this.reCalcFinalPrice();
+      }
+      this.closeSmartPasteModal();
+      this.showAutoToast('提示', '解析完成（使用备用方案）');
     }
   },
   
@@ -3432,8 +3578,8 @@ Page({
     // C. 解析地址，验证是否包含省市区信息
     const parsed = this.parseAddress(detailAddress);
     if (!parsed.province && !parsed.city) {
-      console.log('[submitOrder] 校验失败：地址格式不正确', parsed);
-      return this.showError('地址格式不正确，请包含省市区信息，如：广东省 佛山市 南海区 某某街道101号');
+      console.log('[submitOrder] 校验失败：省市区未填写', parsed);
+      return this.showError('请填写省、市、区');
     }
 
     // D. 组装完整地址字符串 (给后端和微信支付用)
@@ -3506,12 +3652,20 @@ Page({
       shippingMethod
     });
 
+    // 【新增】管理员身份（授权或已点EDIT）：支付 0.01 元
+    const isAdminPay = this.data.isAdmin || this.data.isAuthorized;
+    let payAmount = finalTotalPrice;
+    if (isAdminPay) {
+      payAmount = 0.01;
+      console.log('[doRealPayment] 管理员身份，支付金额调整为 0.01 元');
+    }
+
     // 【新增】检查支付金额
-    console.log('[doRealPayment] 正在支付，金额为:', finalTotalPrice);
+    console.log('[doRealPayment] 正在支付，金额为:', payAmount);
     
-    if (!finalTotalPrice || finalTotalPrice <= 0 || isNaN(finalTotalPrice)) {
-      console.error('[doRealPayment] 金额异常:', finalTotalPrice);
-      this.showAutoToast('支付失败', `订单金额异常（${finalTotalPrice}），请重新选择商品`);
+    if (!payAmount || payAmount <= 0 || isNaN(payAmount)) {
+      console.error('[doRealPayment] 金额异常:', payAmount);
+      this.showAutoToast('支付失败', `订单金额异常（${payAmount}），请重新选择商品`);
       return;
     }
 
@@ -3538,10 +3692,10 @@ Page({
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
-        totalPrice: finalTotalPrice,
+        totalPrice: payAmount,
         goods: cart,
         addressData: orderInfo,
-        shippingFee: shippingFee,
+        shippingFee: (this.data.isAdmin || this.data.isAuthorized) ? 0 : shippingFee,
         shippingMethod: shippingMethod,
         userNickname: userNickname // 🔴 传递用户昵称
       },
@@ -3603,9 +3757,38 @@ Page({
               this.callCheckPayResult(orderId);
             }
             
-            // 延迟一下，然后跳转
+            // 延迟一下，然后返回上一页
             setTimeout(() => {
-              // 跳转到我的页面查看订单
+              const pages = getCurrentPages();
+              // 如果页面栈中有上一页，则返回上一页；否则跳转到 my 页面
+              if (pages.length > 1) {
+                wx.navigateBack({
+                  delta: 1,
+                  success: () => {
+                    console.log('[doRealPayment] 已返回到上一页');
+                    // 通知上一页刷新数据（如果是 my 页面）
+                    setTimeout(() => {
+                      const prevPage = pages[pages.length - 2];
+                      if (prevPage && prevPage.route === 'pages/my/my') {
+                        if (typeof prevPage.loadMyOrders === 'function') {
+                          console.log('[doRealPayment] 刷新 my 页面订单列表');
+                          prevPage.loadMyOrders();
+                        }
+                        if (typeof prevPage.loadMyActivitiesPromise === 'function') {
+                          console.log('[doRealPayment] 刷新 my 页面活动列表（包含购买配件状态）');
+                          prevPage.loadMyActivitiesPromise();
+                        }
+                        // 🔴 如果是管理员，还需要刷新待处理维修工单列表
+                        if (prevPage.data.isAdmin && typeof prevPage.loadPendingRepairs === 'function') {
+                          console.log('[doRealPayment] 刷新管理员待处理维修工单列表');
+                          prevPage.loadPendingRepairs();
+                        }
+                      }
+                    }, 300);
+                  }
+                });
+              } else {
+                // 如果没有上一页，跳转到 my 页面
               wx.redirectTo({ 
                 url: '/pages/my/my',
                 success: () => {
@@ -3632,6 +3815,7 @@ Page({
                   }, 500);
                 }
               });
+              }
             }, 500);
           },
           fail: (err) => {
