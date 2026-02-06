@@ -50,16 +50,23 @@
 <view class="page index-page {{step > 0 ? 'animating' : ''}}" wx:if="{{isAuthorized}}">
   <!-- 管理员模式：封禁用户列表 -->
   <view class="admin-mode-container" wx:if="{{isAdminMode}}">
-    <!-- 顶部标题栏 -->
+    <!-- 顶部标题栏 - 毛玻璃效果 -->
     <view class="admin-header">
-      <text class="admin-title">封禁用户管理</text>
-      <view class="admin-header-right">
-        <!-- 🔴 切换按钮 -->
-        <view class="admin-switch-btn" bindtap="toggleNicknameMode">
-          <text>{{isNicknameMode ? '封禁管理' : '昵称录入'}}</text>
+      <view class="admin-header-bg"></view>
+      <view class="admin-header-content">
+        <view class="admin-title-area">
+          <text class="admin-title">封禁用户管理</text>
+          <text class="admin-subtitle">{{isNicknameMode ? '白名单录入模式' : (bannedUsers.length > 0 ? '共 ' + bannedUsers.length + ' 位用户' : '暂无数据')}}</text>
         </view>
-        <view class="admin-exit-btn-small" bindtap="exitAdminMode">
-          <text class="admin-exit-text-small">退出</text>
+        <view class="admin-header-right">
+          <!-- 🔴 切换按钮 -->
+          <view class="admin-switch-btn {{isNicknameMode ? 'mode-ban' : 'mode-nickname'}}" bindtap="toggleNicknameMode">
+            <text class="switch-icon">{{isNicknameMode ? '🛡️' : '✏️'}}</text>
+            <text>{{isNicknameMode ? '封禁管理' : '昵称录入'}}</text>
+          </view>
+          <view class="admin-exit-btn-small" bindtap="exitAdminMode">
+            <text class="admin-exit-text-small">退出</text>
+          </view>
         </view>
       </view>
     </view>
@@ -103,15 +110,24 @@
     </view>
 
     <!-- 封禁用户列表 -->
-    <scroll-view class="admin-user-list" scroll-y wx:if="{{!isNicknameMode}}">
+    <scroll-view class="admin-user-list" scroll-y wx:if="{{!isNicknameMode}}" enhanced show-scrollbar="{{false}}">
       <!-- 加载中 -->
       <view wx:if="{{isLoadingBannedUsers}}" class="admin-loading">
-        <text>加载中...</text>
+        <view class="loading-spinner"></view>
+        <text class="loading-text">正在加载封禁列表...</text>
       </view>
 
-      <!-- 空状态 -->
+      <!-- 空状态 - 优化后 -->
       <view wx:elif="{{bannedUsers.length === 0}}" class="admin-empty">
-        <text>暂无封禁用户</text>
+        <view class="empty-icon-wrapper">
+          <text class="empty-icon">🎉</text>
+        </view>
+        <text class="empty-title">一切正常</text>
+        <text class="empty-desc">暂无被封禁的用户</text>
+        <view class="empty-hint">
+          <text class="hint-dot">•</text>
+          <text>截图/录屏用户会自动出现在这里</text>
+        </view>
       </view>
 
       <!-- 用户卡片列表 -->
