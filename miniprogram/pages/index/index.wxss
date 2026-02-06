@@ -907,7 +907,7 @@ input, textarea { text-align: left; }
   background: #f8f8f8;
   display: flex;
   flex-direction: column;
-  padding-top: env(safe-area-inset-top);
+  padding-top: calc(env(safe-area-inset-top) + 20rpx);
 }
 
 /* 顶部栏 */
@@ -1034,7 +1034,7 @@ input, textarea { text-align: left; }
 
 /* 用户卡片列表 */
 .admin-user-cards {
-  padding: 16rpx;
+  padding: 20rpx 16rpx;
 }
 
 .admin-user-card {
