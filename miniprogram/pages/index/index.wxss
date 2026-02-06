@@ -899,373 +899,288 @@ input, textarea { text-align: left; }
   50%  { left: 25%; }
   100% { left: 50%; }
 }
-/* ================= 管理员模式样式 - Apple Style ================= */
+/* ================= 管理员模式样式 ================= */
 .admin-mode-container {
   width: 100%;
   height: 100%;
-  background: #f2f2f7;
+  background: #fafafa;
   display: flex;
   flex-direction: column;
-  position: relative;
   padding-top: env(safe-area-inset-top);
 }
 
-/* 顶部导航栏 - iOS Style */
-.admin-nav-bar {
+/* 顶部栏 */
+.admin-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20rpx 32rpx;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-bottom: 1rpx solid rgba(0, 0, 0, 0.08);
-  min-height: 88rpx;
+  padding: 32rpx 40rpx;
+  background: #fff;
 }
 
-.nav-left {
-  display: flex;
-  align-items: center;
-  min-width: 140rpx;
-}
-
-.nav-back-icon {
-  font-size: 56rpx;
-  color: #007aff;
-  font-weight: 300;
-  line-height: 1;
-  margin-right: -4rpx;
-}
-
-.nav-back-text {
-  font-size: 34rpx;
-  color: #007aff;
-}
-
-.nav-center {
-  flex: 1;
-  text-align: center;
-}
-
-.nav-title {
-  font-size: 34rpx;
+.admin-title {
+  font-size: 36rpx;
   font-weight: 600;
-  color: #000000;
+  color: #1a1a1a;
 }
 
-.nav-right {
-  min-width: 140rpx;
-  text-align: right;
+.admin-actions {
+  display: flex;
+  gap: 16rpx;
 }
 
-.nav-action {
-  font-size: 34rpx;
-  color: #007aff;
+.admin-btn {
+  padding: 16rpx 28rpx;
+  font-size: 26rpx;
+  color: #1a1a1a;
+  background: #f0f0f0;
+  border-radius: 8rpx;
 }
 
-.nav-left:active,
-.nav-right:active {
-  opacity: 0.5;
+.admin-btn.exit {
+  color: #666;
 }
 
-/* 用户列表容器 */
+.admin-btn:active {
+  opacity: 0.7;
+}
+
+/* 列表容器 */
 .admin-user-list {
   flex: 1;
   height: 0;
 }
 
-/* 加载中状态 - Apple Style */
+/* 加载中 */
 .admin-loading {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 240rpx 0;
-  gap: 24rpx;
+  padding: 200rpx 0;
 }
 
-.apple-spinner {
-  width: 40rpx;
-  height: 40rpx;
-  border: 4rpx solid #c7c7cc;
-  border-top-color: #8e8e93;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.loading-dot {
+  font-size: 48rpx;
+  color: #999;
+  letter-spacing: 8rpx;
+  animation: blink 1s infinite;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes blink {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
 }
 
-.loading-text {
-  color: #8e8e93;
-  font-size: 28rpx;
-}
-
-/* 空状态 - Apple Style */
+/* 空状态 */
 .admin-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 200rpx 60rpx 0;
-  text-align: center;
+  padding: 160rpx 40rpx;
 }
 
-.empty-icon-circle {
-  width: 120rpx;
-  height: 120rpx;
-  background: #34c759;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.empty-icon {
+  font-size: 80rpx;
   margin-bottom: 32rpx;
 }
 
-.empty-checkmark {
-  font-size: 64rpx;
-  color: #ffffff;
-  font-weight: 300;
-}
-
 .empty-title {
-  font-size: 40rpx;
-  font-weight: 600;
-  color: #000000;
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #1a1a1a;
   margin-bottom: 12rpx;
-  letter-spacing: -0.5rpx;
 }
 
 .empty-desc {
-  font-size: 30rpx;
-  color: #8e8e93;
-  line-height: 1.5;
-  max-width: 480rpx;
+  font-size: 26rpx;
+  color: #999;
 }
 
-/* 用户卡片列表 - Apple Style */
+/* 用户卡片列表 */
 .admin-user-cards {
-  padding: 20rpx;
+  padding: 24rpx;
 }
 
 .admin-user-card {
-  background: #ffffff;
-  border-radius: 20rpx;
-  margin-bottom: 16rpx;
-  overflow: hidden;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  margin-bottom: 20rpx;
 }
 
-/* 用户卡片头部 */
+/* 卡片头部 */
 .user-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 28rpx 32rpx;
-  background: #ffffff;
+  margin-bottom: 24rpx;
 }
 
 .user-nickname {
-  font-size: 34rpx;
+  font-size: 32rpx;
   font-weight: 600;
-  color: #000000;
+  color: #1a1a1a;
 }
 
 .user-ban-reason {
-  font-size: 24rpx;
+  font-size: 22rpx;
   padding: 8rpx 16rpx;
-  background: #ff3b30;
-  color: #ffffff;
-  border-radius: 10rpx;
-  font-weight: 500;
+  background: #1a1a1a;
+  color: #fff;
+  border-radius: 6rpx;
 }
 
-/* 用户信息区域 */
+/* 信息区域 */
 .user-card-info {
-  padding: 0 32rpx 20rpx;
+  margin-bottom: 24rpx;
 }
 
 .info-row {
   display: flex;
-  align-items: flex-start;
-  padding: 14rpx 0;
-  font-size: 28rpx;
-  line-height: 1.5;
-  border-bottom: 1rpx solid rgba(0, 0, 0, 0.04);
-}
-
-.info-row:last-child {
-  border-bottom: none;
+  margin-bottom: 12rpx;
+  font-size: 26rpx;
+  line-height: 1.6;
 }
 
 .info-label {
-  color: #8e8e93;
-  min-width: 160rpx;
-  flex-shrink: 0;
+  color: #999;
+  min-width: 150rpx;
 }
 
 .info-value {
-  color: #000000;
+  color: #333;
   flex: 1;
   word-break: break-all;
 }
 
-/* 操作按钮区域 - Apple Style */
+/* 操作按钮 */
 .user-card-actions {
   display: flex;
-  border-top: 1rpx solid rgba(0, 0, 0, 0.08);
+  gap: 16rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #f0f0f0;
 }
 
 .action-btn {
   flex: 1;
-  height: 96rpx;
+  height: 72rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff;
-  border-right: 1rpx solid rgba(0, 0, 0, 0.08);
-  transition: background 0.15s ease;
-}
-
-.action-btn:last-child {
-  border-right: none;
+  border-radius: 8rpx;
+  background: #f5f5f5;
 }
 
 .action-btn:active {
-  background: rgba(0, 0, 0, 0.05);
+  opacity: 0.7;
+}
+
+.retry-btn {
+  background: #1a1a1a;
 }
 
 .retry-btn .action-btn-text {
-  color: #007aff;
+  color: #fff;
+}
+
+.unban-btn {
+  background: #1a1a1a;
 }
 
 .unban-btn .action-btn-text {
-  color: #34c759;
+  color: #fff;
+}
+
+.ignore-btn {
+  background: #f5f5f5;
 }
 
 .ignore-btn .action-btn-text {
-  color: #8e8e93;
+  color: #666;
 }
 
 .action-btn-text {
-  font-size: 32rpx;
-  font-weight: 400;
+  font-size: 26rpx;
+  font-weight: 500;
 }
 
-/* 昵称录入界面样式 - Apple Style */
+/* 昵称录入界面 */
 .admin-nickname-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 40rpx 20rpx;
-  background: #f2f2f7;
+  align-items: center;
+  padding: 60rpx 40rpx;
 }
 
-.nickname-title {
-  font-size: 26rpx;
-  font-weight: 400;
-  color: #8e8e93;
-  margin-bottom: 12rpx;
-  padding-left: 32rpx;
-  text-transform: uppercase;
-  letter-spacing: 1rpx;
-}
-
-.nickname-desc {
-  display: none;
-}
-
-.nickname-input-wrapper {
+.nickname-card {
   width: 100%;
-  margin-bottom: 40rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 32rpx;
 }
 
 .nickname-input {
   width: 100%;
-  height: 96rpx;
-  background: #ffffff;
+  height: 88rpx;
+  background: #f5f5f5;
   border: none;
-  border-radius: 20rpx;
-  padding: 0 32rpx;
-  font-size: 34rpx;
-  color: #000000;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 30rpx;
+  color: #1a1a1a;
   box-sizing: border-box;
+  margin-bottom: 24rpx;
 }
 
 .nickname-input::placeholder {
-  color: #c7c7cc;
+  color: #bbb;
 }
 
-.nickname-submit-btn {
-  background: #007aff !important;
-  color: #ffffff !important;
-  width: calc(100% - 40rpx) !important;
-  margin: 0 20rpx;
-  border-radius: 20rpx;
-  font-size: 34rpx;
-  font-weight: 400;
-  padding: 0;
-  height: 96rpx;
-  line-height: 96rpx;
-  border: none !important;
-}
-
-.nickname-submit-btn:active {
-  opacity: 0.7;
-}
-
-.nickname-submit-btn[disabled] {
-  background: #c7c7cc !important;
-  opacity: 1;
-}
-
-/* 放行开关样式 - Apple Style */
-.nickname-bypass-wrapper {
-  width: 100%;
-  margin-bottom: 40rpx;
-  background: #ffffff;
-  border-radius: 20rpx;
-  overflow: hidden;
-}
-
-.nickname-bypass-label {
-  font-size: 34rpx;
-  font-weight: 400;
-  color: #000000;
-  padding: 28rpx 32rpx;
+.nickname-option {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 20rpx 0;
+  margin-bottom: 24rpx;
+  border-bottom: 1rpx solid #f0f0f0;
 }
 
-.nickname-bypass-label::before {
-  display: none;
+.option-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
 }
 
-.nickname-bypass-desc {
-  font-size: 26rpx;
-  color: #8e8e93;
-  padding: 0 32rpx 28rpx;
-  line-height: 1.5;
-  border-top: 1rpx solid rgba(0, 0, 0, 0.08);
-  padding-top: 20rpx;
-  margin-top: -8rpx;
+.option-label {
+  font-size: 28rpx;
+  color: #1a1a1a;
 }
 
-.nickname-bypass-switch {
-  position: static;
-  transform: none;
+.option-desc {
+  font-size: 22rpx;
+  color: #999;
 }
 
-.nickname-section {
-  margin-bottom: 40rpx;
+.nickname-submit-btn {
+  width: 100% !important;
+  height: 88rpx;
+  line-height: 88rpx;
+  background: #1a1a1a !important;
+  color: #fff !important;
+  font-size: 28rpx;
+  font-weight: 500;
+  border-radius: 12rpx;
+  border: none !important;
+  padding: 0;
 }
 
-.nickname-footer-hint {
-  text-align: center;
-  padding: 32rpx;
-  color: #8e8e93;
-  font-size: 26rpx;
+.nickname-submit-btn:active {
+  opacity: 0.8;
+}
+
+.nickname-submit-btn[disabled] {
+  background: #ccc !important;
 }
 
 /* ================= 自定义弹窗样式 ================= */
