@@ -11,7 +11,7 @@ exports.main = async (event, context) => {
     return { success: false, error: '密码错误' };
   }
 
-  // 需要清空的集合列表（排除 app_config、guanliyuan、shouhou）
+  // 需要清空的集合列表（排除 app_config、guanliyuan）
   const collectionsToClear = [
     'azjc',
     'blocked_logs',
@@ -26,6 +26,7 @@ exports.main = async (event, context) => {
     'shop_config',
     'shop_orders',
     'shop_series',
+    'shouhou',           // 售后主集合
     'shouhou_read',
     'shouhou_repair',
     'shouhouvideo',

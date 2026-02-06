@@ -4022,7 +4022,7 @@ Page({
     this.clearAllCollections();
   },
 
-  // 🔴 清空所有集合数据（排除 app_config、guanliyuan、shouhou）
+  // 🔴 清空所有集合数据（排除 app_config、guanliyuan）
   // 使用云函数来删除，避免权限问题
   async clearAllCollections() {
     try {
