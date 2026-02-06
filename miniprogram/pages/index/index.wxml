@@ -48,86 +48,85 @@
 
 <!-- 主程序 (气泡按钮等) -->
 <view class="page index-page {{step > 0 ? 'animating' : ''}}" wx:if="{{isAuthorized}}">
-  <!-- 管理员模式：封禁用户列表 -->
+  <!-- 管理员模式：封禁用户列表 - Apple Style -->
   <view class="admin-mode-container" wx:if="{{isAdminMode}}">
-    <!-- 顶部标题栏 - 毛玻璃效果 -->
-    <view class="admin-header">
-      <view class="admin-header-bg"></view>
-      <view class="admin-header-content">
-        <view class="admin-title-area">
-          <text class="admin-title">封禁用户管理</text>
-          <text class="admin-subtitle">{{isNicknameMode ? '白名单录入模式' : (bannedUsers.length > 0 ? '共 ' + bannedUsers.length + ' 位用户' : '暂无数据')}}</text>
-        </view>
-        <view class="admin-header-right">
-          <!-- 🔴 切换按钮 -->
-          <view class="admin-switch-btn {{isNicknameMode ? 'mode-ban' : 'mode-nickname'}}" bindtap="toggleNicknameMode">
-            <text class="switch-icon">{{isNicknameMode ? '🛡️' : '✏️'}}</text>
-            <text>{{isNicknameMode ? '封禁管理' : '昵称录入'}}</text>
-          </view>
-          <view class="admin-exit-btn-small" bindtap="exitAdminMode">
-            <text class="admin-exit-text-small">退出</text>
-          </view>
-        </view>
+    <!-- 顶部导航栏 -->
+    <view class="admin-nav-bar">
+      <view class="nav-left" bindtap="exitAdminMode">
+        <text class="nav-back-icon">‹</text>
+        <text class="nav-back-text">返回</text>
+      </view>
+      <view class="nav-center">
+        <text class="nav-title">{{isNicknameMode ? '昵称录入' : '封禁管理'}}</text>
+      </view>
+      <view class="nav-right" bindtap="toggleNicknameMode">
+        <text class="nav-action">{{isNicknameMode ? '封禁列表' : '录入'}}</text>
       </view>
     </view>
 
-    <!-- 🔴 昵称录入界面 -->
-    <view class="admin-nickname-container" wx:if="{{isNicknameMode}}">
-      <view class="nickname-title">昵称录入</view>
-      <view class="nickname-desc">输入昵称后，将自动同步到白名单</view>
-      
-      <view class="nickname-input-wrapper">
-        <input 
-          class="nickname-input" 
-          type="text" 
-          placeholder="请输入昵称"
-          value="{{nicknameInput}}"
-          bindinput="onNicknameInput"
-          maxlength="20"
-        />
+    <!-- 昵称录入界面 - Apple Style -->
+    <scroll-view class="admin-nickname-container" scroll-y wx:if="{{isNicknameMode}}">
+      <!-- 输入区块 -->
+      <view class="nickname-section">
+        <view class="nickname-title">昵称</view>
+        <view class="nickname-input-wrapper">
+          <input 
+            class="nickname-input" 
+            type="text" 
+            placeholder="输入用户昵称"
+            value="{{nicknameInput}}"
+            bindinput="onNicknameInput"
+            maxlength="20"
+          />
+        </view>
       </view>
       
-      <!-- 🔴 放行开关 -->
-      <view class="nickname-bypass-wrapper">
-        <view class="nickname-bypass-label">地域放行开关</view>
-        <view class="nickname-bypass-desc">开启后，该昵称对应的用户将不受地域拦截限制</view>
-        <switch 
-          class="nickname-bypass-switch"
-          checked="{{nicknameBypassLocation}}"
-          bindchange="toggleNicknameBypass"
-          color="#07C160"
-        />
+      <!-- 放行开关 -->
+      <view class="nickname-section">
+        <view class="nickname-title">设置</view>
+        <view class="nickname-bypass-wrapper">
+          <view class="nickname-bypass-label">
+            <text>地域放行</text>
+            <switch 
+              class="nickname-bypass-switch"
+              checked="{{nicknameBypassLocation}}"
+              bindchange="toggleNicknameBypass"
+              color="#34c759"
+            />
+          </view>
+          <view class="nickname-bypass-desc">开启后，该用户将不受地域拦截限制</view>
+        </view>
       </view>
       
       <button 
         class="nickname-submit-btn" 
-        hover-class="btn-hover" 
+        hover-class="none" 
         bindtap="submitNickname"
         disabled="{{isSubmittingNickname || !nicknameInput}}"
       >
-        {{isSubmittingNickname ? '提交中...' : '提交'}}
+        {{isSubmittingNickname ? '提交中...' : '添加到白名单'}}
       </button>
-    </view>
+      
+      <view class="nickname-footer-hint">
+        <text>添加后将自动同步到白名单数据库</text>
+      </view>
+    </scroll-view>
 
     <!-- 封禁用户列表 -->
     <scroll-view class="admin-user-list" scroll-y wx:if="{{!isNicknameMode}}" enhanced show-scrollbar="{{false}}">
       <!-- 加载中 -->
       <view wx:if="{{isLoadingBannedUsers}}" class="admin-loading">
-        <view class="loading-spinner"></view>
-        <text class="loading-text">正在加载封禁列表...</text>
+        <view class="apple-spinner"></view>
+        <text class="loading-text">载入中...</text>
       </view>
 
-      <!-- 空状态 - 优化后 -->
+      <!-- 空状态 - Apple Style -->
       <view wx:elif="{{bannedUsers.length === 0}}" class="admin-empty">
-        <view class="empty-icon-wrapper">
-          <text class="empty-icon">🎉</text>
+        <view class="empty-icon-circle">
+          <text class="empty-checkmark">✓</text>
         </view>
-        <text class="empty-title">一切正常</text>
-        <text class="empty-desc">暂无被封禁的用户</text>
-        <view class="empty-hint">
-          <text class="hint-dot">•</text>
-          <text>截图/录屏用户会自动出现在这里</text>
-        </view>
+        <text class="empty-title">无封禁用户</text>
+        <text class="empty-desc">截图或录屏的用户将显示在此处</text>
       </view>
 
       <!-- 用户卡片列表 -->
