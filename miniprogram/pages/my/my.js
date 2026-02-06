@@ -604,18 +604,31 @@ Page({
     }
     
     // 🔴 清理表单数据，避免残留
-    this.setData({
-      userReturnAddress: { name: '', phone: '', address: '' },
-      tempReturnAddress: { name: '', phone: '', address: '' },
-      returnTrackingIdInput: '',
-      imgReceipt: '',
-      imgChat: '',
-      buyDate: '',
-      modelIndex: null,
-      testPasswordInput: '',
-      showReturnAddressDialog: false,
-      showReturnAddressModal: false
-    });
+    // 但如果绑定弹窗打开状态（用户正在选图片），不清空绑定相关数据
+    if (!this.data.showModal) {
+      this.setData({
+        userReturnAddress: { name: '', phone: '', address: '' },
+        tempReturnAddress: { name: '', phone: '', address: '' },
+        returnTrackingIdInput: '',
+        imgReceipt: '',
+        imgChat: '',
+        buyDate: '',
+        modelIndex: null,
+        testPasswordInput: '',
+        showReturnAddressDialog: false,
+        showReturnAddressModal: false
+      });
+    } else {
+      // 绑定弹窗打开时，只清理非绑定相关的数据
+      this.setData({
+        userReturnAddress: { name: '', phone: '', address: '' },
+        tempReturnAddress: { name: '', phone: '', address: '' },
+        returnTrackingIdInput: '',
+        testPasswordInput: '',
+        showReturnAddressDialog: false,
+        showReturnAddressModal: false
+      });
+    }
     
     // 🔴 先检查权限获取 openid，然后再加载数据
     this.checkAdminPrivilege().then(() => {
