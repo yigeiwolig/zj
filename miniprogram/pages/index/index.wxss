@@ -915,7 +915,7 @@ input, textarea { text-align: left; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20rpx 32rpx 28rpx;
+  padding: 24rpx 24rpx 24rpx;
   background: #fff;
   border-bottom: 1rpx solid #eee;
 }
@@ -923,22 +923,25 @@ input, textarea { text-align: left; }
 .back-btn {
   display: flex;
   align-items: center;
-  gap: 6rpx;
+  gap: 8rpx;
+  padding: 12rpx 20rpx;
+  background: #f5f5f5;
+  border-radius: 32rpx;
 }
 
 .back-btn:active {
-  opacity: 0.5;
+  background: #e8e8e8;
 }
 
 .back-icon {
-  font-size: 36rpx;
-  color: #333;
-  font-weight: 300;
+  font-size: 32rpx;
+  color: #000;
 }
 
 .back-text {
   font-size: 28rpx;
-  color: #333;
+  color: #000;
+  font-weight: 500;
 }
 
 .admin-title {
@@ -948,7 +951,7 @@ input, textarea { text-align: left; }
 }
 
 .header-placeholder {
-  width: 100rpx;
+  width: 120rpx;
 }
 
 /* 列表容器 */
@@ -1141,7 +1144,7 @@ input, textarea { text-align: left; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 16rpx;
+  padding: 32rpx 24rpx;
 }
 
 .nickname-input {
@@ -1154,7 +1157,7 @@ input, textarea { text-align: left; }
   font-size: 30rpx;
   color: #000;
   box-sizing: border-box;
-  margin-bottom: 16rpx;
+  margin-bottom: 20rpx;
 }
 
 .nickname-input::placeholder {
@@ -1167,8 +1170,8 @@ input, textarea { text-align: left; }
   justify-content: space-between;
   background: #fff;
   border-radius: 12rpx;
-  padding: 24rpx;
-  margin-bottom: 24rpx;
+  padding: 28rpx;
+  margin-bottom: 32rpx;
 }
 
 .option-info {
