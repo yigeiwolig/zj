@@ -1364,12 +1364,13 @@ Page({
     }
   },
 
-  // 🔴 重试昵称验证（将 isBanned 设置为 false，让用户重新输入昵称）
+  // 🔴 重试昵称验证（将 isBanned 设置为 false，并删除 valid_users 记录，让用户重新输入昵称）
   async retryNickname(e) {
     const buttonId = e.currentTarget.dataset.buttonId;
     const userIndex = e.currentTarget.dataset.index;
     const nickname = e.currentTarget.dataset.nickname || '该用户';
     const user = this.data.bannedUsers[userIndex];
+    const openid = user?._openid;
     
     if (!user || !buttonId) {
       this.showMyDialog({ title: '错误', content: '缺少必要参数' });
@@ -1388,31 +1389,49 @@ Page({
           try {
             this.showMyLoading('处理中...');
             
-            // 调用云函数，将 login_logbutton 中的 isBanned 设置为 false
+            // 1. 调用云函数，将 login_logbutton 中的 isBanned 设置为 false，nicknameVerified 设为 false
             const result = await wx.cloud.callFunction({
               name: 'unbanUser',
               data: {
                 buttonId: buttonId,
-                updateData: { isBanned: false }
+                updateData: { 
+                  isBanned: false,
+                  nicknameVerified: false,  // 重置昵称验证状态
+                  banReason: ''             // 清除封禁原因
+                }
               }
             });
 
+            if (!result.result || !result.result.success) {
+              throw new Error(result.result?.error || '更新封禁状态失败');
+            }
+
+            // 2. 删除 valid_users 中该用户的记录（让用户重新输入昵称）
+            if (openid) {
+              try {
+                await wx.cloud.callFunction({
+                  name: 'deleteValidUser',
+                  data: { openid: openid }
+                });
+                console.log('[retryNickname] 已删除 valid_users 记录');
+              } catch (e) {
+                console.warn('[retryNickname] 删除 valid_users 失败（可能不存在）:', e);
+                // 不影响主流程
+              }
+            }
+
             this.hideMyLoading();
 
-            if (result.result && result.result.success) {
-              // 从列表中移除该用户
-              const users = this.data.bannedUsers;
-              users.splice(userIndex, 1);
-              this.setData({ bannedUsers: users });
-              
-              this.showMyDialog({
-                title: '操作成功',
-                content: `用户 "${nickname}" 已解除封禁，可以重新输入昵称`,
-                showCancel: false
-              });
-            } else {
-              throw new Error(result.result?.error || '操作失败');
-            }
+            // 从列表中移除该用户
+            const users = this.data.bannedUsers;
+            users.splice(userIndex, 1);
+            this.setData({ bannedUsers: users });
+            
+            this.showMyDialog({
+              title: '操作成功',
+              content: `用户 "${nickname}" 已解除封禁\n下次进入需要重新输入昵称验证`,
+              showCancel: false
+            });
           } catch (err) {
             this.hideMyLoading();
             console.error('[retryNickname] 操作失败:', err);
