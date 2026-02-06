@@ -62,36 +62,34 @@
 
     <!-- 昵称录入界面 -->
     <view class="admin-nickname-container" wx:if="{{isNicknameMode}}">
-      <view class="nickname-card">
-        <input 
-          class="nickname-input" 
-          type="text" 
-          placeholder="输入昵称"
-          value="{{nicknameInput}}"
-          bindinput="onNicknameInput"
-          maxlength="20"
-        />
-        
-        <view class="nickname-option">
-          <view class="option-info">
-            <text class="option-label">地域放行</text>
-            <text class="option-desc">不受地域拦截限制</text>
-          </view>
-          <switch 
-            checked="{{nicknameBypassLocation}}"
-            bindchange="toggleNicknameBypass"
-            color="#000"
-          />
+      <input 
+        class="nickname-input" 
+        type="text" 
+        placeholder="输入昵称"
+        value="{{nicknameInput}}"
+        bindinput="onNicknameInput"
+        maxlength="20"
+      />
+      
+      <view class="nickname-option">
+        <view class="option-info">
+          <text class="option-label">地域放行</text>
+          <text class="option-desc">不受地域拦截限制</text>
         </view>
-        
-        <button 
-          class="nickname-submit-btn" 
-          bindtap="submitNickname"
-          disabled="{{isSubmittingNickname || !nicknameInput}}"
-        >
-          {{isSubmittingNickname ? '提交中...' : '添加'}}
-        </button>
+        <switch 
+          checked="{{nicknameBypassLocation}}"
+          bindchange="toggleNicknameBypass"
+          color="#000"
+        />
       </view>
+      
+      <button 
+        class="nickname-submit-btn" 
+        bindtap="submitNickname"
+        disabled="{{isSubmittingNickname || !nicknameInput}}"
+      >
+        {{isSubmittingNickname ? '提交中...' : '添加'}}
+      </button>
     </view>
 
     <!-- 封禁用户列表 -->
