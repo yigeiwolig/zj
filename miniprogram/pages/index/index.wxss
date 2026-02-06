@@ -1,6 +1,7 @@
 /* ================= 全局 & 基础 ================= */
 page { background-color: #F9F9F9; height: 100%; overflow: hidden; }
 .index-page { height: 100%; display: flex; flex-direction: column; padding: 120rpx 60rpx 80rpx; box-sizing: border-box; position: relative; }
+.index-page.admin-active { padding: 0; background: #fff; }
 
 /* 保持首页输入左对齐 */
 input, textarea { text-align: left; }

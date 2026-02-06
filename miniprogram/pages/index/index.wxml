@@ -47,7 +47,7 @@
 </view>
 
 <!-- 主程序 (气泡按钮等) -->
-<view class="page index-page {{step > 0 ? 'animating' : ''}}" wx:if="{{isAuthorized}}">
+<view class="page index-page {{step > 0 ? 'animating' : ''}} {{isAdminMode ? 'admin-active' : ''}}" wx:if="{{isAuthorized}}">
   <!-- 管理员模式：封禁用户列表 -->
   <view class="admin-mode-container" wx:if="{{isAdminMode}}">
     <!-- 顶部栏 -->
