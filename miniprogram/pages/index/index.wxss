@@ -1,7 +1,7 @@
 /* ================= 全局 & 基础 ================= */
 page { background-color: #F9F9F9; height: 100%; overflow: hidden; }
 .index-page { height: 100%; display: flex; flex-direction: column; padding: 120rpx 60rpx 80rpx; box-sizing: border-box; position: relative; }
-.index-page.admin-active { padding: 0; background: #fff; }
+.index-page.admin-active { padding: 0; background: #f8f8f8; }
 
 /* 保持首页输入左对齐 */
 input, textarea { text-align: left; }
@@ -904,7 +904,7 @@ input, textarea { text-align: left; }
 .admin-mode-container {
   width: 100%;
   height: 100%;
-  background: #fff;
+  background: #f8f8f8;
   display: flex;
   flex-direction: column;
   padding-top: env(safe-area-inset-top);
@@ -915,64 +915,67 @@ input, textarea { text-align: left; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24rpx 32rpx;
+  padding: 20rpx 32rpx 28rpx;
+  background: #fff;
+  border-bottom: 1rpx solid #eee;
 }
 
 .back-btn {
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  padding: 12rpx 24rpx;
-  background: #f5f5f5;
-  border-radius: 40rpx;
+  gap: 6rpx;
 }
 
 .back-btn:active {
-  background: #eee;
+  opacity: 0.5;
 }
 
 .back-icon {
+  font-size: 36rpx;
+  color: #333;
+  font-weight: 300;
+}
+
+.back-text {
   font-size: 28rpx;
   color: #333;
 }
 
-.back-text {
-  font-size: 26rpx;
-  color: #333;
-}
-
 .admin-title {
-  font-size: 32rpx;
+  font-size: 34rpx;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #000;
 }
 
 .header-placeholder {
-  width: 120rpx;
+  width: 100rpx;
 }
 
 /* 列表容器 */
 .admin-user-list {
   flex: 1;
   height: 0;
+  background: #f8f8f8;
 }
 
 /* 底部切换栏 */
 .admin-bottom-tabs {
-  padding: 20rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  border-top: 1rpx solid #eee;
 }
 
 .tab-item {
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 96rpx;
-  background: #1a1a1a;
-  border-radius: 48rpx;
+  height: 92rpx;
+  background: #000;
+  border-radius: 46rpx;
 }
 
 .tab-item:active {
-  opacity: 0.85;
+  background: #333;
 }
 
 .tab-text {
@@ -1006,38 +1009,36 @@ input, textarea { text-align: left; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 140rpx 40rpx;
+  padding: 120rpx 40rpx;
 }
 
 .empty-icon {
-  font-size: 72rpx;
-  margin-bottom: 28rpx;
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
 }
 
 .empty-title {
-  font-size: 30rpx;
-  font-weight: 500;
-  color: #1a1a1a;
-  margin-bottom: 10rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #000;
+  margin-bottom: 12rpx;
 }
 
 .empty-desc {
-  font-size: 24rpx;
-  color: #999;
+  font-size: 26rpx;
+  color: #888;
 }
 
 /* 用户卡片列表 */
 .admin-user-cards {
-  padding: 10rpx 32rpx;
+  padding: 16rpx;
 }
 
 .admin-user-card {
-  padding: 28rpx 0;
-  border-bottom: 1rpx solid #f0f0f0;
-}
-
-.admin-user-card:last-child {
-  border-bottom: none;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 12rpx;
 }
 
 /* 卡片头部 */
@@ -1045,37 +1046,37 @@ input, textarea { text-align: left; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20rpx;
+  margin-bottom: 16rpx;
 }
 
 .user-nickname {
-  font-size: 30rpx;
+  font-size: 32rpx;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #000;
 }
 
 .user-ban-reason {
   font-size: 22rpx;
-  padding: 8rpx 20rpx;
-  background: #1a1a1a;
+  padding: 8rpx 16rpx;
+  background: #ff4757;
   color: #fff;
-  border-radius: 20rpx;
+  border-radius: 6rpx;
 }
 
 /* 信息区域 */
 .user-card-info {
-  margin-bottom: 20rpx;
+  margin-bottom: 16rpx;
 }
 
 .info-row {
   display: flex;
-  margin-bottom: 10rpx;
+  margin-bottom: 8rpx;
   font-size: 24rpx;
   line-height: 1.6;
 }
 
 .info-label {
-  color: #999;
+  color: #888;
   min-width: 140rpx;
 }
 
@@ -1085,12 +1086,12 @@ input, textarea { text-align: left; }
   word-break: break-all;
 }
 
-/* 操作按钮 - 圆润风格 */
+/* 操作按钮 */
 .user-card-actions {
   display: flex;
   gap: 12rpx;
-  padding-top: 20rpx;
-  border-top: 1rpx solid #f0f0f0;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f5f5f5;
 }
 
 .action-btn {
@@ -1100,15 +1101,14 @@ input, textarea { text-align: left; }
   align-items: center;
   justify-content: center;
   border-radius: 36rpx;
-  background: #f5f5f5;
 }
 
 .action-btn:active {
-  opacity: 0.75;
+  opacity: 0.7;
 }
 
 .retry-btn {
-  background: #1a1a1a;
+  background: #3b82f6;
 }
 
 .retry-btn .action-btn-text {
@@ -1116,7 +1116,7 @@ input, textarea { text-align: left; }
 }
 
 .unban-btn {
-  background: #1a1a1a;
+  background: #22c55e;
 }
 
 .unban-btn .action-btn-text {
@@ -1124,7 +1124,7 @@ input, textarea { text-align: left; }
 }
 
 .ignore-btn {
-  background: #f0f0f0;
+  background: #f1f1f1;
 }
 
 .ignore-btn .action-btn-text {
@@ -1141,20 +1141,20 @@ input, textarea { text-align: left; }
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 20rpx 32rpx;
+  padding: 16rpx;
 }
 
 .nickname-input {
   width: 100%;
-  height: 96rpx;
-  background: #f5f5f5;
+  height: 100rpx;
+  background: #fff;
   border: none;
-  border-radius: 48rpx;
-  padding: 0 32rpx;
-  font-size: 28rpx;
-  color: #1a1a1a;
+  border-radius: 12rpx;
+  padding: 0 28rpx;
+  font-size: 30rpx;
+  color: #000;
   box-sizing: border-box;
-  margin-bottom: 32rpx;
+  margin-bottom: 16rpx;
 }
 
 .nickname-input::placeholder {
@@ -1165,8 +1165,10 @@ input, textarea { text-align: left; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16rpx 8rpx;
-  margin-bottom: 32rpx;
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  margin-bottom: 24rpx;
 }
 
 .option-info {
@@ -1176,22 +1178,23 @@ input, textarea { text-align: left; }
 }
 
 .option-label {
-  font-size: 28rpx;
-  color: #1a1a1a;
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #000;
 }
 
 .option-desc {
-  font-size: 22rpx;
-  color: #999;
+  font-size: 24rpx;
+  color: #888;
 }
 
 .nickname-submit-btn {
   width: 100% !important;
   height: 96rpx;
   line-height: 96rpx;
-  background: #1a1a1a !important;
+  background: #000 !important;
   color: #fff !important;
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 500;
   border-radius: 48rpx;
   border: none !important;
@@ -1199,12 +1202,12 @@ input, textarea { text-align: left; }
 }
 
 .nickname-submit-btn:active {
-  opacity: 0.8;
+  background: #333 !important;
 }
 
 .nickname-submit-btn[disabled] {
-  background: #ddd !important;
-  color: #999 !important;
+  background: #ccc !important;
+  color: #888 !important;
 }
 
 /* ================= 自定义弹窗样式 ================= */
