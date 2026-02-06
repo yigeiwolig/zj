@@ -52,13 +52,12 @@
   <view class="admin-mode-container" wx:if="{{isAdminMode}}">
     <!-- 顶部栏 -->
     <view class="admin-header">
-      <text class="admin-title">{{isNicknameMode ? '昵称录入' : '封禁管理'}}</text>
-      <view class="admin-actions">
-        <view class="admin-btn" bindtap="toggleNicknameMode">
-          {{isNicknameMode ? '查看列表' : '录入昵称'}}
-        </view>
-        <view class="admin-btn exit" bindtap="exitAdminMode">退出</view>
+      <view class="back-btn" bindtap="exitAdminMode">
+        <text class="back-icon">←</text>
+        <text class="back-text">返回</text>
       </view>
+      <text class="admin-title">{{isNicknameMode ? '昵称录入' : '封禁管理'}}</text>
+      <view class="header-placeholder"></view>
     </view>
 
     <!-- 昵称录入界面 -->
@@ -182,6 +181,16 @@
         </view>
       </view>
     </scroll-view>
+
+    <!-- 底部切换栏 -->
+    <view class="admin-bottom-tabs">
+      <view class="tab-item {{!isNicknameMode ? 'active' : ''}}" bindtap="toggleNicknameMode" wx:if="{{isNicknameMode}}">
+        <text class="tab-text">封禁列表</text>
+      </view>
+      <view class="tab-item {{isNicknameMode ? 'active' : ''}}" bindtap="toggleNicknameMode" wx:if="{{!isNicknameMode}}">
+        <text class="tab-text">昵称录入</text>
+      </view>
+    </view>
   </view>
 
   <!-- 正常模式：原有内容 -->
