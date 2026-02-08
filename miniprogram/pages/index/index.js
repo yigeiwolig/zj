@@ -263,7 +263,6 @@ Page({
     }
 
     this.setData({ isLoading: true });
-    this.showMyLoading('验证身份...');
     
     // 🔴 确保在云函数调用前关闭任何官方 loading
     if (wx.__mt_oldHideLoading) {
@@ -290,7 +289,6 @@ Page({
       }
     }).then(res => {
       this.setData({ isLoading: false });
-      this.hideMyLoading();
       
       const result = res.result || {};
 
@@ -320,8 +318,6 @@ Page({
               }, 2000);
       } else {
         // --- 失败 ---
-        // 🔴 关键修复：验证失败时也要隐藏加载弹窗
-        this.hideMyLoading();
         
         if (result.isBlocked === true || result.type === 'banned') {
           wx.setStorageSync('is_user_banned', true);
@@ -335,7 +331,6 @@ Page({
       }
     }).catch(err => {
       this.setData({ isLoading: false });
-      this.hideMyLoading();
       this.showAutoToast('错误', '网络错误，请重试');
     });
   },
