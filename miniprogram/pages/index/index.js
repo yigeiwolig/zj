@@ -42,6 +42,7 @@ Page({
     // 【新增】首次进入提示弹窗
     showFirstTimeModal: false,
     showWechatQRCode: false, // 是否显示微信二维码
+    showCopySuccessInModal: false, // 在首次进入弹窗内显示复制成功提示
     adminWechat: 'MT-摩改社', // 管理员微信号（可以修改）
     
     // Loading 状态（合并重复定义）
@@ -1278,7 +1279,8 @@ Page({
     wx.setStorageSync('has_seen_first_time_modal', true);
     this.setData({ 
       showFirstTimeModal: false,
-      showWechatQRCode: false
+      showWechatQRCode: false,
+      showCopySuccessInModal: false
     });
   },
 
@@ -1288,8 +1290,22 @@ Page({
     wx.setClipboardData({
       data: wechat,
       success: () => {
-        // 复制成功后显示二维码（不显示复制成功弹窗，避免关闭当前弹窗）
-        this.setData({ showWechatQRCode: true });
+        // 🔴 立即关闭微信官方的"内容已复制"弹窗
+        if (wx.__mt_oldHideToast) {
+          wx.__mt_oldHideToast();
+        }
+        wx.hideToast();
+        
+        // 显示二维码和复制成功提示
+        this.setData({ 
+          showWechatQRCode: true,
+          showCopySuccessInModal: true
+        });
+        
+        // 1.5秒后隐藏复制成功提示
+        setTimeout(() => {
+          this.setData({ showCopySuccessInModal: false });
+        }, 1500);
       },
       fail: () => {
         this.showAutoToast('提示', '复制失败，请重试');

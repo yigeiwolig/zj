@@ -316,6 +316,12 @@
     <view class="first-time-title">开启专属体验</view>
     <view class="first-time-desc">如果您是在抖音或闲鱼添加的用户，请添加管理员微信录入昵称</view>
     
+    <!-- 复制成功提示 -->
+    <view class="copy-success-tip" wx:if="{{showCopySuccessInModal}}">
+      <text class="copy-success-icon">✓</text>
+      <text class="copy-success-text">内容已复制</text>
+    </view>
+    
     <!-- 二维码显示区域 -->
     <view class="qr-code-container" wx:if="{{showWechatQRCode}}">
       <image class="qr-code-image" src="/images/qrcode.jpg" mode="aspectFit" />
