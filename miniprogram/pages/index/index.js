@@ -75,7 +75,8 @@ Page({
     if (this.data.showCustomSuccessModal) patch.showCustomSuccessModal = false;
     if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
     if (this.data.showConfirmModal) patch.showConfirmModal = false;
-    if (this.data.showFirstTimeModal) patch.showFirstTimeModal = false;
+    // 🔴 不关闭首次进入提示弹窗，让用户可以继续操作
+    // if (this.data.showFirstTimeModal) patch.showFirstTimeModal = false;
     if (Object.keys(patch).length) this.setData(patch);
   },
 
@@ -1287,12 +1288,8 @@ Page({
     wx.setClipboardData({
       data: wechat,
       success: () => {
-        // 复制成功后显示二维码
+        // 复制成功后显示二维码（不显示复制成功弹窗，避免关闭当前弹窗）
         this.setData({ showWechatQRCode: true });
-        // 延迟显示复制成功提示，避免和二维码显示冲突
-        setTimeout(() => {
-          this._showCopySuccessOnce();
-        }, 300);
       },
       fail: () => {
         this.showAutoToast('提示', '复制失败，请重试');
