@@ -262,12 +262,22 @@ Page({
       return;
     }
 
+    // 🔴 临时屏蔽任何 Loading（完全不显示）
+    const oldWxShowLoading = wx.showLoading;
+    const oldAppShowLoading = app && app.showLoading;
+    wx.showLoading = () => {};
+    if (app) {
+      app.showLoading = () => {};
+      if (app.hideLoading) app.hideLoading();
+    }
+
     this.setData({ isLoading: true });
     
     // 🔴 确保在云函数调用前关闭任何官方 loading
     if (wx.__mt_oldHideLoading) {
       wx.__mt_oldHideLoading();
     }
+    try { wx.hideLoading(); } catch (e) {}
 
     // 🔴 获取设备信息
     const sysInfo = wx.getSystemInfoSync();
@@ -288,6 +298,9 @@ Page({
         phoneModel: sysInfo.model || ''
       }
     }).then(res => {
+      // 恢复 Loading
+      if (oldWxShowLoading) wx.showLoading = oldWxShowLoading;
+      if (app && oldAppShowLoading) app.showLoading = oldAppShowLoading;
       this.setData({ isLoading: false });
       
       const result = res.result || {};
@@ -330,6 +343,9 @@ Page({
         }
       }
     }).catch(err => {
+      // 恢复 Loading
+      if (oldWxShowLoading) wx.showLoading = oldWxShowLoading;
+      if (app && oldAppShowLoading) app.showLoading = oldAppShowLoading;
       this.setData({ isLoading: false });
       this.showAutoToast('错误', '网络错误，请重试');
     });
