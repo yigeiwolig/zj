@@ -309,6 +309,16 @@
   </view>
 </view>
 
+<!-- 【新增】首次进入提示弹窗 -->
+<view class="custom-modal-mask" wx:if="{{showFirstTimeModal}}" catchtouchmove="noop" catchtap="closeFirstTimeModal">
+  <view class="custom-modal-box first-time-modal" catchtouchmove="noop" catchtap="noop">
+    <view class="first-time-icon">✨</view>
+    <view class="first-time-title">开启专属体验</view>
+    <view class="first-time-desc">如果您是在抖音或闲鱼添加的用户，请添加管理员微信录入昵称</view>
+    <view class="first-time-btn" bindtap="closeFirstTimeModal">我知道了</view>
+  </view>
+</view>
+
 <!-- 自定义加载中动画（使用 my 页面的样式） -->
 <view class="loading-mask" wx:if="{{showLoadingAnimation}}">
   <view class="loader">

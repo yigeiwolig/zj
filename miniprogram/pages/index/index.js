@@ -39,6 +39,9 @@ Page({
     confirmModalContent: '',
     _pendingUnbanData: null, // 存储待执行的放行数据
     
+    // 【新增】首次进入提示弹窗
+    showFirstTimeModal: false
+    
     // Loading 状态（合并重复定义）
     isLoading: false,
     loadingText: '加载中...',
@@ -70,6 +73,7 @@ Page({
     if (this.data.showCustomSuccessModal) patch.showCustomSuccessModal = false;
     if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
     if (this.data.showConfirmModal) patch.showConfirmModal = false;
+    if (this.data.showFirstTimeModal) patch.showFirstTimeModal = false;
     if (Object.keys(patch).length) this.setData(patch);
   },
 
@@ -102,6 +106,15 @@ Page({
     // 🔴 强制拦截微信官方 loading：确保拦截生效
     if (wx.__mt_oldHideLoading) {
       wx.__mt_oldHideLoading(); // 调用原始 hideLoading 确保关闭任何官方弹窗
+    }
+    
+    // 🔴 检查是否第一次进入小程序
+    const hasSeenFirstTimeModal = wx.getStorageSync('has_seen_first_time_modal');
+    if (!hasSeenFirstTimeModal) {
+      // 延迟显示，确保页面加载完成
+      setTimeout(() => {
+        this.setData({ showFirstTimeModal: true });
+      }, 500);
     }
     
     // 1. 先检查缓存（不立即跳转，等异步检查完成）
@@ -1254,6 +1267,13 @@ Page({
       confirmModalContent: '',
       _pendingUnbanData: null
     });
+  },
+
+  // 🔴 关闭首次进入提示弹窗
+  closeFirstTimeModal() {
+    // 标记用户已看过提示
+    wx.setStorageSync('has_seen_first_time_modal', true);
+    this.setData({ showFirstTimeModal: false });
   },
 
   // 🔴 确认执行放行
