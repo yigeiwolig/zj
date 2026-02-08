@@ -374,7 +374,18 @@ page {
 }
 
 .copy-success-modal .modal-icon-new {
-  display: none !important; /* A方案：不显示图标 */
+  display: flex !important; /* 显示勾勾图标 */
+  align-items: center;
+  justify-content: center;
+  width: 80rpx;
+  height: 80rpx;
+  background: #000;
+  border-radius: 50%;
+  margin: 0 auto 24rpx;
+  font-size: 48rpx;
+  color: #fff;
+  font-weight: 300;
+  animation: checkmarkPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
 .copy-success-modal .modal-title-new {
@@ -382,7 +393,7 @@ page {
   margin-bottom: 0 !important;
   letter-spacing: 0 !important;
   font-weight: 600 !important;
-  animation: toastTextPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: toastTextPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
 }
 
 /* A方案：纯文字轻微弹一下（和 custom-toast 保持一致） */
