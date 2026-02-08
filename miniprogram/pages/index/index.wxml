@@ -331,9 +331,6 @@
       <view class="first-time-btn secondary" wx:if="{{showWechatQRCode}}" bindtap="toggleQRCode">
         收起二维码
       </view>
-      <view class="first-time-btn secondary" wx:if="{{!showWechatQRCode}}" bindtap="closeFirstTimeModal">
-        我知道了
-      </view>
     </view>
   </view>
 </view>
