@@ -193,21 +193,39 @@ Page({
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
       
-      const buttonRes = await db.collection('login_logbutton')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
+      // 🔴 同时检查 login_logbutton 和 login_logs 两个集合
+      const [buttonRes, logRes] = await Promise.all([
+        db.collection('login_logbutton')
+          .where({ _openid: openid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get(),
+        db.collection('login_logs')
+          .where({ _openid: openid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get()
+      ]);
       
+      // 检查 login_logbutton 集合
       if (buttonRes.data && buttonRes.data.length > 0) {
         const btn = buttonRes.data[0];
-        
-        // 🔴 最高优先级：检查强制封禁按钮 qiangli
         const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
         if (qiangli) {
-          console.log('[products] ⚠️ 检测到强制封禁按钮 qiangli 已开启，无视一切放行，直接封禁');
+          console.log('[products] ⚠️ 检测到强制封禁按钮 qiangli 已开启（login_logbutton），无视一切放行，直接封禁');
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-          return; // 强制封禁，直接返回，不执行后续任何检查
+          return;
+        }
+      }
+
+      // 🔴 同时检查 login_logs 集合（兼容用户在 login_logs 中设置 qiangli 的情况）
+      if (logRes.data && logRes.data.length > 0) {
+        const log = logRes.data[0];
+        const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
+        if (qiangli) {
+          console.log('[products] ⚠️ 检测到强制封禁按钮 qiangli 已开启（login_logs），无视一切放行，直接封禁');
+          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          return;
         }
       }
       

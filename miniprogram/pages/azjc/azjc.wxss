@@ -402,14 +402,47 @@ page { height: 100%; background: #fff; overflow: hidden; }
 
 /* 教程展示块 (V-Card) */
 .v-card { background: #fff; border-radius: 50rpx; overflow: hidden; margin-bottom: 40rpx; box-shadow: 0 20rpx 40rpx rgba(0,0,0,0.05); }
-.v-player { width: 100%; height: 360rpx; background: #000; display: flex; justify-content: center; align-items: center; }
+.v-player { 
+  width: 100%; 
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
+  background: #000; 
+  position: relative;
+  display: flex; 
+  justify-content: center; 
+  align-items: center; 
+}
+.v-player video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
 .play-btn { width: 80rpx; height: 80rpx; background: rgba(255,255,255,0.2); border-radius: 50%; color: #fff; display: flex; justify-content: center; align-items: center; font-size: 40rpx; }
 .v-info { padding: 40rpx; }
 .v-title { font-size: 32rpx; font-weight: 700; display: block; }
 
 /* 图文块 */
 .g-article { margin-bottom: 60rpx; }
-.g-media { width: 100%; height: 600rpx; background: #f5f5f7; border-radius: 40rpx; margin-bottom: 30rpx; }
+.g-media { 
+  width: 100%; 
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
+  background: #f5f5f7; 
+  border-radius: 40rpx; 
+  margin-bottom: 30rpx; 
+  position: relative;
+  overflow: hidden;
+}
+.g-media image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .g-info { padding: 0 10rpx; }
 .g-title { font-size: 40rpx; font-weight: 800; display: block; margin-bottom: 15rpx; }
 .g-desc { font-size: 28rpx; color: #666; line-height: 1.6; }
@@ -587,16 +620,20 @@ page { height: 100%; background: #fff; overflow: hidden; }
 }
 
 /* 渲染出的真实媒体样式 */
-/* 🔴 视频包装器：用于定位全屏按钮 */
+/* 🔴 视频包装器：用于定位全屏按钮 - 16:9比例 */
 .v-player-wrapper {
   position: relative;
   width: 100%;
-  height: 380rpx;
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
   border-radius: 40rpx 40rpx 0 0;
   overflow: hidden;
 }
 
 .v-player-real {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   border-radius: 40rpx 40rpx 0 0;
@@ -776,11 +813,14 @@ page { height: 100%; background: #fff; overflow: hidden; }
 }
 
 .g-media-real {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  height: 600rpx;
+  height: 100%;
   background: #eee;
   border-radius: 40rpx;
-  margin-bottom: 30rpx;
+  object-fit: cover;
 }
 
 .admin-actions {

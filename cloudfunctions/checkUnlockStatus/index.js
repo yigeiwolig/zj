@@ -102,11 +102,16 @@ exports.main = async (event, context) => {
       }
     } catch (e) {}
 
-    // 🔴 最高优先级：检查强制封禁按钮 qiangli
-    const qiangli = buttonRecord && (buttonRecord.qiangli === true || buttonRecord.qiangli === 1 || buttonRecord.qiangli === 'true' || buttonRecord.qiangli === '1')
+    // 🔴 最高优先级：检查强制封禁按钮 qiangli（同时检查 login_logbutton 和 login_logs）
+    const qiangliFromButton = buttonRecord && (buttonRecord.qiangli === true || buttonRecord.qiangli === 1 || buttonRecord.qiangli === 'true' || buttonRecord.qiangli === '1');
+    const qiangliFromLog = record && (record.qiangli === true || record.qiangli === 1 || record.qiangli === 'true' || record.qiangli === '1');
+    const qiangli = qiangliFromButton || qiangliFromLog;
+    
     console.log('[checkUnlockStatus] 📋 login_logbutton 记录 - qiangli 值:', buttonRecord?.qiangli, ', isBanned:', buttonRecord?.isBanned, ', banReason:', buttonRecord?.banReason);
+    console.log('[checkUnlockStatus] 📋 login_logs 记录 - qiangli 值:', record?.qiangli);
+    
     if (qiangli) {
-      console.log('[checkUnlockStatus] ⚠️ 检测到强制封禁按钮 qiangli 已开启，无视一切放行，直接封禁');
+      console.log('[checkUnlockStatus] ⚠️ 检测到强制封禁按钮 qiangli 已开启（来源:', qiangliFromButton ? 'login_logbutton' : 'login_logs', '），无视一切放行，直接封禁');
       console.log('[checkUnlockStatus] ⚠️ 即使 auto=true，qiangli 也会阻止自动放行');
       return { action: 'WAIT', msg: '强制封禁中：qiangli按钮已开启' }
     }

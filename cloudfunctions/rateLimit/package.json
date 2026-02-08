@@ -1,0 +1,7 @@
+{
+  "name": "rateLimit",
+  "version": "1.0.0",
+  "description": "频率限制云函数 - 防止爬虫和恶意请求",
+  "main": "index.js",
+  "dependencies": {}
+}

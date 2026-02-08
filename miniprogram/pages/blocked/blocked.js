@@ -4,12 +4,14 @@ Page({
     checkTimer: null,
     type: '', // 封禁类型
     canCheck: false, // 冷却期间禁止检查
-    showCopySuccessModal: false, // 自定义"内容已复制"弹窗
     // 【新增】自定义成功提示弹窗
     showCustomSuccessModal: false,
     customSuccessModalClosing: false, // 成功提示弹窗退出动画中
     successModalTitle: '',
-    successModalContent: ''
+    successModalContent: '',
+    
+    // 【新增】控制"内容已复制"弹窗
+    showCopySuccessModal: false
   },
 
   // 互斥：确保同一时间只显示一个弹窗/提示
@@ -23,20 +25,6 @@ Page({
     if (Object.keys(patch).length) this.setData(patch);
   },
 
-  // 统一方法：显示"内容已复制"弹窗（互斥）
-  _showCopySuccessOnce() {
-    // 🔴 清理之前的定时器，避免快速连续调用时状态混乱
-    if (this._copySuccessTimer) {
-      clearTimeout(this._copySuccessTimer);
-      this._copySuccessTimer = null;
-    }
-    this._closeAllPopups();
-    this.setData({ showCopySuccessModal: true });
-    this._copySuccessTimer = setTimeout(() => {
-      this.setData({ showCopySuccessModal: false });
-      this._copySuccessTimer = null;
-    }, 1500);
-  },
 
   onLoad(options) {
     // 🔴 1. 隐藏左上角返回首页按钮（极为重要）
@@ -125,20 +113,20 @@ Page({
     this.callCheckCloud();
     }
 
-    this.setData({
-      checkTimer: setInterval(() => {
-        if (this._isPageDestroyed) return;
-        if (this.data.canCheck) {
+    // 🔴 修复：定时器ID存储在实例变量中，而不是 data 中
+    this.checkTimer = setInterval(() => {
+      if (this._isPageDestroyed) return;
+      if (this.data.canCheck) {
         this.callCheckCloud();
-        }
-      }, 4000)
-    });
+      }
+    }, 4000);
   },
 
   stopAutoCheck() {
-    if (this.data.checkTimer) {
-      clearInterval(this.data.checkTimer);
-      this.setData({ checkTimer: null });
+    // 🔴 修复：从实例变量中获取定时器ID
+    if (this.checkTimer) {
+      clearInterval(this.checkTimer);
+      this.checkTimer = null;
     }
   },
 
@@ -280,11 +268,14 @@ Page({
   },
 
   handleCopyWechat() {
-    // 🔴 复制前先关闭所有可能的弹窗和自动检测
-    try {
-      wx.hideToast();
-      wx.hideLoading();
-    } catch (e) {}
+    // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
+    const hideOfficialToast = () => {
+      try {
+        if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+        if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+      } catch (e) {}
+    };
+    hideOfficialToast();
     
     // 🔴 关键修复：暂时关闭自动检测，避免"验证通过"弹窗和"复制成功"弹窗冲突
     this.stopAutoCheck();
@@ -300,17 +291,14 @@ Page({
     wx.setClipboardData({ 
       data: 'MT-mogaishe',
       success: () => {
-        // 🔴 立即疯狂隐藏微信官方弹窗（多次尝试，不同时机）
-        const hideOfficialToast = () => {
-          try {
-        wx.hideToast();
-            wx.hideLoading();
-          } catch (e) {}
-        };
-        
-        // 立即执行多次
+        // 🔴 立即疯狂隐藏微信官方弹窗（使用原生API，多次尝试）
         hideOfficialToast();
+        setTimeout(hideOfficialToast, 1);
+        setTimeout(hideOfficialToast, 3);
+        setTimeout(hideOfficialToast, 5);
         setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 15);
+        setTimeout(hideOfficialToast, 20);
         setTimeout(hideOfficialToast, 30);
         setTimeout(hideOfficialToast, 50);
         setTimeout(hideOfficialToast, 80);
@@ -320,18 +308,19 @@ Page({
         setTimeout(hideOfficialToast, 350);
         setTimeout(hideOfficialToast, 500);
         
-        // 🔴 延迟显示自定义"内容已复制"弹窗（等待微信官方弹窗消失）
+        // 🔴 延迟800ms后显示自定义弹窗
         setTimeout(() => {
-          // 显示自定义"内容已复制"弹窗（互斥）
-          this._showCopySuccessOnce();
-          
-          // 🔴 复制弹窗完全关闭后，恢复自动检测
+          // 显示自定义"内容已复制"弹窗
+          this.setData({ showCopySuccessModal: true });
+          // 2秒后自动关闭
           setTimeout(() => {
+            this.setData({ showCopySuccessModal: false });
+            // 🔴 复制成功后，恢复自动检测
             if (!this._isPageDestroyed) {
               this.startAutoCheck();
             }
-          }, 1500);
-        }, 800); // 等待 800ms，确保微信官方弹窗已消失
+          }, 2000);
+        }, 800);
       }
     });
   }

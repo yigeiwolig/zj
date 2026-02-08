@@ -240,24 +240,25 @@ page {
   }
 }
 
-/* ================= 统一的"内容已复制"弹窗（样式和首页一致） ================= */
+/* ================= 统一的"内容已复制"弹窗 - 黑色勾，白色底，保留文字 ================= */
 .copy-success-modal {
   width: 400rpx !important;
   padding: 60rpx 40rpx !important;
   min-height: auto;
+  background: #ffffff !important;
 }
 
 .copy-success-modal .modal-icon-new {
   display: flex !important; /* 显示勾勾图标 */
   align-items: center;
   justify-content: center;
-  width: 80rpx;
-  height: 80rpx;
-  background: #000;
-  border-radius: 50%;
+  width: auto;
+  height: auto;
+  background: transparent !important; /* 去掉黑色圆形背景 */
+  border-radius: 0;
   margin: 0 auto 24rpx;
-  font-size: 48rpx;
-  color: #fff;
+  font-size: 80rpx;
+  color: #000000 !important; /* 黑色勾 */
   font-weight: 300;
   animation: checkmarkPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
@@ -267,6 +268,8 @@ page {
   margin-bottom: 0 !important;
   letter-spacing: 0 !important;
   font-weight: 600 !important;
+  color: #000000 !important;
+  text-align: center;
   animation: toastTextPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
 }
 
@@ -344,13 +347,13 @@ page {
   display: flex !important; /* 显示勾勾图标 */
   align-items: center;
   justify-content: center;
-  width: 80rpx;
-  height: 80rpx;
-  background: #000;
-  border-radius: 50%;
+  width: auto;
+  height: auto;
+  background: transparent !important; /* 去掉黑色圆形背景 */
+  border-radius: 0;
   margin: 0 auto 24rpx;
-  font-size: 48rpx;
-  color: #fff;
+  font-size: 80rpx;
+  color: #000000 !important; /* 黑色勾 */
   font-weight: 300;
   animation: checkmarkPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
@@ -371,7 +374,8 @@ page {
   margin-bottom: 0 !important;
   letter-spacing: 0 !important;
   font-weight: 600 !important;
-  color: #000000;
+  color: #000000 !important;
+  text-align: center;
   animation: toastTextPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) 0.2s both;
 }
 

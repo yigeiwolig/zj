@@ -2481,8 +2481,8 @@ Page({
     
     console.log('[azjc] 启动定时自动保存（每30秒）');
     
-    // 每30秒保存一次
-    const timer = setInterval(() => {
+    // 🔴 修复：定时器ID存储在实例变量中，而不是 data 中
+    this.autoSaveTimer = setInterval(() => {
       if (this.data.isShareCodeUser && this.data.sessionStartTime > 0) {
         console.log('[azjc] 定时自动保存触发');
         this._uploadSessionStats().catch(err => {
@@ -2490,16 +2490,15 @@ Page({
         });
       }
     }, 30000); // 30秒
-    
-    this.setData({ autoSaveTimer: timer });
   },
 
   // 🔴 停止定时自动保存
   _stopAutoSave() {
-    if (this.data.autoSaveTimer) {
+    // 🔴 修复：从实例变量中获取定时器ID
+    if (this.autoSaveTimer) {
       console.log('[azjc] 停止定时自动保存');
-      clearInterval(this.data.autoSaveTimer);
-      this.setData({ autoSaveTimer: null });
+      clearInterval(this.autoSaveTimer);
+      this.autoSaveTimer = null;
     }
   }
 });

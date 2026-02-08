@@ -299,7 +299,7 @@
   </view>
 </view>
 
-<!-- 【新增】自定义"内容已复制"弹窗 - 白色，大一点 -->
+<!-- 【全局通用】自定义"内容已复制"弹窗（统一使用 copy-success-modal 样式） -->
 <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
     <!-- 图标：使用 Unicode 字符 -->
@@ -315,12 +315,6 @@
     <view class="first-time-icon">✨</view>
     <view class="first-time-title">开启专属体验</view>
     <view class="first-time-desc">如果您是在抖音或闲鱼添加的用户，请添加管理员微信录入昵称</view>
-    
-    <!-- 复制成功提示 -->
-    <view class="copy-success-tip" wx:if="{{showCopySuccessInModal}}">
-      <text class="copy-success-icon">✓</text>
-      <text class="copy-success-text">内容已复制</text>
-    </view>
     
     <!-- 二维码显示区域 -->
     <view class="qr-code-container" wx:if="{{showWechatQRCode}}">

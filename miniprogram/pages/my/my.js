@@ -110,12 +110,13 @@ Page({
     showPaidRepairConfirmModal: false, // 是否显示付费维修确认弹窗
     currentPaidRepairItem: null, // 当前需要确认的维修单
 
-    // 统一的"内容已复制"弹窗（和首页一致）
-    showCopySuccessModal: false,
     
     // 【新增】分享码生成弹窗
     showShareCodeGenerateModal: false,
     shareCodeValue: '',
+    
+    // 【新增】控制"内容已复制"弹窗
+    showCopySuccessModal: false,
     
     // 【新增】自动消失提示（无按钮，2秒后自动消失）
     autoToast: { show: false, title: '', content: '' },
@@ -180,9 +181,9 @@ Page({
     try { wx.hideToast(); } catch (e) {}
     try { wx.hideLoading(); } catch (e) {}
     const patch = {};
-    if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
     if (this.data.showShareCodeGenerateModal) patch.showShareCodeGenerateModal = false;
     if (this.data.showModal) patch.showModal = false;
+    if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
     if (this.data.autoToast && this.data.autoToast.show) {
       patch['autoToast.show'] = false;
       if (this.data.autoToastClosing) patch.autoToastClosing = false;
@@ -205,6 +206,7 @@ Page({
       this._copySuccessTimer = null;
     }, 1500);
   },
+
 
   onLoad(options) {
     // 🔴 更新页面访问统计
@@ -713,7 +715,12 @@ Page({
       console.log('✅ [checkAdminPrivilege] 已获取 openid:', myOpenid);
 
       const db = wx.cloud.database();
-      const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      let adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      
+      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      if (adminCheck.data.length === 0) {
+        adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
+      }
       
       if (adminCheck.data.length > 0) {
         this.setData({ 
@@ -2394,19 +2401,41 @@ Page({
 所在地区: 广东省佛山市南海区桂城街道
 详细地址: 创智路2号保利心语花园三期（驿站）（到付直接拒收，无需派送）`;
     
+    // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
+    const hideOfficialToast = () => {
+      try {
+        if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+        if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+      } catch (e) {}
+    };
+    hideOfficialToast();
+    
     wx.setClipboardData({
       data: address,
       success: (res) => {
         console.log('[copyReturnAddress] 复制成功', res);
-        // 立即隐藏官方的"内容已复制" Toast
-        wx.hideToast();
-        setTimeout(() => { wx.hideToast(); }, 50);
+        // 🔴 立即疯狂隐藏官方弹窗（使用原生API，多次尝试）
+        hideOfficialToast();
+        setTimeout(hideOfficialToast, 1);
+        setTimeout(hideOfficialToast, 3);
+        setTimeout(hideOfficialToast, 5);
+        setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 15);
+        setTimeout(hideOfficialToast, 20);
+        setTimeout(hideOfficialToast, 30);
+        setTimeout(hideOfficialToast, 50);
+        setTimeout(hideOfficialToast, 80);
+        setTimeout(hideOfficialToast, 120);
+        setTimeout(hideOfficialToast, 180);
+        setTimeout(hideOfficialToast, 250);
+        setTimeout(hideOfficialToast, 350);
+        setTimeout(hideOfficialToast, 500);
         // 使用统一的"内容已复制"自定义弹窗（互斥）
         this._showCopySuccessOnce();
       },
       fail: (err) => {
         console.error('[copyReturnAddress] 复制失败', err);
-        wx.hideToast();
+        hideOfficialToast();
         this.showAutoToast('复制失败', '请手动复制地址');
       }
     });
@@ -2435,19 +2464,41 @@ Page({
       return;
     }
     
+    // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
+    const hideOfficialToast = () => {
+      try {
+        if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+        if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+      } catch (e) {}
+    };
+    hideOfficialToast();
+    
     wx.setClipboardData({
       data: addressText,
       success: (res) => {
         console.log('[copyUserAddress] 复制成功', res);
-        // 立即隐藏官方的"内容已复制" Toast
-        wx.hideToast();
-        setTimeout(() => { wx.hideToast(); }, 50);
+        // 🔴 立即疯狂隐藏官方弹窗（使用原生API，多次尝试）
+        hideOfficialToast();
+        setTimeout(hideOfficialToast, 1);
+        setTimeout(hideOfficialToast, 3);
+        setTimeout(hideOfficialToast, 5);
+        setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 15);
+        setTimeout(hideOfficialToast, 20);
+        setTimeout(hideOfficialToast, 30);
+        setTimeout(hideOfficialToast, 50);
+        setTimeout(hideOfficialToast, 80);
+        setTimeout(hideOfficialToast, 120);
+        setTimeout(hideOfficialToast, 180);
+        setTimeout(hideOfficialToast, 250);
+        setTimeout(hideOfficialToast, 350);
+        setTimeout(hideOfficialToast, 500);
         // 使用统一的"内容已复制"自定义弹窗（互斥）
         this._showCopySuccessOnce();
       },
       fail: (err) => {
         console.error('[copyUserAddress] 复制失败', err);
-        wx.hideToast();
+        hideOfficialToast();
         this.showAutoToast('提示', '复制失败，请手动复制');
       }
     });
@@ -2467,19 +2518,41 @@ Page({
     // 格式化地址文本：姓名 电话 地址
     const addressText = `${name} ${phone}\n${address}`;
     
+    // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
+    const hideOfficialToast = () => {
+      try {
+        if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+        if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+      } catch (e) {}
+    };
+    hideOfficialToast();
+    
     wx.setClipboardData({
       data: addressText,
       success: (res) => {
         console.log('[copyOrderAddress] 复制成功', res);
-        // 立即隐藏官方的"内容已复制" Toast
-        wx.hideToast();
-        setTimeout(() => { wx.hideToast(); }, 50);
+        // 🔴 立即疯狂隐藏官方弹窗（使用原生API，多次尝试）
+        hideOfficialToast();
+        setTimeout(hideOfficialToast, 1);
+        setTimeout(hideOfficialToast, 3);
+        setTimeout(hideOfficialToast, 5);
+        setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 15);
+        setTimeout(hideOfficialToast, 20);
+        setTimeout(hideOfficialToast, 30);
+        setTimeout(hideOfficialToast, 50);
+        setTimeout(hideOfficialToast, 80);
+        setTimeout(hideOfficialToast, 120);
+        setTimeout(hideOfficialToast, 180);
+        setTimeout(hideOfficialToast, 250);
+        setTimeout(hideOfficialToast, 350);
+        setTimeout(hideOfficialToast, 500);
         // 使用统一的"内容已复制"自定义弹窗（互斥）
         this._showCopySuccessOnce();
       },
       fail: (err) => {
         console.error('[copyOrderAddress] 复制失败', err);
-        wx.hideToast();
+        hideOfficialToast();
         this.showAutoToast('提示', '复制失败，请手动复制');
       }
     });
@@ -3802,23 +3875,41 @@ Page({
   copyData(e) {
     const text = e.currentTarget.dataset.text;
     if(!text) return;
-    // 🔴 提前隐藏可能的 toast
-    wx.hideToast();
+    
+    // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
+    const hideOfficialToast = () => {
+      try {
+        if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+        if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+      } catch (e) {}
+    };
+    hideOfficialToast();
     
     wx.setClipboardData({
       data: text,
       success: () => {
-        // 立即干掉系统"已复制"toast，多次尝试确保隐藏
-        wx.hideToast();
-        setTimeout(() => { wx.hideToast(); }, 50);
-        setTimeout(() => { wx.hideToast(); }, 100);
-        setTimeout(() => { wx.hideToast(); }, 150);
+        // 🔴 立即疯狂隐藏官方弹窗（使用原生API，多次尝试）
+        hideOfficialToast();
+        setTimeout(hideOfficialToast, 1);
+        setTimeout(hideOfficialToast, 3);
+        setTimeout(hideOfficialToast, 5);
+        setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 15);
+        setTimeout(hideOfficialToast, 20);
+        setTimeout(hideOfficialToast, 30);
+        setTimeout(hideOfficialToast, 50);
+        setTimeout(hideOfficialToast, 80);
+        setTimeout(hideOfficialToast, 120);
+        setTimeout(hideOfficialToast, 180);
+        setTimeout(hideOfficialToast, 250);
+        setTimeout(hideOfficialToast, 350);
+        setTimeout(hideOfficialToast, 500);
         // 使用统一的"内容已复制"弹窗（互斥）
         this._showCopySuccessOnce();
       },
       fail: () => {
-        wx.hideToast();
-        setTimeout(() => { wx.hideToast(); }, 50);
+        hideOfficialToast();
+        setTimeout(hideOfficialToast, 50);
       }
     });
   },
@@ -4860,15 +4951,28 @@ Page({
       });
       
       // 处理视频数据
-      const videoApps = res[1].data.map(i => ({
-        ...i, 
-        type: 'video', 
-        title: '投稿: ' + (i.vehicleName || '未知车型'),
-        // 视频申请已经是数字状态（0/1/-1），直接使用
-        originalCreateTime: i.createTime, // 🔴 保留原始时间用于排序
-        // 格式化时间用于显示
-        createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚'
-      }));
+      const videoApps = res[1].data.map(i => {
+        // 🔴 确保视频投稿不包含维修相关属性，避免显示错误的标签
+        const { needReturn, returnStatus, returnCompleted, repairItems, repairTotalPrice, repairPaid, warrantyExpired, remainingDays, needPurchaseParts, purchasePartsStatus, type, ...videoData } = i;
+        // 🔴 构建干净的视频数据对象，不包含任何维修相关属性
+        const cleanVideoData = {};
+        // 只复制需要的字段
+        Object.keys(videoData).forEach(key => {
+          // 排除所有维修相关字段
+          if (!['needReturn', 'returnStatus', 'returnCompleted', 'repairItems', 'repairTotalPrice', 'repairPaid', 'warrantyExpired', 'remainingDays', 'needPurchaseParts', 'purchasePartsStatus'].includes(key)) {
+            cleanVideoData[key] = videoData[key];
+          }
+        });
+        return {
+          ...cleanVideoData,
+          type: 'video', // 🔴 强制设置为 'video'，覆盖任何可能的错误值
+          title: '投稿: ' + (i.vehicleName || '未知车型'),
+          // 视频申请已经是数字状态（0/1/-1），直接使用
+          originalCreateTime: i.createTime, // 🔴 保留原始时间用于排序
+          // 格式化时间用于显示
+          createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚'
+        };
+      });
       
       // [新增] 处理维修工单
       const repairApps = res[2].data.map(i => {
@@ -5033,6 +5137,19 @@ Page({
         return result;
       });
       
+      // 🔴 调试：检查视频投稿数据
+      videoApps.forEach(v => {
+        if (v.type !== 'video' || v.needReturn !== undefined || v.returnStatus !== undefined) {
+          console.error('❌ [loadMyActivities] 视频投稿数据异常:', {
+            _id: v._id,
+            type: v.type,
+            needReturn: v.needReturn,
+            returnStatus: v.returnStatus,
+            title: v.title
+          });
+        }
+      });
+      
       // 合并并按时间倒序（使用原始时间对象排序）
       const all = [...deviceApps, ...videoApps, ...repairApps].sort((a, b) => {
         // 使用原始 createTime 对象排序
@@ -5041,15 +5158,36 @@ Page({
         return timeB - timeA;
       });
       
+      // 🔴 再次检查合并后的数据，强制清理视频投稿的维修相关属性
+      all.forEach(item => {
+        if (item.type === 'video') {
+          // 🔴 强制删除所有维修相关属性
+          delete item.needReturn;
+          delete item.returnStatus;
+          delete item.returnCompleted;
+          delete item.repairItems;
+          delete item.repairTotalPrice;
+          delete item.repairPaid;
+          delete item.warrantyExpired;
+          delete item.remainingDays;
+          delete item.needPurchaseParts;
+          delete item.purchasePartsStatus;
+          // 确保 type 正确
+          item.type = 'video';
+        }
+      });
+      
       // 🔴 过滤规则：
-      // - 设备 / 视频申请：只显示「审核中 / 已驳回」
+      // - 设备 / 视频申请：显示「审核中 / 已通过 / 已驳回」
       // - 维修工单：全部展示（含 SHIPPED / TUTORIAL），因为用户需要看到处理结果
       const filtered = all.filter(i => {
         // 维修工单始终保留
         if (i.type === 'repair') return true;
         const status = i.status;
-        // 设备 / 视频：只保留 审核中(0/PENDING) 和 已驳回(-1/REJECTED)
-        return status === 0 || status === 'PENDING' || status === -1 || status === 'REJECTED';
+        // 设备 / 视频：保留 审核中(0/PENDING)、已通过(1/APPROVED) 和 已驳回(-1/REJECTED)
+        return status === 0 || status === 'PENDING' || 
+               status === 1 || status === 'APPROVED' || 
+               status === -1 || status === 'REJECTED';
       });
       
       console.log('📋 [loadMyActivities] 过滤后的申请记录（已通过已排除）:', filtered);
@@ -5574,10 +5712,8 @@ Page({
       clearInterval(this.countdownTimer);
     }
     
-    // 🔴 标记是否正在处理自动扣除，避免重复触发
-    if (!this._autoDeducting) {
-      this._autoDeducting = false;
-    }
+    // 🔴 修复：初始化自动扣除标志，避免重复触发
+    this._autoDeducting = false;
     
     this.countdownTimer = setInterval(() => {
       const repair = this.data.myReturnRequiredRepair;
@@ -6997,11 +7133,11 @@ Page({
       this.data.showTestPasswordModal ||
       this.data.showLocationPermissionModal ||
       this.data.showLogisticsModal ||
-      this.data.showCopySuccessModal ||
       this.data.showShareCodeGenerateModal ||
       this.data.showFillRepairModal ||
       this.data.showPurchasePartsModal ||
       this.data.showPaidRepairConfirmModal ||
+      this.data.showCopySuccessModal ||
       this.data.showLoadingAnimation ||
       this.data.isClearingData ||
       (this.data.dialog && this.data.dialog.show) ||

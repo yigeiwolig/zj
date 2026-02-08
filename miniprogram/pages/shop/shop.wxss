@@ -205,10 +205,228 @@ page {
 /* ============ 2. 主页面 ============ */
 .main-scroll { height: 100vh; padding-top: 180rpx; box-sizing: border-box; }
 
-/* Hero 轮播 */
-.hero-swiper-box { height: 422rpx; width: 100%; background: #000; position: relative; margin-bottom: 40rpx; }
-.hero-swiper, .hero-media { width: 100%; height: 100%; object-fit: cover; }
-.admin-del-media { position: absolute; top: 20rpx; right: 20rpx; background: red; color: #fff; width: 50rpx; height: 50rpx; border-radius: 50%; text-align: center; line-height: 50rpx; }
+/* Hero 轮播 - 16:9比例 */
+.hero-swiper-box { 
+  width: 100%; 
+  padding-bottom: 56.25%; /* 16:9 比例 (9/16 = 0.5625) */
+  background: #000; 
+  position: relative; 
+  margin-bottom: 40rpx; 
+  height: 0;
+}
+.hero-swiper { 
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%; 
+  height: 100%; 
+}
+.hero-media { 
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%; 
+  height: 100%; 
+  object-fit: cover; 
+}
+/* 🔴 新增：详情页视频管理员控制开关组 */
+.admin-detail-video-controls {
+  position: absolute;
+  top: 20rpx;
+  left: 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  z-index: 30;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(10rpx);
+  padding: 20rpx;
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.3);
+}
+
+.video-control-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 200rpx;
+}
+
+.control-label {
+  font-size: 26rpx;
+  color: #fff;
+  font-weight: 600;
+  margin-right: 20rpx;
+}
+
+/* iOS风格开关 */
+.switch-toggle {
+  width: 88rpx;
+  height: 52rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 26rpx;
+  position: relative;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.switch-toggle.on {
+  background: #34C759;
+}
+
+.switch-thumb {
+  width: 44rpx;
+  height: 44rpx;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 4rpx;
+  left: 4rpx;
+  transition: all 0.3s ease;
+  box-shadow: 0 2rpx 4rpx rgba(0,0,0,0.2);
+}
+
+.switch-toggle.on .switch-thumb {
+  transform: translateX(36rpx);
+}
+
+.switch-toggle:active {
+  opacity: 0.8;
+}
+
+/* 🔴 新增：拖拽排序列表 */
+.media-drag-list {
+  padding: 30rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  margin: 20rpx;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.drag-tip {
+  font-size: 24rpx;
+  color: #666;
+  text-align: center;
+  margin-bottom: 30rpx;
+  padding: 20rpx;
+  background: #f5f5f7;
+  border-radius: 12rpx;
+}
+
+.drag-item {
+  display: flex;
+  align-items: center;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  background: #f9f9f9;
+  border-radius: 16rpx;
+  border: 2rpx solid #e0e0e0;
+  transition: all 0.2s;
+}
+
+.drag-item:active {
+  background: #f0f0f0;
+  border-color: #0071E3;
+}
+
+.drag-item-preview {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+  background: #000;
+  margin-right: 20rpx;
+  position: relative;
+}
+
+.drag-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.drag-preview-video {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 24rpx;
+}
+
+.drag-item-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.drag-item-type {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #000;
+}
+
+.drag-item-badges {
+  display: flex;
+  gap: 10rpx;
+}
+
+.badge {
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+  color: #fff;
+}
+
+.pin-badge {
+  background: #FFC107;
+}
+
+.autoplay-badge {
+  background: #4CAF50;
+}
+
+.drag-handle {
+  font-size: 32rpx;
+  color: #999;
+  padding: 10rpx;
+}
+
+.drag-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 30rpx;
+  padding-top: 30rpx;
+  border-top: 1rpx solid #e0e0e0;
+}
+
+.drag-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  text-align: center;
+  border-radius: 40rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.drag-btn.cancel {
+  background: #f5f5f7;
+  color: #666;
+}
+
+.drag-btn.confirm {
+  background: #000;
+  color: #fff;
+}
+
+.drag-btn:active {
+  opacity: 0.8;
+  transform: scale(0.98);
+}
 
 /* Admin: 左右分开的上传按钮 */
 .admin-upload-row {
@@ -233,9 +451,18 @@ page {
 .product-cover-wrapper {
   position: relative;
   width: 100%;
-  height: 422rpx;
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
+  overflow: hidden;
 }
-.p-img { width: 100%; height: 422rpx; object-fit: cover; }
+.p-img { 
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%; 
+  height: 100%; 
+  object-fit: cover; 
+}
 .p-info { padding: 40rpx; }
 .p-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 34rpx; align-items: center; }
 .p-price-wrapper { 
@@ -321,8 +548,33 @@ page {
   margin-bottom: 0;
 }
 .detail-images { margin-bottom: 40rpx; }
-.dimg-box { position: relative; width: 100%; height: 422rpx; overflow: hidden; }
-.dimg { width: 100%; height: 100%; display: block; object-fit: cover; }
+.dimg-box { 
+  position: relative; 
+  width: 100%; 
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
+  overflow: hidden;
+  transition: transform 0.3s ease-out, box-shadow 0.2s, opacity 0.2s;
+}
+
+.dimg-box.dragging {
+  transition: none !important;
+  transform: translateZ(0) scale(1.02);
+  box-shadow: 0 12rpx 32rpx rgba(0,0,0,0.15);
+  z-index: 100;
+  opacity: 0.95;
+  border: 2rpx solid #007AFF;
+  will-change: transform;
+}
+.dimg { 
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%; 
+  height: 100%; 
+  display: block; 
+  object-fit: cover; 
+}
 .admin-del-abs { position: absolute; top: 20rpx; right: 20rpx; background: red; color: #fff; width: 50rpx; height: 50rpx; border-radius: 50%; text-align: center; line-height: 50rpx; }
 .add-txt-btn { text-align: center; padding: 40rpx; color: #0071E3; font-weight: 600; font-size: 26rpx; }
 
@@ -364,7 +616,12 @@ page {
 /* 选项 Grid (图上字下) */
 .opt-grid { display: flex; flex-wrap: wrap; gap: 20rpx; }
 .opt-card { width: 30%; flex-grow: 1; border: 2rpx solid #eee; border-radius: 16rpx; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; text-align: center; transition: all 0.3s ease; }
-.opt-card.selected { border-color: #0071E3; background: rgba(0,113,227,0.03); }
+.opt-card.selected { 
+  border: 4rpx solid #0071E3; /* 🔴 和型号选择保持一致，使用4rpx边框 */
+  background: #F2F7FF; /* 🔴 和型号选择保持一致，使用相同的背景色 */
+  box-shadow: 0 8rpx 20rpx rgba(0, 113, 227, 0.15); /* 🔴 和型号选择保持一致，使用相同的阴影 */
+  transform: scale(1.02); /* 🔴 和型号选择保持一致，使用相同的放大效果 */
+}
 
 /* 🔴 优化：管理员模式下改为横向布局，左边文字，右边上传照片 */
 .opt-grid.admin-mode .opt-card.admin-mode {
@@ -425,7 +682,22 @@ page {
   color: #666 !important;
 }
 
-.opt-img { width: 100%; height: 160rpx; background: #f0f0f0; object-fit: cover; }
+.opt-img { 
+  width: 100%; 
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
+  background: #f0f0f0; 
+  position: relative;
+  overflow: hidden;
+}
+.opt-img image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .opt-info { 
   padding: 20rpx 10rpx; 
   width: 100%; 
@@ -526,7 +798,14 @@ page {
   margin-left: 12rpx;
   font-weight: 500;
 }
-.acc-thumb { width: 100rpx; height: 100rpx; border-radius: 12rpx; background: #eee; margin-right: 20rpx; }
+.acc-thumb { 
+  width: 100rpx; 
+  height: 56.25rpx; /* 16:9 比例 (100 * 9/16 = 56.25) */
+  border-radius: 12rpx; 
+  background: #eee; 
+  margin-right: 20rpx;
+  object-fit: cover;
+}
 .acc-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .acc-n { font-size: 28rpx; font-weight: 600; }
 .acc-p { font-size: 26rpx; color: #666; margin-top: 6rpx; }
@@ -735,7 +1014,8 @@ page {
 /* ============ 5. 配件详情（高端极简风格） ============ */
 .acc-detail-hero { 
   width: 100%; 
-  height: 500rpx; /* 增加高度，更有冲击力 */
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
   background: #f9f9f9;
   display: flex; 
   flex-direction: column; 
@@ -746,6 +1026,9 @@ page {
 }
 
 .acc-detail-hero .dimg { 
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%; 
   height: 100%; 
   object-fit: cover; 
@@ -2075,12 +2358,23 @@ page {
   margin: 0; 
 }
 
-/* 视频容器 */
+/* 视频容器 - 16:9比例 */
 .hero-video-wrapper,
 .detail-video-wrapper {
-  position: relative;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
+}
+.hero-video-wrapper video,
+.detail-video-wrapper video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* 全屏播放器的暂停覆盖层 */

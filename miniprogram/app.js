@@ -48,6 +48,16 @@ App({
           console.error('[app] 页面访问统计更新失败:', pageRoute, err);
         }
       });
+    },
+    
+    // 🔴 shop页面数据预加载缓存
+    shopDataCache: {
+      shopTitle: null,
+      topMediaList: null,
+      seriesList: null,
+      accessoryList: null,
+      cacheTime: null, // 缓存时间戳
+      isLoading: false // 是否正在加载
     }
   },
 
@@ -265,60 +275,47 @@ App({
         else wx.__mt_oldHideLoading();
       };
 
-      // 4) setClipboardData - 拦截复制API，自动隐藏原生提示并显示自定义提示
+      // 4) setClipboardData - 拦截并立即隐藏官方弹窗
       wx.setClipboardData = (opt = {}) => {
         const originalSuccess = opt.success;
         const originalFail = opt.fail;
         
-        // 🔴 检查页面是否有自定义复制弹窗（通过检查 success 回调中是否调用了页面方法）
-        // 如果页面有自定义处理，就不显示 global toast，让页面自己控制
-        const hasPageCustomHandler = originalSuccess && originalSuccess.toString().includes('_showCopySuccessOnce');
-        
-        // 🔴 策略：只有在页面没有自定义处理时才显示 global toast
-        const toast = getToast();
-        if (toast && !hasPageCustomHandler) {
-          hideKnownPagePopups();
-          // 立即显示自定义提示（抢占显示时机）
-          toast.showToast({ title: '内容已复制', icon: 'success', duration: 2000 });
+        // 🔴 复制前立即隐藏可能的官方弹窗
+        if (wx.__mt_oldHideToast) {
+          wx.__mt_oldHideToast();
+        }
+        if (wx.__mt_oldHideLoading) {
+          wx.__mt_oldHideLoading();
         }
         
-        // 包装 success 回调
+        // 包装 success 回调，立即隐藏官方弹窗
         opt.success = (res) => {
-          // 🔴 关键修复：必须调用原生的 hideToast 才能隐藏系统弹出的"内容已复制"
-          // 因为 wx.hideToast 已经被我们拦截了，指向的是自定义组件的 hideToast
-          const hideNativeToast = () => {
+          // 🔴 立即疯狂隐藏官方弹窗（多次尝试，不同时机）
+          const hideOfficialToast = () => {
             try {
-              if (wx.__mt_oldHideToast) {
-                wx.__mt_oldHideToast();
-              } else {
-                // 如果没有保存原生方法（理论上不可能），尝试直接调用（可能会递归，但这里是兜底）
-                // 实际上我们应该确保 __mt_oldHideToast 存在
-            }
-          } catch (e) {}
+              if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+              if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+            } catch (e) {}
           };
-
-          // 立即隐藏原生提示
-          hideNativeToast();
           
-          // 疯狂隐藏原生提示
-          setTimeout(hideNativeToast, 0);
-          setTimeout(hideNativeToast, 10);
-          setTimeout(hideNativeToast, 30);
-          setTimeout(hideNativeToast, 50);
-          setTimeout(hideNativeToast, 100);
-          setTimeout(hideNativeToast, 200);
+          // 立即执行多次，确保官方弹窗不会显示
+          hideOfficialToast();
+          setTimeout(hideOfficialToast, 1);
+          setTimeout(hideOfficialToast, 3);
+          setTimeout(hideOfficialToast, 5);
+          setTimeout(hideOfficialToast, 10);
+          setTimeout(hideOfficialToast, 15);
+          setTimeout(hideOfficialToast, 20);
+          setTimeout(hideOfficialToast, 30);
+          setTimeout(hideOfficialToast, 50);
+          setTimeout(hideOfficialToast, 80);
+          setTimeout(hideOfficialToast, 120);
+          setTimeout(hideOfficialToast, 180);
+          setTimeout(hideOfficialToast, 250);
+          setTimeout(hideOfficialToast, 350);
+          setTimeout(hideOfficialToast, 500);
           
-          // 如果自定义提示还没显示（getToast失败的情况），且页面没有自定义处理，现在尝试显示
-          if (!toast && !hasPageCustomHandler) {
-            setTimeout(() => {
-              const t = getToast();
-              if (t) {
-                t.showToast({ title: '内容已复制', icon: 'success', duration: 1500 });
-              }
-            }, 50);
-          }
-          
-          // 执行原始 success 回调（页面会在这里调用 _showCopySuccessOnce()）
+          // 执行原始 success 回调
           if (originalSuccess) originalSuccess(res);
         };
         
@@ -337,6 +334,9 @@ App({
         traceUser: true,
       });
       console.log('✅ 云开发已在 app.js 初始化，环境ID: cloudbase-4gn1heip7c38ec6c');
+      
+      // 🔴 预加载shop页面数据（不阻塞启动）
+      this.preloadShopData();
       
       // 🔴 应用启动时检查封禁状态（确保重启后也能拦截）
       // PC端检测已在onLaunch最开始执行，这里不再重复检查
@@ -430,32 +430,59 @@ App({
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
       
-      const buttonRes = await db.collection('login_logbutton')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
+      // 🔴 同时检查 login_logbutton 和 login_logs 两个集合
+      const [buttonRes, logRes] = await Promise.all([
+        db.collection('login_logbutton')
+          .where({ _openid: openid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get(),
+        db.collection('login_logs')
+          .where({ _openid: openid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get()
+      ]);
       
+      // 检查 login_logbutton 集合
       if (buttonRes.data && buttonRes.data.length > 0) {
         const btn = buttonRes.data[0];
-        
-        // 🔴 最高优先级：检查强制封禁按钮 qiangli
         const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
         if (qiangli) {
-          console.log('[app] ⚠️ 检测到强制封禁按钮 qiangli 已开启，无视一切放行，直接封禁');
-          // 延迟一下，确保页面加载完成
+          console.log('[app] ⚠️ 检测到强制封禁按钮 qiangli 已开启（login_logbutton），无视一切放行，直接封禁');
           setTimeout(() => {
             wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           }, 500);
-          return; // 强制封禁，直接返回，不执行后续任何检查
+          return;
+        }
+      }
+
+      // 🔴 同时检查 login_logs 集合（兼容用户在 login_logs 中设置 qiangli 的情况）
+      if (logRes.data && logRes.data.length > 0) {
+        const log = logRes.data[0];
+        const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
+        if (qiangli) {
+          console.log('[app] ⚠️ 检测到强制封禁按钮 qiangli 已开启（login_logs），无视一切放行，直接封禁');
+          setTimeout(() => {
+            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          }, 500);
+          return;
         }
       }
       
       // 🔴 关键修复：先检查是否是管理员，管理员豁免封禁检查（但qiangli优先级更高）
-      const adminCheck = await db.collection('guanliyuan')
+      let adminCheck = await db.collection('guanliyuan')
         .where({ openid: openid })
         .limit(1)
         .get();
+      
+      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      if (adminCheck.data && adminCheck.data.length === 0) {
+        adminCheck = await db.collection('guanliyuan')
+          .where({ _openid: openid })
+          .limit(1)
+          .get();
+      }
       
       if (adminCheck.data && adminCheck.data.length > 0) {
         console.log('[app] ✅ 检测到管理员身份，豁免封禁检查');
@@ -533,31 +560,58 @@ App({
       const db = wx.cloud.database();
 
       // 🔴 先检查是否是管理员，管理员豁免检查
-      const adminCheck = await db.collection('guanliyuan')
+      let adminCheck = await db.collection('guanliyuan')
         .where({ openid: openid })
         .limit(1)
         .get();
+      
+      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      if (adminCheck.data && adminCheck.data.length === 0) {
+        adminCheck = await db.collection('guanliyuan')
+          .where({ _openid: openid })
+          .limit(1)
+          .get();
+      }
       
       if (adminCheck.data && adminCheck.data.length > 0) {
         return; // 管理员直接返回，不检查封禁状态
       }
 
-      // 🔴 检查 qiangli 强制封禁
-      const buttonRes = await db.collection('login_logbutton')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
+      // 🔴 检查 qiangli 强制封禁（同时检查 login_logbutton 和 login_logs 两个集合）
+      const [buttonRes, logRes] = await Promise.all([
+        db.collection('login_logbutton')
+          .where({ _openid: openid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get(),
+        db.collection('login_logs')
+          .where({ _openid: openid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get()
+      ]);
 
+      // 检查 login_logbutton 集合
       if (buttonRes.data && buttonRes.data.length > 0) {
         const btn = buttonRes.data[0];
         const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
         
         if (qiangli) {
-          console.log('[app] 🚫 定时检查：检测到 qiangli 强制封禁，立即跳转');
-          // 停止定时检查
+          console.log('[app] 🚫 定时检查：检测到 qiangli 强制封禁（login_logbutton），立即跳转');
           this.stopQiangliCheck();
-          // 立即跳转，不延迟
+          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          return;
+        }
+      }
+
+      // 🔴 同时检查 login_logs 集合（兼容用户在 login_logs 中设置 qiangli 的情况）
+      if (logRes.data && logRes.data.length > 0) {
+        const log = logRes.data[0];
+        const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
+        
+        if (qiangli) {
+          console.log('[app] 🚫 定时检查：检测到 qiangli 强制封禁（login_logs），立即跳转');
+          this.stopQiangliCheck();
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           return;
         }
@@ -955,5 +1009,90 @@ App({
 
   checkAccess: function() {
     this.getLocationAndCheck();
+  },
+
+  // 🔴 预加载shop页面数据（应用启动时调用，提升用户体验）
+  preloadShopData() {
+    // 防止重复加载
+    if (this.globalData.shopDataCache.isLoading) {
+      console.log('[app] shop数据正在加载中，跳过重复请求');
+      return;
+    }
+
+    // 检查缓存是否有效（5分钟内有效）
+    const now = Date.now();
+    const cacheTime = this.globalData.shopDataCache.cacheTime;
+    if (cacheTime && (now - cacheTime < 5 * 60 * 1000)) {
+      console.log('[app] shop数据缓存有效，无需重新加载');
+      return;
+    }
+
+    console.log('[app] 开始预加载shop页面数据...');
+    this.globalData.shopDataCache.isLoading = true;
+
+    if (!wx.cloud) {
+      console.warn('[app] 云开发未初始化，跳过shop数据预加载');
+      this.globalData.shopDataCache.isLoading = false;
+      return;
+    }
+
+    const db = wx.cloud.database();
+    const cache = this.globalData.shopDataCache;
+
+    // 并行加载所有数据
+    Promise.all([
+      // 1. 加载商店标题
+      db.collection('shop_config').doc('shopTitle').get().catch(err => {
+        console.warn('[app] 预加载shopTitle失败:', err);
+        return { data: null };
+      }),
+      // 2. 加载顶部媒体
+      db.collection('shop_config').doc('topMedia').get().catch(err => {
+        console.warn('[app] 预加载topMedia失败:', err);
+        return { data: null };
+      }),
+      // 3. 加载产品系列
+      db.collection('shop_series').get().catch(err => {
+        console.warn('[app] 预加载shop_series失败:', err);
+        return { data: [] };
+      }),
+      // 4. 加载配件
+      db.collection('shop_accessories').get().catch(err => {
+        console.warn('[app] 预加载shop_accessories失败:', err);
+        return { data: [] };
+      })
+    ]).then(([titleRes, mediaRes, seriesRes, accRes]) => {
+      // 保存到缓存
+      if (titleRes.data && titleRes.data.title) {
+        cache.shopTitle = titleRes.data.title;
+      }
+      if (mediaRes.data && mediaRes.data.list) {
+        cache.topMediaList = mediaRes.data.list;
+      }
+      if (seriesRes.data && Array.isArray(seriesRes.data)) {
+        cache.seriesList = seriesRes.data;
+      }
+      if (accRes.data && Array.isArray(accRes.data)) {
+        cache.accessoryList = accRes.data;
+      }
+      cache.cacheTime = Date.now();
+      cache.isLoading = false;
+      
+      console.log('[app] ✅ shop数据预加载完成');
+      console.log('[app] - shopTitle:', cache.shopTitle ? '已加载' : '无数据');
+      console.log('[app] - topMediaList:', cache.topMediaList ? `${cache.topMediaList.length}项` : '无数据');
+      console.log('[app] - seriesList:', cache.seriesList ? `${cache.seriesList.length}项` : '无数据');
+      console.log('[app] - accessoryList:', cache.accessoryList ? `${cache.accessoryList.length}项` : '无数据');
+    }).catch(err => {
+      console.error('[app] shop数据预加载失败:', err);
+      cache.isLoading = false;
+    });
+  },
+
+  // 🔴 刷新shop数据缓存（后台刷新，不影响当前页面）
+  refreshShopDataCache() {
+    console.log('[app] 后台刷新shop数据缓存...');
+    this.globalData.shopDataCache.cacheTime = null; // 清除缓存时间，强制刷新
+    this.preloadShopData();
   }
 })

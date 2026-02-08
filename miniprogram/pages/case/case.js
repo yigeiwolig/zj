@@ -5,6 +5,22 @@ var qqmapsdk = new QQMapWX({
     key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
 });
 
+// 🔴 静默发送调试日志（不显示错误）
+function silentAgentLog(data) {
+  try {
+    wx.request({
+      url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
+      method: 'POST',
+      header: { 'Content-Type': 'application/json' },
+      data: data,
+      fail: () => {}, // 静默失败，不输出错误
+      complete: () => {} // 静默完成
+    });
+  } catch (e) {
+    // 静默捕获所有错误
+  }
+}
+
 Page({
   data: {
     statusBarHeight: 20,
@@ -24,6 +40,7 @@ Page({
     formClosing: false, // 表单弹窗退出动画中
     showSuccess: false,
     showUploadOptions: false, // 显示上传选项弹窗（选择相册/录制）
+    showVideoPreview: false, // 🔴 显示视频预览弹窗
     showShootingGuide: false, // 显示拍摄角度演示弹窗
     shootingGuideMode: 'guide', // 拍摄指南弹窗模式：'guide' 编辑教学页面，'publish' 发布官方案例
     shootingGuideVideoUrl: '', // 拍摄角度演示视频URL（用于播放的临时URL）
@@ -32,7 +49,7 @@ Page({
     
     // 拍摄指南按钮状态
     guideBtnDisabled: true,
-    guideBtnText: '我知道了 (5s)',
+    guideBtnText: '我知道了 (3s)',
     guideTimer: null,
     showCategoryPickerModal: false,
     categoryPickerClosing: false, // 分类选择器退出动画中   
@@ -73,8 +90,8 @@ Page({
     
     // --- 表单数据 ---
     vehicleName: '',
-    categoryArray: ['街车', '仿赛', '踏板', '巡航', '电摩', '电动自行车'],
-    categoryValueArray: ['street', 'sport', 'scooter', 'cruise', 'ebike', 'bicycle'],
+    categoryArray: ['街车', '仿赛', '踏板', '巡航', '拉力', '旅行车', '电摩', '电动自行车'],
+    categoryValueArray: ['street', 'sport', 'scooter', 'cruise', 'rally', 'touring', 'ebike', 'bicycle'],
     categoryIndex: null, // 🔴 修复：按照 zj4 的写法，使用 null
     modelArray: ['F1', 'F2', 'F2 Long', '不知道'],
     modelIndex: null, // 🔴 修复：按照 zj4 的写法，使用 null
@@ -309,10 +326,11 @@ Page({
             type: item.category || 'street',
             title: item.vehicleName || '无标题',
             model: item.model || '未知',
-            categoryName: item.categoryName || '官方视频',
+            categoryName: item.categoryName || null,
             color: this.getRandomColor(),
             videoUrl: item.videoFileID,
-            coverUrl: item.coverFileID || null
+            coverUrl: item.coverFileID || null,
+            displayTime: item.createTime ? this.formatTime(item.createTime) : null
           };
         });
         this.setData({ list: cloudList, displayList: cloudList });
@@ -435,35 +453,103 @@ Page({
   // 🆕 为待审核列表补充统计信息：同 SN 的通过次数/拒绝次数/总投稿次数
   // 返回 Promise<list>
   enrichPendingStats(list) {
-    const sns = Array.from(new Set((list || []).map(i => i.sn).filter(Boolean)));
-    if (sns.length === 0) return Promise.resolve(list);
+    if (!list || list.length === 0) return Promise.resolve(list);
 
-    const tasks = sns.map(sn => {
-      // 通过：status = 1；拒绝：status = -1；总投稿：全部（包含审核中/通过/拒绝）
-      return Promise.all([
-        db.collection('video').where({ sn, status: 1 }).count(),
-        db.collection('video').where({ sn, status: -1 }).count(),
-        db.collection('video').where({ sn }).count(),
-      ]).then(([passRes, rejectRes, totalRes]) => {
-        return {
-          sn,
-          passCount: passRes.total || 0,
-          rejectCount: rejectRes.total || 0,
-          totalCount: totalRes.total || 0,
-        };
-      }).catch(err => {
-        console.error('❌ [enrichPendingStats] 统计失败 sn=', sn, err);
-        return { sn, passCount: 0, rejectCount: 0, totalCount: 0 };
-      });
+    // 🔴 分别处理有 sn 和没有 sn 的记录
+    const itemsWithSn = list.filter(i => i.sn);
+    const itemsWithoutSn = list.filter(i => !i.sn);
+
+    const tasks = [];
+
+    // 1. 按 SN 统计（有 sn 的记录）
+    const sns = Array.from(new Set(itemsWithSn.map(i => i.sn)));
+    sns.forEach(sn => {
+      tasks.push(
+        Promise.all([
+          db.collection('video').where({ sn, status: 1 }).count(),
+          db.collection('video').where({ sn, status: -1 }).count(),
+          db.collection('video').where({ sn }).count(),
+        ]).then(([passRes, rejectRes, totalRes]) => {
+          return {
+            key: sn,
+            keyType: 'sn',
+            passCount: passRes.total || 0,
+            rejectCount: rejectRes.total || 0,
+            totalCount: totalRes.total || 0,
+          };
+        }).catch(err => {
+          console.error('❌ [enrichPendingStats] 统计失败 sn=', sn, err);
+          return { key: sn, keyType: 'sn', passCount: 0, rejectCount: 0, totalCount: 0 };
+        })
+      );
     });
 
-    return Promise.all(tasks).then(statArr => {
-      const statMap = {};
-      statArr.forEach(s => { statMap[s.sn] = s; });
+    // 2. 按 openid 统计（没有 sn 的记录，统计该用户所有投稿）
+    const openids = Array.from(new Set(itemsWithoutSn.map(i => i.openid || i._openid).filter(Boolean)));
+    openids.forEach(openid => {
+      tasks.push(
+        Promise.all([
+          db.collection('video').where({ _openid: openid, status: 1 }).count(),
+          db.collection('video').where({ _openid: openid, status: -1 }).count(),
+          db.collection('video').where({ _openid: openid }).count(),
+        ]).then(([passRes, rejectRes, totalRes]) => {
+          return {
+            key: openid,
+            keyType: 'openid',
+            passCount: passRes.total || 0,
+            rejectCount: rejectRes.total || 0,
+            totalCount: totalRes.total || 0,
+          };
+        }).catch(err => {
+          console.error('❌ [enrichPendingStats] 统计失败 openid=', openid, err);
+          return { key: openid, keyType: 'openid', passCount: 0, rejectCount: 0, totalCount: 0 };
+        })
+      );
+    });
 
-      return (list || []).map(item => {
-        const s = statMap[item.sn];
-        if (!s) return item;
+    if (tasks.length === 0) {
+      // 如果没有需要统计的，直接返回，但确保所有记录都有默认值
+      return Promise.resolve(list.map(item => ({
+        ...item,
+        passCount: item.passCount || 0,
+        rejectCount: item.rejectCount || 0,
+        totalCount: item.totalCount || 0,
+      })));
+    }
+
+    return Promise.all(tasks).then(statArr => {
+      const snStatMap = {};
+      const openidStatMap = {};
+      
+      statArr.forEach(s => {
+        if (s.keyType === 'sn') {
+          snStatMap[s.key] = s;
+        } else {
+          openidStatMap[s.key] = s;
+        }
+      });
+
+      return list.map(item => {
+        let s = null;
+        if (item.sn) {
+          s = snStatMap[item.sn];
+        } else {
+          const openid = item.openid || item._openid;
+          if (openid) {
+            s = openidStatMap[openid];
+          }
+        }
+        
+        if (!s) {
+          // 🔴 如果没有找到统计信息，返回默认值
+          return {
+            ...item,
+            passCount: item.passCount || 0,
+            rejectCount: item.rejectCount || 0,
+            totalCount: item.totalCount || 0,
+          };
+        }
+        
         return {
           ...item,
           passCount: s.passCount,
@@ -785,7 +871,7 @@ Page({
         showShootingGuide: true,
         shootingGuideMode: 'guide',
         guideBtnDisabled: true,
-        guideBtnText: '我知道了 (5s)'
+        guideBtnText: '我知道了 (3s)'
       });
       this.startGuideTimer();
       // 弹窗渲染完成后立刻播放视频，尽量消除等待感
@@ -797,7 +883,7 @@ Page({
 
   // 拍摄指南倒计时
   startGuideTimer() {
-    let seconds = 5;
+    let seconds = 3;
     if (this.data.guideTimer) clearInterval(this.data.guideTimer);
     
     const timer = setInterval(() => {
@@ -878,23 +964,11 @@ Page({
         camera: 'back',
         success: (res) => {
           console.log('✅ 选择视频成功:', res);
-          // 直接打开表单，使用选择的视频
-          console.log('📋 打开表单，当前数据:', {
-            categoryArray: this.data.categoryArray,
-            categoryArrayLength: this.data.categoryArray ? this.data.categoryArray.length : 0,
-            modelArray: this.data.modelArray,
-            categoryIndex: this.data.categoryIndex,
-            modelIndex: this.data.modelIndex
-          });
-          // 🔴 调试：确保数据存在
-          if (!this.data.categoryArray || this.data.categoryArray.length === 0) {
-            console.error('❌ [错误] categoryArray 为空！');
-            this._showCustomToast('数据错误：categoryArray为空', 'none', 3000);
-          }
-          // 🔴 修复：按照 zj4 的写法，打开表单时不重置 categoryIndex 和 modelIndex
+          // 🔴 先显示预览，确认后再打开表单
           this.setData({
-            showForm: true,
-            videoPath: res.tempFilePath
+            videoPath: res.tempFilePath,
+            showVideoPreview: true,
+            isVideoPlaying: true
           });
           // 🔴 调试：延迟检查数据是否正确传递到页面
           setTimeout(() => {
@@ -1091,20 +1165,14 @@ Page({
     if (!this.data.shootingGuideVideoUrl) {
       console.log('📝 没有视频URL，跳过播放');
       // #region agent log
-      wx.request({
-        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-        method: 'POST',
-        header: { 'Content-Type': 'application/json' },
-        data: {
-          sessionId: 'debug-session',
-          runId: 'run1',
-          hypothesisId: 'H1',
-          location: 'case.js:playShootingGuideVideo',
-          message: 'no video url, skip play',
-          data: { shootingGuideVideoUrl: this.data.shootingGuideVideoUrl },
-          timestamp: Date.now()
-        },
-        fail: () => {}
+      silentAgentLog({
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'H1',
+        location: 'case.js:playShootingGuideVideo',
+        message: 'no video url, skip play',
+        data: { shootingGuideVideoUrl: this.data.shootingGuideVideoUrl },
+        timestamp: Date.now()
       });
       // #endregion
       return;
@@ -1114,20 +1182,14 @@ Page({
       videoContext.play();
       console.log('▶️ 手动触发视频播放');
       // #region agent log
-      wx.request({
-        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-        method: 'POST',
-        header: { 'Content-Type': 'application/json' },
-        data: {
-          sessionId: 'debug-session',
-          runId: 'run1',
-          hypothesisId: 'H1',
-          location: 'case.js:playShootingGuideVideo',
-          message: 'called videoContext.play',
-          data: { shootingGuideVideoUrl: this.data.shootingGuideVideoUrl },
-          timestamp: Date.now()
-        },
-        fail: () => {}
+      silentAgentLog({
+        sessionId: 'debug-session',
+        runId: 'run1',
+        hypothesisId: 'H1',
+        location: 'case.js:playShootingGuideVideo',
+        message: 'called videoContext.play',
+        data: { shootingGuideVideoUrl: this.data.shootingGuideVideoUrl },
+        timestamp: Date.now()
       });
       // #endregion
     }
@@ -1137,20 +1199,14 @@ Page({
   onShootingGuideVideoPlay(e) {
     console.log('✅ 拍摄指南视频开始播放', e);
     // #region agent log
-    wx.request({
-      url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-      method: 'POST',
-      header: { 'Content-Type': 'application/json' },
-      data: {
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'H2',
-        location: 'case.js:onShootingGuideVideoPlay',
-        message: 'video play event',
-        data: {},
-        timestamp: Date.now()
-      },
-      fail: () => {}
+    silentAgentLog({
+      sessionId: 'debug-session',
+      runId: 'run1',
+      hypothesisId: 'H2',
+      location: 'case.js:onShootingGuideVideoPlay',
+      message: 'video play event',
+      data: {},
+      timestamp: Date.now()
     });
     // #endregion
   },
@@ -1158,20 +1214,14 @@ Page({
   onShootingGuideVideoError(e) {
     console.error('❌ 拍摄指南视频播放错误:', e.detail);
     // #region agent log
-    wx.request({
-      url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-      method: 'POST',
-      header: { 'Content-Type': 'application/json' },
-      data: {
-        sessionId: 'debug-session',
-        runId: 'run1',
-        hypothesisId: 'H3',
-        location: 'case.js:onShootingGuideVideoError',
-        message: 'video error event',
-        data: { err: e.detail && e.detail.errMsg },
-        timestamp: Date.now()
-      },
-      fail: () => {}
+    silentAgentLog({
+      sessionId: 'debug-session',
+      runId: 'run1',
+      hypothesisId: 'H3',
+      location: 'case.js:onShootingGuideVideoError',
+      message: 'video error event',
+      data: { err: e.detail && e.detail.errMsg },
+      timestamp: Date.now()
     });
     // #endregion
     const errMsg = e.detail.errMsg || '';
@@ -1336,20 +1386,14 @@ Page({
         // 保存原始 fileID 用于删除
         this.setData({ shootingGuideVideoFileID: res.data.videoFileID });
         // #region agent log
-        wx.request({
-          url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-          method: 'POST',
-          header: { 'Content-Type': 'application/json' },
-          data: {
-            sessionId: 'debug-session',
-            runId: 'run1',
-            hypothesisId: 'H4',
-            location: 'case.js:loadShootingGuideVideo',
-            message: 'loaded config',
-            data: { videoFileID: res.data.videoFileID },
-            timestamp: Date.now()
-          },
-          fail: () => {}
+        silentAgentLog({
+          sessionId: 'debug-session',
+          runId: 'run1',
+          hypothesisId: 'H4',
+          location: 'case.js:loadShootingGuideVideo',
+          message: 'loaded config',
+          data: { videoFileID: res.data.videoFileID },
+          timestamp: Date.now()
         });
         // #endregion
         
@@ -1363,20 +1407,14 @@ Page({
                   shootingGuideVideoUrl: urlRes.fileList[0].tempFileURL
                 });
                 // #region agent log
-                wx.request({
-                  url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-                  method: 'POST',
-                  header: { 'Content-Type': 'application/json' },
-                  data: {
-                    sessionId: 'debug-session',
-                    runId: 'run1',
-                    hypothesisId: 'H4',
-                    location: 'case.js:loadShootingGuideVideo',
-                    message: 'got temp file url',
-                    data: { tempUrl: urlRes.fileList[0].tempFileURL },
-                    timestamp: Date.now()
-                  },
-                  fail: () => {}
+                silentAgentLog({
+                  sessionId: 'debug-session',
+                  runId: 'run1',
+                  hypothesisId: 'H4',
+                  location: 'case.js:loadShootingGuideVideo',
+                  message: 'got temp file url',
+                  data: { tempUrl: urlRes.fileList[0].tempFileURL },
+                  timestamp: Date.now()
                 });
                 // #endregion
               }
@@ -1387,20 +1425,14 @@ Page({
             shootingGuideVideoUrl: res.data.videoFileID
           });
           // #region agent log
-          wx.request({
-            url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-            method: 'POST',
-            header: { 'Content-Type': 'application/json' },
-            data: {
-              sessionId: 'debug-session',
-              runId: 'run1',
-              hypothesisId: 'H4',
-              location: 'case.js:loadShootingGuideVideo',
-              message: 'use direct fileID as url',
-              data: { directUrl: res.data.videoFileID },
-              timestamp: Date.now()
-            },
-            fail: () => {}
+          silentAgentLog({
+            sessionId: 'debug-session',
+            runId: 'run1',
+            hypothesisId: 'H4',
+            location: 'case.js:loadShootingGuideVideo',
+            message: 'use direct fileID as url',
+            data: { directUrl: res.data.videoFileID },
+            timestamp: Date.now()
           });
           // #endregion
         }
@@ -1585,7 +1617,7 @@ Page({
 
     // 🔴 核心修复：使用小程序专用 API 获取位置
     // 小程序不支持属性选择器，需要查询所有 tab-item 然后找到对应的
-    const tabTypes = ['all', 'street', 'sport', 'scooter', 'cruise', 'ebike', 'bicycle'];
+    const tabTypes = ['all', 'street', 'sport', 'scooter', 'cruise', 'rally', 'touring', 'ebike', 'bicycle'];
     const targetIndex = tabTypes.indexOf(type);
     
     if (targetIndex === -1) {
@@ -1987,8 +2019,9 @@ Page({
               this.setData({
                 showCamera: false,
                 cameraAnimating: false,
-                showForm: true,
-                videoPath: res.tempVideoPath
+                videoPath: res.tempVideoPath,
+                showVideoPreview: true, // 🔴 先显示预览
+                isVideoPlaying: true
               });
             }, 250);
           } else if (save) {
@@ -2053,30 +2086,37 @@ Page({
       myDevicesLength: myDevices ? myDevices.length : 0
     });
     
-    // 🔴 修复：防止重复提交
+    // 🔴 修复：防止重复提交（在函数开始就检查并设置状态）
     if (this.data.isSubmitting) {
       console.log('⚠️ [提交] 正在提交中，忽略重复点击');
       return;
     }
     
+    // 🔴 立即设置提交状态，防止竞态条件
+    this.setData({ isSubmitting: true });
+    
     // 🔴 修复：使用自定义提示框，并触发抖动
     if (!videoPath) {
       console.error('❌ [提交] 视频丢失');
+      this.setData({ isSubmitting: false }); // 重置状态
       this.showFormErrorWithShake('请先选择或录制视频');
       return;
     }
     if (!vehicleName || vehicleName.trim() === '') {
       console.error('❌ [提交] 未填写车型');
+      this.setData({ isSubmitting: false }); // 重置状态
       this.showFormErrorWithShake('请填写车型信息');
       return;
     }
     if (categoryIndex === null || categoryIndex === undefined) {
       console.error('❌ [提交] 未选择分类');
+      this.setData({ isSubmitting: false }); // 重置状态
       this.showFormErrorWithShake('请选择车型分类');
       return;
     }
     if (modelIndex === null || modelIndex === undefined) {
       console.error('❌ [提交] 未选择型号');
+      this.setData({ isSubmitting: false }); // 重置状态
       this.showFormErrorWithShake('请选择产品型号');
       return;
     }
@@ -2086,14 +2126,6 @@ Page({
       targetSn = myDevices[selectedSnIndex].sn;
     }
     console.log('🔵 [提交] 准备提交，targetSn:', targetSn || '未绑定设备');
-    
-    // 🔴 修复：防止重复提交
-    if (this.data.isSubmitting) {
-      console.log('⚠️ [提交] 正在提交中，忽略重复点击');
-      return;
-    }
-    
-    this.setData({ isSubmitting: true });
     this.showMyLoading('上传中...');
     const cloudPath = `video/${Date.now()}_user.mp4`;
     
@@ -2217,6 +2249,89 @@ Page({
   },
   closeVideoPlayer() { 
     this.setData({ showVideoPlayer: false, currentVideo: null });
+  },
+
+  // 🔴 视频预览相关函数
+  closeVideoPreview() {
+    // 停止视频播放
+    const videoContext = wx.createVideoContext('caseVideoPreviewPlayer');
+    if (videoContext) {
+      videoContext.pause();
+    }
+    
+    this.setData({ 
+      showVideoPreview: false,
+      isVideoPlaying: true
+      // 注意：不清除 videoPath，因为确认使用时还需要它
+    });
+  },
+
+  // 重新选择视频（关闭预览，返回上传选项）
+  rechooseVideo() {
+    // 停止视频播放
+    const videoContext = wx.createVideoContext('caseVideoPreviewPlayer');
+    if (videoContext) {
+      videoContext.pause();
+    }
+    
+    this.setData({ 
+      showVideoPreview: false,
+      isVideoPlaying: true,
+      videoPath: null // 重新选择时清除视频路径
+    });
+    
+    // 延迟一下，确保预览关闭后再显示上传选项
+    setTimeout(() => {
+      this.setData({ showUploadOptions: true });
+    }, 300);
+  },
+
+  // 确认使用视频（关闭预览，打开表单）
+  confirmVideoPreview() {
+    this.closeVideoPreview();
+    
+    // 🔴 延迟2秒，确保预览关闭后再打开表单
+    setTimeout(() => {
+      console.log('📋 打开表单，当前数据:', {
+        categoryArray: this.data.categoryArray,
+        categoryArrayLength: this.data.categoryArray ? this.data.categoryArray.length : 0,
+        modelArray: this.data.modelArray,
+        categoryIndex: this.data.categoryIndex,
+        modelIndex: this.data.modelIndex
+      });
+      
+      // 🔴 调试：确保数据存在
+      if (!this.data.categoryArray || this.data.categoryArray.length === 0) {
+        console.error('❌ [错误] categoryArray 为空！');
+        this._showCustomToast('数据错误：categoryArray为空', 'none', 3000);
+        return;
+      }
+      
+      // 🔴 修复：按照 zj4 的写法，打开表单时不重置 categoryIndex 和 modelIndex
+      this.setData({
+        showForm: true
+      });
+    }, 2000);
+  },
+
+  // 视频预览播放/暂停切换
+  toggleVideoPreviewPlayPause() {
+    const videoContext = wx.createVideoContext('caseVideoPreviewPlayer');
+    if (this.data.isVideoPlaying) {
+      videoContext.pause();
+    } else {
+      videoContext.play();
+    }
+  },
+
+  // 视频预览播放事件
+  onVideoPreviewPlay() {
+    this.setData({ isVideoPlaying: true });
+  },
+
+  // 视频预览暂停事件
+  onVideoPreviewPause() {
+    this.setData({ isVideoPlaying: false });
   },
   
   // 🔴 新增：视频播放器手势控制（下拉关闭）
@@ -2584,9 +2699,9 @@ Page({
         // 延迟重试
         setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
       } else {
-        // 最终降级
+        // 最终降级到原生
         console.warn('[case] custom-toast 组件未找到，使用降级方案');
-        this._showCustomToast({ title, icon, duration });
+        wx.showToast({ title, icon, duration });
       }
     };
     tryShow();
@@ -2596,7 +2711,17 @@ Page({
   _showCustomModal(options) {
     // 如果 editable 为 true，使用原生（因为自定义组件不支持输入框）
     if (options.editable) {
-      return this._showCustomModal(options);
+      return wx.showModal({
+        title: options.title || '提示',
+        content: options.content || '',
+        placeholderText: options.placeholderText || '',
+        editable: true,
+        showCancel: options.showCancel !== false,
+        confirmText: options.confirmText || '确定',
+        cancelText: options.cancelText || '取消',
+        confirmColor: options.confirmColor || '#576B95',
+        success: options.success
+      });
     }
     
     // 尝试获取组件，最多重试3次
@@ -2615,9 +2740,16 @@ Page({
         // 延迟重试
         setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
       } else {
-        // 最终降级
+        // 最终降级到原生
         console.warn('[case] custom-toast 组件未找到，使用降级方案');
-        this._showCustomModal(options);
+        wx.showModal({
+          title: options.title || '提示',
+          content: options.content || '',
+          showCancel: options.showCancel !== false,
+          confirmText: options.confirmText || '确定',
+          cancelText: options.cancelText || '取消',
+          success: options.success
+        });
       }
     };
     tryShow();

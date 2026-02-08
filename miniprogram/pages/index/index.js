@@ -42,7 +42,6 @@ Page({
     // 【新增】首次进入提示弹窗
     showFirstTimeModal: false,
     showWechatQRCode: false, // 是否显示微信二维码
-    showCopySuccessInModal: false, // 在首次进入弹窗内显示复制成功提示
     adminWechat: 'MT-摩改社', // 管理员微信号（可以修改）
     
     // Loading 状态（合并重复定义）
@@ -74,27 +73,12 @@ Page({
     try { wx.hideLoading(); } catch (e) {}
     const patch = {};
     if (this.data.showCustomSuccessModal) patch.showCustomSuccessModal = false;
-    if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
     if (this.data.showConfirmModal) patch.showConfirmModal = false;
     // 🔴 不关闭首次进入提示弹窗，让用户可以继续操作
     // if (this.data.showFirstTimeModal) patch.showFirstTimeModal = false;
     if (Object.keys(patch).length) this.setData(patch);
   },
 
-  // 统一方法：显示"内容已复制"弹窗（互斥）
-  _showCopySuccessOnce() {
-    // 🔴 清理之前的定时器，避免快速连续调用时状态混乱
-    if (this._copySuccessTimer) {
-      clearTimeout(this._copySuccessTimer);
-      this._copySuccessTimer = null;
-    }
-    this._closeAllPopups();
-    this.setData({ showCopySuccessModal: true });
-    this._copySuccessTimer = setTimeout(() => {
-      this.setData({ showCopySuccessModal: false });
-      this._copySuccessTimer = null;
-    }, 1500);
-  },
 
   onLoad(options) {
     // 🔴 更新页面访问统计
@@ -112,25 +96,28 @@ Page({
       wx.__mt_oldHideLoading(); // 调用原始 hideLoading 确保关闭任何官方弹窗
     }
     
-    // 🔴 检查是否第一次进入小程序
-    const hasSeenFirstTimeModal = wx.getStorageSync('has_seen_first_time_modal');
-    if (!hasSeenFirstTimeModal) {
-      // 延迟显示，确保页面加载完成
-      setTimeout(() => {
-        this.setData({ showFirstTimeModal: true });
-      }, 500);
-    }
-    
     // 1. 先检查缓存（不立即跳转，等异步检查完成）
     const hasAuth = wx.getStorageSync('has_permanent_auth');
     const savedNickname = wx.getStorageSync('user_nickname');
     
+    // 🔴 如果用户已经通过验证，不显示首次进入弹窗，并标记为已看过
     if (hasAuth && savedNickname) {
       // 缓存中有授权和昵称，直接使用
       this.setData({ isAuthorized: true, isShowNicknameUI: false });
+      // 已通过验证的用户不需要显示首次进入弹窗
+      wx.setStorageSync('has_seen_first_time_modal', true);
     } else {
       // 缓存中没有，先检查 valid_users 集合
       this.checkValidUserFromDatabase();
+      
+      // 🔴 只有未通过验证的用户才检查是否显示首次进入弹窗
+      const hasSeenFirstTimeModal = wx.getStorageSync('has_seen_first_time_modal');
+      if (!hasSeenFirstTimeModal) {
+        // 延迟显示，确保页面加载完成
+        setTimeout(() => {
+          this.setData({ showFirstTimeModal: true });
+        }, 500);
+      }
     }
     
     // 2. 异步检查全局黑名单（避免死循环）
@@ -193,12 +180,15 @@ Page({
           // 保存昵称和授权状态到本地存储
           wx.setStorageSync('user_nickname', nickname);
           wx.setStorageSync('has_permanent_auth', true);
+          // 🔴 已通过验证的用户不需要显示首次进入弹窗
+          wx.setStorageSync('has_seen_first_time_modal', true);
           
           // 更新页面状态，直接进入
           this.setData({ 
             isAuthorized: true, 
             isShowNicknameUI: false,
-            inputNickName: nickname
+            inputNickName: nickname,
+            showFirstTimeModal: false // 🔴 确保不显示首次进入弹窗
           });
           
           console.log('[index] 从 valid_users 自动恢复用户昵称:', nickname);
@@ -288,14 +278,24 @@ Page({
         }
       } catch (e) {}
     }
+    // 🔴 优化：只在确实需要隐藏时才调用 hideLoading，避免不配对警告
+    let lastHideTime = 0;
     const hideAllLoading = () => {
-      try { wx.hideLoading(); } catch (e) {}
-      try { if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading(); } catch (e) {}
-      const toast = this.selectComponent('#custom-toast');
-      if (toast && toast.hideLoading) toast.hideLoading();
-      if (this.data.showLoadingAnimation) this.setData({ showLoadingAnimation: false });
-      if (app && app.hideLoading) app.hideLoading();
+      const now = Date.now();
+      // 限制调用频率，避免频繁调用导致警告
+      if (now - lastHideTime < 200) return;
+      lastHideTime = now;
+      
       try {
+        // 只隐藏确实存在的 loading，避免不配对
+        const toast = this.selectComponent('#custom-toast');
+        if (toast && toast.hideLoading) {
+          try { toast.hideLoading(); } catch (e) {}
+        }
+        if (this.data.showLoadingAnimation) {
+          this.setData({ showLoadingAnimation: false });
+        }
+        // 直接设置全局状态，不调用可能不配对的 hideLoading
         if (app && app.globalData && app.globalData.ui && app.globalData.ui.loading?.show) {
           app.globalData.ui.loading = { ...app.globalData.ui.loading, show: false };
           if (app._emitUI) app._emitUI();
@@ -303,7 +303,8 @@ Page({
       } catch (e) {}
     };
     hideAllLoading();
-    this._noLoadingTimer = setInterval(hideAllLoading, 100);
+    // 降低调用频率，从 100ms 改为 300ms
+    this._noLoadingTimer = setInterval(hideAllLoading, 300);
 
     this.setData({ isLoading: true });
     
@@ -313,8 +314,25 @@ Page({
     }
     try { wx.hideLoading(); } catch (e) {}
 
-    // 🔴 获取设备信息
-    const sysInfo = wx.getSystemInfoSync();
+    // 🔴 获取设备信息（使用新的 API）
+    let sysInfo = {};
+    try {
+      // 使用新的 API 替代已废弃的 wx.getSystemInfoSync
+      const deviceInfo = wx.getDeviceInfo();
+      const windowInfo = wx.getWindowInfo();
+      sysInfo = {
+        system: deviceInfo.system || '',
+        model: deviceInfo.model || '',
+        ...windowInfo
+      };
+    } catch (e) {
+      // 降级方案：如果新 API 不支持，使用旧 API
+      try {
+        sysInfo = wx.getSystemInfoSync();
+      } catch (e2) {
+        console.warn('[index] 无法获取设备信息:', e2);
+      }
+    }
     // 🔴 尝试获取位置信息（从缓存或实时获取）
     const cachedLocation = wx.getStorageSync('last_location') || {};
 
@@ -348,12 +366,18 @@ Page({
         }
         // 🔴 封禁状态已完全由 login_logbutton 管理，不再检查 login_logs.isBanned
         // 如果 verifyNickname 返回 success，说明已经通过验证，直接放行
-              wx.setStorageSync('has_permanent_auth', true);
-              wx.setStorageSync('user_nickname', name);
-              wx.removeStorageSync('is_user_banned');
-              this.setData({ isAuthorized: true, isShowNicknameUI: false });
-              // 显示自定义成功弹窗
-                this._closeAllPopups();
+        wx.setStorageSync('has_permanent_auth', true);
+        wx.setStorageSync('user_nickname', name);
+        // 🔴 验证通过后，标记为已看过首次进入弹窗
+        wx.setStorageSync('has_seen_first_time_modal', true);
+        wx.removeStorageSync('is_user_banned');
+        this.setData({ 
+          isAuthorized: true, 
+          isShowNicknameUI: false,
+          showFirstTimeModal: false // 🔴 确保不显示首次进入弹窗
+        });
+        // 显示自定义成功弹窗
+        this._closeAllPopups();
                 this.setData({ 
                 showCustomSuccessModal: true,
                 successModalTitle: '验证通过',
@@ -385,22 +409,46 @@ Page({
 
   // 【新增】处理自定义弹窗的按钮点击 (复制微信号)
   handleCopyFromModal() {
-    // 🔴 确保拦截微信官方的 toast（如果存在）
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
+    // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
+    const hideOfficialToast = () => {
+      try {
+        if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+        if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+      } catch (e) {}
+    };
+    hideOfficialToast();
     
     wx.setClipboardData({
       data: 'MT-mogaishe',
       success: () => {
-        // 复制成功后关闭错误弹窗
-        this.setData({ showCustomErrorModal: false });
-        // 🔴 再次确保关闭微信官方 toast（如果被触发）
-        if (wx.__mt_oldHideLoading) {
-          wx.__mt_oldHideLoading();
-        }
-        // 显示自定义"内容已复制"弹窗（互斥）
-        this._showCopySuccessOnce();
+        // 🔴 立即疯狂隐藏微信官方弹窗（使用原生API，多次尝试）
+        hideOfficialToast();
+        setTimeout(hideOfficialToast, 1);
+        setTimeout(hideOfficialToast, 3);
+        setTimeout(hideOfficialToast, 5);
+        setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 15);
+        setTimeout(hideOfficialToast, 20);
+        setTimeout(hideOfficialToast, 30);
+        setTimeout(hideOfficialToast, 50);
+        setTimeout(hideOfficialToast, 80);
+        setTimeout(hideOfficialToast, 120);
+        setTimeout(hideOfficialToast, 180);
+        setTimeout(hideOfficialToast, 250);
+        setTimeout(hideOfficialToast, 350);
+        setTimeout(hideOfficialToast, 500);
+        
+        // 🔴 延迟800ms后显示自定义弹窗
+        setTimeout(() => {
+          // 复制成功后关闭错误弹窗
+          this.setData({ showCustomErrorModal: false });
+          // 显示自定义"内容已复制"弹窗
+          this.setData({ showCopySuccessModal: true });
+          // 2秒后自动关闭
+          setTimeout(() => {
+            this.setData({ showCopySuccessModal: false });
+          }, 2000);
+        }, 800);
       }
     });
   },
@@ -431,7 +479,17 @@ Page({
     }
 
     console.log('[handleAccess] 开始获取位置...');
-    const sysInfo = wx.getSystemInfoSync();
+    let sysInfo = {};
+    try {
+      const deviceInfo = wx.getDeviceInfo();
+      sysInfo = { model: deviceInfo.model || '未知机型' };
+    } catch (e) {
+      try {
+        sysInfo = wx.getSystemInfoSync();
+      } catch (e2) {
+        sysInfo = { model: '未知机型' };
+      }
+    }
     const phoneModel = sysInfo.model || '未知机型';
 
     wx.getLocation({
@@ -902,20 +960,36 @@ Page({
         .get();
 
       Promise.all([p1, p2, p3]).then(results => {
+        const logRes = results[0]; // login_logs
         const userRes = results[1];
         const buttonRes = results[2];
+
+        // 🔴 最高优先级：检查强制封禁按钮 qiangli（同时检查 login_logbutton 和 login_logs）
+        // 先检查 login_logbutton
+        if (buttonRes.data && buttonRes.data.length > 0) {
+          const btn = buttonRes.data[0];
+          const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
+          if (qiangli) {
+            console.log('[index] ⚠️ 最终安检：检测到强制封禁按钮 qiangli 已开启（login_logbutton），无视一切放行，直接封禁');
+            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+            return;
+          }
+        }
+
+        // 🔴 同时检查 login_logs 集合（兼容用户在 login_logs 中设置 qiangli 的情况）
+        if (logRes.data && logRes.data.length > 0) {
+          const log = logRes.data[0];
+          const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
+          if (qiangli) {
+            console.log('[index] ⚠️ 最终安检：检测到强制封禁按钮 qiangli 已开启（login_logs），无视一切放行，直接封禁');
+            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+            return;
+          }
+        }
 
         // 🔴 最终安检：检查 login_logbutton，确保没有封禁
         if (buttonRes.data && buttonRes.data.length > 0) {
           const btn = buttonRes.data[0];
-          
-          // 🔴 最高优先级：检查强制封禁按钮 qiangli
-          const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
-          if (qiangli) {
-            console.log('[index] ⚠️ 最终安检：检测到强制封禁按钮 qiangli 已开启，无视一切放行，直接封禁');
-            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-            return; // 强制封禁，直接返回，不执行后续任何检查
-          }
           
           const rawFlag = btn.isBanned;
           const isBanned =
@@ -1211,7 +1285,12 @@ Page({
     try {
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
-      const adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      const db = wx.cloud.database();
+      let adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      if (adminCheck.data.length === 0) {
+        adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
+      }
       if (adminCheck.data.length > 0) {
         this.setData({ isAdmin: true });
         console.log('[index] 身份验证成功：合法管理员');
@@ -1323,32 +1402,54 @@ Page({
     this.setData({ 
       showFirstTimeModal: false,
       showWechatQRCode: false,
-      showCopySuccessInModal: false
     });
   },
 
   // 🔴 复制管理员微信号
   copyAdminWechat() {
     const wechat = this.data.adminWechat;
+    // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
+    const hideOfficialToast = () => {
+      try {
+        if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+        if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+      } catch (e) {}
+    };
+    hideOfficialToast();
+    
     wx.setClipboardData({
       data: wechat,
       success: () => {
-        // 🔴 立即关闭微信官方的"内容已复制"弹窗
-        if (wx.__mt_oldHideToast) {
-          wx.__mt_oldHideToast();
-        }
-        wx.hideToast();
+        // 🔴 立即疯狂隐藏微信官方弹窗（使用原生API，多次尝试）
+        hideOfficialToast();
+        setTimeout(hideOfficialToast, 1);
+        setTimeout(hideOfficialToast, 3);
+        setTimeout(hideOfficialToast, 5);
+        setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 15);
+        setTimeout(hideOfficialToast, 20);
+        setTimeout(hideOfficialToast, 30);
+        setTimeout(hideOfficialToast, 50);
+        setTimeout(hideOfficialToast, 80);
+        setTimeout(hideOfficialToast, 120);
+        setTimeout(hideOfficialToast, 180);
+        setTimeout(hideOfficialToast, 250);
+        setTimeout(hideOfficialToast, 350);
+        setTimeout(hideOfficialToast, 500);
         
-        // 显示二维码和复制成功提示
-        this.setData({ 
-          showWechatQRCode: true,
-          showCopySuccessInModal: true
-        });
-        
-        // 1.5秒后隐藏复制成功提示
+        // 🔴 延迟800ms后显示自定义弹窗
         setTimeout(() => {
-          this.setData({ showCopySuccessInModal: false });
-        }, 1500);
+          // 显示二维码
+          this.setData({ 
+            showWechatQRCode: true
+          });
+          // 显示自定义"内容已复制"弹窗
+          this.setData({ showCopySuccessModal: true });
+          // 2秒后自动关闭
+          setTimeout(() => {
+            this.setData({ showCopySuccessModal: false });
+          }, 2000);
+        }, 800);
       },
       fail: () => {
         this.showAutoToast('提示', '复制失败，请重试');
@@ -1363,7 +1464,6 @@ Page({
     this.setData({ 
       showFirstTimeModal: false,
       showWechatQRCode: false,
-      showCopySuccessInModal: false
     });
     
     // 显示昵称输入界面

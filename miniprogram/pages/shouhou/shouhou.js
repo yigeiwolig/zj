@@ -982,9 +982,14 @@ Page({
 
       // 2. 去数据库比对白名单
       const db = wx.cloud.database();
-      const adminCheck = await db.collection('guanliyuan').where({
+      let adminCheck = await db.collection('guanliyuan').where({
         openid: myOpenid
       }).get();
+
+      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      if (adminCheck.data.length === 0) {
+        adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
+      }
 
       // 3. 如果找到了记录，说明你是受信任的管理员
       if (adminCheck.data.length > 0) {
@@ -3845,10 +3850,27 @@ Page({
     let fee = 0;
 
     if (shippingMethod === 'zto') {
-      fee = 0; // 中通运费0元（售后页统一免运费）
+      fee = 12; // 🔴 中通快递运费12元（固定）
     } else if (shippingMethod === 'sf') {
-      // 售后页统一免运费，顺丰也按0计
-      fee = 0;
+      // 🔴 顺丰逻辑：从详细地址中解析省市区（和shop页面一样的计算方式）
+      if (!detailAddress || !detailAddress.trim()) {
+        fee = 0; // 没填地址，运费暂计为0
+      } else {
+        // 解析地址，提取省份信息
+        const parsed = this.parseAddressForShipping(detailAddress);
+        const province = parsed.province || '';
+        
+        // 判断是否广东
+        if (province.indexOf('广东') > -1) {
+          fee = 13;
+        } else if (province) {
+          // 如果解析到了省份但不是广东，则按省外计算
+          fee = 22;
+        } else {
+          // 如果解析不到省份，运费暂计为0（待用户完善地址）
+          fee = 0;
+        }
+      }
     }
 
     console.log('[shouhou] 价格计算完成:', {
@@ -4025,7 +4047,16 @@ Page({
       return;
     }
 
-    // 售后页统一免运费，无需顺丰运费校验
+    // 🔴 重新计算运费，确保金额准确
+    this.reCalcFinalPrice();
+    const currentShippingFee = this.data.shippingFee;
+    const currentFinalTotalPrice = this.data.finalTotalPrice;
+    
+    // 🔴 顺丰运费校验（和shop页面一样）
+    if (shippingMethod === 'sf' && currentShippingFee === 0) {
+      console.log('[shouhou] 校验失败：顺丰运费未计算');
+      return this.showAutoToast('提示', '请完善地址信息以计算运费');
+    }
 
     // 拼装地址：省市区选择器 + 详细地址
     const addressParts = [];
@@ -4039,9 +4070,11 @@ Page({
     // 先关闭可能存在的自动提示，确保确认弹窗能正常显示
     this.setData({ 'autoToast.show': false });
     
-    // 授权管理员自动识别，支付 0.01 元，运费不计（无需点击管理员模式）
-    const payAmount = this.data.isAuthorized ? 0.01 : finalTotalPrice;
-    const payFee = this.data.isAuthorized ? 0 : shippingFee;
+    // 🔴 管理员身份（授权或已点EDIT）：支付 0.01 元，运费不计
+    const isAdminPay = this.data.isAdmin || this.data.isAuthorized;
+    // 🔴 使用重新计算后的价格和运费
+    const payAmount = isAdminPay ? 0.01 : currentFinalTotalPrice;
+    const payFee = isAdminPay ? 0 : currentShippingFee;
     
     // 调支付
     this.showMyDialog({

@@ -94,10 +94,19 @@ Page({
     }, 60000); // 60秒 = 1分钟
   },
   
+  onHide() {
+    // 🔴 修复：页面隐藏时也清理定时器
+    if (this.statusTimer) {
+      clearInterval(this.statusTimer);
+      this.statusTimer = null;
+    }
+  },
+
   onUnload() {
     // 清理定时器
     if (this.statusTimer) {
       clearInterval(this.statusTimer);
+      this.statusTimer = null;
     }
   },
   

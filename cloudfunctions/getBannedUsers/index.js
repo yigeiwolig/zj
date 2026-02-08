@@ -87,56 +87,56 @@ exports.main = async (event, context) => {
           banReasonText = button.banReason || 'Unknown';
       }
 
-      // 格式化封禁页面（英文，用于后台）
+      // 格式化封禁页面（拼音，用于后台）
       let banPageText = '';
       switch (button.banPage) {
         case 'case':
-          banPageText = 'Case';
+          banPageText = 'anliye';
           break;
         case 'my':
-          banPageText = 'My';
+          banPageText = 'gerenzhongxin';
           break;
         case 'products':
-          banPageText = 'Products';
+          banPageText = 'chanpinye';
           break;
         case 'shop':
-          banPageText = 'Shop';
+          banPageText = 'shangdianye';
           break;
         case 'home':
-          banPageText = 'Home';
+          banPageText = 'shouye';
           break;
         case 'paihang':
-          banPageText = 'Ranking';
+          banPageText = 'paihangbang';
           break;
         case 'shouhou':
-          banPageText = 'Repair';
+          banPageText = 'weixiuzhongxin';
           break;
         case 'index':
-          banPageText = 'Login';
+          banPageText = 'dengluye';
           break;
         case 'blocked':
-          banPageText = 'Blocked';
+          banPageText = 'fengjingye';
           break;
         case 'admin':
-          banPageText = 'Admin';
+          banPageText = 'guanliyuanye';
           break;
         case 'adminLite':
-          banPageText = 'AdminLite';
+          banPageText = 'guanliyuanjingjianye';
           break;
         case 'azjc':
-          banPageText = 'Tutorial';
+          banPageText = 'anzhuangjiaocheng';
           break;
         case 'call':
-          banPageText = 'Contact';
+          banPageText = 'lianxieye';
           break;
         case 'scan':
-          banPageText = 'Scan';
+          banPageText = 'saomiaoye';
           break;
         case 'ota':
-          banPageText = 'OTA';
+          banPageText = 'otaye';
           break;
         case 'pagenew':
-          banPageText = 'NewPage';
+          banPageText = 'xinyemian';
           break;
         default:
           banPageText = button.banPage || 'Unknown';

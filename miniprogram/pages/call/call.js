@@ -19,8 +19,6 @@ Page({
     toastMsg: '',
     toastIcon: 'none', // success 或 none（A方案不显示图标）
 
-    // 统一的"内容已复制"弹窗（和首页一致样式）
-    showCopySuccessModal: false,
 
     iconTop: iconWechat,   
     iconBottom: iconEmail, 
@@ -35,26 +33,11 @@ Page({
     try { wx.hideToast(); } catch (e) {}
     try { wx.hideLoading(); } catch (e) {}
     const patch = {};
-    if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
     if (this.data.showModal) patch.showModal = false;
     if (this.data.toastVisible) patch.toastVisible = false;
     if (Object.keys(patch).length) this.setData(patch);
   },
 
-  // 统一方法：显示"内容已复制"弹窗（互斥）
-  _showCopySuccessOnce() {
-    // 🔴 清理之前的定时器，避免快速连续调用时状态混乱
-    if (this._copySuccessTimer) {
-      clearTimeout(this._copySuccessTimer);
-      this._copySuccessTimer = null;
-    }
-    this._closeAllPopups();
-    this.setData({ showCopySuccessModal: true });
-    this._copySuccessTimer = setTimeout(() => {
-      this.setData({ showCopySuccessModal: false });
-      this._copySuccessTimer = null;
-    }, 1500);
-  },
 
   onLoad() {
     // 🔴 更新页面访问统计
@@ -104,7 +87,6 @@ Page({
           setTimeout(() => { wx.hideToast(); }, 150);
 
           // 2）显示统一的居中大弹窗（互斥）
-          this._showCopySuccessOnce();
         },
         fail: () => {
           wx.hideToast();
@@ -154,7 +136,6 @@ Page({
         setTimeout(() => { wx.hideToast(); }, 150);
 
         // 2）显示统一"内容已复制"弹窗（互斥）
-        this._showCopySuccessOnce();
         this.setData({ step: 2 });
       },
       fail: () => {
@@ -181,7 +162,6 @@ Page({
 
         // 2）显示统一"内容已复制"弹窗（互斥）
         this.setData({ showModal: false, emailContent: '', step: 1 });
-        this._showCopySuccessOnce();
       },
       fail: () => {
         wx.hideToast();

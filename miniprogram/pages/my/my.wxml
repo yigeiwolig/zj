@@ -639,7 +639,9 @@
               </view>
               
               <!-- 已驳回 (-1 或 REJECTED) -->
-              <view class="status-pill fail" wx:if="{{item.status === -1 || item.status === 'REJECTED'}}">已驳回</view>
+              <view class="status-pill fail" wx:if="{{item.status === -1 || item.status === 'REJECTED'}}">
+                <view class="dot-f"></view>已驳回
+              </view>
               
               <!-- [新增] 维修单特殊状态 -->
               
@@ -669,14 +671,16 @@
               </view>
               
               <!-- 🔴 场景B：待支付·需寄回 - 红色 -->
-              <view class="status-pill fail" wx:if="{{item.type === 'repair' && item.needReturn && !item.returnCompleted && item.status !== 'REPAIR_COMPLETED_SENT' && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.returnStatus === 'PENDING_RETURN' && item.status !== 'SHIPPED' && ((item.warrantyExpired === true || item.remainingDays === 0) && item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0 && item.repairPaid === false) || (!((item.warrantyExpired === true || item.remainingDays === 0) && item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0))}}">
+              <!-- 🔴 确保只有维修类型才显示，使用括号明确优先级 -->
+              <view class="status-pill fail" wx:if="{{(item.type === 'repair') && (item.needReturn === true) && (item.returnCompleted !== true) && (item.status !== 'REPAIR_COMPLETED_SENT') && (item.status !== 'USER_SENT') && (item.returnStatus !== 'USER_SENT') && (item.returnStatus === 'PENDING_RETURN') && (item.status !== 'SHIPPED') && (((item.warrantyExpired === true || item.remainingDays === 0) && item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0 && item.repairPaid === false) || (!((item.warrantyExpired === true || item.remainingDays === 0) && item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0)))}}">
                 <view class="dot-f"></view>
                 <text wx:if="{{(item.warrantyExpired === true || item.remainingDays === 0) && item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0}}">待支付·需寄回</text>
                 <text wx:else>需寄回维修</text>
               </view>
               
               <!-- 🔴 待寄回维修（其他情况，黄色）- 排除场景A和场景B -->
-              <view class="status-pill processing" wx:if="{{item.type === 'repair' && item.needReturn && !item.returnCompleted && item.status !== 'REPAIR_COMPLETED_SENT' && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.returnStatus !== 'PENDING_RETURN' && item.status !== 'SHIPPED'}}">
+              <!-- 🔴 确保只有维修类型才显示，使用括号明确优先级 -->
+              <view class="status-pill processing" wx:if="{{(item.type === 'repair') && (item.needReturn === true) && (item.returnCompleted !== true) && (item.status !== 'REPAIR_COMPLETED_SENT') && (item.status !== 'USER_SENT') && (item.returnStatus !== 'USER_SENT') && (item.returnStatus !== 'PENDING_RETURN') && (item.status !== 'SHIPPED')}}">
                 <view class="dot-p"></view>待寄回维修
               </view>
               
@@ -930,14 +934,6 @@
         <view class="cd-btn cancel" bindtap="closeInputDialog">取消</view>
         <view class="cd-btn confirm" bindtap="onInputDialogConfirm">确定</view>
       </view>
-    </view>
-  </view>
-
-  <!-- 统一的"内容已复制"弹窗（样式和首页一致） -->
-  <view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
-    <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
-      <view class="modal-icon-new success-icon">✓</view>
-      <view class="modal-title-new">内容已复制</view>
     </view>
   </view>
 
@@ -1581,5 +1577,15 @@
       </scroll-view>
       
     </view>
+  </view>
+</view>
+
+<!-- 【全局通用】自定义"内容已复制"弹窗（统一使用 copy-success-modal 样式） -->
+<view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
+    <!-- 图标：使用 Unicode 字符 -->
+    <view class="modal-icon-new success-icon">✓</view>
+    <!-- 标题 -->
+    <view class="modal-title-new">内容已复制</view>
   </view>
 </view>

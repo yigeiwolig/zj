@@ -62,6 +62,8 @@
       <view class="tab-item {{currentTab === 'sport' ? 'active' : ''}}" bindtap="switchTab" data-type="sport">仿赛</view>
       <view class="tab-item {{currentTab === 'scooter' ? 'active' : ''}}" bindtap="switchTab" data-type="scooter">踏板</view>
       <view class="tab-item {{currentTab === 'cruise' ? 'active' : ''}}" bindtap="switchTab" data-type="cruise">巡航</view>
+      <view class="tab-item {{currentTab === 'rally' ? 'active' : ''}}" bindtap="switchTab" data-type="rally">拉力</view>
+      <view class="tab-item {{currentTab === 'touring' ? 'active' : ''}}" bindtap="switchTab" data-type="touring">旅行车</view>
       <view class="tab-item {{currentTab === 'ebike' ? 'active' : ''}}" bindtap="switchTab" data-type="ebike">电摩</view>
       <view class="tab-item {{currentTab === 'bicycle' ? 'active' : ''}}" bindtap="switchTab" data-type="bicycle">电动自行车</view>
     </view>
@@ -187,9 +189,29 @@
           </view>
         </view>
         <view class="card-content">
-          <!-- 🔴 修改：这里加了 "车型：" 前缀 -->
-          <text class="card-title">车型：{{item.title}}</text>
-          <view class="card-meta">产品型号：{{item.model}}</view>
+          <!-- 1. 车型标题 -->
+          <text class="card-main-title">{{item.title}}</text>
+          
+          <!-- 2. 信息块 (加底色，更有分量感) -->
+          <view class="card-info-block">
+            <!-- 型号 -->
+            <view class="info-item">
+              <text class="info-label">型号</text>
+              <text class="info-value highlight">{{item.model}}</text>
+            </view>
+            
+            <!-- 竖线 -->
+            <view class="info-divider"></view>
+            
+            <!-- 车型 -->
+            <view class="info-item" wx:if="{{item.categoryName}}">
+              <text class="info-label">车型</text>
+              <text class="info-value">{{item.categoryName}}</text>
+            </view>
+          </view>
+
+          <!-- 3. 时间信息 -->
+          <view class="card-time" wx:if="{{item.displayTime}}">{{item.displayTime}}</view>
         </view>
       </view>
     </block>
@@ -627,6 +649,39 @@
     </cover-view>
     <cover-view class="cam-btn" style="width: 40px;"></cover-view>
   </cover-view>
+</view>
+
+<!-- 🔴 视频预览弹窗 -->
+<view class="dark-mask" wx:if="{{showVideoPreview}}" bindtap="closeVideoPreview" catchtouchmove="noop"></view>
+<view class="video-preview-modal" wx:if="{{showVideoPreview}}" catchtouchmove="noop">
+  <view class="video-preview-box">
+    <view class="video-preview-close" bindtap="closeVideoPreview">✕</view>
+    <view class="video-preview-video-wrapper">
+      <video 
+        src="{{videoPath}}" 
+        id="caseVideoPreviewPlayer"
+        controls="{{false}}"
+        autoplay="{{true}}" 
+        object-fit="contain" 
+        class="video-preview-player"
+        bindplay="onVideoPreviewPlay"
+        bindpause="onVideoPreviewPause"
+      ></video>
+      <!-- 点击层，点击屏幕暂停/播放 -->
+      <view class="video-preview-click-layer" bindtap="toggleVideoPreviewPlayPause"></view>
+      <!-- 暂停时显示的播放图标 -->
+      <view class="video-preview-pause-overlay {{!isVideoPlaying ? 'show' : ''}}" catchtap="toggleVideoPreviewPlayPause">
+        <view class="play-icon">
+          <view class="play-triangle"></view>
+        </view>
+      </view>
+    </view>
+    <!-- 底部操作按钮 -->
+    <view class="video-preview-actions">
+      <view class="video-preview-btn cancel" bindtap="rechooseVideo">重新选择</view>
+      <view class="video-preview-btn confirm" bindtap="confirmVideoPreview">确认使用</view>
+    </view>
+  </view>
 </view>
 
 <!-- 全局自定义弹窗组件 -->

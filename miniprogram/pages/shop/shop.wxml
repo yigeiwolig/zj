@@ -34,7 +34,7 @@
   
   <!-- 顶部轮播 (Hero) -->
   <view class="hero-swiper-box">
-    <swiper class="hero-swiper" indicator-dots="{{true}}" circular="{{true}}" autoplay="{{!isAdmin}}">
+    <swiper class="hero-swiper" indicator-dots="{{true}}" circular="{{true}}" autoplay="{{!isAdmin}}" bindchange="onSwiperChange">
       <block wx:for="{{topMediaList}}" wx:key="url">
         <swiper-item>
           <view wx:if="{{item.type === 'video'}}" class="hero-video-wrapper">
@@ -42,6 +42,8 @@
               src="{{item.url}}" 
               class="hero-media" 
               id="hero-video-{{index}}"
+              autoplay="{{item.autoplay || false}}"
+              preload="metadata"
               muted 
               loop 
               show-play-btn="{{false}}" 
@@ -54,7 +56,7 @@
               data-location="hero"
             ></video>
             <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.url}}" data-location="hero">
-              <view class="play-icon">
+              <view class="play-icon" wx:if="{{!heroVideoPlaying[index]}}">
                 <view class="play-triangle"></view>
               </view>
             </view>
@@ -66,8 +68,39 @@
       </block>
     </swiper>
     
+    <!-- Admin: 拖拽排序模式 -->
+    <view class="media-drag-list" wx:if="{{isAdmin && isEditingMedia}}">
+      <view class="drag-tip">长按拖动调整顺序，置顶项会显示在最前</view>
+      <block wx:for="{{sortedTopMediaList}}" wx:key="url" wx:for-index="dragIndex">
+        <view class="drag-item" 
+              data-index="{{item.originalIndex}}"
+              bindtouchstart="onDragStart"
+              bindtouchmove="onDragMove"
+              bindtouchend="onDragEnd">
+          <view class="drag-item-preview">
+            <image wx:if="{{item.type === 'image'}}" src="{{item.url}}" mode="aspectFill" class="drag-preview-img"></image>
+            <view wx:else class="drag-preview-video">
+              <text>🎥 视频</text>
+            </view>
+          </view>
+          <view class="drag-item-info">
+            <text class="drag-item-type">{{item.type === 'image' ? '图片' : '视频'}}</text>
+            <view class="drag-item-badges">
+              <text wx:if="{{item.isPinned}}" class="badge pin-badge">置顶</text>
+              <text wx:if="{{item.autoplay && item.type === 'video'}}" class="badge autoplay-badge">自动播放</text>
+            </view>
+          </view>
+          <view class="drag-handle">☰</view>
+        </view>
+      </block>
+      <view class="drag-actions">
+        <view class="drag-btn cancel" bindtap="adminCancelDrag">取消</view>
+        <view class="drag-btn confirm" bindtap="adminConfirmDrag">完成</view>
+      </view>
+    </view>
+
     <!-- Admin: 左右分开的上传按钮 -->
-    <view class="admin-upload-row" wx:if="{{isAdmin}}">
+    <view class="admin-upload-row" wx:if="{{isAdmin && !isEditingMedia}}">
        <view class="up-btn" bindtap="adminAddImage">📷 上传图片</view>
        <view class="up-btn" bindtap="adminAddVideo">🎥 上传视频</view>
     </view>
@@ -128,13 +161,19 @@
       <!-- (A) 详情长图/视频 -->
       <view class="detail-images">
          <block wx:for="{{currentSeries.detailImages}}" wx:key="url">
-           <view class="dimg-box">
+           <view class="dimg-box {{isAdmin && isDetailDragging && detailDragIndex === index ? 'dragging' : ''}}"
+                 style="{{isAdmin && isDetailDragging && detailDragIndex === index ? 'transform: translateY(' + detailDragOffsetY + 'px) scale(1.02);' : ''}}"
+                 bindtouchstart="{{isAdmin ? 'onDetailDragStart' : ''}}"
+                 catchtouchmove="{{isAdmin ? 'onDetailDragMove' : ''}}"
+                 bindtouchend="{{isAdmin ? 'onDetailDragEnd' : ''}}"
+                 data-index="{{index}}">
               <view wx:if="{{item.type === 'video'}}" class="detail-video-wrapper">
                 <video 
                   src="{{item.url}}" 
                   class="dimg" 
-                  style="height:422rpx; width:100%;" 
                   id="detail-video-{{index}}"
+                  autoplay="{{item.autoplay || false}}"
+                  preload="metadata"
                   muted 
                   loop 
                   show-play-btn="{{false}}" 
@@ -146,15 +185,30 @@
                   data-index="{{index}}"
                   data-location="detail"
                 ></video>
-                <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.url}}" data-location="detail">
-                  <view class="play-icon">
+                <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.url}}" data-location="detail" wx:if="{{!isDetailDragging}}">
+                  <view class="play-icon" wx:if="{{!detailVideoPlaying[index]}}">
                     <view class="play-triangle"></view>
+                  </view>
+                </view>
+                <!-- 🔴 详情页视频的管理员控制开关 -->
+                <view wx:if="{{isAdmin && !isDetailDragging}}" class="admin-detail-video-controls">
+                  <view class="video-control-item">
+                    <text class="control-label">置顶</text>
+                    <view class="switch-toggle {{item.isPinned ? 'on' : ''}}" catchtap="adminToggleDetailVideoPin" data-index="{{index}}">
+                      <view class="switch-thumb"></view>
+                    </view>
+                  </view>
+                  <view class="video-control-item">
+                    <text class="control-label">自动播放</text>
+                    <view class="switch-toggle {{item.autoplay ? 'on' : ''}}" catchtap="adminToggleDetailVideoAutoplay" data-index="{{index}}">
+                      <view class="switch-thumb"></view>
+                    </view>
                   </view>
                 </view>
               </view>
               <image wx:else src="{{item.url}}" mode="aspectFill" class="dimg" />
               
-              <view wx:if="{{isAdmin}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
+              <view wx:if="{{isAdmin && !isDetailDragging}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
            </view>
          </block>
          <view class="add-txt-btn" wx:if="{{isAdmin}}" bindtap="adminAddDetailMedia">+ 添加详情图片/视频</view>
@@ -648,6 +702,7 @@
     src="{{currentVideoUrl}}" 
     id="fullscreen-video"
     autoplay="{{true}}" 
+    preload="auto"
     class="fullscreen-video" 
     show-fullscreen-btn="{{false}}" 
     show-center-play-btn="{{false}}"

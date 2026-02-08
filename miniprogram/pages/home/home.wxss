@@ -5843,7 +5843,18 @@ page {
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 .phantom.expanded .p-image-box { 
-  height: 380rpx; /* 使用固定高度，确保编辑模式下可见 */
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
+  position: relative;
+  overflow: hidden;
+}
+.phantom.expanded .p-image-box image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= */
@@ -12626,9 +12637,18 @@ page { background-color: #F2F2F7; height: 100%; overflow: hidden; font-family: -
 
 /* 展开时，图片固定高度 380rpx (约占屏幕 1/4)，不再依赖父容器高度 */
 .phantom.expanded .p-image-box { 
-  height: 380rpx;
-  /* 确保编辑模式下可以点击 */
-  cursor: pointer;
+  padding-bottom: 56.25%; /* 16:9 比例 */
+  height: 0;
+  position: relative;
+  overflow: hidden;
+}
+.phantom.expanded .p-image-box image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= */
