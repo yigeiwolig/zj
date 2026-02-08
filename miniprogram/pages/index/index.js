@@ -270,17 +270,40 @@ Page({
       if (oldWxShowLoading) wx.showLoading = oldWxShowLoading;
       if (oldOldWxShowLoading) wx.__mt_oldShowLoading = oldOldWxShowLoading;
       if (app && oldAppShowLoading) app.showLoading = oldAppShowLoading;
+      if (this._noLoadingTimer) {
+        clearInterval(this._noLoadingTimer);
+        this._noLoadingTimer = null;
+      }
     };
     wx.showLoading = () => {};
     if (wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = () => {};
     if (app) {
       app.showLoading = () => {};
       if (app.hideLoading) app.hideLoading();
+      // 直接关闭全局 UI Loading
+      try {
+        if (app.globalData && app.globalData.ui && app.globalData.ui.loading) {
+          app.globalData.ui.loading = { ...app.globalData.ui.loading, show: false };
+          if (app._emitUI) app._emitUI();
+        }
+      } catch (e) {}
     }
-    try { wx.hideLoading(); } catch (e) {}
-    const toast = this.selectComponent('#custom-toast');
-    if (toast && toast.hideLoading) toast.hideLoading();
-    if (this.data.showLoadingAnimation) this.setData({ showLoadingAnimation: false });
+    const hideAllLoading = () => {
+      try { wx.hideLoading(); } catch (e) {}
+      try { if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading(); } catch (e) {}
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && toast.hideLoading) toast.hideLoading();
+      if (this.data.showLoadingAnimation) this.setData({ showLoadingAnimation: false });
+      if (app && app.hideLoading) app.hideLoading();
+      try {
+        if (app && app.globalData && app.globalData.ui && app.globalData.ui.loading?.show) {
+          app.globalData.ui.loading = { ...app.globalData.ui.loading, show: false };
+          if (app._emitUI) app._emitUI();
+        }
+      } catch (e) {}
+    };
+    hideAllLoading();
+    this._noLoadingTimer = setInterval(hideAllLoading, 100);
 
     this.setData({ isLoading: true });
     
