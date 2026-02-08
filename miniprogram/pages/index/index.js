@@ -1313,11 +1313,18 @@ Page({
     });
   },
 
-  // 🔴 显示/隐藏二维码
+  // 🔴 收起二维码并跳转到昵称输入页面
   toggleQRCode() {
+    // 关闭首次进入弹窗
+    wx.setStorageSync('has_seen_first_time_modal', true);
     this.setData({ 
-      showWechatQRCode: !this.data.showWechatQRCode 
+      showFirstTimeModal: false,
+      showWechatQRCode: false,
+      showCopySuccessInModal: false
     });
+    
+    // 显示昵称输入界面
+    this.setData({ isShowNicknameUI: true });
   },
 
   // 🔴 确认执行放行
