@@ -1,9 +1,0 @@
-{
-  "name": "deleteValidUser",
-  "version": "1.0.0",
-  "description": "删除 valid_users 中的用户记录，让用户重新输入昵称",
-  "main": "index.js",
-  "dependencies": {
-    "wx-server-sdk": "~2.6.3"
-  }
-}

@@ -424,17 +424,17 @@
       </view>
       
       <!-- 🔴 如果没有维修单，显示"去选购商品"卡片 -->
-      <view 
-        wx:else
-        class="empty-order-card" 
-        bindtap="goToShop"
-      >
-        <view class="empty-content">
-          <view class="empty-icon">📦</view>
-          <view class="empty-title">开启您的改装之旅</view>
-          <view class="empty-desc">下单后，此处将实时追踪您的物料进度</view>
-          
-          <view class="go-shop-btn">去选购商品 ➔</view>
+    <view 
+      wx:else 
+      class="empty-order-card" 
+      bindtap="goToShop"
+    >
+      <view class="empty-content">
+        <view class="empty-icon">📦</view>
+        <view class="empty-title">开启您的改装之旅</view>
+        <view class="empty-desc">下单后，此处将实时追踪您的物料进度</view>
+        
+        <view class="go-shop-btn">去选购商品 ➔</view>
         </view>
       </view>
     </view>
@@ -726,7 +726,7 @@
                 <text wx:if="{{item.deductionReason === '配件错误' || item.deductionReason === 'wrong_part'}}">配件错误·扣30天</text>
                 <text wx:elif="{{item.deductionReason === '超时' || item.deductionReason === 'timeout'}}">超时未寄·扣30天</text>
                 <text wx:else>扣30天质保</text>
-              </view>
+                </view>
             </view>
           </view>
           
@@ -989,10 +989,10 @@
             <view class="rr-item-info">
               <!-- 基础信息区域 -->
               <view class="rr-info-section">
-                <view class="rr-info-row">
+              <view class="rr-info-row">
                   <text class="rr-info-label">用户昵称</text>
                   <text class="rr-info-value">{{item.userNickname || '匿名用户'}}</text>
-                </view>
+              </view>
                 <view class="rr-info-row">
                   <text class="rr-info-label">质保状态</text>
                   <text class="rr-info-value {{(item.warrantyExpired === true || item.remainingDays === 0) ? 'rr-warranty-expired-text' : 'rr-warranty-normal-text'}}">
@@ -1011,34 +1011,34 @@
               <view class="rr-info-section" wx:if="{{item.returnStatus === 'PENDING_RETURN'}}">
                 <view class="rr-info-row rr-address-row">
                   <text class="rr-info-label">收货地址</text>
-                  <view class="rr-info-value-wrapper">
+                <view class="rr-info-value-wrapper">
                     <text class="rr-info-value">
                       {{item.returnAddress ? (item.returnAddress.name + ' ' + item.returnAddress.phone + ' ' + item.returnAddress.address) : (item.contact.name + ' ' + item.contact.phone + ' ' + item.contact.address)}}
                     </text>
-                    <view class="rr-copy-user-address-btn" bindtap="copyUserAddress" data-index="{{index}}">
-                      <text class="rr-copy-text">复制</text>
-                    </view>
+                  <view class="rr-copy-user-address-btn" bindtap="copyUserAddress" data-index="{{index}}">
+                    <text class="rr-copy-text">复制</text>
                   </view>
                 </view>
+              </view>
               </view>
 
               <!-- 详细信息区域 -->
               <view class="rr-info-section">
-                <view class="rr-info-row" wx:if="{{item.returnNote}}">
+              <view class="rr-info-row" wx:if="{{item.returnNote}}">
                   <text class="rr-info-label">备注</text>
-                  <text class="rr-info-value">{{item.returnNote}}</text>
-                </view>
-                <view class="rr-info-row">
+                <text class="rr-info-value">{{item.returnNote}}</text>
+              </view>
+              <view class="rr-info-row">
                   <text class="rr-info-label">故障描述</text>
-                  <text class="rr-info-value">{{item.description}}</text>
-                </view>
-                <view class="rr-info-row">
+                <text class="rr-info-value">{{item.description}}</text>
+              </view>
+              <view class="rr-info-row">
                   <text class="rr-info-label">商品发出时间</text>
-                  <text class="rr-info-value">{{item.shipTime}}</text>
-                </view>
-                <view class="rr-info-row" wx:if="{{item.returnTrackingId}}">
+                <text class="rr-info-value">{{item.shipTime}}</text>
+              </view>
+              <view class="rr-info-row" wx:if="{{item.returnTrackingId}}">
                   <text class="rr-info-label">寄回运单号</text>
-                  <text class="rr-info-value">{{item.returnTrackingId}}</text>
+                <text class="rr-info-value">{{item.returnTrackingId}}</text>
                 </view>
               </view>
             </view>
@@ -1053,7 +1053,7 @@
                 </block>
                 <!-- 🔴 如果用户未支付，显示查看物流和填写售后单/寄出快递 -->
                 <block wx:else>
-                  <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}">查看物流</view>
+                <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}">查看物流</view>
                   <!-- 🔴 修改：如果已填写售后单且已支付（过质保）或未过质保已填写单号，显示寄出快递；否则显示填写售后单 -->
                   <view class="rr-btn ship-out" wx:if="{{item.repairItems && item.repairItems.length > 0 && ((item.warrantyExpired && item.repairPaid) || (!item.warrantyExpired && item.trackingId))}}" bindtap="adminShipOutAfterRepair" data-id="{{item._id}}">寄出快递</view>
                   <view class="rr-btn fill-repair" wx:else bindtap="openFillRepairModal" data-item="{{item}}" data-index="{{index}}">填写售后单</view>
@@ -1364,7 +1364,7 @@
     </view>
   </view>
 
-  <!-- ================= 购买配件弹窗 ================= -->
+<!-- ================= 购买配件弹窗 ================= -->
 <view class="custom-dialog-mask purchase-parts-mask" wx:if="{{showPurchasePartsModal}}" bindtap="closePurchasePartsModal" catchtouchmove="noop">
   <view class="custom-dialog-box purchase-parts-dialog" catchtap="noop" catchtouchmove="noop">
     <view class="cd-content purchase-parts-content">

@@ -4310,7 +4310,7 @@ Page({
                 },
                 fail: (err) => {
                   console.error('[shouhou doPayment] 调用云函数失败:', err);
-                }
+            }
               });
             }
             
@@ -4338,15 +4338,15 @@ Page({
                 });
               } else {
                 // 如果没有上一页，跳转到 my 页面
-                wx.navigateTo({ url: '/pages/my/my' });
-                setTimeout(() => {
-                  const pages = getCurrentPages();
-                  const myPage = pages[pages.length - 1];
-                  if (myPage && typeof myPage.loadMyActivitiesPromise === 'function') {
+              wx.navigateTo({ url: '/pages/my/my' });
+              setTimeout(() => {
+                const pages = getCurrentPages();
+                const myPage = pages[pages.length - 1];
+                if (myPage && typeof myPage.loadMyActivitiesPromise === 'function') {
                     myPage.loadMyActivitiesPromise().then(() => {
                       console.log('[shouhou doPayment] my页面数据已刷新');
                     });
-                  }
+                }
                 }, 500);
               }
             }, 500);
