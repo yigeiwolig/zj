@@ -315,7 +315,26 @@
     <view class="first-time-icon">✨</view>
     <view class="first-time-title">开启专属体验</view>
     <view class="first-time-desc">如果您是在抖音或闲鱼添加的用户，请添加管理员微信录入昵称</view>
-    <view class="first-time-btn" bindtap="closeFirstTimeModal">我知道了</view>
+    
+    <!-- 二维码显示区域 -->
+    <view class="qr-code-container" wx:if="{{showWechatQRCode}}">
+      <image class="qr-code-image" src="/images/qrcode.jpg" mode="aspectFit" />
+      <text class="qr-code-tip">扫描二维码添加管理员微信</text>
+      <text class="qr-code-wechat">微信号：{{adminWechat}}</text>
+    </view>
+    
+    <!-- 按钮区域 -->
+    <view class="first-time-btns">
+      <view class="first-time-btn primary" bindtap="copyAdminWechat">
+        {{showWechatQRCode ? '已复制微信号' : '复制微信号'}}
+      </view>
+      <view class="first-time-btn secondary" wx:if="{{showWechatQRCode}}" bindtap="toggleQRCode">
+        收起二维码
+      </view>
+      <view class="first-time-btn secondary" wx:if="{{!showWechatQRCode}}" bindtap="closeFirstTimeModal">
+        我知道了
+      </view>
+    </view>
   </view>
 </view>
 

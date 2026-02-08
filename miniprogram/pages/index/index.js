@@ -41,6 +41,8 @@ Page({
     
     // 【新增】首次进入提示弹窗
     showFirstTimeModal: false,
+    showWechatQRCode: false, // 是否显示微信二维码
+    adminWechat: 'MT-摩改社', // 管理员微信号（可以修改）
     
     // Loading 状态（合并重复定义）
     isLoading: false,
@@ -1273,7 +1275,36 @@ Page({
   closeFirstTimeModal() {
     // 标记用户已看过提示
     wx.setStorageSync('has_seen_first_time_modal', true);
-    this.setData({ showFirstTimeModal: false });
+    this.setData({ 
+      showFirstTimeModal: false,
+      showWechatQRCode: false
+    });
+  },
+
+  // 🔴 复制管理员微信号
+  copyAdminWechat() {
+    const wechat = this.data.adminWechat;
+    wx.setClipboardData({
+      data: wechat,
+      success: () => {
+        // 复制成功后显示二维码
+        this.setData({ showWechatQRCode: true });
+        // 延迟显示复制成功提示，避免和二维码显示冲突
+        setTimeout(() => {
+          this._showCopySuccessOnce();
+        }, 300);
+      },
+      fail: () => {
+        this.showAutoToast('提示', '复制失败，请重试');
+      }
+    });
+  },
+
+  // 🔴 显示/隐藏二维码
+  toggleQRCode() {
+    this.setData({ 
+      showWechatQRCode: !this.data.showWechatQRCode 
+    });
   },
 
   // 🔴 确认执行放行
