@@ -40,7 +40,7 @@ Page({
     _pendingUnbanData: null, // 存储待执行的放行数据
     
     // 【新增】首次进入提示弹窗
-    showFirstTimeModal: false
+    showFirstTimeModal: false,
     
     // Loading 状态（合并重复定义）
     isLoading: false,
