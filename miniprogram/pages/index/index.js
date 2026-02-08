@@ -264,12 +264,23 @@ Page({
 
     // 🔴 临时屏蔽任何 Loading（完全不显示）
     const oldWxShowLoading = wx.showLoading;
+    const oldOldWxShowLoading = wx.__mt_oldShowLoading;
     const oldAppShowLoading = app && app.showLoading;
+    const restoreLoading = () => {
+      if (oldWxShowLoading) wx.showLoading = oldWxShowLoading;
+      if (oldOldWxShowLoading) wx.__mt_oldShowLoading = oldOldWxShowLoading;
+      if (app && oldAppShowLoading) app.showLoading = oldAppShowLoading;
+    };
     wx.showLoading = () => {};
+    if (wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = () => {};
     if (app) {
       app.showLoading = () => {};
       if (app.hideLoading) app.hideLoading();
     }
+    try { wx.hideLoading(); } catch (e) {}
+    const toast = this.selectComponent('#custom-toast');
+    if (toast && toast.hideLoading) toast.hideLoading();
+    if (this.data.showLoadingAnimation) this.setData({ showLoadingAnimation: false });
 
     this.setData({ isLoading: true });
     
@@ -299,8 +310,7 @@ Page({
       }
     }).then(res => {
       // 恢复 Loading
-      if (oldWxShowLoading) wx.showLoading = oldWxShowLoading;
-      if (app && oldAppShowLoading) app.showLoading = oldAppShowLoading;
+      restoreLoading();
       this.setData({ isLoading: false });
       
       const result = res.result || {};
@@ -344,8 +354,7 @@ Page({
       }
     }).catch(err => {
       // 恢复 Loading
-      if (oldWxShowLoading) wx.showLoading = oldWxShowLoading;
-      if (app && oldAppShowLoading) app.showLoading = oldAppShowLoading;
+      restoreLoading();
       this.setData({ isLoading: false });
       this.showAutoToast('错误', '网络错误，请重试');
     });
