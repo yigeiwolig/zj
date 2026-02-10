@@ -270,10 +270,10 @@ Page({
   handleCopyWechat() {
     // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
     const hideOfficialToast = () => {
-      try {
+    try {
         if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
         if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
-      } catch (e) {}
+    } catch (e) {}
     };
     hideOfficialToast();
     
@@ -316,9 +316,9 @@ Page({
           setTimeout(() => {
             this.setData({ showCopySuccessModal: false });
             // 🔴 复制成功后，恢复自动检测
-            if (!this._isPageDestroyed) {
-              this.startAutoCheck();
-            }
+          if (!this._isPageDestroyed) {
+            this.startAutoCheck();
+          }
           }, 2000);
         }, 800);
       }

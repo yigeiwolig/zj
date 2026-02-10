@@ -189,6 +189,29 @@ page {
 .wave.delay { animation-delay: 0.6s; }
 .blue-loader .wave { border-color: #0A84FF; } /* 蓝色波纹 */
 
+/* 🔴 新增：旋转加载圈（用于搜索和连接状态） */
+.spinner-loader {
+  width: 32rpx;
+  height: 32rpx;
+  border: 4rpx solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spinnerRotate 0.8s linear infinite;
+  flex-shrink: 0;
+  margin-right: 16rpx;
+}
+
+/* 白色加载圈（连接状态使用，但扫描状态也是白色，因为背景是黑色） */
+.spinner-loader.white {
+  border: 4rpx solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+}
+
+@keyframes spinnerRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* ========================================= */
 /* 修复：信号条动画 (强制开启) */
 /* ========================================= */
@@ -294,6 +317,7 @@ page {
 /* 图标颜色 */
 .t-icon.warn { background: #FF9500; } /* 橙色 ! */
 .t-icon.err { background: #FF3B30; }  /* 红色 ! */
+.t-icon.success { background: #34C759; } /* 绿色 ✓ */
 
 /* ========================================= */
 /* 7. 隐蔽模式按钮样式 */
@@ -898,6 +922,89 @@ page {
   opacity: 0.5; 
   pointer-events: none; 
   background: #8E8E93 !important; 
+}
+
+/* 🔴 权限引导步骤样式（重新设计） */
+.permission-guide {
+  width: 100%;
+  margin-bottom: 50rpx;
+}
+
+.guide-title {
+  font-size: 28rpx;
+  color: #8E8E93;
+  text-align: center;
+  margin-bottom: 40rpx;
+  font-weight: 500;
+}
+
+.guide-flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.flow-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 24rpx;
+}
+
+.flow-number {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  background: #1C1C1E;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.flow-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  background: #F5F5F7;
+  padding: 20rpx 32rpx;
+  border-radius: 16rpx;
+}
+
+.flow-icon-box {
+  width: 48rpx;
+  height: 48rpx;
+  background: #FFFFFF;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.flow-icon {
+  width: 32rpx;
+  height: 32rpx;
+}
+
+.flow-text {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1C1C1E;
+  flex: 1;
+}
+
+.flow-connector {
+  width: 2rpx;
+  height: 24rpx;
+  background: #E5E5EA;
+  margin: 8rpx 0 8rpx 24rpx;
+  align-self: flex-start;
 }
 
 /* 引导弹窗 (Tutorial & Key Anim) */

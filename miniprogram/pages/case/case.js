@@ -345,7 +345,7 @@ Page({
     
     // 🆕 如果是管理员，同时加载待审核列表
     if (this.data.isAdmin) {
-      this.loadPendingList();
+      this.fetchPendingVideos();
     }
   },
   

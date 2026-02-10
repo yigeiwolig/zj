@@ -98,7 +98,7 @@
         <view class="drag-btn confirm" bindtap="adminConfirmDrag">完成</view>
       </view>
     </view>
-
+    
     <!-- Admin: 左右分开的上传按钮 -->
     <view class="admin-upload-row" wx:if="{{isAdmin && !isEditingMedia}}">
        <view class="up-btn" bindtap="adminAddImage">📷 上传图片</view>

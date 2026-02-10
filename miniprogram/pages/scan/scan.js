@@ -18,11 +18,17 @@ const iconGear = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5v
 // 蓝牙小图标 (白色)
 const iconBtSmall = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg==';
 
+// 🔴 新增：更多图标 (深色)
+const iconMoreDark = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSI1IiBjeT0iMTIiIHI9IjIiIGZpbGw9IiMxQzFDMUUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSIjMUMxQzFFIi8+PGNpcmNsZSBjeD0iMTkiIGN5PSIxMiIgcj0iMiIgZmlsbD0iIzFDMUMxRSIvPjwvc3ZnPg==';
+
+// 🔴 新增：蓝牙图标 (深色)
+const iconBtDark = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg==';
+
 // 重置图标 (圆形箭头)
 const iconReset = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAxMkExMiAxMiAwIDAgMSAxNSA0LjA0VjFhMSAxIDAgMCAxIDEuNzA3LS43MDdsNCA0YTEgMSAwIDAgMSAwIDEuNDE0bC00IDRhMSAxIDAgMCAxLTEuNzA3LS43MDdWOC4wNEE5IDkgMCAwIDAgMyAxMkgzWiIvPjxwYXRoIGQ9Ik0yMSAxMkE5IDkgMCAwIDAgOSA4LjA0VjExYTEgMSAwIDAgMS0xLjcwNy43MDdsLTQtNGExIDEgMCAwIDEgMC0xLjQxNGw0LTRhMSAxIDAgMCAxIDEuNzA3LjcwN1Y0LjA0QTEyIDEyIDAgMCAxIDIxIDEySDIxWiIvPjwvc3ZnPg==';
 
-// 小齿轮图标 (用于高级设置)
-const iconGearSmall = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyLjUiLz48cGF0aCBkPSJNMTIuNzUgNS41YTEuNzUgMS43NSAwIDAgMSAxLjUgMHYxLjVhMS43NSAxLjc1IDAgMCAxLTEuNSAwdi0xLjVaIi8+PHBhdGggZD0iTTE4LjUgMTJhMS43NSAxLjc1IDAgMCAxLTEuNSAxLjV2MS41YTEuNzUgMS43NSAwIDAgMSAxLjUgMHYtMS41WiIvPjxwYXRoIGQ9Ik0xMS4yNSAxOC41YTEuNzUgMS43NSAwIDAgMSAxLjUgMHYxLjVhMS43NSAxLjc1IDAgMCAxLTEuNSAwdi0xLjVaIi8+PHBhdGggZD0iTTUuNSAxMmExLjc1IDEuNzUgMCAwIDEgMS41LTEuNVY5YTEuNzUgMS43NSAwIDAgMS0xLjUgMHYxLjVaIi8+PHBhdGggZD0iTTEyLjc1IDE4LjVhMS43NSAxLjc1IDAgMCAxIDEuNSAwdjEuNWExLjc1IDEuNzUgMCAwIDEtMS41IDB2LTEuNVoiLz48cGF0aCBkPSJNNS41IDEyYTEuNzUgMS43NSAwIDAgMSAxLjUgMS41VjE1YTEuNzUgMS43NSAwIDAgMS0xLjUgMHYtMS41WiIvPjxwYXRoIGQ9Ik0xOC41IDEyYTEuNzUgMS43NSAwIDAgMS0xLjUtMS41VjlhMS43NSAxLjc1IDAgMCAxIDEuNSAwdjEuNVoiLz48L3N2Zz4=';
+// 小齿轮图标 (用于高级设置) - 简洁清晰的设置图标
+const iconGearSmall = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4LjUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMyIgZmlsbD0iIzFDMUMxRSIvPjxwYXRoIGQ9Ik0xMiA0VjJNMTIgMjJWMjBNMjAgMTJIMjJNMiAxMkg0TTE4LjY2IDUuMzRMMTkuNzggNC4yMk0xOS43OCAxOS43OEwxOC42NiAxOC42Nk00LjIyIDE5Ljc4TDUuMzQgMTguNjZNNS4zNCA1LjM0TDQuMjIgNC4yMiIgc3Ryb2tlPSIjMUMxQzFFIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==';
 
 // 连接图标 (主页大胶囊用)
 const iconConnect = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTUgN0gxN0MyMC4zMTM3IDcgMjMgOS42ODYyOSAyMyAxM0MyMyAxNi4zMTM3IDIwLjMxMzcgMTkgMTcgMTlIMTVNOCAxN0g2QzIuNjg2MjkgMTcgMCAxNC4zMTM3IDAgMTNDMCA5LjY4NjI5IDIuNjg2MjkgNyA2IDdIOE04IDEzSDE2IiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=';
@@ -104,8 +110,8 @@ class BLEHelper {
                 this.onError({ 
                   type: 'auth_deny',
                   message: '蓝牙权限被拒绝',
-                  detail: '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。'
-              });
+                  detail: '开启蓝牙权限\n\n      ╭─────────╮\n      │   ⋯     │  ← 右上角\n      ╰─────────╯\n           │\n           ▼\n      ╭─────────╮\n      │  设置   │\n      ╰─────────╯\n           │\n           ▼\n      ╭─────────╮\n      │  蓝牙   │\n      ╰─────────╯'
+                });
               }
             }
               if (this.onError) this.onError(err);
@@ -131,7 +137,7 @@ class BLEHelper {
                   this.onError({ 
                     type: 'auth_deny',
                     message: '蓝牙功能不可用',
-                    detail: '请确保：\n1. 系统蓝牙已开启\n2. 已授权小程序使用蓝牙功能\n\n可在手机设置中检查权限'
+                    detail: '开启蓝牙权限\n\n      ╭─────────╮\n      │   ⋯     │  ← 右上角\n      ╰─────────╯\n           │\n           ▼\n      ╭─────────╮\n      │  设置   │\n      ╰─────────╯\n           │\n           ▼\n      ╭─────────╮\n      │  蓝牙   │\n      ╰─────────╯'
                 });
                 }
               }
@@ -367,6 +373,10 @@ Page({
     showBluetoothAlert: false,
     bluetoothAlertClosing: false, // 蓝牙提示弹窗退出动画中
     
+    // 🔴 新增：权限拒绝提示弹窗
+    showPermissionModal: false,
+    permissionModalClosing: false,
+
     // 新增：自动校准中弹窗
     showCalibratingModal: false,
     calibratingModalClosing: false, // 校准弹窗退出动画中
@@ -382,6 +392,9 @@ Page({
     
     // 🔴 新增：OTA提示
     showOtaTip: false,
+    
+    // 🔴 新增：连接成功提示
+    showConnectSuccessTip: false,
     
     // 新增：连接状态
     isConnecting: false,      // 正在连接中
@@ -476,7 +489,10 @@ Page({
       gearSmall: iconGearSmall,
       ghostOpen: iconGhostOpen,
       ghostClose: iconGhostClose,
-      btSmall: iconBtSmall
+      btSmall: iconBtSmall,
+      // 🔴 新增
+      moreDark: iconMoreDark,
+      btDark: iconBtDark
     },
     
     // 滑块状态 (默认 mid)
@@ -559,18 +575,19 @@ Page({
         isConnecting: false,
         connectedDeviceName: finalName // 设置格式化后的名称
       });
+      
+      // 🔴 显示连接成功提示
+      this.setData({ showConnectSuccessTip: true });
+      setTimeout(() => {
+        this.setData({ showConnectSuccessTip: false });
+      }, 2000); // 2秒后自动隐藏
     };
     this.ble.onError = (err) => {
       this.setData({ isScanning: false });
       
-      // 🔴 处理蓝牙权限错误，使用自定义弹窗
+      // 🔴 处理蓝牙权限错误，使用自定义弹窗 (图形化)
       if (err && err.type === 'auth_deny') {
-        this._showCustomModal({
-          title: err.message || '蓝牙权限被拒绝',
-          content: err.detail || '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。',
-          showCancel: false,
-          confirmText: '知道了'
-        });
+        this.setData({ showPermissionModal: true });
       }
       // 可以在这里做必要的错误上报或静默处理
     };
@@ -633,6 +650,39 @@ Page({
     const app = getApp();
     if (app && app.startQiangliCheck) {
       app.startQiangliCheck();
+    }
+    
+    // 🔴 修复：从OTA页面返回后，重置蓝牙状态，避免连接无响应
+    // 检查是否从OTA页面返回（通过检查页面栈）
+    const pages = getCurrentPages();
+    const prevPage = pages[pages.length - 2];
+    if (prevPage && prevPage.route && prevPage.route.includes('ota/ota')) {
+      // 从OTA页面返回，重置所有蓝牙相关状态
+      console.log('🔄 [onShow] 从OTA页面返回，重置蓝牙状态');
+      this.setData({
+        isConnected: false,
+        isConnecting: false,
+        isScanning: false,
+        isNavigatingToOta: false,
+        connectedDeviceName: '',
+        showConnectSuccessTip: false,
+        showOtaTip: false,
+        showApproachTip: false,
+        showDisconnectTip: false,
+        showConnectBluetoothTip: false
+      });
+      
+      // 重新初始化蓝牙适配器（如果之前被关闭了）
+      if (this.ble) {
+        // 先断开可能残留的连接
+        this.ble.disconnect();
+        // 延迟一下再重新初始化，确保状态清理干净
+        setTimeout(() => {
+          this.ble.initBluetoothAdapter().catch(err => {
+            console.log('⚠️ [onShow] 蓝牙适配器初始化失败（可能未开启）:', err);
+          });
+        }, 300);
+      }
     }
   },
 
@@ -958,6 +1008,17 @@ Page({
     }, 420);
   },
 
+  // 🔴 新增：关闭权限提示弹窗
+  closePermissionModal() {
+    this.setData({ permissionModalClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showPermissionModal: false,
+        permissionModalClosing: false
+      });
+    }, 420);
+  },
+
 
   // 监听断开 (修改：增加 UI 反馈)
   onBleDisconnected() {
@@ -1051,6 +1112,8 @@ Page({
   // ===============================================
   onTouchStartMain(e) {
     if (e.changedTouches.length > 0) {
+      // 记录起点 & 重置节流时间戳（减少后续 setData 频率，提升流畅度）
+      this._lastMainMoveTs = Date.now();
       this.setData({ 
         touchStartX: e.changedTouches[0].clientX,
         isDraggingModel: true,
@@ -1062,6 +1125,14 @@ Page({
   // 🔴 新增：滑动过程中的跟手效果
   onTouchMoveMain(e) {
     if (!this.data.isDraggingModel) return;
+    
+    // 简单节流：避免每一帧都 setData，降低卡顿感
+    const now = Date.now();
+    const last = this._lastMainMoveTs || 0;
+    if (now - last < 16) { // ~60fps
+      return;
+    }
+    this._lastMainMoveTs = now;
     
     const touchCurrentX = e.touches[0].clientX;
     const startX = this.data.touchStartX;
@@ -1104,6 +1175,8 @@ Page({
       modelActiveScale: 1.08,
       modelSideScale: 0.86
     });
+    // 结束时清理节流时间戳
+    this._lastMainMoveTs = 0;
     
     // 判断是否切换
     if (Math.abs(diff) < threshold) {

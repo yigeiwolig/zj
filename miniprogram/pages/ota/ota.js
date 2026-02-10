@@ -28,7 +28,17 @@ class BLEHelper {
               if (err.errMsg && err.errMsg.includes('already opened')) {
                 resolve();
               } else {
-                if (this.onError) this.onError(err);
+                // 🔴 处理权限错误
+                if (err.errMsg && err.errMsg.includes('auth deny')) {
+                  if (this.onError) {
+                    this.onError({ 
+                      type: 'auth_deny',
+                      errMsg: err.errMsg
+                    });
+                  }
+                } else {
+                  if (this.onError) this.onError(err);
+                }
                 reject(err);
               }
             }
@@ -126,7 +136,18 @@ Page({
     devices: ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX'],
     currentDevIdx: 0,
     currentSvg: iconF1Pro,
-    hasSavedOtaRecord: false // 仅在动画完成且显示"升级完成"后再保存
+    hasSavedOtaRecord: false, // 仅在动画完成且显示"升级完成"后再保存
+    
+    // 🔴 新增：权限拒绝提示弹窗
+    showPermissionModal: false,
+    permissionModalClosing: false,
+    
+    // 🔴 新增：图标数据
+    icons: {
+      moreDark: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSI1IiBjeT0iMTIiIHI9IjIiIGZpbGw9IiMxQzFDMUUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSIjMUMxQzFFIi8+PGNpcmNsZSBjeD0iMTkiIGN5PSIxMiIgcj0iMiIgZmlsbD0iIzFDMUMxRSIvPjwvc3ZnPg==',
+      gearSmall: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4LjUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMyIgZmlsbD0iIzFDMUMxRSIvPjxwYXRoIGQ9Ik0xMiA0VjJNMTIgMjJWMjBNMjAgMTJIMjJNMiAxMkg0TTE4LjY2IDUuMzRMMTkuNzggNC4yMk0xOS43OCAxOS43OEwxOC42NiAxOC42Nk00LjIyIDE5Ljc4TDUuMzQgMTguNjZNNS4zNCA1LjM0TDQuMjIgNC4yMiIgc3Ryb2tlPSIjMUMxQzFFIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==',
+      btDark: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg=='
+    }
   },
 
   onLoad() {
@@ -314,6 +335,14 @@ Page({
 
     this.ble.onError = (err) => {
       console.error('蓝牙错误:', err);
+      
+      // 🔴 处理蓝牙权限错误
+      if (err && (err.errMsg && err.errMsg.includes('auth deny')) || (err.type === 'auth_deny')) {
+        this.setData({ showPermissionModal: true });
+        this.setData({ loaderFading: false });
+        return;
+      }
+      
       this.showIslandTip('连接失败', false);
       // 连接失败时，保持加载界面显示，不跳转
       this.setData({ loaderFading: false });
@@ -401,16 +430,16 @@ Page({
       });
       
       // 3. 先检查是否已存在记录（避免重复保存）
+      // 🔴 修改：只基于 deviceId 检查，实现全网共享（任何用户升级后，其他用户都能识别）
       const db = wx.cloud.database();
       const existingRes = await db.collection('ota_connections')
         .where({ 
-          _openid: openid,
           deviceId: device.deviceId 
         })
         .get();
       
       if (existingRes.data.length > 0) {
-        console.log('✅ [saveOtaConnectionToCloud] 记录已存在，跳过保存');
+        console.log('✅ [saveOtaConnectionToCloud] 该设备已有OTA记录（全网共享），跳过保存');
         return;
       }
       
@@ -527,6 +556,19 @@ Page({
     // 重置保存标记，防止下次流程被跳过
     this.setData({ hasSavedOtaRecord: false });
     const pages = getCurrentPages();
+
+    // ✅ 优先：如果是从 MT 控制中心进来的，直接回到控制中心对应的卡片页
+    const scanPageIndex = pages.findIndex(page => {
+      const route = page.route || '';
+      return route.includes('scan/scan');
+    });
+    if (scanPageIndex >= 0) {
+      const deltaToScan = pages.length - 1 - scanPageIndex;
+      wx.navigateBack({ delta: deltaToScan });
+      return;
+    }
+
+    // 兜底：旧逻辑，回到产品列表
     const productsPageIndex = pages.findIndex(page => {
       const route = page.route || '';
       return route.includes('products/products');
@@ -540,8 +582,32 @@ Page({
     }
   },
 
+  // 🔴 新增：关闭权限提示弹窗
+  closePermissionModal() {
+    this.setData({ permissionModalClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showPermissionModal: false,
+        permissionModalClosing: false
+      });
+    }, 420);
+  },
+
   goBack() {
     const pages = getCurrentPages();
+
+    // ✅ 和"完成退出"保持一致：优先回到控制中心
+    const scanPageIndex = pages.findIndex(page => {
+      const route = page.route || '';
+      return route.includes('scan/scan');
+    });
+    if (scanPageIndex >= 0) {
+      const deltaToScan = pages.length - 1 - scanPageIndex;
+      wx.navigateBack({ delta: deltaToScan });
+      return;
+    }
+
+    // 兜底：旧逻辑
     const productsPageIndex = pages.findIndex(page => {
       const route = page.route || '';
       return route.includes('products/products');

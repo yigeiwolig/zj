@@ -336,9 +336,10 @@ page { background-color: #000; color: #fff; box-sizing: border-box; font-family:
   font-size: 20rpx;
   padding: 4rpx 16rpx;
   border-radius: 20rpx;
-  background: #F2F2F7;
+  /* 顶部 EDIT 按钮改为纯白色胶囊 */
+  background: #FFFFFF;
   color: #8E8E93;
-  border: 1rpx solid #E5E5EA;
+  border: 1rpx solid rgba(255, 255, 255, 0.4);
   vertical-align: middle;
   transition: all 0.3s;
   font-weight: 600;

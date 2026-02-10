@@ -189,29 +189,25 @@
           </view>
         </view>
         <view class="card-content">
-          <!-- 1. 车型标题 -->
-          <text class="card-main-title">{{item.title}}</text>
+          <!-- 1. 车型行：强调车型名称 -->
+          <view class="card-main-row">
+            <text class="card-label">车型：</text>
+            <text class="card-vehicle-name">{{item.title}}</text>
+          </view>
           
-          <!-- 2. 信息块 (加底色，更有分量感) -->
-          <view class="card-info-block">
-            <!-- 型号 -->
-            <view class="info-item">
-              <text class="info-label">型号</text>
-              <text class="info-value highlight">{{item.model}}</text>
+          <!-- 2. 信息整合块：包含产品型号和车型分类 -->
+          <view class="card-info-box">
+            <!-- 产品型号 -->
+            <view class="info-row">
+              <text class="info-label-small">产品型号：</text>
+              <text class="info-value-model">{{item.model}}</text>
             </view>
-            
-            <!-- 竖线 -->
-            <view class="info-divider"></view>
-            
-            <!-- 车型 -->
-            <view class="info-item" wx:if="{{item.categoryName}}">
-              <text class="info-label">车型</text>
-              <text class="info-value">{{item.categoryName}}</text>
+            <!-- 车型分类 -->
+            <view class="info-row" wx:if="{{item.categoryName}}">
+              <text class="info-label-small">车型分类：</text>
+              <text class="info-value-category">{{item.categoryName}}</text>
             </view>
           </view>
-
-          <!-- 3. 时间信息 -->
-          <view class="card-time" wx:if="{{item.displayTime}}">{{item.displayTime}}</view>
         </view>
       </view>
     </block>

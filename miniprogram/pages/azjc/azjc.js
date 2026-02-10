@@ -82,6 +82,8 @@ Page({
     fullScreenVideoTransform: '', // 全屏视频的初始transform（用于动画）
     fullScreenVideoInitialStyle: '', // 全屏视频的初始样式（用于动画）
     fullScreenVideoMaskClosing: false, // 🔴 背景遮罩层关闭状态（用于同步背景变透明动画）
+    videoSlideEndTime: 0, // 🔴 视频拖拽结束时间戳（用于阻止后续1秒内的页面滚动）
+    videoSlideDirection: '', // 🔴 视频拖拽方向（'down'=向下，'up'=向上）
     
     // 🔴 自定义加载动画
     showLoadingAnimation: false,
@@ -2008,7 +2010,86 @@ Page({
   },
 
   // 手势监听（滑回重置）
+  // 🔴 新增：视频容器触摸开始（阻止事件传播到页面）
+  onVideoContainerTouchStart(e) {
+    // 阻止事件传播，防止触发页面滚动
+    e.stopPropagation && e.stopPropagation();
+    this.onVideoTouchStart(e);
+  },
+
+  // 🔴 新增：视频容器触摸移动（阻止事件传播到页面）
+  onVideoContainerTouchMove(e) {
+    // 阻止事件传播，防止触发页面滚动
+    e.stopPropagation && e.stopPropagation();
+    this.onVideoTouchMove(e);
+  },
+
+  // 🔴 新增：视频容器触摸结束（阻止事件传播到页面）
+  onVideoContainerTouchEnd(e) {
+    // 阻止事件传播，防止触发页面滚动
+    e.stopPropagation && e.stopPropagation();
+    this.onVideoTouchEnd(e);
+  },
+
+  // 🔴 新增：视频触摸开始
+  onVideoTouchStart(e) {
+    // 记录触摸开始位置，用于判断滑动方向
+    if (e.touches && e.touches.length > 0) {
+      this._videoTouchStartY = e.touches[0].clientY;
+      this._isVideoTouching = true;
+      this._videoTouchMoved = false; // 标记是否发生了移动
+    }
+  },
+
+  // 🔴 新增：视频触摸移动
+  onVideoTouchMove(e) {
+    // 视频拖拽中，记录移动距离
+    if (e.touches && e.touches.length > 0 && this._videoTouchStartY !== undefined) {
+      const moveY = e.touches[0].clientY - this._videoTouchStartY;
+      // 如果移动距离超过阈值，认为是有效拖拽
+      if (Math.abs(moveY) > 10) {
+        this._videoTouchMoved = true;
+        this._videoLastMoveY = moveY; // 记录最后移动方向（正数=向下，负数=向上）
+      }
+    }
+    this._isVideoTouching = true;
+  },
+
+  // 🔴 新增：视频触摸结束
+  onVideoTouchEnd(e) {
+    // 只有发生了移动才记录拖拽结束时间
+    if (this._videoTouchMoved) {
+      // 记录视频拖拽结束时间和方向（向下拖拽为正数）
+      const slideDirection = this._videoLastMoveY > 0 ? 'down' : 'up';
+      this.setData({
+        videoSlideEndTime: Date.now(),
+        videoSlideDirection: slideDirection // 记录滑动方向
+      });
+      
+      console.log('🔴 [onVideoTouchEnd] 视频拖拽结束，方向:', slideDirection, '移动距离:', this._videoLastMoveY);
+      
+      // 1.5秒后清除锁定（延长锁定时间，确保完全阻止）
+      setTimeout(() => {
+        this.setData({
+          videoSlideEndTime: 0,
+          videoSlideDirection: ''
+        });
+      }, 1500);
+    }
+    
+    this._isVideoTouching = false;
+    this._videoTouchMoved = false;
+  },
+
   touchStart: function(e) {
+    // 🔴 修复：如果视频拖拽刚结束（1秒内），不记录起始位置，防止触发翻页
+    const now = Date.now();
+    const videoSlideEndTime = this.data.videoSlideEndTime;
+    if (videoSlideEndTime && (now - videoSlideEndTime) < 1000) {
+      console.log('🔴 [touchStart] 视频拖拽刚结束（1秒内），阻止记录起始位置');
+      return;
+    }
+    
     // 如果正在全屏或已锁定，不记录起始位置，防止误触发翻页
     if (this.data.isVideoFullScreen || this.data.locked) {
       return;
@@ -2017,9 +2098,19 @@ Page({
   },
 
   touchEnd: function(e) {
+    // 🔴 修复：如果视频拖拽刚结束（1秒内），完全阻止页面滚动
+    const now = Date.now();
+    const videoSlideEndTime = this.data.videoSlideEndTime;
+    
     // 如果正在全屏或已锁定，不处理翻页
     // 🔴 额外检查：如果正在处理全屏切换，也不处理翻页（防止点击全屏按钮时触发）
     if (this.data.isVideoFullScreen || this.data.locked || this._isHandlingFullScreen) return;
+
+    // 🔴 修复：如果视频拖拽刚结束（1.5秒内），完全阻止页面滚动（不管什么方向）
+    if (videoSlideEndTime && (now - videoSlideEndTime) < 1500) {
+      console.log('🔴 [touchEnd] 视频拖拽刚结束（1.5秒内），完全阻止页面滚动');
+      return; // 完全阻止，不管什么方向
+    }
 
     let endY = e.changedTouches[0].pageY;
     let distance = endY - this.data.startY;
@@ -2143,6 +2234,19 @@ Page({
         fullScreenVideoMaskClosing: false, // 🔴 清除关闭状态，确保打开动画流畅
         locked: true
       });
+      
+      // 🔴 修复：禁用页面滚动，防止视频拖拽结束后触发页面滚动
+      const pages = getCurrentPages();
+      const currentPage = pages[pages.length - 1];
+      if (currentPage && currentPage.setData) {
+        // 通过设置页面样式禁用滚动
+        wx.setPageStyle({
+          style: {
+            overflow: 'hidden',
+            height: '100vh'
+          }
+        });
+      }
 
       // 🔴 延迟一帧后添加active类触发动画，确保初始状态已渲染
       // 这样会先显示白色背景（opacity变为1），然后视频飞出来，最后背景渐变到黑色
@@ -2150,6 +2254,12 @@ Page({
         this.setData({
           fullScreenVideoTransform: 'active' // 添加active类触发视频放大动画
         });
+        
+        // 🔴 修复：动画开始后，延迟一点时间再播放视频，确保视频已渲染
+        setTimeout(() => {
+          const videoContext = wx.createVideoContext('fullscreen-video-player');
+          videoContext.play();
+        }, 100);
       }, 50);
     }).exec();
   },
@@ -2174,23 +2284,39 @@ Page({
   },
 
   // 🔴 关闭全屏视频遮罩层
-  closeFullScreenVideo() {
+  closeFullScreenVideo(e) {
+    console.log('🔴 [closeFullScreenVideo] 点击关闭按钮');
+    
+    // 🔴 防止重复点击
+    if (this._isClosingFullScreen) {
+      console.log('⚠️ [closeFullScreenVideo] 正在关闭中，忽略重复点击');
+      return;
+    }
+    this._isClosingFullScreen = true;
+    
     // 🔴 保存当前全屏视频的暂停状态
     const pausedState = this.data.fullScreenVideoPaused;
     const videoIndex = this.data.fullScreenVideoIndex;
     
-    // 先暂停全屏视频
-    const videoContext = wx.createVideoContext('fullscreen-video-player');
-    videoContext.pause();
+    console.log('🔴 [closeFullScreenVideo] 开始关闭，pausedState:', pausedState, 'videoIndex:', videoIndex);
     
-    // 🔴 同时触发视频缩小和背景变透明，让动画同步进行
+    // 🔴 修复：直接触发关闭动画，不设置暂停状态，不调用 pause()
+    // 让视频继续播放直到动画完成，然后通过清空 URL 来停止播放
+    // 同时触发视频缩小和背景变透明，让动画同步进行
     this.setData({
       fullScreenVideoTransform: '', // 移除active类，触发视频缩小动画
       fullScreenVideoMaskClosing: true // 🔴 添加关闭状态，触发背景变透明
+      // 🔴 不设置 fullScreenVideoPaused，避免视频立即暂停
     });
+    
+    console.log('🔴 [closeFullScreenVideo] 已设置关闭状态');
     
     // 🔴 延迟后隐藏遮罩层，并同步暂停状态到原视频（等待动画完成）
     setTimeout(() => {
+      // 🔴 在动画完成后才暂停视频（此时用户已经看不到视频了）
+      const videoContext = wx.createVideoContext('fullscreen-video-player');
+      videoContext.pause();
+      
       // 🔴 同步暂停状态到原视频
       if (videoIndex >= 0) {
         const originalVideoContext = wx.createVideoContext(`video-${videoIndex}`);
@@ -2203,15 +2329,25 @@ Page({
       
       this.setData({
         isVideoFullScreen: false,
-        fullScreenVideoUrl: '',
+        fullScreenVideoUrl: '', // 🔴 清空 URL 停止播放
         fullScreenVideoIndex: -1,
         fullScreenVideoPaused: false,
         fullScreenVideoInitialStyle: '',
         fullScreenVideoMaskClosing: false // 🔴 清除关闭状态
       });
+      
+      // 🔴 修复：恢复页面滚动
+      wx.setPageStyle({
+        style: {
+          overflow: 'auto',
+          height: 'auto'
+        }
+      });
+      
       setTimeout(() => {
         this.setData({ locked: false });
         this._isHandlingFullScreen = false;
+        this._isClosingFullScreen = false; // 🔴 重置关闭标志
       }, 100);
     }, 500); // 🔴 调整时间与动画时间一致（0.5s，与打开时同步）
   },

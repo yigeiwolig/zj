@@ -1930,7 +1930,7 @@ Page({
     this.calcTotal();
   },
   closeDetail() { 
-    console.log('[shop] closeDetail called');
+    console.log('[shop] closeDetail called'); 
     
     // 🔴 修复：关闭详情页时清理拖拽状态，防止卡住
     if (this.data.detailLongPressTimer) {
@@ -2179,38 +2179,38 @@ Page({
     this.chooseImageWithCrop().then(async (path)=>{
       this.showMyLoading('上传中...');
       try {
-        const s = this.data.currentSeries;
-        
-        // 【修复】确保 options 数组和对应项存在
-        if (!s.options || !s.options[idx]) {
-          this.showAutoToast('提示', '数据错误');
-          this.hideMyLoading();
-          return;
-        }
+          const s = this.data.currentSeries;
+          
+          // 【修复】确保 options 数组和对应项存在
+          if (!s.options || !s.options[idx]) {
+            this.showAutoToast('提示', '数据错误');
+            this.hideMyLoading();
+            return;
+          }
         
         const oldFileID = s.options[idx].img; // 🔴 保存旧图片ID
         
         const fileID = await this.uploadToCloud(path, 'shop/options');
-        
-        // 【修复】使用深拷贝更新
-        const updatedOptions = s.options.map((opt, i) => {
-          if (i === idx) {
-            return { ...opt, img: fileID };
-          }
-          return opt;
-        });
-        const updatedSeries = { ...s, options: updatedOptions };
-        
-        // 【修复】使用明确的路径更新
-        this.setData({ 
-          currentSeries: updatedSeries,
-          [`seriesList[${this.data.currentSeriesIdx}]`]: updatedSeries,
-          [`seriesList[${this.data.currentSeriesIdx}].options[${idx}].img`]: fileID,
-          [`currentSeries.options[${idx}].img`]: fileID
-        });
-        
-        // 保存到云端
-        this.saveSeriesToCloud(updatedSeries);
+          
+          // 【修复】使用深拷贝更新
+          const updatedOptions = s.options.map((opt, i) => {
+            if (i === idx) {
+              return { ...opt, img: fileID };
+            }
+            return opt;
+          });
+          const updatedSeries = { ...s, options: updatedOptions };
+          
+          // 【修复】使用明确的路径更新
+          this.setData({ 
+            currentSeries: updatedSeries,
+            [`seriesList[${this.data.currentSeriesIdx}]`]: updatedSeries,
+            [`seriesList[${this.data.currentSeriesIdx}].options[${idx}].img`]: fileID,
+            [`currentSeries.options[${idx}].img`]: fileID
+          });
+          
+          // 保存到云端
+          this.saveSeriesToCloud(updatedSeries);
         
         // 🔴 删除旧图片
         if (oldFileID && oldFileID.startsWith('cloud://')) {
@@ -2224,9 +2224,9 @@ Page({
             }
           });
         }
-        
-        this.hideMyLoading();
-        this.showAutoToast('成功', '上传成功');
+          
+          this.hideMyLoading();
+          this.showAutoToast('成功', '上传成功');
         } catch (err) {
           console.error('[shop.js] adminUploadOptionImg 上传失败:', err);
           this.hideMyLoading();
@@ -2983,7 +2983,7 @@ Page({
         if (list[idx].detailImages.length > 0) {
           list[idx].detailImages[0] = fileID;
         } else {
-          list[idx].detailImages.push(fileID);
+        list[idx].detailImages.push(fileID);
         }
         
         this.setData({ accessoryList: list });

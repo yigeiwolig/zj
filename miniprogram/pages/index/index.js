@@ -366,18 +366,18 @@ Page({
         }
         // 🔴 封禁状态已完全由 login_logbutton 管理，不再检查 login_logs.isBanned
         // 如果 verifyNickname 返回 success，说明已经通过验证，直接放行
-        wx.setStorageSync('has_permanent_auth', true);
-        wx.setStorageSync('user_nickname', name);
+              wx.setStorageSync('has_permanent_auth', true);
+              wx.setStorageSync('user_nickname', name);
         // 🔴 验证通过后，标记为已看过首次进入弹窗
         wx.setStorageSync('has_seen_first_time_modal', true);
-        wx.removeStorageSync('is_user_banned');
+              wx.removeStorageSync('is_user_banned');
         this.setData({ 
           isAuthorized: true, 
           isShowNicknameUI: false,
           showFirstTimeModal: false // 🔴 确保不显示首次进入弹窗
         });
-        // 显示自定义成功弹窗
-        this._closeAllPopups();
+              // 显示自定义成功弹窗
+                this._closeAllPopups();
                 this.setData({ 
                 showCustomSuccessModal: true,
                 successModalTitle: '验证通过',
@@ -440,8 +440,8 @@ Page({
         
         // 🔴 延迟800ms后显示自定义弹窗
         setTimeout(() => {
-          // 复制成功后关闭错误弹窗
-          this.setData({ showCustomErrorModal: false });
+        // 复制成功后关闭错误弹窗
+        this.setData({ showCustomErrorModal: false });
           // 显示自定义"内容已复制"弹窗
           this.setData({ showCopySuccessModal: true });
           // 2秒后自动关闭
@@ -1439,10 +1439,10 @@ Page({
         
         // 🔴 延迟800ms后显示自定义弹窗
         setTimeout(() => {
-          // 显示二维码
-          this.setData({ 
-            showWechatQRCode: true
-          });
+        // 显示二维码
+        this.setData({ 
+          showWechatQRCode: true
+        });
           // 显示自定义"内容已复制"弹窗
           this.setData({ showCopySuccessModal: true });
           // 2秒后自动关闭

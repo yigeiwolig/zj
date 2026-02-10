@@ -98,6 +98,17 @@ Page({
     myReturnRequiredRepair: null, // 用户当前需要寄回的维修单
     myPurchasePartsRepair: null,  // 仅需购买配件的维修单（needPurchaseParts 且无 needReturn）
     
+    // 🔴 新增：权限拒绝提示弹窗
+    showPermissionModal: false,
+    permissionModalClosing: false,
+    
+    // 🔴 新增：图标数据
+    icons: {
+      moreDark: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSI1IiBjeT0iMTIiIHI9IjIiIGZpbGw9IiMxQzFDMUUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSIjMUMxQzFFIi8+PGNpcmNsZSBjeD0iMTkiIGN5PSIxMiIgcj0iMiIgZmlsbD0iIzFDMUMxRSIvPjwvc3ZnPg==',
+      gearSmall: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4LjUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMyIgZmlsbD0iIzFDMUMxRSIvPjxwYXRoIGQ9Ik0xMiA0VjJNMTIgMjJWMjBNMjAgMTJIMjJNMiAxMkg0TTE4LjY2IDUuMzRMMTkuNzggNC4yMk0xOS43OCAxOS43OEwxOC42NiAxOC42Nk00LjIyIDE5Ljc4TDUuMzQgMTguNjZNNS4zNCA1LjM0TDQuMjIgNC4yMiIgc3Ryb2tlPSIjMUMxQzFFIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==',
+      btDark: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg=='
+    }
+    
     // 🔴 新增：购买配件相关
     showPurchasePartsModal: false, // 是否显示购买配件弹窗
     purchasePartsModalModel: '', // 弹窗标题用型号（打开时设，避免标题不见了）
@@ -4214,6 +4225,17 @@ Page({
   },
 
   // 关闭输入弹窗（带收缩退出动画）
+  // 🔴 新增：关闭权限提示弹窗
+  closePermissionModal() {
+    this.setData({ permissionModalClosing: true });
+    setTimeout(() => {
+      this.setData({ 
+        showPermissionModal: false,
+        permissionModalClosing: false
+      });
+    }, 420);
+  },
+
   closeInputDialog() {
     this.setData({ inputDialogClosing: true });
     setTimeout(() => {
@@ -4274,6 +4296,17 @@ Page({
     // 状态：错误
     this.ble.onError = (err) => {
       this.hideMyLoading();
+      
+      // 🔴 处理蓝牙权限错误
+      if (err && ((err.errMsg && err.errMsg.includes('auth deny')) || (err.type === 'auth_deny'))) {
+        this.setData({ 
+          isScanning: false, 
+          connectStatusText: '蓝牙错误，请检查权限',
+          showPermissionModal: true
+        });
+        return;
+      }
+      
       this.setData({ 
         isScanning: false, 
         connectStatusText: '蓝牙错误，请检查权限' 

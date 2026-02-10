@@ -321,14 +321,14 @@ page {
   position: relative;
   z-index: 1;
   /* 默认状态 (搜索框收起时)：Nav高(80) + 间距 */
-  padding-top: 20rpx; 
+  padding-top: 40rpx; 
   /* 关键：增加过渡动画，让列表滑上滑下 */
   transition: padding-top 0.3s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* 🔴 核心修复：当搜索框出来时，列表自动往下移 */
 .video-list.pushed-down {
-  /* 展开状态：默认(20) + 搜索框高(120) */
+  /* 展开状态：默认(40) + 搜索框高(约100)，拉开更多距离 */
   padding-top: 140rpx; 
 }
 
@@ -370,125 +370,91 @@ page {
 }
 
 .card-content {
-  padding: 16rpx;
+  padding: 16rpx 20rpx;
   display: flex;
   flex-direction: column;
+  gap: 12rpx;
   justify-content: flex-start;
 }
 
-/* 3. 修复字体太小的问题 */
-.card-title {
-  font-size: 28rpx; 
-  font-weight: 600;
-  color: #000;
-  line-height: 1.3;
-  margin-bottom: 10rpx;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+/* 1. 车型主行 */
+.card-main-row {
+  display: flex;
+  align-items: baseline;
+  width: 100%;
+  line-height: 1.2;
 }
 
-.card-content {
-  padding: 20rpx;
+.card-label {
+  font-size: 28rpx;
+  color: #000;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.card-vehicle-name {
+  font-size: 38rpx; /* 再次放大 */
+  font-weight: 900;
+  color: #000;
+  margin-left: 4rpx;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: -1rpx; /* 稍微收紧字间距，更有冲击力 */
+}
+
+/* 2. 信息整合块 (一体化背景，更显扎实) */
+.card-info-box {
+  background-color: #F8FAFD; /* 极淡的冷蓝色背景，显得高级 */
+  padding: 14rpx 16rpx;
+  border-radius: 8rpx; /* 稍微方一点，更硬朗 */
   display: flex;
   flex-direction: column;
   gap: 8rpx;
-}
-
-/* 1. 车型主标题 */
-.card-main-title {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #111; /* 更深的黑色 */
-  line-height: 1.4;
-  margin-bottom: 16rpx; /* 拉开一点标题和标签的距离 */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-/* 1. 车型主标题 */
-.card-main-title {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: #1A1A1A;
-  line-height: 1.4;
-  margin-bottom: 16rpx; /* 增加留白 */
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  letter-spacing: 0.5rpx;
-}
-
-/* 2. 标签行 (横向排列，更紧凑协调) */
-.card-tags-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12rpx;
-  margin-bottom: 4rpx;
-}
-
-/* 2. 信息块 (更有分量，解决"干"的问题) */
-.card-info-block {
-  margin-top: 12rpx;
-  background-color: #F8F9FB; /* 浅灰背景，增加填充感 */
-  border-radius: 10rpx; /* 适度圆角 */
-  padding: 12rpx 16rpx; /* 内部留白，撑起体积 */
-  display: flex;
-  align-items: center;
-  width: 100%; /* 撑满宽度 */
+  width: 100%;
   box-sizing: border-box;
+  /* 左侧加一道蓝色装饰线，增加设计感 */
+  border-left: 6rpx solid #007AFF; 
+  margin-top: 10rpx; /* 往下移一点 */
 }
 
-.info-item {
+.info-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  line-height: 1.2;
 }
 
-.info-label {
+.info-label-small {
   font-size: 22rpx;
-  color: #999;
-  margin-right: 8rpx;
+  color: #8E8E93; /* 中性灰 */
+  flex-shrink: 0;
 }
 
-.info-value {
+/* 产品型号：深色强调 */
+.info-value-model {
   font-size: 24rpx;
-  color: #333;
-  font-weight: 600;
+  color: #1D1D1F; 
+  font-weight: 700;
+  margin-left: 4rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.info-value.highlight {
-  color: #007AFF;
-  font-size: 26rpx;
-}
-
-.info-divider {
-  width: 2rpx;
-  height: 20rpx;
-  background-color: #E0E0E0;
-  margin: 0 20rpx;
+/* 车型分类：亮色点缀 */
+.info-value-category {
+  font-size: 24rpx;
+  color: #007AFF; /* 品牌蓝，增加色彩 */
+  font-weight: 700;
+  margin-left: 4rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 3. 时间信息 */
-.card-time {
-  font-size: 20rpx;
-  color: #CCC;
-  margin-top: 12rpx;
-  text-align: right;
-  padding-right: 4rpx;
-}
-
-/* 时间信息 */
-.card-time {
-  font-size: 18rpx;
-  color: #CCC;
-  margin-top: 4rpx;
-  text-align: right;
-}
+/* 已移除 */
 
 /* 4. 底部录制按钮 */
 /* 底部按钮容器 */
