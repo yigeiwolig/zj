@@ -107,7 +107,7 @@ Page({
       moreDark: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSI1IiBjeT0iMTIiIHI9IjIiIGZpbGw9IiMxQzFDMUUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSIjMUMxQzFFIi8+PGNpcmNsZSBjeD0iMTkiIGN5PSIxMiIgcj0iMiIgZmlsbD0iIzFDMUMxRSIvPjwvc3ZnPg==',
       gearSmall: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4LjUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMyIgZmlsbD0iIzFDMUMxRSIvPjxwYXRoIGQ9Ik0xMiA0VjJNMTIgMjJWMjBNMjAgMTJIMjJNMiAxMkg0TTE4LjY2IDUuMzRMMTkuNzggNC4yMk0xOS43OCAxOS43OEwxOC42NiAxOC42Nk00LjIyIDE5Ljc4TDUuMzQgMTguNjZNNS4zNCA1LjM0TDQuMjIgNC4yMiIgc3Ryb2tlPSIjMUMxQzFFIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==',
       btDark: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg=='
-    }
+    },
     
     // 🔴 新增：购买配件相关
     showPurchasePartsModal: false, // 是否显示购买配件弹窗
@@ -148,6 +148,10 @@ Page({
     
     // 🔴 管理员填写用户地址（临时数据）
     showReturnAddressDialog: false,
+    
+    // 🔴 新增：上传选项弹窗
+    showUploadOptions: false,
+    uploadImageType: 'receipt', // 'receipt' or 'chat'
     tempReturnAddress: { name: '', phone: '', address: '' },
     
     // 🔴 智能分析弹窗相关
@@ -648,7 +652,8 @@ Page({
       // 确保 myOpenid 已获取后再加载数据，等待所有数据加载完成后再隐藏 loading
       const loadPromises = [
         this.loadMyOrdersPromise(),
-        this.loadMyActivitiesPromise()
+        this.loadMyActivitiesPromise(),
+        Promise.resolve(this.loadMyDevices()) // 🔴 修复：确保设备列表也被加载
       ];
       
       // 🔴 如果是管理员，同时加载待处理维修工单列表
@@ -704,6 +709,8 @@ Page({
           this.loadMyOrdersPromise(),
           this.loadMyActivitiesPromise()
         ]).then(() => {
+          // 🔴 修复：确保设备列表也被加载
+          this.loadMyDevices();
           this.hideMyLoading();
           this._isLoading = false;
         }).catch((loadErr) => {
@@ -1014,38 +1021,75 @@ Page({
   loadPendingRepairs() {
     const db = wx.cloud.database();
     const _ = db.command;
-    db.collection('shouhou_repair')
+    
+    // 1. 查询待处理的维修工单
+    const p1 = db.collection('shouhou_repair')
       .where({ 
         status: 'PENDING',
         needReturn: _.neq(true),       // 排除已标记为需要寄回的
-        // 🔴 修复：排除已标记为需要购买配件的（无论purchasePartsStatus是什么，只要needPurchaseParts为true就排除）
-        // 使用 _.or([_.neq(true), _.exists(false)]) 来排除 true 和不存在的情况
-        // 但微信小程序数据库不支持 _.exists，所以直接使用 _.neq(true) 即可
-        // 注意：如果字段不存在，_.neq(true) 会匹配，所以需要确保字段存在时才排除
-        // 实际上，当管理员设置 needPurchaseParts: true 后，这个字段一定存在，所以 _.neq(true) 应该能正确排除
         needPurchaseParts: _.neq(true) // 排除已标记为需要购买配件的
       })
       .orderBy('createTime', 'desc')
-      .get()
-      .then(res => {
-        // 🔴 二次过滤：确保排除所有 needPurchaseParts 为 true 的记录（防止数据库查询条件不生效）
-        const filtered = (res.data || []).filter(item => {
-          // 如果 needPurchaseParts 为 true，排除
-          if (item.needPurchaseParts === true) {
-            return false;
-          }
-          // 如果 purchasePartsStatus 为 'completed'，也排除（配件已购买完成）
-          if (item.purchasePartsStatus === 'completed') {
-            return false;
-          }
-          return true;
-        });
-        console.log('[loadPendingRepairs] 查询结果:', res.data?.length, '条，过滤后:', filtered.length, '条');
-        this.setData({ repairList: filtered });
-      })
-      .catch(err => {
-        console.error('❌ [loadPendingRepairs] 加载维修工单失败:', err);
+      .get();
+    
+    // 2. 并行执行查询
+    Promise.all([p1]).then(([repairsRes]) => {
+      // 🔴 二次过滤：确保排除所有 needPurchaseParts 为 true 的记录
+      const filtered = (repairsRes.data || []).filter(item => {
+        if (item.needPurchaseParts === true) return false;
+        if (item.purchasePartsStatus === 'completed') return false;
+        return true;
       });
+      
+      console.log('[loadPendingRepairs] 查询结果:', repairsRes.data?.length, '条，过滤后:', filtered.length, '条');
+      
+      // 🔴 为每个维修工单查询对应用户的最新质保信息
+      const warrantyPromises = filtered.map(item => {
+        return db.collection('sn')
+          .where(_.or([
+            { openid: item._openid },
+            { _openid: item._openid }
+          ]))
+          .get()
+          .then(devicesRes => {
+            const userDevices = devicesRes.data || [];
+            
+            // 找到用户所有设备中到期日最晚的那一台
+            let latestExpiryDevice = null;
+            if (userDevices.length > 0) {
+              latestExpiryDevice = userDevices.reduce((prev, current) => {
+                const prevExp = prev.expiryDate ? new Date(prev.expiryDate) : new Date(0);
+                const currentExp = current.expiryDate ? new Date(current.expiryDate) : new Date(0);
+                return currentExp > prevExp ? current : prev;
+              }, userDevices[0]);
+            }
+            
+            // 🔴 使用找到的最新质保设备来计算质保状态
+            const warrantyInfo = this._calcWarrantyFromLocalFields(item, latestExpiryDevice);
+            
+            return {
+              ...item,
+              warrantyExpired: warrantyInfo.warrantyExpired,
+              remainingDays: warrantyInfo.remainingDays,
+              expiryDate: warrantyInfo.expiryDate
+            };
+          })
+          .catch(err => {
+            console.error('[loadPendingRepairs] 查询用户质保信息失败:', err);
+            // 如果查询失败，使用原有数据
+            return item;
+          });
+      });
+      
+      // 等待所有质保信息查询完成
+      Promise.all(warrantyPromises).then(finalRepairs => {
+        console.log('[loadPendingRepairs] 最终维修工单列表（含质保信息）:', finalRepairs.length, '条');
+        this.setData({ repairList: finalRepairs });
+      });
+    })
+    .catch(err => {
+      console.error('❌ [loadPendingRepairs] 加载维修工单失败:', err);
+    });
   },
 
   // 状态映射辅助
@@ -1920,7 +1964,7 @@ Page({
        // 无需录入（使用自定义弹窗）
        this.showMyDialog({
          title: '确认操作',
-         content: '将通知用户"查看维修教程可修复"，确定吗？',
+         content: '将通知用户"查看教程可修复"，确定吗？',
          showCancel: true,
          confirmText: '确定',
          cancelText: '取消',
@@ -2663,19 +2707,35 @@ Page({
   loadReturnRequiredList() {
     this.showMyLoading('加载中...');
     const db = wx.cloud.database();
+    const _ = db.command;
     // 查询需要寄回且未完成的维修单（只查 shouhou_repair，不查 shop_orders）
-    // 排除条件：returnCompleted为true，或status为COMPLETED/RETURN_RECEIVED
-    db.collection('shouhou_repair')
-      .where({
+    // 排除条件：returnCompleted为true，或status为COMPLETED/RETURN_RECEIVED，或已扣除质保
+    const baseWhere = {
         needReturn: true,
         returnCompleted: db.command.neq(true), // 未完成的
-        status: db.command.nin(['COMPLETED', 'RETURN_RECEIVED']) // 排除已完成和售后完结的
-      })
+        status: db.command.nin(['COMPLETED', 'RETURN_RECEIVED']), // 排除已完成和售后完结的
+        warrantyDeducted: _.neq(true),          // 排除已扣除质保的
+        isWarrantyDeducted: _.neq(true)         // 兼容旧字段
+      };
+    // 🔴 用户个人中心：只看当前用户自己的需寄回维修单
+    if (!this.data.isAdmin && this.data.myOpenid) {
+      baseWhere._openid = this.data.myOpenid;
+    }
+
+    db.collection('shouhou_repair')
+      .where(baseWhere)
       .orderBy('createTime', 'desc')
       .get()
       .then(res => {
+        // 🔴 再次兜底过滤：防止旧数据遗留导致已扣质保、已完结的订单继续出现在弹窗中
+        const repairs = (res.data || []).filter(item => {
+          if (item.warrantyDeducted === true || item.isWarrantyDeducted === true) return false;
+          if (item.status === 'COMPLETED' || item.status === 'RETURN_RECEIVED') return false;
+          if (item.returnCompleted === true) return false;
+          return true;
+        });
         // 🔴 获取所有维修单的 openid，批量查询 valid_users 获取昵称
-        const openids = [...new Set((res.data || []).map(item => item._openid).filter(Boolean))];
+        const openids = [...new Set(repairs.map(item => item._openid).filter(Boolean))];
         
         // 批量查询 valid_users 获取昵称
         const nicknamePromises = openids.map(openid => 
@@ -2697,46 +2757,122 @@ Page({
             nicknameDict[openid] = nickname;
           });
           
-          // 格式化数据，添加配件发出时间和用户昵称
-        const filtered = (res.data || []).map(item => {
-            // #region agent log
-            console.log('[DEBUG] loadReturnRequiredList item from db', {
-              itemId: item._id,
-              warrantyExpired: item.warrantyExpired,
-              warrantyExpiredType: typeof item.warrantyExpired,
-              hasWarrantyExpired: 'warrantyExpired' in item
-            });
-            wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'my.js:2557',message:'loadReturnRequiredList item from db',data:{itemId:item._id,warrantyExpired:item.warrantyExpired,warrantyExpiredType:typeof item.warrantyExpired,hasWarrantyExpired:'warrantyExpired' in item,itemKeys:Object.keys(item).slice(0,10)},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'D'},fail:()=>{}});
-            // #endregion
-          return {
-            ...item,
-              shipTime: item.solveTime ? this.formatTime(item.solveTime) : (item.createTime ? this.formatTime(item.createTime) : '未知'),
-              userNickname: nicknameDict[item._openid] || null // 🔴 添加用户昵称
-          };
-        });
-          
-          this.hideMyLoading();
-        this.setData({ returnRequiredList: filtered });
-        console.log('✅ [loadReturnRequiredList] 加载需寄回维修单:', filtered.length, '条');
-          
-          // #region agent log
-          console.log('[DEBUG] loadReturnRequiredList after setData', {
-            filteredCount: filtered.length,
-            firstItemWarrantyExpired: filtered[0]?.warrantyExpired,
-            firstItemId: filtered[0]?._id
+      // 🔴 新增：为每条维修单从 sn 集合实时计算质保状态
+          const warrantyPromises = repairs.map(item => {
+            // 如果缺少 openid，直接使用本地字段兜底
+            if (!item._openid) {
+              return Promise.resolve(this._calcWarrantyFromLocalFields(item));
+            }
+            
+            return db.collection('sn')
+              .where(_.or([
+                { openid: item._openid },
+                { _openid: item._openid } // 兼容 _openid 字段
+              ]))
+              .get()
+              .then(snRes => {
+                const list = snRes.data || [];
+                if (list.length > 0) {
+                  // 🔴 选择 expiryDate 最晚的那台设备作为准信源
+                  let dev = list[0];
+                  list.forEach(d => {
+                    if (d.expiryDate && (!dev.expiryDate || d.expiryDate > dev.expiryDate)) {
+                      dev = d;
+                    }
+                  });
+                  return this._calcWarrantyFromLocalFields(item, dev);
+                }
+                // 没查到设备，用本地字段兜底
+                return this._calcWarrantyFromLocalFields(item);
+              })
+              .catch(err => {
+                console.error('[loadReturnRequiredList] 查询 sn 质保信息失败:', err);
+                return this._calcWarrantyFromLocalFields(item);
+              });
           });
-          wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'my.js:2563',message:'loadReturnRequiredList after setData',data:{filteredCount:filtered.length,firstItemWarrantyExpired:filtered[0]?.warrantyExpired,firstItemId:filtered[0]?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run2',hypothesisId:'E'},fail:()=>{}});
-          // #endregion
+          
+          Promise.all(warrantyPromises).then(warrantyList => {
+            const filtered = repairs.map((item, index) => {
+              const w = warrantyList[index] || {};
+              return {
+                ...item,
+                shipTime: item.solveTime ? this.formatTime(item.solveTime) : (item.createTime ? this.formatTime(item.createTime) : '未知'),
+                userNickname: nicknameDict[item._openid] || null,
+                warrantyExpired: w.warrantyExpired === true,
+                remainingDays: typeof w.remainingDays === 'number' ? w.remainingDays : (item.remainingDays || 0),
+                expiryDate: w.expiryDate || item.expiryDate || ''
+              };
+            });
+            
+            this.hideMyLoading();
+            this.setData({ returnRequiredList: filtered });
+            console.log('✅ [loadReturnRequiredList] 加载需寄回维修单:', filtered.length, '条');
+          }).catch(err => {
+            this.hideMyLoading();
+            console.error('[loadReturnRequiredList] 计算质保状态失败:', err);
+            const fallback = repairs.map(item => ({
+              ...item,
+              shipTime: item.solveTime ? this.formatTime(item.solveTime) : (item.createTime ? this.formatTime(item.createTime) : '未知'),
+              userNickname: nicknameDict[item._openid] || null
+            }));
+            this.setData({ returnRequiredList: fallback });
+          });
         }).catch(err => {
           this.hideMyLoading();
           console.error('[loadReturnRequiredList] 查询用户昵称失败:', err);
-          // 即使查询昵称失败，也显示列表（不显示昵称）
-          const filtered = (res.data || []).map(item => ({
-            ...item,
-            shipTime: item.solveTime ? this.formatTime(item.solveTime) : (item.createTime ? this.formatTime(item.createTime) : '未知'),
-            userNickname: null
-          }));
-          this.setData({ returnRequiredList: filtered });
+          
+          const repairs = res.data || [];
+          const warrantyPromises = repairs.map(item => {
+            if (!item._openid) {
+              return Promise.resolve(this._calcWarrantyFromLocalFields(item));
+            }
+            return db.collection('sn')
+              .where(_.or([
+                { openid: item._openid },
+                { _openid: item._openid }
+              ]))
+              .get()
+              .then(snRes => {
+                const list = snRes.data || [];
+                if (list.length > 0) {
+                  let dev = list[0];
+                  list.forEach(d => {
+                    if (d.expiryDate && (!dev.expiryDate || d.expiryDate > dev.expiryDate)) {
+                      dev = d;
+                    }
+                  });
+                  return this._calcWarrantyFromLocalFields(item, dev);
+                }
+                return this._calcWarrantyFromLocalFields(item);
+              })
+              .catch(err2 => {
+                console.error('[loadReturnRequiredList] 查询 sn 质保信息失败(昵称分支):', err2);
+                return this._calcWarrantyFromLocalFields(item);
+              });
+          });
+          
+          Promise.all(warrantyPromises).then(warrantyList => {
+            const filtered = repairs.map((item, index) => {
+              const w = warrantyList[index] || {};
+              return {
+                ...item,
+                shipTime: item.solveTime ? this.formatTime(item.solveTime) : (item.createTime ? this.formatTime(item.createTime) : '未知'),
+                userNickname: null,
+                warrantyExpired: w.warrantyExpired === true,
+                remainingDays: typeof w.remainingDays === 'number' ? w.remainingDays : (item.remainingDays || 0),
+                expiryDate: w.expiryDate || item.expiryDate || ''
+              };
+            });
+            this.setData({ returnRequiredList: filtered });
+          }).catch(err2 => {
+            console.error('[loadReturnRequiredList] 计算质保状态失败(昵称分支):', err2);
+            const fallback = repairs.map(item => ({
+              ...item,
+              shipTime: item.solveTime ? this.formatTime(item.solveTime) : (item.createTime ? this.formatTime(item.createTime) : '未知'),
+              userNickname: null
+            }));
+            this.setData({ returnRequiredList: fallback });
+          });
         });
       })
       .catch(err => {
@@ -2744,6 +2880,44 @@ Page({
         console.error('加载需寄回订单失败:', err);
         this.showAutoToast('加载失败', err.errMsg || '请稍后重试');
       });
+  },
+
+  // 🔴 新增：从本地字段和 sn 设备记录中计算真实质保状态的通用方法
+  // repairItem: shouhou_repair 中的记录
+  // device: sn 集合中的对应设备（可选）
+  _calcWarrantyFromLocalFields(repairItem = {}, device = null) {
+    const now = new Date();
+
+    // 优先使用设备上的到期日，其次是维修单上的
+    let expiryDate = (device && device.expiryDate) || repairItem.expiryDate || '';
+
+    // 优先使用设备上的剩余天数，其次是维修单上的
+    let remainingDays = typeof (device && device.remainingDays) === 'number'
+      ? device.remainingDays
+      : (typeof repairItem.remainingDays === 'number' ? repairItem.remainingDays : null);
+
+    let warrantyExpired = repairItem.warrantyExpired;
+
+    // 方案1：有 expiryDate 时，以 expiryDate 为准
+    if (expiryDate) {
+      const exp = new Date(expiryDate);
+      if (!isNaN(exp.getTime())) {
+        const diff = Math.ceil((exp - now) / 86400000);
+        remainingDays = diff > 0 ? diff : 0;
+        warrantyExpired = diff <= 0;
+      }
+    }
+    // 方案2：无 expiryDate 但有 remainingDays 时，以剩余天数为准
+    else if (typeof remainingDays === 'number') {
+      warrantyExpired = remainingDays <= 0;
+      remainingDays = remainingDays > 0 ? remainingDays : 0;
+    }
+
+    return {
+      warrantyExpired: !!warrantyExpired,
+      remainingDays: typeof remainingDays === 'number' ? remainingDays : 0,
+      expiryDate: expiryDate || ''
+    };
   },
 
   // 🔴 新增：打开填写售后单弹窗
@@ -4358,9 +4532,15 @@ Page({
         // 它会自动寻找 NB 开头的设备并连接
         this.ble.startScan(); 
       })
-      .catch(() => {
-        this.showAutoToast('提示', '请开启手机蓝牙');
-        this.setData({ isScanning: false, connectStatusText: '请开启蓝牙后重试' });
+      .catch((err) => {
+        // 🔴 权限错误已经在 BLEHelper 的 onError 回调中处理，这里只处理其他错误
+        if (!err || !err.errMsg || !err.errMsg.includes('auth deny')) {
+          this.showAutoToast('提示', '请开启手机蓝牙');
+          this.setData({ isScanning: false, connectStatusText: '请开启蓝牙后重试' });
+        } else {
+          // 权限错误已经在 onError 回调中显示权限教程弹窗了
+          this.setData({ isScanning: false, connectStatusText: '蓝牙权限未开启' });
+        }
       });
   },
 
@@ -4386,10 +4566,16 @@ Page({
     // 3. 【变 MT】生成一个假的显示名称，给用户看，也给数据库存
     const displayName = 'MT' + sn;
 
+    // 🔴 修复：蓝牙连接成功后先显示连接状态，等待云函数验证后再显示表单
     // 更新界面提示
     this.setData({ 
       isScanning: false,
-      connectStatusText: `正在验证: ${displayName}...` 
+      bluetoothReady: true, // 连接成功，显示连接状态
+      connectedDeviceName: displayName, // 显示设备名称
+      connectStatusText: `正在验证: ${displayName}...`,
+      isDeviceLocked: true, // 🔴 先锁定，等待云函数验证通过后再解锁显示表单
+      lockedReason: '', // 🔴 验证中不显示"无法绑定"，只显示"正在验证"的提示
+      currentSn: sn // 保存 SN 码
     });
 
     // 4. 调用云函数 (传过去的 deviceName 是 MT 开头的)
@@ -4410,10 +4596,8 @@ Page({
       success: res => {
         const result = res.result;
         
-        // 只要物理连接成功，界面上就显示 MTxxx
+        // 🔴 修复：bluetoothReady 已经在 handleDeviceBound 中设置了，这里只需要更新状态
         this.setData({
-          bluetoothReady: true,
-          connectedDeviceName: displayName, // 【关键】界面显示 MT
           connectStatusText: '已连接'
         });
 
@@ -4427,20 +4611,36 @@ Page({
               confirmText: '好的',
               success: () => {
                 this.closeBindModal();
-                this.loadMyDevices();
+                // 🔴 修复：延迟刷新设备列表，确保数据库已更新，并添加日志
+                setTimeout(() => {
+                  console.log('[AUTO_APPROVED] 准备刷新设备列表，myOpenid:', this.data.myOpenid ? this.data.myOpenid.substring(0, 10) + '...' : '未获取');
+                  if (!this.data.myOpenid) {
+                    // 如果 myOpenid 还没获取，先获取再刷新
+                    this.checkAdminPrivilege().then(() => {
+                      this.loadMyDevices();
+                    });
+                  } else {
+                    this.loadMyDevices();
+                  }
+                }, 1000); // 增加到1秒，确保数据库更新完成
               }
             });
           } 
           // 情况2：新机需审核
           else if (result.status === 'NEED_AUDIT') {
-            // 这里不需要弹窗，只需要 Toast 提示一下让用户填表，或者直接静默
-            // 如果非要弹窗，可以用 showMyDialog
-            // 但建议这里用这一行轻提示即可，否则太打断流程
-            this.showAutoToast('提示', '验证通过，请填表');
-            
-            this.setData({ 
-              currentSn: sn,
-              isDeviceLocked: false 
+            // 🔴 修复：显示弹窗，用户点击"知道了"后再显示表单
+            this.showMyDialog({
+              title: '验证通过',
+              content: '设备验证成功，请填写绑定信息',
+              showCancel: false,
+              confirmText: '知道了',
+              success: () => {
+                // 弹窗关闭后，解锁并显示表单
+                this.setData({ 
+                  isDeviceLocked: false,
+                  connectStatusText: '已连接'
+                });
+              }
             });
           }
 
@@ -4500,12 +4700,45 @@ Page({
   // ==========================================
   // 2. 图片上传逻辑
   // ==========================================
+  // 🔴 修改：显示上传选项弹窗
   chooseProofImage(e) {
     const type = e.currentTarget.dataset.type; // 'receipt' or 'chat'
+    this.setData({ 
+      showUploadOptions: true,
+      uploadImageType: type // 保存类型，供后续使用
+    });
+  },
+  
+  // 🔴 新增：关闭上传选项弹窗
+  closeUploadOptions() {
+    this.setData({ showUploadOptions: false });
+  },
+  
+  // 🔴 新增：阻止事件冒泡
+  preventBubble() {
+    // 空函数，用于阻止事件冒泡
+  },
+  
+  // 🔴 新增：从相册选择图片
+  chooseImageFromAlbum() {
+    this.setData({ showUploadOptions: false });
+    this._doChooseProofImage(['album']);
+  },
+  
+  // 🔴 新增：拍照
+  chooseImageFromCamera() {
+    this.setData({ showUploadOptions: false });
+    this._doChooseProofImage(['camera']);
+  },
+  
+  // 🔴 新增：实际执行选择图片的方法
+  _doChooseProofImage(sourceType) {
+    const type = this.data.uploadImageType || 'receipt';
     
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
+      sourceType: sourceType,
       success: async (res) => {
         const tempPath = res.tempFiles[0].tempFilePath;
         this.showMyLoading('上传中...');
@@ -4598,6 +4831,8 @@ Page({
         success: () => {
           this.closeBindModal();
           this.resetBluetoothState(); // 【关键】提交成功后，断开连接，清空状态
+          // 🔴 修复：提交审核后刷新设备列表（虽然设备还在审核中，但刷新可以确保后续审核通过后能及时显示）
+          this.loadMyDevices();
         }
       });
     }).catch(err => {
@@ -4677,17 +4912,94 @@ Page({
   // 1. 【核心修改】修复加载设备的查询条件
   loadMyDevices() {
     // 如果还没拿到 OpenID，先不查
-    if (!this.data.myOpenid) return;
+    if (!this.data.myOpenid) {
+      console.warn('[loadMyDevices] myOpenid 未获取，无法加载设备列表');
+      return;
+    }
 
     const db = wx.cloud.database();
     
-    // 【修改】这里使用我们之前在 bindDevice 里存的 'openid' 字段
-    // 并且不再写 '{openid}' 这种无效代码
-    db.collection('sn').where({
-      openid: this.data.myOpenid,  // 必须匹配当前用户
-      isActive: true               // 必须是审核通过的
-    }).get().then(res => {
-      console.log('查到的设备:', res.data); // 调试打印
+    console.log('[loadMyDevices] ========== 开始查询设备 ==========');
+    console.log('[loadMyDevices] 完整 openid:', this.data.myOpenid);
+    console.log('[loadMyDevices] openid 长度:', this.data.myOpenid ? this.data.myOpenid.length : 0);
+    console.log('[loadMyDevices] openid 前10位:', this.data.myOpenid ? this.data.myOpenid.substring(0, 10) + '...' : '未获取');
+    console.log('[loadMyDevices] openid 后10位:', this.data.myOpenid ? '...' + this.data.myOpenid.substring(this.data.myOpenid.length - 10) : '未获取');
+    
+    // 🔴 修复：先尝试使用 _openid 查询（兼容不同的数据格式）
+    // 同时查询 openid 和 _openid 字段，确保兼容性
+    Promise.all([
+      db.collection('sn').where({
+        openid: this.data.myOpenid
+      }).get(),
+      db.collection('sn').where({
+        _openid: this.data.myOpenid
+      }).get()
+    ]).then(([res1, res2]) => {
+      const allDevicesRes = {
+        data: [...res1.data, ...res2.data]
+      };
+      
+      // 去重（根据 _id）
+      const uniqueDevices = [];
+      const seenIds = new Set();
+      allDevicesRes.data.forEach(device => {
+        if (!seenIds.has(device._id)) {
+          seenIds.add(device._id);
+          uniqueDevices.push(device);
+        }
+      });
+      allDevicesRes.data = uniqueDevices;
+      
+      return allDevicesRes;
+    }).then(allDevicesRes => {
+      console.log('[loadMyDevices] 调试：查询所有设备（包括未激活）:', allDevicesRes.data.length);
+      if (allDevicesRes.data.length > 0) {
+        console.log('[loadMyDevices] 所有设备详情:', allDevicesRes.data.map(d => ({
+          sn: d.sn,
+          productModel: d.productModel,
+          openid: d.openid,
+          isActive: d.isActive,
+          expiryDate: d.expiryDate
+        })));
+      } else {
+        console.warn('[loadMyDevices] ⚠️ 警告：查询所有设备（包括未激活）也返回 0 条，可能 openid 不匹配或权限问题');
+        // 🔴 尝试查询所有设备，看看数据库中到底有什么（测试权限）
+        db.collection('sn').limit(10).get().then(allRes => {
+          console.log('[loadMyDevices] 调试：查询所有设备（前10条）:', allRes.data.length, '条');
+          if (allRes.data.length > 0) {
+            console.log('[loadMyDevices] 所有设备详情:', allRes.data.map(d => ({
+              sn: d.sn,
+              openid: d.openid || '无',
+              isActive: d.isActive,
+              productModel: d.productModel
+            })));
+            // 🔴 检查是否有匹配的 openid
+            const matched = allRes.data.filter(d => d.openid === this.data.myOpenid);
+            console.log('[loadMyDevices] 前10条中匹配当前 openid 的设备:', matched.length, '条');
+          } else {
+            console.error('[loadMyDevices] ❌ 错误：查询所有设备也返回 0 条，可能是数据库权限问题或环境不匹配');
+          }
+        }).catch(err => {
+          console.error('[loadMyDevices] ❌ 查询所有设备失败:', err);
+        });
+      }
+      
+      // 然后查询已激活的设备
+      return db.collection('sn').where({
+        openid: this.data.myOpenid,  // 必须匹配当前用户
+        isActive: true               // 必须是审核通过的
+      }).get();
+    }).then(res => {
+      console.log('[loadMyDevices] 查到的已激活设备数量:', res.data.length);
+      if (res.data.length > 0) {
+        console.log('[loadMyDevices] 已激活设备详情:', res.data.map(d => ({
+          sn: d.sn,
+          productModel: d.productModel,
+          openid: d.openid ? d.openid.substring(0, 10) + '...' : '无',
+          isActive: d.isActive,
+          expiryDate: d.expiryDate
+        })));
+      }
 
       // === 【新增】前端去重逻辑 ===
       const uniqueMap = new Map();
@@ -4700,27 +5012,36 @@ Page({
           
           // 原有的计算逻辑
           const now = new Date();
-          const exp = new Date(item.expiryDate);
-          const diff = Math.ceil((exp - now) / (86400000));
-          const isExpired = diff <= 0;
+          let diff = 0;
+          let isExpired = false;
+          
+          // 🔴 修复：处理 expiryDate 为空的情况
+          if (item.expiryDate) {
+            const exp = new Date(item.expiryDate);
+            if (!isNaN(exp.getTime())) {
+              diff = Math.ceil((exp - now) / (86400000));
+              isExpired = diff <= 0;
+            }
+          }
 
           uniqueList.push({
             name: item.productModel || '未知型号',
             sn: 'MT' + item.sn,
             days: diff > 0 ? diff : 0,
             isExpired: isExpired, // 🔴 新增：是否过期
-            hasExtra: item.hasExtra,
-            expiryDate: item.expiryDate,
-            activations: item.activations,
-            firmware: item.firmware
+            hasExtra: item.hasExtra || false,
+            expiryDate: item.expiryDate || '',
+            activations: item.activations || 0,
+            firmware: item.firmware || ''
           });
         }
       });
       // ==========================
       
+      console.log('[loadMyDevices] 处理后的设备列表:', uniqueList);
       this.setData({ deviceList: uniqueList });
     }).catch(err => {
-      console.error('设备加载失败:', err);
+      console.error('[loadMyDevices] 设备加载失败:', err);
     });
   },
 
@@ -4832,7 +5153,10 @@ Page({
             success: () => {
               this.closeAuditModal(); // 关闭审核框
               this.loadAuditList();   // 刷新列表
-              this.loadMyDevices();   // 刷新设备
+              // 🔴 修复：延迟刷新设备列表，确保数据库已更新
+              setTimeout(() => {
+                this.loadMyDevices();   // 刷新设备
+              }, 500);
             }
           });
         } else {
@@ -4983,6 +5307,16 @@ Page({
         };
       });
       
+      // 🔴 修复：如果发现有新的"已通过"设备申请，自动刷新设备列表
+      const hasNewApprovedDevice = deviceApps.some(app => app.status === 1 || app.status === 'APPROVED');
+      if (hasNewApprovedDevice) {
+        console.log('[loadMyActivities] 检测到已通过的设备申请，自动刷新设备列表');
+        // 延迟一下，确保数据库已更新
+        setTimeout(() => {
+          this.loadMyDevices();
+        }, 500);
+      }
+      
       // 处理视频数据
       const videoApps = res[1].data.map(i => {
         // 🔴 确保视频投稿不包含维修相关属性，避免显示错误的标签
@@ -4999,11 +5333,11 @@ Page({
         return {
           ...cleanVideoData,
           type: 'video', // 🔴 强制设置为 'video'，覆盖任何可能的错误值
-          title: '投稿: ' + (i.vehicleName || '未知车型'),
-          // 视频申请已经是数字状态（0/1/-1），直接使用
-          originalCreateTime: i.createTime, // 🔴 保留原始时间用于排序
-          // 格式化时间用于显示
-          createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚'
+        title: '投稿: ' + (i.vehicleName || '未知车型'),
+        // 视频申请已经是数字状态（0/1/-1），直接使用
+        originalCreateTime: i.createTime, // 🔴 保留原始时间用于排序
+        // 格式化时间用于显示
+        createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚'
         };
       });
       
@@ -5105,7 +5439,7 @@ Page({
           }
           statusNum = 1; // 已处理
         } else if (i.status === 'TUTORIAL') {
-          statusText = '教程可修复'; // 用户看到这个状态
+          statusText = '查看教程可修复'; // 用户看到这个状态
           statusClass = 'info'; // 蓝色
           statusNum = 1; // 已处理
         } else if (i.needReturn && !i.returnCompleted && i.status !== 'REPAIR_COMPLETED_SENT' && i.status !== 'SHIPPED') {
@@ -5226,19 +5560,10 @@ Page({
       console.log('📋 [loadMyActivities] 过滤后的申请记录（已通过已排除）:', filtered);
       console.log('📋 [loadMyActivities] 记录数量:', filtered.length);
       
-      // 【新增】设置用户需寄回的维修单（取最新的一个未完成的，且未标记为COMPLETED）
-      // 🔴 修复：从 p4 的查询结果中获取需寄回的维修单（res[3] 是 p3，res[3] 是 p4）
-      // Promise.all 的顺序：[p1, p2, p3, p4, p5, p6, p7]
-      // res[0] = p1, res[1] = p2, res[2] = p3, res[3] = p4, res[4] = p5, res[5] = p6, res[6] = p7
-      // 🔴 修复：即使 status 是 USER_SENT，如果有 repairItems 且未支付，也要显示
-      const returnRequiredRepairs = (res[3].data || []).filter(item => {
-        // 如果已填写售后单且未支付，即使有 returnTrackingId 也要显示
-        const hasUnpaidRepair = item.repairItems && item.repairItems.length > 0 && item.repairPaid === false;
-        // 基本过滤条件
-        const basicFilter = !item.returnCompleted && item.status !== 'COMPLETED';
-        // 如果有未支付的维修单，即使 status 是 USER_SENT 也显示
-        return basicFilter && (hasUnpaidRepair || item.status !== 'USER_SENT');
-      });
+      // 【新增】设置用户需寄回的维修单（取最新的一个 needReturn=true 且未 returnCompleted 的）
+      // p4 查询条件里已经限制了：_openid = 当前用户、needReturn=true、returnCompleted!=true
+      // 这里不再做二次复杂过滤，直接使用 p4 返回的结果即可，避免把合法的需寄回单过滤掉
+      const returnRequiredRepairs = (res[3].data || []);
       console.log('🔍 [loadMyActivities] p4 查询结果:', {
         totalCount: res[3].data?.length || 0,
         filteredCount: returnRequiredRepairs.length,
@@ -7371,6 +7696,15 @@ class BLEHelper {
         },
         fail: (err) => {
           console.error('蓝牙适配器初始化失败', err);
+          // 🔴 处理权限错误
+          if (err.errMsg && err.errMsg.includes('auth deny')) {
+            if (this.onError) {
+              this.onError({ 
+                type: 'auth_deny',
+                errMsg: err.errMsg
+              });
+            }
+          }
           reject(err);
         }
       });

@@ -823,23 +823,21 @@ Page({
                 selectedDistrict: districtList[districtIndex].name
               });
             } else {
-              this.setData({
-                selectedDistrict: targetDistrict
-              });
+              // 🔴 修复：如果匹配失败，不设置selectedDistrict，让它保持为空，显示"请选择区县"
+              // 不设置selectedDistrict，这样WXML会显示"请选择区县"
+              console.log('[shouhou] ⚠️ 区县匹配失败，目标区县:', targetDistrict, '不设置selectedDistrict，让用户手动选择');
             }
           }
         }
       },
       fail: (err) => {
         console.error('[shouhou] 加载区县列表失败:', err);
-        // 🔴 修复：如果API失败，至少设置区县文本，让用户知道解析到了什么
-        if (targetDistrict) {
-          this.setData({
-            selectedDistrict: targetDistrict,
-            districtList: [] // 清空列表，避免显示错误数据
-          });
-          console.log('[shouhou] ⚠️ API调用失败，已设置区县文本:', targetDistrict);
-        }
+        // 🔴 修复：如果API失败，不设置selectedDistrict，让它保持为空，显示"请选择区县"
+        // 不设置selectedDistrict，这样WXML会显示"请选择区县"
+        this.setData({
+          districtList: [] // 清空列表，避免显示错误数据
+        });
+        console.log('[shouhou] ⚠️ API调用失败，不设置selectedDistrict，让用户手动选择');
       }
     });
   },
@@ -1403,12 +1401,38 @@ Page({
       }).count();
 
       if (deviceRes.total === 0) {
-        // 🔴 没有绑定设备，显示自定义弹窗
+        // 🔴 没有绑定设备，显示自定义弹窗，点击「知道了」后跳转到个人中心
         this._showCustomModal({
           title: '提示',
           content: '您尚未绑定设备，无法进行故障报修。请先前往个人中心绑定设备。',
           showCancel: false,
-          confirmText: '知道了'
+          confirmText: '知道了',
+          success: (res) => {
+            if (res && res.confirm) {
+              // 跳转到「我的」页面进行设备绑定
+              // 先尝试 switchTab（如果 my 是 tabBar 页面）
+              wx.switchTab({
+                url: '/pages/my/my',
+                success: () => {
+                  console.log('[checkDeviceBeforeRepair] switchTab 跳转成功');
+                },
+                fail: (err) => {
+                  console.log('[checkDeviceBeforeRepair] switchTab 失败，尝试 navigateTo:', err);
+                  // 降级：使用 navigateTo（如果 my 不是 tabBar 页面）
+                  wx.navigateTo({
+                    url: '/pages/my/my',
+                    success: () => {
+                      console.log('[checkDeviceBeforeRepair] navigateTo 跳转成功');
+                    },
+                    fail: (err2) => {
+                      console.error('[checkDeviceBeforeRepair] navigateTo 也失败:', err2);
+                      this._showCustomToast('跳转失败，请手动前往"我的"页面', 'none');
+                    }
+                  });
+                }
+              });
+            }
+          }
         });
         return; // 不切换服务类型
       }
@@ -3852,23 +3876,38 @@ Page({
     if (shippingMethod === 'zto') {
       fee = 12; // 🔴 中通快递运费12元（固定）
     } else if (shippingMethod === 'sf') {
-      // 🔴 顺丰逻辑：从详细地址中解析省市区（和shop页面一样的计算方式）
-      if (!detailAddress || !detailAddress.trim()) {
-        fee = 0; // 没填地址，运费暂计为0
-      } else {
-        // 解析地址，提取省份信息
+      // 🔴 顺丰逻辑：
+      // 1. 优先使用用户在省市区选择器中选的省份（selectedProvince）
+      // 2. 如果还没有选省份，再尝试从详细地址中解析
+      // 3. 如果两者都拿不到省份，则给出提示，运费暂计为 0
+      let province = '';
+      let needParseHint = false;
+
+      if (selectedProvince && selectedProvince.trim()) {
+        province = selectedProvince.trim();
+      } else if (detailAddress && detailAddress.trim()) {
+        // 解析地址，提取省份信息（智能粘贴等场景）
         const parsed = this.parseAddressForShipping(detailAddress);
-        const province = parsed.province || '';
-        
-        // 判断是否广东
+        province = (parsed.province || '').trim();
+        if (!province) {
+          // 记录：我们尝试解析但失败了，需要给用户一个提示
+          needParseHint = true;
+        }
+      }
+
+      if (!province) {
+        // 没有拿到省份信息：运费暂计为0，并在适当场景给出提示
+        fee = 0;
+        if (needParseHint) {
+          // 只有在解析失败时才提示，避免一开始什么都没填就一直弹
+          this.showAutoToast('提示', '无法从地址中识别省份，请检查“省市区”和详细地址是否填写完整');
+        }
+      } else {
+        // 判断是否广东省
         if (province.indexOf('广东') > -1) {
-          fee = 13;
-        } else if (province) {
-          // 如果解析到了省份但不是广东，则按省外计算
-          fee = 22;
+          fee = 12; // 广东省内 12 元
         } else {
-          // 如果解析不到省份，运费暂计为0（待用户完善地址）
-      fee = 0;
+          fee = 23; // 省外 23 元
         }
       }
     }
@@ -3989,8 +4028,15 @@ Page({
         return;
       }
       
-      if (!selectedProvince || !selectedCity) {
-        this.showAutoToast('提示', '请填写省、市、区');
+      // 🔴 检查省市区是否完整填写
+      if (!selectedProvince || !selectedCity || !selectedDistrict) {
+        this.showAutoToast('提示', '请完整填写省、市、区');
+        return;
+      }
+      
+      // 🔴 额外检查：如果区县为空，也要阻止提交
+      if (!selectedDistrict || selectedDistrict.trim() === '') {
+        this.showAutoToast('提示', '请选择区县');
         return;
       }
       
@@ -4037,8 +4083,14 @@ Page({
     
     // 直接检查省市区选择器是否已选
     const { selectedProvince, selectedCity, selectedDistrict } = this.data;
-    if (!selectedProvince || !selectedCity) {
-      this.showAutoToast('提示', '请填写省、市、区');
+    if (!selectedProvince || !selectedCity || !selectedDistrict) {
+      this.showAutoToast('提示', '请完整填写省、市、区');
+      return;
+    }
+    
+    // 🔴 额外检查：如果区县为空，也要阻止支付
+    if (!selectedDistrict || selectedDistrict.trim() === '') {
+      this.showAutoToast('提示', '请选择区县');
       return;
     }
     

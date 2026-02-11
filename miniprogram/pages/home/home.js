@@ -46,7 +46,10 @@ Page({
     
     // 【新增】自定义加载动画
     showLoadingAnimation: false,
-    loadingText: '加载中...'
+    loadingText: '加载中...',
+    
+    // 【新增】上传选项弹窗
+    showUploadOptions: false
   },
 
   onLoad() {
@@ -857,17 +860,44 @@ Page({
   // --- 详情与编辑 ---
   
   // 选择图片并上传到云存储（管理员模式下可直接调用，编辑模式下也可调用）
+  // 🔴 修改：显示上传选项弹窗
   chooseImage() {
     // 管理员模式或编辑模式下都可以选择图片
     if(!this.data.isAdmin && !this.data.isEditing) return;
-    
+    this.setData({ showUploadOptions: true });
+  },
+  
+  // 🔴 新增：关闭上传选项弹窗
+  closeUploadOptions() {
+    this.setData({ showUploadOptions: false });
+  },
+  
+  // 🔴 新增：阻止事件冒泡
+  preventBubble() {
+    // 空函数，用于阻止事件冒泡
+  },
+  
+  // 🔴 新增：从相册选择图片
+  chooseImageFromAlbum() {
+    this.setData({ showUploadOptions: false });
+    this._doChooseImage(['album']);
+  },
+  
+  // 🔴 新增：拍照
+  chooseImageFromCamera() {
+    this.setData({ showUploadOptions: false });
+    this._doChooseImage(['camera']);
+  },
+  
+  // 🔴 新增：实际执行选择图片的方法
+  _doChooseImage(sourceType) {
     const that = this;
     const { activeItem } = this.data;
     
     wx.chooseMedia({
       count: 1,
       mediaType: ['image'],
-      sourceType: ['album', 'camera'],
+      sourceType: sourceType,
       success: (res) => {
         const tempFilePath = res.tempFiles[0].tempFilePath;
         console.log('选择的图片临时路径:', tempFilePath);

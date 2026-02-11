@@ -37,7 +37,7 @@ class BLEHelper {
                     });
                   }
                 } else {
-                  if (this.onError) this.onError(err);
+                if (this.onError) this.onError(err);
                 }
                 reject(err);
               }
@@ -363,8 +363,14 @@ Page({
       })
       .catch((err) => {
         console.error('蓝牙初始化失败:', err);
-        this.showIslandTip('蓝牙初始化失败', false);
-        this.setData({ loaderFading: false });
+        // 🔴 权限错误已经在 onError 回调中处理，这里只处理其他错误
+        if (!err || !err.errMsg || !err.errMsg.includes('auth deny')) {
+          this.showIslandTip('蓝牙初始化失败', false);
+          this.setData({ loaderFading: false });
+        } else {
+          // 权限错误已经在 onError 回调中显示权限教程弹窗了
+          this.setData({ loaderFading: false });
+        }
       });
   },
 

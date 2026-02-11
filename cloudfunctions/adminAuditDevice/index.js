@@ -62,11 +62,33 @@ exports.main = async (event, context) => {
     
     // 🔴 获取申请人的 openid（从文档的 _openid 字段获取，这是云开发自动注入的）
     // 注意：在云函数中，_openid 字段可以直接访问
-    const applicantOpenid = applyData._openid
+    // 🔴 修复：如果 _openid 不存在，尝试从文档的 openid 字段获取（某些情况下可能存储在这里）
+    let applicantOpenid = applyData._openid || applyData.openid
+    
+    // 🔴 如果还是没有，尝试从查询结果中获取（云开发会自动注入 _openid）
+    if (!applicantOpenid && applyRes.data) {
+      // 在某些情况下，_openid 可能不在 data 中，需要从其他地方获取
+      // 但通常 _openid 应该在 data 中
+      applicantOpenid = applyData._openid
+    }
     
     // #region agent log
-    sendDebugLog('cloudfunctions/adminAuditDevice/index.js:main', '获取申请详情', { id, applicantOpenid, sn: applyData.sn, hasOpenid: !!applicantOpenid }, 'B')
+    sendDebugLog('cloudfunctions/adminAuditDevice/index.js:main', '获取申请详情', { 
+      id, 
+      applicantOpenid, 
+      sn: applyData.sn, 
+      hasOpenid: !!applicantOpenid,
+      has_openid: !!applyData._openid,
+      has_openid_field: !!applyData.openid,
+      allKeys: Object.keys(applyData)
+    }, 'B')
     // #endregion
+    
+    // 🔴 如果还是没有 openid，记录错误
+    if (!applicantOpenid) {
+      console.error('[adminAuditDevice] 无法获取申请人 openid，申请记录:', applyData)
+      return { success: false, errMsg: '无法获取申请人信息，请重试' }
+    }
 
     if (action === 'reject') {
       await db.collection('my_read').doc(id).update({ data: { status: 'REJECTED' } })
@@ -133,30 +155,59 @@ exports.main = async (event, context) => {
       // #endregion
       
       // 更新 sn 集合，确保设置 openid
-      await db.collection('sn').where({
+      // 🔴 修复：先查询设备是否存在
+      const deviceRes = await db.collection('sn').where({
+        sn: applyData.sn
+      }).get()
+      
+      if (deviceRes.data.length === 0) {
+        console.error('[adminAuditDevice] 设备不存在，SN:', applyData.sn)
+        return { success: false, errMsg: '设备不存在，请检查SN是否正确' }
+      }
+      
+      // 🔴 修复：确保 openid 被设置（必须设置，不能为空）
+      const updateData = {
+        productModel: applyData.productModel,
+        firmware: firmwareVer,
+        expiryDate: finalExpiryDateStr, // 🔴 使用包含待生效延保的最终日期
+        totalDays: finalTotalDays, // 🔴 使用包含待生效延保的最终天数
+        remainingDays: remainingDays > 0 ? remainingDays : 0,
+        
+        // 【核心修复】新机审核通过，激活次数初始为 1
+        activations: 1, 
+        
+        hasExtra: false,
+        bindTime: finalDate, // 绑定时间改为购买时间
+        imgReceipt: applyData.imgReceipt,
+        
+        // 【核心修复】标记为已激活，用户端靠这个字段过滤显示
+        isActive: true,
+        
+        // 🔴 修复：必须设置 openid，不能为空
+        openid: userOpenid
+      }
+      
+      console.log('[adminAuditDevice] 准备更新设备，SN:', applyData.sn, 'openid:', userOpenid, 'updateData keys:', Object.keys(updateData))
+      
+      const updateResult = await db.collection('sn').where({
         sn: applyData.sn
       }).update({
-        data: {
-          productModel: applyData.productModel,
-          firmware: firmwareVer,
-          expiryDate: finalExpiryDateStr, // 🔴 使用包含待生效延保的最终日期
-          totalDays: finalTotalDays, // 🔴 使用包含待生效延保的最终天数
-          remainingDays: remainingDays > 0 ? remainingDays : 0,
-          
-          // 【核心修复】新机审核通过，激活次数初始为 1
-          activations: 1, 
-          
-          hasExtra: false,
-          bindTime: finalDate, // 绑定时间改为购买时间
-          imgReceipt: applyData.imgReceipt,
-          
-          // 【核心修复】标记为已激活，用户端靠这个字段过滤显示
-          isActive: true,
-          
-          // 🔴 确保 openid 被设置（从申请记录中获取）
-          ...(userOpenid ? { openid: userOpenid } : {})
-        }
+        data: updateData
       })
+      
+      console.log('[adminAuditDevice] 设备更新结果，updated:', updateResult.stats?.updated || 0)
+      
+      // 🔴 验证更新是否成功
+      const verifyRes = await db.collection('sn').where({
+        sn: applyData.sn,
+        openid: userOpenid,
+        isActive: true
+      }).get()
+      
+      console.log('[adminAuditDevice] 验证更新结果，查询到的设备数量:', verifyRes.data.length)
+      if (verifyRes.data.length === 0) {
+        console.error('[adminAuditDevice] 警告：更新后验证失败，设备可能未正确更新，SN:', applyData.sn, 'openid:', userOpenid)
+      }
 
       // 更新申请单状态
       await db.collection('my_read').doc(id).update({ data: { status: 'APPROVED' } })

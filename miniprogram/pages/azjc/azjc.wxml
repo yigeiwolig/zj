@@ -112,9 +112,9 @@
               wx:for="{{filteredChapters}}" 
               wx:key="index"
               style="{{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
-              catchtouchstart="{{isAdmin ? 'onDragStart' : ''}}"
+              bindtouchstart="{{isAdmin ? 'onDragStart' : ''}}"
               catchtouchmove="{{isAdmin ? 'onDragMove' : ''}}"
-              catchtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
+              bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
               data-index="{{index}}"
               data-type="chapters"
               id="video-card-{{index}}">
@@ -163,9 +163,9 @@
               wx:for="{{filteredGraphics}}" 
               wx:key="index"
               style="{{isAdmin && isDragging && dragIndex === index && dragType === 'graphics' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
-              catchtouchstart="{{isAdmin ? 'onDragStart' : 'onGraphicTap'}}"
+              bindtouchstart="{{isAdmin ? 'onDragStart' : 'onGraphicTap'}}"
               catchtouchmove="{{isAdmin ? 'onDragMove' : ''}}"
-              catchtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
+              bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
               data-index="{{index}}"
               data-type="graphics">
               <image class="g-media-real" src="{{item.img}}" mode="aspectFill" wx:if="{{item.img}}"></image>
@@ -255,10 +255,8 @@
 
 <!-- 🔴 全屏视频遮罩层：覆盖在整个页面上，不改变 stepIndex -->
 <view class="fullscreen-video-mask {{isVideoFullScreen ? 'active' : ''}} {{fullScreenVideoMaskClosing ? 'closing' : ''}}" wx:if="{{isVideoFullScreen}}" catchtouchmove="noop" catchtap="noop">
-  <view class="fullscreen-video-container {{fullScreenVideoTransform}}" style="{{fullScreenVideoInitialStyle}}" catchtouchstart="onVideoContainerTouchStart" catchtouchmove="onVideoContainerTouchMove" catchtouchend="onVideoContainerTouchEnd">
-    <!-- 🔴 关闭按钮：放在最上层，确保能正常点击 -->
-    <view class="fullscreen-close-btn" catchtap="closeFullScreenVideo" catchtouchmove="noop">✕</view>
-    
+  <view class="fullscreen-video-container {{fullScreenVideoTransform}}" style="{{fullScreenVideoInitialStyle}}" catchtap="toggleFullScreenVideoPlay" catchtouchmove="noop">
+    <view class="fullscreen-close-btn" catchtap="closeFullScreenVideo">✕</view>
     <video 
       class="fullscreen-video-player" 
       src="{{fullScreenVideoUrl}}" 
@@ -267,20 +265,13 @@
       show-fullscreen-btn="{{false}}"
       show-center-play-btn="{{false}}" 
       enable-play-gesture="{{false}}"
-      vslide-gesture="{{false}}"
-      vslide-gesture-in-fullscreen="{{false}}"
+      vslide-gesture="{{true}}"
+      vslide-gesture-in-fullscreen="{{true}}"
       object-fit="contain"
       paused="{{fullScreenVideoPaused}}"
-      catchtouchstart="onVideoTouchStart"
-      catchtouchmove="onVideoTouchMove"
-      catchtouchend="onVideoTouchEnd"
       id="fullscreen-video-player"></video>
-    
-    <!-- 🔴 点击区域：用于切换播放/暂停 -->
-    <view class="fullscreen-video-tap-area" catchtap="toggleFullScreenVideoPlay" catchtouchmove="noop"></view>
-    
     <!-- 🔴 暂停时显示播放按钮 -->
-    <view class="fullscreen-play-overlay {{fullScreenVideoPaused ? 'show' : ''}}" catchtap="toggleFullScreenVideoPlay" catchtouchmove="noop">
+    <view class="fullscreen-play-overlay {{fullScreenVideoPaused ? 'show' : ''}}" catchtap="toggleFullScreenVideoPlay">
       <view class="play-button-icon">▶</view>
     </view>
   </view>

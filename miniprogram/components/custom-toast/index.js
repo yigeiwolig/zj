@@ -22,6 +22,9 @@ Component({
         'toast.show': false,
         'loading.show': false
       });
+      // 🔴 修复：函数不能通过 setData 保存，使用实例变量保存回调
+      this._modalSuccess = opts.success;
+      this._modalFail = opts.fail;
       this.setData({
         modal: {
           show: true,
@@ -31,9 +34,7 @@ Component({
           cancelText: opts.cancelText || '取消',
           confirmText: opts.confirmText || '确定',
           cancelColor: opts.cancelColor,
-          confirmColor: opts.confirmColor,
-          success: opts.success,
-          fail: opts.fail
+          confirmColor: opts.confirmColor
         }
       });
     },
@@ -47,25 +48,35 @@ Component({
       }, 420);
     },
     onCancel() {
-      const { success, fail } = this.data.modal;
+      const success = this._modalSuccess;
+      const fail = this._modalFail;
       this.setData({ modalClosing: true });
       setTimeout(() => {
         this.setData({ 
           'modal.show': false,
           modalClosing: false
         });
+        // 🔴 修复：从实例变量读取回调
         if (success) success({ confirm: false, cancel: true, errMsg: "showModal:ok" });
+        // 清理回调
+        this._modalSuccess = null;
+        this._modalFail = null;
       }, 420);
     },
     onConfirm() {
-      const { success, fail } = this.data.modal;
+      const success = this._modalSuccess;
+      const fail = this._modalFail;
       this.setData({ modalClosing: true });
       setTimeout(() => {
         this.setData({ 
           'modal.show': false,
           modalClosing: false
         });
+        // 🔴 修复：从实例变量读取回调
         if (success) success({ confirm: true, cancel: false, errMsg: "showModal:ok" });
+        // 清理回调
+        this._modalSuccess = null;
+        this._modalFail = null;
       }, 420);
     },
 

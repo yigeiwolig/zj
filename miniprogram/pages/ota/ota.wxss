@@ -260,7 +260,7 @@ page {
 /* ======================= */
 .password-modal-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.4); backdrop-filter: blur(10px); z-index: 9999;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(10px); z-index: 10001 !important; /* 🔴 修复：确保权限教程弹窗在所有其他弹窗之上 */
   display: flex; align-items: center; justify-content: center;
   animation: dialogMaskFadeIn 0.25s ease-out forwards;
 }

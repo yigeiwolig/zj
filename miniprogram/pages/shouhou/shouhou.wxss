@@ -1680,6 +1680,33 @@ page {
 .ship-name { font-size: 28rpx; font-weight: 700; margin-bottom: 8rpx; text-align: center; }
 .ship-price { font-size: 24rpx; color: #000; text-align: center; }
 
+/* 顺丰运费区间价样式（未选择时） */
+.ship-price-range {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4rpx;
+}
+.price-range-item {
+  font-size: 22rpx;
+  color: #86868B;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.price-separator {
+  color: #86868B;
+  margin: 0 2rpx;
+}
+.price-num {
+  color: #000;
+  font-weight: 600;
+  font-size: 24rpx;
+}
+
 /* 4. 总价栏 */
 .final-total-row {
   display: flex; justify-content: flex-end; align-items: baseline;
@@ -1830,6 +1857,33 @@ page {
 .ship-name { font-size: 28rpx; font-weight: 700; margin-bottom: 8rpx; text-align: center; }
 .ship-price { font-size: 24rpx; color: #000; text-align: center; }
 .ship-item.active .ship-name { color: #000; }
+
+/* 顺丰运费区间价样式（未选择时） */
+.ship-price-range {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4rpx;
+}
+.price-range-item {
+  font-size: 22rpx;
+  color: #86868B;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.price-separator {
+  color: #86868B;
+  margin: 0 2rpx;
+}
+.price-num {
+  color: #000;
+  font-weight: 600;
+  font-size: 24rpx;
+}
 
 /* 总价显示 */
 .final-total-row {
@@ -2455,6 +2509,138 @@ page {
   visibility: visible;
 }
 
+/* ================= 上传选项弹窗（经典黑白·实心版） ================= */
+.upload-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.upload-modal-content {
+  width: 560rpx;
+  background: #FFFFFF;
+  border-radius: 32rpx;
+  padding: 0;
+  animation: popIn 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+  overflow: hidden;
+  box-shadow: 0 20rpx 60rpx rgba(0, 0, 0, 0.15);
+}
+
+@keyframes popIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* 选项区域容器 */
+.upload-options-container {
+  background: #FFFFFF;
+  padding-bottom: 20rpx;
+}
+
+.upload-modal-title {
+  font-size: 30rpx;
+  color: #1D1D1F;
+  text-align: center;
+  padding: 40rpx 0 20rpx;
+  font-weight: 600;
+}
+
+.upload-options-list {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 70rpx;
+  padding: 30rpx 40rpx 50rpx;
+}
+
+.upload-option-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  padding: 0;
+  width: 160rpx;
+  transition: all 0.2s ease;
+}
+
+.upload-option-card:active {
+  transform: scale(0.92);
+  opacity: 0.7;
+}
+
+/* 图标容器 - 浅灰背景，柔和 */
+.upload-option-icon-wrapper {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 40rpx;
+  background: #F2F2F7; /* 经典的浅灰色 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20rpx;
+  margin-right: 0;
+}
+
+/* 图标样式 - 黑色实心，更有分量感 */
+.upload-option-icon {
+  width: 64rpx;
+  height: 64rpx;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0.85; /* 稍微降低一点纯黑的刺眼感 */
+}
+
+/* 相册图标 - 文件夹中间显示MT */
+.album-icon {
+  background-image: url("data:image/svg+xml,%3Csvg width='64' height='64' viewBox='0 0 64 64' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M8 16C8 13.7909 9.79086 12 12 12H24C25.1046 12 26 12.8954 26 14V16H52C54.2091 16 56 17.7909 56 20V48C56 50.2091 54.2091 52 52 52H12C9.79086 52 8 50.2091 8 48V16ZM12 20V48H52V20H24V18H12V20Z' fill='black'/%3E%3Ctext x='32' y='36' font-family='Arial, sans-serif' font-size='18' font-weight='bold' fill='black' text-anchor='middle' dominant-baseline='middle'%3EMT%3C/text%3E%3C/svg%3E");
+}
+
+/* 录像图标 - 实心风格 */
+.video-icon {
+  background-image: url("data:image/svg+xml,%3Csvg width='64' height='64' viewBox='0 0 64 64' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill-rule='evenodd' clip-rule='evenodd' d='M8 22C8 19.7909 9.79086 18 12 18H32C34.2091 18 36 19.7909 36 22V42C36 44.2091 34.2091 46 32 46H12C9.79086 46 8 44.2091 8 42V22ZM46 20.5359C46 19.2319 44.4526 18.548 43.4806 19.4211L38 24.3431V39.6569L43.4806 44.5789C44.4526 45.452 46 44.7681 46 43.4641V20.5359Z' fill='black'/%3E%3C/svg%3E");
+}
+
+.upload-option-label {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #1D1D1F;
+  text-align: center;
+}
+
+/* 取消按钮 - 简约分割线风格 */
+.upload-modal-cancel {
+  width: 100%;
+  padding: 32rpx 0;
+  text-align: center;
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #1D1D1F;
+  background: #FFFFFF;
+  border-top: 1rpx solid #F0F0F0;
+  border-radius: 0 0 32rpx 32rpx;
+}
+
+.upload-modal-cancel:active {
+  background: #F5F5F7;
+}
+
+/* 兼容旧样式 */
 .ios-dialog {
   position: relative; 
   background: #FFFFFF;

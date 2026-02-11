@@ -277,3 +277,27 @@
 
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />
+
+<!-- 🔴 新增：上传选项弹窗（选择相册/拍照） -->
+<view class="upload-modal-overlay" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions">
+  <view class="upload-modal-content" catchtap="preventBubble">
+    <view class="upload-options-container">
+      <view class="upload-modal-title">选择上传方式</view>
+      <view class="upload-options-list">
+        <view class="upload-option-card" bindtap="chooseImageFromAlbum" data-action="album">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon album-icon"></view>
+          </view>
+          <view class="upload-option-label">从相册选择</view>
+        </view>
+        <view class="upload-option-card" bindtap="chooseImageFromCamera" data-action="camera">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon video-icon"></view>
+          </view>
+          <view class="upload-option-label">拍照</view>
+        </view>
+      </view>
+    </view>
+    <view class="upload-modal-cancel" bindtap="closeUploadOptions">取消</view>
+  </view>
+</view>

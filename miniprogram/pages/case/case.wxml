@@ -547,20 +547,26 @@
 </view>
 
 <!-- 10. 上传选项弹窗（选择相册/录制） -->
-<view class="modal-overlay active" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions" catchtouchmove="noop" catchtap="noop">
-  <view class="ios-dialog" catchtap="preventBubble" catchtouchmove="noop">
-    <view class="dialog-title center">选择上传方式</view>
-    <view class="upload-options">
-      <view class="option-item" bindtap="chooseVideoFromAlbum" data-action="album">
-        <view class="option-icon">📷</view>
-        <view class="option-text">从相册选择</view>
-      </view>
-      <view class="option-item" bindtap="chooseRecord" data-action="record">
-        <view class="option-icon">🎥</view>
-        <view class="option-text">录制视频</view>
+<view class="upload-modal-overlay" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions" catchtouchmove="noop" catchtap="noop">
+  <view class="upload-modal-content" catchtap="preventBubble" catchtouchmove="noop">
+    <view class="upload-options-container">
+      <view class="upload-modal-title">选择上传方式</view>
+      <view class="upload-options-list">
+        <view class="upload-option-card" bindtap="chooseVideoFromAlbum" data-action="album">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon album-icon"></view>
+          </view>
+          <view class="upload-option-label">从相册选择</view>
+        </view>
+        <view class="upload-option-card" bindtap="chooseRecord" data-action="record">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon video-icon"></view>
+          </view>
+          <view class="upload-option-label">录制视频</view>
+        </view>
       </view>
     </view>
-    <button class="dialog-btn" style="background:#eee; color:#000; margin-top:20rpx;" bindtap="closeUploadOptions">取消</button>
+    <view class="upload-modal-cancel" bindtap="closeUploadOptions">取消</view>
   </view>
 </view>
 

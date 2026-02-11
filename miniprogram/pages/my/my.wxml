@@ -168,11 +168,11 @@
             <view class="r-desc">"{{item.description}}"</view>
             <view class="r-addr">{{item.contact.address}}</view>
             <!-- 🔴 新增：质保状态显示，无质保时显示「用户质保已过期」 -->
-            <view class="r-warranty-status" wx:if="{{item.warrantyExpired || item.remainingDays === 0}}">
+            <view class="r-warranty-status expired" wx:if="{{item.warrantyExpired || item.remainingDays === 0}}">
               <text class="warranty-expired-tag">用户质保已过期</text>
               <text class="warranty-expired-info" wx:if="{{item.expiryDate}}">到期日：{{item.expiryDate}}</text>
             </view>
-            <view class="r-warranty-status" wx:elif="{{item.remainingDays !== undefined && item.remainingDays > 0}}">
+            <view class="r-warranty-status normal" wx:elif="{{item.remainingDays !== undefined && item.remainingDays > 0}}">
               <text class="warranty-normal-tag">剩余质保：{{item.remainingDays}}天</text>
             </view>
           </view>
@@ -358,13 +358,11 @@
       </swiper-item>
     </swiper>
 
-    <!-- 情况 B: 没订单，显示诱导卡片或维修单卡片 -->
-    <view wx:else>
-      <!-- 🔴 优先显示维修单卡片（如果有需要支付的维修单） -->
-      <view 
-        wx:if="{{myReturnRequiredRepair && myReturnRequiredRepair.repairItems && myReturnRequiredRepair.repairItems.length > 0 && myReturnRequiredRepair.repairPaid === false}}"
-        class="return-required-card"
-      >
+    <!-- 🔴 需寄回维修单卡片（无论有没有订单都显示，但确认收货或扣除质保后消失） -->
+    <view 
+      wx:if="{{myReturnRequiredRepair && myReturnRequiredRepair.needReturn && myReturnRequiredRepair.returnCompleted !== true && !myReturnRequiredRepair.warrantyDeducted && !myReturnRequiredRepair.isWarrantyDeducted && myReturnRequiredRepair.status !== 'RETURN_RECEIVED' && myReturnRequiredRepair.status !== 'COMPLETED'}}"
+      class="return-required-card"
+    >
         <!-- 头部：标题和状态标签 -->
         <view class="rr-card-header">
           <view class="rr-card-title">{{myReturnRequiredRepair.returnStatus === 'PENDING_RETURN' ? '需寄回配件维修' : '需寄回故障配件'}}</view>
@@ -410,7 +408,7 @@
             </view>
           </view>
           
-          <!-- 支付状态和按钮 -->
+          <!-- 支付状态和按钮（保持与 Git 仓库一致的 UI） -->
           <view class="rr-payment-section" wx:if="{{myReturnRequiredRepair.warrantyExpired === true || (myReturnRequiredRepair.repairItems && myReturnRequiredRepair.repairItems.length > 0 && myReturnRequiredRepair.repairTotalPrice > 0)}}">
             <view class="rr-payment-status-text" wx:if="{{myReturnRequiredRepair.repairPaid === true}}">
               <text class="rr-payment-paid">✓ 已支付</text>
@@ -420,12 +418,22 @@
               <view class="rr-payment-btn" bindtap="payRepairFee" data-id="{{myReturnRequiredRepair._id}}">立即支付</view>
             </view>
           </view>
+
+          <!-- 用户操作：填写寄回信息 + 一键复制寄回地址 -->
+          <view class="rr-user-actions-simple" wx:if="{{myReturnRequiredRepair.needReturn}}">
+            <view class="rr-simple-btn primary" bindtap="openReturnAddressModal">
+              {{myReturnRequiredRepair.returnTrackingId ? '查看寄回信息' : '填写寄回信息'}}
+            </view>
+            <view class="rr-simple-btn secondary" bindtap="copyReturnAddress">
+              复制寄回地址
+            </view>
+          </view>
         </view>
       </view>
-      
-      <!-- 🔴 如果没有维修单，显示"去选购商品"卡片 -->
+
+    <!-- 情况 B: 没订单且没有需寄回维修单，显示"去选购商品"诱导卡片 -->
     <view 
-      wx:else 
+      wx:if="{{orders.length === 0 && (!myReturnRequiredRepair || !myReturnRequiredRepair.needReturn || myReturnRequiredRepair.returnCompleted === true || myReturnRequiredRepair.warrantyDeducted === true || myReturnRequiredRepair.isWarrantyDeducted === true || myReturnRequiredRepair.status === 'RETURN_RECEIVED' || myReturnRequiredRepair.status === 'COMPLETED')}}"
       class="empty-order-card" 
       bindtap="goToShop"
     >
@@ -435,7 +443,6 @@
         <view class="empty-desc">下单后，此处将实时追踪您的物料进度</view>
         
         <view class="go-shop-btn">去选购商品 ➔</view>
-        </view>
       </view>
     </view>
   </block>
@@ -662,7 +669,7 @@
               
               <!-- 看教程 (蓝色) -->
               <view class="status-pill info" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'TUTORIAL') && !item.trackingId && item.status !== 'REPAIR_COMPLETED_SENT'}}">
-                教程可修复
+                查看教程可修复
               </view>
               
               <!-- 🔴 场景B：已支付·待维修 - 绿色 -->
@@ -680,6 +687,7 @@
               
               <!-- 🔴 待寄回维修（其他情况，黄色）- 排除场景A和场景B -->
               <!-- 🔴 确保只有维修类型才显示，使用括号明确优先级 -->
+              <!-- 注意：此状态仅用于提示，不再在用户端点击弹出管理员的“需寄回订单确认”弹窗 -->
               <view class="status-pill processing" wx:if="{{(item.type === 'repair') && (item.needReturn === true) && (item.returnCompleted !== true) && (item.status !== 'REPAIR_COMPLETED_SENT') && (item.status !== 'USER_SENT') && (item.returnStatus !== 'USER_SENT') && (item.returnStatus !== 'PENDING_RETURN') && (item.status !== 'SHIPPED')}}">
                 <view class="dot-p"></view>待寄回维修
               </view>
@@ -724,13 +732,15 @@
                 <view class="dot-s"></view>已维修完成
               </view>
               
-              <!-- 扣除质保状态 -->
-              <view class="status-pill fail" wx:if="{{item.type === 'repair' && (item.warrantyDeducted || item.isWarrantyDeducted)}}">
-                <view class="dot-f"></view>
-                <text wx:if="{{item.deductionReason === '配件错误' || item.deductionReason === 'wrong_part'}}">配件错误·扣30天</text>
-                <text wx:elif="{{item.deductionReason === '超时' || item.deductionReason === 'timeout'}}">超时未寄·扣30天</text>
-                <text wx:else>扣30天质保</text>
+              <!-- 扣除质保状态（样式优化） -->
+              <view class="status-pill multi-line fail" wx:if="{{item.type === 'repair' && (item.warrantyDeducted || item.isWarrantyDeducted)}}">
+                <view class="status-line">
+                  <text class="status-text-main" wx:if="{{item.deductionReason === '配件错误' || item.deductionReason === 'wrong_part'}}">配件错误</text>
+                  <text class="status-text-main" wx:elif="{{item.deductionReason === '超时' || item.deductionReason === 'timeout'}}">超时未寄</text>
+                  <text class="status-text-main" wx:else>已扣质保</text>
+                  <text class="status-text-sub">已扣除 30 天质保</text>
                 </view>
+              </view>
             </view>
           </view>
           
@@ -807,7 +817,8 @@
         </view>
 
         <!-- === 5. 被锁状态 === -->
-        <view class="locked-view" wx:if="{{bluetoothReady && isDeviceLocked}}">
+        <!-- 🔴 修复：只有在有锁定原因时才显示"无法绑定"，验证中不显示 -->
+        <view class="locked-view" wx:if="{{bluetoothReady && isDeviceLocked && lockedReason}}">
           <view class="locked-icon">🚫</view>
           <text class="locked-title">无法绑定</text>
           <text class="locked-desc">{{lockedReason}}</text>
@@ -1640,5 +1651,29 @@
     <view class="pass-btns">
        <view class="p-btn confirm full-width" bindtap="closePermissionModal">知道了</view>
     </view>
+  </view>
+</view>
+
+<!-- 🔴 新增：上传选项弹窗（选择相册/拍照） -->
+<view class="upload-modal-overlay" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions">
+  <view class="upload-modal-content" catchtap="preventBubble">
+    <view class="upload-options-container">
+      <view class="upload-modal-title">选择上传方式</view>
+      <view class="upload-options-list">
+        <view class="upload-option-card" bindtap="chooseImageFromAlbum" data-action="album">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon album-icon"></view>
+          </view>
+          <view class="upload-option-label">从相册选择</view>
+        </view>
+        <view class="upload-option-card" bindtap="chooseImageFromCamera" data-action="camera">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon video-icon"></view>
+          </view>
+          <view class="upload-option-label">拍照</view>
+        </view>
+      </view>
+    </view>
+    <view class="upload-modal-cancel" bindtap="closeUploadOptions">取消</view>
   </view>
 </view>

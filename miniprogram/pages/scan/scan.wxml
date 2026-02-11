@@ -25,7 +25,7 @@
   </view>
 
   <!-- ======================= -->
-  <!-- 新增：权限拒绝提示弹窗 (图形化) -->
+  <!-- 🔴 新增：蓝牙权限教程弹窗 -->
   <!-- ======================= -->
   <view class="password-modal-mask {{permissionModalClosing ? 'closing' : ''}}" wx:if="{{showPermissionModal}}" catchtouchmove="noop" catchtap="noop">
     <view class="password-box" catchtouchmove="noop" catchtap="noop">
@@ -206,13 +206,14 @@
 
               <!-- B. 扫描 -->
               <view class="capsule-content scanning-ui" wx:if="{{isScanning}}">
-                 <view class="spinner-loader"></view>
+                 <view class="scan-loader"><view class="wave"></view><view class="wave delay"></view></view>
                  <text>搜索设备中...</text>
               </view>
 
               <!-- C. 【修改】正在连接 (白色字 + 白色圈) -->
               <view class="capsule-content connecting-ui" wx:if="{{isConnecting}}">
-                 <view class="spinner-loader white"></view>
+                 <!-- 使用通用的 scan-loader 即可，默认就是白色的 -->
+                 <view class="scan-loader"><view class="wave"></view><view class="wave delay"></view></view>
                  <text style="color:#FFFFFF">正在连接设备...</text>
               </view>
 
@@ -344,6 +345,17 @@
 
            <!-- 底部控制 -->
            <view class="card-controls">
+              <!-- 折叠角度小提示条（所有机型共用）：每次进入折叠页面都会出现一次 -->
+              <view class="fold-inline-hint" 
+                    wx:if="{{detailMode === 'edit' && editType === 'fold'}}">
+                 <view class="fold-inline-box {{showFoldInlineHint ? 'show' : 'hide'}}"
+                       style="transform: translateY({{foldHintOffset}}px);">
+                   <text class="fold-inline-text">上滑「调整」，下方是重置角度</text>
+                   <!-- 顶部静态提示箭头，指向下面的“调整” -->
+                   <text class="fold-inline-arrow">↓</text>
+                 </view>
+              </view>
+
               <!-- 还原为按钮组 -->
               <view class="split-btn-group" style="padding: 10rpx;">
                  <view class="split-item" bindtap="handleAdjust" data-action="left" data-mode="fold">
@@ -359,7 +371,7 @@
                       <text class="btn-text">归零</text>
                     </view>
                     <!-- 顶层：调整按钮（可向上滑动） -->
-                    <view class="adjust-slider-btn {{adjustSlideActive ? 'active' : ''}}"
+                    <view class="adjust-slider-btn {{adjustSlideActive ? 'active' : ''}} {{isAdjustDemo ? 'demo' : ''}} {{adjustSnap ? 'snap' : ''}}"
                           style="transform: translateY({{adjustSlideOffset}}px);"
                           bindtouchstart="onAdjustSlideStart"
                           bindtouchmove="onAdjustSlideMove"
