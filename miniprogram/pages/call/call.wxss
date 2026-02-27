@@ -16,7 +16,7 @@ page {
 .back-icon {
   position: absolute;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
+  top: calc(env(safe-area-inset-top, 0px) + 20rpx); /* 🔴 减少顶部间距 */
   width: 70rpx;
   height: 70rpx;
   display: flex;

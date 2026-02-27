@@ -773,7 +773,8 @@
 
   <!-- 5. 绑定模态框 -->
   <view class="modal {{showModal ? 'show' : ''}}" catchtouchmove="noop">
-    <view class="modal-content" catchtouchmove="noop">
+    <!-- 当蓝牙连接成功时，加上 connected 类，触发整张卡片的二次上滑动画 -->
+    <view class="modal-content {{bluetoothReady ? 'connected' : ''}}" catchtouchmove="noop">
       
       <!-- 1. 文案修改：绑定设备 -->
       <view class="modal-header">
@@ -811,7 +812,8 @@
         </view>
 
         <!-- === 4. Tab 切换 (逻辑修改：连上蓝牙后才显示！) === -->
-        <view class="type-tabs" wx:if="{{bluetoothReady && !isDeviceLocked}}">
+        <!-- 🔴 强制显示：只要 bluetoothReady 为 true 就显示 -->
+        <view class="type-tabs" wx:if="{{bluetoothReady}}">
           <view class="tab-item {{bindType == 'new' ? 'active' : ''}}" bindtap="changeBindType" data-type="new">全新设备</view>
           <view class="tab-item {{bindType == 'used' ? 'active' : ''}}" bindtap="changeBindType" data-type="used">二手/旧设备</view>
         </view>
@@ -824,8 +826,9 @@
           <text class="locked-desc">{{lockedReason}}</text>
         </view>
 
-        <!-- === 6. 正常填表区域 (连上且没锁才显示) === -->
-        <view class="bind-form-area" wx:if="{{bluetoothReady && !isDeviceLocked}}">
+        <!-- === 6. 正常填表区域 (强制显示：只要 bluetoothReady 为 true 就显示) === -->
+        <!-- 🔴 强制显示表格，只要蓝牙连接成功就显示，不允许消失 -->
+        <view class="bind-form-area" wx:if="{{bluetoothReady}}">
           
           <view class="form-item">
             <text class="form-label">选择产品型号</text>
@@ -838,12 +841,20 @@
             <text class="form-label">{{bindType == 'new' ? '订单截图' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
             <view class="upload-group">
               <view class="upload-box" bindtap="chooseProofImage" data-type="receipt">
-                <image wx:if="{{imgReceipt}}" src="{{imgReceipt}}" mode="aspectFill" class="uploaded-img" />
-                <block wx:else><text class="plus-icon">+</text><text>购买截图</text></block>
+                <!-- 背景占位：始终显示 + 和文案，图片会覆盖在上面 -->
+                <view class="upload-placeholder-center">
+                  <text class="plus-icon">+</text>
+                  <text>购买截图</text>
+                </view>
+                <!-- 🔴 使用本地预览路径，让用户上传后立马看到缩略图 -->
+                <image wx:if="{{previewImgReceipt}}" src="{{previewImgReceipt}}" mode="aspectFill" class="uploaded-img" />
               </view>
               <view class="upload-box" wx:if="{{bindType == 'used'}}" bindtap="chooseProofImage" data-type="chat">
-                <image wx:if="{{imgChat}}" src="{{imgChat}}" mode="aspectFill" class="uploaded-img" />
-                <block wx:else><text class="plus-icon">+</text><text>聊天记录</text></block>
+                <view class="upload-placeholder-center">
+                  <text class="plus-icon">+</text>
+                  <text>聊天记录</text>
+                </view>
+                <image wx:if="{{previewImgChat}}" src="{{previewImgChat}}" mode="aspectFill" class="uploaded-img" />
               </view>
             </view>
           </view>
@@ -860,7 +871,8 @@
       </scroll-view>
 
       <!-- 底部提交按钮 -->
-      <view class="modal-footer" wx:if="{{bluetoothReady && !isDeviceLocked}}">
+      <!-- 🔴 强制显示：只要 bluetoothReady 为 true 就显示提交按钮 -->
+      <view class="modal-footer" wx:if="{{bluetoothReady}}">
         <button class="submit-btn" bindtap="submitAudit">提交上传审核</button>
       </view>
 

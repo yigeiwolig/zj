@@ -141,11 +141,13 @@
         <view class="section-label">故障描述</view>
         <textarea class="input-area" placeholder="请详细描述故障现象..." style="height: 100px;" value="{{repairDescription}}" bindinput="handleRepairInput"></textarea>
         <view class="upload-box" bindtap="chooseVideo">
-          <!-- 已选择视频：显示封面 + 删除按钮 + 点击预览 -->
+          <!-- 已选择视频：显示视频播放器（自动显示第一帧作为封面） -->
           <view wx:if="{{tempVideoPath}}" class="upload-selected" catchtap="openVideoPreview">
             <view class="upload-preview-container">
-              <image wx:if="{{tempVideoThumb}}" src="{{tempVideoThumb}}" mode="aspectFill" class="upload-preview-img"></image>
-              <view wx:else class="upload-preview-fallback">已选择视频</view>
+              <!-- 如果有提取的封面图，显示图片 -->
+              <image wx:if="{{tempVideoThumb && tempVideoThumb !== 'AUTO_GENERATE'}}" src="{{tempVideoThumb}}" mode="aspectFill" class="upload-preview-img"></image>
+              <!-- 否则显示 video 组件（会自动显示第一帧） -->
+              <video wx:else src="{{tempVideoPath}}" class="upload-preview-video" show-center-play-btn="{{false}}" enable-play-gesture="{{false}}" controls="{{false}}"></video>
               <view class="upload-play-icon">▶</view>
               <view class="upload-remove" catchtap="removeRepairVideo">✕</view>
             </view>
@@ -328,13 +330,52 @@
             <view class="repair-label">故障描述</view>
             <view class="repair-desc-text">{{repairDescription || '未填写'}}</view>
           </view>
+
+          <!-- 新增：故障设备选择 -->
+          <view class="repair-device-section">
+            <view class="repair-label">
+              故障设备
+              <text class="required-star">*</text>
+            </view>
+            <!-- 有设备列表时，显示 iOS 风格选择框 -->
+            <picker 
+              wx:if="{{myDevices && myDevices.length > 0}}" 
+              mode="selector" 
+              range="{{myDevices}}" 
+              range-key="displaySn" 
+              value="{{selectedDeviceIndex !== null ? selectedDeviceIndex : 0}}" 
+              bindchange="onDeviceChange"
+              style="width: 100%;"
+            >
+              <view class="ios-select">
+                <!-- 未选择时：显示红色提示文字（居中） -->
+                <block wx:if="{{selectedDeviceIndex === null}}">
+                  <text class="ios-select-text ios-select-text-warn ios-select-text-center">
+                    请选择故障设备
+                  </text>
+                </block>
+                <!-- 已选择时：左边显示 SN，右边显示型号 -->
+                <block wx:else>
+                  <text class="ios-select-sn">{{myDevices[selectedDeviceIndex].displaySn}}</text>
+                  <text class="ios-select-model">{{myDevices[selectedDeviceIndex].productModel || '未知型号'}}</text>
+                </block>
+                <text class="ios-select-arrow">⌵</text>
+              </view>
+            </picker>
+            <!-- 没有设备列表时的提示（与 case 页风格一致） -->
+            <view wx:else class="ios-select repair-no-device">
+              未找到已绑定设备
+            </view>
+          </view>
           <view class="repair-video-section" wx:if="{{tempVideoPath}}">
             <view class="repair-label">故障视频</view>
-            <view wx:if="{{tempVideoThumb}}" class="repair-video-wrapper">
-              <image src="{{tempVideoThumb}}" mode="aspectFill" class="repair-video-thumb"></image>
+            <view class="repair-video-wrapper">
+              <!-- 如果有提取的封面图，显示图片 -->
+              <image wx:if="{{tempVideoThumb && tempVideoThumb !== 'AUTO_GENERATE'}}" src="{{tempVideoThumb}}" mode="aspectFill" class="repair-video-thumb"></image>
+              <!-- 否则显示 video 组件（会自动显示第一帧） -->
+              <video wx:else src="{{tempVideoPath}}" id="repairVideoDisplay" class="repair-preview-video" show-center-play-btn="{{false}}" enable-play-gesture="{{false}}" controls="{{false}}"></video>
               <view class="repair-play-overlay">▶</view>
             </view>
-            <video wx:else src="{{tempVideoPath}}" id="repairVideoPreview" class="repair-preview-video" controls></video>
           </view>
           <view class="repair-video-section" wx:else>
             <view class="repair-label">故障视频</view>
@@ -481,9 +522,15 @@
       <block wx:if="{{modalMode === 'video'}}">
         <view class="input-label">视频文件</view>
         <view wx:if="{{tempVideoThumb || tempVideoPath}}" class="upload-preview" bindtap="adminChooseVideo">
-          <block wx:if="{{tempVideoThumb}}">
+          <!-- 如果有提取的封面图，显示图片 -->
+          <block wx:if="{{tempVideoThumb && tempVideoThumb !== 'AUTO_GENERATE'}}">
             <image src="{{tempVideoThumb}}" mode="aspectFill" class="preview-img"></image>
           </block>
+          <!-- 如果有视频路径但没有封面，显示 video 组件（会自动显示第一帧） -->
+          <block wx:elif="{{tempVideoPath}}">
+            <video src="{{tempVideoPath}}" class="preview-video" show-center-play-btn="{{false}}" enable-play-gesture="{{false}}" controls="{{false}}"></video>
+          </block>
+          <!-- 降级方案：显示文字占位 -->
           <block wx:else>
             <view class="preview-placeholder">已选择视频</view>
           </block>
@@ -541,25 +588,7 @@
     </view>
   </view>
 
-  <!-- 隐藏视频组件 (提取封面用 - 管理员上传教程) -->
-  <video 
-    wx:if="{{tempVideoPath && !tempVideoThumb && extractingThumb && modalMode === 'video'}}"
-    id="thumbVideo"
-    src="{{tempVideoPath}}"
-    style="position: fixed; top: -9999px; left: -9999px; width: 400px; height: 300px; opacity: 0;"
-    bindloadedmetadata="onVideoMetadataLoaded"
-    bindtimeupdate="onVideoTimeUpdate"
-  ></video>
-
-  <!-- 隐藏视频组件 (提取封面用 - 故障报修) -->
-  <video 
-    wx:if="{{tempVideoPath && !tempVideoThumb && extractingThumb && serviceType === 'repair'}}"
-    id="repairVideoPreview"
-    src="{{tempVideoPath}}"
-    style="position: fixed; top: -9999px; left: -9999px; width: 400px; height: 300px; opacity: 0;"
-    bindloadedmetadata="onVideoMetadataLoaded"
-    bindtimeupdate="onVideoTimeUpdate"
-  ></video>
+  <!-- 🔴 不再需要隐藏的 video 和 canvas 组件，因为我们直接使用 video 组件显示第一帧 -->
 
   <!-- 自定义加载动画 -->
   <view class="loading-mask" wx:if="{{showLoadingAnimation}}">

@@ -121,7 +121,7 @@
 .back-icon {
   position: absolute;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
+  top: calc(env(safe-area-inset-top, 0px) + 20rpx); /* 🔴 减少顶部间距 */
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -1375,6 +1375,20 @@
 }
 .modal.show .modal-content { transform: translateY(0); }
 
+/* 蓝牙连接成功后，让整张卡片再走一次“从底部上来”的动画，更有过程感 */
+@keyframes modalCardSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.modal.show .modal-content.connected {
+  animation: modalCardSlideUp 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
 .modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
 .close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
 
@@ -1455,11 +1469,37 @@
   position: relative;
   overflow: hidden;
 }
-.plus-icon { font-size: 40rpx; margin-bottom: 10rpx; color: #CCC; }
-.uploaded-img { width: 100%; height: 100%; border-radius: 20rpx; }
+
+/* 中心占位内容（+号和文字） */
+.upload-placeholder-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.plus-icon { 
+  font-size: 72rpx;  /* 放大加号，居中更明显 */
+  margin-bottom: 12rpx; 
+  color: #B5B5B5; 
+  font-weight: 600;
+}
+/* 🔴 关键修复：图片要绝对定位到盒子里，填满 padding 区域，否则高度为 0 看不见 */
+.uploaded-img { 
+  position: absolute; 
+  top: 0; 
+  left: 0; 
+  width: 100%; 
+  height: 100%; 
+  border-radius: 20rpx; 
+}
 
 .modal-footer { padding: 20rpx 40rpx 0; flex-shrink: 0; }
 .submit-btn { width: 100%; padding: 28rpx; background: #000; color: #fff; border-radius: 100rpx; font-size: 30rpx; font-weight: 600; }
+
+/* === 填表区域上滑动画 === */
+/* 之前给表单单独做的上滑动画去掉，改为整张卡片动画 */
 
 /* === 自定义弹窗样式 === */
 .custom-dialog-mask {

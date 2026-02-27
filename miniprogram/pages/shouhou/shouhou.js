@@ -117,6 +117,10 @@ Page({
     videoFileName: '',
     repairDescription: '', // 故障描述
     
+    // 故障设备选择
+    myDevices: [],            // 当前用户已绑定的设备列表
+    selectedDeviceIndex: null, // 选中的故障设备索引（null 表示未选）
+    
     // [新增] 订单信息（统一格式）
     orderInfo: { name: '', phone: '', address: '' },
 
@@ -3006,54 +3010,28 @@ Page({
     }); 
   },
 
-  // [新增] 提取故障报修视频封面
+  // [新增] 提取故障报修视频封面（使用 poster 属性自动生成）
   captureRepairVideoFrame() {
-    const videoContext = wx.createVideoContext('repairVideoPreview', this);
+    console.log('🎬 开始提取视频封面');
     
-    // 🔴 检查 snapshot 方法是否存在
-    if (!videoContext || typeof videoContext.snapshot !== 'function') {
-      console.warn('[captureRepairVideoFrame] snapshot 方法不可用，跳过封面提取');
-      this.setData({
-        extractingThumb: false
-      });
+    const videoPath = this.data.tempVideoPath;
+    if (!videoPath) {
+      console.warn('视频路径为空，无法提取封面');
+      this.setData({ extractingThumb: false });
       getApp().hideDialog();
       return;
     }
+
+    // 🔴 关键方案：使用 video 组件的 poster 属性
+    // 微信会自动从视频中提取第一帧作为 poster
+    // 我们只需要设置一个特殊标记，让 WXML 渲染带 poster 的 video
+    this.setData({
+      tempVideoThumb: 'AUTO_GENERATE', // 特殊标记：让 WXML 知道要自动生成封面
+      extractingThumb: false
+    });
     
-    // 先定位到第一帧
-    videoContext.seek(0);
-    
-    // 等待定位完成后再截图
-    setTimeout(() => {
-      try {
-        videoContext.snapshot({
-          success: (res) => {
-            // 截图成功，保存封面路径
-            this.setData({
-              tempVideoThumb: res.tempImagePath,
-              extractingThumb: false
-            });
-            // 关闭提示弹窗
-            getApp().hideDialog();
-          },
-          fail: (err) => {
-            // 截图失败，使用占位提示
-            console.error('截图失败:', err);
-            this.setData({
-              extractingThumb: false
-            });
-            getApp().hideDialog();
-            // 封面失败也不弹原生提示
-          }
-        });
-      } catch (error) {
-        console.error('[captureRepairVideoFrame] snapshot 调用异常:', error);
-        this.setData({
-          extractingThumb: false
-        });
-        getApp().hideDialog();
-      }
-    }, 500);
+    getApp().hideDialog();
+    console.log('✅ 已设置自动封面模式');
   },
 
   // ========================================================
@@ -3991,6 +3969,8 @@ Page({
       return;
     }
     
+    // 打开订单弹窗前，加载当前用户的设备列表（用于选择故障设备）
+    this.loadRepairDevices();
     // 打开订单弹窗
     this.setData({ showOrderModal: true });
   },
@@ -4042,6 +4022,13 @@ Page({
       
       if (!detailAddress || !detailAddress.trim()) {
         this.showAutoToast('提示', '请填写详细地址');
+        return;
+      }
+
+      // 如果用户有绑定设备，则要求选择具体故障设备
+      const { myDevices, selectedDeviceIndex } = this.data;
+      if (myDevices && myDevices.length > 0 && (selectedDeviceIndex === null || selectedDeviceIndex === undefined)) {
+        this.showAutoToast('提示', '请选择故障设备');
         return;
       }
       
@@ -5222,74 +5209,77 @@ Page({
   },
 
   // 视频元数据加载完成，准备截图
-  onVideoMetadataLoaded() {
-    // 等待一小段时间确保视频帧已准备好
-    setTimeout(() => {
-      // 判断是管理员上传教程还是故障报修
-      if (this.data.modalMode === 'video') {
-        this.captureVideoFrame();
-      } else if (this.data.serviceType === 'repair') {
-        this.captureRepairVideoFrame();
-      }
-    }, 300);
-  },
+  // 🔴 不再需要这些方法，因为我们直接使用 video 组件显示第一帧
 
-  // 视频时间更新（用于确保第一帧已加载）
-  onVideoTimeUpdate() {
-    // 如果当前时间接近0秒，可以尝试截图
-    // 这个事件主要用于确保视频帧已准备好
-  },
-
-  // 截取视频第一帧
+  // 截取视频第一帧（管理员上传教程视频）
   captureVideoFrame() {
-    const videoContext = wx.createVideoContext('thumbVideo', this);
+    console.log('🎬 开始提取教程视频封面');
     
-    // 🔴 检查 snapshot 方法是否存在
-    if (!videoContext || typeof videoContext.snapshot !== 'function') {
-      console.warn('[captureVideoFrame] snapshot 方法不可用，跳过封面提取');
-      this.setData({
-        extractingThumb: false
-      });
-      this.hideMyLoading();
-      this._showCustomToast('视频已选择（封面提取不可用）', 'none', 2000);
-      return;
-    }
+    // 🔴 使用 video 组件自动显示第一帧作为封面
+    this.setData({
+      tempVideoThumb: 'AUTO_GENERATE', // 特殊标记：让 WXML 知道要自动生成封面
+      extractingThumb: false
+    });
     
-    // 先定位到第一帧
-    videoContext.seek(0);
-    
-    // 等待定位完成后再截图
-    setTimeout(() => {
-      try {
-        videoContext.snapshot({
-          success: (res) => {
-            // 截图成功，保存封面路径
-            this.setData({
-              tempVideoThumb: res.tempImagePath,
-              extractingThumb: false
-            });
-            this.hideMyLoading();
-            this._showCustomToast('视频已选择', 'success');
-          },
-          fail: (err) => {
-            // 截图失败，使用占位提示
-            console.error('截图失败:', err);
-            this.setData({
-              extractingThumb: false
-            });
-            this.hideMyLoading();
-            this._showCustomToast('视频已选择（封面提取失败）', 'none', 2000);
-          }
-        });
-      } catch (error) {
-        console.error('[captureVideoFrame] snapshot 调用异常:', error);
-        this.setData({
-          extractingThumb: false
-        });
-        this.hideMyLoading();
-        this._showCustomToast('视频已选择（封面提取失败）', 'none', 2000);
+    this.hideMyLoading();
+    this._showCustomToast('视频已选择', 'success');
+    console.log('✅ 已设置自动封面模式');
+  },
+
+  // ================= 故障设备选择相关 =================
+
+  // 加载当前用户的设备列表（用于选择哪个设备故障）
+  loadRepairDevices() {
+    const db = wx.cloud.database();
+
+    wx.cloud.callFunction({ name: 'login' }).then(res => {
+      const openid = res.result && res.result.openid;
+      if (!openid) {
+        console.warn('[loadRepairDevices] 未获取到 openid');
+        return;
       }
-    }, 500);
+
+      db.collection('sn').where({
+        openid: openid,
+        isActive: true
+      }).get().then(devRes => {
+        const devices = devRes.data || [];
+        // 为每个设备添加 displaySn 字段（和 case 页保持一致）
+        const devicesWithDisplaySn = devices.map(device => ({
+          ...device,
+          displaySn: device.displaySn || ('MT' + (device.sn || '')),
+          productModel: device.productModel || device.name || '未知型号'  // 🔴 确保 productModel 有值
+        }));
+
+        const nextState = {
+          myDevices: devicesWithDisplaySn
+        };
+        // 如果只有 1 个设备，自动选中
+        if (devicesWithDisplaySn.length === 1) {
+          nextState.selectedDeviceIndex = 0;
+        }
+        this.setData(nextState);
+        console.log('[loadRepairDevices] 加载到设备列表:', devicesWithDisplaySn);
+        // 🔴 调试：打印每个设备的 productModel
+        devicesWithDisplaySn.forEach((dev, idx) => {
+          console.log(`[loadRepairDevices] 设备 ${idx}:`, {
+            displaySn: dev.displaySn,
+            productModel: dev.productModel,
+            name: dev.name
+          });
+        });
+      }).catch(err => {
+        console.error('[loadRepairDevices] 查询设备失败:', err);
+      });
+    }).catch(err => {
+      console.error('[loadRepairDevices] 调用 login 云函数失败:', err);
+    });
+  },
+
+  // 监听设备选择
+  onDeviceChange(e) {
+    const index = Number(e.detail.value);
+    this.setData({ selectedDeviceIndex: index });
   },
 
   // 联系信息折叠/展开
@@ -5337,7 +5327,8 @@ Page({
     console.log('[submitRepairTicket] ========== 开始提交维修工单 ==========');
     const { 
       currentModelName, repairDescription, videoFileName, tempVideoPath, 
-      orderInfo // 复用收货信息
+      orderInfo, // 复用收货信息
+      myDevices, selectedDeviceIndex
     } = this.data;
 
     console.log('[submitRepairTicket] 当前数据:', {
@@ -5368,6 +5359,11 @@ Page({
     if (!tempVideoPath) {
       console.warn('[submitRepairTicket] 校验失败：视频路径为空');
       this.showAutoToast('提示', '请上传故障视频');
+      return;
+    }
+    // 如果用户有绑定设备，则要求选择具体故障设备
+    if (myDevices && myDevices.length > 0 && (selectedDeviceIndex === null || selectedDeviceIndex === undefined)) {
+      this.showAutoToast('提示', '请选择故障设备');
       return;
     }
     // 🔴 修改：检查省市区和详细地址
@@ -5423,7 +5419,7 @@ Page({
         // 3. 写入数据库
         const db = wx.cloud.database();
         // 🔴 修改：组装完整地址（省市区 + 详细地址）
-        const { selectedProvince, selectedCity, selectedDistrict, detailAddress } = this.data;
+        const { selectedProvince, selectedCity, selectedDistrict, detailAddress, myDevices, selectedDeviceIndex } = this.data;
         const addressParts = [];
         if (selectedProvince) addressParts.push(selectedProvince);
         if (selectedCity) addressParts.push(selectedCity);
@@ -5436,6 +5432,21 @@ Page({
           address: finalAddress,
           shippingMethod: this.data.shippingMethod || 'zto' // 让维修工单也记录快递方式
         };
+
+        // 选中的故障设备信息（如果有的话）
+        let selectedDevice = null;
+        if (myDevices && myDevices.length > 0 && selectedDeviceIndex !== null && selectedDeviceIndex !== undefined) {
+          const idx = Number(selectedDeviceIndex);
+          if (!Number.isNaN(idx) && idx >= 0 && idx < myDevices.length) {
+            const dev = myDevices[idx];
+            selectedDevice = {
+              deviceId: dev._id,
+              sn: dev.sn,
+              displaySn: dev.displaySn || ('MT' + (dev.sn || '')),
+              productModel: dev.productModel || currentModelName
+            };
+          }
+        }
         
         console.log('[submitRepairTicket] 准备写入数据库，数据:', {
           model: currentModelName,
@@ -5469,6 +5480,7 @@ Page({
               description: repairDescription.trim(),
               videoFileID: fileID,
               contact: finalContact,
+              device: selectedDevice || null,
               status: 'PENDING',
               warrantyExpired: false,
               expiryDate: null,
@@ -5527,6 +5539,7 @@ Page({
               description: repairDescription.trim(),
               videoFileID: fileID,
               contact: finalContact,
+              device: selectedDevice || null,
               status: 'PENDING',
               warrantyExpired: warrantyInfo.warrantyExpired,
               expiryDate: warrantyInfo.expiryDate,
@@ -5609,6 +5622,7 @@ Page({
               description: repairDescription.trim(),
               videoFileID: fileID,
               contact: finalContact, // 存入联系人信息（包含完整地址）
+              device: selectedDevice || null,
               status: 'PENDING',  // 初始状态
               // 🔴 新增：质保信息
               warrantyExpired: warrantyInfo.warrantyExpired,

@@ -18,17 +18,11 @@ const iconGear = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5v
 // 蓝牙小图标 (白色)
 const iconBtSmall = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg==';
 
-// 🔴 新增：更多图标 (深色，用于权限教程)
-const iconMoreDark = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSI1IiBjeT0iMTIiIHI9IjIiIGZpbGw9IiMxQzFDMUUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSIjMUMxQzFFIi8+PGNpcmNsZSBjeD0iMTkiIGN5PSIxMiIgcj0iMiIgZmlsbD0iIzFDMUMxRSIvPjwvc3ZnPg==';
-
-// 🔴 新增：蓝牙图标 (深色，用于权限教程)
-const iconBtDark = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg==';
-
 // 重置图标 (圆形箭头)
 const iconReset = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAxMkExMiAxMiAwIDAgMSAxNSA0LjA0VjFhMSAxIDAgMCAxIDEuNzA3LS43MDdsNCA0YTEgMSAwIDAgMSAwIDEuNDE0bC00IDRhMSAxIDAgMCAxLTEuNzA3LS43MDdWOC4wNEE5IDkgMCAwIDAgMyAxMkgzWiIvPjxwYXRoIGQ9Ik0yMSAxMkE5IDkgMCAwIDAgOSA4LjA0VjExYTEgMSAwIDAgMS0xLjcwNy43MDdsLTQtNGExIDEgMCAwIDEgMC0xLjQxNGw0LTRhMSAxIDAgMCAxIDEuNzA3LjcwN1Y0LjA0QTEyIDEyIDAgMCAxIDIxIDEySDIxWiIvPjwvc3ZnPg==';
 
-// 小齿轮图标 (用于高级设置和权限教程)
-const iconGearSmall = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSI4LjUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIyIi8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMyIgZmlsbD0iIzFDMUMxRSIvPjxwYXRoIGQ9Ik0xMiA0VjJNMTIgMjJWMjBNMjAgMTJIMjJNMiAxMkg0TTE4LjY2IDUuMzRMMTkuNzggNC4yMk0xOS43OCAxOS43OEwxOC42NiAxOC42Nk00LjIyIDE5Ljc4TDUuMzQgMTguNjZNNS4zNCA1LjM0TDQuMjIgNC4yMiIgc3Ryb2tlPSIjMUMxQzFFIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjwvc3ZnPg==';
+// 小齿轮图标 (用于高级设置)
+const iconGearSmall = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyLjUiLz48cGF0aCBkPSJNMTIuNzUgNS41YTEuNzUgMS43NSAwIDAgMSAxLjUgMHYxLjVhMS43NSAxLjc1IDAgMCAxLTEuNSAwdi0xLjVaIi8+PHBhdGggZD0iTTE4LjUgMTJhMS43NSAxLjc1IDAgMCAxLTEuNSAxLjV2MS41YTEuNzUgMS43NSAwIDAgMSAxLjUgMHYtMS41WiIvPjxwYXRoIGQ9Ik0xMS4yNSAxOC41YTEuNzUgMS43NSAwIDAgMSAxLjUgMHYxLjVhMS43NSAxLjc1IDAgMCAxLTEuNSAwdi0xLjVaIi8+PHBhdGggZD0iTTUuNSAxMmExLjc1IDEuNzUgMCAwIDEgMS41LTEuNVY5YTEuNzUgMS43NSAwIDAgMS0xLjUgMHYxLjVaIi8+PHBhdGggZD0iTTEyLjc1IDE4LjVhMS43NSAxLjc1IDAgMCAxIDEuNSAwdjEuNWExLjc1IDEuNzUgMCAwIDEtMS41IDB2LTEuNVoiLz48cGF0aCBkPSJNNS41IDEyYTEuNzUgMS43NSAwIDAgMSAxLjUgMS41VjE1YTEuNzUgMS43NSAwIDAgMS0xLjUgMHYtMS41WiIvPjxwYXRoIGQ9Ik0xOC41IDEyYTEuNzUgMS43NSAwIDAgMS0xLjUtMS41VjlhMS43NSAxLjc1IDAgMCAxIDEuNSAwdjEuNVoiLz48L3N2Zz4=';
 
 // 连接图标 (主页大胶囊用)
 const iconConnect = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTUgN0gxN0MyMC4zMTM3IDcgMjMgOS42ODYyOSAyMyAxM0MyMyAxNi4zMTM3IDIwLjMxMzcgMTkgMTcgMTlIMTVNOCAxN0g2QzIuNjg2MjkgMTcgMCAxNC4zMTM3IDAgMTNDMCA5LjY4NjI5IDIuNjg2MjkgNyA2IDdIOE04IDEzSDE2IiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=';
@@ -373,10 +367,6 @@ Page({
     showBluetoothAlert: false,
     bluetoothAlertClosing: false, // 蓝牙提示弹窗退出动画中
     
-    // 🔴 新增：蓝牙权限教程弹窗
-    showPermissionModal: false,
-    permissionModalClosing: false, // 权限弹窗退出动画中
-    
     // 新增：自动校准中弹窗
     showCalibratingModal: false,
     calibratingModalClosing: false, // 校准弹窗退出动画中
@@ -392,9 +382,6 @@ Page({
     
     // 🔴 新增：OTA提示
     showOtaTip: false,
-    
-    // 🔴 新增：连接成功提示
-    showConnectSuccessTip: false,
     
     // 新增：连接状态
     isConnecting: false,      // 正在连接中
@@ -424,6 +411,8 @@ Page({
     
     // === 折叠页引导状态 ===
     isLightOn: true,          // 折叠页指示灯状态（true=红，false=黑）
+    showFoldInlineHint: false, // 🔴 折叠页上滑提示显示状态
+    foldHintOffset: 0,         // 🔴 折叠页提示偏移量（用于动画）
     
     // === 打开角度页引导状态 ===
     openAngleTutorialTimer: null,
@@ -454,10 +443,8 @@ Page({
     adjustTouchStartY: 0,        // 触摸开始时的 Y 坐标
     adjustHasMoved: false,       // 是否发生了滑动（用于区分点击和滑动）
     adjustSnap: false,           // 手动模式：松手后回弹/贴合时，给一个顺滑过渡动画
-    showFoldInlineHint: false,   // F2 MAX 折叠角度页顶部的小提示条
-    foldDemoPlaying: false,      // 是否正在播放“自动上滑调整”演示（播放时禁用手动滑动）
-    foldHintOffset: 0,           // 提示条跟随调整按钮一起上滑的偏移量
-    isAdjustDemo: false,         // 调整按钮当前是否处在“演示动画”模式（有过渡），手动滑动时为 false
+    foldDemoPlaying: false,      // 是否正在播放"自动上滑调整"演示（播放时禁用手动滑动）
+    isAdjustDemo: false,         // 调整按钮当前是否处在"演示动画"模式（有过渡），手动滑动时为 false
 
     angleBtnText: '160°', // 角度按钮文本（F1显示180°，F2显示160°）
 
@@ -494,9 +481,7 @@ Page({
       gearSmall: iconGearSmall,
       ghostOpen: iconGhostOpen,
       ghostClose: iconGhostClose,
-      btSmall: iconBtSmall,
-      moreDark: iconMoreDark, // 🔴 权限教程弹窗使用
-      btDark: iconBtDark // 🔴 权限教程弹窗使用（第三步）
+      btSmall: iconBtSmall
     },
     
     // 滑块状态 (默认 mid)
@@ -507,9 +492,25 @@ Page({
       shutdown: 'mid'
     },
     
+    // === 指示灯确认弹窗（调整按钮用）===
+    showIndicatorCheckModal: false,      // 是否显示指示灯检查弹窗
+    indicatorCheckModalClosing: false,   // 弹窗关闭动画状态
+    pendingSendData: null,               // 待发送的数据 { sendText, type }
+    hasShownSettingsIndicatorModal: false, // 🔴 标记是否已经显示过高级设置的指示灯弹窗（每次打开高级设置重置）
+    
     // === 隐蔽模式相关 ===
     showStealthTutorial: false, // 是否显示隐蔽模式教学
     stealthTutorialMode: 'enter', // 教学模式：'enter'=进入, 'exit'=退出
+    
+    // === 出厂设置相关 ===
+    showFactoryResetModal: false, // 是否显示出厂设置弹窗
+    factoryResetStep: 0, // 当前步骤：0=打开收回, 1=开启自检, 2=开机上翻, 3=自动调平
+    factoryResetSteps: [
+      { text: '正在打开自动收回', data: '打开收回' },
+      { text: '正在开启自检', data: '开启自检' },
+      { text: '正在打开开机牌上翻', data: '开机上翻' },
+      { text: '正在自动调平，请用手进行阻挡', data: '自动调平', isLeveling: true }
+    ],
     stealthAnimPressing: false, // 按钮是否按下
     stealthAnimLight: false,    // 灯光状态（用于闪烁）
     stealthAnimText: '请在车把上\n长按按键 3 秒', // 提示文字
@@ -579,20 +580,18 @@ Page({
         isConnecting: false,
         connectedDeviceName: finalName // 设置格式化后的名称
       });
-      
-      // 🔴 显示连接成功提示
-      this.setData({ showConnectSuccessTip: true });
-      setTimeout(() => {
-        this.setData({ showConnectSuccessTip: false });
-      }, 2000); // 2秒后自动隐藏
     };
     this.ble.onError = (err) => {
       this.setData({ isScanning: false });
       
-      // 🔴 处理蓝牙权限错误，显示权限教程弹窗
+      // 🔴 处理蓝牙权限错误，使用自定义弹窗
       if (err && err.type === 'auth_deny') {
-        this.setData({ showPermissionModal: true });
-        return;
+        this._showCustomModal({
+          title: err.message || '蓝牙权限被拒绝',
+          content: err.detail || '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。',
+          showCancel: false,
+          confirmText: '知道了'
+        });
       }
       // 可以在这里做必要的错误上报或静默处理
     };
@@ -657,40 +656,47 @@ Page({
       app.startQiangliCheck();
     }
     
-    // 🔴 修复：从OTA页面返回后，重置蓝牙状态，避免连接无响应
-    // 说明：当用户从OTA页面返回scan页面时，蓝牙可能处于异常状态（比如OTA过程中蓝牙被关闭或断开）
-    // 这个逻辑会检测是否从OTA页面返回，如果是，则重置所有蓝牙相关状态，并重新初始化蓝牙适配器
-    // 这样可以避免页面显示"已连接"但实际蓝牙已断开的问题
-    const pages = getCurrentPages();
-    const prevPage = pages[pages.length - 2];
-    if (prevPage && prevPage.route && prevPage.route.includes('ota/ota')) {
-      // 从OTA页面返回，重置所有蓝牙相关状态
-      console.log('🔄 [onShow] 从OTA页面返回，重置蓝牙状态');
+    // 🔴 修复：从 OTA 页面返回后，关闭不应该显示的弹窗并恢复页面状态
+    // 防止弹窗或遮罩层导致点击失效
+    // 注意：不关闭用户主动打开的弹窗（如高级设置弹窗 showSettingsModal）
       this.setData({
-        isConnected: false,
-        isConnecting: false,
-        isScanning: false,
-        isNavigatingToOta: false,
-        connectedDeviceName: '',
-        showConnectSuccessTip: false,
-        showOtaTip: false,
-        showApproachTip: false,
+      showPasswordModal: false,
+      showTutorialModal: false,
+      showKeyModal: false,
         showDisconnectTip: false,
-        showConnectBluetoothTip: false
-      });
-      
-      // 重新初始化蓝牙适配器（如果之前被关闭了）
-      if (this.ble) {
-        // 先断开可能残留的连接
-        this.ble.disconnect();
-        // 延迟一下再重新初始化，确保状态清理干净
-        setTimeout(() => {
-          this.ble.initBluetoothAdapter().catch(err => {
-            console.log('⚠️ [onShow] 蓝牙适配器初始化失败（可能未开启）:', err);
-          });
-        }, 300);
-      }
+      showApproachTip: false,
+      showCalibratingModal: false,
+      showConnectBluetoothTip: false,
+      showOtaTip: false,
+      // showSettingsModal: false, // 🔴 不移除：用户主动打开的弹窗，不应该被关闭
+      showIndicatorCheckModal: false,
+      showStealthTutorial: false,
+      showFactoryResetModal: false,
+      showAngleHint: false,
+      showNewProductHint: false,
+      showBluetoothAlert: false,
+      // 重置弹窗关闭动画状态
+      passwordModalClosing: false,
+      tutorialModalClosing: false,
+      keyModalClosing: false,
+      indicatorCheckModalClosing: false,
+      calibratingModalClosing: false,
+      bluetoothAlertClosing: false
+    });
+    
+    // 确保页面处于正常状态（不是编辑模式，除非用户正在编辑）
+    // 如果当前在编辑模式，保持编辑模式；否则确保是主模式
+    if (this.data.detailMode === 'edit' && !this.data.currentModel) {
+      // 如果编辑模式但没有当前模型，可能是状态异常，重置为主模式
+      this.setData({ detailMode: 'main' });
     }
+    
+    // 🔴 如果高级设置弹窗是打开的，重新显示提示 Toast
+    if (this.data.showSettingsModal) {
+      this.showToast();
+    }
+    
+    console.log('✅ [onShow] 页面状态已恢复，所有弹窗已关闭');
   },
 
   onHide() {
@@ -769,6 +775,195 @@ Page({
       stealthAnimTextScale: 1,
       stealthTutorialBtnDisabled: true
     });
+  },
+
+  // ===============================================
+  // 🔴 出厂设置功能（F1 MAX / F2 PRO / F2 PRO Long / F2 MAX 系列）
+  // ===============================================
+  handleFactoryReset() {
+    console.log('🔧 [管理员] 点击出厂设置按钮');
+    
+    // 检查是否为管理员
+    if (!this.data.isAdmin) {
+      this._showCustomToast('需要管理员权限', 'none', 2000);
+      return;
+    }
+    
+    // 检查是否为支持出厂设置的机型
+    const currentModel = this.data.currentModel || {};
+    const name = currentModel.name || '';
+    const type = currentModel.type || '';
+
+    const isF2MaxSeries = name.includes('F2') && (type === 'Max' || type === 'Max Long');
+    const isF2ProSeries = name.includes('F2') && (type === 'Pro' || type === 'Pro Long');
+    const isF1Max = name.includes('F1') && type === 'Max';
+    const isF1Pro = name.includes('F1') && type === 'Pro';
+    const isSupported = isF2MaxSeries || isF2ProSeries || isF1Max || isF1Pro;
+    
+    if (!isSupported) {
+      this._showCustomToast('仅支持 F1 MAX / F2 PRO / F2 PRO Long / F2 MAX 系列', 'none', 2000);
+      return;
+    }
+    
+    // 震动反馈
+    wx.vibrateShort({ type: 'light' });
+    
+    // 开始出厂设置流程
+    this.startFactoryReset();
+  },
+
+  // 开始出厂设置流程
+  startFactoryReset() {
+    const currentModel = this.data.currentModel || {};
+    const name = currentModel.name || '';
+    const type = currentModel.type || '';
+
+    const isF2MaxSeries = name.includes('F2') && (type === 'Max' || type === 'Max Long');
+    const isF2ProSeries = name.includes('F2') && (type === 'Pro' || type === 'Pro Long');
+    const isF1Max = name.includes('F1') && type === 'Max';
+    const isF1Pro = name.includes('F1') && type === 'Pro';
+
+    let steps = [];
+
+    if (isF2MaxSeries) {
+      // F2 MAX 系列：原来的四步流程（最后一步带自动调平动画 + 确认键）
+      // 全程自动播放，用户只在最后一步点击确认结束
+      steps = [
+        { text: '正在打开自动收回', data: '打开收回', sendTimes: 2, interval: 500, delayNext: 2000 },
+        { text: '正在开启自检', data: '开启自检', sendTimes: 2, interval: 500, delayNext: 2000 },
+        { text: '正在打开开机牌上翻', data: '开机上翻', sendTimes: 2, interval: 500, delayNext: 2000 },
+        { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true, isFinal: true }
+      ];
+    } else if (isF1Max || isF2ProSeries) {
+      // F1 MAX / F2 PRO / F2 PRO Long：
+      // 文案拆成多句，每句单独显示 3 秒，
+      // 第一步发送“初始化角度”，并且需要用户点击“确认”后才进入下一步
+      steps = [
+        { 
+          text: '初始化角度中',
+          data: '初始化角度',
+          sendTimes: 2,
+          interval: 500,
+          delayNext: 0,          // 🔴 不自动跳到下一步，等待用户点击确认
+          showConfirm: true      // 初始化角度阶段也需要确认键
+        },
+        { 
+          text: '请长按按钮3秒',
+          data: null,
+          sendTimes: 0,
+          interval: 0,
+          delayNext: 3000
+        },
+        { 
+          text: '断开细红线',
+          data: null,
+          sendTimes: 0,
+          interval: 0,
+          delayNext: 3000
+        },
+        { 
+          text: '请观察主板是不是还继续亮灯',
+          data: null,
+          sendTimes: 0,
+          interval: 0,
+          delayNext: 0,
+          isFinal: true
+        }
+      ];
+    } else if (isF1Pro) {
+      // F1 PRO：只发送一次“初始化角度”，并立即显示带确认键
+      steps = [
+        {
+          text: '初始化角度中',
+          data: '初始化角度',
+          sendTimes: 2,
+          interval: 500,
+          delayNext: 0,
+          isFinal: true
+        }
+      ];
+    } else {
+      // 兜底：使用默认步骤（不太可能走到这里）
+      steps = this.data.factoryResetSteps || [];
+    }
+
+    // 重置步骤并显示弹窗
+    this.setData({
+      showFactoryResetModal: true,
+      factoryResetStep: 0,
+      factoryResetSteps: steps
+    });
+
+    // 执行所有步骤
+    this.executeFactoryResetStep(0);
+  },
+
+  // 执行出厂设置步骤
+  executeFactoryResetStep(stepIndex) {
+    const steps = this.data.factoryResetSteps || [];
+    if (stepIndex >= steps.length) {
+      // 所有步骤完成，保持弹窗显示，等待用户点击确认
+      console.log('✅ [出厂设置] 所有步骤完成');
+      return;
+    }
+
+    const step = steps[stepIndex] || {};
+    
+    // 更新当前步骤
+    this.setData({
+      factoryResetStep: stepIndex
+    });
+
+    this.setData({
+      factoryResetStep: stepIndex
+    });
+
+    const data = step.data;
+    const sendTimes = step.sendTimes != null ? step.sendTimes : 2;
+    const interval = step.interval != null ? step.interval : 500;
+    const delayNext = step.delayNext != null ? step.delayNext : 2000;
+
+    if (data) {
+      console.log(`📤 [出厂设置] 步骤 ${stepIndex + 1}: ${data}（连续${sendTimes}次，间隔${interval}ms）`);
+      this.sendDataMultiple(data, sendTimes, interval);
+    } else {
+      console.log(`ℹ️ [出厂设置] 步骤 ${stepIndex + 1}: 仅提示，无需发送数据`);
+    }
+
+    // 如果是 F1 MAX / F2 PRO 系列的第一步（需要确认），或标记为 isFinal 的步骤：
+    // 不自动进入下一步，等待用户点击“确认”
+    if (step.showConfirm || step.isFinal || delayNext <= 0 || stepIndex >= steps.length - 1) {
+      console.log('ℹ️ [出厂设置] 当前步骤等待用户确认或已是最后一步');
+      return;
+    }
+
+    // 其他步骤：延迟后自动执行下一步
+    setTimeout(() => {
+      this.executeFactoryResetStep(stepIndex + 1);
+    }, delayNext);
+  },
+
+  // 确认出厂设置完成
+  confirmFactoryReset() {
+    const steps = this.data.factoryResetSteps || [];
+    const currentIndex = this.data.factoryResetStep || 0;
+    const currentStep = steps[currentIndex] || {};
+
+    // 如果是最终步骤（isFinal），点击确认关闭弹窗
+    if (currentStep.isFinal || currentIndex >= steps.length - 1) {
+      this.setData({
+        showFactoryResetModal: false,
+        factoryResetStep: 0
+      });
+      console.log('✅ [出厂设置] 用户确认完成，关闭弹窗');
+      return;
+    }
+
+    // 其他带确认键的步骤（例如：初始化角度中）：
+    // 点击确认后进入下一步
+    const nextIndex = currentIndex + 1;
+    console.log(`ℹ️ [出厂设置] 用户确认步骤 ${currentIndex + 1}，进入步骤 ${nextIndex + 1}`);
+    this.executeFactoryResetStep(nextIndex);
   },
 
   // 步骤2：按钮按下
@@ -1108,8 +1303,6 @@ Page({
   // ===============================================
   onTouchStartMain(e) {
     if (e.changedTouches.length > 0) {
-      // 记录起点 & 重置节流时间戳（减少后续 setData 频率，提升流畅度）
-      this._lastMainMoveTs = Date.now();
       this.setData({ 
         touchStartX: e.changedTouches[0].clientX,
         isDraggingModel: true,
@@ -1121,14 +1314,6 @@ Page({
   // 🔴 新增：滑动过程中的跟手效果
   onTouchMoveMain(e) {
     if (!this.data.isDraggingModel) return;
-    
-    // 简单节流：避免每一帧都 setData，降低卡顿感
-    const now = Date.now();
-    const last = this._lastMainMoveTs || 0;
-    if (now - last < 16) { // ~60fps
-      return;
-    }
-    this._lastMainMoveTs = now;
     
     const touchCurrentX = e.touches[0].clientX;
     const startX = this.data.touchStartX;
@@ -1171,8 +1356,6 @@ Page({
       modelActiveScale: 1.08,
       modelSideScale: 0.86
     });
-    // 结束时清理节流时间戳
-    this._lastMainMoveTs = 0;
     
     // 判断是否切换
     if (Math.abs(diff) < threshold) {
@@ -1428,7 +1611,6 @@ Page({
     const type = this.data.pendingEditType || 'fold';
     this.setData({ tutorialModalClosing: true });
     setTimeout(() => {
-      // 关闭教程弹窗，进入对应编辑页
       this.setData({
         showTutorialModal: false,
         detailMode: 'edit',
@@ -1436,15 +1618,16 @@ Page({
         tutorialModalClosing: false
       });
 
-      // 教程结束后，根据类型进入不同逻辑
-      if (type === 'open') {
-        // 打开角度：进入新刻度模式（F1 每次都会弹教学弹窗）
-        this.initOpenMode();
-      } else if (type === 'fold') {
-        // 折叠角度：每次进入都触发一次“上滑调整”小提示 + 按钮自动演示
+      // 🔴 如果是折叠模式，启动上滑提示动画
+      if (type === 'fold') {
         this.startFoldInlineHint();
       }
     }, 420);
+
+    // 教程结束后，如果是"打开角度"，初始化新的刻度模式
+    if (type === 'open') {
+      this.initOpenMode();
+    }
   },
 
   // ===============================================
@@ -1511,7 +1694,10 @@ Page({
   // 初始化打开角度模式 (强制每次都弹窗)
   // ===============================================
   initOpenMode() {
-    const isF1 = this.data.currentModel.name.includes('F1');
+    const model = this.data.currentModel || {};
+    const isF1 = model.name && model.name.includes('F1');
+    const isF2Max = model.name && model.name.includes('F2') &&
+                    (model.type === 'Max' || model.type === 'Max Long');
     
     // F1系列上限180，F2系列上限170
     this.maxAngle = isF1 ? 180 : 170;
@@ -1535,8 +1721,8 @@ Page({
       transition: 'none' // 🔴 关键：禁用动画，防止残留的 transition 导致闪烁
     });
     
-    // 修改：F1系列【每次】进入都弹窗，去掉 !hasShownF1Guide 判断
-    if (isF1) {
+    // 修改：F1 系列 & F2 MAX 系列【每次】进入都弹出打开角度引导弹窗
+    if (isF1 || isF2Max) {
        this.setData({ showAngleHint: true });
        this.startOpenAngleTutorialLoop();
        // 🔴 启动倒计时
@@ -1772,8 +1958,8 @@ Page({
   // 3. 微调逻辑 (核心修正)
   // ===============================================
   handleAdjust(e) {
-    // 🔴 检查蓝牙连接状态
-    if (!this.data.isConnected) {
+    // 🔴 检查蓝牙连接状态（管理员除外）
+    if (!this.data.isConnected && !this.data.isAdmin) {
       this._showCustomToast('未连接蓝牙', 'none', 2000);
       return;
     }
@@ -1807,13 +1993,13 @@ Page({
       
       if (action === 'left' || action === 'fine-tune-up') {
         gap += step;
-        if (isF1OrF2 && this.data.isConnected) {
+        if (isF1OrF2 && (this.data.isConnected || this.data.isAdmin)) {
           console.log('📤 [蓝牙] 发送"调大"');
           this.sendData('调大');
         }
       } else if (action === 'right' || action === 'fine-tune-down') {
         gap -= step;
-        if (isF1OrF2 && this.data.isConnected) {
+        if (isF1OrF2 && (this.data.isConnected || this.data.isAdmin)) {
           console.log('📤 [蓝牙] 发送"调小"');
           this.sendData('调小');
         }
@@ -1827,9 +2013,17 @@ Page({
           modelName: currentModel?.name
         });
         if (isF1OrF2) {
-          if (this.data.isConnected) {
-            console.log('📤 [蓝牙] 发送"调整折叠角度"');
-            this.sendData('调整折叠角度');
+          if (this.data.isConnected || this.data.isAdmin) {
+            // 🔴 显示指示灯确认弹窗
+            this.setData({
+              showIndicatorCheckModal: true,
+              indicatorCheckModalClosing: false,
+              pendingSendData: {
+                type: 'adjust',
+                sendText: '调整折叠角度'
+              }
+            });
+            console.log('🔍 [蓝牙] 准备发送"调整折叠角度"，等待用户确认');
           } else {
             console.log('❌ [蓝牙] 未连接，无法发送"调整折叠角度"');
             this._showCustomToast('蓝牙未连接', 'none', 2000);
@@ -1846,10 +2040,11 @@ Page({
           isF2,
           isF1OrF2,
           isConnected: this.data.isConnected,
+          isAdmin: this.data.isAdmin,
           modelName: currentModel?.name
         });
         if (isF1OrF2) {
-          if (this.data.isConnected) {
+          if (this.data.isConnected || this.data.isAdmin) {
             console.log('📤 [蓝牙] 发送"初始化角度"');
             this.sendData('初始化角度');
           } else {
@@ -1860,8 +2055,8 @@ Page({
           console.log('❌ [调试] 不是 F1/F2 机型，不发送');
           this._showCustomToast('当前机型不支持', 'none', 2000);
         }
-        // 🔴 点击归零后，重置滑动状态
-        this.resetAdjustSlider();
+        // 🔴 点击归零后，重置滑动状态（带 snap 回弹动画）
+        this.resetAdjustSlider(false);
       } 
 
       if (gap < 0) gap = 0;
@@ -2122,17 +2317,6 @@ Page({
     }, 420);
   },
   
-  // 🔴 关闭权限教程弹窗（带收缩退出动画）
-  closePermissionModal() {
-    this.setData({ permissionModalClosing: true });
-    setTimeout(() => {
-      this.setData({ 
-        showPermissionModal: false,
-        permissionModalClosing: false
-      });
-    }, 420);
-  },
-  
   // 🔴 阻止背景滚动（空函数，用于 catchtouchmove）
   preventMove() {
     return false;
@@ -2165,7 +2349,11 @@ Page({
       return; // Pro 机型点击无效
     }
 
-    this.setData({ showSettingsModal: true });
+    // 🔴 重置指示灯弹窗标记，每次打开高级设置都重置
+    this.setData({ 
+      showSettingsModal: true,
+      hasShownSettingsIndicatorModal: false
+    });
     this.showToast();
   },
 
@@ -2173,6 +2361,48 @@ Page({
     this.setData({ showSettingsModal: false });
     // 关闭时清除 Toast
     this.setData({ toastClass: '' });
+  },
+
+  // 🔴 新增：确认发送数据（指示灯确认弹窗）
+  confirmSendData() {
+    if (!this.data.pendingSendData) {
+      console.warn('⚠️ [蓝牙] 没有待发送的数据');
+      return;
+    }
+
+    const { type, sendText } = this.data.pendingSendData;
+    const currentModel = this.data.currentModel;
+    const isF2Max = currentModel && 
+                    currentModel.name && currentModel.name.includes('F2') && 
+                    (currentModel.type === 'Max' || currentModel.type === 'Max Long');
+    
+    // 关闭弹窗
+    this.setData({ 
+      showIndicatorCheckModal: false,
+      indicatorCheckModalClosing: true
+    });
+
+    // 延迟一下再发送，让弹窗关闭动画完成
+    setTimeout(() => {
+      this.setData({ 
+        indicatorCheckModalClosing: false,
+        pendingSendData: null
+      });
+
+      // 发送数据
+      if (type === 'adjust') {
+        // 调整按钮：发送2次，间隔0.5秒
+        console.log(`📤 [蓝牙] 发送"${sendText}"（连续2次，间隔0.5秒）`);
+        this.sendDataMultiple(sendText, 2, 500);
+      } else if (type === 'settings') {
+        // 高级设置：发送3次，间隔0.5秒
+        const modelName = isF2Max 
+          ? (currentModel.type === 'Max Long' ? 'F2 MAX Long' : 'F2 MAX')
+          : 'F1 MAX';
+        console.log(`📤 [蓝牙] ${modelName} 发送"${sendText}"（连续3次，间隔0.5秒）`);
+        this.sendDataMultiple(sendText, 3, 500);
+      }
+    }, 300);
   },
 
   // Toast 动画控制
@@ -2222,7 +2452,7 @@ Page({
       if (key === 'faultDetect') {
         // 主动故障检测
         if (targetVal === 'left') {
-          sendText = '开机自检';
+          sendText = '开启自检';
         } else if (targetVal === 'right') {
           sendText = '关闭自检';
         }
@@ -2236,15 +2466,35 @@ Page({
       } else if (key === 'shutdown') {
         // 关机位置
         if (targetVal === 'left') {
-          sendText = '关闭收回';
+          // 🔴 收回：发送“打开收回”（与 F1 MAX 一致）
+          sendText = '打开收回';
         } else if (targetVal === 'right') {
+          // 🔴 保持：发送“关闭收回”
           sendText = '关闭收回'; // 用户要求保持也是"关闭收回"
         }
       }
       
       if (sendText) {
+        // 🔴 只有第一次点击才显示指示灯确认弹窗
+        if (!this.data.hasShownSettingsIndicatorModal) {
+          // 第一次点击：显示弹窗
+          this.setData({
+            showIndicatorCheckModal: true,
+            indicatorCheckModalClosing: false,
+            hasShownSettingsIndicatorModal: true, // 标记已显示过
+            pendingSendData: {
+              type: 'settings',
+              sendText: sendText,
+              key: key,
+              targetVal: targetVal
+            }
+          });
+          console.log(`🔍 [蓝牙] 准备发送"${sendText}"，等待用户确认`);
+        } else {
+          // 第二次及以后：直接发送
         console.log(`📤 [蓝牙] F2 MAX 发送"${sendText}"（连续3次，间隔0.5秒）`);
         this.sendDataMultiple(sendText, 3, 500);
+        }
       }
     }
     
@@ -2269,8 +2519,26 @@ Page({
       }
       
       if (sendText) {
+        // 🔴 只有第一次点击才显示指示灯确认弹窗
+        if (!this.data.hasShownSettingsIndicatorModal) {
+          // 第一次点击：显示弹窗
+          this.setData({
+            showIndicatorCheckModal: true,
+            indicatorCheckModalClosing: false,
+            hasShownSettingsIndicatorModal: true, // 标记已显示过
+            pendingSendData: {
+              type: 'settings',
+              sendText: sendText,
+              key: key,
+              targetVal: targetVal
+            }
+          });
+          console.log(`🔍 [蓝牙] 准备发送"${sendText}"，等待用户确认`);
+        } else {
+          // 第二次及以后：直接发送
         console.log(`📤 [蓝牙] F1 MAX 发送"${sendText}"（连续3次，间隔0.5秒）`);
         this.sendDataMultiple(sendText, 3, 500);
+        }
       }
     }
     
@@ -2405,73 +2673,92 @@ Page({
   },
 
   // ===============================================
+  // 🔴 折叠页上滑提示动画
+  // ===============================================
+  
+  startFoldInlineHint() {
+    // 开始播放自动演示：提示 + 调整按钮自动上滑
+    // 播放期间只锁定"调整"这个滑块，页面其它区域仍可点击
+    this.setData({
+      showFoldInlineHint: true,
+      foldDemoPlaying: true,
+      isAdjustDemo: true,        // 开启演示模式 → 有过渡动画
+      adjustSlideOffset: 0,
+      adjustSlideActive: false,
+      foldHintOffset: 0
+    });
+
+    // 1）先展示提示 2 秒（让用户有时间看文案）
+    setTimeout(() => {
+      // 2）让"调整"按钮自动上滑到锁定位置，露出下面的"归零"
+      this.setData({
+        adjustSlideOffset: -80,   // 与手动锁定高度一致，行程略短更顺畅
+        adjustSlideActive: true,
+        foldHintOffset: -50       // 提示条也一起往上提一些，让文字和箭头跟着"调整"走
+      });
+
+      // 3）再停留 3 秒，然后按钮回到底部、提示淡出、解除锁定
+      setTimeout(() => {
+        // 先让按钮带动画落回到底部
+        this.resetAdjustSlider(true);
+
+        // 同时淡出提示 & 关闭演示模式
+        this.setData({
+          showFoldInlineHint: false,
+          foldDemoPlaying: false,
+          foldHintOffset: 0
+        });
+      }, 3000);
+    }, 2000);
+  },
+
+  // ===============================================
   // 🔴 调整按钮滑动逻辑
   // ===============================================
   
   // 滑动开始
   onAdjustSlideStart(e) {
-    // 如果正在播放自动演示，禁止手动滑动
-    if (this.data.foldDemoPlaying) return;
-
     // 只在折叠模式下生效
     if (this.data.editType !== 'fold') return;
 
     this.setData({
       adjustTouchStartY: e.touches[0].clientY,
-      adjustHasMoved: false, // 标记是否发生了滑动
-      adjustSnap: false      // 开始手动拖动时，先关闭回弹动画，纯跟手
+      adjustHasMoved: false // 标记是否发生了滑动
     });
-
-    // 记录当前起始偏移，用于支持向上/向下双向拖动
-    this._adjustStartOffset = this.data.adjustSlideOffset || 0;
-    // 重置本次滑动的节流时间戳
-    this._lastAdjustMoveTs = 0;
   },
 
   // 滑动移动
   onAdjustSlideMove(e) {
-    // 如果正在播放自动演示，禁止手动滑动
-    if (this.data.foldDemoPlaying) return;
-
     // 只在折叠模式下生效
     if (this.data.editType !== 'fold') return;
 
-    const now = Date.now();
-    const last = this._lastAdjustMoveTs || 0;
-    // 简单节流：约 ~60fps，避免 setData 过于频繁导致“卡顿”感
-    if (now - last < 16) return;
-    this._lastAdjustMoveTs = now;
-
     const currentY = e.touches[0].clientY;
     const startY = this.data.adjustTouchStartY;
-    let moveY = currentY - startY;       // 手指本次相对起点的位移（向下为正）
+    let moveY = currentY - startY;
 
-    // 标记已发生滑动（阈值调小，让一上手就能顺畅跟手）
-    if (Math.abs(moveY) > 3) {
+    // 标记已发生滑动（移动超过 5px 才算滑动）
+    if (Math.abs(moveY) > 5) {
       this.setData({ adjustHasMoved: true });
     }
 
-    // 1. 基于起始偏移 + 手指位移，支持向上/向下双向拖动
-    let newOffset = (this._adjustStartOffset || 0) + moveY;
+    // 1. 只有往上滑才生效 (moveY < 0)
+    // 如果往下滑，强制归0
+    if (moveY > 0) moveY = 0;
 
-    // 2. 限制最大上滑/下滑距离 (比如 -120px ~ 0)
-    if (newOffset < -120) newOffset = -120;
-    if (newOffset > 0) newOffset = 0;
+    // 2. 限制最大上滑距离 (比如 120px)
+    if (moveY < -120) moveY = -120;
 
     // 3. 激活阈值：滑过 -60px 就显示归零
-    const isActive = newOffset < -60;
+    const isActive = moveY < -60;
 
     this.setData({
-      adjustSlideOffset: newOffset,
+      adjustSlideOffset: moveY,
       adjustSlideActive: isActive
     });
   },
 
   // 滑动结束
   onAdjustSlideEnd(e) {
-    // 如果正在播放自动演示，禁止手动滑动
-    if (this.data.foldDemoPlaying) return;
-
     // 只在折叠模式下生效
     if (this.data.editType !== 'fold') return;
     
@@ -2481,46 +2768,45 @@ Page({
     // 如果没滑动（只是点击），不处理，让点击事件触发
     if (!hasMoved) {
       this.setData({ adjustHasMoved: false });
-      this._lastAdjustMoveTs = 0;
       return;
     }
     
     // 锁定阈值：松手时，如果滑过了 -60px，就停在空中显示归零
     const lockThreshold = -60;
-    const lockPosition = -80; // 停在 -80px 的高度（行程更短，动画更利索）
-
-    // 手动模式：松手时加一个短暂的回弹动画
-    this.setData({ adjustSnap: true });
+    const lockPosition = -100; // 停在 -100px 的高度
 
     if (currentOffset < lockThreshold) {
-      // 停住，显示归零（滑到锁定高度）
+      // 停住，显示归零（带 snap 动画）
       this.setData({
+        adjustSnap: true,
         adjustSlideOffset: lockPosition,
         adjustSlideActive: true
       });
+      
+      // 动画结束后关闭 snap 类
+      setTimeout(() => {
+        this.setData({ adjustSnap: false });
+      }, 200);
     } else {
-      // 没滑到位，弹回去（归零）
+      // 没滑到位，弹回去（带 snap 动画）
       this.setData({
+        adjustSnap: true,
         adjustSlideOffset: 0,
         adjustSlideActive: false
       });
-    }
     
-    // 回弹动画结束后，移除 snap class
+      // 动画结束后关闭 snap 类
     setTimeout(() => {
       this.setData({ adjustSnap: false });
-    }, 220);
+      }, 200);
+    }
 
-    // 重置滑动标记 & 节流时间戳
+    // 重置滑动标记
     this.setData({ adjustHasMoved: false });
-    this._lastAdjustMoveTs = 0;
   },
 
   // 🔴 调整按钮点击事件（当没有滑动时触发）
   onAdjustClick(e) {
-    // 如果正在播放自动演示，禁止点击
-    if (this.data.foldDemoPlaying) return;
-
     // 只在折叠模式下生效
     if (this.data.editType !== 'fold') return;
     
@@ -2534,58 +2820,31 @@ Page({
   },
 
   // 重置滑动状态（点击归零后调用）
-  // fromDemo = true 时，表示来自自动演示：保持 demo 过渡，让按钮平滑落回去，再关掉 demo 状态
   resetAdjustSlider(fromDemo = false) {
+    if (fromDemo) {
+      // 🔴 从演示模式回落：保持 isAdjustDemo 类，让动画平滑
     this.setData({
       adjustSlideOffset: 0,
       adjustSlideActive: false
     });
 
-    if (fromDemo) {
       // 等动画结束后再关闭 demo class，避免中途卡顿
       setTimeout(() => {
         this.setData({ isAdjustDemo: false });
-      }, 480);
-    }
-  },
-
-  // ===============================================
-  // 折叠角度页：进入时的小提示条（所有支持折叠的机型通用）
-  // ===============================================
-  startFoldInlineHint() {
-    // 开始播放自动演示：提示 + 调整按钮自动上滑
-    // 播放期间只锁定“调整”这个滑块，页面其它区域仍可点击
+      }, 300);
+    } else {
+      // 🔴 从手动上滑/点击归零回落：启用 snap 类（快速回弹）
     this.setData({
-      showFoldInlineHint: true,
-      foldDemoPlaying: true,
-      isAdjustDemo: true,        // 开启演示模式 → 有过渡动画
+        adjustSnap: true,
       adjustSlideOffset: 0,
-      adjustSlideActive: false,
-      foldHintOffset: 0
+        adjustSlideActive: false
     });
 
-    // 1）先展示提示 0.8 秒
+      // 动画结束后关闭 snap 类
     setTimeout(() => {
-      // 2）让“调整”按钮自动上滑到锁定位置，露出下面的“归零”
-      this.setData({
-        adjustSlideOffset: -80,   // 与手动锁定高度一致，行程略短更顺畅
-        adjustSlideActive: true,
-        foldHintOffset: -50       // 提示条也一起往上提一些，让文字和箭头跟着“调整”走
-      });
-
-      // 3）再停留 1.5 秒，然后按钮回到底部、提示淡出、解除锁定
-      setTimeout(() => {
-        // 先让按钮带动画落回到底部
-        this.resetAdjustSlider(true);
-
-        // 同时淡出提示 & 关闭演示模式
-        this.setData({
-          showFoldInlineHint: false,
-          foldDemoPlaying: false,
-          foldHintOffset: 0
-        });
-      }, 1500);
-    }, 800);
+        this.setData({ adjustSnap: false });
+      }, 200); // snap 动画是 0.18s
+    }
   },
 
   // ===============================================

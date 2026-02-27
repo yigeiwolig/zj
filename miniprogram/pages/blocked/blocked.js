@@ -11,7 +11,11 @@ Page({
     successModalContent: '',
     
     // 【新增】控制"内容已复制"弹窗
-    showCopySuccessModal: false
+    showCopySuccessModal: false,
+    
+    // 🔴 新增：调试信息
+    debugInfo: '',
+    isAdmin: false
   },
 
   // 互斥：确保同一时间只显示一个弹窗/提示
@@ -43,9 +47,11 @@ Page({
       app.globalData.updatePageVisit('blocked');
     }
     
+    // 🔴 检查是否是管理员
+    const isAdmin = wx.getStorageSync('is_admin') === true;
     
     const type = options.type || '';
-    this.setData({ type });
+    this.setData({ type, isAdmin });
     
     // 🔴 重置跳转标志，允许后续跳转
     app.globalData._isJumpingToBlocked = false;
@@ -145,6 +151,14 @@ Page({
       const action = result.action;
 
       console.log('📡 云端指令:', action);
+      console.log('📡 完整返回结果:', JSON.stringify(result));
+      
+      // 🔴 更新调试信息（仅管理员可见）
+      if (this.data.isAdmin) {
+        this.setData({
+          debugInfo: `Action: ${action}, Msg: ${result.msg || 'N/A'}`
+        });
+      }
 
       // --- 指令 A: PASS (自动录入，直接放行) ---
       if (action === 'PASS') {
@@ -265,6 +279,28 @@ Page({
     }).catch(err => {
       console.error('云函数调用失败', err);
     });
+  },
+
+  // 🔴 新增：清除缓存并重试
+  handleClearCache() {
+    console.log('🔄 清除所有封禁相关缓存...');
+    wx.removeStorageSync('is_user_banned');
+    wx.removeStorageSync('is_screenshot_banned');
+    wx.removeStorageSync('has_permanent_auth');
+    
+    // 显示提示
+    this._closeAllPopups();
+    this.setData({
+      showCustomSuccessModal: true,
+      successModalTitle: '缓存已清除',
+      successModalContent: '正在重新检查状态...'
+    });
+    
+    setTimeout(() => {
+      this.setData({ showCustomSuccessModal: false });
+      // 立即重新检查
+      this.callCheckCloud();
+    }, 1500);
   },
 
   handleCopyWechat() {

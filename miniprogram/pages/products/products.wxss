@@ -99,7 +99,7 @@ page {
 /* 顶部导航 */
 .header {
   position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
-  padding-top: calc(env(safe-area-inset-top, 0px) + 88rpx); 
+  padding-top: calc(env(safe-area-inset-top, 0px) + 20rpx); /* 🔴 减少顶部间距 */ 
   padding-left: 40rpx; 
   padding-right: 40rpx;
   box-sizing: border-box; 
@@ -115,7 +115,7 @@ page {
 .back-icon {
   position: absolute;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
+  top: calc(env(safe-area-inset-top, 0px) + 20rpx); /* 🔴 减少顶部间距，从 88rpx 改为 20rpx */
   width: 70rpx;
   height: 70rpx;
   display: flex;

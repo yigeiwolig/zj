@@ -27,9 +27,15 @@
       联系管理员修复
     </button>
     
+    <!-- 🔴 新增：清除缓存按钮（仅管理员可见） -->
+    <button class="action-btn secondary" wx:if="{{isAdmin}}" hover-class="btn-hover" bindtap="handleClearCache" style="margin-top: 20rpx; background: #666;">
+      清除缓存并重试
+    </button>
+    
     <view class="debug-info">
       <text>Error Code: 0x000000F4_CRITICAL</text>
       <text>Session ID: {{randomSessionId}}</text>
+      <text wx:if="{{debugInfo}}">Debug: {{debugInfo}}</text>
     </view>
   </view>
 </view>

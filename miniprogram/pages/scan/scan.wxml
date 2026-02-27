@@ -25,59 +25,6 @@
   </view>
 
   <!-- ======================= -->
-  <!-- 🔴 新增：蓝牙权限教程弹窗 -->
-  <!-- ======================= -->
-  <view class="password-modal-mask {{permissionModalClosing ? 'closing' : ''}}" wx:if="{{showPermissionModal}}" catchtouchmove="noop" catchtap="noop">
-    <view class="password-box" catchtouchmove="noop" catchtap="noop">
-      <view class="pass-title">蓝牙权限未开启</view>
-      
-      <view class="permission-guide">
-         <view class="guide-title">开启蓝牙权限</view>
-         
-         <view class="guide-flow">
-            <view class="flow-item">
-               <view class="flow-number">1</view>
-               <view class="flow-content">
-                  <view class="flow-icon-box">
-                     <image class="flow-icon" src="{{icons.moreDark}}" mode="aspectFit"></image>
-                  </view>
-                  <text class="flow-text">点击右上角</text>
-               </view>
-            </view>
-            
-            <view class="flow-connector"></view>
-            
-            <view class="flow-item">
-               <view class="flow-number">2</view>
-               <view class="flow-content">
-                  <view class="flow-icon-box">
-                     <image class="flow-icon" src="{{icons.gearSmall}}" mode="aspectFit"></image>
-                  </view>
-                  <text class="flow-text">选择设置</text>
-               </view>
-            </view>
-            
-            <view class="flow-connector"></view>
-            
-            <view class="flow-item">
-               <view class="flow-number">3</view>
-               <view class="flow-content">
-                  <view class="flow-icon-box">
-                     <image class="flow-icon" src="{{icons.btDark}}" mode="aspectFit"></image>
-                  </view>
-                  <text class="flow-text">开启蓝牙</text>
-               </view>
-            </view>
-         </view>
-      </view>
-
-      <view class="pass-btns">
-         <view class="p-btn confirm full-width" bindtap="closePermissionModal">知道了</view>
-      </view>
-    </view>
-  </view>
-
-  <!-- ======================= -->
   <!-- 新增：自动校准中弹窗 -->
   <!-- ======================= -->
   <view class="password-modal-mask {{calibratingModalClosing ? 'closing' : ''}}" wx:if="{{showCalibratingModal}}" catchtouchmove="noop" catchtap="noop">
@@ -258,11 +205,6 @@
               <view class="t-icon warn">!</view>
               <text>点击上方按钮连接设备</text>
             </view>
-            <!-- 连接成功提示 -->
-            <view class="toast {{showConnectSuccessTip ? 'show' : ''}}">
-              <view class="t-icon success">✓</view>
-              <text>连接成功</text>
-            </view>
           </view>
           
           <!-- 3. 设备图 -->
@@ -322,6 +264,16 @@
                 <text class="btn-text">退出隐蔽模式</text>
               </view>
             </view>
+
+            <!-- 🔴 出厂设置按钮（只在管理员模式下显示，F1 MAX / F1 PRO / F2 PRO / F2 PRO Long / F2 MAX 系列） -->
+            <view class="single-btn-wrapper" wx:if="{{isAdmin && ((currentModel.name === 'F2' && (currentModel.type === 'Max' || currentModel.type === 'Max Long' || currentModel.type === 'Pro' || currentModel.type === 'Pro Long')) || (currentModel.name === 'F1' && (currentModel.type === 'Max' || currentModel.type === 'Pro')))}}">
+              <view class="single-btn factory-reset-btn" bindtap="handleFactoryReset">
+                <view class="btn-icon-circle mt-icon">
+                  <text class="mt-text">MT</text>
+                </view>
+                <text class="btn-text">出厂设置</text>
+              </view>
+            </view>
           </view>
 
         </view>
@@ -347,11 +299,11 @@
            <view class="card-controls">
               <!-- 折叠角度小提示条（所有机型共用）：每次进入折叠页面都会出现一次 -->
               <view class="fold-inline-hint" 
-                    wx:if="{{detailMode === 'edit' && editType === 'fold'}}">
-                 <view class="fold-inline-box {{showFoldInlineHint ? 'show' : 'hide'}}"
-                       style="transform: translateY({{foldHintOffset}}px);">
+                    wx:if="{{detailMode === 'edit' && editType === 'fold'}}"
+                    style="transform: translateY({{foldHintOffset}}rpx);">
+                 <view class="fold-inline-box {{showFoldInlineHint ? 'show' : 'hide'}}">
                    <text class="fold-inline-text">上滑「调整」，下方是重置角度</text>
-                   <!-- 顶部静态提示箭头，指向下面的“调整” -->
+                   <!-- 顶部静态提示箭头，指向下面的"调整" -->
                    <text class="fold-inline-arrow">↓</text>
                  </view>
               </view>
@@ -479,7 +431,7 @@
         </view>
 
         <!-- 6. 教学引导弹窗 -->
-        <view class="tutorial-mask" wx:if="{{showAngleHint && filters.isF1Series(currentModel.name)}}" catchtouchmove="noop" catchtap="noop">
+        <view class="tutorial-mask" wx:if="{{showAngleHint}}" catchtouchmove="noop" catchtap="noop">
           <view class="guide-modal" catchtouchmove="noop" catchtap="noop">
             <view class="guide-title" style="margin-bottom: 40rpx;">操作指引</view>
             <view class="anim-stage">
@@ -549,6 +501,28 @@
 
   </view> <!-- 结束 control-page -->
 
+  <!-- 🔴 新增：指示灯确认弹窗（调整按钮用） -->
+  <view class="password-modal-mask {{indicatorCheckModalClosing ? 'closing' : ''}}" wx:if="{{showIndicatorCheckModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
+      <!-- 指示灯动画区域（根据类型显示闪烁或常亮） -->
+      <view class="indicator-anim-wrap">
+        <view class="indicator-outer {{pendingSendData && pendingSendData.type === 'settings' ? 'blinking' : 'light-on'}}">
+          <view class="indicator-inner">
+            <text class="indicator-text">MT</text>
+          </view>
+        </view>
+      </view>
+      
+      <view class="indicator-title">请到车把位置进行观察</view>
+      <view class="indicator-desc">
+        {{pendingSendData && pendingSendData.type === 'settings' ? '点击确认后查看按钮是否闪烁' : '点击确认后查看按钮是否常亮红灯'}}
+      </view>
+      <view class="pass-btns" style="margin-top: 40rpx;">
+        <view class="p-btn confirm full-width" bindtap="confirmSendData">确认</view>
+      </view>
+    </view>
+  </view>
+
   <!-- ======================= -->
   <!-- F1PRO/MAX 第二步：全新产品 170度 滑动提示 (最终版) -->
   <!-- ======================= -->
@@ -608,6 +582,32 @@
       <view class="pass-btns">
         <view class="p-btn confirm full-width {{stealthTutorialBtnDisabled ? 'disabled' : ''}}" bindtap="closeStealthTutorial" wx:if="{{!stealthTutorialBtnDisabled}}">知道了</view>
         <view class="p-btn confirm full-width disabled" wx:else>知道了</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ======================= -->
+  <!-- 8. 出厂设置弹窗 -->
+  <!-- ======================= -->
+  <view class="password-modal-mask" wx:if="{{showFactoryResetModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
+      <view class="pass-title" style="margin-bottom: 40rpx;">出厂设置</view>
+      
+      <!-- 当前步骤文字 -->
+      <view class="factory-reset-content">
+        <text class="factory-reset-text">{{factoryResetSteps[factoryResetStep].text}}</text>
+        
+        <!-- 自动调平时的旋转动画 -->
+        <view class="leveling-animation" wx:if="{{factoryResetSteps[factoryResetStep].isLeveling}}">
+          <view class="leveling-circle">
+            <view class="leveling-inner"></view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 确认按钮：在初始化角度阶段和最后一步（isFinal）显示 -->
+      <view class="pass-btns" style="margin-top: 60rpx;" wx:if="{{factoryResetSteps[factoryResetStep].isFinal || factoryResetSteps[factoryResetStep].showConfirm}}">
+        <view class="p-btn confirm full-width" bindtap="confirmFactoryReset">确认</view>
       </view>
     </view>
   </view>
