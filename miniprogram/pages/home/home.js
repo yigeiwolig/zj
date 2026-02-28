@@ -70,6 +70,9 @@ Page({
     this._deletedIds = new Set(); // 记录已删除的ID，避免重复删除
     this._hasGeneratedTestData = false; // 标记是否已经生成过测试数据（本次会话）
     
+    // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
+    this.calcNavBarInfo();
+
     // 检查管理员权限
     this.checkAdminPrivilege();
     
@@ -677,6 +680,17 @@ Page({
     // 强制更新数据
     this.setData({ shops: list });
     return list;
+  },
+
+  // 🔴 计算导航栏信息（屏幕适配）
+  calcNavBarInfo() {
+    const menuButton = wx.getMenuButtonBoundingClientRect();
+    const windowInfo = wx.getWindowInfo(); 
+    const statusBarHeight = windowInfo.statusBarHeight;
+    const gap = menuButton.top - statusBarHeight;
+    const navBarHeight = (gap * 2) + menuButton.height;
+    this.setData({ statusBarHeight, navBarHeight });
+    console.log('[home.js] 屏幕适配信息:', { statusBarHeight, navBarHeight, gap, menuButtonHeight: menuButton.height });
   },
 
   // ================== 权限检查逻辑 ==================

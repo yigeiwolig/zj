@@ -8,6 +8,10 @@ const db = wx.cloud.database();
 
 Page({
   data: {
+    // 🔴 屏幕适配：状态栏和导航栏高度
+    statusBarHeight: 20,  // 状态栏高度（px）
+    navBarHeight: 44,     // 导航栏高度（px）
+
     // 页面状态控制
     isShowNicknameUI: false,
     isAuthorized: false,
@@ -96,6 +100,9 @@ Page({
       wx.__mt_oldHideLoading(); // 调用原始 hideLoading 确保关闭任何官方弹窗
     }
     
+    // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
+    this.calcNavBarInfo();
+
     // 1. 先检查缓存（不立即跳转，等异步检查完成）
     const hasAuth = wx.getStorageSync('has_permanent_auth');
     const savedNickname = wx.getStorageSync('user_nickname');
@@ -1279,6 +1286,17 @@ Page({
     }
   },
 
+
+  // 🔴 计算导航栏信息（屏幕适配）
+  calcNavBarInfo() {
+    const menuButton = wx.getMenuButtonBoundingClientRect();
+    const windowInfo = wx.getWindowInfo(); 
+    const statusBarHeight = windowInfo.statusBarHeight;
+    const gap = menuButton.top - statusBarHeight;
+    const navBarHeight = (gap * 2) + menuButton.height;
+    this.setData({ statusBarHeight, navBarHeight });
+    console.log('[index.js] 屏幕适配信息:', { statusBarHeight, navBarHeight, gap, menuButtonHeight: menuButton.height });
+  },
 
   // ================== 管理员权限检查 ==================
   async checkAdminPrivilege() {

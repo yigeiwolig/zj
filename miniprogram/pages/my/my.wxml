@@ -45,7 +45,7 @@
   <block wx:if="{{isAdmin}}">
     
     <!-- 1. 标题栏 + 切换按钮 -->
-    <view class="admin-header-row">
+    <view class="admin-header-row" style="padding-top: {{statusBarHeight + navBarHeight + 20}}px;">
       <view class="admin-page-title">
         待处理订单
       </view>

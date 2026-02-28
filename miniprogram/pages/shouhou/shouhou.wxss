@@ -91,7 +91,7 @@ page {
 }
 
 .nav-header {
-  padding-top: calc(env(safe-area-inset-top) + 20rpx); /* 🔴 减少顶部间距，从 88rpx 改为 20rpx */
+  /* 🔴 使用动态计算，通过内联样式设置 padding-top */
   padding-left: 40rpx;
   padding-right: 40rpx;
   padding-bottom: 0rpx; /* 去掉底部间距 */
@@ -142,7 +142,7 @@ page {
 .header-title-row {
   position: absolute;
   left: 50%;
-  top: calc(env(safe-area-inset-top) + 20rpx + 30rpx); /* 🔴 减少顶部间距，从 88rpx 改为 20rpx */
+  /* 🔴 使用动态计算，通过内联样式设置 top */
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
@@ -1592,7 +1592,8 @@ page {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 93%; /* 调整为与 shop 页面一致的高度 */
+  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
+  max-height: calc(100vh - 60px);
   background: #F5F5F7;
   border-radius: 40rpx 40rpx 0 0;
   z-index: 600;
@@ -1613,7 +1614,7 @@ page {
 
 /* 全屏弹窗样式（与shop页面一致） */
 .full-screen-overlay {
-  height: 93% !important;
+  max-height: calc(100vh - 60px) !important; /* 🔴 使用动态计算 */
 }
 
 /* 弹窗头部 */
@@ -1626,7 +1627,12 @@ page {
 .nav-close { font-size: 40rpx; color: #999; padding: 10rpx; }
 
 /* 弹窗滚动区 */
-.checkout-scroll { flex: 1; overflow-y: auto; }
+.checkout-scroll { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 
 /* 2. 商品清单卡片 */
 .group-card {
@@ -1846,7 +1852,12 @@ page {
 .co-title { font-size: 32rpx; font-weight: 700; color: #1D1D1F; }
 .nav-close { font-size: 40rpx; color: #999; padding: 10rpx; }
 
-.checkout-scroll { flex: 1; overflow-y: auto; }
+.checkout-scroll { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 .checkout-body { padding: 40rpx; padding-bottom: 200rpx; }
 
 /* 卡片通用样式 */

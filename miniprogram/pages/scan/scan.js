@@ -553,11 +553,11 @@ Page({
     };
     
     this.ble.onConnected = async (device) => {
-      // 🔴 连接成功后，检查该设备是否有OTA记录
+      // 🔴 连接成功后，检查该设备是否有OTA记录（管理员跳过此检查）
       const hasOtaRecord = await this.checkOtaConnection(device.deviceId);
       
       if (!hasOtaRecord) {
-        // 没有OTA记录，断开连接并提示
+        // 没有OTA记录，断开连接并提示（管理员已在上一步跳过）
         console.log('❌ [onConnected] 设备未进行OTA升级，断开连接');
         this.ble.disconnect();
         this.setData({
@@ -675,6 +675,8 @@ Page({
       showAngleHint: false,
       showNewProductHint: false,
       showBluetoothAlert: false,
+      // 🔴 重置 OTA 跳转标记，确保从 OTA 页面返回后可以正常连接蓝牙
+      isNavigatingToOta: false,
       // 重置弹窗关闭动画状态
       passwordModalClosing: false,
       tutorialModalClosing: false,
@@ -1228,6 +1230,12 @@ Page({
   // 🔴 检查指定设备是否有OTA连接记录（根据设备ID判断）
   async checkOtaConnection(deviceId) {
     try {
+      // 🔴 管理员跳过 OTA 检查，直接放行
+      if (this.data.isAdmin) {
+        console.log('🔍 [checkOtaConnection] 管理员模式，跳过 OTA 校验');
+        return true;
+      }
+      
       // 对于 F2 LONG 系列设备（F2 Pro Long / F2 Max Long），无需强制OTA，直接放行
       const cur = this.data.currentModel || {};
       const isF2Long = cur.name === 'F2' && cur.type && cur.type.indexOf('Long') !== -1;

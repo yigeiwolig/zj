@@ -138,8 +138,9 @@ Page({
       app.globalData.updatePageVisit('case');
     }
     
-    const winInfo = wx.getWindowInfo();
-    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
+    // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
+    this.calcNavBarInfo();
+    
     this.ctx = wx.createCameraContext();
     
     // 加载拍摄指南视频
@@ -239,6 +240,17 @@ Page({
     }
   },
   
+  // 🔴 计算导航栏信息（屏幕适配）
+  calcNavBarInfo() {
+    const menuButton = wx.getMenuButtonBoundingClientRect();
+    const windowInfo = wx.getWindowInfo(); 
+    const statusBarHeight = windowInfo.statusBarHeight;
+    const gap = menuButton.top - statusBarHeight;
+    const navBarHeight = (gap * 2) + menuButton.height;
+    this.setData({ statusBarHeight, navBarHeight });
+    console.log('[case.js] 屏幕适配信息:', { statusBarHeight, navBarHeight, gap, menuButtonHeight: menuButton.height });
+  },
+
   // 🔴 新增：检测运行环境
   detectEnvironment() {
     const sysInfo = wx.getSystemInfoSync();

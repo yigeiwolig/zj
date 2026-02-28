@@ -92,17 +92,16 @@ page {
 
 /* 顶部导航 */
 .header {
-  position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
-  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
+  position: fixed; top: 0; left: 0; right: 0;
+  padding-left: 40rpx; padding-right: 40rpx;
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
   z-index: 10000; pointer-events: none; /* 🔴 提高 z-index 确保返回键显示 */
   background: transparent; 
 }
-/* 🔴 统一返回键样式 - 全局标准 */
+/* 🔴 统一返回键样式 - 全局标准（使用计算值） */
 .back-icon {
   position: absolute;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 20rpx); /* 🔴 减少顶部间距 */
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -131,9 +130,9 @@ page {
 
 /* ============ 1. 顶部导航 ============ */
 .nav-header {
-  position: absolute; top: 0; left: 0; width: 100%; height: 180rpx;
-  display: flex; align-items: flex-end; justify-content: space-between;
-  padding: 0 40rpx 20rpx; box-sizing: border-box;
+  position: absolute; top: 0; left: 0; width: 100%;
+  display: flex; align-items: center; justify-content: space-between; /* 🔴 改为 center，让标题垂直居中 */
+  padding: 0 40rpx; box-sizing: border-box;
   background: rgba(245,245,247,0.9); backdrop-filter: blur(20px); z-index: 100;
 }
 .nav-left {
@@ -167,7 +166,7 @@ page {
 .brand-title { 
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(-50%); /* 🔴 添加 translateY(-50%) 实现垂直居中 */
   font-size: 38rpx; 
   font-weight: 800; 
   text-align: center;
@@ -300,7 +299,8 @@ page {
   background: #fff;
   border-radius: 20rpx;
   margin: 20rpx;
-  max-height: 80vh;
+  /* 🔴 使用动态计算高度 */
+  max-height: calc(100vh - 200px);
   overflow-y: auto;
 }
 
@@ -540,7 +540,15 @@ page {
 }
 .modal-title { font-weight: 700; font-size: 32rpx; }
 
-.modal-scroll { flex: 1; overflow-y: scroll; background: #fff; position: relative; z-index: 1; }
+.modal-scroll { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  overflow-y: scroll; 
+  background: #fff; 
+  position: relative; 
+  z-index: 1; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 .scroll-inner { padding-bottom: 50rpx; }
 /* 确保 scroll-view 不会覆盖底部按钮 */
 .modal-scroll {
@@ -871,12 +879,12 @@ page {
   display: flex;
   flex-direction: column;
   
-  height: auto;       
-  /* 🔴 改动1：由 85vh 改为 88vh，让它几乎能顶到胶囊按钮下面 */
-  max-height: 88vh;   
+  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
+  max-height: calc(100vh - 60px); /* 预留顶部空间 */
   
   z-index: 999;
   padding-bottom: 0; 
+  overflow: hidden; /* 确保内容不会溢出 */
 }
 
 .overlay.active { transform: translateY(0); }
@@ -917,13 +925,10 @@ page {
 
 /* 4. 滚动区域 */
 .specs-scroll-body {
-  flex: none;         
-  height: auto;       
-  
-  /* 🔴 改动2：放松内部高度限制，从 60vh 增加到 80vh */
-  /* 这样内容多的时候，它就会乖乖往上长，填满上面的空间 */
-  max-height: 80vh;   
+  flex: 1;         /* 🔴 改为 flex: 1，自动填充剩余空间 */
+  min-height: 0;  /* 🔴 关键：允许 flex 子元素缩小 */
   width: 100%;
+  overflow-y: auto; /* 🔴 确保可以滚动 */
 }
 
 .specs-table-content { 
@@ -1282,7 +1287,12 @@ page {
 }
 .co-title { font-size: 32rpx; font-weight: 700; }
 
-.checkout-scroll { flex: 1; overflow-y: auto; }
+.checkout-scroll { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 /* ============================================================== */
 /* 2. 优化：订单确认页 (宽松布局) */
 /* ============================================================== */
@@ -1475,7 +1485,8 @@ page {
   margin-bottom: 50rpx; 
   line-height: 2; 
   text-align: left; /* 🔴 左对齐，更易读 */
-  max-height: 60vh; /* 限制最大高度 */
+  /* 🔴 使用动态计算高度 */
+  max-height: calc(100vh - 200px); /* 限制最大高度 */
   overflow-y: auto; /* 内容过多时可滚动 */
   word-wrap: break-word; /* 自动换行 */
 }
@@ -2711,7 +2722,12 @@ page {
 .nav-close { font-size: 40rpx; color: #999; padding: 10rpx; }
 
 /* 滚动区域 */
-.checkout-scroll { flex: 1; overflow-y: auto; }
+.checkout-scroll { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 .checkout-body { padding: 40rpx; padding-bottom: 280rpx; }  /* 可多滑一点到底 */
 
 /* 3. 卡片通用样式 */

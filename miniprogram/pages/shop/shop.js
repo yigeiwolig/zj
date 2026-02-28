@@ -24,6 +24,10 @@ Page({
     isAuthorized: false, // 是否是白名单里的管理员
     isAdmin: false,      // 当前是否开启了管理员模式
 
+    // 🔴 屏幕适配：状态栏和导航栏高度
+    statusBarHeight: 20,  // 状态栏高度（px）
+    navBarHeight: 44,     // 导航栏高度（px）
+
     // 新增：购物车数据
     cart: [],
     cartTotalPrice: 0,
@@ -274,6 +278,9 @@ Page({
       }
     }
 
+    // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
+    this.calcNavBarInfo();
+
     // 立即加载数据
     this.loadDataFromCloud();
     this.calcTotal();
@@ -456,6 +463,17 @@ Page({
     });
   },
   // ================== 权限检查逻辑 ==================
+  // 🔴 计算导航栏信息（屏幕适配）
+  calcNavBarInfo() {
+    const menuButton = wx.getMenuButtonBoundingClientRect();
+    const windowInfo = wx.getWindowInfo(); 
+    const statusBarHeight = windowInfo.statusBarHeight;
+    const gap = menuButton.top - statusBarHeight;
+    const navBarHeight = (gap * 2) + menuButton.height;
+    this.setData({ statusBarHeight, navBarHeight });
+    console.log('[shop.js] 屏幕适配信息:', { statusBarHeight, navBarHeight, gap, menuButtonHeight: menuButton.height });
+  },
+
   async checkAdminPrivilege() {
     try {
       // 1. 获取当前用户的 OpenID (利用云函数)

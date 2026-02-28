@@ -104,11 +104,14 @@
 /* 固定返回按钮 */
 /* 顶部导航 */
 .header {
-  position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
-  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
+  position: fixed; top: 0; left: 0; right: 0;
+  padding-left: 40rpx; padding-right: 40rpx;
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
   z-index: 100; pointer-events: none;
   background: transparent; 
+  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
+  padding-top: calc(env(safe-area-inset-top, 0px) + 44px); /* 状态栏 + 导航栏高度 */
+  height: calc(env(safe-area-inset-top, 0px) + 44px + 20px); /* 总高度 */
 }
 /* 管理员切换按钮居中 */
 .admin-toggle-wrapper {
@@ -117,11 +120,12 @@
   transform: translateX(-50%);
   pointer-events: auto;
 }
-/* 🔴 统一返回键样式 - 全局标准 */
+/* 🔴 统一返回键样式 - 全局标准（使用计算值） */
 .back-icon {
   position: absolute;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 20rpx); /* 🔴 减少顶部间距 */
+  /* 🔴 使用动态计算，垂直居中在导航栏内 */
+  top: calc(env(safe-area-inset-top, 0px) + 22px); /* 状态栏 + 导航栏一半高度 - 返回键一半高度 */
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -279,7 +283,10 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start; /* 改为顶部对齐 */
-  padding: 180rpx 40rpx 20rpx; 
+  /* 🔴 使用动态计算，通过内联样式设置 padding-top */
+  padding-left: 40rpx;
+  padding-right: 40rpx;
+  padding-bottom: 20rpx; 
   margin-bottom: 20rpx;
   flex-wrap: wrap; /* 允许换行 */
   gap: 20rpx; /* 添加间距 */
@@ -915,7 +922,8 @@
 .purchase-parts-mask .custom-dialog-box.purchase-parts-dialog {
   max-width: 720rpx;
   width: 90vw;
-  max-height: 90vh;
+  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
+  max-height: calc(100vh - 80px);
   padding: 0;
   overflow: hidden;
   box-sizing: border-box;
@@ -949,9 +957,14 @@
 }
 
 .purchase-parts-content {
-  max-height: 70vh;
+  /* 🔴 使用动态计算高度 */
+  max-height: calc(100vh - 300px);
+  flex: 1;
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
   display: flex;
   flex-direction: column;
+  overflow-y: auto; /* 🔴 确保可以滚动 */
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
   padding: 32rpx 32rpx 0;
   margin-bottom: 0;
   text-align: left;
@@ -1369,9 +1382,11 @@
 
 .modal-content { 
   position: absolute; bottom: 0; width: 100%; background: #fff; border-radius: 40rpx 40rpx 0 0;
-  max-height: 85vh; display: flex; flex-direction: column;
+  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
+  max-height: calc(100vh - 60px); display: flex; flex-direction: column;
   transform: translateY(100%); transition: 0.3s;
   padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  overflow: hidden; /* 🔴 确保内容不会溢出 */
 }
 .modal.show .modal-content { transform: translateY(0); }
 
@@ -1392,7 +1407,14 @@
 .modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
 .close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
 
-.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+.modal-scroll-area { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  padding: 0 40rpx; 
+  box-sizing: border-box; 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 
 .type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
 .tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
@@ -1968,7 +1990,14 @@
 .modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
 .close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
 
-.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+.modal-scroll-area { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  padding: 0 40rpx; 
+  box-sizing: border-box; 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 
 .type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
 .tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
@@ -2336,7 +2365,14 @@
 .modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
 .close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
 
-.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+.modal-scroll-area { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  padding: 0 40rpx; 
+  box-sizing: border-box; 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 
 .type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
 .tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
@@ -2704,7 +2740,14 @@
 .modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
 .close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
 
-.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+.modal-scroll-area { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  padding: 0 40rpx; 
+  box-sizing: border-box; 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 
 .type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
 .tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
@@ -3072,7 +3115,14 @@
 .modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
 .close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
 
-.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+.modal-scroll-area { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  padding: 0 40rpx; 
+  box-sizing: border-box; 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 
 .type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
 .tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
@@ -3440,7 +3490,14 @@
 .modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
 .close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
 
-.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+.modal-scroll-area { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  padding: 0 40rpx; 
+  box-sizing: border-box; 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 
 .type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
 .tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
@@ -3808,7 +3865,14 @@
 .modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
 .close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
 
-.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+.modal-scroll-area { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  padding: 0 40rpx; 
+  box-sizing: border-box; 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 
 .type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
 .tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
@@ -4176,7 +4240,14 @@
 .modal-header { padding: 40rpx 40rpx 20rpx; display: flex; justify-content: space-between; font-size: 34rpx; font-weight: 700; flex-shrink: 0; }
 .close-modal { font-size: 36rpx; color: #999; padding: 10rpx; line-height: 1; }
 
-.modal-scroll-area { flex: 1; padding: 0 40rpx; box-sizing: border-box; overflow-y: auto; }
+.modal-scroll-area { 
+  flex: 1; 
+  min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
+  padding: 0 40rpx; 
+  box-sizing: border-box; 
+  overflow-y: auto; 
+  -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
+}
 
 .type-tabs { display: flex; background: #F2F2F7; padding: 8rpx; border-radius: 20rpx; margin-bottom: 40rpx; }
 .tab-item { flex: 1; text-align: center; font-size: 26rpx; color: #8E8E93; padding: 16rpx 0; border-radius: 16rpx; transition: 0.2s; font-weight: 600; }
@@ -4515,7 +4586,8 @@
 .return-required-modal {
   width: 90%;
   max-width: 680rpx;
-  max-height: 80vh;
+  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
+  max-height: calc(100vh - 100px);
   background: #fff;
   border-radius: 32rpx;
   display: flex;
@@ -6062,7 +6134,8 @@
 .fill-repair-dialog {
   width: 680rpx;
   max-width: 90vw;
-  max-height: 90vh;
+  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
+  max-height: calc(100vh - 80px);
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -6627,13 +6700,15 @@
 .bottom-modal-content {
   width: 100%;
   max-width: 100%;
-  max-height: 85vh;
+  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
+  max-height: calc(100vh - 60px);
   background: #ffffff;
   border-radius: 32rpx 32rpx 0 0;
   display: flex;
   flex-direction: column;
   transform: translateY(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden; /* 🔴 确保内容不会溢出 */
   box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.15);
   box-sizing: border-box;
   overflow: hidden;
@@ -6896,8 +6971,8 @@
 
 .logistics-modal-box {
   width: 100%;
-  max-height: 85vh;
-  height: 85vh; /* 🔴 关键修复：给明确的高度，让 flex 子元素可以正确计算 */
+  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
+  max-height: calc(100vh - 60px);
   background: #FFFFFF;
   border-radius: 40rpx 40rpx 0 0; /* 更大的圆角 */
   overflow: hidden;

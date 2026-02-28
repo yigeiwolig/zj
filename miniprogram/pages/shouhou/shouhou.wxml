@@ -4,14 +4,14 @@
 <!-- ================== 首页 (iOS 风格) ================== -->
 <view class="home-view {{inDetail ? 'shrink' : ''}}">
   <!-- 顶部导航 -->
-  <view class="nav-header">
+  <view class="nav-header" style="padding-top: {{statusBarHeight + 20}}px;">
     <!-- 顶部导航 -->
     <view class="header">
       <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 8}}px; background: transparent !important; background-color: transparent !important; border: none !important; border-radius: 0 !important; box-shadow: none !important; -webkit-tap-highlight-color: transparent !important;">
         <text class="back-arrow">‹</text>
       </view>
     </view>
-    <view class="header-title-row">
+    <view class="header-title-row" style="top: {{statusBarHeight + 50}}px;">
       <view class="large-title">
         MT维修中心
         <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">

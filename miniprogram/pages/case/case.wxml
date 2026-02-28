@@ -2,13 +2,13 @@
 <view class="brand-bg-watermark">MT-摩改社</view>
 
 <!-- 顶部导航 -->
-<view class="header" wx:if="{{!showVideoPlayer}}">
-  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 8}}px;">
+<view class="header" wx:if="{{!showVideoPlayer}}" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight}}px;">
+  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + (navBarHeight - 35)}}px;">
     <text class="back-arrow">‹</text>
   </view>
 </view>
-<view class="custom-header" style="padding-top: {{statusBarHeight}}px;">
-  <view class="header-content">
+<view class="custom-header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight}}px;">
+  <view class="header-content" style="height: {{navBarHeight}}px;">
     <view class="header-title">
       <text>MT 案例库</text>
       <!-- 只有白名单用户能看到的切换开关 -->
@@ -40,7 +40,7 @@
 </view>
 
 <!-- 🆕 导航区域容器 -->
-<view class="nav-container" style="top: {{statusBarHeight + 44}}px;">
+<view class="nav-container" style="top: {{statusBarHeight + navBarHeight}}px;">
   
   <!-- 1. 可滚动的 Tab 栏 -->
   <scroll-view 
@@ -157,7 +157,7 @@
   bindscroll="handleScrollViewScroll" 
   enhanced="{{true}}"
   show-scrollbar="{{false}}"
-  style="height: calc(100vh - {{statusBarHeight + 44 + 60}}px); top: {{statusBarHeight + 44 + 60}}px;"
+  style="height: calc(100vh - {{statusBarHeight + navBarHeight + 60}}px); top: {{statusBarHeight + navBarHeight + 60}}px;"
 >
   <!-- 视频列表 (🔴 增加 pushed-down 类，实现下移动画) -->
   <view class="video-list {{showSearchBar ? 'pushed-down' : ''}}">

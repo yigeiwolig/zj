@@ -102,7 +102,7 @@ page {
 }
 
 .header-content {
-  height: 44px;
+  /* 🔴 使用动态计算高度，通过内联样式设置 height */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -112,8 +112,8 @@ page {
 
 /* 顶部导航 */
 .header {
-  position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
-  padding-top: calc(env(safe-area-inset-top, 0px) + 20rpx); /* 🔴 减少顶部间距 */ 
+  position: fixed; top: 0; left: 0; right: 0;
+  /* 🔴 使用动态计算高度，通过内联样式设置 padding-top 和 height */
   padding-left: 40rpx; 
   padding-right: 40rpx;
   box-sizing: border-box; 
@@ -125,11 +125,11 @@ page {
   background: transparent; 
 }
 
-/* 🔴 统一返回键样式 - 全局标准 */
+/* 🔴 统一返回键样式 - 全局标准（使用计算值） */
 .back-icon {
   position: absolute;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 88rpx);
+  /* 🔴 使用动态计算，通过内联样式设置 top */
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -680,7 +680,8 @@ page {
   background: #F2F2F7;
   border-radius: 40rpx 40rpx 0 0;
   padding-bottom: env(safe-area-inset-bottom);
-  max-height: 60vh;
+  /* 🔴 使用动态计算高度 */
+  max-height: calc(100vh - 200px);
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);

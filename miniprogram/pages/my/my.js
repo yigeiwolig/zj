@@ -16,6 +16,10 @@ var qqmapsdkDistrict = new QQMapWX({
 
 Page({
   data: {
+    // 🔴 屏幕适配：状态栏和导航栏高度
+    statusBarHeight: 20,  // 状态栏高度（px）
+    navBarHeight: 44,     // 导航栏高度（px）
+
     countdownTimer: null, // 🔴 倒计时定时器
     currentOrderIndex: 0,
     showModal: false,
@@ -245,6 +249,9 @@ Page({
       });
     }
     
+    // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
+    this.calcNavBarInfo();
+
     this.checkAdminPrivilege();
     
     // 1. 初始化蓝牙助手
@@ -715,6 +722,17 @@ Page({
         });
       }
     });
+  },
+
+  // 🔴 计算导航栏信息（屏幕适配）
+  calcNavBarInfo() {
+    const menuButton = wx.getMenuButtonBoundingClientRect();
+    const windowInfo = wx.getWindowInfo(); 
+    const statusBarHeight = windowInfo.statusBarHeight;
+    const gap = menuButton.top - statusBarHeight;
+    const navBarHeight = (gap * 2) + menuButton.height;
+    this.setData({ statusBarHeight, navBarHeight });
+    console.log('[my.js] 屏幕适配信息:', { statusBarHeight, navBarHeight, gap, menuButtonHeight: menuButton.height });
   },
 
   // ================== 权限检查逻辑 ==================

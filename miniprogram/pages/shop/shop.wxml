@@ -4,18 +4,18 @@
 
 <!-- ================= 1. 顶部导航 ================= -->
 <!-- 顶部返回，只在主列表显示，深色背景用白色箭头 -->
-<view class="header" wx:if="{{!showOrderModal && !showDetail}}">
-  <view class="back-icon" catchtap="goBack">
+<view class="header" wx:if="{{!showOrderModal && !showDetail}}" style="padding-top: {{statusBarHeight}}px;">
+  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
     <text class="back-arrow">‹</text>
   </view>
 </view>
-<view class="nav-header">
+<view class="nav-header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
   <!-- 左侧：返回按钮 -->
   <view class="nav-left">
   </view>
   
   <!-- 中间区域：标题和管理员切换按钮 -->
-  <view class="brand-title" bindtap="handleTitleClick">
+  <view class="brand-title" bindtap="handleTitleClick" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
     <text>{{shopTitle || 'MT 配件中心'}}</text>
     <!-- 只有白名单用户能看到的切换开关 -->
     <view 
