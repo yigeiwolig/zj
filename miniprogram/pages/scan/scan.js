@@ -523,9 +523,8 @@ Page({
   },
 
   onLoad() {
-    // 🔴 获取状态栏高度
-    const winInfo = wx.getWindowInfo();
-    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
+    // 🔴 计算导航栏高度（适配所有机型）
+    this.calcNavBarInfo();
     
     // 🔴 更新页面访问统计
     const app = getApp();
@@ -902,6 +901,11 @@ Page({
 
   // 执行出厂设置步骤
   executeFactoryResetStep(stepIndex) {
+    // 如果用户已经手动中断（关闭弹窗），不再继续后续步骤
+    if (!this.data.showFactoryResetModal) {
+      console.log('⏹ [出厂设置] 弹窗已关闭，中断后续步骤');
+      return;
+    }
     const steps = this.data.factoryResetSteps || [];
     if (stepIndex >= steps.length) {
       // 所有步骤完成，保持弹窗显示，等待用户点击确认
@@ -966,6 +970,16 @@ Page({
     const nextIndex = currentIndex + 1;
     console.log(`ℹ️ [出厂设置] 用户确认步骤 ${currentIndex + 1}，进入步骤 ${nextIndex + 1}`);
     this.executeFactoryResetStep(nextIndex);
+  },
+
+  // 🔴 新增：用户主动中断出厂设置（右上角 X）
+  cancelFactoryReset() {
+    console.log('⏹ [出厂设置] 用户点击关闭，立即中断所有步骤');
+    this.setData({
+      showFactoryResetModal: false,
+      factoryResetStep: 0
+    });
+    // 不需要额外清理定时器：executeFactoryResetStep 会在下次检查到 showFactoryResetModal=false 后自动停止
   },
 
   // 步骤2：按钮按下
@@ -1430,6 +1444,21 @@ Page({
       detailMode: 'main',
       angleBtnText: isF1 ? '180°' : '160°' // 根据机型设置按钮文本
     });
+  },
+
+  // 🔴 计算导航栏高度（标准方法，适配所有机型）
+  calcNavBarInfo() {
+    try {
+      const menuButton = wx.getMenuButtonBoundingClientRect();
+      const windowInfo = wx.getWindowInfo();
+      const statusBarHeight = windowInfo.statusBarHeight || 44;
+      const gap = menuButton.top - statusBarHeight;
+      const navBarHeight = (gap * 2) + menuButton.height;
+      this.setData({ statusBarHeight, navBarHeight });
+    } catch (e) {
+      // 降级方案：使用默认值
+      this.setData({ statusBarHeight: 44, navBarHeight: 44 });
+    }
   },
 
   goBack() {
@@ -2053,8 +2082,9 @@ Page({
         });
         if (isF1OrF2) {
           if (this.data.isConnected || this.data.isAdmin) {
-            console.log('📤 [蓝牙] 发送"初始化角度"');
-            this.sendData('初始化角度');
+            // 🔴 按你的要求：归零也发送 2 次，间隔 0.5 秒
+            console.log('📤 [蓝牙] 发送"初始化角度"（连续2次，间隔0.5秒）');
+            this.sendDataMultiple('初始化角度', 2, 500);
           } else {
             console.log('❌ [蓝牙] 未连接，无法发送"初始化角度"');
             this._showCustomToast('蓝牙未连接', 'none', 2000);

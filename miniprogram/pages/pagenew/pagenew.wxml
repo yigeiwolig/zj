@@ -1,28 +1,20 @@
 <!-- pages/pagenew/pagenew.wxml -->
 <view class="container">
 
-<!-- ================= 1. 顶部导航 ================= -->
-<view class="nav-header">
-  <view class="nav-back" catchtap="goBack">
-    <text class="icon-back">‹</text>
+<!-- ================= 1. 自定义导航栏 ================= -->
+<view class="header" style="padding-top: {{statusBarHeight}}px;">
+  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
+    <text class="back-arrow">‹</text>
   </view>
-
-  <view class="brand-box">
-    <text class="brand-main">MT</text>
-    <text class="brand-sub">新品展示</text>
-    <!-- 只有白名单用户能看到的切换开关 -->
-    <view 
-      wx:if="{{isAuthorized}}" 
-      class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
-      catchtap="toggleAdminMode"
-      style="pointer-events: auto; z-index: 10002; position: relative;">
+</view>
+<view class="nav-header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
+  <view class="brand-title" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
+    <text>MT 新品展示</text>
+    <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
       {{isAdmin ? 'EXIT' : 'EDIT'}}
     </view>
   </view>
-  
-  <view class="nav-placeholder"></view>
 </view>
-
 
 <!-- ================= 2. 核心滑动区 ================= -->
 <view class="swiper-container">

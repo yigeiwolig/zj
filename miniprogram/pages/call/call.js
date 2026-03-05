@@ -40,6 +40,9 @@ Page({
 
 
   onLoad() {
+    // 🔴 计算导航栏高度（适配所有机型）
+    this.calcNavBarInfo();
+    
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -185,6 +188,21 @@ Page({
   },
 
   preventMove() { return },
+
+  // 🔴 计算导航栏高度（标准方法，适配所有机型）
+  calcNavBarInfo() {
+    try {
+      const menuButton = wx.getMenuButtonBoundingClientRect();
+      const windowInfo = wx.getWindowInfo();
+      const statusBarHeight = windowInfo.statusBarHeight || 44;
+      const gap = menuButton.top - statusBarHeight;
+      const navBarHeight = (gap * 2) + menuButton.height;
+      this.setData({ statusBarHeight, navBarHeight });
+    } catch (e) {
+      // 降级方案：使用默认值
+      this.setData({ statusBarHeight: 44, navBarHeight: 44 });
+    }
+  },
 
   // 返回上一页
   handleBack() {

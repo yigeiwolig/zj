@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "控制中心",
-  "navigationStyle": "custom",
+  "navigationBarBackgroundColor": "#eef1f5",
+  "navigationBarTextStyle": "black",
   "backgroundColor": "#eef1f5",
   "usingComponents": {
     "custom-toast": "/components/custom-toast/index"

@@ -59,6 +59,11 @@ exports.main = async (event, context) => {
       const visit = visitRes.data.find(v => v._openid === button._openid);
       
       // 计算总访问次数
+      // 计算总访问次数
+      // 计算总访问次数
+      // 计算总访问次数
+      // 计算总访问次数
+      // 计算总访问次数
       let totalVisits = 0;
       if (visit) {
         Object.keys(visit).forEach(key => {
@@ -68,23 +73,23 @@ exports.main = async (event, context) => {
         });
       }
 
-      // 格式化封禁原因（英文，用于后台）
+      // 格式化封禁原因（改为中文标签，用于后台右上角展示）
       let banReasonText = '';
       switch (button.banReason) {
         case 'screenshot':
-          banReasonText = 'Screenshot';
+          banReasonText = '截屏封号';
           break;
         case 'screen_record':
-          banReasonText = 'Screen Record';
+          banReasonText = '录屏封号';
           break;
         case 'location_blocked':
-          banReasonText = 'Location Blocked';
+          banReasonText = '定位异常';
           break;
         case 'nickname_verify_fail':
-          banReasonText = 'Nickname Verify Fail';
+          banReasonText = '昵称审核失败';
           break;
         default:
-          banReasonText = button.banReason || 'Unknown';
+          banReasonText = button.banReason || '未知原因';
       }
 
       // 格式化封禁页面（拼音，用于后台）

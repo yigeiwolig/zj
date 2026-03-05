@@ -2500,14 +2500,23 @@ Page({
 
   // 返回键处理
   handleBack: function() {
-    wx.navigateBack({
-      fail: () => {
-        // 如果没有上一页，则跳转到首页
-        wx.reLaunch({
-          url: '/pages/home/home'
+    try {
+      const pages = getCurrentPages();
+      if (pages && pages.length > 1) {
+        // 有上一页时，正常返回上一页（不会触发 webviewId not found）
+        wx.navigateBack();
+      } else {
+        // 没有上一页时，直接回到首页 / 入口页，避免多余的 navigateBack 报错
+        wx.switchTab({
+          url: '/pages/index/index'
         });
       }
-    });
+    } catch (e) {
+      // 兜底：极端情况下直接回到首页
+      wx.switchTab({
+        url: '/pages/index/index'
+      });
+    }
   },
 
   // 🔴 记录板块点击（分享码用户专用）

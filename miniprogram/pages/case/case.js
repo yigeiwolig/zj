@@ -6,19 +6,10 @@ var qqmapsdk = new QQMapWX({
 });
 
 // 🔴 静默发送调试日志（不显示错误）
+// ⚠️ 性能优化：调试日志上报在正式环境关闭，避免多余的 HTTP 请求拖慢加载
 function silentAgentLog(data) {
-  try {
-    wx.request({
-      url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-      method: 'POST',
-      header: { 'Content-Type': 'application/json' },
-      data: data,
-      fail: () => {}, // 静默失败，不输出错误
-      complete: () => {} // 静默完成
-    });
-  } catch (e) {
-    // 静默捕获所有错误
-  }
+  // 直接返回，不再发起网络请求（保留函数占位，防止调用报错）
+  return;
 }
 
 Page({
@@ -105,6 +96,20 @@ Page({
     // --- 列表数据 ---
     list: [],        
     displayList: [],
+    // 🔴 拖拽排序状态（仅管理员管理模式使用）
+    isDraggingCard: false,     // 是否正在拖拽卡片
+    draggingCardId: null,      // 当前拖拽的卡片 _id
+    draggingCardIndex: -1,     // 当前拖拽卡片在 displayList 中的索引
+    
+    // 🔴 长按飞起拖拽（参考 shouhou 页面配件拖拽）
+    cardWidth: 0,              // 拖拽卡片的宽度（px）
+    cardHeight: 0,             // 拖拽卡片的高度（px）
+    cardInitX: 0,              // 拖拽卡片的初始 X 坐标（px）
+    cardInitY: 0,              // 拖拽卡片的初始 Y 坐标（px）
+    dragX: 0,                  // 当前拖拽卡片的 X 坐标（px，用于 fixed 定位）
+    dragY: 0,                  // 当前拖拽卡片的 Y 坐标（px，用于 fixed 定位）
+    touchStartX: 0,            // 触摸起始 X 坐标
+    touchStartY: 0,            // 触摸起始 Y 坐标
     
     // --- 🆕 待审核列表 ---
     pendingList: [],  // 管理员待审核的用户投稿
@@ -328,24 +333,35 @@ Page({
     if(this.data.list.length === 0) getApp().showLoading({ title: '加载中...' });
     
     db.collection('video_go')
-      .orderBy('createTime', 'desc')
+      .orderBy('createTime', 'desc') // 先按时间倒序拿回来，后面再按 sortOrder 调整
       .get()
       .then(res => {
         getApp().hideLoading();
-        const cloudList = res.data.map(item => {
-          return {
-            _id: item._id,
-            type: item.category || 'street',
-            title: item.vehicleName || '无标题',
-            model: item.model || '未知',
-            categoryName: item.categoryName || null,
-            color: this.getRandomColor(),
-            videoUrl: item.videoFileID,
-            coverUrl: item.coverFileID || null,
-            displayTime: item.createTime ? this.formatTime(item.createTime) : null
-          };
-        });
-        this.setData({ list: cloudList, displayList: cloudList });
+        const cloudListWithIndex = res.data.map((item, idx) => ({
+          _id: item._id,
+          type: item.category || 'street',
+          title: item.vehicleName || '无标题',
+          model: item.model || '未知',
+          categoryName: item.categoryName || null,
+          color: this.getRandomColor(),
+          videoUrl: item.videoFileID,
+          coverUrl: item.coverFileID || null,
+          displayTime: item.createTime ? this.formatTime(item.createTime) : null,
+          // 🔴 新增：用于排序的字段（没有则为 null）
+          sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : null,
+          originalIndex: idx,
+        }));
+
+        // 先把有 sortOrder 的按 sortOrder 排在前面，其余保持原顺序
+        const withOrder = cloudListWithIndex
+          .filter(i => i.sortOrder !== null)
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+        const withoutOrder = cloudListWithIndex
+          .filter(i => i.sortOrder === null)
+          .sort((a, b) => a.originalIndex - b.originalIndex);
+        const finalList = withOrder.concat(withoutOrder);
+
+        this.setData({ list: finalList, displayList: finalList });
         
         // 数据回来后再次校准滑块
         setTimeout(() => this.initTabPosition(), 200);
@@ -403,6 +419,185 @@ Page({
     const mode = e.currentTarget.dataset.mode;
     this.setData({ adminSubMode: mode });
     this._showCustomToast(mode === 'edit' ? '视频编辑模式' : '管理现有视频模式', 'none');
+  },
+
+  // ==========================================
+  // [新增] 管理员拖拽排序官方案例（长按飞起 + 跟手移动）
+  // 参考 shouhou 页面配件拖拽实现
+  // ==========================================
+
+  // 长按触发拖拽
+  onCardLongPress(e) {
+    if (!this.data.isAdmin) {
+      console.log('[case.js] 非管理员模式，不允许拖拽');
+      return;
+    }
+    
+    const index = e.currentTarget.dataset.index;
+    const id = e.currentTarget.dataset.id;
+    console.log('[case.js] 长按触发拖拽，索引:', index, 'ID:', id);
+    
+    // 震动反馈
+    wx.vibrateShort({ type: 'heavy' });
+    
+    // 获取卡片位置和尺寸
+    const query = wx.createSelectorQuery().in(this);
+    query.selectAll('.ios-card').boundingClientRect();
+    query.exec((res) => {
+      if (res && res[0] && res[0][index]) {
+        const rect = res[0][index];
+        console.log('[case.js] 卡片位置:', rect);
+        
+        this.setData({
+          isDraggingCard: true,
+          draggingCardId: id,
+          draggingCardIndex: index,
+          cardWidth: rect.width,
+          cardHeight: rect.height,
+          cardInitX: rect.left,
+          cardInitY: rect.top,
+          dragX: rect.left,
+          dragY: rect.top,
+          touchStartX: 0,
+          touchStartY: 0
+        });
+      }
+    });
+  },
+
+  // 触摸移动（卡片跟手 + 智能判断上下 / 左右）
+  onCardTouchMove(e) {
+    if (!this.data.isDraggingCard || !this.data.isAdmin) return;
+    
+    const touch = e.touches[0];
+    
+    // 记录初始位置（如果还没记录）
+    if (this.data.touchStartX === 0 && this.data.touchStartY === 0) {
+      this.setData({
+        touchStartX: touch.pageX,
+        touchStartY: touch.pageY
+      });
+    }
+    
+    // 计算新位置（卡片中心跟随手指）
+    const newX = touch.pageX - this.data.cardWidth / 2;
+    const newY = touch.pageY - this.data.cardHeight / 2;
+    
+    // 限制在屏幕范围内
+    const systemInfo = wx.getSystemInfoSync();
+    const minX = 0;
+    const maxX = systemInfo.windowWidth - this.data.cardWidth;
+    const minY = 0;
+    const maxY = systemInfo.windowHeight - this.data.cardHeight;
+    
+    const clampedX = Math.max(minX, Math.min(maxX, newX));
+    const clampedY = Math.max(minY, Math.min(maxY, newY));
+    
+    this.setData({
+      dragX: clampedX,
+      dragY: clampedY
+    });
+    
+    // 检测是否需要交换位置（同时传入 X/Y，用于判断左右列）
+    this.checkCardSwap(touch.clientX || touch.pageX, touch.clientY || touch.pageY);
+  },
+
+  // 检测卡片交换
+  checkCardSwap(currentX, currentY) {
+    const { draggingCardIndex, displayList } = this.data;
+    if (!displayList || displayList.length <= 1) return;
+    
+    // 获取所有卡片的位置
+    const query = wx.createSelectorQuery().in(this);
+    query.selectAll('.ios-card').boundingClientRect();
+    query.exec((res) => {
+      if (!res || !res[0]) return;
+      
+      const rects = res[0];
+
+      // 当前拖拽卡片中心点 X（用 dragX + cardWidth/2，更稳定）
+      const dragCenterX = this.data.dragX + this.data.cardWidth / 2;
+
+      // 找到手指当前覆盖的卡片
+      for (let i = 0; i < rects.length; i++) {
+        if (i === draggingCardIndex) continue; // 跳过自己
+        
+        const rect = rects[i];
+
+        // 1）先判断是否在同一列：中心点 X 距离不能太大
+        const targetCenterX = rect.left + rect.width / 2;
+        const sameColumnThreshold = rect.width * 0.8; // 阈值：约等于一列宽度
+        const isSameColumn = Math.abs(targetCenterX - dragCenterX) < sameColumnThreshold;
+
+        if (!isSameColumn) {
+          // 不在同一列，忽略这个卡片，避免左右乱跳
+          continue;
+        }
+
+        // 2）在同一列的前提下，判断手指是否在这个卡片的垂直中心区域
+        if (currentY > rect.top + rect.height * 0.3 && currentY < rect.bottom - rect.height * 0.3) {
+          // 交换位置（只在同一列里上下交换）
+          const newList = displayList.slice();
+          const [moved] = newList.splice(draggingCardIndex, 1);
+          newList.splice(i, 0, moved);
+          
+          console.log('[case.js] 交换卡片:', draggingCardIndex, '->', i);
+          
+          this.setData({
+            displayList: newList,
+            draggingCardIndex: i
+          });
+          break;
+        }
+      }
+    });
+  },
+
+  // 触摸结束
+  onCardTouchEnd() {
+    if (!this.data.isDraggingCard || !this.data.isAdmin) {
+      return;
+    }
+
+    console.log('[case.js] 拖拽结束，保存顺序到云端');
+
+    // 重置状态
+    this.setData({
+      isDraggingCard: false,
+      draggingCardId: null,
+      draggingCardIndex: -1,
+      dragX: 0,
+      dragY: 0,
+      touchStartX: 0,
+      touchStartY: 0
+    });
+
+    // 保存到云端
+    this.saveCaseOrderToCloud();
+  },
+
+  // 把当前 displayList 的顺序保存到云端（video_go.sortOrder）
+  saveCaseOrderToCloud() {
+    const { displayList } = this.data;
+    if (!displayList || displayList.length === 0) return;
+
+    const tasks = displayList.map((item, index) => {
+      return db.collection('video_go').doc(item._id).update({
+        data: {
+          sortOrder: index,
+        },
+      });
+    });
+
+    Promise.all(tasks)
+      .then(() => {
+        console.log('[case.js] ✅ 官方案例排序已保存到云端');
+        this._showCustomToast('排序已保存', 'none');
+      })
+      .catch((err) => {
+        console.error('[case.js] ❌ 保存排序失败:', err);
+        this._showCustomToast('排序保存失败', 'error');
+      });
   },
 
   // ==========================================

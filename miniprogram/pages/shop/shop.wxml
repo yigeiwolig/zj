@@ -42,7 +42,7 @@
               src="{{item.url}}" 
               class="hero-media" 
               id="hero-video-{{index}}"
-              autoplay="{{item.autoplay || false}}"
+              autoplay="{{item.autoplay || (!isAdmin && index === 0 && item.type === 'video')}}"
               preload="metadata"
               muted 
               loop 
@@ -540,7 +540,7 @@
       <!-- 总价显示区 -->
       <view class="final-total-row">
         <text class="ft-label">共 {{cart.length}} 件，总计</text>
-        <text class="ft-price">¥{{(isAdmin || isAuthorized) ? 0.01 : finalTotalPrice}}</text>
+        <text class="ft-price">¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
       </view>
 
       <!-- 收货信息 -->

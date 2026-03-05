@@ -4,19 +4,26 @@ page {
   height: 100%;
 }
 
-/* 顶部导航 */
+/* 顶部导航（统一样式，参考 shop 页） */
 .header {
-  position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
-  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
-  box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
-  z-index: 10000; pointer-events: none; /* 🔴 提高 z-index 确保返回键显示 */
-  background: transparent; 
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding-left: 40rpx;
+  padding-right: 40rpx;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 10000;
+  pointer-events: none;
+  background: transparent;
 }
-/* 🔴 统一返回键样式 - 全局标准 */
+
 .back-icon {
   position: absolute;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 20rpx); /* 🔴 减少顶部间距 */
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -31,16 +38,54 @@ page {
   opacity: 0.7;
   background-color: rgba(0, 0, 0, 0.05);
 }
-.back-icon::before {
-  display: none;
-}
-
-/* 统一返回箭头样式 */
 .back-arrow {
   font-size: 48rpx;
   font-weight: 300;
   color: #000;
   line-height: 1;
+}
+
+.nav-header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40rpx;
+  box-sizing: border-box;
+  /* 统一为淡灰色毛玻璃背景，和 shop 页一致 */
+  background: rgba(245,245,247,0.9);
+  backdrop-filter: blur(20px);
+  z-index: 100;
+}
+
+.brand-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  text-align: center;
+  display: flex;
+  flex-direction: column; /* 主标题 + 副标题 垂直排列 */
+  align-items: center;
+  justify-content: center;
+  gap: 4rpx;
+  pointer-events: auto;
+}
+
+/* 主标题：MT-摩改社 */
+.brand-main {
+  font-size: 38rpx;
+  font-weight: 800;
+  color: #000;
+}
+
+/* 副标题：技术支持 */
+.brand-sub {
+  font-size: 22rpx;
+  color: #8E8E93;
+  letter-spacing: 4rpx;
 }
 
 /* 左上角返回按钮 - 统一样式 */
@@ -67,7 +112,8 @@ page {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 80rpx 40rpx;
+  /* 顶部 padding 改为在 wxml 里用 statusBarHeight + navBarHeight 动态控制 */
+  padding: 0 40rpx 80rpx;
   box-sizing: border-box;
   min-height: 100%;
 }
@@ -116,69 +162,7 @@ page {
   justify-content: center;
 }
 
-.title-header { 
-  text-align: center; 
-  margin-bottom: 60rpx; 
-  flex-shrink: 0; 
-  position: relative;
-  padding-top: 20rpx;
-  width: 100%;
-}
-
-/* 普通标题样式 */
-.h1-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 32rpx;
-}
-
-.h1-text {
-  font-size: 48rpx;
-  font-weight: 600;
-  color: #000;
-  line-height: 1.2;
-}
-
-/* 下方的副标题调整，配合艺术字 */
-.p-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24rpx;
-  margin-top: 10rpx;
-}
-
-.p-line {
-  width: 60rpx;
-  height: 1rpx;
-  background: linear-gradient(to right, transparent, rgba(209, 209, 214, 0.6), transparent);
-  position: relative;
-}
-
-.p-line::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 4rpx;
-  height: 4rpx;
-  background: #D1D1D6;
-  border-radius: 50%;
-}
-
-.p {
-  font-size: 20rpx;
-  color: #333; /* 稍微加深一点颜色 */
-  letter-spacing: 12rpx;
-  font-weight: 700;
-  background: #EEE; /* 给副标题加一个浅色底，增加设计感 */
-  padding: 4rpx 20rpx;
-  border-radius: 4rpx;
-  text-transform: uppercase;
-  font-family: "PingFang SC", "Helvetica Neue", sans-serif;
-}
+/* 原 title-header / h1 / p 系列样式已废弃，主标题统一放在导航 brand-title 中 */
 
 .card-stack {
   width: 100%;
@@ -200,7 +184,9 @@ page {
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 20rpx 60rpx rgba(0,0,0,0.04);
+  /* 加强卡片的立体感，让上下两张卡片边界更清晰 */
+  box-shadow: 0 24rpx 80rpx rgba(0,0,0,0.10);
+  border: 1rpx solid rgba(0,0,0,0.03);
   position: relative;
   transition: transform 0.2s;
 }

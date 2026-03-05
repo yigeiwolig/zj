@@ -120,6 +120,10 @@ Page({
     // 故障设备选择
     myDevices: [],            // 当前用户已绑定的设备列表
     selectedDeviceIndex: null, // 选中的故障设备索引（null 表示未选）
+    showDevicePicker: false,   // 是否显示自定义故障设备选择器
+    tempDeviceIndex: null,     // 选择器中临时高亮的索引
+    isDevicePickerClosing: false, // 底部选择器是否处于关闭动画中
+    deviceScrollId: '',        // 设备列表滚动到选中项的 id
     
     // [新增] 订单信息（统一格式）
     orderInfo: { name: '', phone: '', address: '' },
@@ -230,9 +234,8 @@ Page({
 
   // 页面加载时初始化
   onLoad(options) {
-    // 🔴 尽早设置状态栏高度，避免详情页顶得太高
-    const winInfo = wx.getWindowInfo();
-    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
+    // 🔴 计算导航栏高度（适配所有机型）
+    this.calcNavBarInfo();
     
     // 🔴 更新页面访问统计
     const app = getApp();
@@ -1330,6 +1333,21 @@ Page({
     this.setData({
       contactName: '', contactPhone: '', contactAddr: '', contactWechat: '', videoFileName: '', repairDescription: ''
     });
+  },
+
+  // 🔴 计算导航栏高度（标准方法，适配所有机型）
+  calcNavBarInfo() {
+    try {
+      const menuButton = wx.getMenuButtonBoundingClientRect();
+      const windowInfo = wx.getWindowInfo();
+      const statusBarHeight = windowInfo.statusBarHeight || 44;
+      const gap = menuButton.top - statusBarHeight;
+      const navBarHeight = (gap * 2) + menuButton.height;
+      this.setData({ statusBarHeight, navBarHeight });
+    } catch (e) {
+      // 降级方案：使用默认值
+      this.setData({ statusBarHeight: 44, navBarHeight: 44 });
+    }
   },
 
   // 返回上一页
@@ -4109,8 +4127,8 @@ Page({
     // 先关闭可能存在的自动提示，确保确认弹窗能正常显示
     this.setData({ 'autoToast.show': false });
     
-    // 🔴 管理员身份（授权或已点EDIT）：支付 0.01 元，运费不计
-    const isAdminPay = this.data.isAdmin || this.data.isAuthorized;
+    // 🔴 仅管理员身份支付 0.01 元，运费不计
+    const isAdminPay = this.data.isAdmin;
     // 🔴 使用重新计算后的价格和运费
     const payAmount = isAdminPay ? 0.01 : currentFinalTotalPrice;
     const payFee = isAdminPay ? 0 : currentShippingFee;
@@ -4310,8 +4328,8 @@ Page({
       console.error('[doPayment] 获取用户昵称失败:', e);
     }
 
-    // 管理员身份（授权或已点EDIT）：支付 0.01 元，运费不计
-    const isAdminPay = this.data.isAdmin || this.data.isAuthorized;
+    // 仅管理员身份支付 0.01 元，运费不计
+    const isAdminPay = this.data.isAdmin;
     const payAmount = isAdminPay ? 0.01 : totalPrice;
 
     wx.cloud.callFunction({
@@ -5244,12 +5262,22 @@ Page({
         isActive: true
       }).get().then(devRes => {
         const devices = devRes.data || [];
-        // 为每个设备添加 displaySn 字段（和 case 页保持一致）
-        const devicesWithDisplaySn = devices.map(device => ({
-          ...device,
-          displaySn: device.displaySn || ('MT' + (device.sn || '')),
-          productModel: device.productModel || device.name || '未知型号'  // 🔴 确保 productModel 有值
-        }));
+        // 为每个设备添加 displaySn 字段（和 case 页保持一致），并计算质保是否过期
+        const now = new Date();
+        const devicesWithDisplaySn = devices.map(device => {
+          let warrantyExpired = false;
+          if (device.expiryDate) {
+            const exp = new Date(device.expiryDate);
+            const diff = Math.ceil((exp - now) / 86400000);
+            warrantyExpired = diff <= 0;
+          }
+          return {
+            ...device,
+            displaySn: device.displaySn || ('MT' + (device.sn || '')),
+            productModel: device.productModel || device.name || '未知型号',  // 🔴 确保 productModel 有值
+            warrantyExpired
+          };
+        });
 
         const nextState = {
           myDevices: devicesWithDisplaySn
@@ -5273,6 +5301,62 @@ Page({
       });
     }).catch(err => {
       console.error('[loadRepairDevices] 调用 login 云函数失败:', err);
+    });
+  },
+
+  // 打开自定义故障设备选择器
+  openDevicePicker() {
+    const { myDevices, selectedDeviceIndex } = this.data;
+    if (!myDevices || myDevices.length === 0) return;
+    let tempIndex = selectedDeviceIndex;
+    if (tempIndex === null || tempIndex === undefined) {
+      tempIndex = 0;
+    }
+    this.setData({
+      showDevicePicker: true,
+      tempDeviceIndex: tempIndex,
+      isDevicePickerClosing: false,
+      deviceScrollId: `device-${tempIndex}`
+    });
+  },
+
+  // 关闭自定义选择器（不修改已选值）
+  closeDevicePicker() {
+    // 先触发下滑动画，再真正隐藏
+    if (this.data.isDevicePickerClosing) return;
+    this.setData({ isDevicePickerClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showDevicePicker: false,
+        isDevicePickerClosing: false
+      });
+    }, 260);
+  },
+
+  // 在选择器中临时高亮某个设备
+  chooseDeviceTemp(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(index)) return;
+    this.setData({
+      tempDeviceIndex: index,
+      deviceScrollId: `device-${index}`
+    });
+  },
+
+  // 确认选择故障设备
+  confirmDevicePicker() {
+    const { myDevices, tempDeviceIndex } = this.data;
+    if (!myDevices || myDevices.length === 0) {
+      this.setData({ showDevicePicker: false });
+      return;
+    }
+    let idx = tempDeviceIndex;
+    if (idx === null || idx === undefined) {
+      idx = 0;
+    }
+    this.setData({
+      selectedDeviceIndex: idx,
+      showDevicePicker: false
     });
   },
 
@@ -5346,8 +5430,13 @@ Page({
   // 【新增】实际提交维修工单的方法（从 submitRepairTicket 中分离出来）
   doSubmitRepairTicket() {
     const { 
-      currentModelName, repairDescription, videoFileName, tempVideoPath, 
-      orderInfo
+      currentModelName,
+      repairDescription,
+      videoFileName,
+      tempVideoPath,
+      orderInfo,
+      myDevices,
+      selectedDeviceIndex
     } = this.data;
 
     // 1. 校验

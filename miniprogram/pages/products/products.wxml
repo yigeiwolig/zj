@@ -68,8 +68,8 @@ module.exports = {
 </wxs>
 
 <!-- 顶部导航 -->
-<view class="header">
-  <view class="back-icon" catchtap="goBack">
+<view class="header" style="padding-top: {{statusBarHeight}}px;">
+  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
     <text class="back-arrow">‹</text>
   </view>
 </view>
@@ -166,6 +166,46 @@ module.exports = {
   <view class="loader" catchtouchmove="noop" catchtap="noop">
     <text class="loader-label">请稍候...</text>
     <view class="loading-bar"></view>
+  </view>
+</view>
+
+<!-- 🆕 产品上新弹窗（首进 PRODUCTS 时，复用 pagenew 数据） -->
+<view class="new-arrival-mask" wx:if="{{showNewArrivalModal}}" catchtouchmove="noop" catchtap="closeNewArrivalModal">
+  <view class="new-arrival-box" catchtap="noop" catchtouchmove="noop">
+    <view class="na-bg-glow"></view>
+    <view class="na-close-icon" catchtap="closeNewArrivalModal">×</view>
+    
+    <!-- 顶部标题区 -->
+    <view class="na-header-group">
+      <view class="na-main-title">MT 新品推荐</view>
+      <view class="na-tag-line">左右滑动查看更多</view>
+    </view>
+
+    <!-- 轮播卡片区 -->
+    <swiper class="na-swiper"
+            current="{{newArrivalIndex}}"
+            bindchange="onNewArrivalChange"
+            circular="{{false}}"
+            previous-margin="30rpx"
+            next-margin="30rpx">
+      <block wx:for="{{newArrivalList}}" wx:key="_id">
+        <swiper-item class="na-swiper-item">
+          <view class="na-card">
+            <image class="na-cover-img" src="{{item.cover || defaultCover}}" mode="aspectFill"></image>
+            <view class="na-card-overlay">
+              <view class="na-badge">NEW</view>
+              <text class="na-name">{{item.title || 'New Product'}}</text>
+            </view>
+          </view>
+        </swiper-item>
+      </block>
+    </swiper>
+
+    <!-- 底部操作区 -->
+    <button class="na-jump-btn" catchtap="handleNewArrivalJump">
+      <text>立即查看</text>
+      <view class="btn-arrow">→</view>
+    </button>
   </view>
 </view>
 

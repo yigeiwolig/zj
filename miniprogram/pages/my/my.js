@@ -557,28 +557,8 @@ Page({
   // --- 1. 页面显示时，加载云端数据 ---
   onShow() {
     // #region agent log
-    try {
-      const logData = {
-        location: 'miniprogram/pages/my/my.js:onShow',
-        message: 'onShow called',
-        data: { 
-          timestamp: Date.now(),
-          hasLoading: this.data.showLoadingAnimation
-        },
-        timestamp: Date.now(),
-        sessionId: 'debug-session',
-        runId: 'scroll-performance',
-        hypothesisId: 'onShow-freq'
-      };
-      wx.request({
-        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-        method: 'POST',
-        header: { 'Content-Type': 'application/json' },
-        data: logData,
-        success: () => {},
-        fail: () => {}
-      });
-    } catch (err) {}
+    // ⚠️ 性能优化：关闭到本地 127.0.0.1 的调试上报，避免多余 HTTP 请求拖慢加载
+    // （保留结构，方便以后需要时再开启）
     // #endregion
 
     // 🔴 防抖：如果正在加载，不重复加载
@@ -860,14 +840,7 @@ Page({
         runId: 'scroll-performance',
         hypothesisId: 'load-data-freq'
       };
-      wx.request({
-        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-        method: 'POST',
-        header: { 'Content-Type': 'application/json' },
-        data: logData,
-        success: () => {},
-        fail: () => {}
-      });
+      // 调试日志上报已关闭（避免额外 HTTP 请求）
     } catch (err) {}
     // #endregion
 
@@ -1118,19 +1091,18 @@ Page({
     const shippingFee = 0; // 从订单中获取，如果有的话
     const shippingMethod = 'zto'; // 默认中通
 
-    // 管理员身份（授权或已点EDIT）：支付 0.01 元
-    if (this.data.isAdmin || this.data.isAuthorized) {
-      totalPrice = 0.01;
-    }
+    // 管理员身份：支付 0.01 元；其他用户使用真实金额
+    const isAdminPay = this.data.isAdmin;
+    const payAmount = isAdminPay ? 0.01 : totalPrice;
 
-    if (totalPrice <= 0) {
+    if (payAmount <= 0) {
       this.showAutoToast('提示', '订单金额异常');
       return;
     }
 
     console.log('[repayOrder] 准备重新支付，订单信息:', {
       orderId: item.orderId,
-      totalPrice,
+      totalPrice: payAmount,
       goodsCount: goods.length
     });
 
@@ -1140,7 +1112,7 @@ Page({
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
-        totalPrice: totalPrice,
+        totalPrice: payAmount,
         goods: goods,
         addressData: addressData,
         shippingFee: shippingFee,
@@ -1347,14 +1319,7 @@ Page({
         runId: 'confirm-receipt-issue',
         hypothesisId: 'timing-issue'
       };
-      wx.request({
-        url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-        method: 'POST',
-        header: { 'Content-Type': 'application/json' },
-        data: logData,
-        success: () => {},
-        fail: () => {}
-      });
+      // 调试日志上报已关闭
     } catch (err) {}
     // #endregion
 
@@ -1386,14 +1351,7 @@ Page({
             runId: 'confirm-receipt-issue',
             hypothesisId: 'cloud-function-success'
           };
-          wx.request({
-            url: 'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',
-            method: 'POST',
-            header: { 'Content-Type': 'application/json' },
-            data: logData,
-            success: () => {},
-            fail: () => {}
-          });
+          // 调试日志上报已关闭
         } catch (err) {}
         // #endregion
         
@@ -2105,6 +2063,7 @@ Page({
     }).then(() => {
       this.hideMyLoading();
       this.setData({ showPurchasePartsModal: false });
+      this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
       
       console.log('✅ [submitPurchaseParts] 数据库更新成功，开始刷新数据');
       
@@ -2378,6 +2337,8 @@ Page({
             userReturnAddress: { name: '', phone: '', address: '' },
             returnTrackingIdInput: ''
           });
+          // 🔴 重新计算是否还有弹窗，恢复页面滚动
+          this.updateModalState();
           // 刷新数据（会更新弹窗内容，显示运单号输入框）
           this.loadMyActivitiesPromise().catch(() => {});
         }
@@ -2430,7 +2391,8 @@ Page({
     const address = `收件人: MT
 手机号码: 13527692427
 所在地区: 广东省佛山市南海区桂城街道
-详细地址: 创智路2号保利心语花园三期（驿站）（到付直接拒收，无需派送）`;
+详细地址: 创智路2号保利心语花园三期（驿站）
+备注（到付直接拒收，无需派送）`;
     
     // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
     const hideOfficialToast = () => {
@@ -2468,6 +2430,56 @@ Page({
         console.error('[copyReturnAddress] 复制失败', err);
         hideOfficialToast();
         this.showAutoToast('复制失败', '请手动复制地址');
+      }
+    });
+  },
+
+  // 【新增】一键复制「用户报修」里的联系地址
+  copyRepairAddress(e) {
+    const address = e.currentTarget.dataset.address || '';
+    const name = e.currentTarget.dataset.name || '';
+    const phone = e.currentTarget.dataset.phone || '';
+
+    if (!address && !name && !phone) {
+      this.showAutoToast('提示', '地址信息不存在');
+      return;
+    }
+
+    const addressText = `${name || ''} ${phone || ''}\n${address || ''}`.trim();
+
+    const hideOfficialToast = () => {
+      try {
+        if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+        if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+      } catch (e) {}
+    };
+    hideOfficialToast();
+
+    wx.setClipboardData({
+      data: addressText,
+      success: (res) => {
+        console.log('[copyRepairAddress] 复制成功', res);
+        hideOfficialToast();
+        setTimeout(hideOfficialToast, 1);
+        setTimeout(hideOfficialToast, 3);
+        setTimeout(hideOfficialToast, 5);
+        setTimeout(hideOfficialToast, 10);
+        setTimeout(hideOfficialToast, 15);
+        setTimeout(hideOfficialToast, 20);
+        setTimeout(hideOfficialToast, 30);
+        setTimeout(hideOfficialToast, 50);
+        setTimeout(hideOfficialToast, 80);
+        setTimeout(hideOfficialToast, 120);
+        setTimeout(hideOfficialToast, 180);
+        setTimeout(hideOfficialToast, 250);
+        setTimeout(hideOfficialToast, 350);
+        setTimeout(hideOfficialToast, 500);
+        this._showCopySuccessOnce();
+      },
+      fail: (err) => {
+        console.error('[copyRepairAddress] 复制失败', err);
+        hideOfficialToast();
+        this.showAutoToast('提示', '复制失败，请手动复制');
       }
     });
   },
@@ -3241,10 +3253,9 @@ Page({
   doRepairPayment(repairId, repairItems, totalPrice) {
     const app = getApp();
     const isAdmin = this.data.isAdmin || (app && app.globalData && app.globalData.isAdmin);
-    const isAuthorized = this.data.isAuthorized || (app && app.globalData && app.globalData.isAuthorized);
     
-    // 管理员或授权用户支付金额为0.01元（测试）
-    const payAmount = (isAdmin || isAuthorized) ? 0.01 : totalPrice;
+    // 管理员支付 0.01 元；其他用户按真实 totalPrice 支付
+    const payAmount = isAdmin ? 0.01 : totalPrice;
     
     this.showMyLoading('唤起收银台...');
     
@@ -6115,6 +6126,7 @@ Page({
       }
 
       this.setData(updateData);
+      this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
       
       wx.hideLoading();
       
@@ -6138,6 +6150,7 @@ Page({
         updateData['userReturnAddress.address'] = result.address;
       }
       this.setData(updateData);
+      this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
       this.showAutoToast('提示', '解析完成（使用备用方案）');
     }
   },
@@ -6863,6 +6876,7 @@ Page({
               showReturnAddressModal: false,
               returnTrackingIdInput: ''
             });
+            this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
           });
         }).catch(err => {
           console.error('自动扣除质保失败:', err);
@@ -6872,6 +6886,7 @@ Page({
               showReturnAddressModal: false,
               returnTrackingIdInput: ''
             });
+            this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
           });
         });
         return;
@@ -6885,6 +6900,7 @@ Page({
         showReturnAddressModal: false,
         returnTrackingIdInput: ''
       });
+      this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
     });
   },
   
@@ -7058,6 +7074,7 @@ Page({
             returnTrackingIdInput: '',
             userReturnAddress: { name: '', phone: '', address: '' }
           });
+          this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
           
           // 刷新数据，卡片会自动消失（因为 returnTrackingId 已存在）
           this.loadMyActivitiesPromise().catch(() => {});

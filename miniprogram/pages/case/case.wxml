@@ -1,46 +1,32 @@
 <!-- 背景大水印 -->
 <view class="brand-bg-watermark">MT-摩改社</view>
 
-<!-- 顶部导航 -->
-<view class="header" wx:if="{{!showVideoPlayer}}" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight}}px;">
-  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + (navBarHeight - 35)}}px;">
+<!-- 自定义导航栏 -->
+<view class="header" wx:if="{{!showVideoPlayer}}" style="padding-top: {{statusBarHeight}}px;">
+  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
     <text class="back-arrow">‹</text>
   </view>
 </view>
-<view class="custom-header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight}}px;">
-  <view class="header-content" style="height: {{navBarHeight}}px;">
-    <view class="header-title">
-      <text>MT 案例库</text>
-      <!-- 只有白名单用户能看到的切换开关 -->
-      <view 
-        wx:if="{{isAuthorized}}" 
-        class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
-        catchtap="toggleAdminMode">
-        {{isAdmin ? 'EXIT' : 'EDIT'}}
-      </view>
-      <!-- 管理员模式下的子模式切换 -->
-      <view 
-        wx:if="{{isAdmin}}" 
-        class="admin-submode-toggle">
-        <view 
-          class="submode-btn {{adminSubMode === 'edit' ? 'active' : ''}}" 
-          catchtap="switchAdminSubMode" 
-          data-mode="edit">
-          视频编辑
-        </view>
-        <view 
-          class="submode-btn {{adminSubMode === 'manage' ? 'active' : ''}}" 
-          catchtap="switchAdminSubMode" 
-          data-mode="manage">
-          管理现有视频
-        </view>
-      </view>
+<view class="nav-header" wx:if="{{!showVideoPlayer}}" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
+  <view class="brand-title" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
+    <text>MT 案例库</text>
+    <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
+      {{isAdmin ? 'EXIT' : 'EDIT'}}
+    </view>
+  </view>
+  <!-- 管理员子模式切换 -->
+  <view wx:if="{{isAdmin}}" class="admin-submode-btns" style="top: {{statusBarHeight + navBarHeight}}px;">
+    <view class="submode-btn {{adminSubMode === 'edit' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="edit">
+      视频编辑
+    </view>
+    <view class="submode-btn {{adminSubMode === 'manage' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="manage">
+      管理现有视频
     </view>
   </view>
 </view>
 
 <!-- 🆕 导航区域容器 -->
-<view class="nav-container" style="top: {{statusBarHeight + navBarHeight}}px;">
+<view class="nav-container" style="padding-top: {{statusBarHeight + navBarHeight + (isAdmin ? 80 : 20)}}px;">
   
   <!-- 1. 可滚动的 Tab 栏 -->
   <scroll-view 
@@ -165,17 +151,25 @@
       暂无案例视频
     </view>
 
-    <block wx:for="{{displayList}}" wx:key="_id">
+    <block wx:for="{{displayList}}" wx:key="_id" wx:for-index="index">
       <!-- 🆕 move-animation: 实现列表重排时的过渡效果 -->
-      <view class="ios-card move-animation" bindtap="onCardTap" data-id="{{item._id}}">
+      <view 
+        class="ios-card move-animation {{isDraggingCard && draggingCardId === item._id ? 'dragging' : ''}}" 
+        bindtap="onCardTap" 
+        bindlongpress="{{isAdmin ? 'onCardLongPress' : ''}}"
+        catchtouchmove="{{isAdmin ? 'onCardTouchMove' : ''}}"
+        catchtouchend="{{isAdmin ? 'onCardTouchEnd' : ''}}"
+        data-id="{{item._id}}"
+        data-index="{{index}}"
+        style="{{isDraggingCard && draggingCardId === item._id ? 'position: fixed; left: ' + dragX + 'px; top: ' + dragY + 'px; width: ' + cardWidth + 'px; opacity: 0.9; z-index: 9999; transition: none;' : ''}}"
+      >
         <view class="thumb-box" style="background-color: {{item.color}};">
           <image wx:if="{{item.coverUrl}}" src="{{item.coverUrl}}" mode="aspectFill" class="card-cover-img"></image>
           <view class="card-watermark-overlay">MT</view>
           
-          <!-- 🔴 修改：删除了 class="play-icon-overlay" 那个播放按钮 -->
-          <!-- 编辑图标（管理员用，两种模式都显示） -->
+          <!-- 🔧 编辑图标：只在“管理现有视频”模式下显示 -->
           <view 
-            wx:if="{{isAdmin}}" 
+            wx:if="{{isAdmin && adminSubMode === 'manage'}}" 
             class="edit-icon-overlay" 
             catchtap="onEditIconTap" 
             data-id="{{item._id}}"
@@ -210,6 +204,8 @@
           </view>
         </view>
       </view>
+      <!-- 占位符（拖动时显示） -->
+      <view wx:if="{{isDraggingCard && draggingCardIndex === index}}" class="ios-card-placeholder"></view>
     </block>
     
     <!-- 底部占位，防止被悬浮按钮挡住 -->
@@ -367,7 +363,8 @@
 
 <!-- 9. 管理员上传表单 -->
 <view class="modal-overlay active" wx:if="{{showAdminForm}}" catchtouchmove="noop" catchtap="noop">
-  <view class="ios-dialog left-align" catchtouchmove="noop" catchtap="noop">
+  <!-- 加 admin-form-dialog，整体往下挪一点，避免被顶部刘海/导航压住 -->
+  <view class="ios-dialog left-align admin-form-dialog" catchtouchmove="noop" catchtap="noop">
     <view class="admin-form-header">
       <view class="dialog-title center">{{isEditing ? '修改案例' : '发布官方案例'}}</view>
       <!-- 管理员切换按钮 -->
@@ -388,11 +385,21 @@
     </view>
     <view style="display: flex; gap: 20rpx; margin-bottom: 30rpx;">
       <view class="upload-box" bindtap="chooseAdminVideo">
-        <block wx:if="{{!adminVideoPath}}"><view class="upload-icon">📹</view><text class="upload-text">选视频</text></block>
+        <block wx:if="{{!adminVideoPath}}">
+          <view class="upload-inner">
+            <view class="upload-icon">📹</view>
+            <text class="upload-text">选视频</text>
+          </view>
+        </block>
         <video wx:else src="{{adminVideoPath}}" class="preview-media" show-play-btn="{{false}}"></video>
       </view>
       <view class="upload-box" bindtap="chooseAdminCover">
-        <block wx:if="{{!adminThumbPath}}"><view class="upload-icon">🖼️</view><text class="upload-text">选封面</text></block>
+        <block wx:if="{{!adminThumbPath}}">
+          <view class="upload-inner">
+            <view class="upload-icon">🖼️</view>
+            <text class="upload-text">选封面</text>
+          </view>
+        </block>
         <image wx:else src="{{adminThumbPath}}" class="preview-media" mode="aspectFill"></image>
       </view>
     </view>

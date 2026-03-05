@@ -133,7 +133,13 @@ Page({
         iconSvg: iconProfile, 
         iconSize: '80rpx' 
       }
-    ]
+    ],
+
+    // 🆕 产品上新弹窗（复用 pagenew 数据）
+    // 默认先打开，确保你能看到弹窗；后续再根据需要改成只在首进时打开
+    showNewArrivalModal: true,
+    newArrivalList: [],
+    newArrivalIndex: 0
   },
 
   onLoad() {
@@ -150,9 +156,8 @@ Page({
       return;
     }
 
-    // 🔴 获取状态栏高度
-    const winInfo = wx.getWindowInfo();
-    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
+    // 🔴 计算导航栏高度（适配所有机型）
+    this.calcNavBarInfo();
     
     // 🔴 更新页面访问统计
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -184,6 +189,64 @@ Page({
       }, 800);
 
     }, 300);
+
+    // 🆕 初始化“新品弹窗”（复用 pagenew 的 products 集合）
+    this.initNewArrivalModal();
+  },
+
+  // 🆕 从云端读取 products 集合，显示产品上新弹窗（和 pagenew 复用同一份数据）
+  async initNewArrivalModal() {
+    try {
+      if (!wx.cloud) return;
+
+      // 确保已初始化云环境（有些场景只在 pagenew 里 init 过）
+      if (!this.db) {
+        try {
+          wx.cloud.init({ traceUser: true });
+        } catch (e) {
+          // 已初始化过也没关系，忽略错误
+        }
+        this.db = wx.cloud.database();
+      }
+
+      const res = await this.db.collection('products').get();
+      const products = (res.data || []).map(item => ({
+        ...item,
+        jumpNumber: item.jumpNumber || null
+      }));
+      if (!products.length) {
+        console.log('[products] 新品弹窗：products 集合为空，不展示');
+        return;
+      }
+
+      console.log('[products] 新品弹窗数据条数:', products.length);
+
+      this.setData({
+        newArrivalList: products,
+        newArrivalIndex: 0,
+        showNewArrivalModal: true
+      });
+    } catch (err) {
+      console.error('[products] 加载新品弹窗数据失败:', err);
+    }
+  },
+
+  // 🆕 弹窗内 swiper 切换
+  onNewArrivalChange(e) {
+    this.setData({ newArrivalIndex: e.detail.current });
+  },
+
+  // 🆕 关闭新品弹窗
+  closeNewArrivalModal() {
+    this.setData({ showNewArrivalModal: false });
+  },
+
+  // 🆕 弹窗底部“立即跳转”：等同于点击“产品选购”功能卡片
+  handleNewArrivalJump() {
+    wx.vibrateShort({ type: 'medium' }); // 增强震动反馈
+    this.setData({ showNewArrivalModal: false });
+    // 直接复用现有导航逻辑，跳到 id=4 的产品选购（shop 页面）
+    this.executeNavigation(4);
   },
 
   // 🔴 检查封禁状态
@@ -265,6 +328,14 @@ Page({
   },
 
   onShow() {
+    // 🔴 兜底：每次回到 PRODUCTS 页，强制关闭所有“全屏遮罩类”UI，防止页面被罩层卡住
+    this.setData({
+      showLoadingAnimation: false,     // 关闭 loading 遮罩
+      'autoToast.show': false,         // 关闭顶部自动提示
+      autoToastClosing: false,
+      isDrawerOpen: false              // 关闭底部抽屉（对应 drawer-mask）
+    });
+
     // 🔴 启动定时检查 qiangli 强制封禁
     const app = getApp();
     if (app && app.startQiangliCheck) {
@@ -735,6 +806,21 @@ Page({
     }
   },
   
+  // 🔴 计算导航栏高度（标准方法，适配所有机型）
+  calcNavBarInfo() {
+    try {
+      const menuButton = wx.getMenuButtonBoundingClientRect();
+      const windowInfo = wx.getWindowInfo();
+      const statusBarHeight = windowInfo.statusBarHeight || 44;
+      const gap = menuButton.top - statusBarHeight;
+      const navBarHeight = (gap * 2) + menuButton.height;
+      this.setData({ statusBarHeight, navBarHeight });
+    } catch (e) {
+      // 降级方案：使用默认值
+      this.setData({ statusBarHeight: 44, navBarHeight: 44 });
+    }
+  },
+
   goBack() { 
     wx.reLaunch({ url: '/pages/index/index' }); 
   },

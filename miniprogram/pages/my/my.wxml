@@ -9,8 +9,8 @@
 <view class="container {{hasModalOpen ? 'modal-open' : ''}}">
 
   <!-- 顶部导航 -->
-  <view class="header">
-    <view class="back-icon" catchtap="goBack">
+  <view class="header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
+    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
       <text class="back-arrow">‹</text>
     </view>
     <view class="admin-toggle-wrapper" wx:if="{{isAuthorized}}">
@@ -166,7 +166,18 @@
           <view class="repair-info">
             <view class="r-title">{{item.model}} - {{item.contact.name}}</view>
             <view class="r-desc">"{{item.description}}"</view>
-            <view class="r-addr">{{item.contact.address}}</view>
+            <view class="r-addr-row">
+              <text class="r-addr">{{item.contact.address}}</text>
+              <view 
+                class="r-copy-btn" 
+                bindtap="copyRepairAddress"
+                data-name="{{item.contact.name}}"
+                data-phone="{{item.contact.phone}}"
+                data-address="{{item.contact.address}}"
+              >
+                <text class="r-copy-text">复制地址</text>
+              </view>
+            </view>
             <!-- 🔴 新增：质保状态显示，无质保时显示「用户质保已过期」 -->
             <view class="r-warranty-status expired" wx:if="{{item.warrantyExpired || item.remainingDays === 0}}">
               <text class="warranty-expired-tag">用户质保已过期</text>
@@ -419,10 +430,10 @@
             </view>
           </view>
 
-          <!-- 用户操作：填写寄回信息 + 一键复制寄回地址 -->
-          <view class="rr-user-actions-simple" wx:if="{{myReturnRequiredRepair.needReturn}}">
+          <!-- 用户操作：仅在【还没填写寄回单号】时，展示“填写寄回信息 + 复制寄回地址” -->
+          <view class="rr-user-actions-simple" wx:if="{{myReturnRequiredRepair.needReturn && !myReturnRequiredRepair.returnTrackingId}}">
             <view class="rr-simple-btn primary" bindtap="openReturnAddressModal">
-              {{myReturnRequiredRepair.returnTrackingId ? '查看寄回信息' : '填写寄回信息'}}
+              填写寄回信息
             </view>
             <view class="rr-simple-btn secondary" bindtap="copyReturnAddress">
               复制寄回地址

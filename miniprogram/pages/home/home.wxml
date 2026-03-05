@@ -7,8 +7,8 @@
 <view class="container" bindtap="onBgTap">
   
   <!-- 顶部导航 -->
-  <view class="header">
-    <view class="back-icon" catchtap="goBack">
+  <view class="header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
+    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
       <text class="back-arrow">‹</text>
     </view>
   </view>

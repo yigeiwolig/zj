@@ -1,6 +1,7 @@
 {
-  "navigationStyle": "custom",
   "navigationBarTitleText": "MT 案例库",
+  "navigationBarBackgroundColor": "#ffffff",
+  "navigationBarTextStyle": "black",
   "disableScroll": true,
   "enablePullDownRefresh": false,
   "usingComponents": {

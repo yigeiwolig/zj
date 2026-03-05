@@ -1,6 +1,7 @@
 {
-  "navigationStyle": "custom",
-  "navigationBarTitleText": "New Arrivals",
+  "navigationBarTitleText": "MT 新品展示",
+  "navigationBarBackgroundColor": "#ffffff",
+  "navigationBarTextStyle": "black",
   "usingComponents": {
     "custom-toast": "/components/custom-toast/index"
   }

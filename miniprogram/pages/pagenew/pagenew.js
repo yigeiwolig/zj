@@ -3,8 +3,9 @@ const app = getApp()
 
 Page({
   data: {
-    // 🔴 状态栏高度
+    // 🔴 导航栏高度相关
     statusBarHeight: 44,
+    navBarHeight: 44,
     
     isAuthorized: false, // 是否是白名单里的管理员
     isAdmin: false,      // 当前是否开启了管理员模式
@@ -24,9 +25,8 @@ Page({
     // #region agent log
     wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:onLoad',message:'onLoad called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'loading-trace',hypothesisId:'A'},fail:()=>{}});
     // #endregion
-    // 🔴 获取状态栏高度
-    const winInfo = wx.getWindowInfo();
-    this.setData({ statusBarHeight: winInfo.statusBarHeight || 44 });
+    // 🔴 计算导航栏高度（适配所有机型）
+    this.calcNavBarInfo();
     // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
@@ -41,6 +41,12 @@ Page({
     
     // 检查管理员权限
     this.checkAdminPrivilege();
+
+    // 🔴 初始化截屏/录屏封号保护
+    this.initScreenshotProtection();
+
+    // 🔴 首次进入时检查封禁状态
+    this.checkBanStatus();
   },
 
   onShow() {
@@ -49,6 +55,9 @@ Page({
     if (app && app.startQiangliCheck) {
       app.startQiangliCheck();
     }
+
+    // 🔴 回到页面时再次检查封禁状态
+    this.checkBanStatus();
   },
 
   onHide() {
@@ -106,6 +115,21 @@ Page({
     console.log('[pagenew] 切换管理员模式，新状态:', nextState);
     this.setData({ isAdmin: nextState });
     this._showCustomToast(nextState ? '管理模式开启' : '已回到用户模式', 'none');
+  },
+
+  // 🔴 计算导航栏高度（标准方法，适配所有机型）
+  calcNavBarInfo() {
+    try {
+      const menuButton = wx.getMenuButtonBoundingClientRect();
+      const windowInfo = wx.getWindowInfo();
+      const statusBarHeight = windowInfo.statusBarHeight || 44;
+      const gap = menuButton.top - statusBarHeight;
+      const navBarHeight = (gap * 2) + menuButton.height;
+      this.setData({ statusBarHeight, navBarHeight });
+    } catch (e) {
+      // 降级方案：使用默认值
+      this.setData({ statusBarHeight: 44, navBarHeight: 44 });
+    }
   },
 
   // 左上角返回
@@ -451,4 +475,212 @@ Page({
     };
     tryShow();
   },
+
+  // ================= 截屏 / 录屏封号逻辑（与 products 页保持一致） =================
+
+  // 🔴 计算位置信息和设备信息
+  async _getLocationAndDeviceInfo() {
+    const sysInfo = wx.getSystemInfoSync();
+    const deviceInfo = {
+      deviceInfo: sysInfo.system || '',
+      phoneModel: sysInfo.model || ''
+    };
+    
+    const cachedLocation = wx.getStorageSync('last_location');
+    if (cachedLocation && cachedLocation.province && cachedLocation.city) {
+      return {
+        ...cachedLocation,
+        ...deviceInfo
+      };
+    }
+    
+    try {
+      const locationRes = await new Promise((resolve, reject) => {
+        wx.getLocation({
+          type: 'gcj02',
+          success: resolve,
+          fail: reject
+        });
+      });
+
+      const lat = locationRes.latitude;
+      const lng = locationRes.longitude;
+
+      const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
+      const addressData = await reverseGeocodeWithRetry(lat, lng, {
+        maxRetries: 3,
+        timeout: 10000,
+        retryDelay: 1000
+      });
+
+      return {
+        ...addressData,
+        ...deviceInfo
+      };
+    } catch (err) {
+      console.error('[pagenew] 获取位置信息失败:', err);
+      if (cachedLocation) {
+        return {
+          ...cachedLocation,
+          ...deviceInfo
+        };
+      }
+      return deviceInfo;
+    }
+  },
+
+  // 🔴 截屏/录屏拦截：本地立即封禁 + 云端记录
+  async handleIntercept(type) {
+    wx.removeStorageSync('has_permanent_auth');
+    wx.setStorageSync('is_user_banned', true);
+    if (type === 'screenshot') {
+      wx.setStorageSync('is_screenshot_banned', true);
+    }
+
+    console.log('[pagenew] 🔴 截屏/录屏检测，立即跳转封禁页');
+    this._jumpToBlocked(type);
+
+    const sysInfo = wx.getSystemInfoSync();
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: {
+        type,
+        banPage: 'pagenew',
+        deviceInfo: sysInfo.system || '',
+        phoneModel: sysInfo.model || ''
+      }
+    });
+
+    this._getLocationAndDeviceInfo().then(locationData => {
+      wx.cloud.callFunction({
+        name: 'banUserByScreenshot',
+        data: {
+          type,
+          banPage: 'pagenew',
+          ...locationData
+        }
+      });
+    }).catch(() => {});
+  },
+
+  _jumpToBlocked(type) {
+    const app = getApp();
+    if (app.globalData._isJumpingToBlocked) {
+      return;
+    }
+
+    const pages = getCurrentPages();
+    const currentPage = pages[pages.length - 1];
+    if (currentPage && currentPage.route === 'pages/blocked/blocked') {
+      return;
+    }
+
+    app.globalData._isJumpingToBlocked = true;
+
+    wx.reLaunch({
+      url: `/pages/blocked/blocked?type=${type}`,
+      success: () => {
+        setTimeout(() => {
+          app.globalData._isJumpingToBlocked = false;
+        }, 2000);
+      },
+      fail: () => {
+        app.globalData._isJumpingToBlocked = false;
+        wx.exitMiniProgram();
+      }
+    });
+  },
+
+  // 🔴 初始化截屏/录屏保护
+  initScreenshotProtection() {
+    if (wx.setVisualEffectOnCapture) {
+      wx.setVisualEffectOnCapture({
+        visualEffect: 'hidden',
+        success: () => console.log('[pagenew] 🛡️ 硬件级防偷拍锁定')
+      });
+    }
+
+    wx.onUserCaptureScreen(() => {
+      this.handleIntercept('screenshot');
+    });
+
+    if (wx.onUserScreenRecord) {
+      wx.onUserScreenRecord(() => {
+        this.handleIntercept('record');
+      });
+    }
+  },
+
+  // 🔴 检查封禁状态（与 products 保持同一套规则）
+  async checkBanStatus() {
+    try {
+      const loginRes = await wx.cloud.callFunction({ name: 'login' });
+      const openid = loginRes.result.openid;
+      const db = wx.cloud.database();
+
+      const [buttonRes, logRes] = await Promise.all([
+        db.collection('login_logbutton')
+          .where({ _openid: openid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get(),
+        db.collection('login_logs')
+          .where({ _openid: openid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get()
+      ]);
+
+      if (buttonRes.data && buttonRes.data.length > 0) {
+        const btn = buttonRes.data[0];
+        const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
+        if (qiangli) {
+          console.log('[pagenew] ⚠️ 检测到强制封禁（login_logbutton）');
+          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          return;
+        }
+      }
+
+      if (logRes.data && logRes.data.length > 0) {
+        const log = logRes.data[0];
+        const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
+        if (qiangli) {
+          console.log('[pagenew] ⚠️ 检测到强制封禁（login_logs）');
+          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          return;
+        }
+      }
+
+      const adminCheck = await db.collection('guanliyuan')
+        .where({ openid: openid })
+        .limit(1)
+        .get();
+
+      if (adminCheck.data && adminCheck.data.length > 0) {
+        console.log('[pagenew] ✅ 管理员豁免封禁检查');
+        return;
+      }
+
+      if (buttonRes.data && buttonRes.data.length > 0) {
+        const btn = buttonRes.data[0];
+        const rawFlag = btn.isBanned;
+        const isBanned = rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
+        if (isBanned) {
+          console.log('[pagenew] 检测到封禁状态，跳转封禁页');
+          const banType = btn.banReason === 'screenshot' || btn.banReason === 'screen_record'
+            ? 'screenshot'
+            : (btn.banReason === 'location_blocked' ? 'location' : 'banned');
+          wx.reLaunch({ url: `/pages/blocked/blocked?type=${banType}` });
+          return;
+        }
+      }
+    } catch (err) {
+      const msg = (err.errMsg || err.message || '') + '';
+      if (msg.indexOf('access_token') !== -1) {
+        console.warn('[pagenew] 云会话未就绪，跳过封禁检查');
+        return;
+      }
+      console.error('[pagenew] 检查封禁状态失败:', err);
+    }
+  }
 })

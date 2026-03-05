@@ -1,11 +1,15 @@
 <view class="container">
   
-  <!-- 顶部导航 -->
-  <view class="header">
-    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 8}}px;">
+  <!-- 自定义导航栏 -->
+  <view class="header" style="padding-top: {{statusBarHeight}}px;">
+    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
       <text class="back-arrow">‹</text>
     </view>
-    <view class="nav-logo">MT控制中心</view>
+  </view>
+  <view class="nav-header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
+    <view class="brand-title" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
+      <text>MT 控制中心</text>
+    </view>
   </view>
 
   <!-- ======================= -->
@@ -591,7 +595,11 @@
   <!-- ======================= -->
   <view class="password-modal-mask" wx:if="{{showFactoryResetModal}}" catchtouchmove="noop" catchtap="noop">
     <view class="password-box" catchtouchmove="noop" catchtap="noop">
-      <view class="pass-title" style="margin-bottom: 40rpx;">出厂设置</view>
+      <!-- 右上角关闭按钮（中断出厂设置） -->
+      <view class="modal-close-x" bindtap="cancelFactoryReset">✕</view>
+      <view class="pass-title" style="margin-bottom: 40rpx;">
+        出厂设置
+      </view>
       
       <!-- 当前步骤文字 -->
       <view class="factory-reset-content">

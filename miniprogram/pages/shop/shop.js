@@ -762,11 +762,22 @@ Page({
       console.log('[shop.js] res.errMsg:', res.errMsg);
       console.log('[shop.js] res.data:', res.data);
       if (res.data && res.data.list) {
-        console.log('[shop.js] 设置 topMediaList, 数量:', res.data.list.length);
-        console.log('[shop.js] topMediaList 内容:', res.data.list);
-        this.setData({ topMediaList: res.data.list });
+        // 🔴 防御性修复：如果未配置 type，根据 url 自动识别图片/视频
+        const fixedList = (res.data.list || []).map(item => {
+          if (item.type) return item;
+          const url = (item.url || '').toLowerCase();
+          const isVideo = url.endsWith('.mp4') || url.endsWith('.mov') || url.indexOf('.mp4?') !== -1 || url.indexOf('.mov?') !== -1;
+          return {
+            type: isVideo ? 'video' : 'image',
+            ...item,
+          };
+        });
+
+        console.log('[shop.js] 设置 topMediaList, 数量:', fixedList.length);
+        console.log('[shop.js] topMediaList 内容(修正后):', fixedList);
+        this.setData({ topMediaList: fixedList });
         // 🔴 更新缓存
-        this.ensureShopDataCache().topMediaList = res.data.list;
+        this.ensureShopDataCache().topMediaList = fixedList;
       } else {
         console.log('[shop.js] ⚠️ res.data 为空或没有 list 字段');
       }
@@ -816,12 +827,32 @@ Page({
           console.log(`[shop.js]   jumpNumber: ${item.jumpNumber}`);
           console.log(`[shop.js]   完整对象:`, JSON.stringify(item, null, 2));
         });
+        // 🔴 防御性修复：为 detailImages 自动补全 type（image / video）
+        const fixedSeriesList = (res.data || []).map(series => {
+          const fixedDetailImages = (series.detailImages || []).map(item => {
+            if (item.type) return item;
+            const url = (item.url || '').toLowerCase();
+            const isVideo =
+              url.endsWith('.mp4') ||
+              url.endsWith('.mov') ||
+              url.indexOf('.mp4?') !== -1 ||
+              url.indexOf('.mov?') !== -1;
+            return {
+              type: isVideo ? 'video' : 'image',
+              ...item,
+            };
+          });
+          return {
+            ...series,
+            detailImages: fixedDetailImages,
+          };
+        });
         
-        console.log('[shop.js] 设置 seriesList, 数量:', res.data.length);
-        this.setData({ seriesList: res.data });
+        console.log('[shop.js] 设置 seriesList, 数量:', fixedSeriesList.length);
+        this.setData({ seriesList: fixedSeriesList });
         console.log('[shop.js] ✅ seriesList 已更新到页面数据');
         // 🔴 更新缓存
-        this.ensureShopDataCache().seriesList = res.data;
+        this.ensureShopDataCache().seriesList = fixedSeriesList;
         
         // 如果有跳转号码，立即跳转到对应产品
         if (this.jumpNumber) {
@@ -4432,8 +4463,8 @@ Page({
       shippingMethod
     });
 
-    // 【新增】管理员身份（授权或已点EDIT）：支付 0.01 元
-    const isAdminPay = this.data.isAdmin || this.data.isAuthorized;
+    // 【新增】仅管理员身份支付 0.01 元（普通用户按真实金额）
+    const isAdminPay = this.data.isAdmin;
     let payAmount = finalTotalPrice;
     if (isAdminPay) {
       payAmount = 0.01;

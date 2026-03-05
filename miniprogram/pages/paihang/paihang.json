@@ -1,6 +1,6 @@
 {
   "navigationBarTitleText": "MotoRank",
-  "navigationStyle": "custom",
+  "navigationBarBackgroundColor": "#000000",
   "navigationBarTextStyle": "white",
   "backgroundColor": "#000000"
 }

@@ -619,11 +619,12 @@ page {
 
 /* 顶部导航 */
 .header {
-  position: fixed; top: 0; left: 0; right: 0; height: 180rpx;
-  padding-top: 80rpx; padding-left: 40rpx; padding-right: 40rpx;
+  position: fixed; top: 0; left: 0; right: 0;
+  padding-left: 40rpx; padding-right: 40rpx;
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
   z-index: 10000; pointer-events: none; /* 🔴 提高 z-index 确保返回键显示 */
   background: transparent; 
+  /* 🔴 使用动态计算高度，通过内联样式设置 padding-top 和 height */
 }
 
 /* ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= */
@@ -773,7 +774,7 @@ page {
 .back-icon {
   position: absolute;
   left: 40rpx;
-  top: calc(env(safe-area-inset-top, 0px) + 20rpx); /* 🔴 减少顶部间距 */
+  /* 🔴 使用动态计算，通过内联样式设置 top */
   width: 70rpx;
   height: 70rpx;
   display: flex;

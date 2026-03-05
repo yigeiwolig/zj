@@ -109,9 +109,7 @@
   box-sizing: border-box; display: flex; justify-content: space-between; align-items: center;
   z-index: 100; pointer-events: none;
   background: transparent; 
-  /* 🔴 使用动态计算高度，考虑状态栏和导航栏 */
-  padding-top: calc(env(safe-area-inset-top, 0px) + 44px); /* 状态栏 + 导航栏高度 */
-  height: calc(env(safe-area-inset-top, 0px) + 44px + 20px); /* 总高度 */
+  /* 🔴 使用动态计算高度，通过内联样式设置 padding-top 和 height */
 }
 /* 管理员切换按钮居中 */
 .admin-toggle-wrapper {
@@ -124,8 +122,7 @@
 .back-icon {
   position: absolute;
   left: 40rpx;
-  /* 🔴 使用动态计算，垂直居中在导航栏内 */
-  top: calc(env(safe-area-inset-top, 0px) + 22px); /* 状态栏 + 导航栏一半高度 - 返回键一半高度 */
+  /* 🔴 使用动态计算，通过内联样式设置 top */
   width: 70rpx;
   height: 70rpx;
   display: flex;
@@ -5654,6 +5651,13 @@
   padding: 28rpx 28rpx 20rpx; 
 }
 
+.r-addr-row {
+  margin-top: 8rpx;
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+}
+
 .r-title { 
   font-weight: 700; 
   font-size: 34rpx; 
@@ -5674,6 +5678,31 @@
   color: #8E8E93;
   line-height: 1.5;
   word-break: break-all;
+  flex: 1;
+}
+
+.r-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6rpx 16rpx;
+  background: #E5E5EA;
+  border-radius: 8rpx;
+  color: #000;
+  font-size: 22rpx;
+  font-weight: 500;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.r-copy-btn:active {
+  opacity: 0.7;
+  transform: scale(0.96);
+}
+
+.r-copy-text {
+  font-size: 22rpx;
+  color: #000;
 }
 
 /* 需要寄回开关 */
