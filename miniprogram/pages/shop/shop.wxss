@@ -581,7 +581,8 @@ page {
   width: 100%; 
   height: 100%; 
   display: block; 
-  object-fit: cover; 
+  /* 配合 image 的 mode="aspectFit"，保证完整显示，不裁切 */
+  object-fit: contain;
 }
 .admin-del-abs { position: absolute; top: 20rpx; right: 20rpx; background: red; color: #fff; width: 50rpx; height: 50rpx; border-radius: 50%; text-align: center; line-height: 50rpx; }
 .add-txt-btn { text-align: center; padding: 40rpx; color: #0071E3; font-weight: 600; font-size: 26rpx; }
@@ -816,7 +817,11 @@ page {
 }
 .acc-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .acc-n { font-size: 28rpx; font-weight: 600; }
-.acc-p { font-size: 26rpx; color: #666; margin-top: 6rpx; }
+.acc-p { 
+  font-size: 26rpx; 
+  color: #007AFF; /* 配件价格改为蓝色，与主色保持一致 */
+  margin-top: 6rpx; 
+}
 
 /* ======================================================== */
 /* 优化后的配件按钮：胶囊样式，更大，更好点 */

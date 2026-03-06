@@ -206,7 +206,8 @@
                   </view>
                 </view>
               </view>
-              <image wx:else src="{{item.url}}" mode="aspectFill" class="dimg" />
+              <!-- 16:9 容器内完整显示，不裁切 -->
+              <image wx:else src="{{item.url}}" mode="aspectFit" class="dimg" />
               
               <view wx:if="{{isAdmin && !isDetailDragging}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
            </view>
@@ -269,15 +270,19 @@
         </view>
 
         <!-- B. 配置方案 -->
-        <view class="cfg-group">
+        <!-- 普通用户：只有当当前系列存在配置项时才显示；
+             管理员：即使没有配置项也显示（方便添加新的配置方案） -->
+        <view class="cfg-group" wx:if="{{(currentSeries.options && currentSeries.options.length > 0) || isAdmin}}">
           <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="optionTitle">
             {{currentSeries.labels.optionTitle || '配置方案'}}
           </view>
           <view class="opt-grid {{isAdmin ? 'admin-mode' : ''}}">
              <block wx:for="{{currentSeries.options}}" wx:key="name">
                 <view class="opt-card {{selectedOptionIdx === index ? 'selected' : ''}} {{isAdmin ? 'admin-mode' : ''}}" bindtap="selectOption" data-index="{{index}}">
-                   <!-- 普通模式：显示图片 -->
-                   <image wx:if="{{item.img && !isAdmin}}" src="{{item.img}}" class="opt-img" mode="aspectFill" />
+                  <!-- 普通模式：显示图片（用 16:9 容器包一层，避免高度为 0 导致不显示） -->
+                  <view wx:if="{{item.img && !isAdmin}}" class="opt-img">
+                    <image src="{{item.img}}" mode="aspectFill"></image>
+                  </view>
                    
                    <!-- 管理员模式：左边文字区域 -->
                    <view class="opt-info">

@@ -122,19 +122,18 @@
               <text class="info-value">{{item.banPageText}}</text>
             </view>
             
-            <view class="info-row" wx:if="{{item.province || item.city || item.latitude}}">
+            <!-- 地址行：拆成三种情况，避免嵌套 block / text 带来的缩进问题 -->
+            <view class="info-row" wx:if="{{item.province || item.city || item.district}}">
               <text class="info-label">地址：</text>
-              <text class="info-value">
-                <block wx:if="{{item.province || item.city}}">
-                  {{item.province}}{{item.city}}{{item.district}}
-                </block>
-                <block wx:else>
-                  <text wx:if="{{item.latitude && item.longitude}}">
-                    经纬度: {{item.latitude}}, {{item.longitude}}
-                  </text>
-                  <text wx:else>未获取到地址</text>
-                </block>
-              </text>
+              <text class="info-value">{{item.province}}{{item.city}}{{item.district}}</text>
+            </view>
+            <view class="info-row" wx:elif="{{item.latitude && item.longitude}}">
+              <text class="info-label">地址：</text>
+              <text class="info-value">经纬度: {{item.latitude}}, {{item.longitude}}</text>
+            </view>
+            <view class="info-row" wx:else>
+              <text class="info-label">地址：</text>
+              <text class="info-value">未获取到地址</text>
             </view>
             
             <view class="info-row" wx:if="{{item.address}}">

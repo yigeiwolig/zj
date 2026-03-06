@@ -93,6 +93,17 @@ Page({
     if (wx.hideShareMenu) {
       wx.hideShareMenu();
     }
+    
+    // 🔴 关键修复：从后台返回时需要恢复自动检测
+    // onHide / onUnload 会把 _isPageDestroyed 设为 true 并停止轮询
+    // 如果管理员这时已经在后台把用户解封了，但这里不重启检测，
+    // 页面就永远停在 "等待管理员解封..." 的状态，除非用户重启小程序。
+    this._isPageDestroyed = false;
+    // 如果当前没有定时器，并且已经过了写入保护期，可以重新启动自动检测
+    if (!this.checkTimer && this.data.canCheck) {
+      console.log('[blocked] 页面重新显示，恢复云端状态检测');
+      this.startAutoCheck();
+    }
   },
 
   onHide() {

@@ -2215,13 +2215,36 @@ Page({
       this.saveSeriesToCloud(s);
   },
   adminDelOption(e) {
+      const idx = e.currentTarget.dataset.oidx;
       const s = this.data.currentSeries;
-      if(s.options.length>1) {
-          s.options.splice(e.currentTarget.dataset.oidx, 1);
-          this.setData({currentSeries:s, selectedOptionIdx:0, [`seriesList[${this.data.currentSeriesIdx}]`]: s});
-          this.calcTotal();
-          this.saveSeriesToCloud(s);
+
+      if (!s.options || s.options.length === 0) {
+        return;
       }
+
+      // 直接删除当前索引的配置项，允许删到 0 个
+      s.options.splice(idx, 1);
+
+      // 重新计算选中索引：
+      // - 如果还有配置项，尽量保持在相同位置
+      // - 如果删到 0 个，则设置为 -1（未选择）
+      let newSelectedIdx = this.data.selectedOptionIdx;
+      if (s.options.length === 0) {
+        newSelectedIdx = -1;
+      } else {
+        if (newSelectedIdx >= s.options.length) {
+          newSelectedIdx = s.options.length - 1;
+        }
+      }
+
+      this.setData({
+        currentSeries: s,
+        selectedOptionIdx: newSelectedIdx,
+        [`seriesList[${this.data.currentSeriesIdx}]`]: s
+      });
+
+      this.calcTotal();
+      this.saveSeriesToCloud(s);
   },
   adminUploadOptionImg(e) {
       const idx = e.currentTarget.dataset.oidx;
@@ -3951,22 +3974,31 @@ Page({
   // 修改：执行添加逻辑 (加入严谨验证)
   // ========================================================
   _addCurrentSelectionToCart() {
+    const { currentSeries } = this.data;
+
     // 1. 验证：是否选择了型号
     if (this.data.selectedModelIdx === -1) {
       this.showCenterToast('未选购产品'); // 中间弹窗
       return { success: false };
     }
 
-    // 2. 验证：是否选择了配置 (新增逻辑)
-    if (this.data.selectedOptionIdx === -1) {
+    // 2. 验证：是否选择了配置
+    //    只有在当前系列"确实存在配置项"时才强制要求选择；
+    //    如果该系列没有任何配置项（options 为空），则跳过此校验。
+    const hasOptions = currentSeries && Array.isArray(currentSeries.options) && currentSeries.options.length > 0;
+    if (hasOptions && this.data.selectedOptionIdx === -1) {
       this.showCenterToast('请选择配置'); // 中间弹窗
       return { success: false };
     }
 
     // ... 以下逻辑保持不变 ...
-    const {currentSeries, selectedModelIdx, selectedOptionIdx, accessoryList} = this.data;
+    const { selectedModelIdx, selectedOptionIdx, accessoryList } = this.data;
     const m = currentSeries.models[selectedModelIdx];
-    const o = currentSeries.options[selectedOptionIdx]; // 此时肯定选了
+    // 如果没有配置项，或未选择配置，则使用一个“虚拟配置”，价格为 0
+    const hasRealOption = hasOptions && selectedOptionIdx > -1 && currentSeries.options[selectedOptionIdx];
+    const o = hasRealOption 
+      ? currentSeries.options[selectedOptionIdx] 
+      : { name: '默认配置', price: 0 };
 
     let newCart = [...this.data.cart];
 
