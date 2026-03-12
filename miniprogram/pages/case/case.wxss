@@ -97,15 +97,15 @@ page {
   top: 0;
   left: 0;
   right: 0;
-  padding-left: 40rpx;
+  padding-left: 40rpx; 
   padding-right: 40rpx;
-  box-sizing: border-box;
-  display: flex;
-  justify-content: space-between;
+  box-sizing: border-box; 
+  display: flex; 
+  justify-content: space-between; 
   align-items: center;
   z-index: 10000;
   pointer-events: none;
-  background: transparent;
+  background: transparent; 
 }
 
 .back-icon {
@@ -1464,10 +1464,10 @@ page {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  justify-content: center; 
 }
 
 .upload-icon { 

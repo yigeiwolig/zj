@@ -18,7 +18,7 @@ page {
   align-items: center;
   z-index: 10000;
   pointer-events: none;
-  background: transparent;
+  background: transparent; 
 }
 
 .back-icon {

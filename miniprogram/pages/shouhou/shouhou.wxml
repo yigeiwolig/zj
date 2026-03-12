@@ -6,16 +6,16 @@
   <!-- 自定义导航栏 -->
   <view class="header" style="padding-top: {{statusBarHeight}}px;">
     <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
-      <text class="back-arrow">‹</text>
+        <text class="back-arrow">‹</text>
+      </view>
     </view>
-  </view>
   <view class="nav-header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
     <view class="brand-title" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
       <text>MT 维修中心</text>
-      <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
-        {{isAdmin ? 'EXIT' : 'EDIT'}}
+        <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
+          {{isAdmin ? 'EXIT' : 'EDIT'}}
+        </view>
       </view>
-    </view>
   </view>
   
   <!-- F1 系列 -->
@@ -339,21 +339,21 @@
               class="ios-select" 
               bindtap="openDevicePicker"
             >
-              <!-- 未选择时：显示红色提示文字（居中） -->
-              <block wx:if="{{selectedDeviceIndex === null}}">
+                <!-- 未选择时：显示红色提示文字（居中） -->
+                <block wx:if="{{selectedDeviceIndex === null}}">
                 <text class="ios-select-placeholder-text">请选择故障设备</text>
-              </block>
-              <!-- 已选择时：左边显示 SN，右边显示型号 -->
-              <block wx:else>
-                <text class="ios-select-sn">{{myDevices[selectedDeviceIndex].displaySn}}</text>
+                </block>
+                <!-- 已选择时：左边显示 SN，右边显示型号 -->
+                <block wx:else>
+                  <text class="ios-select-sn">{{myDevices[selectedDeviceIndex].displaySn}}</text>
                 <view class="ios-select-model-wrapper">
                   <text class="ios-select-model {{myDevices[selectedDeviceIndex].expiryDate ? (myDevices[selectedDeviceIndex].warrantyExpired ? 'ios-select-model-expired' : 'ios-select-model-active') : ''}}">
                     {{myDevices[selectedDeviceIndex].productModel || '未知型号'}}
                   </text>
                 </view>
-              </block>
-              <text class="ios-select-arrow">⌵</text>
-            </view>
+                </block>
+                <text class="ios-select-arrow">⌵</text>
+              </view>
             <!-- 没有设备列表时的提示（与 case 页风格一致） -->
             <view wx:else class="ios-select repair-no-device">
               未找到已绑定设备

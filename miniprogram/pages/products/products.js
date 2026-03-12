@@ -383,7 +383,7 @@ Page({
     }
   },
 
-  // 🔴 获取位置和设备信息的辅助函数（必须解析出详细地址）
+  // 🔴 获取位置和设备信息的辅助函数（必须解析出详细地址，带超时保护）
   async _getLocationAndDeviceInfo() {
     const sysInfo = wx.getSystemInfoSync();
     const deviceInfo = {
@@ -402,25 +402,35 @@ Page({
     }
     
     try {
-      // 获取当前位置
-      const locationRes = await new Promise((resolve, reject) => {
-        wx.getLocation({
-          type: 'gcj02',
-          success: resolve,
-          fail: reject
-        });
-      });
+      // 🔴 获取当前位置（带超时保护，最多等待 3 秒）
+      const locationRes = await Promise.race([
+        new Promise((resolve, reject) => {
+          wx.getLocation({
+            type: 'gcj02',
+            success: resolve,
+            fail: reject
+          });
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('获取定位超时')), 3000)
+        )
+      ]);
 
       const lat = locationRes.latitude;
       const lng = locationRes.longitude;
       
-      // 🔴 使用带重试机制的逆地理编码获取详细地址
+      // 🔴 使用带重试机制的逆地理编码获取详细地址（减少超时时间，加快响应）
       const { reverseGeocodeWithRetry } = require('../../utils/reverseGeocode.js');
-      const addressData = await reverseGeocodeWithRetry(lat, lng, {
-        maxRetries: 3,
-        timeout: 10000,
-        retryDelay: 1000
-      });
+      const addressData = await Promise.race([
+        reverseGeocodeWithRetry(lat, lng, {
+          maxRetries: 2, // 减少重试次数，从 3 次降到 2 次
+          timeout: 5000, // 减少单次超时时间，从 10 秒降到 5 秒
+          retryDelay: 500 // 减少重试延迟，从 1 秒降到 0.5 秒
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('逆地理编码超时')), 8000)
+        )
+      ]);
 
       return {
         ...addressData,
@@ -457,8 +467,12 @@ Page({
     // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
 
-    // 🔴 异步调用云函数（不阻塞跳转）
+    // 🔴 异步调用云函数（不阻塞跳转，带超时保护）
     const sysInfo = wx.getSystemInfoSync();
+    const cloudCallTimeout = setTimeout(() => {
+      console.warn('[products] ⚠️ 云函数调用超时（5秒），已跳过');
+    }, 5000);
+    
     wx.cloud.callFunction({
       name: 'banUserByScreenshot',
       data: {
@@ -468,15 +482,30 @@ Page({
         phoneModel: sysInfo.model || ''
       },
       success: (res) => {
+        clearTimeout(cloudCallTimeout);
         console.log('[products] ✅ 设置封禁状态成功:', res);
       },
       fail: (err) => {
+        clearTimeout(cloudCallTimeout);
         console.error('[products] ⚠️ 设置封禁状态失败:', err);
       }
     });
 
-    // 🔴 异步补充位置信息（不阻塞，可选）
-    this._getLocationAndDeviceInfo().then(locationData => {
+    // 🔴 异步补充位置信息（不阻塞，可选，带超时保护）
+    const locationTimeout = setTimeout(() => {
+      console.warn('[products] ⚠️ 位置信息获取超时（8秒），已跳过');
+    }, 8000);
+    
+    Promise.race([
+      this._getLocationAndDeviceInfo(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('位置信息获取超时')), 8000))
+    ]).then(locationData => {
+      clearTimeout(locationTimeout);
+      // 再次调用云函数补充位置信息（也带超时）
+      const updateTimeout = setTimeout(() => {
+        console.warn('[products] ⚠️ 更新位置信息超时（5秒），已跳过');
+      }, 5000);
+      
       wx.cloud.callFunction({
         name: 'banUserByScreenshot',
         data: {
@@ -485,15 +514,18 @@ Page({
           ...locationData
         },
         success: (res) => {
+          clearTimeout(updateTimeout);
           console.log('[products] 补充位置信息成功，类型:', type, '结果:', res);
         },
         fail: (err) => {
+          clearTimeout(updateTimeout);
           console.error('[products] 补充位置信息失败:', err);
         }
       });
-    }).catch(() => {
+    }).catch((err) => {
+      clearTimeout(locationTimeout);
       // 位置信息获取失败，不影响，已经设置了封禁状态
-      console.log('[products] 位置信息获取失败，但封禁状态已设置');
+      console.log('[products] 位置信息获取失败或超时，但封禁状态已设置:', err.message || err);
     });
   },
 
@@ -820,7 +852,7 @@ Page({
       this.setData({ statusBarHeight: 44, navBarHeight: 44 });
     }
   },
-
+  
   goBack() { 
     wx.reLaunch({ url: '/pages/index/index' }); 
   },

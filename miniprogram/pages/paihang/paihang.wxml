@@ -9,15 +9,15 @@
   </view>
   <view class="nav-header" style="padding-top: {{statusBarHeight}}px; min-height: {{statusBarHeight + navBarHeight + 20}}px;">
     <view class="brand-title" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
-      <text class="brand-sub">{{isAdminMode ? 'ADMIN MODE' : 'LIVE STANDINGS'}}</text>
-      <view class="brand-main">
+        <text class="brand-sub">{{isAdminMode ? 'ADMIN MODE' : 'LIVE STANDINGS'}}</text>
+        <view class="brand-main">
         <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdminMode ? 'on' : ''}}" catchtap="toggleAdminMode">
-          {{isAdminMode ? 'EXIT' : 'EDIT'}}
+            {{isAdminMode ? 'EXIT' : 'EDIT'}}
+          </view>
+          MOTO<text class="text-accent">GP</text>
+          <text wx:if="{{isAdminMode}}" class="admin-tag">已解锁</text>
         </view>
-        MOTO<text class="text-accent">GP</text>
-        <text wx:if="{{isAdminMode}}" class="admin-tag">已解锁</text>
       </view>
-    </view>
     <!-- 只有榜单页显示顶部开关 -->
     <block wx:if="{{currentTab === 'rank'}}">
       <view class="filter-row" style="top: {{statusBarHeight + navBarHeight}}px;">

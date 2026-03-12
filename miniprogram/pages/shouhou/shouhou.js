@@ -5272,8 +5272,8 @@ Page({
             warrantyExpired = diff <= 0;
           }
           return {
-            ...device,
-            displaySn: device.displaySn || ('MT' + (device.sn || '')),
+          ...device,
+          displaySn: device.displaySn || ('MT' + (device.sn || '')),
             productModel: device.productModel || device.name || '未知型号',  // 🔴 确保 productModel 有值
             warrantyExpired
           };

@@ -9,18 +9,18 @@
 </view>
 <view class="nav-header" wx:if="{{!showVideoPlayer}}" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
   <view class="brand-title" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
-    <text>MT 案例库</text>
+      <text>MT 案例库</text>
     <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
-      {{isAdmin ? 'EXIT' : 'EDIT'}}
-    </view>
+        {{isAdmin ? 'EXIT' : 'EDIT'}}
+      </view>
   </view>
   <!-- 管理员子模式切换 -->
   <view wx:if="{{isAdmin}}" class="admin-submode-btns" style="top: {{statusBarHeight + navBarHeight}}px;">
     <view class="submode-btn {{adminSubMode === 'edit' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="edit">
-      视频编辑
-    </view>
+          视频编辑
+        </view>
     <view class="submode-btn {{adminSubMode === 'manage' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="manage">
-      管理现有视频
+          管理现有视频
     </view>
   </view>
 </view>

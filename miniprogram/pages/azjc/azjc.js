@@ -2515,7 +2515,7 @@ Page({
       // 兜底：极端情况下直接回到首页
       wx.switchTab({
         url: '/pages/index/index'
-      });
+    });
     }
   },
 

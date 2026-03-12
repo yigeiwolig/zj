@@ -338,14 +338,14 @@ Page({
       .then(res => {
         getApp().hideLoading();
         const cloudListWithIndex = res.data.map((item, idx) => ({
-          _id: item._id,
-          type: item.category || 'street',
-          title: item.vehicleName || '无标题',
-          model: item.model || '未知',
-          categoryName: item.categoryName || null,
-          color: this.getRandomColor(),
-          videoUrl: item.videoFileID,
-          coverUrl: item.coverFileID || null,
+            _id: item._id,
+            type: item.category || 'street',
+            title: item.vehicleName || '无标题',
+            model: item.model || '未知',
+            categoryName: item.categoryName || null,
+            color: this.getRandomColor(),
+            videoUrl: item.videoFileID,
+            coverUrl: item.coverFileID || null,
           displayTime: item.createTime ? this.formatTime(item.createTime) : null,
           // 🔴 新增：用于排序的字段（没有则为 null）
           sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : null,
