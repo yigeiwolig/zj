@@ -749,7 +749,7 @@
                   <text class="status-text-main" wx:if="{{item.deductionReason === '配件错误' || item.deductionReason === 'wrong_part'}}">配件错误</text>
                   <text class="status-text-main" wx:elif="{{item.deductionReason === '超时' || item.deductionReason === 'timeout'}}">超时未寄</text>
                   <text class="status-text-main" wx:else>已扣质保</text>
-                  <text class="status-text-sub">已扣除 30 天质保</text>
+                  <text class="status-text-sub">已扣除半年质保（180天）</text>
                 </view>
               </view>
             </view>

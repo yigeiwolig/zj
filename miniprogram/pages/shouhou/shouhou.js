@@ -1443,6 +1443,7 @@ Page({
                   // 降级：使用 navigateTo（如果 my 不是 tabBar 页面）
                   wx.navigateTo({
                     url: '/pages/my/my',
+                    animationType: 'none',
                     success: () => {
                       console.log('[checkDeviceBeforeRepair] navigateTo 跳转成功');
                     },
@@ -1490,21 +1491,19 @@ Page({
         if (unfinishedReturns.length > 0) {
           // 有未完成的寄回订单，显示提示并阻止切换
           this.showAutoToast('提示', '检测到您有一笔未完成的售后，未寄回维修配件，请先处理完成');
-          // 延迟跳转，让用户看到提示
-          setTimeout(() => {
-            // 跳转到个人中心
-            console.log('[checkUnfinishedReturn] 准备跳转到 my 页面');
-            wx.navigateTo({ 
-              url: '/pages/my/my',
-              success: () => {
-                console.log('[checkUnfinishedReturn] 跳转成功');
-              },
-              fail: (err) => {
-                console.error('[checkUnfinishedReturn] 跳转失败:', err);
-                this._showCustomToast('跳转失败，请手动进入个人中心', 'none');
-              }
-            });
-          }, 3000);
+          // 立即跳转，避免点击后体感卡顿
+          console.log('[checkUnfinishedReturn] 准备跳转到 my 页面');
+          wx.navigateTo({ 
+            url: '/pages/my/my',
+            animationType: 'none',
+            success: () => {
+              console.log('[checkUnfinishedReturn] 跳转成功');
+            },
+            fail: (err) => {
+              console.error('[checkUnfinishedReturn] 跳转失败:', err);
+              this._showCustomToast('跳转失败，请手动进入个人中心', 'none');
+            }
+          });
           return; // 不切换服务类型
         }
         
@@ -4201,7 +4200,7 @@ Page({
                 this.callCheckPayResult(orderId);
               }
               
-              wx.navigateTo({ url: '/pages/my/my' });
+              wx.navigateTo({ url: '/pages/my/my', animationType: 'none' });
             },
             fail: () => {
               this._showCustomToast('支付取消', 'none');
@@ -4428,7 +4427,7 @@ Page({
                 });
               } else {
                 // 如果没有上一页，跳转到 my 页面
-              wx.navigateTo({ url: '/pages/my/my' });
+              wx.navigateTo({ url: '/pages/my/my', animationType: 'none' });
               setTimeout(() => {
                 const pages = getCurrentPages();
                 const myPage = pages[pages.length - 1];

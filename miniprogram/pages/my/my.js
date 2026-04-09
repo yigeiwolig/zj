@@ -1238,7 +1238,8 @@ Page({
     if (order.realStatus === 'SIGNED' || order.realStatus === 'COMPLETED') {
       console.log('[viewTutorialAndSign] 订单已签收，直接跳转教程')
       wx.navigateTo({
-        url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '')
+        url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : ''),
+        animationType: 'none'
       })
       return
     }
@@ -1409,6 +1410,7 @@ Page({
               : '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '') + '&justConfirmed=1';
             wx.navigateTo({
               url: tutorialUrl,
+              animationType: 'none',
               success: () => {
                 this.showAutoToast('成功', isShouhou ? '售后教程已解锁' : '教程已解锁');
               },
@@ -1417,7 +1419,7 @@ Page({
                 this.showAutoToast('提示', '跳转失败，请重试');
               }
             });
-          }, 800); // 等待 800ms
+          }, 120); // 缩短等待，避免点击后体感卡顿
           
         } else {
           this.hideMyLoading();
@@ -1471,9 +1473,10 @@ Page({
     setTimeout(() => {
       const modelName = e.currentTarget.dataset.model || '';
       wx.navigateTo({
-        url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '')
+        url: '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : ''),
+        animationType: 'none'
       });
-    }, 3000);
+    }, 150);
   },
 
   // 🔴 生成安装教程分享码
@@ -3694,7 +3697,7 @@ Page({
     
     this.showMyDialog({
       title: '扣除质保',
-      content: '确认扣除用户30天质保？扣除后将显示"配件错误·扣30天"。',
+      content: '确认扣除用户半年质保（180天）？扣除后将显示"配件错误·扣半年"。',
       showCancel: true,
       confirmText: '确定',
       cancelText: '取消',
@@ -3721,7 +3724,7 @@ Page({
                 // 成功扣除（云函数已经更新了数据库状态，前端只需刷新）
                 this.showMyDialog({
                   title: '操作成功',
-                  content: '已扣除用户30天质保',
+                  content: '已扣除用户半年质保（180天）',
                   showCancel: false,
                   confirmText: '好的',
                   success: () => {
@@ -5165,13 +5168,13 @@ Page({
         } else if (i.warrantyDeducted || i.isWarrantyDeducted) {
         // 🔴 优先检查扣除质保状态
           if (i.deductionReason === '配件错误' || i.deductionReason === 'wrong_part') {
-            statusText = '配件错误·扣30天';
+            statusText = '配件错误·扣半年';
             statusClass = 'fail';
           } else if (i.deductionReason === '超时' || i.deductionReason === 'timeout') {
-            statusText = '超时未寄·扣30天';
+            statusText = '超时未寄·扣半年';
             statusClass = 'fail';
           } else {
-            statusText = '扣30天质保';
+            statusText = '扣半年质保';
             statusClass = 'fail';
           }
           statusNum = 1; // 已处理
@@ -7354,6 +7357,7 @@ Page({
   goToRepairService() {
     wx.navigateTo({
       url: '/pages/shouhou/shouhou',
+      animationType: 'none',
       success: () => {
         console.log('[my.js] 跳转到预约维修服务成功');
       },
@@ -7368,6 +7372,7 @@ Page({
   goToCustomerService() {
     wx.navigateTo({
       url: '/pages/call/call',
+      animationType: 'none',
       success: () => {
         console.log('[my.js] 跳转到联系在线客服成功');
       },
@@ -7419,7 +7424,7 @@ Page({
     if (model) {
       wx.redirectTo({ url });
     } else {
-      wx.navigateTo({ url });
+      wx.navigateTo({ url, animationType: 'none' });
     }
   },
 
@@ -7431,9 +7436,9 @@ Page({
       : myPurchasePartsRepair;
     if (repair && repair.needPurchaseParts && repair.model) {
       const model = encodeURIComponent(String(repair.model).trim());
-      wx.navigateTo({ url: '/pages/shouhou/shouhou?model=' + model });
+      wx.navigateTo({ url: '/pages/shouhou/shouhou?model=' + model, animationType: 'none' });
     } else {
-      wx.navigateTo({ url: '/pages/shouhou/shouhou' });
+      wx.navigateTo({ url: '/pages/shouhou/shouhou', animationType: 'none' });
     }
   },
 

@@ -429,6 +429,11 @@ Page({
     isScanning: false, // 是否正在扫描
     connectedDeviceName: '',
     touchStartX: 0,
+    detailSwipeStartX: 0,
+    detailSwipeStartY: 0,
+    detailSwipeTracking: false,
+    detailOpenGuardUntil: 0,
+    blockDetailTouch: false,
     
     // 角度控制（旧旋转臂仍保留给折叠逻辑使用）
     angleMode: '90', 
@@ -506,10 +511,10 @@ Page({
     showFactoryResetModal: false, // 是否显示出厂设置弹窗
     factoryResetStep: 0, // 当前步骤：0=打开收回, 1=开启自检, 2=开机上翻, 3=自动调平
     factoryResetSteps: [
-      { text: '正在打开自动收回', data: '打开收回' },
-      { text: '正在开启自检', data: '开启自检' },
-      { text: '正在打开开机牌上翻', data: '开机上翻' },
-      { text: '正在自动调平，请用手进行阻挡', data: '自动调平', isLeveling: true }
+      { text: '正在打开自动收回', data: '打开收回', sendTimes: 2, interval: 500, delayNext: 2000 },
+      { text: '正在开启自检', data: '开启自检', sendTimes: 2, interval: 500, delayNext: 2000 },
+      { text: '正在打开开机牌上翻', data: '开机上翻', sendTimes: 2, interval: 500, delayNext: 2000 },
+      { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true }
     ],
     stealthAnimPressing: false, // 按钮是否按下
     stealthAnimLight: false,    // 灯光状态（用于闪烁）
@@ -522,7 +527,7 @@ Page({
     stealthTextBlinkInterval: null, // 文字闪烁定时器（用于退出模式后5次）
   },
 
-  onLoad() {
+  onLoad(options) {
     // 🔴 计算导航栏高度（适配所有机型）
     this.calcNavBarInfo();
     
@@ -532,11 +537,18 @@ Page({
       app.globalData.updatePageVisit('scan');
     }
     
-    // 初始化当前模型
-    const currentModel = this.data.models[0];
+    // 初始化当前模型（支持从 products 兜底恢复到指定卡片）
+    let restoreIndex = 0;
+    if (options && options.restoreIndex !== undefined) {
+      const parsed = parseInt(options.restoreIndex, 10);
+      if (!isNaN(parsed) && parsed >= 0 && parsed < this.data.models.length) {
+        restoreIndex = parsed;
+      }
+    }
+    const currentModel = this.data.models[restoreIndex] || this.data.models[0];
     this.setData({ currentModel });
     // 确保首屏状态：active/next/prev，且不循环
-    this.updateCardStatus(0);
+    this.updateCardStatus(restoreIndex);
 
     this.ble = new BLEHelper(wx);
     
@@ -701,6 +713,16 @@ Page({
   },
 
   onHide() {
+    // 兜底：若详情主层被系统手势带走，记录恢复信息给 products onShow 使用
+    try {
+      if (this.data.showDetail && this.data.detailMode === 'main') {
+        wx.setStorageSync('__scan_recover_payload__', {
+          ts: Date.now(),
+          index: this.data.currentIndex || 0
+        });
+      }
+    } catch (e) {}
+
     // 🔴 停止定时检查
     const app = getApp();
     if (app && app.stopQiangliCheck) {
@@ -719,6 +741,10 @@ Page({
     this.stopTutorialLoop();
     this.stopOpenAngleTutorialLoop();
     this.stopStealthAnim();
+    if (this._detailBlockTimer) {
+      clearTimeout(this._detailBlockTimer);
+      this._detailBlockTimer = null;
+    }
     // 释放弹窗延迟定时器
     if (this.modalDelayTimer) clearTimeout(this.modalDelayTimer);
     if (this.ble) this.ble.disconnect();
@@ -743,6 +769,8 @@ Page({
 
   // 1-2. 通用打开教学弹窗函数
   openStealthTutorialWithMode(mode) {
+    // 防止“点击进入控制台”后出现点击透传，误打开教学弹窗
+    if (Date.now() < (this._controlTapLockUntil || this.data.detailOpenGuardUntil || 0)) return;
     const isEnter = mode === 'enter';
     // 步骤1：第一帧（初始状态）
     this.setData({ 
@@ -782,6 +810,7 @@ Page({
   // 🔴 出厂设置功能（F1 MAX / F2 PRO / F2 PRO Long / F2 MAX 系列）
   // ===============================================
   handleFactoryReset() {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
     console.log('🔧 [管理员] 点击出厂设置按钮');
     
     // 检查是否为管理员
@@ -835,8 +864,51 @@ Page({
         { text: '正在打开开机牌上翻', data: '开机上翻', sendTimes: 2, interval: 500, delayNext: 2000 },
         { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true, isFinal: true }
       ];
-    } else if (isF1Max || isF2ProSeries) {
-      // F1 MAX / F2 PRO / F2 PRO Long：
+    } else if (isF1Max) {
+      // F1 MAX：
+      // 在“初始化角度（折叠点归零）”之前，先设置“关机位置=收回”（发送“打开收回”）
+      // 之后再进入原有初始化流程，第一步仍需用户点击确认
+      steps = [
+        {
+          text: '正在设置关机位置为收回',
+          data: '打开收回',
+          sendTimes: 2,
+          interval: 500,
+          delayNext: 2000
+        },
+        {
+          text: '初始化角度中',
+          data: '初始化角度',
+          sendTimes: 2,
+          interval: 500,
+          delayNext: 0,          // 等待用户点击确认
+          showConfirm: true
+        },
+        {
+          text: '请长按按钮3秒',
+          data: null,
+          sendTimes: 0,
+          interval: 0,
+          delayNext: 3000
+        },
+        {
+          text: '断开细红线',
+          data: null,
+          sendTimes: 0,
+          interval: 0,
+          delayNext: 3000
+        },
+        {
+          text: '请观察主板是不是还继续亮灯',
+          data: null,
+          sendTimes: 0,
+          interval: 0,
+          delayNext: 0,
+          isFinal: true
+        }
+      ];
+    } else if (isF2ProSeries) {
+      // F2 PRO / F2 PRO Long：
       // 文案拆成多句，每句单独显示 3 秒，
       // 第一步发送“初始化角度”，并且需要用户点击“确认”后才进入下一步
       steps = [
@@ -1165,6 +1237,7 @@ Page({
   // 蓝牙连接交互 (修改版)
   // ===============================================
   async handleConnect() {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
     // 防止重复点击：如果已连接、正在连接、正在跳转到OTA页面，则直接返回
     if (this.data.isConnected || this.data.isConnecting || this.data.isNavigatingToOta) {
       return;
@@ -1393,6 +1466,49 @@ Page({
     }
   },
 
+  // 详情页主层：右滑返回到卡片页（图二）
+  onDetailSwipeStart(e) {
+    if (!this.data.showDetail || this.data.detailMode !== 'main') return;
+    if (!e.touches || !e.touches.length) return;
+    const t = e.touches[0];
+    this.setData({
+      detailSwipeStartX: t.clientX,
+      detailSwipeStartY: t.clientY,
+      detailSwipeTracking: true
+    });
+  },
+
+  onDetailSwipeMove(e) {
+    if (!this.data.detailSwipeTracking) return;
+    if (!this.data.showDetail || this.data.detailMode !== 'main') return;
+    if (!e.touches || !e.touches.length) return;
+    const t = e.touches[0];
+    const dx = t.clientX - this.data.detailSwipeStartX;
+    const dy = t.clientY - this.data.detailSwipeStartY;
+    // 垂直滑动明显时，取消本次返回手势，避免与页面内部交互冲突
+    if (Math.abs(dy) > 40 && Math.abs(dy) > Math.abs(dx)) {
+      this.setData({ detailSwipeTracking: false });
+    }
+  },
+
+  onDetailSwipeEnd(e) {
+    if (!this.data.detailSwipeTracking) return;
+    this.setData({ detailSwipeTracking: false });
+    if (!this.data.showDetail || this.data.detailMode !== 'main') return;
+    if (!e.changedTouches || !e.changedTouches.length) return;
+    const t = e.changedTouches[0];
+    const startX = this.data.detailSwipeStartX;
+    const dx = t.clientX - this.data.detailSwipeStartX;
+    const dy = t.clientY - this.data.detailSwipeStartY;
+    // 左边缘优先：从屏幕最左侧轻扫时，降低触发阈值，更贴近系统返回手势
+    const isEdgeSwipe = startX <= 28;
+    const threshold = isEdgeSwipe ? 40 : 70;
+    // 详情层支持左右横滑返回图二（你习惯左滑也可触发）
+    if (Math.abs(dx) > threshold && Math.abs(dy) < 50) {
+      this.setData({ showDetail: false, detailMode: 'main' });
+    }
+  },
+
   swipe(direction) {
     let current = this.data.currentIndex;
     const total = this.data.models.length;
@@ -1435,6 +1551,7 @@ Page({
 
   openDetail(e) {
     const index = parseInt(e.currentTarget.dataset.index);
+    this._controlTapLockUntil = Date.now() + 100;
     this.updateCardStatus(index);
     const currentModel = this.data.models[index];
     const isF1 = currentModel && currentModel.name.includes('F1');
@@ -1442,8 +1559,16 @@ Page({
       showDetail: true,
       currentModel: currentModel,
       detailMode: 'main',
+      showStealthTutorial: false,
+      detailOpenGuardUntil: Date.now() + 100,
+      blockDetailTouch: true,
       angleBtnText: isF1 ? '180°' : '160°' // 根据机型设置按钮文本
     });
+    if (this._detailBlockTimer) clearTimeout(this._detailBlockTimer);
+    this._detailBlockTimer = setTimeout(() => {
+      this.setData({ blockDetailTouch: false });
+      this._detailBlockTimer = null;
+    }, 100);
   },
 
   // 🔴 计算导航栏高度（标准方法，适配所有机型）
@@ -1466,7 +1591,7 @@ Page({
       if (this.data.detailMode === 'edit') {
         this.setData({ detailMode: 'main' });
       } else {
-        this.setData({ showDetail: false });
+        this.setData({ showDetail: false, blockDetailTouch: false });
         // 断开连接可选
         // if (this.data.isConnected) this.ble.disconnect(); 
       }
@@ -1479,6 +1604,7 @@ Page({
   // 进入编辑模式 (入口分发)
   // ===============================================
   enterEdit(e) {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
     // 🔴 检查蓝牙连接状态：未连接时不允许进入编辑模式（管理员除外）
     if (!this.data.isConnected && !this.data.isAdmin) {
       // 显示"请先连接蓝牙"小胶囊提示
@@ -2305,6 +2431,7 @@ Page({
   // 🔴 自动校准功能
   // ===============================================
   handleAutoCalibrate() {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
     // 🔴 检查蓝牙连接状态：未连接时不允许使用（管理员除外）
     if (!this.data.isConnected && !this.data.isAdmin) {
       // 显示"请先连接蓝牙"小胶囊提示
@@ -2367,6 +2494,7 @@ Page({
 
   // 打开设置弹窗
   openSettings() {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
     // 🔴 检查蓝牙连接状态：未连接时不允许使用（管理员除外）
     if (!this.data.isConnected && !this.data.isAdmin) {
       // 显示"请先连接蓝牙"小胶囊提示

@@ -200,6 +200,7 @@ Page({
     // 跳转到shop页面，并传递号码参数
     wx.navigateTo({
       url: `/pages/shop/shop?jumpNumber=${product.jumpNumber}`,
+      animationType: 'none',
       fail: (err) => {
         console.error('[adminLite] 跳转失败:', err);
         this._showCustomToast('跳转失败', 'none');

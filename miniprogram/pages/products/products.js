@@ -198,6 +198,22 @@ Page({
   async initNewArrivalModal() {
     try {
       if (!wx.cloud) return;
+      const app = getApp();
+      if (!app.globalData.newArrivalCache) {
+        app.globalData.newArrivalCache = { list: null, cacheTime: 0 };
+      }
+
+      // 5分钟内复用缓存，避免每次进入都等云端+首图下载
+      const cache = app.globalData.newArrivalCache;
+      const now = Date.now();
+      if (cache.list && cache.list.length && (now - cache.cacheTime < 5 * 60 * 1000)) {
+        this.setData({
+          newArrivalList: cache.list,
+          newArrivalIndex: 0,
+          showNewArrivalModal: true
+        });
+        return;
+      }
 
       // 确保已初始化云环境（有些场景只在 pagenew 里 init 过）
       if (!this.db) {
@@ -219,6 +235,14 @@ Page({
         return;
       }
 
+      // 预热前两张封面，减少“弹窗出来后还在转圈”的体感
+      await this.prewarmNewArrivalImages(products, 2);
+
+      app.globalData.newArrivalCache = {
+        list: products,
+        cacheTime: now
+      };
+
       console.log('[products] 新品弹窗数据条数:', products.length);
 
       this.setData({
@@ -229,6 +253,23 @@ Page({
     } catch (err) {
       console.error('[products] 加载新品弹窗数据失败:', err);
     }
+  },
+
+  // 预热图片：失败不阻塞流程
+  async prewarmNewArrivalImages(list, count = 2) {
+    const targets = (list || [])
+      .map(item => item && item.cover)
+      .filter(Boolean)
+      .slice(0, count);
+    if (!targets.length) return;
+
+    await Promise.all(targets.map(src => new Promise(resolve => {
+      wx.getImageInfo({
+        src,
+        success: () => resolve(),
+        fail: () => resolve()
+      });
+    })));
   },
 
   // 🆕 弹窗内 swiper 切换
@@ -335,6 +376,21 @@ Page({
       autoToastClosing: false,
       isDrawerOpen: false              // 关闭底部抽屉（对应 drawer-mask）
     });
+
+    // 兜底恢复：若 scan 详情页被系统侧滑误退到 products，自动回 scan 图二对应卡片
+    try {
+      const payload = wx.getStorageSync('__scan_recover_payload__');
+      if (payload && payload.ts && (Date.now() - payload.ts < 2500)) {
+        wx.removeStorageSync('__scan_recover_payload__');
+        const idx = Number(payload.index || 0);
+        setTimeout(() => {
+          wx.reLaunch({
+            url: `/pages/scan/scan?restoreIndex=${idx}`
+          });
+        }, 30);
+        return;
+      }
+    } catch (e) {}
 
     // 🔴 启动定时检查 qiangli 强制封禁
     const app = getApp();
@@ -640,6 +696,7 @@ Page({
     if (isShareCodeUser) {
       wx.navigateTo({
         url: '/pages/azjc/azjc',
+        animationType: 'none',
         success: () => {
           console.log('[products] 分享码用户跳转到安装教程');
         },
@@ -654,6 +711,7 @@ Page({
     if (id === 8) {
       wx.navigateTo({ 
         url: '/pages/call/call',
+        animationType: 'none',
         success: function() {
           console.log('联系方式跳转成功');
         },
@@ -688,7 +746,7 @@ Page({
     }
     
     if (target) {
-      wx.navigateTo({ url: target });
+      wx.navigateTo({ url: target, animationType: 'none' });
     } else {
       this.showAutoToast('提示', '该功能暂未开放');
     }
@@ -714,7 +772,7 @@ Page({
       if (adminCheck.total > 0) {
         // 是管理员：直接放行
         this.hideMyLoading();
-        wx.navigateTo({ url: '/pages/azjc/azjc' });
+        wx.navigateTo({ url: '/pages/azjc/azjc', animationType: 'none' });
         return; 
       }
 
@@ -777,7 +835,7 @@ Page({
       if (hasDevice) {
         console.log('[checkTutorialAccess] ✅ 用户已绑定设备，直接放行');
         this.hideMyLoading();
-        wx.navigateTo({ url: '/pages/azjc/azjc' });
+      wx.navigateTo({ url: '/pages/azjc/azjc', animationType: 'none' });
         return; 
       }
 
@@ -785,7 +843,7 @@ Page({
       if (confirmedOrders.length > 0) {
         console.log('[checkTutorialAccess] ✅ 用户有已确认收货的订单，直接放行');
         this.hideMyLoading();
-        wx.navigateTo({ url: '/pages/azjc/azjc' });
+      wx.navigateTo({ url: '/pages/azjc/azjc', animationType: 'none' });
         return;
       }
 
@@ -888,6 +946,7 @@ Page({
                 // 跳转到个人中心
                 wx.navigateTo({ 
                   url: '/pages/my/my',
+                  animationType: 'none',
                   fail: (err) => {
                     console.error('[checkUnfinishedReturn] 跳转失败:', err);
                     this.showAutoToast('提示', '跳转失败，请手动进入个人中心');
@@ -1092,9 +1151,46 @@ Page({
 
   // 点击功能卡片
   onFunctionTap(e) {
-    const id = e.currentTarget.dataset.id;
-    // 添加震动反馈
+    const id = Number(e.currentTarget.dataset.id);
     wx.vibrateShort({ type: 'light' });
-    this.executeNavigation(id);
+
+    // 需求：点快捷栏卡片后，先收起抽屉，再自动定位到对应主卡片
+    this.closeDrawer();
+    this.focusCardById(id);
+  },
+
+  // 快捷栏定位：自动滑到对应卡片（不立即跳转）
+  focusCardById(id) {
+    const list = this.data.list || [];
+    if (!list.length) return;
+
+    const targetIndex = list.findIndex(item => Number(item.id) === Number(id));
+    if (targetIndex < 0) return;
+
+    const currentIndex = Number(this.data.currentIndex) || 0;
+    if (currentIndex === targetIndex) return;
+
+    // 若已存在定位动画，先清理
+    if (this._focusCardTimer) {
+      clearInterval(this._focusCardTimer);
+      this._focusCardTimer = null;
+    }
+
+    // 循环列表，选择最短方向移动，做出“快速自动滑动”效果
+    const len = list.length;
+    const forwardSteps = (targetIndex - currentIndex + len) % len;
+    const backwardSteps = (currentIndex - targetIndex + len) % len;
+    const step = forwardSteps <= backwardSteps ? 1 : -1;
+    let idx = currentIndex;
+
+    this._focusCardTimer = setInterval(() => {
+      idx = (idx + step + len) % len;
+      this.setData({ currentIndex: idx });
+
+      if (idx === targetIndex) {
+        clearInterval(this._focusCardTimer);
+        this._focusCardTimer = null;
+      }
+    }, 70);
   }
 });

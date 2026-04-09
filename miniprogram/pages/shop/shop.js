@@ -281,6 +281,13 @@ Page({
     // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
     this.calcNavBarInfo();
 
+    // 图片预热去重缓存（全局复用，避免每次进页重复预热同图）
+    const g = getApp();
+    if (!g.globalData.__shopWarmImageSet) {
+      g.globalData.__shopWarmImageSet = new Set();
+    }
+    this._shopWarmImageSet = g.globalData.__shopWarmImageSet;
+
     // 立即加载数据
     this.loadDataFromCloud();
     this.calcTotal();
@@ -704,9 +711,7 @@ Page({
       this.loadDataFromCloudBackground();
       
       // 🔴 静默预加载媒体资源（不阻塞页面）
-      setTimeout(() => {
-        this.preloadMediaResources();
-      }, 500);
+      this.preloadMediaResources();
       return;
     }
     
@@ -932,10 +937,8 @@ Page({
     // 🔴 更新缓存时间
     this.ensureShopDataCache().cacheTime = Date.now();
     
-    // 🔴 数据加载完成后，静默预加载媒体资源（延迟执行，不阻塞页面）
-    setTimeout(() => {
-      this.preloadMediaResources();
-    }, 500);
+    // 🔴 数据加载完成后，立刻静默预加载媒体资源（不阻塞页面）
+    this.preloadMediaResources();
     
     console.log('[shop.js] ========== loadDataFromCloud 完成 ==========');
     console.log('[shop.js] ========================================');
@@ -1064,36 +1067,38 @@ Page({
     
     // 4. 批量预加载图片（静默进行，不阻塞）
     if (imageUrls.length > 0) {
-      // 分批预加载，避免一次性加载太多
-      const batchSize = 3;
+      // 分批预加载：提高并发，尽快把首屏资源拉到本地缓存
+      const batchSize = 6;
       let currentIndex = 0;
       
       const preloadBatch = () => {
         const batch = imageUrls.slice(currentIndex, currentIndex + batchSize);
         batch.forEach((url, index) => {
+          if (this._shopWarmImageSet && this._shopWarmImageSet.has(url)) return;
           // 延迟执行，避免同时发起太多请求
           setTimeout(() => {
             wx.getImageInfo({
               src: url,
               success: () => {
+                if (this._shopWarmImageSet) this._shopWarmImageSet.add(url);
                 // 静默成功，不输出日志
               },
               fail: () => {
                 // 静默失败，不输出日志（避免控制台噪音）
               }
             });
-          }, index * 100); // 每个图片间隔100ms
+          }, index * 30); // 缩短间隔，提高预热速度
         });
         
         currentIndex += batchSize;
         if (currentIndex < imageUrls.length) {
           // 下一批延迟执行，避免阻塞
-          setTimeout(preloadBatch, 500);
+          setTimeout(preloadBatch, 120);
         }
       };
       
-      // 延迟开始预加载，确保页面已渲染
-      setTimeout(preloadBatch, 300);
+      // 立即开始预加载（越早发起，首屏图片越快）
+      preloadBatch();
     }
     
     console.log('[shop.js] 媒体资源预加载任务已启动（图片:', imageUrls.length, '个）');
@@ -1948,6 +1953,30 @@ Page({
 
     // 正常进入详情
     const s = this.data.seriesList[idx];
+    // 点击进入详情前，优先预热当前产品封面和前两张详情图
+    try {
+      const warmList = [];
+      if (s && s.cover) warmList.push(s.cover);
+      if (s && Array.isArray(s.detailImages)) {
+        s.detailImages
+          .filter(m => m && m.type === 'image' && m.url)
+          .slice(0, 2)
+          .forEach(m => warmList.push(m.url));
+      }
+      warmList.forEach((url, i) => {
+        if (!url) return;
+        if (this._shopWarmImageSet && this._shopWarmImageSet.has(url)) return;
+        setTimeout(() => {
+          wx.getImageInfo({
+            src: url,
+            success: () => {
+              if (this._shopWarmImageSet) this._shopWarmImageSet.add(url);
+            },
+            fail: () => {}
+          });
+        }, i * 60);
+      });
+    } catch (e2) {}
     
     // 🔴 对详情图片进行排序：置顶项在前
     if (s.detailImages && s.detailImages.length > 0) {
@@ -1958,23 +1987,40 @@ Page({
       });
     }
     
-    this.setData({
-      currentSeriesIdx: idx, 
-      currentSeries: s,
-      selectedModelIdx: -1, // 默认不选型号
-      selectedOptionIdx: -1, // 默认不选配置
-      showDetail: true,
-      showFooterBar: false // 初始先隐藏
-    }, () => {
-      // 【核心修改】弹窗打开后，动态计算媒体区高度
-      const query = wx.createSelectorQuery();
-      query.select('.detail-images').boundingClientRect(res => {
-        if (res) {
-          // 将测得的高度存入变量，作为滚动的阈值
-          this.setData({ mediaHeight: res.height });
-        }
-      }).exec();
-    });
+    const openDetailModal = () => {
+      this.setData({
+        currentSeriesIdx: idx, 
+        currentSeries: s,
+        selectedModelIdx: -1, // 默认不选型号
+        selectedOptionIdx: -1, // 默认不选配置
+        showDetail: true,
+        showFooterBar: false // 初始先隐藏
+      }, () => {
+        // 【核心修改】弹窗打开后，动态计算媒体区高度
+        const query = wx.createSelectorQuery();
+        query.select('.detail-images').boundingClientRect(res => {
+          if (res) {
+            // 将测得的高度存入变量，作为滚动的阈值
+            this.setData({ mediaHeight: res.height });
+          }
+        }).exec();
+      });
+    };
+
+    // 先秒开详情，避免点击后“卡住感”
+    openDetailModal();
+    // 首图异步预热（不阻塞交互）
+    const firstVisual = (s.detailImages || []).find(m => m && m.type === 'image' && m.url);
+    const firstVisualUrl = (firstVisual && firstVisual.url) || s.cover || '';
+    if (firstVisualUrl && !(this._shopWarmImageSet && this._shopWarmImageSet.has(firstVisualUrl))) {
+      wx.getImageInfo({
+        src: firstVisualUrl,
+        success: () => {
+          if (this._shopWarmImageSet) this._shopWarmImageSet.add(firstVisualUrl);
+        },
+        fail: () => {}
+      });
+    }
     
     this.calcTotal();
   },
@@ -4917,7 +4963,7 @@ Page({
               this.closeOrderModal();
               wx.removeStorageSync('my_cart');
               this.setData({ cart: [], cartTotalPrice: 0 });
-              setTimeout(() => { wx.navigateTo({ url: '/pages/my/my' }); }, 1000);
+              wx.navigateTo({ url: '/pages/my/my', animationType: 'none' });
             },
             fail: () => {
               this.hideMyLoading();

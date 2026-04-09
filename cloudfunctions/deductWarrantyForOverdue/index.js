@@ -1,5 +1,5 @@
 // cloudfunctions/deductWarrantyForOverdue/index.js
-// 检查并扣除超过30天未上传运单号的质保
+// 检查并扣除超过30天未上传运单号的质保（扣除180天=半年）
 
 const cloud = require('wx-server-sdk')
 
@@ -8,10 +8,13 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 exports.main = async (event, context) => {
   const db = cloud.database()
   const _ = db.command
+  const OVERDUE_DAYS = 30
+  const DEDUCT_DAYS = 180
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000
   
   try {
     const now = new Date()
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const overdueDeadline = new Date(now.getTime() - OVERDUE_DAYS * ONE_DAY_MS)
     
     let overdueRepairs = []
     
@@ -38,7 +41,7 @@ exports.main = async (event, context) => {
               !repair.warrantyDeducted &&
               repair.solveTime) {
             const solveTime = new Date(repair.solveTime)
-            if (solveTime < thirtyDaysAgo) {
+            if (solveTime < overdueDeadline) {
               overdueRepairs = [repair]
             }
           }
@@ -51,7 +54,7 @@ exports.main = async (event, context) => {
           { status: 'SHIPPED' },
           { needReturn: true },
           { returnTrackingId: _.exists(false) }, // 未上传运单号
-          { solveTime: _.lt(thirtyDaysAgo) }, // 超过30天
+          { solveTime: _.lt(overdueDeadline) }, // 超过30天
           { warrantyDeducted: _.neq(true) } // 未扣除过质保
         ]))
         .get()).data
@@ -141,8 +144,8 @@ exports.main = async (event, context) => {
         
         const currentExpiryDate = new Date(device.expiryDate)
         
-        // 扣除30天质保
-        const newExpiryDate = new Date(currentExpiryDate.getTime() - 30 * 24 * 60 * 60 * 1000)
+        // 扣除180天（半年）质保
+        const newExpiryDate = new Date(currentExpiryDate.getTime() - DEDUCT_DAYS * ONE_DAY_MS)
         const newExpiryDateStr = newExpiryDate.toISOString().split('T')[0]
         
         // 计算新的剩余天数
@@ -153,7 +156,7 @@ exports.main = async (event, context) => {
           data: {
             expiryDate: newExpiryDateStr,
             remainingDays: remainingDays > 0 ? remainingDays : 0,
-            totalDays: device.totalDays ? device.totalDays - 30 : 0
+            totalDays: device.totalDays ? Math.max(0, device.totalDays - DEDUCT_DAYS) : 0
           }
         })
         

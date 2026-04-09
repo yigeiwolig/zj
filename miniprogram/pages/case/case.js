@@ -1740,9 +1740,7 @@ Page({
   // 跳转到绑定设备页面
   goToBindDevice() {
     this.setData({ showBindDeviceTip: false });
-    setTimeout(() => {
-      wx.navigateTo({ url: '/pages/my/my' });
-    }, 300);
+    wx.navigateTo({ url: '/pages/my/my', animationType: 'none' });
   },
 
   // 阻止事件冒泡
