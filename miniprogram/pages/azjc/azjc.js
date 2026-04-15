@@ -99,6 +99,35 @@ Page({
     shareCodeRecordCreated: false  // 🔴 是否已创建分享码记录（用于区分首次保存和更新）
   },
 
+  async _buildRetryImageUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.indexOf('cloud://') === 0 && wx.cloud && wx.cloud.getTempFileURL) {
+      try {
+        const resp = await wx.cloud.getTempFileURL({ fileList: [url] });
+        const temp = resp && resp.fileList && resp.fileList[0] && resp.fileList[0].tempFileURL;
+        if (temp) return temp;
+      } catch (e) {}
+      return url;
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const joiner = url.indexOf('?') === -1 ? '?' : '&';
+      return `${url}${joiner}rt=${Date.now()}`;
+    }
+    return url;
+  },
+
+  async onAzjcGraphicImageError(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(idx) || idx < 0) return;
+    this._azjcGraphicRetryMap = this._azjcGraphicRetryMap || {};
+    if (this._azjcGraphicRetryMap[idx]) return;
+    this._azjcGraphicRetryMap[idx] = true;
+    const item = (this.data.filteredGraphics || [])[idx];
+    if (!item || !item.img) return;
+    const next = await this._buildRetryImageUrl(item.img);
+    this.setData({ [`filteredGraphics[${idx}].img`]: next });
+  },
+
   // 关闭分享码提示弹窗
   closeShareCodeModal() {
     this.setData({

@@ -26,7 +26,7 @@
     <view class="carousel">
       <view class="arrow left" bindtap="prevDevice">‹</view>
       <view class="device-selector-content">
-        <image src="{{currentSvg}}" class="device-icon-preview force-white" mode="aspectFit" bindtap="startInject"></image>
+        <image src="{{currentSvg}}" class="device-icon-preview force-white" mode="aspectFit" bindtap="startInject" lazy-load="true"></image>
         <view class="device-name" bindtap="startInject">{{devices[currentDevIdx]}}</view>
       </view>
       <view class="arrow right" bindtap="nextDevice">›</view>
@@ -35,7 +35,7 @@
 
   <view class="reveal-box {{isInjecting ? 'shaking' : ''}}" wx:if="{{isInjecting && !exploded}}">
     <view class="reveal-mask" style="height: {{revealProgress}}%">
-      <image src="{{currentSvg}}" class="device-svg force-white" mode="aspectFit"></image>
+      <image src="{{currentSvg}}" class="device-svg force-white" mode="aspectFit" lazy-load="true"></image>
     </view>
   </view>
 
@@ -70,7 +70,7 @@
              <view class="flow-number">1</view>
              <view class="flow-content">
                 <view class="flow-icon-box">
-                   <image class="flow-icon" src="{{icons.moreDark}}" mode="aspectFit"></image>
+                   <image class="flow-icon" src="{{icons.moreDark}}" mode="aspectFit" lazy-load="true"></image>
                 </view>
                 <text class="flow-text">点击右上角</text>
              </view>
@@ -82,7 +82,7 @@
              <view class="flow-number">2</view>
              <view class="flow-content">
                 <view class="flow-icon-box">
-                   <image class="flow-icon" src="{{icons.gearSmall}}" mode="aspectFit"></image>
+                   <image class="flow-icon" src="{{icons.gearSmall}}" mode="aspectFit" lazy-load="true"></image>
                 </view>
                 <text class="flow-text">选择设置</text>
              </view>
@@ -94,7 +94,7 @@
              <view class="flow-number">3</view>
              <view class="flow-content">
                 <view class="flow-icon-box">
-                   <image class="flow-icon" src="{{icons.btDark}}" mode="aspectFit"></image>
+                   <image class="flow-icon" src="{{icons.btDark}}" mode="aspectFit" lazy-load="true"></image>
                 </view>
                 <text class="flow-text">开启蓝牙</text>
              </view>

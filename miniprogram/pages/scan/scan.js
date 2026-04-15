@@ -413,6 +413,7 @@ Page({
     isLightOn: true,          // 折叠页指示灯状态（true=红，false=黑）
     showFoldInlineHint: false, // 🔴 折叠页上滑提示显示状态
     foldHintOffset: 0,         // 🔴 折叠页提示偏移量（用于动画）
+    showFoldFineTuneHint: false, // 🔴 上滑演示结束后：调大/调小多击提示
     
     // === 打开角度页引导状态 ===
     openAngleTutorialTimer: null,
@@ -632,12 +633,28 @@ Page({
     // 强制更新一次视图到 0度
     this.updateRuler(0, false);
     
-    // 🔴 检查管理员权限
-    this.checkAdminPrivilege();
+    // 🔴 管理员检查延后到首帧后，避免首屏进入卡顿
+    setTimeout(() => {
+      this.checkAdminPrivilege();
+    }, 80);
   },
 
   // ================== 管理员权限检查 ==================
   async checkAdminPrivilege() {
+    const ADMIN_CACHE_KEY = '__scan_admin_privilege_cache__';
+    const ADMIN_CACHE_TTL = 10 * 60 * 1000; // 10分钟缓存，减少反复进页请求
+
+    // 先用本地缓存秒回填，避免首屏等待云端查询
+    try {
+      const cache = wx.getStorageSync(ADMIN_CACHE_KEY);
+      if (cache && typeof cache.isAdmin === 'boolean' && cache.ts && (Date.now() - cache.ts < ADMIN_CACHE_TTL)) {
+        if (this.data.isAdmin !== cache.isAdmin) {
+          this.setData({ isAdmin: cache.isAdmin });
+        }
+        return;
+      }
+    } catch (e) {}
+
     try {
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
@@ -649,53 +666,56 @@ Page({
       }
       if (adminCheck.data.length > 0) {
         this.setData({ isAdmin: true });
+        try {
+          wx.setStorageSync(ADMIN_CACHE_KEY, { isAdmin: true, ts: Date.now() });
+        } catch (e) {}
         console.log('[scan.js] 身份验证成功：合法管理员');
       } else {
         this.setData({ isAdmin: false });
+        try {
+          wx.setStorageSync(ADMIN_CACHE_KEY, { isAdmin: false, ts: Date.now() });
+        } catch (e) {}
         console.log('[scan.js] 未在管理员白名单中');
       }
     } catch (err) {
       console.error('[scan.js] 权限检查失败', err);
-      this.setData({ isAdmin: false });
+      // 请求失败时不强制改为 false，优先维持当前态，避免网络抖动导致权限闪烁
     }
   },
 
   onShow() {
-    // 🔴 启动定时检查 qiangli 强制封禁
-    const app = getApp();
-    if (app && app.startQiangliCheck) {
-      app.startQiangliCheck();
-    }
-    
-    // 🔴 修复：从 OTA 页面返回后，关闭不应该显示的弹窗并恢复页面状态
-    // 防止弹窗或遮罩层导致点击失效
-    // 注意：不关闭用户主动打开的弹窗（如高级设置弹窗 showSettingsModal）
-      this.setData({
-      showPasswordModal: false,
-      showTutorialModal: false,
-      showKeyModal: false,
-        showDisconnectTip: false,
-      showApproachTip: false,
-      showCalibratingModal: false,
-      showConnectBluetoothTip: false,
-      showOtaTip: false,
-      // showSettingsModal: false, // 🔴 不移除：用户主动打开的弹窗，不应该被关闭
-      showIndicatorCheckModal: false,
-      showStealthTutorial: false,
-      showFactoryResetModal: false,
-      showAngleHint: false,
-      showNewProductHint: false,
-      showBluetoothAlert: false,
-      // 🔴 重置 OTA 跳转标记，确保从 OTA 页面返回后可以正常连接蓝牙
-      isNavigatingToOta: false,
-      // 重置弹窗关闭动画状态
-      passwordModalClosing: false,
-      tutorialModalClosing: false,
-      keyModalClosing: false,
-      indicatorCheckModalClosing: false,
-      calibratingModalClosing: false,
-      bluetoothAlertClosing: false
+    // 🔴 修复：从 OTA 页面返回后，按需关闭不应该显示的弹窗并恢复页面状态
+    // 只重置当前为 true 的状态，减少首帧 setData 负载
+    const resetPatch = {};
+    const closeFlags = [
+      'showPasswordModal',
+      'showTutorialModal',
+      'showKeyModal',
+      'showDisconnectTip',
+      'showApproachTip',
+      'showCalibratingModal',
+      'showConnectBluetoothTip',
+      'showOtaTip',
+      'showIndicatorCheckModal',
+      'showStealthTutorial',
+      'showFactoryResetModal',
+      'showAngleHint',
+      'showNewProductHint',
+      'showBluetoothAlert',
+      'isNavigatingToOta',
+      'passwordModalClosing',
+      'tutorialModalClosing',
+      'keyModalClosing',
+      'indicatorCheckModalClosing',
+      'calibratingModalClosing',
+      'bluetoothAlertClosing'
+    ];
+    closeFlags.forEach((k) => {
+      if (this.data[k]) resetPatch[k] = false;
     });
+    if (Object.keys(resetPatch).length) {
+      this.setData(resetPatch);
+    }
     
     // 确保页面处于正常状态（不是编辑模式，除非用户正在编辑）
     // 如果当前在编辑模式，保持编辑模式；否则确保是主模式
@@ -709,7 +729,24 @@ Page({
       this.showToast();
     }
     
-    console.log('✅ [onShow] 页面状态已恢复，所有弹窗已关闭');
+    // 🔴 把非首屏关键任务延后，避免“点进控制中心卡一下”
+    setTimeout(() => {
+      const app = getApp();
+      if (app && app.startQiangliCheck) {
+        app.startQiangliCheck();
+      }
+      if (wx.getScreenRecordingState) {
+        wx.getScreenRecordingState({
+          success: (res) => {
+            if (res.state === 'on' || res.recording) {
+              this.handleIntercept('record');
+            }
+          }
+        });
+      }
+    }, 120);
+
+    console.log('✅ [onShow] 页面状态已恢复');
   },
 
   onHide() {
@@ -727,6 +764,11 @@ Page({
     const app = getApp();
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
+    }
+
+    if (this._foldFineTuneHintTimer) {
+      clearTimeout(this._foldFineTuneHintTimer);
+      this._foldFineTuneHintTimer = null;
     }
   },
 
@@ -747,6 +789,10 @@ Page({
     }
     // 释放弹窗延迟定时器
     if (this.modalDelayTimer) clearTimeout(this.modalDelayTimer);
+    if (this._foldFineTuneHintTimer) {
+      clearTimeout(this._foldFineTuneHintTimer);
+      this._foldFineTuneHintTimer = null;
+    }
     if (this.ble) this.ble.disconnect();
     wx.closeBluetoothAdapter();
   },
@@ -1505,6 +1551,7 @@ Page({
     const threshold = isEdgeSwipe ? 40 : 70;
     // 详情层支持左右横滑返回图二（你习惯左滑也可触发）
     if (Math.abs(dx) > threshold && Math.abs(dy) < 50) {
+      this._controlTapLockUntil = Date.now() + 260;
       this.setData({ showDetail: false, detailMode: 'main' });
     }
   },
@@ -1543,6 +1590,7 @@ Page({
   },
 
   onTapCard(e) {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
     const index = parseInt(e.currentTarget.dataset.index);
     if (index !== this.data.currentIndex) {
       this.updateCardStatus(index);
@@ -1551,7 +1599,8 @@ Page({
 
   openDetail(e) {
     const index = parseInt(e.currentTarget.dataset.index);
-    this._controlTapLockUntil = Date.now() + 100;
+    const guardMs = 420;
+    this._controlTapLockUntil = Date.now() + guardMs;
     this.updateCardStatus(index);
     const currentModel = this.data.models[index];
     const isF1 = currentModel && currentModel.name.includes('F1');
@@ -1560,7 +1609,7 @@ Page({
       currentModel: currentModel,
       detailMode: 'main',
       showStealthTutorial: false,
-      detailOpenGuardUntil: Date.now() + 100,
+      detailOpenGuardUntil: Date.now() + guardMs,
       blockDetailTouch: true,
       angleBtnText: isF1 ? '180°' : '160°' // 根据机型设置按钮文本
     });
@@ -1568,7 +1617,7 @@ Page({
     this._detailBlockTimer = setTimeout(() => {
       this.setData({ blockDetailTouch: false });
       this._detailBlockTimer = null;
-    }, 100);
+    }, guardMs);
   },
 
   // 🔴 计算导航栏高度（标准方法，适配所有机型）
@@ -1591,6 +1640,7 @@ Page({
       if (this.data.detailMode === 'edit') {
         this.setData({ detailMode: 'main' });
       } else {
+        this._controlTapLockUntil = Date.now() + 260;
         this.setData({ showDetail: false, blockDetailTouch: false });
         // 断开连接可选
         // if (this.data.isConnected) this.ble.disconnect(); 
@@ -1627,12 +1677,7 @@ Page({
         this.showTutorial('fold');
       }
     } else if (type === 'open') {
-      // 打开角度：直接进入初始化
-      this.setData({
-        detailMode: 'edit',
-        editType: type,
-      });
-
+      // 打开角度：直接初始化（避免重复 setData 触发双重层切换导致闪屏）
       this.initOpenMode();
     }
   },
@@ -1801,7 +1846,11 @@ Page({
   // ===============================================
   exitEdit() {
     this.stopOpenAngleTutorialLoop();
-    this.setData({ showKeyModal: true });
+    if (this._foldFineTuneHintTimer) {
+      clearTimeout(this._foldFineTuneHintTimer);
+      this._foldFineTuneHintTimer = null;
+    }
+    this.setData({ showKeyModal: true, showFoldFineTuneHint: false });
     
     // 开始循环动画
     this.startKeyAnimLoop();
@@ -1874,6 +1923,14 @@ Page({
     this.setData({
       detailMode: 'edit',
       editType: 'open',
+      // 清理折叠页提示/滑块残留状态，避免切到打开角度时短暂露出上一页元素
+      showFoldInlineHint: false,
+      showFoldFineTuneHint: false,
+      foldHintOffset: 0,
+      adjustSlideOffset: 0,
+      adjustSlideActive: false,
+      isAdjustDemo: false,
+      foldDemoPlaying: false,
       ticks: ticks,
       statusText: '点击180度或90度同步画面',
       currentAngle: 0,
@@ -2843,6 +2900,11 @@ Page({
   // ===============================================
   
   startFoldInlineHint() {
+    if (this._foldFineTuneHintTimer) {
+      clearTimeout(this._foldFineTuneHintTimer);
+      this._foldFineTuneHintTimer = null;
+    }
+
     // 开始播放自动演示：提示 + 调整按钮自动上滑
     // 播放期间只锁定"调整"这个滑块，页面其它区域仍可点击
     this.setData({
@@ -2851,10 +2913,11 @@ Page({
       isAdjustDemo: true,        // 开启演示模式 → 有过渡动画
       adjustSlideOffset: 0,
       adjustSlideActive: false,
-      foldHintOffset: 0
+      foldHintOffset: 0,
+      showFoldFineTuneHint: false
     });
 
-    // 1）先展示提示 2 秒（让用户有时间看文案）
+    // 1）短暂展示提示后立刻演示上滑（原 2s 偏久，改为约 0.65s）
     setTimeout(() => {
       // 2）让"调整"按钮自动上滑到锁定位置，露出下面的"归零"
       this.setData({
@@ -2863,7 +2926,7 @@ Page({
         foldHintOffset: -50       // 提示条也一起往上提一些，让文字和箭头跟着"调整"走
       });
 
-      // 3）再停留 3 秒，然后按钮回到底部、提示淡出、解除锁定
+      // 3）再停留约 2.5 秒，然后按钮回到底部、提示淡出、解除锁定
       setTimeout(() => {
         // 先让按钮带动画落回到底部
         this.resetAdjustSlider(true);
@@ -2874,8 +2937,19 @@ Page({
           foldDemoPlaying: false,
           foldHintOffset: 0
         });
-      }, 3000);
-    }, 2000);
+
+        // 4）演示完全结束后再出现第二段提示（在「调整」按钮行上方），带入场动画
+        setTimeout(() => {
+          this.setData({ showFoldFineTuneHint: true });
+
+          // 5）补充提示显示 3 秒后自动消失
+          this._foldFineTuneHintTimer = setTimeout(() => {
+            this.setData({ showFoldFineTuneHint: false });
+            this._foldFineTuneHintTimer = null;
+          }, 3000);
+        }, 400);
+      }, 2500);
+    }, 650);
   },
 
   // ===============================================

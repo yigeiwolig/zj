@@ -12,13 +12,16 @@ Page({
     currentIndex: 0,
     products: [], 
     defaultCover: '',
+    coverLoadedMap: {},
     
     // 新增：自定义编辑弹窗
     showCustomEditModal: false,
     customEditTitle: '',
     customEditVal: '',
     customEditCallback: null,
-    customEditModalClosing: false // 编辑弹窗退出动画中
+    customEditModalClosing: false, // 编辑弹窗退出动画中
+    customEditMultiline: false,
+    customEditPlaceholder: ''
   },
 
   onLoad: function() {
@@ -50,14 +53,14 @@ Page({
   },
 
   onShow() {
-    // 🔴 启动定时检查 qiangli 强制封禁
-    const app = getApp();
-    if (app && app.startQiangliCheck) {
-      app.startQiangliCheck();
-    }
-
-    // 🔴 回到页面时再次检查封禁状态
-    this.checkBanStatus();
+    // 先显示页面，再延后检查，减少首帧抖动
+    setTimeout(() => {
+      const app = getApp();
+      if (app && app.startQiangliCheck) {
+        app.startQiangliCheck();
+      }
+      this.checkBanStatus();
+    }, 100);
   },
 
   onHide() {
@@ -76,8 +79,59 @@ Page({
     }
   },
 
+  // 图片失败时二次检测重试一次（cloud 临时链接 / http 刷新参数）
+  async onPagenewCoverError(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(index) || index < 0) return;
+
+    this._pagenewCoverRetryMap = this._pagenewCoverRetryMap || {};
+    const tried = this._pagenewCoverRetryMap[index] || 0;
+    if (tried >= 1) return;
+    this._pagenewCoverRetryMap[index] = tried + 1;
+
+    const item = (this.data.products || [])[index];
+    if (!item || !item.cover) return;
+
+    let nextCover = item.cover;
+    try {
+      const cover = String(item.cover);
+      if (cover.indexOf('cloud://') === 0 && wx.cloud && wx.cloud.getTempFileURL) {
+        const resp = await wx.cloud.getTempFileURL({ fileList: [cover] });
+        const temp = resp && resp.fileList && resp.fileList[0] && resp.fileList[0].tempFileURL;
+        if (temp) nextCover = temp;
+      } else if (cover.startsWith('http://') || cover.startsWith('https://')) {
+        const joiner = cover.indexOf('?') === -1 ? '?' : '&';
+        nextCover = `${cover}${joiner}rt=${Date.now()}`;
+      }
+    } catch (err) {
+      console.warn('[pagenew] onPagenewCoverError retry failed:', err);
+    }
+
+    this.setData({
+      [`products[${index}].cover`]: nextCover
+    });
+  },
+
+  onPagenewCoverLoad(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(index) || index < 0) return;
+    this.setData({ [`coverLoadedMap.${index}`]: true });
+  },
+
   // ================== 权限检查逻辑 ==================
   async checkAdminPrivilege() {
+    const ADMIN_CACHE_KEY = '__pagenew_admin_privilege_cache__';
+    const ADMIN_CACHE_TTL = 10 * 60 * 1000;
+    try {
+      const cache = wx.getStorageSync(ADMIN_CACHE_KEY);
+      if (cache && typeof cache.isAuthorized === 'boolean' && cache.ts && (Date.now() - cache.ts < ADMIN_CACHE_TTL)) {
+        if (this.data.isAuthorized !== cache.isAuthorized) {
+          this.setData({ isAuthorized: cache.isAuthorized });
+        }
+        return;
+      }
+    } catch (e) {}
+
     // #region agent log
     wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:checkAdminPrivilege',message:'checkAdminPrivilege called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'loading-trace',hypothesisId:'C'},fail:()=>{}});
     // #endregion
@@ -92,10 +146,15 @@ Page({
       }
       if (adminCheck.data.length > 0) {
         this.setData({ isAuthorized: true });
+        try { wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized: true, ts: Date.now() }); } catch (e) {}
         console.log('[pagenew.js] 身份验证成功：合法管理员');
+      } else {
+        this.setData({ isAuthorized: false });
+        try { wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized: false, ts: Date.now() }); } catch (e) {}
       }
     } catch (err) {
       console.error('[pagenew.js] 权限检查失败', err);
+      // 网络抖动时保留当前状态
     }
   },
 
@@ -134,6 +193,13 @@ Page({
 
   // 左上角返回
   goBack: function() {
+    // 返回 products 时，固定聚焦到“产品选购”卡片
+    try {
+      wx.setStorageSync('__products_return_focus__', {
+        cardId: 4,
+        ts: Date.now()
+      });
+    } catch (e) {}
     wx.navigateBack({
       fail: () => { wx.reLaunch({ url: '/pages/index/index' }); }
     });
@@ -149,9 +215,10 @@ Page({
       // 确保每个产品都有jumpNumber字段
       const products = (res.data || []).map(item => ({
         ...item,
-        jumpNumber: item.jumpNumber || null
+        jumpNumber: item.jumpNumber || null,
+        desc: item.desc != null ? String(item.desc) : ''
       }));
-      _this.setData({ products: products });
+      _this.setData({ products: products, coverLoadedMap: {} });
       console.log('[pagenew] 加载产品列表成功，数量:', products.length);
     }).catch(console.error);
   },
@@ -165,7 +232,12 @@ Page({
   handleAddNew: function() {
     var _this = this;
     wx.showLoading({ title: '创建中' }); // 🔴 保留原生 Loading（因为自定义组件可能没有实现）
-    const newProduct = { title: 'New Product', price: '0', cover: '' }; // 不再需要 details 字段
+    const newProduct = {
+      title: 'New Product',
+      price: '0',
+      cover: '',
+      desc: '一句话介绍新品亮点，方便用户快速了解。'
+    };
     this.db.collection('products').add({ data: newProduct }).then(() => {
       wx.hideLoading();
       this._showCustomToast('已创建', 'success');
@@ -189,7 +261,28 @@ Page({
     });
   },
 
-  // 3. 改价
+  // 3. 编辑简介（多行）
+  handleEditDesc: function() {
+    if (!this.data.isAdmin) return;
+    const idx = this.data.currentIndex;
+    const item = this.data.products[idx];
+    if (!item || !item._id) return;
+    const _this = this;
+    this.setData({
+      showCustomEditModal: true,
+      customEditTitle: '编辑商品简介',
+      customEditVal: item.desc || '',
+      customEditMultiline: true,
+      customEditPlaceholder: '建议 30～80 字，突出卖点与场景',
+      customEditCallback: function (val) {
+        const v = (val || '').trim();
+        _this.setData({ [`products[${idx}].desc`]: v });
+        _this.db.collection('products').doc(item._id).update({ data: { desc: v } }).catch(console.error);
+      }
+    });
+  },
+
+  // 4. 改价
   handleEditPrice: function() {
     var _this = this;
     var idx = this.data.currentIndex;
@@ -205,7 +298,7 @@ Page({
     });
   },
 
-  // 4. 删除
+  // 5. 删除
   handleDeleteProduct: function() {
     var _this = this;
     var idx = this.data.currentIndex;
@@ -226,7 +319,7 @@ Page({
     });
   },
 
-  // 5. 换图
+  // 6. 换图
   handleUploadCover: function() {
     var _this = this;
     var idx = this.data.currentIndex;
@@ -276,6 +369,14 @@ Page({
     if (!product || !product.jumpNumber) {
       return;
     }
+
+    // 从“产品上新”进入“产品选购”详情时，提前写入返回落点
+    try {
+      wx.setStorageSync('__products_return_focus__', {
+        cardId: 4,
+        ts: Date.now()
+      });
+    } catch (e) {}
     
     // 快速跳转到shop页面（静默跳转，失败也不提示）
     wx.navigateTo({
@@ -377,6 +478,8 @@ Page({
       showCustomEditModal: true,
       customEditTitle: '编辑跳转号码',
       customEditVal: initVal || '',
+      customEditMultiline: false,
+      customEditPlaceholder: '请输入号码',
       customEditCallback: callback
     });
   },
@@ -393,20 +496,9 @@ Page({
         customEditTitle: '',
         customEditVal: '',
         customEditCallback: null,
-        customEditModalClosing: false
-      });
-    }, 420);
-  },
-  
-  closeCustomEditModal() {
-    this.setData({ customEditModalClosing: true });
-    setTimeout(() => {
-      this.setData({
-        showCustomEditModal: false,
-        customEditTitle: '',
-        customEditVal: '',
-        customEditCallback: null,
-        customEditModalClosing: false
+        customEditModalClosing: false,
+        customEditMultiline: false,
+        customEditPlaceholder: ''
       });
     }, 420);
   },
@@ -613,6 +705,11 @@ Page({
 
   // 🔴 检查封禁状态（与 products 保持同一套规则）
   async checkBanStatus() {
+    const now = Date.now();
+    if (this._lastBanCheckAt && (now - this._lastBanCheckAt < 15 * 1000)) {
+      return;
+    }
+    this._lastBanCheckAt = now;
     try {
       const loginRes = await wx.cloud.callFunction({ name: 'login' });
       const openid = loginRes.result.openid;

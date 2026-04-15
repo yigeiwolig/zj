@@ -46,10 +46,10 @@
           
           <!-- NO.2 -->
           <view class="podium-item side" wx:if="{{top3[1]}}">
-            <image src="{{icons.crown_silver}}" class="crown-img side-crown"></image>
+            <image src="{{icons.crown_silver}}" class="crown-img side-crown" lazy-load="true"></image>
             <text class="rank-num text-silver">02</text>
             <view class="podium-card silver-border">
-              <image src="{{top3[1].avatar || 'https://api.dicebear.com/9.x/adventurer/svg?seed=default'}}" binderror="onImageError" data-index="1" mode="aspectFill" class="podium-img"></image>
+              <image src="{{top3[1].avatar || 'https://api.dicebear.com/9.x/adventurer/svg?seed=default'}}" binderror="onImageError" data-index="1" mode="aspectFill" class="podium-img" lazy-load="true"></image>
               <view class="podium-info">
                 <text class="p-name">{{top3[1].name}}</text>
                 <text class="p-score text-silver">{{top3[1].angle}}°</text>
@@ -61,10 +61,10 @@
 
           <!-- NO.1 -->
           <view class="podium-item center" wx:if="{{top3[0]}}">
-            <image src="{{icons.crown_gold}}" class="crown-img center-crown"></image>
+            <image src="{{icons.crown_gold}}" class="crown-img center-crown" lazy-load="true"></image>
             <text class="rank-num text-gold">01</text>
             <view class="podium-card gold-border">
-              <image src="{{top3[0].avatar || 'https://api.dicebear.com/9.x/adventurer/svg?seed=default'}}" binderror="onImageError" data-index="0" mode="aspectFill" class="podium-img"></image>
+              <image src="{{top3[0].avatar || 'https://api.dicebear.com/9.x/adventurer/svg?seed=default'}}" binderror="onImageError" data-index="0" mode="aspectFill" class="podium-img" lazy-load="true"></image>
               <view class="podium-info center-info">
                 <text class="p-name big">{{top3[0].name}}</text>
                 <text class="p-score big text-gold">{{top3[0].angle}}<text class="unit">°</text></text>
@@ -77,10 +77,10 @@
 
           <!-- NO.3 -->
           <view class="podium-item side" wx:if="{{top3[2]}}">
-            <image src="{{icons.crown_bronze}}" class="crown-img side-crown"></image>
+            <image src="{{icons.crown_bronze}}" class="crown-img side-crown" lazy-load="true"></image>
             <text class="rank-num text-bronze">03</text>
             <view class="podium-card bronze-border">
-              <image src="{{top3[2].avatar || 'https://api.dicebear.com/9.x/adventurer/svg?seed=default'}}" binderror="onImageError" data-index="2" mode="aspectFill" class="podium-img"></image>
+              <image src="{{top3[2].avatar || 'https://api.dicebear.com/9.x/adventurer/svg?seed=default'}}" binderror="onImageError" data-index="2" mode="aspectFill" class="podium-img" lazy-load="true"></image>
               <view class="podium-info">
                 <text class="p-name">{{top3[2].name}}</text>
                 <text class="p-score text-bronze">{{top3[2].angle}}°</text>
@@ -100,7 +100,7 @@
           <block wx:for="{{userRankList}}" wx:key="id">
             <view class="list-item">
               <text class="li-rank">{{item.rank}}</text>
-              <image src="{{item.avatar}}" class="li-avatar"></image>
+              <image src="{{item.avatar}}" class="li-avatar" lazy-load="true"></image>
               <view class="li-info">
                 <text class="li-name">{{item.name}}</text>
                 <text class="li-bike">{{item.bike}}</text>
@@ -125,7 +125,7 @@
           <block wx:for="{{rankList}}" wx:key="id">
             <view class="list-item admin-item">
               <text class="li-rank {{item.rank<=3?'highlight':''}}">{{item.rank}}</text>
-              <image src="{{item.avatar}}" class="li-avatar"></image>
+              <image src="{{item.avatar}}" class="li-avatar" lazy-load="true"></image>
               <view class="li-info">
                 <text class="li-name">{{item.name}} <text class="score-tag">综:{{item.score}}</text></text>
                 <text class="li-bike">{{item.bike}} | {{item.angle}}°</text>
@@ -153,7 +153,7 @@
 
       <view class="profile-card-v2">
         <view class="avatar-box" bindtap="changeMyAvatar" hover-class="btn-hover">
-          <image src="{{myInfo.avatar}}" mode="aspectFill" class="my-avatar"></image>
+          <image src="{{myInfo.avatar}}" mode="aspectFill" class="my-avatar" lazy-load="true"></image>
           <view class="edit-icon">📷</view>
         </view>
         <view class="info-inputs">
@@ -202,7 +202,7 @@
                 <text class="h-dist">{{item.dist}} KM</text>
               </view>
               <view class="h-right">
-                <image wx:if="{{item.img}}" src="{{item.img}}" mode="aspectFill" class="h-thumb"></image>
+                <image wx:if="{{item.img}}" src="{{item.img}}" mode="aspectFill" class="h-thumb" lazy-load="true"></image>
                 <view wx:else class="h-icon">🏍️</view>
               </view>
             </view>
@@ -217,14 +217,14 @@
   <!-- 底部 Tab Bar -->
   <view class="tab-bar glass-panel">
     <view class="tab-item {{currentTab === 'rank' ? 'active' : ''}}" bindtap="switchTab" data-tab="rank" hover-class="btn-hover">
-      <image src="{{currentTab === 'rank' ? icons.rank_on : icons.rank_off}}" class="tab-icon-img"></image>
+      <image src="{{currentTab === 'rank' ? icons.rank_on : icons.rank_off}}" class="tab-icon-img" lazy-load="true"></image>
       <text class="tab-text">RANK</text>
     </view>
     <view class="upload-btn-wrapper" bindtap="onUpload" hover-class="btn-hover">
       <view class="upload-btn"><text class="plus-icon">+</text></view>
     </view>
     <view class="tab-item {{currentTab === 'mine' ? 'active' : ''}}" bindtap="switchTab" data-tab="mine" hover-class="btn-hover">
-      <image src="{{currentTab === 'mine' ? icons.garage_on : icons.garage_off}}" class="tab-icon-img"></image>
+      <image src="{{currentTab === 'mine' ? icons.garage_on : icons.garage_off}}" class="tab-icon-img" lazy-load="true"></image>
       <text class="tab-text">GARAGE</text>
     </view>
   </view>
@@ -238,11 +238,11 @@
       <scroll-view scroll-y style="max-height: 70vh;">
         <view class="media-row">
           <view class="upload-box" bindtap="chooseDataImg" hover-class="btn-hover">
-            <image wx:if="{{userForm.dataImg}}" src="{{userForm.dataImg}}" mode="aspectFill" class="uploaded-img"></image>
+            <image wx:if="{{userForm.dataImg}}" src="{{userForm.dataImg}}" mode="aspectFill" class="uploaded-img" lazy-load="true"></image>
             <view wx:else class="upload-placeholder"><view class="plus-symbol">+</view><text>数据照片</text></view>
           </view>
           <view class="upload-box" bindtap="chooseVideo" hover-class="btn-hover">
-            <video wx:if="{{userForm.video}}" src="{{userForm.video}}" class="uploaded-img" :controls="false" :show-center-play-btn="false"></video>
+            <video wx:if="{{userForm.video}}" src="{{userForm.video}}" class="uploaded-img" :controls="false" :show-center-play-btn="false" preload="metadata"></video>
             <view wx:else class="upload-placeholder"><view class="plus-symbol">+</view><text>检测视频</text></view>
           </view>
         </view>
@@ -254,7 +254,7 @@
 
         <view class="bluetooth-section">
           <button class="bt-read-btn {{isReading ? 'reading' : ''}} {{isBluetoothConnected ? 'connected' : ''}}" bindtap="readBluetooth" hover-class="btn-hover">
-            <view class="bt-icon-wrap"><image src="{{icons.bluetooth}}" class="bt-svg"></image></view>
+            <view class="bt-icon-wrap"><image src="{{icons.bluetooth}}" class="bt-svg" lazy-load="true"></image></view>
             <view class="bt-text-wrap">
               <text class="bt-main-text">{{isBluetoothConnected ? '设备已连接' : '连接蓝牙设备'}}</text>
               <text class="bt-sub-text">{{isReading ? '正在读取数据...' : (isBluetoothConnected ? '点击重新读取' : '点击搜索附近的设备')}}</text>
@@ -288,7 +288,7 @@
       <view class="modal-close" bindtap="closeEditModal" hover-class="btn-hover">×</view>
       <scroll-view scroll-y style="max-height: 60vh;">
         <view class="admin-avatar-box" bindtap="chooseAvatar" hover-class="btn-hover">
-          <image wx:if="{{form.avatar}}" src="{{form.avatar}}" mode="aspectFill" class="uploaded-img"></image>
+          <image wx:if="{{form.avatar}}" src="{{form.avatar}}" mode="aspectFill" class="uploaded-img" lazy-load="true"></image>
           <view wx:else class="upload-placeholder-admin"><view class="plus-symbol-admin">+</view><text>头像</text></view>
         </view>
         <view class="input-group">

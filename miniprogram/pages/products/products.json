@@ -4,6 +4,7 @@
   },
   "navigationBarTitleText": "分类",
   "navigationStyle": "custom",
+  "disableSwipeBack": true,
   "backgroundColor": "#F9F9F9",
   "backgroundTextStyle": "dark"
 }

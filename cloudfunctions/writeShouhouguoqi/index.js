@@ -14,7 +14,7 @@ const db = cloud.database()
  * @param {string} _openid - 用户openid（从云函数上下文获取）
  */
 exports.main = async (event, context) => {
-  const { repairId, goodsList, addressData, userNickname } = event
+  const { repairId, goodsList, addressData, userNickname, orderId } = event
   const _openid = cloud.getWXContext().OPENID
 
   console.log('[writeShouhouguoqi] 开始执行', {
@@ -97,6 +97,19 @@ exports.main = async (event, context) => {
     console.log('[writeShouhouguoqi] 数据已写入 shouhouguoqi 集合', {
       _id: addRes._id
     })
+
+    // 5. 服务端补写 shop_orders.repairId（小程序端 update 常被数据库权限拦截，导致管理员端黄卡不显示）
+    const outNo = orderId ? String(orderId).trim() : ''
+    if (outNo && repairId) {
+      try {
+        const up = await db.collection('shop_orders').where({ orderId: outNo }).update({
+          data: { repairId }
+        })
+        console.log('[writeShouhouguoqi] 已补写 shop_orders.repairId', { orderId: outNo, repairId, updated: up })
+      } catch (patchErr) {
+        console.error('[writeShouhouguoqi] 补写 shop_orders.repairId 失败:', patchErr)
+      }
+    }
 
     return {
       success: true,

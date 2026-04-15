@@ -8,7 +8,7 @@
 var CARD_SPACING = 260; 
 
 // 计算每个卡片的最终样式
-var getStyle = function(index, currentIndex, listLength, dragOffset, isDragging, hasEntered) {
+var getStyle = function(index, currentIndex, listLength, dragOffset, isDragging, hasEntered, skipCardTransition) {
   if (!hasEntered) {
     return 'transform: translate3d(0, 120vh, 0) scale(0.8); opacity: 0;';
   }
@@ -57,7 +57,7 @@ var getStyle = function(index, currentIndex, listLength, dragOffset, isDragging,
   // E. 动画过渡
   // 拖拽时(isDragging=true) 必须设为 0ms，否则会迟滞！
   // 松手后(isDragging=false) 设为 500ms，让它弹如正确位置
-  var transition = isDragging ? 'none' : 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s';
+  var transition = (isDragging || skipCardTransition) ? 'none' : 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s';
 
   return 'transform: translate3d(0, ' + translateY + ', 0) scale(' + scale + '); opacity: ' + opacity + '; z-index: ' + zIndex + '; transition: ' + transition + ';';
 }
@@ -88,7 +88,7 @@ module.exports = {
       data-title="{{item.title}}"
       data-index="{{index}}"
       
-      style="{{ renderer.getStyle(index, currentIndex, list.length, dragOffset, isDragging, hasEntered) }}"
+      style="{{ renderer.getStyle(index, currentIndex, list.length, dragOffset, isDragging, hasEntered, skipCardTransition) }}"
     >
       
       <!-- 卡片内部 -->
@@ -105,6 +105,7 @@ module.exports = {
             class="svg-icon" 
             src="{{item.iconSvg}}" 
             mode="aspectFit"
+            lazy-load="true"
             style="width: {{item.iconSize}}; height: {{item.iconSize}};"
           ></image>
         </view>
@@ -121,7 +122,7 @@ module.exports = {
 <!-- 底部触发按钮 (当抽屉关闭时显示) -->
 <view class="trigger-button {{isTriggerBtnVisible ? 'visible' : ''}} {{isTriggerBtnFaded ? 'faded' : ''}}" catchtap="toggleDrawer" wx:if="{{!isDrawerOpen}}">
   <text class="trigger-text">查看全部功能</text>
-  <image src="{{iconArrowUp}}" class="trigger-icon" mode="aspectFit"></image>
+  <image src="{{iconArrowUp}}" class="trigger-icon" mode="aspectFit" lazy-load="true"></image>
 </view>
 
 <!-- 底部抽屉功能区 -->
@@ -141,7 +142,7 @@ module.exports = {
       <block wx:for="{{list}}" wx:key="id">
         <view class="function-card" catchtap="onFunctionTap" data-id="{{item.id}}">
           <view class="fc-icon-box">
-            <image class="fc-icon" src="{{item.iconSvg}}" mode="aspectFit"></image>
+            <image class="fc-icon" src="{{item.iconSvg}}" mode="aspectFit" lazy-load="true"></image>
           </view>
           <view class="fc-info">
             <text class="fc-title">{{item.title}}</text>
@@ -191,7 +192,38 @@ module.exports = {
       <block wx:for="{{newArrivalList}}" wx:key="_id">
         <swiper-item class="na-swiper-item">
           <view class="na-card">
-            <image class="na-cover-img" src="{{item.cover || defaultCover}}" mode="aspectFill"></image>
+            <!-- 双图：先加载缩略图（COS imageMogr2），高清层就绪后淡入；首张禁用 lazy-load 避免首屏再等一帧 -->
+            <block wx:if="{{item.dualCover}}">
+              <image
+                class="na-cover-img na-cover-low {{newArrivalHdLoaded[index] ? 'is-hidden' : ''}}"
+                src="{{item.coverThumb}}"
+                mode="aspectFill"
+                lazy-load="{{index > 0}}"
+                binderror="onNewArrivalThumbError"
+                data-index="{{index}}"
+              />
+              <image
+                class="na-cover-img na-cover-high {{newArrivalHdLoaded[index] ? 'is-visible' : ''}}"
+                src="{{item.coverFull}}"
+                mode="aspectFill"
+                lazy-load="{{index > 0}}"
+                bindload="onNewArrivalHdLoad"
+                binderror="onNewArrivalImageError"
+                data-index="{{index}}"
+                data-kind="high"
+              />
+            </block>
+            <block wx:else>
+              <image
+                class="na-cover-img"
+                src="{{item.coverThumb || item.coverFull || item.cover}}"
+                mode="aspectFill"
+                lazy-load="{{index > 0}}"
+                binderror="onNewArrivalImageError"
+                data-index="{{index}}"
+                data-kind="high"
+              />
+            </block>
             <view class="na-card-overlay">
               <view class="na-badge">NEW</view>
               <text class="na-name">{{item.title || 'New Product'}}</text>

@@ -410,14 +410,34 @@ page {
   box-shadow: 0 12rpx 40rpx rgba(0, 0, 0, 0.08);
   border: 1rpx solid rgba(0, 0, 0, 0.02);
   transform: translateZ(0);
+  overflow: hidden; /* 确保外边框完整包裹内部图片 */
 }
 
 /* 图片区域 - 留出白边 */
 .na-cover-img {
-  width: 100%;
-  height: 100%;
+  width: calc(100% - 48rpx);
+  height: calc(100% - 44rpx);
   object-fit: cover;
   border-radius: 30rpx;
+  position: absolute;
+  top: 22rpx;
+  left: 24rpx;
+}
+.na-cover-low {
+  /* 缩略图已较小，仅轻微柔化过渡，避免糊成一团 */
+  filter: blur(0.35px);
+  transform: scale(1.008);
+  transition: opacity 0.2s ease;
+}
+.na-cover-high {
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.na-cover-high.is-visible {
+  opacity: 1;
+}
+.na-cover-low.is-hidden {
+  opacity: 0;
 }
 
 /* 卡片遮罩浮层：只覆盖图片底部区域 */

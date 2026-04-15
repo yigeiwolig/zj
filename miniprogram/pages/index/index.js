@@ -147,6 +147,7 @@ Page({
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
     }
+    this._stopWaitingForPendingJump();
   },
 
   onUnload() {
@@ -154,6 +155,7 @@ Page({
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
     }
+    this._stopWaitingForPendingJump();
   },
 
   // 🔴 从 valid_users 集合检查用户是否有记录
@@ -378,21 +380,20 @@ Page({
         // 🔴 验证通过后，标记为已看过首次进入弹窗
         wx.setStorageSync('has_seen_first_time_modal', true);
               wx.removeStorageSync('is_user_banned');
-        this.setData({ 
-          isAuthorized: true, 
+        this.setData({
+          isAuthorized: true,
           isShowNicknameUI: false,
-          showFirstTimeModal: false // 🔴 确保不显示首次进入弹窗
+          showFirstTimeModal: false, // 🔴 确保不显示首次进入弹窗
+          showCustomSuccessModal: false
+        }, () => {
+          // 昵称验证通过后立即进入主流程，避免“点了立即开启还要再等一段”的体感
+          if (!this._postVerifyEnterTriggered) {
+            this._postVerifyEnterTriggered = true;
+            setTimeout(() => {
+              this.handleAccess();
+            }, 0);
+          }
         });
-              // 显示自定义成功弹窗
-                this._closeAllPopups();
-                this.setData({ 
-                showCustomSuccessModal: true,
-                successModalTitle: '验证通过',
-                successModalContent: ''
-              });
-              setTimeout(() => {
-                this.setData({ showCustomSuccessModal: false });
-              }, 2000);
       } else {
         // --- 失败 ---
         
@@ -401,9 +402,7 @@ Page({
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
         } else {
           // 【核心修改】验证失败，显示自定义黑白弹窗
-          setTimeout(() => {
-            this.setData({ showCustomErrorModal: true });
-          }, 200);
+          this.setData({ showCustomErrorModal: true });
         }
       }
     }).catch(err => {
@@ -485,74 +484,61 @@ Page({
       return; 
     }
 
-    console.log('[handleAccess] 开始获取位置...');
-    let sysInfo = {};
-    try {
-      const deviceInfo = wx.getDeviceInfo();
-      sysInfo = { model: deviceInfo.model || '未知机型' };
-    } catch (e) {
-      try {
-        sysInfo = wx.getSystemInfoSync();
-      } catch (e2) {
-        sysInfo = { model: '未知机型' };
-      }
-    }
-    const phoneModel = sysInfo.model || '未知机型';
+    // 🔴 按下按钮当下先检查定位权限，避免动画过程中再弹定位请求
+    wx.getSetting({
+      success: (settingRes) => {
+        const locationAuth = settingRes.authSetting['scope.userLocation'];
+        console.log('[handleAccess] 点击瞬间定位权限状态:', locationAuth);
 
-    wx.getLocation({
-      type: 'gcj02',
-      isHighAccuracy: true,
-      success: (res) => {
-        console.log('[handleAccess] 位置获取成功:', res);
+        if (locationAuth !== true) {
+          console.log('[handleAccess] 定位权限未开启，立即提示，不进入动画');
+          this.setData({
+            showAuthForceModal: true,
+            authMissingType: 'location'
+          });
+          return;
+        }
+
+        console.log('[handleAccess] 开始获取位置...');
+        // 只有定位权限已开启，才进入动画和定位流程
         this.runAnimation();
-        this.analyzeRegion(res.latitude, res.longitude, phoneModel);
-      },
-      fail: (err) => {
-        console.error('[handleAccess] 位置获取失败:', err);
-        
-        // 🔴 关键修复：先检查定位权限状态
-        wx.getSetting({
-          success: (settingRes) => {
-            const locationAuth = settingRes.authSetting['scope.userLocation'];
-            console.log('[handleAccess] 定位权限状态:', locationAuth);
-            
-            if (locationAuth === false) {
-              // 用户拒绝了定位权限，必须要求用户开启
-              console.log('[handleAccess] 用户拒绝了定位权限，要求开启');
-              this.setData({ 
-                showAuthForceModal: true, 
-                authMissingType: 'location' 
-              });
-              // 🔴 不允许跳转，必须等用户开启权限
-              return;
-            } else if (locationAuth === undefined) {
-              // 权限状态未知（可能是首次请求），也要求用户开启
-              console.log('[handleAccess] 定位权限未设置，要求开启');
-              this.setData({ 
-                showAuthForceModal: true, 
-                authMissingType: 'location' 
-              });
-              // 🔴 不允许跳转，必须等用户开启权限
-              return;
-            } else {
-              // 权限已开启，但获取位置失败（可能是GPS信号弱、网络问题等）
-              // 这种情况下可以允许进入，但给出提示
-              console.log('[handleAccess] 定位权限已开启，但获取位置失败，允许进入');
-              this.showAutoToast('提示', '无法获取当前位置，将使用默认设置');
-              // 延迟跳转，给用户看到提示的时间
-              setTimeout(() => {
-                wx.reLaunch({ url: '/pages/products/products' });
-              }, 1500);
-            }
+
+        let sysInfo = {};
+        try {
+          const deviceInfo = wx.getDeviceInfo();
+          sysInfo = { model: deviceInfo.model || '未知机型' };
+        } catch (e) {
+          try {
+            sysInfo = wx.getSystemInfoSync();
+          } catch (e2) {
+            sysInfo = { model: '未知机型' };
+          }
+        }
+        const phoneModel = sysInfo.model || '未知机型';
+
+        wx.getLocation({
+          type: 'gcj02',
+          isHighAccuracy: true,
+          success: (res) => {
+            console.log('[handleAccess] 位置获取成功:', res);
+            this.analyzeRegion(res.latitude, res.longitude, phoneModel);
           },
-          fail: () => {
-            // 无法获取权限状态，保守处理：要求用户开启权限
-            console.log('[handleAccess] 无法获取权限状态，要求开启定位权限');
-            this.setData({ 
-              showAuthForceModal: true, 
-              authMissingType: 'location' 
+          fail: (err) => {
+            console.error('[handleAccess] 位置获取失败:', err);
+            // 权限已开但定位失败（GPS/网络），不阻断进入
+            this.showAutoToast('提示', '无法获取当前位置，将使用默认设置');
+            this.setData({
+              pendingJumpTarget: '/pages/products/products',
+              pendingJumpData: null
             });
           }
+        });
+      },
+      fail: () => {
+        console.log('[handleAccess] 无法获取权限状态，要求开启定位权限');
+        this.setData({
+          showAuthForceModal: true,
+          authMissingType: 'location'
         });
       }
     });
@@ -598,20 +584,83 @@ Page({
       // 🔴 检查是否有待跳转的目标（由地址检查结果决定）
       if (this.data.pendingJumpTarget) {
         console.log('[index] 动画完成，执行待跳转:', this.data.pendingJumpTarget);
+        // 动画期间并行同步，不再阻塞跳转
         if (this.data.pendingJumpData && this.data.pendingJumpData.collectionName) {
-          // 如果有数据需要写入，先写入再跳转
-          this._executePendingJump();
-        } else {
-          // 直接跳转（封禁页面）
-          console.log('[index] 直接跳转到封禁页');
-          wx.reLaunch({ url: this.data.pendingJumpTarget });
+          this._syncPendingDataInBackground();
         }
+        console.log('[index] 动画结束，立即跳转（不等待同步完成）');
+        wx.reLaunch({ url: this.data.pendingJumpTarget });
       } else {
-        // 🔴 移除默认跳转，严格等待用户授权定位
-        console.log('[index] 动画完成，无待跳转目标，等待用户授权定位');
+        // 不兜底：动画结束后继续等待，目标一到立即跳
+        console.log('[index] 动画完成但目标未就绪，继续等待目标...');
+        this._waitForPendingJumpTarget();
       }
     }, 900);
     this.addAnimationTimer(jumpTimer);
+  },
+
+  _waitForPendingJumpTarget() {
+    this._stopWaitingForPendingJump();
+    this._waitPendingJumpTimer = setInterval(() => {
+      const target = this.data.pendingJumpTarget;
+      if (!target) return;
+      console.log('[index] 目标已就绪，立即跳转:', target);
+      if (this.data.pendingJumpData && this.data.pendingJumpData.collectionName) {
+        this._syncPendingDataInBackground();
+      }
+      this._stopWaitingForPendingJump();
+      wx.reLaunch({ url: target });
+    }, 80);
+  },
+
+  _stopWaitingForPendingJump() {
+    if (this._waitPendingJumpTimer) {
+      clearInterval(this._waitPendingJumpTimer);
+      this._waitPendingJumpTimer = null;
+    }
+  },
+
+  // 🔴 后台同步：动画期间并行执行，不阻塞页面跳转
+  _syncPendingDataInBackground() {
+    try {
+      const pending = this.data.pendingJumpData || {};
+      const collectionName = pending.collectionName;
+      const locData = pending.locData || {};
+      if (!collectionName) return;
+
+      const nickName = wx.getStorageSync('user_nickname') || '未知用户';
+      wx.cloud.callFunction({ name: 'login' })
+        .then(loginRes => {
+          const openid = loginRes?.result?.openid;
+          if (!openid) return;
+          return db.collection(collectionName)
+            .where({ _openid: openid })
+            .orderBy('createTime', 'desc')
+            .limit(1)
+            .get()
+            .then(userRes => {
+              const payload = {
+                ...locData,
+                nickName,
+                updateTime: db.serverDate()
+              };
+              if (userRes.data && userRes.data.length > 0) {
+                return db.collection(collectionName).doc(userRes.data[0]._id).update({ data: payload });
+              }
+              return db.collection(collectionName).add({
+                data: {
+                  ...payload,
+                  createTime: db.serverDate()
+                }
+              });
+            });
+        })
+        .catch(err => {
+          console.warn('[index] 后台同步失败（已跳转，不阻塞）:', err);
+        });
+    } catch (err) {
+      console.warn('[index] 后台同步异常（已跳转，不阻塞）:', err);
+    }
   },
 
   async loadBlockingConfig() {

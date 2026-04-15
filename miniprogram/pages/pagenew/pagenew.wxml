@@ -21,21 +21,25 @@
   <swiper 
     class="card-swiper" 
     current="{{currentIndex}}" 
-    previous-margin="50rpx" 
-    next-margin="50rpx" 
+    previous-margin="56rpx" 
+    next-margin="56rpx" 
     bindchange="onSwiperChange"
     circular="{{false}}"
   >
     <block wx:for="{{products}}" wx:key="_id">
       <swiper-item class="card-wrapper">
-        
-        <!-- ⚠️ 关键修改：非管理员模式下点击卡片可跳转，管理员模式下不跳转 -->
-        <view class="apple-card {{currentIndex === index ? 'active' : ''}}" bindtap="{{!isAdmin ? 'handleCardClick' : ''}}" data-index="{{index}}">
+        <!-- 白色外框（画框感），与灰底区分 -->
+        <view
+          class="apple-card-frame {{currentIndex === index ? 'active' : ''}}"
+          bindtap="{{!isAdmin ? 'handleCardClick' : ''}}"
+          data-index="{{index}}"
+        >
+        <view class="apple-card">
           
           <!-- A. 图片区域 -->
           <view class="card-cover">
             <view class="product-cover-wrapper">
-              <image class="cover-img" src="{{item.cover || defaultCover}}" mode="aspectFill" lazy-load/>
+              <image class="cover-img" src="{{item.cover || defaultCover}}" mode="aspectFill" lazy-load binderror="onPagenewCoverError" data-index="{{index}}"/>
               <!-- 跳转号码标识（管理员模式下可编辑） -->
               <view wx:if="{{isAdmin}}" class="jump-number-badge" catchtap="handleEditJumpNumber" data-index="{{index}}">
                 <text wx:if="{{item.jumpNumber}}">#{{item.jumpNumber}}</text>
@@ -52,40 +56,54 @@
             </block>
           </view>
 
-          <!-- B. 信息区域 -->
+          <!-- B. 信息区域：标题 → 简介 → 价格，右侧箭头 -->
           <view class="card-content">
-            <view class="info-text">
-              <!-- 标题 (管理员点击可修) -->
-              <text 
-                class="p-title {{isAdmin ? 'editable' : ''}}" 
-                catchtap="{{isAdmin ? 'handleEditTitle' : ''}}"
-              >{{item.title || 'New Product'}}</text>
+            <view class="card-content-inner">
+              <view class="info-text">
+                <text
+                  class="p-title {{isAdmin ? 'editable' : ''}}"
+                  catchtap="{{isAdmin ? 'handleEditTitle' : ''}}"
+                >{{item.title || 'New Product'}}</text>
 
-              <!-- 价格 (管理员点击可修) -->
-              <text 
-                class="p-price {{isAdmin ? 'editable' : ''}}" 
-                catchtap="{{isAdmin ? 'handleEditPrice' : ''}}"
-              >¥ {{item.price || '0'}}</text>
-            </view>
+                <view class="p-desc-wrap" wx:if="{{item.desc}}">
+                  <text
+                    class="p-desc {{isAdmin ? 'editable' : ''}}"
+                    catchtap="{{isAdmin ? 'handleEditDesc' : ''}}"
+                  >{{item.desc}}</text>
+                </view>
+                <view
+                  wx:elif="{{isAdmin}}"
+                  class="p-desc-placeholder"
+                  catchtap="handleEditDesc"
+                >点击添加商品简介</view>
 
-            <!-- 装饰用的箭头按钮 (纯装饰，无点击事件) -->
-            <view class="btn-go" wx:if="{{!isAdmin}}">
-              <view class="icon-arrow"></view>
+                <text
+                  class="p-price {{isAdmin ? 'editable' : ''}}"
+                  catchtap="{{isAdmin ? 'handleEditPrice' : ''}}"
+                >¥ {{item.price || '0'}}</text>
+              </view>
+
+              <view class="card-content-side">
+                <view class="btn-go" wx:if="{{!isAdmin}}">
+                  <view class="icon-arrow"></view>
+                </view>
+                <view class="btn-go admin-icon" wx:if="{{isAdmin}}">⚙️</view>
+              </view>
             </view>
-            
-            <!-- 管理员可见的设置图标 (装饰) -->
-            <view class="btn-go admin-icon" wx:if="{{isAdmin}}">⚙️</view>
           </view>
 
+        </view>
         </view>
       </swiper-item>
     </block>
 
     <!-- [管理员] 新建卡片 -->
     <swiper-item class="card-wrapper" wx:if="{{isAdmin}}">
-      <view class="apple-card add-card {{currentIndex === products.length ? 'active' : ''}}" bindtap="handleAddNew">
-        <view class="add-icon">+</view>
-        <text class="add-text">NEW ARRIVAL</text>
+      <view class="apple-card-frame {{currentIndex === products.length ? 'active' : ''}}">
+        <view class="apple-card add-card" bindtap="handleAddNew">
+          <view class="add-icon">+</view>
+          <text class="add-text">NEW ARRIVAL</text>
+        </view>
       </view>
     </swiper-item>
 
@@ -99,10 +117,20 @@
 <view class="custom-modal-mask {{customEditModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" bindtap="closeCustomEditModal" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box" catchtap="noop" catchtouchmove="noop">
     <view class="modal-title">{{customEditTitle}}</view>
-    <input 
-      class="modal-input" 
-      type="text" 
-      placeholder="请输入号码"
+    <textarea
+      wx:if="{{customEditMultiline}}"
+      class="modal-textarea"
+      placeholder="{{customEditPlaceholder}}"
+      value="{{customEditVal}}"
+      maxlength="200"
+      show-confirm-bar="{{false}}"
+      bindinput="onCustomEditInput"
+    />
+    <input
+      wx:else
+      class="modal-input"
+      type="text"
+      placeholder="{{customEditPlaceholder || '请输入'}}"
       value="{{customEditVal}}"
       bindinput="onCustomEditInput"
       confirm-type="done"

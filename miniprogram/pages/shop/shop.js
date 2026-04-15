@@ -61,9 +61,15 @@ Page({
     // 新增：对比选择模式
     isModelCompareMode: false,
     compareSelectedModels: [],
+    // 参数对比引导：1=仅提示选型号（约5s），2=显示开始对比区域
+    compareGuidePhase: 0,
+    // 第2步中的说明文案与箭头（仅展示约5秒）
+    compareGuidePhase2HintVisible: false,
 
     // 顶部媒体资源 (混合图片和视频)
     topMediaList: [],
+    heroCurrent: 0,
+    heroAutoCarouselEnabled: false,
 
     // 商店标题
     shopTitle: 'MT 配件中心',
@@ -77,6 +83,7 @@ Page({
     // 🔴 新增：视频播放状态跟踪（用于控制播放按钮显示）
     heroVideoPlaying: {}, // {0: true, 1: false, ...} 跟踪每个hero视频的播放状态
     detailVideoPlaying: {}, // {0: true, 1: false, ...} 跟踪每个detail视频的播放状态
+    imageHdLoaded: {}, // 图片高清加载状态（先低清再无感切高清）
 
     // 🔴 新增：详情页拖拽排序相关
     detailDragIndex: -1,        // 当前拖拽的卡片索引
@@ -215,6 +222,88 @@ Page({
     loadingText: '加载中...'
   },
 
+  // 为现有图片URL生成低清预览图URL（支持云存储图片处理参数）
+  buildLowQualityUrl(url) {
+    return url;
+  },
+
+  // 给产品系列补齐预览字段，兼容历史数据和新上传数据
+  decorateSeriesImageFields(seriesList = []) {
+    return (seriesList || []).map(series => {
+      const detailImages = (series.detailImages || []).map(item => {
+        if (!item || item.type !== 'image' || !item.url) return item;
+        return {
+          ...item,
+          previewUrl: item.previewUrl || this.buildLowQualityUrl(item.url)
+        };
+      });
+      return {
+        ...series,
+        coverPreview: series.coverPreview || this.buildLowQualityUrl(series.cover),
+        detailImages
+      };
+    });
+  },
+
+  // 高清图加载完成后切换显示
+  onHdImageLoad(e) {
+    const key = e.currentTarget.dataset.key;
+    if (!key) return;
+    this.setData({ [`imageHdLoaded.${key}`]: true });
+  },
+
+  // 产品封面加载失败时做一次二次检测重试（避免偶发空白）
+  async onCoverImageError(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    const kind = e.currentTarget.dataset.kind || 'high';
+    if (Number.isNaN(index) || index < 0) return;
+
+    const retryKey = `${kind}_${index}`;
+    this._coverRetryMap = this._coverRetryMap || {};
+    const tried = this._coverRetryMap[retryKey] || 0;
+    if (tried >= 1) {
+      // 二次检测后仍失败：不要把高清源降级成缩略图，直接用原图做占位层兜底
+      if (kind === 'high') {
+        const series = this.data.seriesList[index];
+        const origin = (series && series.cover) || '';
+        if (origin) {
+          this.setData({
+            [`seriesList[${index}].coverPreview`]: origin,
+            [`imageHdLoaded.cover_${index}`]: false
+          });
+        }
+      }
+      return;
+    } // 只重试一次，避免死循环
+    this._coverRetryMap[retryKey] = tried + 1;
+
+    const series = this.data.seriesList[index];
+    if (!series || !series.cover) return;
+
+    let nextCover = series.cover;
+    try {
+      // cloud:// 图片在个别场景会偶发失效，二次检测时换临时 HTTPS 地址
+      if (typeof series.cover === 'string' && series.cover.indexOf('cloud://') === 0 && wx.cloud && wx.cloud.getTempFileURL) {
+        const resp = await wx.cloud.getTempFileURL({ fileList: [series.cover] });
+        const temp = resp && resp.fileList && resp.fileList[0] && resp.fileList[0].tempFileURL;
+        if (temp) {
+          nextCover = temp;
+        }
+      } else if (typeof series.cover === 'string') {
+        // http(s) 地址追加时间戳，绕开偶发缓存坏链
+        const joiner = series.cover.indexOf('?') === -1 ? '?' : '&';
+        nextCover = `${series.cover}${joiner}rt=${Date.now()}`;
+      }
+    } catch (err) {
+      console.warn('[shop.js] onCoverImageError 二次检测失败:', err);
+    }
+
+    this.setData({
+      [`seriesList[${index}].cover`]: nextCover,
+      [`imageHdLoaded.cover_${index}`]: false
+    });
+  },
+
   onLoad(options) {
     console.log('[shop.js] onLoad 开始', options);
     
@@ -276,6 +365,13 @@ Page({
           console.error('[shop.js] 解析配件信息失败:', e);
         }
       }
+    } else {
+      try {
+        const sid = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+        if (sid) {
+          this.setData({ fromRepair: true, repairId: sid });
+        }
+      } catch (e) {}
     }
 
     // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
@@ -298,6 +394,8 @@ Page({
 
   // 🔴 新增：页面隐藏时清理拖拽状态
   onHide() {
+    this._clearCompareGuideTimers();
+    this._clearHeroAutoTimer();
     // 清理拖拽定时器和状态，防止卡住
     if (this.data.detailLongPressTimer) {
       clearTimeout(this.data.detailLongPressTimer);
@@ -313,27 +411,51 @@ Page({
     });
   },
 
+  onUnload() {
+    this._clearCompareGuideTimers();
+    this._clearHeroAutoTimer();
+  },
+
+  _clearCompareGuideTimers() {
+    if (this._compareGuidePhaseTimer) {
+      clearTimeout(this._compareGuidePhaseTimer);
+      this._compareGuidePhaseTimer = null;
+    }
+    if (this._compareGuidePhase2HintTimer) {
+      clearTimeout(this._compareGuidePhase2HintTimer);
+      this._compareGuidePhase2HintTimer = null;
+    }
+  },
+
   // 1. 页面每次显示时，读取本地缓存的购物车
   onShow() {
-    // 🔴 启动定时检查 qiangli 强制封禁
-    const app = getApp();
-    if (app && app.startQiangliCheck) {
-      app.startQiangliCheck();
-    }
-    
-    // 🔴 重新检查管理员权限（确保从其他页面返回时也能显示开关）
-    this.checkAdminPrivilege();
-    
-    // 🔴 检查录屏状态
-    if (wx.getScreenRecordingState) {
-      wx.getScreenRecordingState({
-        success: (res) => {
-          if (res.state === 'on' || res.recording) {
-            this.handleIntercept('record');
+    this._syncHeroAutoForCurrent();
+    try {
+      const sid = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+      if (sid && !this.data.repairId) {
+        this.setData({ fromRepair: true, repairId: sid });
+      }
+    } catch (e) {}
+    // 先展示页面，再延后重任务，减轻“点进来卡一下”
+    setTimeout(() => {
+      const app = getApp();
+      if (app && app.startQiangliCheck) {
+        app.startQiangliCheck();
+      }
+      
+      // 重新检查管理员权限（确保从其他页面返回时也能显示开关）
+      this.checkAdminPrivilege();
+      
+      if (wx.getScreenRecordingState) {
+        wx.getScreenRecordingState({
+          success: (res) => {
+            if (res.state === 'on' || res.recording) {
+              this.handleIntercept('record');
+            }
           }
-        }
-      });
-    }
+        });
+      }
+    }, 100);
     
     // 读取本地存储的购物车数据
     const cachedCart = wx.getStorageSync('my_cart') || [];
@@ -482,6 +604,18 @@ Page({
   },
 
   async checkAdminPrivilege() {
+    const ADMIN_CACHE_KEY = '__shop_admin_privilege_cache__';
+    const ADMIN_CACHE_TTL = 10 * 60 * 1000;
+    try {
+      const cache = wx.getStorageSync(ADMIN_CACHE_KEY);
+      if (cache && typeof cache.isAuthorized === 'boolean' && cache.ts && (Date.now() - cache.ts < ADMIN_CACHE_TTL)) {
+        if (this.data.isAuthorized !== cache.isAuthorized) {
+          this.setData({ isAuthorized: cache.isAuthorized });
+        }
+        return;
+      }
+    } catch (e) {}
+
     try {
       // 1. 获取当前用户的 OpenID (利用云函数)
       const res = await wx.cloud.callFunction({ name: 'login' });
@@ -504,15 +638,16 @@ Page({
       // 3. 如果找到了记录，说明你是受信任的管理员
       if (adminCheck.data.length > 0) {
         this.setData({ isAuthorized: true });
+        try { wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized: true, ts: Date.now() }); } catch (e) {}
         console.log('[shop.js] ✅ 身份验证成功：合法管理员，EDIT 开关已显示');
     } else {
         this.setData({ isAuthorized: false });
+        try { wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized: false, ts: Date.now() }); } catch (e) {}
         console.log('[shop.js] ❌ 未在管理员白名单中，EDIT 开关已隐藏');
       }
     } catch (err) {
       console.error('[shop.js] ❌ 权限检查失败:', err);
-      // 即使失败，也确保状态正确
-      this.setData({ isAuthorized: false });
+      // 网络抖动时保留当前态，避免权限闪烁
     }
   },
 
@@ -533,10 +668,11 @@ Page({
   // 1. 核心修改：重写 _input 方法，使用自定义弹窗代替 wx.showModal
   // ========================================================
   _input(currentVal, callback) {
+    const normalizedVal = currentVal === undefined || currentVal === null ? '' : String(currentVal);
     this.setData({
       showCustomEditModal: true,
       customEditTitle: '编辑内容',
-      customEditVal: currentVal,
+      customEditVal: normalizedVal,
       customEditCallback: callback // 暂存回调函数
     });
   },
@@ -559,7 +695,10 @@ Page({
   // 弹窗确定
   confirmCustomEdit() {
     if (this.data.customEditCallback) {
-      this.data.customEditCallback(this.data.customEditVal);
+      const safeVal = this.data.customEditVal === undefined || this.data.customEditVal === null
+        ? ''
+        : String(this.data.customEditVal);
+      this.data.customEditCallback(safeVal);
     }
     this.closeCustomEditModal();
   },
@@ -567,7 +706,7 @@ Page({
   // ========================================================
   // 云存储上传函数
   // ========================================================
-  uploadToCloud(path, folder = 'shop') {
+  uploadToCloud(path, folder = 'shop', forceSuffix = '') {
     console.log('[shop.js] uploadToCloud 开始, path:', path, 'folder:', folder);
     return new Promise((resolve, reject) => {
       if (!wx.cloud) {
@@ -575,7 +714,7 @@ Page({
         reject(new Error('wx.cloud 不存在'));
         return;
       }
-      const suffix = path.match(/\.[^.]+?$/)?.[0] || '.png';
+      const suffix = forceSuffix || path.match(/\.[^.]+?$/)?.[0] || '.png';
       const cloudPath = `${folder}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}${suffix}`;
       console.log('[shop.js] 上传到云存储, cloudPath:', cloudPath);
       wx.cloud.uploadFile({
@@ -671,8 +810,12 @@ Page({
       }
       
       if (cache.topMediaList) {
-        this.setData({ topMediaList: cache.topMediaList });
+        if (typeof cache.heroAutoCarouselEnabled === 'boolean') {
+          this.setData({ heroAutoCarouselEnabled: cache.heroAutoCarouselEnabled });
+        }
+        this.setTopMediaListForRender(cache.topMediaList);
         console.log('[shop.js] 从缓存加载 topMediaList, 数量:', cache.topMediaList.length);
+        wx.nextTick(() => this._syncHeroAutoForCurrent());
       }
       
       if (cache.seriesList) {
@@ -767,6 +910,8 @@ Page({
       console.log('[shop.js] res.errMsg:', res.errMsg);
       console.log('[shop.js] res.data:', res.data);
       if (res.data && res.data.list) {
+        const autoCarouselEnabled = res.data.autoCarouselEnabled === true;
+        this.setData({ heroAutoCarouselEnabled: autoCarouselEnabled });
         // 🔴 防御性修复：如果未配置 type，根据 url 自动识别图片/视频
         const fixedList = (res.data.list || []).map(item => {
           if (item.type) return item;
@@ -780,9 +925,11 @@ Page({
 
         console.log('[shop.js] 设置 topMediaList, 数量:', fixedList.length);
         console.log('[shop.js] topMediaList 内容(修正后):', fixedList);
-        this.setData({ topMediaList: fixedList });
+        this.setTopMediaListForRender(fixedList);
         // 🔴 更新缓存
         this.ensureShopDataCache().topMediaList = fixedList;
+        this.ensureShopDataCache().heroAutoCarouselEnabled = autoCarouselEnabled;
+        wx.nextTick(() => this._syncHeroAutoForCurrent());
       } else {
         console.log('[shop.js] ⚠️ res.data 为空或没有 list 字段');
       }
@@ -798,8 +945,12 @@ Page({
           errMsg.includes('cannot find document') || errMsg.includes('not exist')) {
         console.log('[shop.js] 错误类型: 文档不存在');
         console.log('[shop.js] 尝试创建 shop_config.topMedia 文档...');
+        const saveList = this._getTopMediaListForSave();
         this.db.collection('shop_config').doc('topMedia').set({
-          data: { list: this.data.topMediaList }
+          data: {
+            list: saveList,
+            autoCarouselEnabled: this.data.heroAutoCarouselEnabled === true
+          }
         }).then(() => {
           console.log('[shop.js] ✅ shop_config.topMedia 创建成功');
         }).catch(createErr => {
@@ -852,12 +1003,13 @@ Page({
             detailImages: fixedDetailImages,
           };
         });
+        const decoratedSeriesList = this.decorateSeriesImageFields(fixedSeriesList);
         
-        console.log('[shop.js] 设置 seriesList, 数量:', fixedSeriesList.length);
-        this.setData({ seriesList: fixedSeriesList });
+        console.log('[shop.js] 设置 seriesList, 数量:', decoratedSeriesList.length);
+        this.setData({ seriesList: decoratedSeriesList, imageHdLoaded: {} });
         console.log('[shop.js] ✅ seriesList 已更新到页面数据');
         // 🔴 更新缓存
-        this.ensureShopDataCache().seriesList = fixedSeriesList;
+        this.ensureShopDataCache().seriesList = decoratedSeriesList;
         
         // 如果有跳转号码，立即跳转到对应产品
         if (this.jumpNumber) {
@@ -979,13 +1131,17 @@ Page({
       
       if (mediaRes.data && mediaRes.data.list) {
         cache.topMediaList = mediaRes.data.list;
-        this.setData({ topMediaList: mediaRes.data.list });
+        cache.heroAutoCarouselEnabled = mediaRes.data.autoCarouselEnabled === true;
+        this.setData({ heroAutoCarouselEnabled: cache.heroAutoCarouselEnabled });
+        this.setTopMediaListForRender(mediaRes.data.list);
+        wx.nextTick(() => this._syncHeroAutoForCurrent());
         hasUpdate = true;
       }
       
       if (seriesRes.data && Array.isArray(seriesRes.data)) {
-        cache.seriesList = seriesRes.data;
-        this.setData({ seriesList: seriesRes.data });
+        const decoratedSeriesList = this.decorateSeriesImageFields(seriesRes.data);
+        cache.seriesList = decoratedSeriesList;
+        this.setData({ seriesList: decoratedSeriesList, imageHdLoaded: {} });
         hasUpdate = true;
       }
       
@@ -1107,20 +1263,99 @@ Page({
   // ========================================================
   // 保存顶部媒体到云端
   // ========================================================
+  async setTopMediaListForRender(list) {
+    const safeList = Array.isArray(list) ? list : [];
+    const videoFileIds = safeList
+      .filter(item => item && item.type === 'video' && typeof item.url === 'string' && item.url.indexOf('cloud://') === 0)
+      .map(item => item.url);
+
+    const tempUrlMap = {};
+    if (videoFileIds.length > 0 && wx.cloud && wx.cloud.getTempFileURL) {
+      try {
+        const resp = await wx.cloud.getTempFileURL({ fileList: videoFileIds });
+        (resp.fileList || []).forEach(f => {
+          if (f && f.fileID && f.tempFileURL) tempUrlMap[f.fileID] = f.tempFileURL;
+        });
+      } catch (err) {
+        console.warn('[shop.js] getTempFileURL 失败，视频将回退使用原始 fileID:', err);
+      }
+    }
+
+    const renderList = safeList.map(item => {
+      if (!item) return item;
+      if (item.type === 'video' && tempUrlMap[item.url]) {
+        return { ...item, renderUrl: tempUrlMap[item.url] };
+      }
+      return { ...item, renderUrl: item.url };
+    });
+    this.setData({ topMediaList: renderList });
+  },
+
+  _clearHeroAutoTimer() {
+    if (this._heroAutoTimer) {
+      clearTimeout(this._heroAutoTimer);
+      this._heroAutoTimer = null;
+    }
+  },
+
+  _goNextHeroSlide() {
+    const list = this.data.topMediaList || [];
+    if (!list.length) return;
+    const next = (Number(this.data.heroCurrent) + 1) % list.length;
+    this.setData({ heroCurrent: next });
+  },
+
+  _syncHeroAutoForCurrent() {
+    this._clearHeroAutoTimer();
+    const list = this.data.topMediaList || [];
+    if (!this.data.heroAutoCarouselEnabled || !list.length) return;
+
+    const current = Number(this.data.heroCurrent) || 0;
+    const item = list[current];
+    if (!item) return;
+
+    if (item.type === 'image') {
+      this._heroAutoTimer = setTimeout(() => {
+        this._goNextHeroSlide();
+      }, 3000);
+      return;
+    }
+
+    if (item.type === 'video') {
+      setTimeout(() => {
+        const videoContext = wx.createVideoContext(`hero-video-${current}`);
+        if (videoContext) videoContext.play();
+      }, 80);
+    }
+  },
+
+  _getTopMediaListForSave() {
+    return (this.data.topMediaList || []).map(item => {
+      if (!item) return item;
+      const { renderUrl, ...rest } = item;
+      return rest;
+    });
+  },
+
   saveTopMediaToCloud() {
     console.log('[shop.js] saveTopMediaToCloud 开始');
     if (!this.db) {
       console.error('[shop.js] saveTopMediaToCloud: this.db 不存在！');
       return;
     }
-    console.log('[shop.js] 保存 topMediaList:', this.data.topMediaList);
+    const saveList = this._getTopMediaListForSave();
+    console.log('[shop.js] 保存 topMediaList:', saveList);
     this.db.collection('shop_config').doc('topMedia').update({
-      data: { list: this.data.topMediaList }
+      data: {
+        list: saveList,
+        autoCarouselEnabled: this.data.heroAutoCarouselEnabled === true
+      }
     }).then(() => {
       console.log('[shop.js] saveTopMediaToCloud 更新成功');
       // 🔴 更新缓存
       const cache = this.ensureShopDataCache();
-      cache.topMediaList = this.data.topMediaList;
+      cache.topMediaList = saveList;
+      cache.heroAutoCarouselEnabled = this.data.heroAutoCarouselEnabled === true;
       cache.cacheTime = Date.now();
     }).catch(err => {
       console.error('[shop.js] saveTopMediaToCloud 更新失败:', err);
@@ -1131,7 +1366,10 @@ Page({
           errMsg.includes('cannot find document') || errMsg.includes('not exist')) {
         console.log('[shop.js] 文档不存在，尝试创建');
         this.db.collection('shop_config').doc('topMedia').set({
-          data: { list: this.data.topMediaList }
+          data: {
+            list: saveList,
+            autoCarouselEnabled: this.data.heroAutoCarouselEnabled === true
+          }
         }).then(() => {
           console.log('[shop.js] saveTopMediaToCloud 创建成功');
         }).catch(createErr => {
@@ -1339,7 +1577,7 @@ Page({
           url: fileID
         };
         this.data.topMediaList.push(newItem);
-        this.setData({ topMediaList: this.data.topMediaList });
+        this.setTopMediaListForRender(this.data.topMediaList);
         this.saveTopMediaToCloud();
       } catch (err) {
         this.showAutoToast('提示', '上传失败');
@@ -1349,23 +1587,41 @@ Page({
     }).catch(() => {});
   },
   adminAddVideo() {
-    wx.chooseMedia({ count: 1, mediaType: ['video'], success: async (res) => {
+    wx.chooseVideo({
+      sourceType: ['album'],
+      compressed: false,
+      maxDuration: 60,
+      success: async (res) => {
       this.showMyLoading('上传中...');
       try {
-        const fileID = await this.uploadToCloud(res.tempFiles[0].tempFilePath, 'shop/topMedia');
+        const tempPath = res.tempFilePath || '';
+        const rawSuffix = tempPath.match(/\.[^.]+?$/)?.[0] || '';
+        const safeSuffix = rawSuffix ? rawSuffix.toLowerCase() : '';
+        const supported = ['.mp4', '.mov', '.m4v'];
+        if (safeSuffix && supported.indexOf(safeSuffix) === -1) {
+          this.hideMyLoading();
+          this.showAutoToast('提示', '电脑上传请使用 MP4/MOV 格式视频');
+          return;
+        }
+
+        // 电脑端有时拿不到后缀，默认用 mp4；若原始格式非 mp4 建议先转码再上传
+        const videoSuffix = safeSuffix || '.mp4';
+        const fileID = await this.uploadToCloud(tempPath, 'shop/topMedia', videoSuffix);
         const newItem = {
           type: 'video',
-          url: fileID
+          url: fileID,
+          poster: res.thumbTempFilePath || ''
         };
         this.data.topMediaList.push(newItem);
-        this.setData({ topMediaList: this.data.topMediaList });
+        this.setTopMediaListForRender(this.data.topMediaList);
         this.saveTopMediaToCloud();
         this.hideMyLoading();
       } catch (err) {
         this.hideMyLoading();
         this.showAutoToast('提示', '上传失败');
       }
-    }});
+      },
+    });
   },
   adminDelTopMedia(e) {
     const index = e.currentTarget.dataset.index;
@@ -1373,7 +1629,7 @@ Page({
     const oldFileID = deletedItem.url; // 🔴 保存要删除的图片/视频ID
     
     this.data.topMediaList.splice(index, 1);
-    this.setData({ topMediaList: this.data.topMediaList });
+    this.setTopMediaListForRender(this.data.topMediaList);
     this.saveTopMediaToCloud();
     
     // 🔴 删除云存储中的文件
@@ -1388,6 +1644,42 @@ Page({
         }
       });
     }
+  },
+
+  adminToggleTopVideoAutoplay(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(index) || !this.data.topMediaList[index]) return;
+    const item = this.data.topMediaList[index];
+    if (item.type !== 'video') return;
+
+    const nextList = [...this.data.topMediaList];
+    nextList[index] = {
+      ...item,
+      autoplay: !item.autoplay
+    };
+    this.data.topMediaList = nextList;
+    this.setData({ topMediaList: nextList });
+    this.saveTopMediaToCloud();
+    if (!nextList[index].autoplay) {
+      const videoContext = wx.createVideoContext(`hero-video-${index}`);
+      if (videoContext) videoContext.pause();
+      const heroVideoPlaying = { ...this.data.heroVideoPlaying, [index]: false };
+      this.setData({ heroVideoPlaying });
+    }
+    this.showAutoToast('提示', nextList[index].autoplay ? '已开启自动播放' : '已关闭自动播放');
+  },
+
+  adminToggleHeroAutoCarousel() {
+    const next = !this.data.heroAutoCarouselEnabled;
+    this.setData({ heroAutoCarouselEnabled: next }, () => {
+      this.saveTopMediaToCloud();
+      if (next) {
+        this._syncHeroAutoForCurrent();
+      } else {
+        this._clearHeroAutoTimer();
+      }
+      this.showAutoToast('提示', next ? '已开启自动轮播' : '已关闭自动轮播');
+    });
   },
 
 
@@ -1734,7 +2026,11 @@ Page({
         
         const fileID = await this.uploadToCloud(path, 'shop/covers');
 
-        const updatedSeries = { ...series, cover: fileID };
+        const updatedSeries = {
+          ...series,
+          cover: fileID,
+          coverPreview: this.buildLowQualityUrl(fileID)
+        };
 
         this.setData({ 
           [`seriesList[${idx}]`]: updatedSeries,
@@ -2058,10 +2354,15 @@ Page({
           const tempPath = file.fileType === 'image'
             ? await this.cropImageIfPossible(file.tempFilePath)
             : file.tempFilePath;
-          const fileID = await this.uploadToCloud(tempPath, 'shop/detailMedia');
+          const videoSuffix = file.fileType === 'video'
+            ? ((file.tempFilePath && file.tempFilePath.match(/\.[^.]+?$/)?.[0]) || '.mp4')
+            : '';
+          const fileID = await this.uploadToCloud(tempPath, 'shop/detailMedia', videoSuffix);
           const newItem = {
             type: file.fileType, // 自动识别 image 或 video
             url: fileID,
+            previewUrl: file.fileType === 'image' ? this.buildLowQualityUrl(fileID) : '',
+            poster: file.fileType === 'video' ? (file.thumbTempFilePath || '') : '',
             autoplay: false, // 详情页视频默认不自动播放
             isPinned: false // 详情页视频默认不置顶
           };
@@ -2152,7 +2453,15 @@ Page({
   adminAddModel() {
     const s = this.data.currentSeries;
     // 原来是 desc: ''，现在改成 desc: '点击修改描述'
-    s.models.push({name:'新型号', price:0, desc:'点击修改描述'});
+    s.models.push({
+      name:'新型号',
+      price:0,
+      desc:'标准版',                 // 版本文案
+      modelVersion:'标准版',         // 兼容字段（老逻辑/新逻辑都能读）
+      sceneDesc:'适用于日常通勤、城市骑行场景',
+      cardIntro:'适用于日常通勤、城市骑行场景',
+      intro:'适用于日常通勤、城市骑行场景'
+    });
     this.setData({ 
       currentSeries: s, 
       [`seriesList[${this.data.currentSeriesIdx}]`]: s 
@@ -2200,9 +2509,26 @@ Page({
 
     this._input(oldVal, (val) => {
       s.models[idx].desc = val;
+      s.models[idx].modelVersion = val; // 兼容保存
       this.setData({ 
         currentSeries: s, 
         [`seriesList[${this.data.currentSeriesIdx}]`]: s 
+      });
+      this.saveSeriesToCloud(s);
+    });
+  },
+  adminEditModelScene(e) {
+    const idx = e.currentTarget.dataset.midx;
+    const s = this.data.currentSeries;
+    const oldVal = s.models[idx].sceneDesc || s.models[idx].cardIntro || s.models[idx].intro || '';
+
+    this._input(oldVal, (val) => {
+      s.models[idx].sceneDesc = val;
+      s.models[idx].cardIntro = val; // 兼容保存
+      s.models[idx].intro = val;     // 兼容保存
+      this.setData({
+        currentSeries: s,
+        [`seriesList[${this.data.currentSeriesIdx}]`]: s
       });
       this.saveSeriesToCloud(s);
     });
@@ -2707,6 +3033,7 @@ Page({
   onSwiperChange(e) {
     const currentIndex = e.detail.current;
     const topMediaList = this.data.topMediaList;
+    this.setData({ heroCurrent: currentIndex });
     
     if (topMediaList && topMediaList[currentIndex] && topMediaList[currentIndex].type === 'video') {
       // 暂停所有视频并更新状态
@@ -2723,18 +3050,26 @@ Page({
         }
       });
       
-      // 播放当前视频并更新状态
-      setTimeout(() => {
-        const videoContext = wx.createVideoContext(`hero-video-${currentIndex}`);
-        if (videoContext) {
-          videoContext.play();
-          // 更新播放状态
-          const heroVideoPlaying = { ...this.data.heroVideoPlaying };
-          heroVideoPlaying[currentIndex] = true;
-          this.setData({ heroVideoPlaying });
-        }
-      }, 100);
+      // 自动轮播开启时，或当前视频手动设置了自动播放，都自动播
+      if (this.data.heroAutoCarouselEnabled || topMediaList[currentIndex].autoplay === true) {
+        setTimeout(() => {
+          const videoContext = wx.createVideoContext(`hero-video-${currentIndex}`);
+          if (videoContext) {
+            videoContext.play();
+            // 更新播放状态
+            const heroVideoPlaying = { ...this.data.heroVideoPlaying };
+            heroVideoPlaying[currentIndex] = true;
+            this.setData({ heroVideoPlaying });
+          }
+        }, 100);
+      }
     }
+    this._syncHeroAutoForCurrent();
+  },
+
+  onHeroVideoEnded() {
+    if (!this.data.heroAutoCarouselEnabled) return;
+    this._goNextHeroSlide();
   },
 
   // 7. [新增] 视频加载错误处理
@@ -3260,6 +3595,16 @@ Page({
     this.setData({ totalPrice: m.price + o.price + accP });
   },
   openOrderModal() { this.setData({ showOrderModal: true }); },
+  /** 主列表悬浮购物车：快速打开结算弹窗（不触发「立即购买」加购逻辑） */
+  onFloatingCartTap() {
+    const cart = this.data.cart || [];
+    if (!cart.length) {
+      wx.showToast({ title: '购物车是空的', icon: 'none' });
+      return;
+    }
+    this.reCalcFinalPrice(this.data.cartTotalPrice);
+    this.openOrderModal();
+  },
   closeOrderModal() { 
     this.setData({ 
       showOrderModal: false,
@@ -3898,6 +4243,40 @@ Page({
       fullAddress
     };
   },
+
+  /**
+   * 下单用：合并「详细地址框 parse」+「智能粘贴写入的 orderInfo.address」+「省市区选择器」
+   * 智能粘贴常把 detailAddress 收成纯门牌，省市区在 selectedProvince/City/District，不能只用 parseAddress(detailAddress)
+   */
+  resolveAddressForOrder() {
+    const detailAddress = (this.data.detailAddress || '').trim();
+    const parsedDetail = this.parseAddress(detailAddress);
+    const orderAddr = (this.data.orderInfo && this.data.orderInfo.address)
+      ? String(this.data.orderInfo.address).trim()
+      : '';
+    const parsedOrder = orderAddr ? this.parseAddress(orderAddr) : {
+      province: '', city: '', district: '', detail: '', fullAddress: ''
+    };
+    const pSel = (this.data.selectedProvince || '').trim();
+    const cSel = (this.data.selectedCity || '').trim();
+    const dSel = (this.data.selectedDistrict || '').trim();
+
+    const province = parsedDetail.province || parsedOrder.province || pSel;
+    const city = parsedDetail.city || parsedOrder.city || cSel;
+    const district = parsedDetail.district || parsedOrder.district || dSel;
+    const detail = (parsedDetail.detail && parsedDetail.detail.trim())
+      ? parsedDetail.detail.trim()
+      : detailAddress;
+
+    const seg = [province, city, district, detail].filter(s => s && String(s).trim());
+    const fullAddress = seg.join(' ').trim()
+      || parsedDetail.fullAddress
+      || parsedOrder.fullAddress
+      || orderAddr
+      || detailAddress;
+
+    return { province, city, district, detail, fullAddress };
+  },
   
   // 修改 3：编辑对比表头文字
   adminEditSpecHeader(e) {
@@ -3985,6 +4364,8 @@ Page({
 
   // 立即结算 (从成功弹窗跳转)
   onGoToCheckout() {
+    // 打开结算前先按最新购物车金额重算，避免展示旧总价
+    this.reCalcFinalPrice(this.data.cartTotalPrice);
     this._closeCartSuccess({ showOrderModal: true });
   },
 
@@ -4464,15 +4845,15 @@ Page({
       return this.showError('请填写详细地址');
     }
 
-    // C. 解析地址，验证是否包含省市区信息
-    const parsed = this.parseAddress(detailAddress);
-    if (!parsed.province && !parsed.city) {
-      console.log('[submitOrder] 校验失败：省市区未填写', parsed);
+    // C. 省市区：详细地址框 + 选择器 + orderInfo.address（智能粘贴）合并后再校验
+    const addr = this.resolveAddressForOrder();
+    if (!addr.province && !addr.city) {
+      console.log('[submitOrder] 校验失败：省市区未填写', addr);
       return this.showError('请填写省、市、区');
     }
 
     // D. 组装完整地址字符串 (给后端和微信支付用)
-    const fullAddressString = parsed.fullAddress || detailAddress;
+    const fullAddressString = addr.fullAddress || detailAddress;
 
     // 更新 orderInfo 里的 address，因为之前的逻辑是读这个字段的
     const finalOrderInfo = {
@@ -4586,7 +4967,15 @@ Page({
         addressData: orderInfo,
         shippingFee: (this.data.isAdmin || this.data.isAuthorized) ? 0 : shippingFee,
         shippingMethod: shippingMethod,
-        userNickname: userNickname // 🔴 传递用户昵称
+        userNickname: userNickname, // 🔴 传递用户昵称
+        repairId: (() => {
+          let r = (this.data.repairId || '').toString().trim();
+          if (r) return r;
+          try {
+            r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+          } catch (e) {}
+          return r;
+        })() // 🔴 从维修/引导购配件进入商城下单时写入，供管理员端区分黄色卡片
       },
       success: res => {
         console.log('[doRealPayment] 云函数调用成功，返回结果:', res);
@@ -4619,7 +5008,43 @@ Page({
             this.closeOrderModal();
             
             // 🔴 如果是从维修单跳转过来的，更新维修单状态
-            const { repairId } = this.data;
+            let repairId = (this.data.repairId || '').toString().trim();
+            if (!repairId) {
+              try {
+                repairId = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+              } catch (e) {}
+            }
+            const orderIdPatch = payment.outTradeNo;
+            if (orderIdPatch && repairId && wx.cloud) {
+              wx.cloud.database().collection('shop_orders').where({ orderId: orderIdPatch }).update({
+                data: { repairId }
+              }).catch(() => {});
+            }
+            // 与 shouhou 一致：走云函数服务端写入 shop_orders.repairId（客户端 update 常被权限拦截）
+            if (orderIdPatch && repairId) {
+              let nick = '';
+              try {
+                nick = wx.getStorageSync('user_nickname') || '';
+                if (!nick) {
+                  const ui = wx.getStorageSync('userInfo');
+                  if (ui && ui.nickName) nick = ui.nickName;
+                }
+              } catch (e) {}
+              wx.cloud.callFunction({
+                name: 'writeShouhouguoqi',
+                data: {
+                  repairId,
+                  goodsList: cart || [],
+                  addressData: orderInfo || this.data.orderInfo || {},
+                  userNickname: nick,
+                  orderId: orderIdPatch || ''
+                },
+                fail: (err) => console.error('[doRealPayment] writeShouhouguoqi:', err)
+              });
+            }
+            try {
+              wx.removeStorageSync('guided_parts_repair_id');
+            } catch (e) {}
             if (repairId) {
               const db = wx.cloud.database();
               db.collection('shouhou_repair').doc(repairId).update({
@@ -4643,69 +5068,78 @@ Page({
             console.log('[doRealPayment] 支付成功，订单号:', orderId);
             
             if (orderId) {
-              this.callCheckPayResult(orderId);
+              this.startPaymentVerification(orderId);
             }
             
-            // 延迟一下，然后返回上一页
-            setTimeout(() => {
-              const pages = getCurrentPages();
-              // 如果页面栈中有上一页，则返回上一页；否则跳转到 my 页面
-              if (pages.length > 1) {
-                wx.navigateBack({
-                  delta: 1,
-                  success: () => {
-                    console.log('[doRealPayment] 已返回到上一页');
-                    // 通知上一页刷新数据（如果是 my 页面）
-                    setTimeout(() => {
-                      const prevPage = pages[pages.length - 2];
-                      if (prevPage && prevPage.route === 'pages/my/my') {
-                        if (typeof prevPage.loadMyOrders === 'function') {
-                          console.log('[doRealPayment] 刷新 my 页面订单列表');
-                          prevPage.loadMyOrders();
-                        }
-                        if (typeof prevPage.loadMyActivitiesPromise === 'function') {
-                          console.log('[doRealPayment] 刷新 my 页面活动列表（包含购买配件状态）');
-                          prevPage.loadMyActivitiesPromise();
-                        }
-                        // 🔴 如果是管理员，还需要刷新待处理维修工单列表
-                        if (prevPage.data.isAdmin && typeof prevPage.loadPendingRepairs === 'function') {
-                          console.log('[doRealPayment] 刷新管理员待处理维修工单列表');
-                          prevPage.loadPendingRepairs();
-                        }
+            this.showMyDialog({
+              title: '支付成功',
+              content: '是否前往个人中心查看订单？',
+              showCancel: true,
+              confirmText: '去个人中心',
+              cancelText: '继续选购',
+              success: () => {
+                // 延迟一下再跳转，给支付成功状态和查单请求一点缓冲时间
+                setTimeout(() => {
+                  const pages = getCurrentPages();
+                  // 如果页面栈中有上一页，则返回上一页；否则跳转到 my 页面
+                  if (pages.length > 1) {
+                    wx.navigateBack({
+                      delta: 1,
+                      success: () => {
+                        console.log('[doRealPayment] 已返回到上一页');
+                        // 通知上一页刷新数据（如果是 my 页面）
+                        setTimeout(() => {
+                          const prevPage = pages[pages.length - 2];
+                          if (prevPage && prevPage.route === 'pages/my/my') {
+                            if (typeof prevPage.loadMyOrders === 'function') {
+                              console.log('[doRealPayment] 刷新 my 页面订单列表');
+                              prevPage.loadMyOrders();
+                            }
+                            if (typeof prevPage.loadMyActivitiesPromise === 'function') {
+                              console.log('[doRealPayment] 刷新 my 页面活动列表（包含购买配件状态）');
+                              prevPage.loadMyActivitiesPromise();
+                            }
+                            // 🔴 如果是管理员，还需要刷新待处理维修工单列表
+                            if (prevPage.data.isAdmin && typeof prevPage.loadPendingRepairs === 'function') {
+                              console.log('[doRealPayment] 刷新管理员待处理维修工单列表');
+                              prevPage.loadPendingRepairs();
+                            }
+                          }
+                        }, 300);
                       }
-                    }, 300);
+                    });
+                  } else {
+                    // 如果没有上一页，跳转到 my 页面
+                    wx.redirectTo({ 
+                      url: '/pages/my/my',
+                      success: () => {
+                        // 通知 my 页面刷新订单列表和活动列表
+                        setTimeout(() => {
+                          const pages = getCurrentPages();
+                          const myPage = pages[pages.length - 1];
+                          if (myPage) {
+                            // 🔴 修复：同时刷新订单列表和活动列表（活动列表包含需要购买配件的维修单）
+                            if (typeof myPage.loadMyOrders === 'function') {
+                              console.log('[doRealPayment] 刷新 my 页面订单列表');
+                              myPage.loadMyOrders();
+                            }
+                            if (typeof myPage.loadMyActivitiesPromise === 'function') {
+                              console.log('[doRealPayment] 刷新 my 页面活动列表（包含购买配件状态）');
+                              myPage.loadMyActivitiesPromise();
+                            }
+                            // 🔴 如果是管理员，还需要刷新待处理维修工单列表
+                            if (myPage.data.isAdmin && typeof myPage.loadPendingRepairs === 'function') {
+                              console.log('[doRealPayment] 刷新管理员待处理维修工单列表');
+                              myPage.loadPendingRepairs();
+                            }
+                          }
+                        }, 500);
+                      }
+                    });
                   }
-                });
-              } else {
-                // 如果没有上一页，跳转到 my 页面
-              wx.redirectTo({ 
-                url: '/pages/my/my',
-                success: () => {
-                  // 通知 my 页面刷新订单列表和活动列表
-                  setTimeout(() => {
-                    const pages = getCurrentPages();
-                    const myPage = pages[pages.length - 1];
-                    if (myPage) {
-                      // 🔴 修复：同时刷新订单列表和活动列表（活动列表包含需要购买配件的维修单）
-                      if (typeof myPage.loadMyOrders === 'function') {
-                        console.log('[doRealPayment] 刷新 my 页面订单列表');
-                        myPage.loadMyOrders();
-                      }
-                      if (typeof myPage.loadMyActivitiesPromise === 'function') {
-                        console.log('[doRealPayment] 刷新 my 页面活动列表（包含购买配件状态）');
-                        myPage.loadMyActivitiesPromise();
-                      }
-                      // 🔴 如果是管理员，还需要刷新待处理维修工单列表
-                      if (myPage.data.isAdmin && typeof myPage.loadPendingRepairs === 'function') {
-                        console.log('[doRealPayment] 刷新管理员待处理维修工单列表');
-                        myPage.loadPendingRepairs();
-                      }
-                    }
-                  }, 500);
-                }
-              });
+                }, 500);
               }
-            }, 500);
+            });
           },
           fail: (err) => {
             console.error('[doRealPayment] 支付失败:', err);
@@ -4732,13 +5166,42 @@ Page({
     });
   },
 
-  callCheckPayResult(orderId, attempt = 1) {
+  startPaymentVerification(orderId) {
     if (!orderId) return;
-    const maxAttempts = 3;
-    if (attempt === 1) {
-      this.showMyLoading('确认订单中...');
-    } else {
-      this.showMyLoading('再次确认...');
+    // 第一段：即时轮询，尽快确认支付成功并触发状态同步
+    this.callCheckPayResult(orderId, 1, {
+      maxAttempts: 6,
+      intervalMs: 2500,
+      showLoading: true,
+      silent: false
+    });
+    // 第二段：延迟复查，覆盖回调慢/网络抖动导致的漏检
+    setTimeout(() => {
+      this.callCheckPayResult(orderId, 1, {
+        maxAttempts: 4,
+        intervalMs: 3000,
+        showLoading: false,
+        silent: true
+      });
+    }, 12000);
+    setTimeout(() => {
+      this.callCheckPayResult(orderId, 1, {
+        maxAttempts: 3,
+        intervalMs: 3500,
+        showLoading: false,
+        silent: true
+      });
+    }, 28000);
+  },
+
+  callCheckPayResult(orderId, attempt = 1, options = {}) {
+    if (!orderId) return;
+    const maxAttempts = options.maxAttempts || 6;
+    const intervalMs = options.intervalMs || 2500;
+    const silent = !!options.silent;
+    const showLoading = !!options.showLoading && !silent;
+    if (showLoading) {
+      this.showMyLoading(attempt === 1 ? '确认订单中...' : '再次确认...');
     }
 
     wx.cloud.callFunction({
@@ -4748,23 +5211,27 @@ Page({
         const result = res.result || {};
         console.log('[callCheckPayResult] 云函数返回:', result);
         if (result.success) {
-          this.showAutoToast('成功', '订单已确认');
+          if (!silent) {
+            this.showAutoToast('成功', '订单已确认');
+          }
         } else if (attempt < maxAttempts) {
-          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
-        } else {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1, options), intervalMs);
+        } else if (!silent) {
           this.showAutoToast('提示', result.msg || '支付状态待确认，请稍后在"我的订单"查看');
         }
       },
       fail: (err) => {
         console.error('[callCheckPayResult] 调用失败:', err);
         if (attempt < maxAttempts) {
-          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
-        } else {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1, options), intervalMs);
+        } else if (!silent) {
           this.showAutoToast('提示', '网络异常，请稍后在"我的订单"查看');
         }
       },
       complete: () => {
-        this.hideMyLoading();
+        if (showLoading) {
+          this.hideMyLoading();
+        }
       }
     });
   },
@@ -4806,13 +5273,11 @@ Page({
     if (shippingMethod === 'zto') {
       fee = 0; // 中通包邮
     } else if (shippingMethod === 'sf') {
-      // 顺丰逻辑：从详细地址中解析省市区
+      // 顺丰逻辑：省市区可能只在选择器 / orderInfo.address 里
       if (!detailAddress || !detailAddress.trim()) {
         fee = 0; // 没填地址，运费暂计为0
       } else {
-        // 解析地址，提取省份信息
-        const parsed = this.parseAddress(detailAddress);
-        const province = parsed.province || '';
+        const province = (this.resolveAddressForOrder().province || '').trim();
         
         // 判断是否广东
         if (province.indexOf('广东') > -1) {
@@ -4921,6 +5386,155 @@ Page({
     console.log('[shop] 使用默认省份列表（不依赖API）');
   },
 
+  // 智能粘贴：按省加载城市并匹配市、区（与 shouhou 页逻辑一致，供 confirmSmartPaste 回调调用）
+  loadCityListForSmartPaste(provinceId, targetCity, targetDistrict) {
+    const cacheKey = `city_list_${provinceId}`;
+    const cachedCityList = wx.getStorageSync(cacheKey);
+    if (cachedCityList && cachedCityList.length > 0) {
+      this.setData({ cityList: cachedCityList });
+      if (targetCity) {
+        let cityIndex = cachedCityList.findIndex(c => c.name === targetCity);
+        if (cityIndex === -1) {
+          const cityName = targetCity.replace('市', '').replace('自治州', '').replace('地区', '');
+          cityIndex = cachedCityList.findIndex(c => {
+            const cName = c.name.replace('市', '').replace('自治州', '').replace('地区', '');
+            return cName === cityName;
+          });
+        }
+        if (cityIndex === -1) {
+          const cityName = targetCity.replace('市', '');
+          cityIndex = cachedCityList.findIndex(c =>
+            c.name.includes(cityName) || cityName.includes(c.name.replace('市', ''))
+          );
+        }
+        if (cityIndex !== -1) {
+          wx.nextTick(() => {
+            this.setData({
+              cityIndex,
+              selectedCity: cachedCityList[cityIndex].name
+            }, () => {
+              if (cachedCityList[cityIndex].id && targetDistrict) {
+                this.loadDistrictListForSmartPaste(cachedCityList[cityIndex].id, targetDistrict);
+              }
+            });
+          });
+        } else {
+          this.setData({ selectedCity: targetCity });
+        }
+      }
+      return;
+    }
+
+    qqmapsdk.getCityList({
+      success: (res) => {
+        if (res.status === 0 && res.result && res.result.length > 1) {
+          const allCities = res.result[1] || [];
+          const provincePrefix = String(provinceId).substring(0, 2);
+          const cityList = allCities
+            .filter(c => String(c.id || '').substring(0, 2) === provincePrefix)
+            .map(c => ({ id: c.id, name: c.fullname || c.name }));
+          wx.setStorageSync(cacheKey, cityList);
+          this.setData({ cityList });
+          this._matchCityAfterSmartPasteLoad(cityList, targetCity, targetDistrict);
+        } else {
+          this._loadCityListForSmartPasteFallback(provinceId, targetCity, targetDistrict, cacheKey);
+        }
+      },
+      fail: () => {
+        this._loadCityListForSmartPasteFallback(provinceId, targetCity, targetDistrict, cacheKey);
+      }
+    });
+  },
+
+  _loadCityListForSmartPasteFallback(provinceId, targetCity, targetDistrict, cacheKey) {
+    qqmapsdkDistrict.getDistrictByCityId({
+      id: provinceId,
+      success: (res2) => {
+        if (res2.status === 0 && res2.result && res2.result.length > 0) {
+          const cities = res2.result[0] || [];
+          const cityList = cities.map(c => ({ id: c.id, name: c.fullname || c.name }));
+          wx.setStorageSync(cacheKey, cityList);
+          this.setData({ cityList });
+          this._matchCityAfterSmartPasteLoad(cityList, targetCity, targetDistrict);
+        }
+      },
+      fail: (err) => {
+        console.error('[shop] 智能粘贴加载城市失败:', err);
+        if (targetCity) {
+          this.setData({ selectedCity: targetCity, cityList: [] });
+        }
+      }
+    });
+  },
+
+  _matchCityAfterSmartPasteLoad(cityList, targetCity, targetDistrict) {
+    if (!targetCity || !cityList || !cityList.length) return;
+    let cityIndex = cityList.findIndex(c => c.name === targetCity);
+    if (cityIndex === -1) {
+      const cityName = targetCity.replace('市', '').replace('自治州', '').replace('地区', '');
+      cityIndex = cityList.findIndex(c => {
+        const cName = c.name.replace('市', '').replace('自治州', '').replace('地区', '');
+        return cName === cityName;
+      });
+    }
+    if (cityIndex === -1) {
+      const cityName = targetCity.replace('市', '');
+      cityIndex = cityList.findIndex(c =>
+        c.name.includes(cityName) || cityName.includes(c.name.replace('市', ''))
+      );
+    }
+    if (cityIndex !== -1) {
+      wx.nextTick(() => {
+        this.setData({
+          cityIndex,
+          selectedCity: cityList[cityIndex].name
+        }, () => {
+          if (cityList[cityIndex].id && targetDistrict) {
+            this.loadDistrictListForSmartPaste(cityList[cityIndex].id, targetDistrict);
+          }
+        });
+      });
+    } else {
+      this.setData({ selectedCity: targetCity });
+    }
+  },
+
+  loadDistrictListForSmartPaste(cityId, targetDistrict) {
+    qqmapsdkDistrict.getDistrictByCityId({
+      id: cityId,
+      success: (res) => {
+        if (res.status === 0 && res.result && res.result.length > 0) {
+          const districts = res.result[0] || [];
+          const districtList = districts.map(d => ({
+            id: d.id,
+            name: d.fullname || d.name
+          }));
+          this.setData({ districtList });
+          if (targetDistrict) {
+            const districtName = targetDistrict.replace('区', '').replace('县', '').replace('镇', '').replace('街道', '');
+            const districtIndex = districtList.findIndex(d => {
+              const dName = d.name.replace('区', '').replace('县', '').replace('自治县', '').replace('市辖区', '');
+              return d.name === targetDistrict ||
+                d.name.includes(districtName) ||
+                districtName.includes(dName) ||
+                dName === districtName;
+            });
+            if (districtIndex !== -1) {
+              this.setData({
+                districtIndex,
+                selectedDistrict: districtList[districtIndex].name
+              });
+            }
+          }
+        }
+      },
+      fail: (err) => {
+        console.error('[shop] 智能粘贴加载区县失败:', err);
+        this.setData({ districtList: [] });
+      }
+    });
+  },
+
   // ========================================================
   // [新增] 提交定制需求 (只下单不支付)
   // ========================================================
@@ -4933,9 +5547,11 @@ Page({
     if (!/^1[3-9]\d{9}$/.test(orderInfo.phone)) return this.showError('手机号格式错误');
     if (!detailAddress || !detailAddress.trim()) return this.showError('请完善收货地址');
 
-    // 解析地址
-    const parsed = this.parseAddress(detailAddress);
-    const fullAddressString = parsed.fullAddress || detailAddress;
+    const addr = this.resolveAddressForOrder();
+    if (!addr.province && !addr.city) {
+      return this.showError('请填写省、市、区');
+    }
+    const fullAddressString = addr.fullAddress || detailAddress;
     const finalOrderInfo = { ...orderInfo, address: fullAddressString };
 
     this.showMyDialog({
@@ -4987,8 +5603,10 @@ Page({
       cart: newCart,
       cartTotalPrice: newTotal
     });
+    // 3. 同步更新最终应付价（含运费），保证结算弹窗实时显示
+    this.reCalcFinalPrice(newTotal);
 
-    // 3. 【关键】存入本地缓存 (持久化)
+    // 4. 【关键】存入本地缓存 (持久化)
     wx.setStorageSync('my_cart', newCart);
   },
 
@@ -5006,8 +5624,28 @@ Page({
     this.setData({ 
       isModelCompareMode: mode,
       currentSeries: this.data.currentSeries,
-      compareSelectedModels: []
+      compareSelectedModels: [],
+      compareGuidePhase: 0,
+      compareGuidePhase2HintVisible: false
     });
+
+    this._clearCompareGuideTimers();
+    if (mode) {
+      this.setData({ compareGuidePhase: 1 });
+      this._compareGuidePhaseTimer = setTimeout(() => {
+        this._compareGuidePhaseTimer = null;
+        if (!this.data.isModelCompareMode) return;
+        this.setData({
+          compareGuidePhase: 2,
+          compareGuidePhase2HintVisible: true
+        });
+        this._compareGuidePhase2HintTimer = setTimeout(() => {
+          this._compareGuidePhase2HintTimer = null;
+          if (!this.data.isModelCompareMode) return;
+          this.setData({ compareGuidePhase2HintVisible: false });
+        }, 5000);
+      }, 5000);
+    }
   },
 
   // ========================================================
@@ -5062,11 +5700,17 @@ Page({
   // 3. 点击"查看对比结果"按钮 (用户专用)
   // ========================================================
   startCompare() {
+    this._clearCompareGuideTimers();
     this.openSpecsModal();
   },
 
   // 🔴 检查封禁状态
   async checkBanStatus() {
+    const now = Date.now();
+    if (this._lastBanCheckAt && (now - this._lastBanCheckAt < 15 * 1000)) {
+      return;
+    }
+    this._lastBanCheckAt = now;
     try {
       const loginRes = await wx.cloud.callFunction({ name: 'login' });
       const openid = loginRes.result.openid;

@@ -7,10 +7,11 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 // 🔴 微信支付配置（需要和 createOrder 保持一致）
 const WX_PAY_CONFIG = {
-  mchId: '1103782674',
-  appId: 'wxf1a81dd77d810edf',
-  apiV3Key: 'MTMoGaiSheWeChatPay2025Key888888',
-  serialNo: '73F820E3A9CBFF6FF509EAB7B2449CEBAB33E479',
+  // 优先读取环境变量，未配置时回退到当前值（兼容旧部署）
+  mchId: process.env.WX_PAY_MCH_ID || '1103782674',
+  appId: process.env.WX_PAY_APP_ID || 'wxf1a81dd77d810edf',
+  apiV3Key: process.env.WX_PAY_API_V3_KEY || 'MTMoGaiSheWeChatPay2025Key888888',
+  serialNo: process.env.WX_PAY_SERIAL_NO || '73F820E3A9CBFF6FF509EAB7B2449CEBAB33E479',
   keyPath: path.join(__dirname, 'apiclient_key.pem') // 私钥文件（已复制到当前目录）
 }
 
@@ -166,29 +167,39 @@ exports.main = async (event, context) => {
     
     let headers = {}
     let body = null
+    let rawBody = null
     
     // 🔴 检查是否是 HTTP 触发格式
     if (event.httpMethod || event.path || event.headers || event.body !== undefined) {
       console.log('[payCallback] 检测到 HTTP 触发格式')
       headers = event.headers || {}
       
-      // body 可能是字符串，需要解析
-      if (event.body !== undefined && event.body !== null) {
+      // body 可能是 base64 字符串 / 普通 JSON 字符串 / 对象
+      rawBody = event.body
+      if (event.isBase64Encoded && typeof rawBody === 'string') {
         try {
-          if (typeof event.body === 'string') {
+          rawBody = Buffer.from(rawBody, 'base64').toString('utf8')
+          console.log('[payCallback] body 已从 base64 解码')
+        } catch (decodeErr) {
+          console.error('[payCallback] body base64 解码失败:', decodeErr.message || decodeErr)
+        }
+      }
+      if (rawBody !== undefined && rawBody !== null) {
+        try {
+          if (typeof rawBody === 'string') {
             console.log('[payCallback] body 是字符串，开始解析 JSON...')
-            body = JSON.parse(event.body)
+            body = JSON.parse(rawBody)
             console.log('[payCallback] body JSON 解析成功')
           } else {
-            body = event.body
+            body = rawBody
             console.log('[payCallback] body 不是字符串，直接使用')
           }
         } catch (e) {
           console.error('[payCallback] 解析 body 失败:', e)
-          console.error('[payCallback] 原始 body 类型:', typeof event.body)
-          console.error('[payCallback] 原始 body 内容（前500字符）:', typeof event.body === 'string' ? event.body.substring(0, 500) : event.body)
+          console.error('[payCallback] 原始 body 类型:', typeof rawBody)
+          console.error('[payCallback] 原始 body 内容（前500字符）:', typeof rawBody === 'string' ? rawBody.substring(0, 500) : rawBody)
           // 如果解析失败，可能是其他格式，保留原始值
-          body = event.body
+          body = rawBody
         }
       }
     } else {
@@ -198,9 +209,8 @@ exports.main = async (event, context) => {
       body = event.body || event
     }
     
-    console.log('[payCallback] headers:', JSON.stringify(headers, null, 2))
-    console.log('[payCallback] body:', JSON.stringify(body, null, 2))
     console.log('[payCallback] body 类型:', typeof body)
+    console.log('[payCallback] headers 键名:', Object.keys(headers || {}))
     console.log('[payCallback] event.httpMethod:', event.httpMethod)
     console.log('[payCallback] event.path:', event.path)
     
@@ -223,6 +233,22 @@ exports.main = async (event, context) => {
         console.error('[payCallback] body JSON 解析失败:', parseErr)
         console.error('[payCallback] 原始 body 内容:', body)
         // 解析失败时，尝试继续处理
+      }
+    }
+
+    // 某些网关会把真正 payload 包一层 body 字段，这里做兼容剥离
+    if (body && !body.resource && body.body) {
+      const nested = body.body
+      if (typeof nested === 'string') {
+        try {
+          body = JSON.parse(nested)
+          console.log('[payCallback] 已解析 nested body 字符串')
+        } catch (e) {
+          // 保持原样，后续继续走兼容逻辑
+        }
+      } else if (typeof nested === 'object') {
+        body = nested
+        console.log('[payCallback] 已使用 nested body 对象')
       }
     }
     
@@ -263,15 +289,17 @@ exports.main = async (event, context) => {
           if (orderRes.data && orderRes.data.length > 0) {
             const order = orderRes.data[0]
             
-            // 2. 更新订单状态
+            // 2. 更新订单状态（不做 repairId 推断，避免把普通订单误判为引导购配件）
+            const updateData = {
+              status: 'PAID',
+              payTime: db.serverDate(),
+              transactionId: transactionId // 微信支付订单号
+            }
+
             const updateRes = await db.collection('shop_orders').where({
               orderId: outTradeNo
             }).update({
-              data: {
-                status: 'PAID',
-                payTime: db.serverDate(),
-                transactionId: transactionId // 微信支付订单号
-              }
+              data: updateData
             })
             
             console.log('[payCallback] 订单状态更新结果:', updateRes)

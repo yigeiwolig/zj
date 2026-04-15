@@ -87,6 +87,7 @@
           <video 
             class="pending-video-large" 
             src="{{item.videoFileID}}" 
+            preload="metadata"
             show-center-play-btn="{{true}}" 
             show-fullscreen-btn="{{true}}"
             controls="{{true}}"
@@ -164,7 +165,7 @@
         style="{{isDraggingCard && draggingCardId === item._id ? 'position: fixed; left: ' + dragX + 'px; top: ' + dragY + 'px; width: ' + cardWidth + 'px; opacity: 0.9; z-index: 9999; transition: none;' : ''}}"
       >
         <view class="thumb-box" style="background-color: {{item.color}};">
-          <image wx:if="{{item.coverUrl}}" src="{{item.coverUrl}}" mode="aspectFill" class="card-cover-img"></image>
+          <image wx:if="{{item.coverUrl}}" src="{{item.coverUrl}}" mode="aspectFill" class="card-cover-img" lazy-load="true" binderror="onCaseCoverImageError" data-index="{{index}}"></image>
           <view class="card-watermark-overlay">MT</view>
           
           <!-- 🔧 编辑图标：只在“管理现有视频”模式下显示 -->
@@ -391,7 +392,7 @@
             <text class="upload-text">选视频</text>
           </view>
         </block>
-        <video wx:else src="{{adminVideoPath}}" class="preview-media" show-play-btn="{{false}}"></video>
+        <video wx:else src="{{adminVideoPath}}" class="preview-media" show-play-btn="{{false}}" preload="metadata"></video>
       </view>
       <view class="upload-box" bindtap="chooseAdminCover">
         <block wx:if="{{!adminThumbPath}}">
@@ -400,7 +401,7 @@
             <text class="upload-text">选封面</text>
           </view>
         </block>
-        <image wx:else src="{{adminThumbPath}}" class="preview-media" mode="aspectFill"></image>
+        <image wx:else src="{{adminThumbPath}}" class="preview-media" mode="aspectFill" lazy-load="true" binderror="onCaseAdminThumbError"></image>
       </view>
     </view>
     <view wx:if="{{adminVideoPath}}" class="re-upload-text" style="margin-bottom:20rpx">
@@ -505,6 +506,7 @@
             id="shootingGuideVideo"
             src="{{shootingGuideVideoUrl}}" 
             class="shooting-guide-video"
+            preload="metadata"
             controls="{{false}}"
             autoplay="{{true}}"
             loop="{{true}}"
@@ -600,6 +602,7 @@
   <video 
     src="{{currentVideo.videoUrl}}" 
     class="fullscreen-video" 
+    preload="metadata"
     autoplay="{{true}}" 
     controls="{{true}}"
     show-fullscreen-btn="{{false}}"
@@ -612,6 +615,9 @@
   >
     <!-- 🔴 视频加密：使用多层 cover-view 覆盖，防止直接访问 -->
     <cover-view class="auto-watermark"><cover-view class="wm-text">MT-摩改社</cover-view></cover-view>
+    <cover-view class="auto-watermark auto-watermark-nick" wx:if="{{videoWatermarkNickname}}">
+      <cover-view class="wm-text wm-text-nick">@{{videoWatermarkNickname}}</cover-view>
+    </cover-view>
     <cover-view class="video-protection-layer"></cover-view>
     <cover-view class="close-video-btn" bindtap="closeVideoPlayer">×</cover-view>
     <cover-view class="video-bottom-info">
@@ -669,6 +675,7 @@
       <video 
         src="{{videoPath}}" 
         id="caseVideoPreviewPlayer"
+        preload="metadata"
         controls="{{false}}"
         autoplay="{{true}}" 
         object-fit="contain" 

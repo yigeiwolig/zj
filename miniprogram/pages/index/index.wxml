@@ -317,7 +317,7 @@
     
     <!-- 二维码显示区域 -->
     <view class="qr-code-container" wx:if="{{showWechatQRCode}}">
-      <image class="qr-code-image" src="/images/qrcode.jpg" mode="aspectFit" />
+      <image class="qr-code-image" src="/images/qrcode.jpg" mode="aspectFit" lazy-load="true" />
       <text class="qr-code-tip">扫描二维码添加管理员微信</text>
       <text class="qr-code-wechat">微信号：{{adminWechat}}</text>
     </view>

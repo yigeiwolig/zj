@@ -793,6 +793,74 @@ page {
   line-height: 1;
 }
 
+/* 折叠页：按钮行锚点（提示绝对叠在上方，不挤占布局） */
+.fold-adjust-anchor {
+  position: relative;
+  width: 100%;
+}
+
+/* 上滑演示结束后的「调大/调小」补充说明：浮在「调整」行正上方 */
+.fold-finetune-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  display: flex;
+  justify-content: center;
+  padding-bottom: 12rpx;
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 8;
+}
+
+.fold-finetune-inner {
+  max-width: 94%;
+  padding: 18rpx 28rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  border: 1rpx solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  transform-origin: center bottom;
+  animation: foldFinetuneAppear 0.35s ease-out forwards, foldFinetuneBob 0.85s ease-in-out 0.35s infinite;
+}
+
+@keyframes foldFinetuneAppear {
+  from {
+    opacity: 0;
+    transform: translateY(16rpx) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* 一跳一跳：轻微上下弹跳（与上面 appear 衔接后循环） */
+@keyframes foldFinetuneBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-12rpx);
+  }
+  70% {
+    transform: translateY(-4rpx);
+  }
+}
+
+.fold-finetune-line {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #ff3b30;
+  line-height: 1.45;
+  text-align: center;
+}
+
 /* 🔴 调整按钮滑动相关样式 */
 .adjust-slider-wrapper {
   position: relative;
@@ -919,12 +987,30 @@ page {
   transform: translateY(50rpx); transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
 }
 .control-page.show { opacity: 1; visibility: visible; z-index: 50; pointer-events: auto; transform: translateY(0); }
+.detail-touch-guard {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1300;
+  background: transparent;
+}
+.edge-swipe-blocker {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 72rpx;
+  height: 100%;
+  z-index: 1200;
+  background: transparent;
+}
 .device-stage { flex: 1; width: 100%; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 160rpx; }
 
 .view-layer { 
   position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
   display: flex; flex-direction: column; align-items: center; justify-content: center; 
-  transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); 
+  transition: opacity 0.24s ease, transform 0.24s ease;
   opacity: 0; pointer-events: none; z-index: 50; transform: scale(0.95); 
 }
 .view-layer.active { opacity: 1; pointer-events: auto; transform: scale(1); }

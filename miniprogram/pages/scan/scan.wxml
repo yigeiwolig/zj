@@ -18,7 +18,7 @@
   <view class="password-modal-mask" wx:if="{{showBluetoothAlert}}" catchtouchmove="noop" catchtap="noop">
     <view class="password-box" catchtouchmove="noop" catchtap="noop">
       <view class="bluetooth-icon-wrap">
-        <image class="bt-icon-img" src="{{icons.btSmall}}" mode="aspectFit"></image>
+        <image class="bt-icon-img" src="{{icons.btSmall}}" mode="aspectFit" lazy-load="true"></image>
       </view>
       <view class="pass-title">蓝牙未开启</view>
       <view class="pass-desc">请在手机"设置"中打开蓝牙功能\n以便连接设备</view>
@@ -117,7 +117,7 @@
           <view class="model-name">{{item.name}} <text class="model-suffix {{item.type === 'Max' ? 'max' : ''}} {{item.type === 'Pro Long' ? 'pro-long' : ''}} {{item.type === 'Max Long' ? 'max-long' : ''}}">{{item.type}}</text></view>
         </view>
         <view class="visual-area">
-          <image class="custom-icon" src="{{item.icon}}" mode="aspectFit"></image>
+          <image class="custom-icon" src="{{item.icon}}" mode="aspectFit" lazy-load="true"></image>
         </view>
         <view class="action-btn" catchtap="openDetail" data-index="{{index}}">
           点击进入控制台
@@ -130,7 +130,21 @@
   <!-- ======================= -->
   <!-- 详情与控制区 -->
   <!-- ======================= -->
-  <view class="control-page {{showDetail ? 'show' : ''}}">
+  <view class="control-page {{showDetail ? 'show' : ''}}"
+        bindtouchstart="onDetailSwipeStart"
+        bindtouchmove="onDetailSwipeMove"
+        bindtouchend="onDetailSwipeEnd">
+    <!-- 防点透透明遮罩：进入详情后短暂拦截，避免误触发隐蔽模式按钮 -->
+    <view wx:if="{{showDetail && blockDetailTouch}}" class="detail-touch-guard"
+          catchtouchstart="noop"
+          catchtouchmove="noop"
+          catchtouchend="noop"
+          catchtap="noop"></view>
+    <!-- 左边缘手势拦截层：防止系统侧滑直接退出页面 -->
+    <view wx:if="{{showDetail}}" class="edge-swipe-blocker"
+          catchtouchstart="noop"
+          catchtouchmove="noop"
+          catchtouchend="noop"></view>
     
     <!-- 全屏居中布局 -->
     <view class="device-stage centered-container">
@@ -151,7 +165,7 @@
               
               <!-- A. 待机 -->
               <view class="capsule-content idle" wx:if="{{!isScanning && !isConnected && !isConnecting}}">
-                <image class="idle-icon-img" src="{{icons.btSmall}}"></image>
+                <image class="idle-icon-img" src="{{icons.btSmall}}" lazy-load="true"></image>
                 <text>点击连接设备</text>
               </view>
 
@@ -213,7 +227,7 @@
           
           <!-- 3. 设备图 -->
           <view class="card-visual">
-            <image class="card-device-img" src="{{currentModel.icon}}" mode="widthFix"></image>
+            <image class="card-device-img" src="{{currentModel.icon}}" mode="widthFix" lazy-load="true"></image>
           </view>
 
           <!-- 4. 底部按钮 -->
@@ -221,12 +235,12 @@
             <!-- 按钮代码保持不变 -->
             <view class="split-btn-group">
               <view class="split-item" bindtap="enterEdit" data-type="fold">
-                <view class="btn-icon-circle"><image class="svg-icon bounce-icon" src="{{icons.lock}}"></image></view>
+                <view class="btn-icon-circle"><image class="svg-icon bounce-icon" src="{{icons.lock}}" lazy-load="true"></image></view>
                 <text class="btn-text">折叠角度</text>
               </view>
               <view class="btn-divider"></view>
               <view class="split-item" bindtap="enterEdit" data-type="open">
-                <view class="btn-icon-circle"><image class="svg-icon bounce-icon" src="{{icons.arrowUp}}"></image></view>
+                <view class="btn-icon-circle"><image class="svg-icon bounce-icon" src="{{icons.arrowUp}}" lazy-load="true"></image></view>
                 <text class="btn-text">打开角度</text>
               </view>
             </view>
@@ -234,24 +248,24 @@
             <!-- 🔴 隐蔽模式教学入口（非Max型号显示） -->
             <view class="split-btn-group" wx:if="{{currentModel.type !== 'Max' && currentModel.type !== 'Max Long'}}">
               <view class="split-item" bindtap="openStealthTutorial">
-                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}" lazy-load="true"></image></view>
                 <text class="btn-text">开启隐蔽模式</text>
               </view>
               <view class="btn-divider"></view>
               <view class="split-item" bindtap="openExitStealthTutorial">
-                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}" lazy-load="true"></image></view>
                 <text class="btn-text">退出隐蔽模式</text>
               </view>
             </view>
 
             <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Max Long'}}">
                <view class="split-item" style="{{currentModel.name === 'F1' ? 'opacity:0.3; pointer-events:none;' : ''}}" bindtap="handleAutoCalibrate">
-                 <view class="btn-icon-circle"><image class="svg-icon rotate-icon" src="{{icons.cali}}"></image></view>
+                 <view class="btn-icon-circle"><image class="svg-icon rotate-icon" src="{{icons.cali}}" lazy-load="true"></image></view>
                  <text class="btn-text">自动校准</text>
                </view>
                <view class="btn-divider"></view>
                <view class="split-item" bindtap="openSettings">
-                 <view class="btn-icon-circle"><image class="svg-icon rotate-icon" src="{{icons.gear}}"></image></view>
+                 <view class="btn-icon-circle"><image class="svg-icon rotate-icon" src="{{icons.gear}}" lazy-load="true"></image></view>
                  <text class="btn-text">高级设置</text>
                </view>
             </view>
@@ -259,12 +273,12 @@
             <!-- 🔴 隐蔽模式教学入口（在自动校准/高级设置下面） -->
             <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Max Long'}}">
               <view class="split-item" bindtap="openStealthTutorial">
-                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}" lazy-load="true"></image></view>
                 <text class="btn-text">开启隐蔽模式</text>
               </view>
               <view class="btn-divider"></view>
               <view class="split-item" bindtap="openExitStealthTutorial">
-                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}" lazy-load="true"></image></view>
                 <text class="btn-text">退出隐蔽模式</text>
               </view>
             </view>
@@ -312,36 +326,49 @@
                  </view>
               </view>
 
-              <!-- 还原为按钮组 -->
-              <view class="split-btn-group" style="padding: 10rpx;">
-                 <view class="split-item" bindtap="handleAdjust" data-action="left" data-mode="fold">
-                    <text style="font-size:44rpx; font-weight:300;">←</text>
-                 </view>
-                 
-                 <view class="btn-divider"></view>
-                 
-                 <!-- 🔴 中间：可滑动的调整按钮 -->
-                 <view class="split-item adjust-slider-wrapper">
-                    <!-- 底层：归零按钮（滑动后显示） -->
-                    <view class="zero-btn-layer {{adjustSlideActive ? 'show' : ''}}" bindtap="handleAdjust" data-action="zero" data-mode="fold">
-                      <text class="btn-text">归零</text>
-                    </view>
-                    <!-- 顶层：调整按钮（可向上滑动） -->
-                    <view class="adjust-slider-btn {{adjustSlideActive ? 'active' : ''}} {{isAdjustDemo ? 'demo' : ''}} {{adjustSnap ? 'snap' : ''}}"
-                          style="transform: translateY({{adjustSlideOffset}}px);"
-                          bindtouchstart="onAdjustSlideStart"
-                          bindtouchmove="onAdjustSlideMove"
-                          bindtouchend="onAdjustSlideEnd"
-                          bindtap="onAdjustClick">
-                      <text class="btn-text">调整</text>
-                    </view>
-                 </view>
-                 
-                 <view class="btn-divider"></view>
-                 
-                 <view class="split-item" bindtap="handleAdjust" data-action="right" data-mode="fold">
-                    <text style="font-size:44rpx; font-weight:300;">→</text>
-                 </view>
+              <!-- 与按钮行同锚点：提示绝对叠在上方，不占文档流，避免把下面顶上去 -->
+              <view class="fold-adjust-anchor">
+                <view
+                  class="fold-finetune-hint"
+                  wx:if="{{detailMode === 'edit' && editType === 'fold' && showFoldFineTuneHint}}"
+                >
+                  <view class="fold-finetune-inner">
+                    <text class="fold-finetune-line">点击左右「调大」或「调小」，若无反应，</text>
+                    <text class="fold-finetune-line">请多点击几次直到有反应为止。</text>
+                  </view>
+                </view>
+
+                <!-- 还原为按钮组 -->
+                <view class="split-btn-group" style="padding: 10rpx;">
+                   <view class="split-item" bindtap="handleAdjust" data-action="left" data-mode="fold">
+                      <text style="font-size:44rpx; font-weight:300;">←</text>
+                   </view>
+                   
+                   <view class="btn-divider"></view>
+                   
+                   <!-- 🔴 中间：可滑动的调整按钮 -->
+                   <view class="split-item adjust-slider-wrapper">
+                      <!-- 底层：归零按钮（滑动后显示） -->
+                      <view class="zero-btn-layer {{adjustSlideActive ? 'show' : ''}}" bindtap="handleAdjust" data-action="zero" data-mode="fold">
+                        <text class="btn-text">归零</text>
+                      </view>
+                      <!-- 顶层：调整按钮（可向上滑动） -->
+                      <view class="adjust-slider-btn {{adjustSlideActive ? 'active' : ''}} {{isAdjustDemo ? 'demo' : ''}} {{adjustSnap ? 'snap' : ''}}"
+                            style="transform: translateY({{adjustSlideOffset}}px);"
+                            bindtouchstart="onAdjustSlideStart"
+                            bindtouchmove="onAdjustSlideMove"
+                            bindtouchend="onAdjustSlideEnd"
+                            bindtap="onAdjustClick">
+                        <text class="btn-text">调整</text>
+                      </view>
+                   </view>
+                   
+                   <view class="btn-divider"></view>
+                   
+                   <view class="split-item" bindtap="handleAdjust" data-action="right" data-mode="fold">
+                      <text style="font-size:44rpx; font-weight:300;">→</text>
+                   </view>
+                </view>
               </view>
 
               <!-- 完成按钮 (绝对居中) -->

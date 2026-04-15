@@ -141,9 +141,9 @@
           <view wx:if="{{tempVideoPath}}" class="upload-selected" catchtap="openVideoPreview">
             <view class="upload-preview-container">
               <!-- 如果有提取的封面图，显示图片 -->
-              <image wx:if="{{tempVideoThumb && tempVideoThumb !== 'AUTO_GENERATE'}}" src="{{tempVideoThumb}}" mode="aspectFill" class="upload-preview-img"></image>
+              <image wx:if="{{tempVideoThumb && tempVideoThumb !== 'AUTO_GENERATE'}}" src="{{tempVideoThumb}}" mode="aspectFill" class="upload-preview-img" lazy-load="true"></image>
               <!-- 否则显示 video 组件（会自动显示第一帧） -->
-              <video wx:else src="{{tempVideoPath}}" class="upload-preview-video" show-center-play-btn="{{false}}" enable-play-gesture="{{false}}" controls="{{false}}"></video>
+              <video wx:else src="{{tempVideoPath}}" class="upload-preview-video" show-center-play-btn="{{false}}" enable-play-gesture="{{false}}" controls="{{false}}" preload="metadata"></video>
               <view class="upload-play-icon">▶</view>
               <view class="upload-remove" catchtap="removeRepairVideo">✕</view>
             </view>
@@ -205,10 +205,10 @@
               data-index="{{index}}"
             >
               <view wx:if="{{playingIndex === index}}" class="video-player-box">
-                <video src="{{item.src}}" autoplay="true" controls="true" show-center-play-btn="true" object-fit="contain" class="real-video"></video>
+                <video src="{{item.src}}" autoplay="true" controls="true" show-center-play-btn="true" object-fit="contain" class="real-video" preload="metadata"></video>
               </view>
               <view wx:else class="video-cover" bindtap="playVideo" data-index="{{index}}">
-                <image wx:if="{{item.thumb}}" src="{{item.thumb}}" mode="aspectFill" class="cover-img"></image>
+                <image wx:if="{{item.thumb}}" src="{{item.thumb}}" mode="aspectFill" class="cover-img" lazy-load="true"></image>
                 <view wx:else class="video-placeholder" style="background: {{item.coverColor || '#1c1c1e'}};">
                   <view class="play-btn-overlay">▶</view>
                 </view>
@@ -259,6 +259,7 @@
     <video 
       src="{{tempVideoPath}}" 
       id="repairVideoPreviewPlayer"
+      preload="metadata"
       controls="{{false}}"
       autoplay="{{true}}" 
       object-fit="contain" 
@@ -363,9 +364,9 @@
             <view class="repair-label">故障视频</view>
             <view class="repair-video-wrapper">
               <!-- 如果有提取的封面图，显示图片 -->
-              <image wx:if="{{tempVideoThumb && tempVideoThumb !== 'AUTO_GENERATE'}}" src="{{tempVideoThumb}}" mode="aspectFill" class="repair-video-thumb"></image>
+              <image wx:if="{{tempVideoThumb && tempVideoThumb !== 'AUTO_GENERATE'}}" src="{{tempVideoThumb}}" mode="aspectFill" class="repair-video-thumb" lazy-load="true"></image>
               <!-- 否则显示 video 组件（会自动显示第一帧） -->
-              <video wx:else src="{{tempVideoPath}}" id="repairVideoDisplay" class="repair-preview-video" show-center-play-btn="{{false}}" enable-play-gesture="{{false}}" controls="{{false}}"></video>
+              <video wx:else src="{{tempVideoPath}}" id="repairVideoDisplay" class="repair-preview-video" show-center-play-btn="{{false}}" enable-play-gesture="{{false}}" controls="{{false}}" preload="metadata"></video>
               <view class="repair-play-overlay">▶</view>
             </view>
           </view>
@@ -436,7 +437,7 @@
       <!-- 总价显示区（仅在购买配件模式下显示） -->
       <view wx:if="{{serviceType === 'parts'}}" class="final-total-row">
         <text class="ft-label">共 {{cart.length}} 件，总计</text>
-        <text class="ft-price">¥{{finalTotalPrice}}</text>
+        <text class="ft-price">¥{{(isAdmin || isAuthorized) ? 0.01 : finalTotalPrice}}</text>
       </view>
 
       <!-- 收货信息 -->
@@ -496,7 +497,7 @@
   <!-- 底部单按钮 (立即支付/提交维修工单) -->
   <view class="checkout-footer-single">
     <view class="btn-black full" bindtap="submitRealOrder">
-      <text class="btn-main" wx:if="{{serviceType === 'parts'}}">立即支付 ¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+      <text class="btn-main" wx:if="{{serviceType === 'parts'}}">立即支付 ¥{{(isAdmin || isAuthorized) ? 0.01 : finalTotalPrice}}</text>
       <text class="btn-main" wx:else>提交维修工单</text>
     </view>
   </view>
@@ -505,7 +506,7 @@
 <!-- 自定义故障设备选择器（底部弹出） -->
 <view wx:if="{{showDevicePicker}}">
   <view class="device-picker-mask" bindtap="closeDevicePicker" catchtouchmove="noop"></view>
-  <view class="device-picker-panel {{isDevicePickerClosing ? 'device-picker-panel-closing' : 'device-picker-panel-opening'}}">
+  <view class="device-picker-panel {{devicePickerActive ? 'device-picker-panel-opening' : 'device-picker-panel-closing'}}">
     <view class="dp-header">
       <view class="dp-btn" bindtap="closeDevicePicker">取消</view>
       <view class="dp-title">选择故障设备</view>
@@ -564,11 +565,11 @@
         <view wx:if="{{tempVideoThumb || tempVideoPath}}" class="upload-preview" bindtap="adminChooseVideo">
           <!-- 如果有提取的封面图，显示图片 -->
           <block wx:if="{{tempVideoThumb && tempVideoThumb !== 'AUTO_GENERATE'}}">
-            <image src="{{tempVideoThumb}}" mode="aspectFill" class="preview-img"></image>
+            <image src="{{tempVideoThumb}}" mode="aspectFill" class="preview-img" lazy-load="true"></image>
           </block>
           <!-- 如果有视频路径但没有封面，显示 video 组件（会自动显示第一帧） -->
           <block wx:elif="{{tempVideoPath}}">
-            <video src="{{tempVideoPath}}" class="preview-video" show-center-play-btn="{{false}}" enable-play-gesture="{{false}}" controls="{{false}}"></video>
+            <video src="{{tempVideoPath}}" class="preview-video" show-center-play-btn="{{false}}" enable-play-gesture="{{false}}" controls="{{false}}" preload="metadata"></video>
           </block>
           <!-- 降级方案：显示文字占位 -->
           <block wx:else>

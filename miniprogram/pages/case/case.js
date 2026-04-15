@@ -48,6 +48,7 @@ Page({
     // --- 播放器与管理员状态 ---
     showVideoPlayer: false, 
     currentVideo: null,     
+    videoWatermarkNickname: '', // 播放器昵称水印（淡色）
 
     // --- 🆕 搜索栏状态 ---
     showSearchBar: true, // 默认显示
@@ -96,6 +97,8 @@ Page({
     // --- 列表数据 ---
     list: [],        
     displayList: [],
+    caseCoverLoadedMap: {},
+    adminThumbLoaded: false,
     // 🔴 拖拽排序状态（仅管理员管理模式使用）
     isDraggingCard: false,     // 是否正在拖拽卡片
     draggingCardId: null,      // 当前拖拽的卡片 _id
@@ -134,6 +137,55 @@ Page({
     // 🆕 复用 my 页同款 Loading
     showLoadingAnimation: false,
     loadingText: '请稍候...'
+  },
+
+  async _buildRetryImageUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.indexOf('cloud://') === 0 && wx.cloud && wx.cloud.getTempFileURL) {
+      try {
+        const resp = await wx.cloud.getTempFileURL({ fileList: [url] });
+        const temp = resp && resp.fileList && resp.fileList[0] && resp.fileList[0].tempFileURL;
+        if (temp) return temp;
+      } catch (e) {}
+      return url;
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const joiner = url.indexOf('?') === -1 ? '?' : '&';
+      return `${url}${joiner}rt=${Date.now()}`;
+    }
+    return url;
+  },
+
+  async onCaseCoverImageError(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(index) || index < 0) return;
+    this._caseImgRetryMap = this._caseImgRetryMap || {};
+    if (this._caseImgRetryMap[`cover_${index}`]) return;
+    this._caseImgRetryMap[`cover_${index}`] = true;
+    const cur = (this.data.displayList || [])[index];
+    if (!cur || !cur.coverUrl) return;
+    const next = await this._buildRetryImageUrl(cur.coverUrl);
+    this.setData({ [`displayList[${index}].coverUrl`]: next });
+  },
+
+  onCaseCoverImageLoad(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(index) || index < 0) return;
+    this.setData({ [`caseCoverLoadedMap.${index}`]: true });
+  },
+
+  async onCaseAdminThumbError() {
+    this._caseImgRetryMap = this._caseImgRetryMap || {};
+    if (this._caseImgRetryMap.adminThumb) return;
+    this._caseImgRetryMap.adminThumb = true;
+    const cur = this.data.adminThumbPath;
+    if (!cur) return;
+    const next = await this._buildRetryImageUrl(cur);
+    this.setData({ adminThumbPath: next });
+  },
+
+  onCaseAdminThumbLoad() {
+    this.setData({ adminThumbLoaded: true });
   },
 
   onLoad() {
@@ -196,6 +248,7 @@ Page({
     this.checkAdminPrivilege();
     this.loadUserDevices();
     this.detectEnvironment();
+    this.refreshVideoWatermarkNickname();
     
     setTimeout(() => { this.initTabPosition(); }, 500);
   },
@@ -226,6 +279,25 @@ Page({
       }
     } else {
       console.warn('⚠️ getScreenRecordingState API 不存在（可能是预览模式）');
+    }
+
+    // 刷新视频昵称水印，避免用户改昵称后仍显示旧值
+    this.refreshVideoWatermarkNickname();
+  },
+
+  refreshVideoWatermarkNickname() {
+    let nickname = '';
+    try {
+      const userInfo = wx.getStorageSync('userInfo');
+      nickname = (userInfo && userInfo.nickName) || wx.getStorageSync('user_nickname') || '';
+    } catch (e) {}
+
+    nickname = String(nickname || '').trim();
+    if (!nickname) nickname = '匿名用户';
+    if (nickname.length > 18) nickname = `${nickname.slice(0, 18)}...`;
+
+    if (this.data.videoWatermarkNickname !== nickname) {
+      this.setData({ videoWatermarkNickname: nickname });
     }
   },
 
@@ -361,7 +433,7 @@ Page({
           .sort((a, b) => a.originalIndex - b.originalIndex);
         const finalList = withOrder.concat(withoutOrder);
 
-        this.setData({ list: finalList, displayList: finalList });
+        this.setData({ list: finalList, displayList: finalList, caseCoverLoadedMap: {}, adminThumbLoaded: false });
         
         // 数据回来后再次校准滑块
         setTimeout(() => this.initTabPosition(), 200);
@@ -1764,6 +1836,7 @@ Page({
     } else {
       // ▶️ 普通模式或管理现有视频模式：播放视频
       if (targetItem && targetItem.videoUrl) {
+        this.refreshVideoWatermarkNickname();
         this.setData({ currentVideo: targetItem, showVideoPlayer: true });
       } else {
         this._showCustomToast('暂无视频资源', 'none');

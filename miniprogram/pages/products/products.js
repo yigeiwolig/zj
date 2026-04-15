@@ -32,11 +32,12 @@ Page({
     statusBarHeight: 44,
     
     // 状态控制
-    hasEntered: false,      // 控制入场动画启动
+    hasEntered: true,       // 默认可见，避免偶发白屏（入场状态未拉起）
     
     isDragging: false,
     dragOffset: 0,
     currentIndex: 0, // 默认选中第0个，即"产品上新"
+    skipCardTransition: false, // 返回落位时禁用一帧动画，避免“自动滑动可见”
     
     // 【新增】自动消失提示（无按钮，2秒后自动消失）
     autoToast: { show: false, title: '', content: '' },
@@ -139,7 +140,158 @@ Page({
     // 默认先打开，确保你能看到弹窗；后续再根据需要改成只在首进时打开
     showNewArrivalModal: true,
     newArrivalList: [],
-    newArrivalIndex: 0
+    newArrivalIndex: 0,
+    newArrivalHdLoaded: {}
+  },
+
+  // 腾讯云 COS / 云开发临时链：追加数据万象缩略参数，显著减小首包（非 COS 域名不追加，避免第三方图 404）
+  buildLowQualityUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    const u = url.trim();
+    if (u.indexOf('http://') !== 0 && u.indexOf('https://') !== 0) return url;
+    if (/imageMogr2|imageView2/i.test(u)) return u;
+    const host = (() => {
+      try {
+        return new URL(u).hostname || '';
+      } catch (e) {
+        return '';
+      }
+    })();
+    const cosLike = /myqcloud\.com$|tcb\.qcloud\.la$|tencentcos\.cn$|file\.myqcloud\.com$/i.test(host)
+      || /^cos\.[^.]+\.myqcloud\.com$/i.test(host);
+    if (!cosLike) return u;
+    const sep = u.indexOf('?') === -1 ? '?' : '&';
+    return `${u}${sep}imageMogr2/thumbnail/960x`;
+  },
+
+  stripImageProcessParams(url) {
+    if (!url || typeof url !== 'string') return url;
+    const q = url.indexOf('?');
+    if (q === -1) return url;
+    const base = url.slice(0, q);
+    const parts = url.slice(q + 1).split('&').filter(p => !/^(imageMogr2|imageView2)/i.test(p));
+    return parts.length ? `${base}?${parts.join('&')}` : base;
+  },
+
+  async resolveProductCoverUrls(list = []) {
+    if (!wx.cloud || !list.length) return list;
+    const ids = [...new Set(
+      list.map(i => i && i.cover).filter(c => c && String(c).indexOf('cloud://') === 0)
+    )];
+    if (!ids.length) return list;
+    try {
+      const res = await wx.cloud.getTempFileURL({ fileList: ids });
+      const map = {};
+      (res.fileList || []).forEach(f => {
+        if (f.fileID && f.tempFileURL) map[f.fileID] = f.tempFileURL;
+      });
+      return list.map(item => {
+        const c = item.cover;
+        if (c && map[c]) return { ...item, cover: map[c] };
+        return item;
+      });
+    } catch (e) {
+      console.warn('[products] resolveProductCoverUrls', e);
+      return list;
+    }
+  },
+
+  enhanceNewArrivalList(list = []) {
+    return (list || []).map(item => {
+      if (!item || !item.cover) return item;
+      const full = String(item.cover).trim();
+      const thumb = this.buildLowQualityUrl(full);
+      return {
+        ...item,
+        cover: full,
+        coverFull: full,
+        coverThumb: thumb,
+        dualCover: thumb !== full
+      };
+    });
+  },
+
+  onNewArrivalHdLoad(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(idx)) return;
+    this.setData({ [`newArrivalHdLoaded.${idx}`]: true });
+  },
+
+  onNewArrivalThumbError(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(idx) || idx < 0) return;
+    const item = (this.data.newArrivalList || [])[idx];
+    if (!item || !item.coverFull) return;
+
+    const retryKey = `thumb_${idx}`;
+    this._newArrivalRetryMap = this._newArrivalRetryMap || {};
+    if ((this._newArrivalRetryMap[retryKey] || 0) >= 1) return;
+    this._newArrivalRetryMap[retryKey] = 1;
+
+    const stripped = this.stripImageProcessParams(String(item.coverThumb || ''));
+    const fallback = stripped && stripped !== item.coverThumb ? stripped : item.coverFull;
+    const thumb = fallback;
+    const dual = thumb !== item.coverFull;
+    this.setData({
+      [`newArrivalList[${idx}].coverThumb`]: thumb,
+      [`newArrivalList[${idx}].dualCover`]: dual
+    });
+  },
+
+  async onNewArrivalImageError(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    const kind = e.currentTarget.dataset.kind || 'high';
+    if (Number.isNaN(idx) || idx < 0) return;
+
+    const retryKey = `${kind}_${idx}`;
+    this._newArrivalRetryMap = this._newArrivalRetryMap || {};
+    const tried = this._newArrivalRetryMap[retryKey] || 0;
+    if (tried >= 1) return;
+    this._newArrivalRetryMap[retryKey] = tried + 1;
+
+    const item = (this.data.newArrivalList || [])[idx];
+    if (!item) return;
+
+    const base = item.coverFull || item.cover;
+    if (!base) return;
+
+    let nextCover = base;
+    try {
+      const cover = String(base);
+      if (cover.indexOf('cloud://') === 0 && wx.cloud && wx.cloud.getTempFileURL) {
+        const resp = await wx.cloud.getTempFileURL({ fileList: [cover] });
+        const temp = resp && resp.fileList && resp.fileList[0] && resp.fileList[0].tempFileURL;
+        if (temp) {
+          nextCover = temp;
+        }
+      } else if (cover.startsWith('http://') || cover.startsWith('https://')) {
+        const joiner = cover.indexOf('?') === -1 ? '?' : '&';
+        nextCover = `${cover}${joiner}rt=${Date.now()}`;
+      }
+    } catch (err) {
+      console.warn('[products] onNewArrivalImageError retry failed:', err);
+    }
+
+    const nextThumb = this.buildLowQualityUrl(nextCover);
+    this.setData({
+      [`newArrivalList[${idx}].cover`]: nextCover,
+      [`newArrivalList[${idx}].coverFull`]: nextCover,
+      [`newArrivalList[${idx}].coverThumb`]: nextThumb,
+      [`newArrivalList[${idx}].dualCover`]: nextThumb !== nextCover,
+      [`newArrivalHdLoaded.${idx}`]: false
+    });
+  },
+
+  // 记录“从子页面返回后应聚焦的卡片”
+  rememberReturnFocus(cardId) {
+    const idNum = Number(cardId);
+    if (!idNum) return;
+    try {
+      wx.setStorageSync('__products_return_focus__', {
+        cardId: idNum,
+        ts: Date.now()
+      });
+    } catch (e) {}
   },
 
   onLoad() {
@@ -169,6 +321,13 @@ Page({
     
     // 🔴 检查封禁状态（确保重启后也能拦截）
     this.checkBanStatus();
+
+    // 提前后台预热 shop 数据，降低“立即查看”首跳等待
+    try {
+      if (app && typeof app.preloadShopData === 'function') {
+        app.preloadShopData();
+      }
+    } catch (e) {}
     
     // 1. 进页面 300ms 后触发入场
     setTimeout(() => {
@@ -207,11 +366,16 @@ Page({
       const cache = app.globalData.newArrivalCache;
       const now = Date.now();
       if (cache.list && cache.list.length && (now - cache.cacheTime < 5 * 60 * 1000)) {
+        const resolvedCache = await this.resolveProductCoverUrls(cache.list);
+        const enhancedCacheList = this.enhanceNewArrivalList(resolvedCache);
         this.setData({
-          newArrivalList: cache.list,
+          newArrivalList: enhancedCacheList,
           newArrivalIndex: 0,
-          showNewArrivalModal: true
+          showNewArrivalModal: true,
+          newArrivalHdLoaded: {}
         });
+        // 缓存命中时也后台补一轮预热，不阻塞弹窗展示
+        this.prewarmNewArrivalImages(enhancedCacheList, 2).catch(() => {});
         return;
       }
 
@@ -230,26 +394,28 @@ Page({
         ...item,
         jumpNumber: item.jumpNumber || null
       }));
-      if (!products.length) {
+      const resolvedProducts = await this.resolveProductCoverUrls(products);
+      const enhancedProducts = this.enhanceNewArrivalList(resolvedProducts);
+      if (!enhancedProducts.length) {
         console.log('[products] 新品弹窗：products 集合为空，不展示');
         return;
       }
 
-      // 预热前两张封面，减少“弹窗出来后还在转圈”的体感
-      await this.prewarmNewArrivalImages(products, 2);
-
       app.globalData.newArrivalCache = {
-        list: products,
+        list: enhancedProducts,
         cacheTime: now
       };
 
-      console.log('[products] 新品弹窗数据条数:', products.length);
+      console.log('[products] 新品弹窗数据条数:', enhancedProducts.length);
 
       this.setData({
-        newArrivalList: products,
+        newArrivalList: enhancedProducts,
         newArrivalIndex: 0,
-        showNewArrivalModal: true
+        showNewArrivalModal: true,
+        newArrivalHdLoaded: {}
       });
+      // 先展示后预热，避免首开被 await 阻塞导致“弹窗慢”
+      this.prewarmNewArrivalImages(enhancedProducts, 2).catch(() => {});
     } catch (err) {
       console.error('[products] 加载新品弹窗数据失败:', err);
     }
@@ -258,7 +424,7 @@ Page({
   // 预热图片：失败不阻塞流程
   async prewarmNewArrivalImages(list, count = 2) {
     const targets = (list || [])
-      .map(item => item && item.cover)
+      .map(item => item && (item.coverThumb || item.cover))
       .filter(Boolean)
       .slice(0, count);
     if (!targets.length) return;
@@ -285,13 +451,30 @@ Page({
   // 🆕 弹窗底部“立即跳转”：等同于点击“产品选购”功能卡片
   handleNewArrivalJump() {
     wx.vibrateShort({ type: 'medium' }); // 增强震动反馈
-    this.setData({ showNewArrivalModal: false });
-    // 直接复用现有导航逻辑，跳到 id=4 的产品选购（shop 页面）
-    this.executeNavigation(4);
+    // 记录一次“返回后落到产品选购卡片”的意图，保证从 shop 返回体验一致
+    this.rememberReturnFocus(4);
+    // 进入前先把卡片状态准备好（关闭弹窗 + 预定位），返回时不出现可见滑动
+    const list = this.data.list || [];
+    const targetIndex = list.findIndex(item => Number(item.id) === 4);
+    this.setData({
+      skipCardTransition: true,
+      showNewArrivalModal: false,
+      ...(targetIndex >= 0 ? { currentIndex: targetIndex } : {})
+    });
+    // 走极速直跳，避免经过通用分支带来的额外处理
+    wx.navigateTo({
+      url: '/pages/shop/shop',
+      animationType: 'none'
+    });
   },
 
   // 🔴 检查封禁状态
   async checkBanStatus() {
+    const now = Date.now();
+    if (this._lastBanCheckAt && (now - this._lastBanCheckAt < 15 * 1000)) {
+      return;
+    }
+    this._lastBanCheckAt = now;
     try {
       const loginRes = await wx.cloud.callFunction({ name: 'login' });
       const openid = loginRes.result.openid;
@@ -369,6 +552,38 @@ Page({
   },
 
   onShow() {
+    // 兜底：若入场状态异常未拉起，立即恢复可见，避免页面空白
+    if (!this.data.hasEntered) {
+      this.setData({ hasEntered: true });
+    }
+
+    let hasReturnFocus = false;
+
+    // 从任意子页面返回时，按记录恢复到对应卡片（全局统一返回体验）
+    try {
+      const ret = wx.getStorageSync('__products_return_focus__');
+      if (ret && ret.cardId && ret.ts && (Date.now() - ret.ts < 10 * 60 * 1000)) {
+        hasReturnFocus = true;
+        wx.removeStorageSync('__products_return_focus__');
+        const list = this.data.list || [];
+        const targetIndex = list.findIndex(item => Number(item.id) === Number(ret.cardId));
+        const patch = {
+          showNewArrivalModal: false,
+          newArrivalIndex: 0
+        };
+        if (targetIndex >= 0 && targetIndex !== Number(this.data.currentIndex)) {
+          patch.skipCardTransition = true;
+          patch.currentIndex = targetIndex;
+        }
+        this.setData(patch);
+        if (patch.skipCardTransition) {
+          setTimeout(() => {
+            this.setData({ skipCardTransition: false });
+          }, 80);
+        }
+      }
+    } catch (e) {}
+
     // 🔴 兜底：每次回到 PRODUCTS 页，强制关闭所有“全屏遮罩类”UI，防止页面被罩层卡住
     this.setData({
       showLoadingAnimation: false,     // 关闭 loading 遮罩
@@ -392,28 +607,34 @@ Page({
       }
     } catch (e) {}
 
-    // 🔴 启动定时检查 qiangli 强制封禁
-    const app = getApp();
-    if (app && app.startQiangliCheck) {
-      app.startQiangliCheck();
-    }
-    
-    // 🔴 检查封禁状态
-    this.checkBanStatus();
-    
-    // 🔴 检查未完成的寄回订单
-    this.checkUnfinishedReturn();
-    
-    // 🔴 检查录屏状态
-    if (wx.getScreenRecordingState) {
-      wx.getScreenRecordingState({
-        success: (res) => {
-          if (res.state === 'on' || res.recording) {
-            this.handleIntercept('record');
+    const runOnShowChecks = () => {
+      // 🔴 启动定时检查 qiangli 强制封禁
+      const app = getApp();
+      if (app && app.startQiangliCheck) {
+        app.startQiangliCheck();
+      }
+      
+      // 🔴 检查封禁状态
+      this.checkBanStatus();
+      
+      // 🔴 检查未完成的寄回订单
+      this.checkUnfinishedReturn();
+      
+      // 🔴 检查录屏状态
+      if (wx.getScreenRecordingState) {
+        wx.getScreenRecordingState({
+          success: (res) => {
+            if (res.state === 'on' || res.recording) {
+              this.handleIntercept('record');
+            }
           }
-        }
-      });
-    }
+        });
+      }
+    };
+
+    // 统一轻量延后重任务，优先保证首屏响应
+    const delay = hasReturnFocus ? 120 : 80;
+    setTimeout(runOnShowChecks, delay);
   },
 
   // 🔴 初始化截屏/录屏保护
@@ -709,6 +930,7 @@ Page({
     
     // 联系方式直接跳转
     if (id === 8) {
+      this.rememberReturnFocus(id);
       wx.navigateTo({ 
         url: '/pages/call/call',
         animationType: 'none',
@@ -746,6 +968,7 @@ Page({
     }
     
     if (target) {
+      this.rememberReturnFocus(id);
       wx.navigateTo({ url: target, animationType: 'none' });
     } else {
       this.showAutoToast('提示', '该功能暂未开放');
@@ -772,6 +995,7 @@ Page({
       if (adminCheck.total > 0) {
         // 是管理员：直接放行
         this.hideMyLoading();
+        this.rememberReturnFocus(7);
         wx.navigateTo({ url: '/pages/azjc/azjc', animationType: 'none' });
         return; 
       }
@@ -835,6 +1059,7 @@ Page({
       if (hasDevice) {
         console.log('[checkTutorialAccess] ✅ 用户已绑定设备，直接放行');
         this.hideMyLoading();
+      this.rememberReturnFocus(7);
       wx.navigateTo({ url: '/pages/azjc/azjc', animationType: 'none' });
         return; 
       }
@@ -843,6 +1068,7 @@ Page({
       if (confirmedOrders.length > 0) {
         console.log('[checkTutorialAccess] ✅ 用户有已确认收货的订单，直接放行');
         this.hideMyLoading();
+      this.rememberReturnFocus(7);
       wx.navigateTo({ url: '/pages/azjc/azjc', animationType: 'none' });
         return;
       }
@@ -920,11 +1146,19 @@ Page({
   noop() {},
 
   // 【新增】检查是否有未完成的寄回订单
-  checkUnfinishedReturn() {
-    const db = wx.cloud.database();
-    db.collection('shouhou_repair')
+  async checkUnfinishedReturn() {
+    const now = Date.now();
+    if (this._lastUnfinishedReturnCheckAt && (now - this._lastUnfinishedReturnCheckAt < 15 * 1000)) {
+      return;
+    }
+    this._lastUnfinishedReturnCheckAt = now;
+    try {
+      const db = wx.cloud.database();
+      const { result: { openid } } = await wx.cloud.callFunction({ name: 'login' });
+      db.collection('shouhou_repair')
       .where({
-        needReturn: true
+        needReturn: true,
+        _openid: openid
       })
       .get()
       .then(checkRes => {
@@ -966,6 +1200,9 @@ Page({
         console.error('检查寄回订单失败:', err);
         // 检查失败不显示错误，避免影响用户体验
       });
+    } catch (err) {
+      console.error('检查寄回订单失败:', err);
+    }
   },
 
   // 【新增】自动消失提示（无按钮，2秒后自动消失，带收缩退出动画）
@@ -1154,9 +1391,13 @@ Page({
     const id = Number(e.currentTarget.dataset.id);
     wx.vibrateShort({ type: 'light' });
 
-    // 需求：点快捷栏卡片后，先收起抽屉，再自动定位到对应主卡片
+    // 需求：点快捷栏卡片后，先收起抽屉，再直接定位到对应主卡片（无滑动动画）
     this.closeDrawer();
-    this.focusCardById(id);
+    const list = this.data.list || [];
+    const targetIndex = list.findIndex(item => Number(item.id) === Number(id));
+    if (targetIndex >= 0) {
+      this.setData({ currentIndex: targetIndex });
+    }
   },
 
   // 快捷栏定位：自动滑到对应卡片（不立即跳转）

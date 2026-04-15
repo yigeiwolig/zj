@@ -72,6 +72,9 @@
         src="{{editData.img || activeItem.img}}" 
         mode="aspectFill" 
         class="p-img"
+        lazy-load="true"
+        binderror="onHomeMainImageError"
+        data-mode="edit"
       ></image>
       <!-- 编辑模式但没有图片：显示占位图 -->
       <view wx:elif="{{isEditing}}" class="p-img img-placeholder">
@@ -83,6 +86,9 @@
         src="{{activeItem.img || ''}}" 
         mode="aspectFill" 
         class="p-img"
+        lazy-load="true"
+        binderror="onHomeMainImageError"
+        data-mode="active"
       ></image>
       <!-- 管理员模式或编辑模式下的换图提示 -->
       <view class="img-edit-hint" wx:if="{{isAdmin || isEditing}}">点击更换图片</view>

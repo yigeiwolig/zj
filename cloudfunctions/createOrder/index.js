@@ -9,13 +9,14 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 // 🔴 微信支付配置
 const WX_PAY_CONFIG = {
-  mchId: '1103782674',
-  appId: 'wxf1a81dd77d810edf',
-  apiV3Key: 'MTMoGaiSheWeChatPay2025Key888888',
-  serialNo: '73F820E3A9CBFF6FF509EAB7B2449CEBAB33E479', // 🔴 从证书中提取的实际序列号
+  // 优先读取环境变量，未配置时回退到当前值（兼容旧部署）
+  mchId: process.env.WX_PAY_MCH_ID || '1103782674',
+  appId: process.env.WX_PAY_APP_ID || 'wxf1a81dd77d810edf',
+  apiV3Key: process.env.WX_PAY_API_V3_KEY || 'MTMoGaiSheWeChatPay2025Key888888',
+  serialNo: process.env.WX_PAY_SERIAL_NO || '73F820E3A9CBFF6FF509EAB7B2449CEBAB33E479', // 🔴 从证书中提取的实际序列号
   certPath: path.join(__dirname, 'apiclient_cert.p12'),
   keyPath: path.join(__dirname, 'apiclient_key.pem'), // 私钥文件路径
-  certPassword: '1103782674' // p12证书密码通常是商户号
+  certPassword: process.env.WX_PAY_CERT_PASSWORD || '1103782674' // p12证书密码通常是商户号
 }
 
 // 🔴 加载私钥（优先使用单独的私钥文件）

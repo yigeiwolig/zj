@@ -34,23 +34,25 @@
   
   <!-- 顶部轮播 (Hero) -->
   <view class="hero-swiper-box">
-    <swiper class="hero-swiper" indicator-dots="{{true}}" circular="{{true}}" autoplay="{{!isAdmin}}" bindchange="onSwiperChange">
+    <swiper class="hero-swiper" indicator-dots="{{true}}" circular="{{true}}" current="{{heroCurrent}}" autoplay="{{(!isAdmin) && (!heroAutoCarouselEnabled)}}" bindchange="onSwiperChange">
       <block wx:for="{{topMediaList}}" wx:key="url">
         <swiper-item>
           <view wx:if="{{item.type === 'video'}}" class="hero-video-wrapper">
             <video 
-              src="{{item.url}}" 
+              src="{{item.renderUrl || item.url}}" 
+              poster="{{item.poster || ''}}"
               class="hero-media" 
               id="hero-video-{{index}}"
-              autoplay="{{item.autoplay || (!isAdmin && index === 0 && item.type === 'video')}}"
+              autoplay="{{item.autoplay === true}}"
               preload="metadata"
               muted 
-              loop 
+              loop="{{!heroAutoCarouselEnabled}}"
               show-play-btn="{{false}}" 
               show-center-play-btn="{{false}}"
               controls="{{false}}"
               bindplay="onVideoPlay"
               bindpause="onVideoPause"
+              bindended="onHeroVideoEnded"
               binderror="onVideoError"
               data-index="{{index}}"
               data-location="hero"
@@ -61,8 +63,11 @@
               </view>
             </view>
           </view>
-          <image wx:else src="{{item.url}}" class="hero-media" mode="aspectFill" />
+          <image wx:else src="{{item.renderUrl || item.url}}" class="hero-media" mode="aspectFill" lazy-load="true" />
           
+          <view wx:if="{{isAdmin && item.type === 'video'}}" class="admin-autoplay-media {{item.autoplay ? 'on' : ''}}" catchtap="adminToggleTopVideoAutoplay" data-index="{{index}}">
+            {{item.autoplay ? '自动播放开' : '自动播放关'}}
+          </view>
           <view wx:if="{{isAdmin}}" class="admin-del-media" catchtap="adminDelTopMedia" data-index="{{index}}">✕</view>
         </swiper-item>
       </block>
@@ -78,7 +83,7 @@
               bindtouchmove="onDragMove"
               bindtouchend="onDragEnd">
           <view class="drag-item-preview">
-            <image wx:if="{{item.type === 'image'}}" src="{{item.url}}" mode="aspectFill" class="drag-preview-img"></image>
+            <image wx:if="{{item.type === 'image'}}" src="{{item.url}}" mode="aspectFill" class="drag-preview-img" lazy-load="true"></image>
             <view wx:else class="drag-preview-video">
               <text>🎥 视频</text>
             </view>
@@ -103,6 +108,9 @@
     <view class="admin-upload-row" wx:if="{{isAdmin && !isEditingMedia}}">
        <view class="up-btn" bindtap="adminAddImage">📷 上传图片</view>
        <view class="up-btn" bindtap="adminAddVideo">🎥 上传视频</view>
+       <view class="up-btn toggle {{heroAutoCarouselEnabled ? 'on' : ''}}" bindtap="adminToggleHeroAutoCarousel">
+         {{heroAutoCarouselEnabled ? '🔁 自动轮播开' : '🔁 自动轮播关'}}
+       </view>
     </view>
   </view>
 
@@ -111,7 +119,7 @@
     <block wx:for="{{seriesList}}" wx:key="id">
       <view class="prod-card" bindtap="handleProductClick" data-index="{{index}}">
         <view class="product-cover-wrapper">
-          <image class="p-img" src="{{item.cover}}" mode="aspectFill" />
+          <image class="p-img" src="{{item.cover}}" mode="aspectFill" lazy-load="true" binderror="onCoverImageError" data-index="{{index}}" data-kind="high" />
           <!-- 跳转号码标识（管理员模式下可编辑） -->
           <view wx:if="{{isAdmin}}" class="jump-number-badge" catchtap="adminEditJumpNumber" data-index="{{index}}">
             <text wx:if="{{item.jumpNumber}}">#{{item.jumpNumber}}</text>
@@ -139,6 +147,15 @@
 
   <view style="height: 100rpx;"></view>
 </scroll-view>
+
+<!-- 主列表悬浮购物车：纯路径 SVG + 篮内 MT 文字叠层（小程序对 SVG 内 text 常不渲染，故用叠层） -->
+<view class="shop-float-cart" wx:if="{{!showOrderModal && !showDetail}}" catchtap="onFloatingCartTap">
+  <view class="shop-float-cart-inner">
+    <image class="shop-float-cart-svg" src="/images/shop-float-cart.svg" mode="aspectFit" />
+    <text class="shop-float-mt-overlay">MT</text>
+  </view>
+  <view class="shop-float-cart-badge" wx:if="{{cart.length > 0}}">{{cart.length > 99 ? '99+' : cart.length}}</view>
+</view>
 
 <!-- ================= 3. 产品详情弹窗 (Detail) ================= -->
 <view class="full-modal {{showDetail ? 'active' : ''}}">
@@ -170,6 +187,7 @@
               <view wx:if="{{item.type === 'video'}}" class="detail-video-wrapper">
                 <video 
                   src="{{item.url}}" 
+                  poster="{{item.poster || ''}}"
                   class="dimg" 
                   id="detail-video-{{index}}"
                   autoplay="{{item.autoplay || false}}"
@@ -207,7 +225,9 @@
                 </view>
               </view>
               <!-- 16:9 容器内完整显示，不裁切 -->
-              <image wx:else src="{{item.url}}" mode="aspectFit" class="dimg" />
+              <block wx:else>
+                <image src="{{item.url}}" mode="aspectFit" class="dimg" lazy-load="true" />
+              </block>
               
               <view wx:if="{{isAdmin && !isDetailDragging}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
            </view>
@@ -231,10 +251,21 @@
             </view>
         </view>
 
-        <!-- 对比确认条 -->
-        <view wx:if="{{isModelCompareMode}}" style="text-align:center; margin-bottom:20rpx;">
-          <view class="btn-black" style="display:inline-block; font-size:24rpx; padding:10rpx 40rpx;" bindtap="startCompare">
-            开始对比 (已选{{compareSelectedModels.length}})
+        <!-- 对比引导：第1步仅文案+型号按压示意；约5秒后第2步出现「开始对比」 -->
+        <view wx:if="{{isModelCompareMode}}" class="compare-action-bar">
+          <view wx:if="{{compareGuidePhase == 1}}" class="compare-guide-phase1">
+            <text class="compare-guide-phase1-txt">请选中需要对比的型号</text>
+          </view>
+          <view wx:if="{{compareGuidePhase == 2}}" class="compare-guide-phase2">
+            <text wx:if="{{compareGuidePhase2HintVisible}}" class="compare-guide-phase2-title">点击开始对比查看详细参数</text>
+            <view class="compare-guide-phase2-row">
+              <view class="compare-start-btn-wrap">
+                <text wx:if="{{compareGuidePhase2HintVisible}}" class="compare-guide-arrow">➜</text>
+                <view class="btn-black compare-start-btn" bindtap="startCompare">
+                  开始对比 (已选{{compareSelectedModels.length}})
+                </view>
+              </view>
+            </view>
           </view>
         </view>
 
@@ -244,17 +275,20 @@
             {{currentSeries.labels.modelTitle || '选择型号'}}
           </view>
           
-          <block wx:for="{{currentSeries.models}}" wx:key="name">
+          <block wx:for="{{currentSeries.models}}" wx:key="index">
             <view 
-              class="model-card-normal {{ (!isModelCompareMode && selectedModelIdx === index) || (isModelCompareMode && item.isCompareChecked) ? 'selected' : ''}}" 
+              class="model-card-normal {{ (!isModelCompareMode && selectedModelIdx === index) || (isModelCompareMode && item.isCompareChecked) ? 'selected' : ''}} {{isModelCompareMode && item.isCompareChecked ? 'compare-checked' : ''}} {{isModelCompareMode && compareGuidePhase == 1 && !item.isCompareChecked ? 'compare-guide-press-cycle' : ''}}" 
               bindtap="selectModel" 
               data-index="{{index}}">
               
               <view wx:if="{{isModelCompareMode}}" class="circle {{item.isCompareChecked ? 'checked' : ''}}" style="margin-right:20rpx;"></view>
 
-              <view style="flex:1">
-                  <text class="m-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelName':''}}" data-midx="{{index}}">{{item.name}}</text>
-                  <text class="m-desc {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelDesc':''}}" data-midx="{{index}}">{{item.desc || (isAdmin ? '点击添加描述' : '')}}</text>
+              <view class="m-main">
+                  <view class="m-title-row">
+                    <text class="m-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelName':''}}" data-midx="{{index}}">{{item.name}}</text>
+                    <text class="m-version {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelDesc':''}}" data-midx="{{index}}">{{item.desc || (isAdmin ? '点击填写版本' : '标准版')}}</text>
+                  </view>
+                  <text class="m-scene {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelScene':''}}" data-midx="{{index}}">{{item.sceneDesc || item.cardIntro || item.intro || (isAdmin ? '点击填写使用场景' : '适用于日常通勤、城市骑行场景')}}</text>
               </view>
               
               <!-- 🔴 优化：把价格包装在 view 中，根据管理员模式设置不同的 class -->
@@ -277,11 +311,11 @@
             {{currentSeries.labels.optionTitle || '配置方案'}}
           </view>
           <view class="opt-grid {{isAdmin ? 'admin-mode' : ''}}">
-             <block wx:for="{{currentSeries.options}}" wx:key="name">
+             <block wx:for="{{currentSeries.options}}" wx:key="index">
                 <view class="opt-card {{selectedOptionIdx === index ? 'selected' : ''}} {{isAdmin ? 'admin-mode' : ''}}" bindtap="selectOption" data-index="{{index}}">
                   <!-- 普通模式：显示图片（用 16:9 容器包一层，避免高度为 0 导致不显示） -->
                   <view wx:if="{{item.img && !isAdmin}}" class="opt-img">
-                    <image src="{{item.img}}" mode="aspectFill"></image>
+                    <image src="{{item.img}}" mode="aspectFill" lazy-load="true"></image>
                   </view>
                    
                    <!-- 管理员模式：左边文字区域 -->
@@ -292,7 +326,7 @@
                    
                    <!-- 管理员模式：右边上传照片按钮 -->
                    <view wx:if="{{isAdmin}}" class="admin-add-icon" catchtap="adminUploadOptionImg" data-oidx="{{index}}">
-                     <image wx:if="{{item.img}}" src="{{item.img}}" style="width: 100%; height: 100%; border-radius: 14rpx; object-fit: cover;" mode="aspectFill" />
+                     <image wx:if="{{item.img}}" src="{{item.img}}" style="width: 100%; height: 100%; border-radius: 14rpx; object-fit: cover;" mode="aspectFill" lazy-load="true" />
                      <text wx:else style="font-size: 50rpx;">📷</text>
                    </view>
                    
@@ -314,7 +348,7 @@
                <view class="acc-row-card {{item.selected ? 'selected' : ''}} {{item.isRequired ? 'required-highlight' : ''}} {{item.isRequired && item.selected ? 'required-selected' : ''}}" 
                      bindtap="openAccessoryDetail" data-index="{{index}}">
             
-            <image class="acc-thumb" src="{{item.img}}" mode="aspectFill" />
+            <image class="acc-thumb" src="{{item.img}}" mode="aspectFill" lazy-load="true" />
             <view wx:if="{{isAdmin}}" class="admin-float-thumb" catchtap="adminUploadAccThumb" data-index="{{index}}">📷</view>
 
             <view class="acc-info">
@@ -368,7 +402,7 @@
   <view class="specs-header-container">
     <view class="capsule-header">
       <view class="sp-cell label">参数项</view>
-      <block wx:for="{{compareData.headers}}" wx:key="*this">
+      <block wx:for="{{compareData.headers}}" wx:key="headerIdx" wx:for-index="headerIdx">
         <view class="sp-cell">{{item}}</view>
       </block>
       <view wx:if="{{isAdmin}}" class="sp-cell admin-w"></view>
@@ -382,7 +416,7 @@
        <block wx:for="{{compareData.rows}}" wx:key="label" wx:for-index="rowIdx">
          <view class="sp-row">
             <view class="sp-cell label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSpecCell':''}}" data-row="{{rowIdx}}" data-key="label">{{item.label}}</view>
-            <block wx:for="{{item.vals}}" wx:for-item="val" wx:key="*this" wx:for-index="valIdx">
+            <block wx:for="{{item.vals}}" wx:for-item="val" wx:key="valIdx" wx:for-index="valIdx">
                <view class="sp-cell {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSpecCell':''}}" data-row="{{rowIdx}}" data-key="v{{valIdx+1}}">{{val}}</view>
             </block>
             <view wx:if="{{isAdmin}}" class="sp-cell admin-w" catchtap="adminDelSpecRow" data-index="{{rowIdx}}">✕</view>
@@ -424,7 +458,7 @@
   <scroll-view scroll-y class="modal-scroll">
      <view class="acc-detail-hero">
         <image wx:if="{{accessoryList[currentAccIdx].detailImages.length>0}}" 
-               src="{{accessoryList[currentAccIdx].detailImages[0]}}" mode="aspectFill" class="dimg"/>
+               src="{{accessoryList[currentAccIdx].detailImages[0]}}" mode="aspectFill" class="dimg" lazy-load="true"/>
         <view wx:else class="acc-hero-placeholder">
           <view class="acc-hero-placeholder-icon">📷</view>
           <text class="acc-hero-placeholder-text">暂无图片</text>

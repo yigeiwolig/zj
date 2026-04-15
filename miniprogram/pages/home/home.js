@@ -52,6 +52,43 @@ Page({
     showUploadOptions: false
   },
 
+  async _buildRetryImageUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.indexOf('cloud://') === 0 && wx.cloud && wx.cloud.getTempFileURL) {
+      try {
+        const resp = await wx.cloud.getTempFileURL({ fileList: [url] });
+        const temp = resp && resp.fileList && resp.fileList[0] && resp.fileList[0].tempFileURL;
+        if (temp) return temp;
+      } catch (e) {}
+      return url;
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const joiner = url.indexOf('?') === -1 ? '?' : '&';
+      return `${url}${joiner}rt=${Date.now()}`;
+    }
+    return url;
+  },
+
+  async onHomeMainImageError(e) {
+    const mode = e.currentTarget.dataset.mode || 'active';
+    this._homeImgRetryMap = this._homeImgRetryMap || {};
+    if (this._homeImgRetryMap[mode]) return;
+    this._homeImgRetryMap[mode] = true;
+
+    if (mode === 'edit') {
+      const cur = (this.data.editData && this.data.editData.img) || (this.data.activeItem && this.data.activeItem.img) || '';
+      if (!cur) return;
+      const next = await this._buildRetryImageUrl(cur);
+      this.setData({ 'editData.img': next });
+      return;
+    }
+
+    const cur = this.data.activeItem && this.data.activeItem.img;
+    if (!cur) return;
+    const next = await this._buildRetryImageUrl(cur);
+    this.setData({ 'activeItem.img': next });
+  },
+
   onLoad() {
     // 🔴 更新页面访问统计
     const app = getApp();

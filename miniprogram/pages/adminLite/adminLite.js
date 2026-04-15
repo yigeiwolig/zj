@@ -24,6 +24,7 @@ Page({
     lastSubmission: null,
     // 新增：产品列表
     productList: [],
+    productCoverLoadedMap: {},
     isAuthorized: false, // 是否是白名单里的管理员
     isAdmin: false,      // 当前是否开启了管理员模式
     // 新增：自定义编辑弹窗
@@ -31,6 +32,41 @@ Page({
     customEditTitle: '',
     customEditVal: '',
     customEditCallback: null
+  },
+
+  async _buildRetryImageUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.indexOf('cloud://') === 0 && wx.cloud && wx.cloud.getTempFileURL) {
+      try {
+        const resp = await wx.cloud.getTempFileURL({ fileList: [url] });
+        const temp = resp && resp.fileList && resp.fileList[0] && resp.fileList[0].tempFileURL;
+        if (temp) return temp;
+      } catch (e) {}
+      return url;
+    }
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      const joiner = url.indexOf('?') === -1 ? '?' : '&';
+      return `${url}${joiner}rt=${Date.now()}`;
+    }
+    return url;
+  },
+
+  async onAdminLiteCoverError(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(idx) || idx < 0) return;
+    this._adminLiteImgRetryMap = this._adminLiteImgRetryMap || {};
+    if (this._adminLiteImgRetryMap[idx]) return;
+    this._adminLiteImgRetryMap[idx] = true;
+    const item = (this.data.productList || [])[idx];
+    if (!item || !item.cover) return;
+    const next = await this._buildRetryImageUrl(item.cover);
+    this.setData({ [`productList[${idx}].cover`]: next });
+  },
+
+  onAdminLiteCoverLoad(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(idx) || idx < 0) return;
+    this.setData({ [`productCoverLoadedMap.${idx}`]: true });
   },
 
   onLoad() {
@@ -153,7 +189,7 @@ Page({
             jumpNumber: item.jumpNumber || null
           };
         });
-        this.setData({ productList: productList });
+        this.setData({ productList: productList, productCoverLoadedMap: {} });
         console.log('[adminLite] 产品列表已设置，数量:', productList.length, '管理员模式:', this.data.isAdmin);
       })
       .catch(err => {

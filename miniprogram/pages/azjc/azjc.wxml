@@ -122,6 +122,7 @@
                 <video 
                   class="v-player-real" 
                   src="{{item.url}}" 
+                  preload="metadata"
                   direction="0" 
                   show-fullscreen-btn="{{false}}"
                   enable-play-gesture="{{true}}"
@@ -168,7 +169,7 @@
               bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
               data-index="{{index}}"
               data-type="graphics">
-              <image class="g-media-real" src="{{item.img}}" mode="aspectFill" wx:if="{{item.img}}"></image>
+              <image class="g-media-real" src="{{item.img}}" mode="aspectFill" wx:if="{{item.img}}" lazy-load="true" binderror="onAzjcGraphicImageError" data-index="{{index}}"></image>
               <view class="g-media" wx:else></view>
               <view class="g-info">
                 <text class="g-title">{{item.title || '安装流程图解 0' + (index+1)}}</text>
@@ -260,6 +261,7 @@
     <video 
       class="fullscreen-video-player" 
       src="{{fullScreenVideoUrl}}" 
+      preload="metadata"
       wx:if="{{fullScreenVideoUrl}}"
       direction="0" 
       show-fullscreen-btn="{{false}}"

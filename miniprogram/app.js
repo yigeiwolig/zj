@@ -1038,17 +1038,29 @@ App({
 
     const db = wx.cloud.database();
     const cache = this.globalData.shopDataCache;
+    const isDocNotFoundError = (err) => {
+      const msg = (err && (err.errMsg || err.message)) || '';
+      return msg.indexOf('cannot find document') !== -1;
+    };
 
     // 并行加载所有数据
     Promise.all([
       // 1. 加载商店标题
       db.collection('shop_config').doc('shopTitle').get().catch(err => {
-        console.warn('[app] 预加载shopTitle失败:', err);
+        if (isDocNotFoundError(err)) {
+          console.log('[app] shopTitle 文档不存在，按空配置处理');
+        } else {
+          console.warn('[app] 预加载shopTitle失败:', err);
+        }
         return { data: null };
       }),
       // 2. 加载顶部媒体
       db.collection('shop_config').doc('topMedia').get().catch(err => {
-        console.warn('[app] 预加载topMedia失败:', err);
+        if (isDocNotFoundError(err)) {
+          console.log('[app] topMedia 文档不存在，按空配置处理');
+        } else {
+          console.warn('[app] 预加载topMedia失败:', err);
+        }
         return { data: null };
       }),
       // 3. 加载产品系列

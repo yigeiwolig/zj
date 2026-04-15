@@ -121,6 +121,7 @@ Page({
     myDevices: [],            // 当前用户已绑定的设备列表
     selectedDeviceIndex: null, // 选中的故障设备索引（null 表示未选）
     showDevicePicker: false,   // 是否显示自定义故障设备选择器
+    devicePickerActive: false, // 底部设备选择器是否处于上滑展开态
     tempDeviceIndex: null,     // 选择器中临时高亮的索引
     isDevicePickerClosing: false, // 底部选择器是否处于关闭动画中
     deviceScrollId: '',        // 设备列表滚动到选中项的 id
@@ -1218,27 +1219,11 @@ Page({
     });
   },
 
-  // 页面卸载时清理
-  onShow() {
-    // 🔴 启动定时检查 qiangli 强制封禁
-    const app = getApp();
-    if (app && app.startQiangliCheck) {
-      app.startQiangliCheck();
-    }
-    
-    // 🔴 检查录屏状态
-    if (wx.getScreenRecordingState) {
-      wx.getScreenRecordingState({
-        success: (res) => {
-          if (res.state === 'on' || res.recording) {
-            this.handleIntercept('record');
-          }
-        }
-      });
-    }
-  },
-
   onUnload() {
+    if (this._devicePickerTimer) {
+      clearTimeout(this._devicePickerTimer);
+      this._devicePickerTimer = null;
+    }
     if (this._arrowBounceTimer) {
       clearInterval(this._arrowBounceTimer);
       this._arrowBounceTimer = null;
@@ -1254,6 +1239,10 @@ Page({
 
   // 页面隐藏时清理（防止拖拽过程中切换页面）
   onHide() {
+    if (this._devicePickerTimer) {
+      clearTimeout(this._devicePickerTimer);
+      this._devicePickerTimer = null;
+    }
     if (this._arrowBounceTimer) {
       clearInterval(this._arrowBounceTimer);
       this._arrowBounceTimer = null;
@@ -1387,26 +1376,41 @@ Page({
 
   toggleService(e) {
     const type = e.currentTarget.dataset.type;
+    if (type === this.data.serviceType) return;
     
-    // 如果切换到故障报修，先检查是否绑定了设备
+    // 优先切 UI，避免体感卡顿；后台异步校验资格，不通过再回退
     if (type === 'repair') {
-      this.checkDeviceBeforeRepair();
+      this.setData({ serviceType: 'repair' });
+      this.checkDeviceBeforeRepair({ fallbackToParts: true, allowSwitch: false });
     } else {
       this.setData({ serviceType: type });
     }
   },
 
   // 🔴 检查设备绑定（在切换到故障报修时调用）
-  async checkDeviceBeforeRepair() {
+  async checkDeviceBeforeRepair(options = {}) {
+    const { fallbackToParts = false, allowSwitch = true } = options;
+    if (this._repairCheckInFlight) return;
+    this._repairCheckInFlight = true;
     try {
       const db = wx.cloud.database();
-      const _ = db.command;
+      const now = Date.now();
+      const cache = this._repairDeviceCache;
       
       // 1. 获取当前用户 openid
-      const loginRes = await wx.cloud.callFunction({ name: 'login' });
-      const openid = loginRes.result?.openid;
+      let openid = this.data.myOpenid || '';
+      if (!openid) {
+        const loginRes = await wx.cloud.callFunction({ name: 'login' });
+        openid = loginRes.result?.openid || '';
+        if (openid) {
+          this.setData({ myOpenid: openid });
+        }
+      }
       
       if (!openid) {
+        if (fallbackToParts && this.data.serviceType === 'repair') {
+          this.setData({ serviceType: 'parts' });
+        }
         this._showCustomModal({
           title: '提示',
           content: '无法获取用户信息，请稍后重试',
@@ -1416,13 +1420,53 @@ Page({
         return;
       }
 
+      // 2. 命中短缓存（30 秒）时直接使用，避免重复云查询
+      if (
+        cache &&
+        cache.openid === openid &&
+        now - cache.ts < 30000
+      ) {
+        if (!cache.hasDevice) {
+          if (fallbackToParts && this.data.serviceType === 'repair') {
+            this.setData({ serviceType: 'parts' });
+          }
+          this._showCustomModal({
+            title: '提示',
+            content: '您尚未绑定设备，无法进行故障报修。请先前往个人中心绑定设备。',
+            showCancel: false,
+            confirmText: '知道了',
+            success: (res) => {
+              if (res && res.confirm) {
+                wx.switchTab({
+                  url: '/pages/my/my',
+                  fail: () => {
+                    wx.navigateTo({ url: '/pages/my/my', animationType: 'none' });
+                  }
+                });
+              }
+            }
+          });
+          return;
+        }
+        this.checkUnfinishedReturn(openid, { fallbackToParts, allowSwitch });
+        return;
+      }
+
       // 2. 检查是否绑定了设备（使用 openid 字段，必须检查 isActive: true）
       const deviceRes = await db.collection('sn').where({
         openid: openid,
         isActive: true  // 🔴 只有已激活的设备才算绑定成功
       }).count();
+      this._repairDeviceCache = {
+        ts: Date.now(),
+        openid,
+        hasDevice: deviceRes.total > 0
+      };
 
       if (deviceRes.total === 0) {
+        if (fallbackToParts && this.data.serviceType === 'repair') {
+          this.setData({ serviceType: 'parts' });
+        }
         // 🔴 没有绑定设备，显示自定义弹窗，点击「知道了」后跳转到个人中心
         this._showCustomModal({
           title: '提示',
@@ -1461,9 +1505,12 @@ Page({
       }
       
       // 3. 绑定了设备，继续检查是否有未完成的寄回订单
-      this.checkUnfinishedReturn();
+      this.checkUnfinishedReturn(openid, { fallbackToParts, allowSwitch });
     } catch (err) {
       console.error('[checkDeviceBeforeRepair] 检查设备失败:', err);
+      if (fallbackToParts && this.data.serviceType === 'repair') {
+        this.setData({ serviceType: 'parts' });
+      }
       // 检查失败时，使用自定义弹窗提示
       this._showCustomModal({
         title: '提示',
@@ -1471,15 +1518,29 @@ Page({
         showCancel: false,
         confirmText: '知道了'
       });
+    } finally {
+      this._repairCheckInFlight = false;
     }
   },
 
   // 【新增】检查是否有未完成的寄回订单
-  checkUnfinishedReturn() {
-    const db = wx.cloud.database();
-    db.collection('shouhou_repair')
+  async checkUnfinishedReturn(openidParam, options = {}) {
+    const { fallbackToParts = false, allowSwitch = true } = options;
+    try {
+      const db = wx.cloud.database();
+      let openid = openidParam || this.data.myOpenid || '';
+      if (!openid) {
+        const loginRes = await wx.cloud.callFunction({ name: 'login' });
+        openid = loginRes.result?.openid || '';
+        if (openid) {
+          this.setData({ myOpenid: openid });
+        }
+      }
+      if (!openid) return;
+      db.collection('shouhou_repair')
       .where({
-        needReturn: true
+        needReturn: true,
+        _openid: openid
       })
       .get()
       .then(checkRes => {
@@ -1490,6 +1551,9 @@ Page({
         
         if (unfinishedReturns.length > 0) {
           // 有未完成的寄回订单，显示提示并阻止切换
+          if (fallbackToParts && this.data.serviceType === 'repair') {
+            this.setData({ serviceType: 'parts' });
+          }
           this.showAutoToast('提示', '检测到您有一笔未完成的售后，未寄回维修配件，请先处理完成');
           // 立即跳转，避免点击后体感卡顿
           console.log('[checkUnfinishedReturn] 准备跳转到 my 页面');
@@ -1508,7 +1572,9 @@ Page({
         }
         
         // 没有未完成的寄回订单，正常切换
-        this.setData({ serviceType: 'repair' });
+        if (allowSwitch && this.data.serviceType !== 'repair') {
+          this.setData({ serviceType: 'repair' });
+        }
       })
       .catch(err => {
         const msg = (err.errMsg || err.message || '') + '';
@@ -1517,9 +1583,17 @@ Page({
         } else {
           console.error('检查寄回订单失败:', err);
         }
-        // 检查失败也允许切换，避免阻塞用户
-        this.setData({ serviceType: 'repair' });
+        if (allowSwitch && this.data.serviceType !== 'repair') {
+          // 检查失败也允许切换，避免阻塞用户
+          this.setData({ serviceType: 'repair' });
+        }
       });
+    } catch (err) {
+      console.error('检查寄回订单失败:', err);
+      if (allowSwitch && this.data.serviceType !== 'repair') {
+        this.setData({ serviceType: 'repair' });
+      }
+    }
   },
 
   // 3. 加载配件 (支持云端价格) - 新版本
@@ -3836,15 +3910,20 @@ Page({
 
     // 保存并更新 UI，并重新计算
     this.saveCartToCache(cart);
-    this.reCalcFinalPrice(cart);
   },
 
   // 4. [新增/确保有] 统一的保存函数
   saveCartToCache(newCart) {
     console.log('[shouhou] saveCartToCache 被调用，购物车数据:', newCart);
     try {
+      const newTotal = (newCart || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
       wx.setStorageSync('my_cart', newCart);
-      this.setData({ cart: newCart });
+      this.setData({ 
+        cart: newCart,
+        cartTotalPrice: newTotal
+      });
+      // 统一在这里重算应付金额，确保购物车数量变化后总价实时刷新
+      this.reCalcFinalPrice(newCart);
       console.log('[shouhou] 购物车保存成功');
     } catch (error) {
       console.error('[shouhou] 购物车保存失败:', error);
@@ -4127,7 +4206,7 @@ Page({
     this.setData({ 'autoToast.show': false });
     
     // 🔴 仅管理员身份支付 0.01 元，运费不计
-    const isAdminPay = this.data.isAdmin;
+    const isAdminPay = this.data.isAdmin || this.data.isAuthorized;
     // 🔴 使用重新计算后的价格和运费
     const payAmount = isAdminPay ? 0.01 : currentFinalTotalPrice;
     const payFee = isAdminPay ? 0 : currentShippingFee;
@@ -4174,7 +4253,15 @@ Page({
         addressData: addr,
         shippingFee: fee,
         shippingMethod: method,
-        userNickname: userNickname // 🔴 传递用户昵称
+        userNickname: userNickname, // 🔴 传递用户昵称
+        repairId: (() => {
+          let r = (this.data.repairId || '').toString().trim();
+          if (r) return r;
+          try {
+            r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+          } catch (e) {}
+          return r;
+        })() // 🔴 引导购配件订单标记
       },
       success: res => {
         this.hideMyLoading();
@@ -4196,11 +4283,34 @@ Page({
               
               // 🔴 支付成功后，延迟同步订单信息（等待支付回调先处理，获得交易单号）
               const orderId = payment.outTradeNo;
+              let repairId = (this.data.repairId || '').toString().trim();
+              if (!repairId) {
+                try {
+                  repairId = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+                } catch (e) {}
+              }
+              if (orderId && repairId && wx.cloud) {
+                wx.cloud.database().collection('shop_orders').where({ orderId }).update({
+                  data: { repairId }
+                }).catch(() => {});
+              }
+              try {
+                wx.removeStorageSync('guided_parts_repair_id');
+              } catch (e) {}
               if (orderId) {
-                this.callCheckPayResult(orderId);
+                this.startPaymentVerification(orderId);
               }
               
-              wx.navigateTo({ url: '/pages/my/my', animationType: 'none' });
+              this.showMyDialog({
+                title: '支付成功',
+                content: '是否前往个人中心查看订单？',
+                showCancel: true,
+                confirmText: '去个人中心',
+                cancelText: '继续选购',
+                callback: () => {
+                  wx.navigateTo({ url: '/pages/my/my', animationType: 'none' });
+                }
+              });
             },
             fail: () => {
               this._showCustomToast('支付取消', 'none');
@@ -4328,7 +4438,7 @@ Page({
     }
 
     // 仅管理员身份支付 0.01 元，运费不计
-    const isAdminPay = this.data.isAdmin;
+    const isAdminPay = this.data.isAdmin || this.data.isAuthorized;
     const payAmount = isAdminPay ? 0.01 : totalPrice;
 
     wx.cloud.callFunction({
@@ -4339,7 +4449,15 @@ Page({
         addressData: addressData,
         shippingFee: isAdminPay ? 0 : (this.data.shippingFee || 0),
         shippingMethod: this.data.shippingMethod || 'zto',
-        userNickname: userNickname // 🔴 传递用户昵称
+        userNickname: userNickname, // 🔴 传递用户昵称
+        repairId: (() => {
+          let r = (this.data.repairId || '').toString().trim();
+          if (r) return r;
+          try {
+            r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+          } catch (e) {}
+          return r;
+        })() // 🔴 引导购配件订单标记（含本地存储兜底）
       },
       success: res => {
         this.hideMyLoading();
@@ -4363,7 +4481,21 @@ Page({
               totalPrice: 0
             });
             // 🔴 如果是从「去购买配件」来的，更新维修单配件购买状态，并刷新我的页面
-            const repairId = this.data.repairId;
+            let repairId = (this.data.repairId || '').toString().trim();
+            if (!repairId) {
+              try {
+                repairId = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+              } catch (e) {}
+            }
+            const orderIdPatch = payment.outTradeNo;
+            if (orderIdPatch && repairId && wx.cloud) {
+              wx.cloud.database().collection('shop_orders').where({ orderId: orderIdPatch }).update({
+                data: { repairId }
+              }).catch(() => {});
+            }
+            try {
+              wx.removeStorageSync('guided_parts_repair_id');
+            } catch (e) {}
             
             // #region agent log
             console.log('[DEBUG shouhou doPayment] 检查写入 shouhouguoqi 的条件', {
@@ -4388,7 +4520,8 @@ Page({
                   repairId: repairId,
                   goodsList: goodsList || [],
                   addressData: actualAddress,
-                  userNickname: userNickname || ''
+                  userNickname: userNickname || '',
+                  orderId: orderIdPatch || ''
                 },
                 success: (res) => {
                   if (res.result && res.result.success) {
@@ -4402,43 +4535,55 @@ Page({
             }
               });
             }
+            if (orderIdPatch) {
+              this.startPaymentVerification(orderIdPatch);
+            }
             
-            // 🔴 更新成功后，返回到上一页
-            setTimeout(() => {
-              const pages = getCurrentPages();
-              // 如果页面栈中有上一页，则返回上一页；否则跳转到 my 页面
-              if (pages.length > 1) {
-                wx.navigateBack({
-                  delta: 1,
-                  success: () => {
-                    console.log('[shouhou doPayment] 已返回到上一页');
-                    // 通知上一页刷新数据（如果是 my 页面）
+            this.showMyDialog({
+              title: '支付成功',
+              content: '是否前往个人中心查看订单？',
+              showCancel: true,
+              confirmText: '去个人中心',
+              cancelText: '继续选购',
+              callback: () => {
+                // 🔴 更新成功后，按原逻辑返回/跳转 my
+                setTimeout(() => {
+                  const pages = getCurrentPages();
+                  // 如果页面栈中有上一页，则返回上一页；否则跳转到 my 页面
+                  if (pages.length > 1) {
+                    wx.navigateBack({
+                      delta: 1,
+                      success: () => {
+                        console.log('[shouhou doPayment] 已返回到上一页');
+                        // 通知上一页刷新数据（如果是 my 页面）
+                        setTimeout(() => {
+                          const prevPage = pages[pages.length - 2];
+                          if (prevPage && prevPage.route === 'pages/my/my') {
+                            if (typeof prevPage.loadMyActivitiesPromise === 'function') {
+                              prevPage.loadMyActivitiesPromise().then(() => {
+                                console.log('[shouhou doPayment] my页面数据已刷新');
+                              });
+                            }
+                          }
+                        }, 300);
+                      }
+                    });
+                  } else {
+                    // 如果没有上一页，跳转到 my 页面
+                    wx.navigateTo({ url: '/pages/my/my', animationType: 'none' });
                     setTimeout(() => {
-                      const prevPage = pages[pages.length - 2];
-                      if (prevPage && prevPage.route === 'pages/my/my') {
-                        if (typeof prevPage.loadMyActivitiesPromise === 'function') {
-                          prevPage.loadMyActivitiesPromise().then(() => {
+                      const pages = getCurrentPages();
+                      const myPage = pages[pages.length - 1];
+                      if (myPage && typeof myPage.loadMyActivitiesPromise === 'function') {
+                          myPage.loadMyActivitiesPromise().then(() => {
                             console.log('[shouhou doPayment] my页面数据已刷新');
                           });
-                        }
                       }
-                    }, 300);
+                    }, 500);
                   }
-                });
-              } else {
-                // 如果没有上一页，跳转到 my 页面
-              wx.navigateTo({ url: '/pages/my/my', animationType: 'none' });
-              setTimeout(() => {
-                const pages = getCurrentPages();
-                const myPage = pages[pages.length - 1];
-                if (myPage && typeof myPage.loadMyActivitiesPromise === 'function') {
-                    myPage.loadMyActivitiesPromise().then(() => {
-                      console.log('[shouhou doPayment] my页面数据已刷新');
-                    });
-                }
                 }, 500);
               }
-            }, 500);
+            });
           },
           fail: () => {
             this._showCustomToast('支付取消', 'none');
@@ -4452,10 +4597,43 @@ Page({
     });
   },
 
-  callCheckPayResult(orderId, attempt = 1) {
+  startPaymentVerification(orderId) {
     if (!orderId) return;
-    const maxAttempts = 3;
-    this.showMyLoading(attempt === 1 ? '确认订单中...' : '再次确认...');
+    // 第一段：即时轮询，尽快确认支付并同步订单
+    this.callCheckPayResult(orderId, 1, {
+      maxAttempts: 6,
+      intervalMs: 2500,
+      showLoading: true,
+      silent: false
+    });
+    // 第二段：延迟复查，覆盖支付回调慢到达场景
+    setTimeout(() => {
+      this.callCheckPayResult(orderId, 1, {
+        maxAttempts: 4,
+        intervalMs: 3000,
+        showLoading: false,
+        silent: true
+      });
+    }, 12000);
+    setTimeout(() => {
+      this.callCheckPayResult(orderId, 1, {
+        maxAttempts: 3,
+        intervalMs: 3500,
+        showLoading: false,
+        silent: true
+      });
+    }, 28000);
+  },
+
+  callCheckPayResult(orderId, attempt = 1, options = {}) {
+    if (!orderId) return;
+    const maxAttempts = options.maxAttempts || 6;
+    const intervalMs = options.intervalMs || 2500;
+    const silent = !!options.silent;
+    const showLoading = !!options.showLoading && !silent;
+    if (showLoading) {
+      this.showMyLoading(attempt === 1 ? '确认订单中...' : '再次确认...');
+    }
 
     wx.cloud.callFunction({
       name: 'checkPayResult',
@@ -4464,10 +4642,12 @@ Page({
         const result = res.result || {};
         console.log('[shouhou] checkPayResult 返回:', result);
         if (result.success) {
-          this._showCustomToast('订单已确认', 'success');
+          if (!silent) {
+            this._showCustomToast('订单已确认', 'success');
+          }
         } else if (attempt < maxAttempts) {
-          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
-        } else {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1, options), intervalMs);
+        } else if (!silent) {
           this._showCustomToast(
             result.msg || '支付状态待确认，请稍后查看"我的订单"',
             'none'
@@ -4477,8 +4657,8 @@ Page({
       fail: (err) => {
         console.error('[shouhou] checkPayResult 调用失败:', err);
         if (attempt < maxAttempts) {
-          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1), 2000);
-        } else {
+          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1, options), intervalMs);
+        } else if (!silent) {
           this._showCustomToast(
             '网络异常，请稍后在"我的订单"查看',
             'none'
@@ -4486,7 +4666,9 @@ Page({
         }
       },
       complete: () => {
-        this.hideMyLoading();
+        if (showLoading) {
+          this.hideMyLoading();
+        }
       }
     });
   },
@@ -5307,29 +5489,50 @@ Page({
   openDevicePicker() {
     const { myDevices, selectedDeviceIndex } = this.data;
     if (!myDevices || myDevices.length === 0) return;
+    if (this._devicePickerTimer) {
+      clearTimeout(this._devicePickerTimer);
+      this._devicePickerTimer = null;
+    }
     let tempIndex = selectedDeviceIndex;
     if (tempIndex === null || tempIndex === undefined) {
       tempIndex = 0;
     }
     this.setData({
       showDevicePicker: true,
+      devicePickerActive: false,
       tempDeviceIndex: tempIndex,
       isDevicePickerClosing: false,
       deviceScrollId: `device-${tempIndex}`
     });
+    // 先挂载在底部，再切换为 active，确保出现「从下往上滑」动画
+    this._devicePickerTimer = setTimeout(() => {
+      if (this.data.showDevicePicker) {
+        this.setData({ devicePickerActive: true });
+      }
+      this._devicePickerTimer = null;
+    }, 20);
   },
 
   // 关闭自定义选择器（不修改已选值）
   closeDevicePicker() {
     // 先触发下滑动画，再真正隐藏
     if (this.data.isDevicePickerClosing) return;
-    this.setData({ isDevicePickerClosing: true });
-    setTimeout(() => {
+    if (this._devicePickerTimer) {
+      clearTimeout(this._devicePickerTimer);
+      this._devicePickerTimer = null;
+    }
+    this.setData({
+      isDevicePickerClosing: true,
+      devicePickerActive: false
+    });
+    this._devicePickerTimer = setTimeout(() => {
       this.setData({
         showDevicePicker: false,
-        isDevicePickerClosing: false
+        isDevicePickerClosing: false,
+        devicePickerActive: false
       });
-    }, 260);
+      this._devicePickerTimer = null;
+    }, 280);
   },
 
   // 在选择器中临时高亮某个设备
@@ -5346,17 +5549,15 @@ Page({
   confirmDevicePicker() {
     const { myDevices, tempDeviceIndex } = this.data;
     if (!myDevices || myDevices.length === 0) {
-      this.setData({ showDevicePicker: false });
+      this.closeDevicePicker();
       return;
     }
     let idx = tempDeviceIndex;
     if (idx === null || idx === undefined) {
       idx = 0;
     }
-    this.setData({
-      selectedDeviceIndex: idx,
-      showDevicePicker: false
-    });
+    this.setData({ selectedDeviceIndex: idx });
+    this.closeDevicePicker();
   },
 
   // 监听设备选择
@@ -5535,9 +5736,11 @@ Page({
             };
           }
         }
+        // 🔴 维修单型号优先使用“用户选中的故障设备型号”，避免与当前页面型号不一致
+        const repairModelName = (selectedDevice && selectedDevice.productModel) || currentModelName;
         
         console.log('[submitRepairTicket] 准备写入数据库，数据:', {
-          model: currentModelName,
+          model: repairModelName,
           description: repairDescription.trim(),
           contact: finalContact
         });
@@ -5564,7 +5767,7 @@ Page({
           db.collection('shouhou_repair').add({
             data: {
               type: 'repair',
-              model: currentModelName,
+              model: repairModelName,
               description: repairDescription.trim(),
               videoFileID: fileID,
               contact: finalContact,
@@ -5623,7 +5826,7 @@ Page({
           db.collection('shouhou_repair').add({
             data: {
               type: 'repair',
-              model: currentModelName,
+              model: repairModelName,
               description: repairDescription.trim(),
               videoFileID: fileID,
               contact: finalContact,
@@ -5667,11 +5870,11 @@ Page({
         }
         
         // 查询用户设备（匹配当前型号）
-        db.collection('sn').where({
-          openid: userOpenid,
-          productModel: currentModelName,
-          isActive: true
-        }).get().then(deviceRes => {
+        const deviceQuery = (selectedDevice && selectedDevice.sn)
+          ? { openid: userOpenid, sn: selectedDevice.sn, isActive: true }
+          : { openid: userOpenid, productModel: repairModelName, isActive: true };
+
+        db.collection('sn').where(deviceQuery).get().then(deviceRes => {
           // 清除超时定时器
           clearTimeout(deviceQueryTimeout);
           
@@ -5706,7 +5909,7 @@ Page({
             data: {
               // 不设置 _openid，系统会自动设置
               type: 'repair', // 类型标记
-              model: currentModelName,
+              model: repairModelName,
               description: repairDescription.trim(),
               videoFileID: fileID,
               contact: finalContact, // 存入联系人信息（包含完整地址）
@@ -5790,7 +5993,7 @@ Page({
           db.collection('shouhou_repair').add({
             data: {
               type: 'repair',
-              model: currentModelName,
+              model: repairModelName,
               description: repairDescription.trim(),
               videoFileID: fileID,
               contact: finalContact,
@@ -5854,20 +6057,33 @@ Page({
   },
 
   onShow() {
+    // 🔴 启动定时检查 qiangli 强制封禁（合并自原 onShow，避免重复定义被覆盖）
+    const app = getApp();
+    if (app && app.startQiangliCheck) {
+      app.startQiangliCheck();
+    }
+
     // 兜底：若预选提示已关但定时器未清（偶尔卡住），在此清理
     if (!this.data.showPreselectTip && this._arrowBounceTimer) {
       clearInterval(this._arrowBounceTimer);
       this._arrowBounceTimer = null;
     }
     
-    // 🔴 从「去购买配件」带来的 repairId，从 globalData 获取
-    const app = getApp();
-    if (app && app.globalData && app.globalData.shouhouRepairId) {
-      this.setData({
-        repairId: app.globalData.shouhouRepairId
-      });
-      // 获取后清空，避免下次进入时误用
-      app.globalData.shouhouRepairId = null;
+    // 🔴 从「去购买配件」带来的 repairId：globalData + 本地存储（切 Tab / 重进小程序不丢）
+    const GUIDED_KEY = 'guided_parts_repair_id';
+    let rid = '';
+    try {
+      rid = (app && app.globalData && app.globalData.shouhouRepairId) || wx.getStorageSync(GUIDED_KEY) || '';
+    } catch (e) {
+      rid = (app && app.globalData && app.globalData.shouhouRepairId) || '';
+    }
+    if (rid) {
+      rid = String(rid).trim();
+      this.setData({ repairId: rid });
+      if (app && app.globalData) {
+        app.globalData.shouhouRepairId = null;
+      }
+      // 不在此处 removeStorage，支付成功后再清，避免中途丢 repairId
     }
     
     // 🔴 从「去购买配件」带 model 进入：onShow 比 onReady 更早/稳定，在此处打开对应型号卡

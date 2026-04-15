@@ -76,6 +76,78 @@ page {
   100% { left: 50%; }
 }
 
+/* 主列表悬浮购物车：圆形 + 购物车 SVG + 篮内 MT 叠层（低于订单全屏层 z-index:600） */
+.shop-float-cart {
+  position: fixed;
+  right: 24rpx;
+  bottom: calc(40rpx + env(safe-area-inset-bottom));
+  width: 132rpx;
+  height: 132rpx;
+  padding: 0;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: linear-gradient(165deg, #ffffff 0%, #f2f2f7 100%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 8rpx 32rpx rgba(0, 0, 0, 0.12),
+    0 2rpx 0 rgba(255, 255, 255, 0.9) inset;
+  border: 1rpx solid rgba(0, 0, 0, 0.07);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 400;
+  pointer-events: auto;
+}
+.shop-float-cart-inner {
+  position: relative;
+  width: 72rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.shop-float-cart-svg {
+  width: 72rpx;
+  height: 72rpx;
+  display: block;
+  flex-shrink: 0;
+}
+/* 篮筐视觉中心约在图标偏右上；text 基线会偏下，用略小的 top + 负 margin 修正 */
+.shop-float-mt-overlay {
+  position: absolute;
+  left: 60%;
+  top: 53%;
+  transform: translate(-50%, -50%);
+  margin-top: -3rpx;
+  font-size: 17rpx;
+  font-weight: 900;
+  color: #1c1c1e;
+  letter-spacing: 0;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+.shop-float-cart-badge {
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+  min-width: 30rpx;
+  height: 30rpx;
+  padding: 0 8rpx;
+  border-radius: 15rpx;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 18rpx;
+  font-weight: 600;
+  line-height: 30rpx;
+  text-align: center;
+  box-sizing: border-box;
+  border: 2rpx solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 2rpx 10rpx rgba(255, 59, 48, 0.28);
+}
+
 /* ============ 通用组件 ============ */
 .btn-black {
   background: #000; color: #fff; font-weight: 600; padding: 30rpx 40rpx;
@@ -227,6 +299,39 @@ page {
   width: 100%; 
   height: 100%; 
   object-fit: cover; 
+}
+.admin-del-media {
+  position: absolute;
+  top: 40rpx;
+  right: 14rpx;
+  width: 42rpx;
+  height: 42rpx;
+  line-height: 42rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: rgba(255, 59, 48, 0.9);
+  color: #fff;
+  font-size: 30rpx;
+  z-index: 35;
+  box-shadow: 0 6rpx 14rpx rgba(0, 0, 0, 0.28);
+}
+.admin-autoplay-media {
+  position: absolute;
+  top: 40rpx;
+  right: 72rpx;
+  min-width: 132rpx;
+  height: 42rpx;
+  line-height: 42rpx;
+  text-align: center;
+  padding: 0 12rpx;
+  border-radius: 21rpx;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 20rpx;
+  z-index: 35;
+}
+.admin-autoplay-media.on {
+  background: rgba(7, 193, 96, 0.92);
 }
 /* 🔴 新增：详情页视频管理员控制开关组 */
 .admin-detail-video-controls {
@@ -439,6 +544,10 @@ page {
   font-size: 24rpx; font-weight: 600;
   box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.2);
 }
+.up-btn.toggle.on {
+  background: rgba(7, 193, 96, 0.95);
+  color: #fff;
+}
 
 /* 产品列表 (单列大卡片) */
 .product-list { padding: 0 30rpx; display: flex; flex-direction: column; gap: 40rpx; }
@@ -462,6 +571,21 @@ page {
   width: 100%; 
   height: 100%; 
   object-fit: cover; 
+}
+.p-img-low {
+  filter: blur(1.2px);
+  transform: scale(1.02);
+  transition: opacity 0.2s ease;
+}
+.p-img-high {
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.p-img-high.is-visible {
+  opacity: 1;
+}
+.p-img-low.is-hidden {
+  opacity: 0;
 }
 .p-info { padding: 40rpx; }
 .p-row { display: flex; justify-content: space-between; font-weight: 700; font-size: 34rpx; align-items: center; }
@@ -584,6 +708,21 @@ page {
   /* 配合 image 的 mode="aspectFit"，保证完整显示，不裁切 */
   object-fit: contain;
 }
+.dimg-low {
+  filter: blur(1.2px);
+  transform: scale(1.01);
+  transition: opacity 0.2s ease;
+}
+.dimg-high {
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.dimg-high.is-visible {
+  opacity: 1;
+}
+.dimg-low.is-hidden {
+  opacity: 0;
+}
 .admin-del-abs { position: absolute; top: 20rpx; right: 20rpx; background: red; color: #fff; width: 50rpx; height: 50rpx; border-radius: 50%; text-align: center; line-height: 50rpx; }
 .add-txt-btn { text-align: center; padding: 40rpx; color: #0071E3; font-weight: 600; font-size: 26rpx; }
 
@@ -600,6 +739,89 @@ page {
   border-radius: 40rpx;
   font-weight: 600;
   box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.2);
+}
+.compare-action-bar {
+  margin-bottom: 28rpx;
+  padding: 0 8rpx;
+}
+/* 第1步：仅提示，无「开始对比」按钮 */
+.compare-guide-phase1 {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 22rpx 32rpx;
+}
+.compare-guide-phase1-txt {
+  font-size: 30rpx;
+  font-weight: 650;
+  color: #1d1d1f;
+  letter-spacing: 0.5rpx;
+  padding: 20rpx 36rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(180deg, #fafbfc 0%, #f2f4f7 100%);
+  border: 1rpx solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6rpx 20rpx rgba(17, 24, 39, 0.06);
+}
+/* 第2步：上方说明 + 箭头指向「开始对比」 */
+.compare-guide-phase2 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+}
+.compare-guide-phase2-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #424245;
+  text-align: center;
+  line-height: 1.45;
+  padding: 0 16rpx;
+}
+.compare-guide-phase2-row {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.compare-start-btn-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.compare-guide-arrow {
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  margin-right: 16rpx;
+  transform: translateY(-50%);
+  color: #ff3b30;
+  font-size: 72rpx;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -6rpx;
+  text-shadow: 0 4rpx 14rpx rgba(255, 59, 48, 0.28);
+  animation: compareArrowNudge 1.6s ease-in-out infinite;
+}
+@keyframes compareArrowNudge {
+  0%,
+  100% {
+    transform: translateY(-50%) translateX(-4rpx);
+    opacity: 0.88;
+  }
+  50% {
+    transform: translateY(-50%) translateX(14rpx);
+    opacity: 1;
+  }
+}
+.compare-start-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  padding: 18rpx 44rpx;
+  border-radius: 40rpx;
+  flex-shrink: 0;
 }
 .cfg-group { margin-bottom: 60rpx; }
 .cfg-label { font-size: 28rpx; color: #1D1D1F; font-weight: 700; margin-bottom: 24rpx; }
@@ -1799,32 +2021,31 @@ page {
 /* ========================================= */
 .model-card-normal {
   position: relative;
-  height: 220rpx;
-  margin-bottom: 50rpx;
-  background: #fff;
-  border-radius: 32rpx;
+  min-height: 210rpx;
+  margin-bottom: 30rpx;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
+  border-radius: 24rpx;
   display: flex; justify-content: space-between; align-items: center;
-  padding: 0 50rpx; box-sizing: border-box;
-  box-shadow: 0 8rpx 24rpx rgba(0,0,0,0.08);
-  border: 4rpx solid transparent;
+  padding: 24rpx 30rpx; box-sizing: border-box;
+  box-shadow: 0 4rpx 14rpx rgba(17, 24, 39, 0.06);
+  border: 2rpx solid #eceff3;
   
   /* 核心：添加过渡动画 */
   transition: all 0.3s ease;
 }
 
-/* 选中状态 */
+/* 选中状态（与下方 .opt-card.selected 同档：4rpx 蓝框 + 浅蓝底 + 1.02 放大 + 蓝色投影，选中才够醒目） */
 .model-card-normal.selected {
-  border-color: #0071E3;
+  border: 4rpx solid #0071E3;
   background: #F2F7FF;
-  /* 选中时稍微放大一点点，增加确认感 */
   transform: scale(1.02);
   box-shadow: 0 8rpx 20rpx rgba(0, 113, 227, 0.15);
 }
 
 /* 按压状态 */
 .model-card-normal:active {
-  transform: scale(0.98);
-  background-color: #f5f5f5;
+  transform: scale(0.992);
+  background-color: #f7f8fa;
   transition: all 0.1s ease;
 }
 
@@ -1832,17 +2053,82 @@ page {
   background-color: #E0EDFF;
   transform: scale(1.0);
 }
-
+.model-card-normal.compare-checked {
+  /* 与 .selected 视觉一致（对比勾选时同时带 .selected） */
+  border: 4rpx solid #0071E3;
+  background: #F2F7FF;
+  transform: scale(1.02);
+  box-shadow: 0 8rpx 20rpx rgba(0, 113, 227, 0.15);
+}
+/* 对比引导第1步：明显的「浮起 ↔ 按下」循环；手指按下时暂停动画并给出真实按压反馈 */
+.model-card-normal.compare-guide-press-cycle {
+  transition: none;
+  animation: compareModelPressUnchk 1.2s ease-in-out infinite;
+}
+.model-card-normal.compare-guide-press-cycle.compare-checked {
+  animation: compareModelPressChk 1.2s ease-in-out infinite;
+}
+@keyframes compareModelPressUnchk {
+  0%,
+  100% {
+    /* 略浮起、阴影更开 =「凸」 */
+    transform: scale(1) translateY(-4rpx);
+    border: 2rpx solid #eceff3;
+    background: linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
+    box-shadow: 0 12rpx 28rpx rgba(17, 24, 39, 0.11);
+  }
+  50% {
+    /* 压下去、贴近底面 */
+    transform: scale(0.972) translateY(2rpx);
+    border: 2rpx solid #d5dae2;
+    background-color: #eef0f3;
+    box-shadow: 0 2rpx 8rpx rgba(17, 24, 39, 0.06);
+  }
+}
+@keyframes compareModelPressChk {
+  0%,
+  100% {
+    /* 与选中态同基准放大，再略上浮，循环更明显 */
+    transform: scale(1.02) translateY(-3rpx);
+    border: 4rpx solid #0071E3;
+    background: #F2F7FF;
+    box-shadow: 0 10rpx 26rpx rgba(0, 113, 227, 0.16);
+  }
+  50% {
+    transform: scale(0.985) translateY(2rpx);
+    border: 4rpx solid #0071E3;
+    background-color: #e3edfc;
+    box-shadow: 0 4rpx 14rpx rgba(0, 113, 227, 0.12);
+  }
+}
+/* 引导循环进行中：真实点击时停掉循环动画，用更明显的「按下去」态（松手后循环继续） */
+.model-card-normal.compare-guide-press-cycle:active {
+  animation: none !important;
+  transition: transform 0.08s ease, background-color 0.08s ease, box-shadow 0.08s ease !important;
+  transform: scale(0.958) translateY(5rpx) !important;
+  background-color: #e4e7ec !important;
+  border: 2rpx solid #c9ced6 !important;
+  box-shadow: 0 1rpx 6rpx rgba(17, 24, 39, 0.08) !important;
+}
+.model-card-normal.compare-guide-press-cycle.compare-checked:active {
+  animation: none !important;
+  transition: transform 0.08s ease, background-color 0.08s ease, box-shadow 0.08s ease !important;
+  transform: scale(0.968) translateY(4rpx) !important;
+  background-color: #cfe2fb !important;
+  border: 4rpx solid #0071E3 !important;
+  box-shadow: 0 2rpx 10rpx rgba(0, 113, 227, 0.14) !important;
+}
 .m-info .name { font-size: 36rpx; font-weight: 700; color: #000; }
 .m-info .desc { font-size: 24rpx; color: #888; margin-top: 8rpx; }
 
 /* 🔴 优化：价格包装器基础样式 */
 .m-price-wrapper {
-  padding: 20rpx 30rpx; /* 增加内边距，扩大点击区域 */
-  min-width: 120rpx; /* 确保有足够的点击区域 */
+  padding: 0 0 0 24rpx;
+  min-width: 150rpx;
+  align-self: center;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 /* 普通模式：价格在右边（原位置） */
@@ -1856,9 +2142,63 @@ page {
 }
 
 .m-price { 
-  font-size: 36rpx; 
-  font-weight: 700; 
-  color: #0071E3; 
+  font-size: 44rpx; 
+  font-weight: 800; 
+  color: #0071E3;
+  letter-spacing: 0.5rpx;
+}
+.m-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  gap: 0;
+  padding-right: 12rpx;
+}
+.m-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-height: 52rpx;
+  margin-top: -4rpx; /* 型号整体上移一点 */
+}
+.m-version {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6rpx;
+  padding: 5rpx 16rpx;
+  border-radius: 14rpx;
+  font-size: 21rpx;
+  color: #6f7a89;
+  background: #ffffff;
+  border: 1rpx solid #d7dde6;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: 0.2rpx;
+  box-shadow: 0 1rpx 4rpx rgba(31, 41, 55, 0.06);
+  transform: translateY(-1rpx);
+  white-space: nowrap;
+  width: auto;          /* 按文字自适配宽度 */
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.m-scene {
+  display: block;
+  margin-top: 32rpx; /* 简介整体下移，与标题行拉开距离 */
+  padding-top: 4rpx;
+  font-size: 23rpx;
+  color: #5f6977;
+  line-height: 1.5;
+  max-width: 96%;
+  font-weight: 500;
+}
+.model-card-normal .m-name {
+  font-size: 38rpx;
+  font-weight: 800;
+  color: #111827;
+  line-height: 1.15;
 }
 
 /* 兼容旧样式 */
