@@ -3,6 +3,14 @@ const https = require('https');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
+async function isGuanliyuan(openid) {
+  if (!openid) return false;
+  let r = await db.collection('guanliyuan').where({ openid }).limit(1).get();
+  if (r.data && r.data.length > 0) return true;
+  r = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get();
+  return !!(r.data && r.data.length > 0);
+}
+
 // 日志发送函数（Node.js 环境）
 const logToServer = (location, message, data, hypothesisId) => {
   try {
@@ -59,6 +67,11 @@ exports.main = async (event, context) => {
     // #endregion
 
   try {
+    if (await isGuanliyuan(OPENID)) {
+      console.log('[banUserByLocation] 管理员账号，跳过地址封禁写入');
+      return { success: true, skippedByAdmin: true };
+    }
+
     // 1. 查找 login_logs（仅用于日志打印）
     try {
       const logRes = await db.collection('login_logs')

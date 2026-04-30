@@ -139,6 +139,14 @@ function decryptCallbackData(encryptedData, nonce, associatedData) {
   }
 }
 
+function normalizeToFen(amount) {
+  if (amount === null || amount === undefined || amount === '') return NaN
+  const num = Number(amount)
+  if (!Number.isFinite(num)) return NaN
+  if (Number.isInteger(num) && num >= 100) return num
+  return Math.round(num * 100)
+}
+
 // 🔴 微信支付 API v3 回调处理
 exports.main = async (event, context) => {
   const db = cloud.database()
@@ -222,6 +230,17 @@ exports.main = async (event, context) => {
     
     console.log('[payCallback] 签名信息:', { signature, timestamp, nonce, serial })
     console.log('[payCallback] 所有请求头键名:', Object.keys(headers))
+
+    // 🔴 基础安全校验：回调头必须存在，且时间窗不能过旧
+    if (!signature || !timestamp || !nonce || !serial) {
+      console.error('[payCallback] 缺少必要回调签名头，拒绝处理')
+      return { code: 'FAIL', message: 'missing headers' }
+    }
+    const callbackTs = Number(timestamp)
+    if (!Number.isFinite(callbackTs) || Math.abs(Math.floor(Date.now() / 1000) - callbackTs) > 300) {
+      console.error('[payCallback] 回调时间戳异常，拒绝处理')
+      return { code: 'FAIL', message: 'invalid timestamp' }
+    }
     
     // 🔴 如果 body 是字符串，需要解析（HTTP 触发的 body 通常是字符串）
     if (typeof body === 'string') {
@@ -288,6 +307,27 @@ exports.main = async (event, context) => {
           
           if (orderRes.data && orderRes.data.length > 0) {
             const order = orderRes.data[0]
+
+            // 幂等：已处理成功直接返回
+            if (order.status === 'PAID' && order.transactionId === transactionId) {
+              console.log('[payCallback] 命中幂等，订单已是 PAID，直接返回 SUCCESS')
+              return { code: 'SUCCESS', message: '成功' }
+            }
+
+            // 🔴 核验 appid/mchid/金额，避免串单和伪造回调
+            if (decryptedData.appid !== WX_PAY_CONFIG.appId || decryptedData.mchid !== WX_PAY_CONFIG.mchId) {
+              console.error('[payCallback] appid/mchid 不匹配，拒绝更新订单', {
+                gotAppId: decryptedData.appid,
+                gotMchId: decryptedData.mchid
+              })
+              return { code: 'FAIL', message: 'appid or mchid mismatch' }
+            }
+            const paidFen = decryptedData.amount && Number(decryptedData.amount.total)
+            const orderFen = normalizeToFen(order.totalFee)
+            if (!Number.isFinite(paidFen) || !Number.isFinite(orderFen) || paidFen !== orderFen) {
+              console.error('[payCallback] 支付金额与订单金额不一致，拒绝更新订单', { paidFen, orderFen })
+              return { code: 'FAIL', message: 'amount mismatch' }
+            }
             
             // 2. 更新订单状态（不做 repairId 推断，避免把普通订单误判为引导购配件）
             const updateData = {
@@ -317,6 +357,7 @@ exports.main = async (event, context) => {
             console.log('[payCallback] 订单', outTradeNo, '状态已更新为 PAID')
           } else {
             console.warn('[payCallback] 未找到订单:', outTradeNo)
+            return { code: 'FAIL', message: 'order not found' }
           }
           
           return { code: 'SUCCESS', message: '成功' }
@@ -349,7 +390,7 @@ exports.main = async (event, context) => {
     
   } catch (err) {
     console.error('支付回调处理失败:', err)
-    // 即使出错也要返回成功，避免微信重复回调
-    return { code: 'SUCCESS', message: '成功' }
+    // 返回 FAIL 让微信重试，避免静默丢单
+    return { code: 'FAIL', message: 'internal error' }
   }
 }

@@ -67,29 +67,25 @@
     <!-- 图片区域 (管理员模式下点击可换图，编辑模式下也可换图) -->
     <view class="p-image-box" catchtap="{{(isAdmin || isEditing) ? 'chooseImage' : ''}}">
       <!-- 编辑模式：优先显示 editData.img，如果没有则显示 activeItem.img -->
-      <image 
-        wx:if="{{isEditing && (editData.img || activeItem.img)}}" 
-        src="{{editData.img || activeItem.img}}" 
-        mode="aspectFill" 
-        class="p-img"
-        lazy-load="true"
-        binderror="onHomeMainImageError"
-        data-mode="edit"
-      ></image>
+      <block wx:if="{{isEditing && (editData.img || activeItem.img)}}">
+        <block wx:if="{{editData.imgDual}}">
+          <image src="{{editData.imgThumb}}" mode="aspectFill" class="p-img p-img-low {{homeMainHdLoaded.edit ? 'is-hidden' : ''}}" lazy-load="true" binderror="onHomeMainImageError" data-mode="edit"></image>
+          <image src="{{editData.imgFull || editData.img}}" mode="aspectFill" class="p-img p-img-high {{homeMainHdLoaded.edit ? 'is-visible' : ''}}" lazy-load="true" bindload="onHomeMainHdLoad" binderror="onHomeMainImageError" data-mode="edit"></image>
+        </block>
+        <image wx:else src="{{editData.img || activeItem.img}}" mode="aspectFill" class="p-img" lazy-load="true" binderror="onHomeMainImageError" data-mode="edit"></image>
+      </block>
       <!-- 编辑模式但没有图片：显示占位图 -->
       <view wx:elif="{{isEditing}}" class="p-img img-placeholder">
         <text class="placeholder-text">点击添加图片</text>
       </view>
       <!-- 浏览模式：显示 activeItem.img -->
-      <image 
-        wx:else 
-        src="{{activeItem.img || ''}}" 
-        mode="aspectFill" 
-        class="p-img"
-        lazy-load="true"
-        binderror="onHomeMainImageError"
-        data-mode="active"
-      ></image>
+      <block wx:else>
+        <block wx:if="{{activeItem.imgDual}}">
+          <image src="{{activeItem.imgThumb}}" mode="aspectFill" class="p-img p-img-low {{homeMainHdLoaded.active ? 'is-hidden' : ''}}" lazy-load="true" binderror="onHomeMainImageError" data-mode="active"></image>
+          <image src="{{activeItem.imgFull || activeItem.img || ''}}" mode="aspectFill" class="p-img p-img-high {{homeMainHdLoaded.active ? 'is-visible' : ''}}" lazy-load="true" bindload="onHomeMainHdLoad" binderror="onHomeMainImageError" data-mode="active"></image>
+        </block>
+        <image wx:else src="{{activeItem.img || ''}}" mode="aspectFill" class="p-img" lazy-load="true" binderror="onHomeMainImageError" data-mode="active"></image>
+      </block>
       <!-- 管理员模式或编辑模式下的换图提示 -->
       <view class="img-edit-hint" wx:if="{{isAdmin || isEditing}}">点击更换图片</view>
     </view>

@@ -32,38 +32,75 @@
 <!-- ================= 2. 主页面 ================= -->
 <scroll-view scroll-y class="main-scroll">
   
-  <!-- 顶部轮播 (Hero) -->
+  <!-- 顶部轮播 (Hero)：视频固定 16:9；图片按真实比例（含 1:1），高度由 bindload + heroSwiperHeightPx 驱动 -->
   <view class="hero-swiper-box">
-    <swiper class="hero-swiper" indicator-dots="{{true}}" circular="{{true}}" current="{{heroCurrent}}" autoplay="{{(!isAdmin) && (!heroAutoCarouselEnabled)}}" bindchange="onSwiperChange">
+    <swiper wx:if="{{topMediaList.length > 0}}" class="hero-swiper" style="height: {{heroSwiperHeightPx}}px" indicator-dots="{{true}}" circular="{{true}}" current="{{heroCurrent}}" autoplay="{{(!isAdmin) && (!heroAutoCarouselEnabled)}}" bindchange="onSwiperChange">
       <block wx:for="{{topMediaList}}" wx:key="url">
-        <swiper-item>
-          <view wx:if="{{item.type === 'video'}}" class="hero-video-wrapper">
-            <video 
-              src="{{item.renderUrl || item.url}}" 
-              poster="{{item.poster || ''}}"
-              class="hero-media" 
-              id="hero-video-{{index}}"
-              autoplay="{{item.autoplay === true}}"
-              preload="metadata"
-              muted 
-              loop="{{!heroAutoCarouselEnabled}}"
-              show-play-btn="{{false}}" 
-              show-center-play-btn="{{false}}"
-              controls="{{false}}"
-              bindplay="onVideoPlay"
-              bindpause="onVideoPause"
-              bindended="onHeroVideoEnded"
-              binderror="onVideoError"
-              data-index="{{index}}"
-              data-location="hero"
-            ></video>
-            <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.url}}" data-location="hero">
-              <view class="play-icon" wx:if="{{!heroVideoPlaying[index]}}">
-                <view class="play-triangle"></view>
+        <swiper-item class="hero-swiper-item">
+          <view wx:if="{{item.type === 'video'}}" class="hero-video-outer">
+            <view class="hero-video-wrapper">
+              <video 
+                src="{{item.renderUrl || item.url}}" 
+                poster="{{item.poster || ''}}"
+                class="hero-media hero-video-el" 
+                id="hero-video-{{index}}"
+                object-fit="contain"
+                autoplay="{{item.autoplay === true}}"
+                preload="metadata"
+                muted 
+                loop="{{!heroAutoCarouselEnabled}}"
+                show-play-btn="{{false}}" 
+                show-center-play-btn="{{false}}"
+                controls="{{false}}"
+                bindplay="onVideoPlay"
+                bindpause="onVideoPause"
+                bindended="onHeroVideoEnded"
+                binderror="onVideoError"
+                data-index="{{index}}"
+                data-location="hero"
+              ></video>
+              <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.renderUrl || item.url}}" data-location="hero">
+                <view class="play-icon" wx:if="{{!heroVideoPlaying[index]}}">
+                  <view class="play-triangle"></view>
+                </view>
               </view>
             </view>
           </view>
-          <image wx:else src="{{item.renderUrl || item.url}}" class="hero-media" mode="aspectFill" lazy-load="true" />
+          <block wx:else>
+            <view wx:if="{{item.dualRender}}" class="hero-image-stack">
+              <image
+                src="{{item.renderThumb}}"
+                class="hero-img-base {{heroHdLoaded[index] ? 'is-hidden' : ''}}"
+                mode="widthFix"
+                lazy-load="{{index !== 0}}"
+                bindload="onHeroSlideImageLoad"
+                binderror="onHeroImageError"
+                data-index="{{index}}"
+                data-src="{{item.renderThumb}}"
+              />
+              <image
+                src="{{item.renderFull}}"
+                class="hero-img-overlay hero-img-overlay-full {{heroHdLoaded[index] ? 'is-visible' : ''}}"
+                mode="aspectFit"
+                lazy-load="{{index !== 0}}"
+                bindload="onHeroDualFullLoad"
+                binderror="onHeroImageError"
+                data-index="{{index}}"
+                data-src="{{item.renderFull}}"
+              />
+            </view>
+            <image
+              wx:else
+              src="{{item.renderFull || item.renderUrl || item.url}}"
+              class="hero-img-single"
+              mode="widthFix"
+              lazy-load="{{index !== 0}}"
+              bindload="onHeroSlideImageLoad"
+              binderror="onHeroImageError"
+              data-index="{{index}}"
+              data-src="{{item.renderFull || item.renderUrl || item.url}}"
+            />
+          </block>
           
           <view wx:if="{{isAdmin && item.type === 'video'}}" class="admin-autoplay-media {{item.autoplay ? 'on' : ''}}" catchtap="adminToggleTopVideoAutoplay" data-index="{{index}}">
             {{item.autoplay ? '自动播放开' : '自动播放关'}}
@@ -72,6 +109,9 @@
         </swiper-item>
       </block>
     </swiper>
+    <view wx:else class="hero-empty {{isAdmin ? '' : 'hero-empty-user'}}">
+      <text wx:if="{{isAdmin}}" class="hero-empty-tip">暂无顶部图片/视频，请上传</text>
+    </view>
     
     <!-- Admin: 拖拽排序模式 -->
     <view class="media-drag-list" wx:if="{{isAdmin && isEditingMedia}}">
@@ -83,7 +123,7 @@
               bindtouchmove="onDragMove"
               bindtouchend="onDragEnd">
           <view class="drag-item-preview">
-            <image wx:if="{{item.type === 'image'}}" src="{{item.url}}" mode="aspectFill" class="drag-preview-img" lazy-load="true"></image>
+            <image wx:if="{{item.type === 'image'}}" src="{{item.renderUrl || item.url}}" mode="aspectFit" class="drag-preview-img" lazy-load="true"></image>
             <view wx:else class="drag-preview-video">
               <text>🎥 视频</text>
             </view>
@@ -119,17 +159,15 @@
     <block wx:for="{{seriesList}}" wx:key="id">
       <view class="prod-card" bindtap="handleProductClick" data-index="{{index}}">
         <view class="product-cover-wrapper">
-          <image class="p-img" src="{{item.cover}}" mode="aspectFill" lazy-load="true" binderror="onCoverImageError" data-index="{{index}}" data-kind="high" />
+          <image class="p-img" src="{{item.coverDisplay || item.cover}}" mode="widthFix" lazy-load="true" binderror="onCoverImageError" data-index="{{index}}" data-kind="high" />
           <!-- 跳转号码标识（管理员模式下可编辑） -->
           <view wx:if="{{isAdmin}}" class="jump-number-badge" catchtap="adminEditJumpNumber" data-index="{{index}}">
             <text wx:if="{{item.jumpNumber}}">#{{item.jumpNumber}}</text>
             <text wx:else>#</text>
           </view>
+          <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadCover" data-index="{{index}}">📷</view>
+          <view class="admin-del-card-btn" wx:if="{{isAdmin}}" catchtap="adminDeleteSeries" data-index="{{index}}">✕</view>
         </view>
-        <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadCover" data-index="{{index}}">📷</view>
-        
-        <!-- 红色删除按钮 -->
-        <view class="admin-del-card-btn" wx:if="{{isAdmin}}" catchtap="adminDeleteSeries" data-index="{{index}}">✕</view>
         
         <view class="p-info">
            <view class="p-row">
@@ -175,10 +213,10 @@
   <scroll-view scroll-y class="modal-scroll" bindscroll="onDetailScroll">
     <view class="scroll-inner">
       
-      <!-- (A) 详情长图/视频 -->
+      <!-- (A) 详情长图/视频：图片用 widthFix，按文件真实宽高比排版（1:1 即方图、16:9 即横条），不裁切 -->
       <view class="detail-images">
          <block wx:for="{{currentSeries.detailImages}}" wx:key="url">
-           <view class="dimg-box {{isAdmin && isDetailDragging && detailDragIndex === index ? 'dragging' : ''}}"
+           <view class="dimg-box {{item.type === 'video' ? 'dimg-box-video' : 'dimg-box-image'}} {{isAdmin && isDetailDragging && detailDragIndex === index ? 'dragging' : ''}}"
                  style="{{isAdmin && isDetailDragging && detailDragIndex === index ? 'transform: translateY(' + detailDragOffsetY + 'px) scale(1.02);' : ''}}"
                  bindtouchstart="{{isAdmin ? 'onDetailDragStart' : ''}}"
                  catchtouchmove="{{isAdmin ? 'onDetailDragMove' : ''}}"
@@ -186,10 +224,11 @@
                  data-index="{{index}}">
               <view wx:if="{{item.type === 'video'}}" class="detail-video-wrapper">
                 <video 
-                  src="{{item.url}}" 
+                  src="{{item.urlDisplay || item.url}}" 
                   poster="{{item.poster || ''}}"
                   class="dimg" 
                   id="detail-video-{{index}}"
+                  object-fit="contain"
                   autoplay="{{item.autoplay || false}}"
                   preload="metadata"
                   muted 
@@ -203,7 +242,7 @@
                   data-index="{{index}}"
                   data-location="detail"
                 ></video>
-                <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.url}}" data-location="detail" wx:if="{{!isDetailDragging}}">
+                <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.urlDisplay || item.url}}" data-location="detail" wx:if="{{!isDetailDragging}}">
                   <view class="play-icon" wx:if="{{!detailVideoPlaying[index]}}">
                     <view class="play-triangle"></view>
                   </view>
@@ -224,9 +263,10 @@
                   </view>
                 </view>
               </view>
-              <!-- 16:9 容器内完整显示，不裁切 -->
+              <!-- 图片：widthFix 按真实宽高比撑开高度，兼容 1:1 / 竖图 / 横图 -->
               <block wx:else>
-                <image src="{{item.url}}" mode="aspectFit" class="dimg" lazy-load="true" />
+                <!-- 前 2 张不参与懒加载，避免每次进详情都像「整页在加载」 -->
+                <image src="{{item.urlDisplay || item.url}}" mode="widthFix" class="dimg dimg-detail-static" lazy-load="{{index > 1}}" />
               </block>
               
               <view wx:if="{{isAdmin && !isDetailDragging}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
@@ -313,9 +353,9 @@
           <view class="opt-grid {{isAdmin ? 'admin-mode' : ''}}">
              <block wx:for="{{currentSeries.options}}" wx:key="index">
                 <view class="opt-card {{selectedOptionIdx === index ? 'selected' : ''}} {{isAdmin ? 'admin-mode' : ''}}" bindtap="selectOption" data-index="{{index}}">
-                  <!-- 普通模式：显示图片（用 16:9 容器包一层，避免高度为 0 导致不显示） -->
+                  <!-- 普通模式：按图真实比例（含 1:1）展示 -->
                   <view wx:if="{{item.img && !isAdmin}}" class="opt-img">
-                    <image src="{{item.img}}" mode="aspectFill" lazy-load="true"></image>
+                    <image class="opt-img-el" src="{{item.imgDisplay || item.img}}" mode="widthFix" lazy-load="true"></image>
                   </view>
                    
                    <!-- 管理员模式：左边文字区域 -->
@@ -326,7 +366,7 @@
                    
                    <!-- 管理员模式：右边上传照片按钮 -->
                    <view wx:if="{{isAdmin}}" class="admin-add-icon" catchtap="adminUploadOptionImg" data-oidx="{{index}}">
-                     <image wx:if="{{item.img}}" src="{{item.img}}" style="width: 100%; height: 100%; border-radius: 14rpx; object-fit: cover;" mode="aspectFill" lazy-load="true" />
+                     <image wx:if="{{item.img}}" class="admin-opt-thumb-img" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
                      <text wx:else style="font-size: 50rpx;">📷</text>
                    </view>
                    
@@ -348,7 +388,9 @@
                <view class="acc-row-card {{item.selected ? 'selected' : ''}} {{item.isRequired ? 'required-highlight' : ''}} {{item.isRequired && item.selected ? 'required-selected' : ''}}" 
                      bindtap="openAccessoryDetail" data-index="{{index}}">
             
-            <image class="acc-thumb" src="{{item.img}}" mode="aspectFill" lazy-load="true" />
+            <view class="acc-thumb-box">
+              <image class="acc-thumb" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
+            </view>
             <view wx:if="{{isAdmin}}" class="admin-float-thumb" catchtap="adminUploadAccThumb" data-index="{{index}}">📷</view>
 
             <view class="acc-info">
@@ -457,8 +499,8 @@
   </view>
   <scroll-view scroll-y class="modal-scroll">
      <view class="acc-detail-hero">
-        <image wx:if="{{accessoryList[currentAccIdx].detailImages.length>0}}" 
-               src="{{accessoryList[currentAccIdx].detailImages[0]}}" mode="aspectFill" class="dimg" lazy-load="true"/>
+        <image wx:if="{{accessoryList[currentAccIdx].detailImages && accessoryList[currentAccIdx].detailImages.length>0}}" 
+               src="{{(accessoryList[currentAccIdx].detailImagesDisplay && accessoryList[currentAccIdx].detailImagesDisplay[0]) || accessoryList[currentAccIdx].detailImages[0]}}" mode="widthFix" class="acc-detail-hero-img" lazy-load="true"/>
         <view wx:else class="acc-hero-placeholder">
           <view class="acc-hero-placeholder-icon">📷</view>
           <text class="acc-hero-placeholder-text">暂无图片</text>

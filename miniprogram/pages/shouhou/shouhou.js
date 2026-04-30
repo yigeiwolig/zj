@@ -1,4 +1,5 @@
 // pages/shouhou/shouhou.js
+const cosUpload = require('../../utils/cosUpload.js');
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
 // 🔴 使用专门的行政区key（用于省市区选择器 - getCityList）
 const MAP_KEY = 'CGRBZ-FLLLL-CNCPC-MQ6YK-YENYT-2MFCD'; // 行政区key（专门用于省市区选择器）
@@ -23,16 +24,15 @@ const DB_PARTS = {
   'F1 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
   'F2 PRO': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
   'F2 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-  'F2 PRO Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
   'F2 MAX Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"]
 };
 
 // 视频数据 - 按组同步（同组型号共享视频）
-// 分组：F1 PRO + F1 MAX 一组，F2 PRO + F2 MAX 一组，F2 PRO Long + F2 MAX Long 一组
+// 分组：F1 PRO + F1 MAX 一组，F2 PRO + F2 MAX 一组，F2 MAX Long 单独 F2 Long 组
 const VIDEO_GROUPS = {
   'F1': ['F1 PRO', 'F1 MAX'],           // F1 组
   'F2': ['F2 PRO', 'F2 MAX'],           // F2 组
-  'F2 Long': ['F2 PRO Long', 'F2 MAX Long'] // F2 Long 组
+  'F2 Long': ['F2 MAX Long'] // F2 Long 组
 };
 
 // 型号到组的映射
@@ -41,7 +41,6 @@ const MODEL_TO_GROUP = {
   'F1 MAX': 'F1',
   'F2 PRO': 'F2',
   'F2 MAX': 'F2',
-  'F2 PRO Long': 'F2 Long',
   'F2 MAX Long': 'F2 Long'
 };
 
@@ -51,7 +50,6 @@ const DB_VIDEOS = {
   'F1 MAX': [],
   'F2 PRO': [],
   'F2 MAX': [],
-  'F2 PRO Long': [],
   'F2 MAX Long': []
 };
 
@@ -61,7 +59,6 @@ const CODES = {
   'F1 MAX': '123456',
   'F2 PRO': '456789',
   'F2 MAX': '456789',
-  'F2 PRO Long': '456789',
   'F2 MAX Long': '456789'
 };
 
@@ -1767,7 +1764,7 @@ Page({
 
     this._showCustomModal({
       title: '确认同步',
-      content: '将强制覆盖所有6个型号（F1 PRO、F1 MAX、F2 PRO、F2 MAX、F2 PRO Long、F2 MAX Long）的配件数据到云端，云端旧数据将被删除并替换为本地数据，是否继续？',
+      content: '将强制覆盖所有5个型号（F1 PRO、F1 MAX、F2 PRO、F2 MAX、F2 MAX Long）的配件数据到云端，云端旧数据将被删除并替换为本地数据，是否继续？',
       showCancel: true,
       confirmText: '继续',
       cancelText: '取消',
@@ -1777,7 +1774,7 @@ Page({
           this.showMyLoading('同步中...');
           
           // 所有型号列表
-          const allModels = ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 PRO Long', 'F2 MAX Long'];
+          const allModels = ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 MAX Long'];
           let totalParts = 0;
           let successCount = 0;
           let failCount = 0;
@@ -1789,7 +1786,7 @@ Page({
 
           console.log('[syncAllPartsToCloud] 总计需要同步', totalParts, '个配件');
 
-          // 逐个型号同步（6个独立型号）- 强制覆盖旧数据
+          // 逐个型号同步（5个独立型号）- 强制覆盖旧数据
           const syncPromises = allModels.map(modelName => {
             const partsList = DB_PARTS[modelName] || [];
             if (partsList.length === 0) {
@@ -4253,6 +4250,7 @@ Page({
         addressData: addr,
         shippingFee: fee,
         shippingMethod: method,
+        orderSource: 'shouhou',
         userNickname: userNickname, // 🔴 传递用户昵称
         repairId: (() => {
           let r = (this.data.repairId || '').toString().trim();
@@ -4449,6 +4447,7 @@ Page({
         addressData: addressData,
         shippingFee: isAdminPay ? 0 : (this.data.shippingFee || 0),
         shippingMethod: this.data.shippingMethod || 'zto',
+        orderSource: 'shouhou',
         userNickname: userNickname, // 🔴 传递用户昵称
         repairId: (() => {
           let r = (this.data.repairId || '').toString().trim();
@@ -5218,47 +5217,32 @@ Page({
       // 上传视频到云存储并写入 shouhouvideo 集合（按型号独立）
       
       const modelName = this.data.currentModelName;
-      const timestamp = Date.now();
-      const videoCloudPath = `shouhou/videos/${modelName}/${timestamp}_${val}.mp4`;
-      const thumbCloudPath = this.data.tempVideoThumb 
-        ? `shouhou/thumbs/${modelName}/${timestamp}_${val}.jpg`
-        : null;
 
-      // 先上传视频文件
-      wx.cloud.uploadFile({
-        cloudPath: videoCloudPath,
-        filePath: this.data.tempVideoPath,
-        success: (videoRes) => {
-              // 视频上传成功，如果有封面则上传封面
-              if (thumbCloudPath && this.data.tempVideoThumb) {
-                wx.cloud.uploadFile({
-                  cloudPath: thumbCloudPath,
-                  filePath: this.data.tempVideoThumb,
-                  success: (thumbRes) => {
-                    // 封面上传成功，写入数据库
-                    this.saveVideoToDB(val, modelName, videoRes.fileID, thumbRes.fileID);
-                  },
-                  fail: (err) => {
-                    console.error('封面上传失败:', err);
-                    // 封面上传失败，只保存视频
-                    this.saveVideoToDB(val, modelName, videoRes.fileID, null);
-                  }
-                });
-              } else {
-                // 没有封面，直接保存视频
-                this.saveVideoToDB(val, modelName, videoRes.fileID, null);
-              }
-        },
-        fail: (err) => {
-          // 🔴 上传失败时清除上传状态
-          this.setData({ 
+      cosUpload
+        .uploadVideoToCos(this.data.tempVideoPath, `shouhou/videos/${modelName}`)
+        .then(videoUrl => {
+          if (this.data.tempVideoThumb) {
+            return cosUpload
+              .uploadImageToCos(this.data.tempVideoThumb, `shouhou/thumbs/${modelName}`)
+              .then(thumbUrl => ({ videoUrl, thumbUrl }))
+              .catch(err => {
+                console.error('封面上传失败:', err);
+                return { videoUrl, thumbUrl: null };
+              });
+          }
+          return { videoUrl, thumbUrl: null };
+        })
+        .then(({ videoUrl, thumbUrl }) => {
+          this.saveVideoToDB(val, modelName, videoUrl, thumbUrl);
+        })
+        .catch(err => {
+          this.setData({
             showLoadingAnimation: false,
-            isUploadingVideo: false 
+            isUploadingVideo: false
           });
           console.error('视频上传失败:', err);
           this._showCustomToast('视频上传失败', 'none');
-        }
-      });
+        });
     }
   },
 
@@ -5695,15 +5679,12 @@ Page({
     // 使用很短的延迟确保动画已经渲染，然后再开始上传（避免微信原生提示覆盖）
     // 注意：如果微信系统提示仍然出现，可能需要使用其他上传方式
     setTimeout(() => {
-      console.log('[submitRepairTicket] 开始上传视频，路径:', tempVideoPath);
-      // 2. 上传视频
-      const cloudPath = `repair_video/${Date.now()}_${Math.floor(Math.random()*1000)}.mp4`;
-      wx.cloud.uploadFile({
-      cloudPath: cloudPath,
-      filePath: tempVideoPath,
-      success: async (res) => {
-        console.log('[submitRepairTicket] 视频上传成功，fileID:', res.fileID);
-        const fileID = res.fileID;
+      console.log('[submitRepairTicket] 开始上传视频(COS)，路径:', tempVideoPath);
+      cosUpload
+        .uploadVideoToCos(tempVideoPath, 'repair_video')
+        .then(async publicUrl => {
+        const fileID = publicUrl;
+        console.log('[submitRepairTicket] 视频上传成功，URL:', fileID);
         
         // 3. 写入数据库
         const db = wx.cloud.database();
@@ -6045,13 +6026,11 @@ Page({
             }
           });
         });
-      },
-      fail: err => {
-        // 隐藏自定义加载动画
+      })
+      .catch(err => {
         this.setData({ showLoadingAnimation: false });
         console.error('[submitRepairTicket] 视频上传失败:', err);
-        this.showAutoToast('上传失败', err.errMsg || '视频上传失败，请检查网络后重试');
-      }
+        this.showAutoToast('上传失败', (err && err.message) || (err && err.errMsg) || '视频上传失败，请检查网络后重试');
       });
     });
   },

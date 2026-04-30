@@ -4,6 +4,17 @@ const https = require('https')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+async function assertAdmin(db) {
+  const wxContext = cloud.getWXContext()
+  const openid = wxContext.OPENID
+  if (!openid) throw new Error('UNAUTHORIZED')
+  const byOpenid = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+  if (byOpenid.data.length > 0) return openid
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+  if (bySystemOpenid.data.length > 0) return openid
+  throw new Error('FORBIDDEN')
+}
+
 // 🔹 配置信息
 const CONFIG = {
   // 必须与你 createOrder 里的保持一致
@@ -163,6 +174,8 @@ exports.main = async (event, context) => {
   console.log('[main] 开始处理:', { action, orderId, id })
 
   try {
+    await assertAdmin(db)
+
     // ===========================================
     // 场景 1: 确认发货 (核心逻辑)
     // ===========================================
@@ -280,6 +293,9 @@ exports.main = async (event, context) => {
 
   } catch (err) {
     console.error('[main] 全局异常:', err)
+    if (String(err && err.message).includes('UNAUTHORIZED') || String(err && err.message).includes('FORBIDDEN')) {
+      return { success: false, errMsg: '无管理员权限' }
+    }
     return { success: false, errMsg: '系统异常: ' + err.message }
   }
 }

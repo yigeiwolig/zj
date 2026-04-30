@@ -165,7 +165,13 @@
         style="{{isDraggingCard && draggingCardId === item._id ? 'position: fixed; left: ' + dragX + 'px; top: ' + dragY + 'px; width: ' + cardWidth + 'px; opacity: 0.9; z-index: 9999; transition: none;' : ''}}"
       >
         <view class="thumb-box" style="background-color: {{item.color}};">
-          <image wx:if="{{item.coverUrl}}" src="{{item.coverUrl}}" mode="aspectFill" class="card-cover-img" lazy-load="true" binderror="onCaseCoverImageError" data-index="{{index}}"></image>
+          <block wx:if="{{item.coverUrl}}">
+            <block wx:if="{{item.dualCover}}">
+              <image src="{{item.coverThumb}}" mode="aspectFill" class="card-cover-img card-cover-low {{caseCoverLoadedMap[index] ? 'is-hidden' : ''}}" lazy-load="true" binderror="onCaseCoverImageError" data-index="{{index}}"></image>
+              <image src="{{item.coverFull}}" mode="aspectFill" class="card-cover-img card-cover-high {{caseCoverLoadedMap[index] ? 'is-visible' : ''}}" lazy-load="true" bindload="onCaseCoverHdLoad" binderror="onCaseCoverImageError" data-index="{{index}}"></image>
+            </block>
+            <image wx:else src="{{item.coverFull || item.coverUrl}}" mode="aspectFill" class="card-cover-img" lazy-load="true" binderror="onCaseCoverImageError" data-index="{{index}}"></image>
+          </block>
           <view class="card-watermark-overlay">MT</view>
           
           <!-- 🔧 编辑图标：只在“管理现有视频”模式下显示 -->

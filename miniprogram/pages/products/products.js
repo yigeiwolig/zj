@@ -26,6 +26,16 @@ const iconShop = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5v
 // ⬆️ 向上箭头 (用于底部触发按钮)
 const iconArrowUp = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgNVYxOU01IDEyTDEyIDVNMTkgMTJMMTIgNSIgc3Ryb2tlPSIjMzMzMzMzIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==";
 
+/** 新品弹窗：云端未返回前先占位，保证蒙层第一时间出现 */
+const NEW_ARRIVAL_LOADING_ITEM = {
+  _id: 'fallback-loading',
+  title: '正在加载新品…',
+  cover: '',
+  coverFull: '',
+  coverThumb: '',
+  dualCover: false
+};
+
 Page({
   data: {
     // 🔴 状态栏高度
@@ -61,6 +71,7 @@ Page({
         id: 3, 
         title: '产品上新', 
         en: 'NEW ARRIVALS', 
+        hint: '查看最新上架与亮点',
         iconSvg: iconNew, 
         iconSize: '110rpx' // <---【在这里改】因为是发散的丝带，给最大
       },
@@ -68,6 +79,7 @@ Page({
         id: 4, 
         title: '产品选购', 
         en: 'PRODUCTS', 
+        hint: '浏览配件与实时价格',
         iconSvg: iconShop, 
         iconSize: '72rpx'  // <---【在这里改】实心购物车，稍微改小显得精致
       },
@@ -75,6 +87,7 @@ Page({
         id: 10, 
         title: '案例展示', 
         en: 'SHOWCASE', 
+        hint: '真实装车案例参考',
         iconSvg: iconShowcase, 
         iconSize: '80rpx'  // <---【在这里改】标准大小
       },
@@ -82,6 +95,7 @@ Page({
         id: 5, 
         title: '排行榜单', 
         en: 'RANKING LIST', 
+        hint: '热门榜单与排行变化',
         iconSvg: iconRank, 
         iconSize: '80rpx' 
       },
@@ -89,6 +103,7 @@ Page({
         id: 9, 
         title: 'OTA升级', 
         en: 'SYSTEM UPDATE', 
+        hint: '在线升级设备固件',
         iconSvg: iconOTA, 
         iconSize: '80rpx' 
       },
@@ -96,6 +111,7 @@ Page({
         id: 8, 
         title: '联系方式', 
         en: 'CONTACT US', 
+        hint: '客服咨询与联系方式',
         iconSvg: iconContact, 
         iconSize: '80rpx' 
       },
@@ -103,6 +119,7 @@ Page({
         id: 1, 
         title: '控制中心', 
         en: 'CONTROL CENTER', 
+        hint: '连接设备并调节参数',
         iconSvg: iconControl, 
         iconSize: '80rpx' 
       },
@@ -110,6 +127,7 @@ Page({
         id: 7, 
         title: '安装教程', 
         en: 'VIDEO GUIDE', 
+        hint: '分步视频安装教程',
         iconSvg: iconInstall, 
         iconSize: '80rpx' 
       },
@@ -117,6 +135,7 @@ Page({
         id: 6, 
         title: '维修中心', 
         en: 'SERVICE & REPAIR', 
+        hint: '寄修申请与进度查看',
         iconSvg: iconRepair, 
         iconSize: '80rpx' 
       },
@@ -124,6 +143,7 @@ Page({
         id: 12, 
         title: '附近门店', 
         en: 'NEARBY STORES', 
+        hint: '查看附近门店导航',
         iconSvg: iconStore, 
         iconSize: '80rpx' 
       },
@@ -131,14 +151,15 @@ Page({
         id: 2, 
         title: '个人中心', 
         en: 'MY PROFILE', 
+        hint: '订单与账户统一管理',
         iconSvg: iconProfile, 
         iconSize: '80rpx' 
       }
     ],
 
-    // 🆕 产品上新弹窗（复用 pagenew 数据）
-    // 默认先打开，确保你能看到弹窗；后续再根据需要改成只在首进时打开
-    showNewArrivalModal: true,
+    // 🆕 产品上新弹窗：由 initNewArrivalModal 在有数据时再设为 true，避免先闪空白
+    showNewArrivalModal: false,
+    newArrivalClosing: false,
     newArrivalList: [],
     newArrivalIndex: 0,
     newArrivalHdLoaded: {}
@@ -322,9 +343,10 @@ Page({
     // 🔴 检查封禁状态（确保重启后也能拦截）
     this.checkBanStatus();
 
-    // 提前后台预热 shop 数据，降低“立即查看”首跳等待
+    // 仅当全局尚无商城缓存时触发预拉（避免与 app.onLaunch 重复打云；回到本页也不会刷掉已带 renderUrl 的缓存）
     try {
-      if (app && typeof app.preloadShopData === 'function') {
+      const sc = app && app.globalData && app.globalData.shopDataCache;
+      if (app && typeof app.preloadShopData === 'function' && (!sc || !sc.cacheTime)) {
         app.preloadShopData();
       }
     } catch (e) {}
@@ -349,8 +371,17 @@ Page({
 
     }, 300);
 
-    // 🆕 初始化“新品弹窗”（复用 pagenew 的 products 集合）
-    this.initNewArrivalModal();
+    // 首进新品弹窗：0ms 仅让出当前同步栈（避免与 onLoad 内其它 setData 同帧硬挤），不再人为等 280ms
+    this._scheduleNewArrivalModal();
+  },
+
+  /** 仅在 onLoad 触发；用 setTimeout(0) 代替固定延迟，弹窗能紧跟首屏渲染 */
+  _scheduleNewArrivalModal() {
+    if (this._newArrivalTimer) clearTimeout(this._newArrivalTimer);
+    this._newArrivalTimer = setTimeout(() => {
+      this._newArrivalTimer = null;
+      this.initNewArrivalModal();
+    }, 0);
   },
 
   // 🆕 从云端读取 products 集合，显示产品上新弹窗（和 pagenew 复用同一份数据）
@@ -362,22 +393,47 @@ Page({
         app.globalData.newArrivalCache = { list: null, cacheTime: 0 };
       }
 
-      // 5分钟内复用缓存，避免每次进入都等云端+首图下载
       const cache = app.globalData.newArrivalCache;
       const now = Date.now();
-      if (cache.list && cache.list.length && (now - cache.cacheTime < 5 * 60 * 1000)) {
+      const cacheFresh = !!(cache.list && cache.list.length && (now - cache.cacheTime < 5 * 60 * 1000));
+
+      if (cacheFresh) {
+        const needsCloud = (cache.list || []).some(
+          i => i && i.cover && String(i.cover).indexOf('cloud://') === 0
+        );
+        if (!needsCloud) {
+          const enhancedCacheList = this.enhanceNewArrivalList(cache.list);
+          this.setData({
+            newArrivalList: enhancedCacheList,
+            newArrivalIndex: 0,
+            showNewArrivalModal: true,
+            newArrivalClosing: false,
+            newArrivalHdLoaded: {}
+          });
+          this.prewarmNewArrivalImages(enhancedCacheList, 2).catch(() => {});
+          return;
+        }
         const resolvedCache = await this.resolveProductCoverUrls(cache.list);
         const enhancedCacheList = this.enhanceNewArrivalList(resolvedCache);
         this.setData({
           newArrivalList: enhancedCacheList,
           newArrivalIndex: 0,
           showNewArrivalModal: true,
+          newArrivalClosing: false,
           newArrivalHdLoaded: {}
         });
-        // 缓存命中时也后台补一轮预热，不阻塞弹窗展示
         this.prewarmNewArrivalImages(enhancedCacheList, 2).catch(() => {});
         return;
       }
+
+      // 无缓存：先立刻展示蒙层 + 占位，再拉云端（避免「先进页面半天才出弹窗」）
+      this.setData({
+        showNewArrivalModal: true,
+        newArrivalClosing: false,
+        newArrivalList: [NEW_ARRIVAL_LOADING_ITEM],
+        newArrivalIndex: 0,
+        newArrivalHdLoaded: {}
+      });
 
       // 确保已初始化云环境（有些场景只在 pagenew 里 init 过）
       if (!this.db) {
@@ -397,7 +453,21 @@ Page({
       const resolvedProducts = await this.resolveProductCoverUrls(products);
       const enhancedProducts = this.enhanceNewArrivalList(resolvedProducts);
       if (!enhancedProducts.length) {
-        console.log('[products] 新品弹窗：products 集合为空，不展示');
+        console.log('[products] 新品弹窗：products 集合为空，展示占位卡片');
+        this.setData({
+          newArrivalList: [{
+            _id: 'fallback-empty',
+            title: '新品准备中',
+            cover: '',
+            coverFull: '',
+            coverThumb: '',
+            dualCover: false
+          }],
+          newArrivalIndex: 0,
+          showNewArrivalModal: true,
+          newArrivalClosing: false,
+          newArrivalHdLoaded: {}
+        });
         return;
       }
 
@@ -412,12 +482,27 @@ Page({
         newArrivalList: enhancedProducts,
         newArrivalIndex: 0,
         showNewArrivalModal: true,
+        newArrivalClosing: false,
         newArrivalHdLoaded: {}
       });
       // 先展示后预热，避免首开被 await 阻塞导致“弹窗慢”
       this.prewarmNewArrivalImages(enhancedProducts, 2).catch(() => {});
     } catch (err) {
       console.error('[products] 加载新品弹窗数据失败:', err);
+      this.setData({
+        newArrivalList: [{
+          _id: 'fallback-error',
+          title: '新品加载中',
+          cover: '',
+          coverFull: '',
+          coverThumb: '',
+          dualCover: false
+        }],
+        newArrivalIndex: 0,
+        showNewArrivalModal: true,
+        newArrivalClosing: false,
+        newArrivalHdLoaded: {}
+      });
     }
   },
 
@@ -445,21 +530,27 @@ Page({
 
   // 🆕 关闭新品弹窗
   closeNewArrivalModal() {
-    this.setData({ showNewArrivalModal: false });
+    if (!this.data.showNewArrivalModal || this.data.newArrivalClosing) return;
+    this.setData({ newArrivalClosing: true });
+    if (this._newArrivalCloseTimer) clearTimeout(this._newArrivalCloseTimer);
+    this._newArrivalCloseTimer = setTimeout(() => {
+      this._newArrivalCloseTimer = null;
+      this.setData({
+        showNewArrivalModal: false,
+        newArrivalClosing: false
+      });
+    }, 360);
   },
 
   // 🆕 弹窗底部“立即跳转”：等同于点击“产品选购”功能卡片
   handleNewArrivalJump() {
     wx.vibrateShort({ type: 'medium' }); // 增强震动反馈
-    // 记录一次“返回后落到产品选购卡片”的意图，保证从 shop 返回体验一致
-    this.rememberReturnFocus(4);
-    // 进入前先把卡片状态准备好（关闭弹窗 + 预定位），返回时不出现可见滑动
-    const list = this.data.list || [];
-    const targetIndex = list.findIndex(item => Number(item.id) === 4);
+    // 从上新弹窗跳转到商城时，不再强制记录“返回后定位到产品选购”
+    // 避免用户返回主页/再次进入时出现“自动刷到产品选购”的突兀感
     this.setData({
       skipCardTransition: true,
       showNewArrivalModal: false,
-      ...(targetIndex >= 0 ? { currentIndex: targetIndex } : {})
+      newArrivalClosing: false
     });
     // 走极速直跳，避免经过通用分支带来的额外处理
     wx.navigateTo({
@@ -559,38 +650,82 @@ Page({
 
     let hasReturnFocus = false;
 
-    // 从任意子页面返回时，按记录恢复到对应卡片（全局统一返回体验）
+    // 最高优先级：shop(back from jumpNumber) 的一次性强制聚焦
     try {
-      const ret = wx.getStorageSync('__products_return_focus__');
-      if (ret && ret.cardId && ret.ts && (Date.now() - ret.ts < 10 * 60 * 1000)) {
-        hasReturnFocus = true;
+      const forceFocus = wx.getStorageSync('__products_force_focus_once__');
+      const validForceFocus = !!(
+        forceFocus &&
+        forceFocus.cardId &&
+        forceFocus.ts &&
+        (Date.now() - forceFocus.ts < 15000)
+      );
+      if (forceFocus) {
+        wx.removeStorageSync('__products_force_focus_once__');
+      }
+      if (validForceFocus) {
+        wx.removeStorageSync('__products_skip_return_focus_once__');
         wx.removeStorageSync('__products_return_focus__');
         const list = this.data.list || [];
-        const targetIndex = list.findIndex(item => Number(item.id) === Number(ret.cardId));
-        const patch = {
-          showNewArrivalModal: false,
-          newArrivalIndex: 0
-        };
+        const targetIndex = list.findIndex(item => Number(item.id) === Number(forceFocus.cardId));
         if (targetIndex >= 0 && targetIndex !== Number(this.data.currentIndex)) {
-          patch.skipCardTransition = true;
-          patch.currentIndex = targetIndex;
-        }
-        this.setData(patch);
-        if (patch.skipCardTransition) {
+          this.setData({
+            newArrivalIndex: 0,
+            skipCardTransition: true,
+            currentIndex: targetIndex
+          });
           setTimeout(() => {
             this.setData({ skipCardTransition: false });
           }, 80);
+        } else {
+          this.setData({ newArrivalIndex: 0 });
         }
+        hasReturnFocus = true;
       }
     } catch (e) {}
 
-    // 🔴 兜底：每次回到 PRODUCTS 页，强制关闭所有“全屏遮罩类”UI，防止页面被罩层卡住
-    this.setData({
-      showLoadingAnimation: false,     // 关闭 loading 遮罩
-      'autoToast.show': false,         // 关闭顶部自动提示
-      autoToastClosing: false,
-      isDrawerOpen: false              // 关闭底部抽屉（对应 drawer-mask）
-    });
+    // pagenew 返回 products 的一次性豁免：忽略自动定位，保持当前卡片不被改写
+    let skipReturnFocusOnce = false;
+    if (!hasReturnFocus) {
+      try {
+        const skipPayload = wx.getStorageSync('__products_skip_return_focus_once__');
+        skipReturnFocusOnce = !!(
+          skipPayload
+          && skipPayload.source === 'pagenew_goBack'
+          && skipPayload.ts
+          && (Date.now() - skipPayload.ts < 8000)
+        );
+        if (skipPayload) {
+          wx.removeStorageSync('__products_skip_return_focus_once__');
+        }
+        if (skipReturnFocusOnce) {
+          wx.removeStorageSync('__products_return_focus__');
+        }
+      } catch (e) {}
+    }
+
+    // 从任意子页面返回时，按记录恢复到对应卡片（全局统一返回体验）
+    if (!hasReturnFocus && !skipReturnFocusOnce) {
+      try {
+        const ret = wx.getStorageSync('__products_return_focus__');
+        if (ret && ret.cardId && ret.ts && (Date.now() - ret.ts < 10 * 60 * 1000)) {
+          hasReturnFocus = true;
+          wx.removeStorageSync('__products_return_focus__');
+          const list = this.data.list || [];
+          const targetIndex = list.findIndex(item => Number(item.id) === Number(ret.cardId));
+          const patch = { newArrivalIndex: 0 };
+          if (targetIndex >= 0 && targetIndex !== Number(this.data.currentIndex)) {
+            patch.skipCardTransition = true;
+            patch.currentIndex = targetIndex;
+          }
+          this.setData(patch);
+          if (patch.skipCardTransition) {
+            setTimeout(() => {
+              this.setData({ skipCardTransition: false });
+            }, 80);
+          }
+        }
+      } catch (e) {}
+    }
 
     // 兜底恢复：若 scan 详情页被系统侧滑误退到 products，自动回 scan 图二对应卡片
     try {
@@ -606,6 +741,17 @@ Page({
         return;
       }
     } catch (e) {}
+
+    // 🔴 兜底：每次回到 PRODUCTS 页，强制关闭所有“全屏遮罩类”UI，防止页面被罩层卡住
+    this.setData({
+      showLoadingAnimation: false,     // 关闭 loading 遮罩
+      'autoToast.show': false,         // 关闭顶部自动提示
+      autoToastClosing: false,
+      isDrawerOpen: false,             // 关闭底部抽屉（对应 drawer-mask）
+      newArrivalClosing: false
+    });
+
+    // 按需求：回到本页（onShow）不再弹新品弹窗，只在 onLoad 首进时弹
 
     const runOnShowChecks = () => {
       // 🔴 启动定时检查 qiangli 强制封禁

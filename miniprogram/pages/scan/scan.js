@@ -37,8 +37,6 @@ const iconF1Pro = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE
 const iconF1Max = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMjUiIHk9IjMwIiB3aWR0aD0iMTUwIiBoZWlnaHQ9IjkwIiByeD0iMTIiIGZpbGw9IiMxQzFDMUUiLz48cmVjdCB4PSI0NSIgeT0iNDUiIHdpZHRoPSIzNSIgaGVpZ2h0PSI4IiByeD0iNCIgZmlsbD0iI0ZGRkZGRiIvPjxyZWN0IHg9IjEyMCIgeT0iNDUiIHdpZHRoPSIzNSIgaGVpZ2h0PSI4IiByeD0iNCIgZmlsbD0iI0ZGRkZGRiIvPjx0ZXh0IHg9IjEwMCIgeT0iOTAiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9IjkwMCIgZm9udC1zaXplPSIyNCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI0ZGRkZGRiIgbGV0dGVyLXNwYWNpbmc9IjMiPk1UPC90ZXh0Pjwvc3ZnPg==';
 const iconF2Pro = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDMwIEgxOTAgQzE5NSAzMCAxOTUgMzUgMTk1IDM1IFY0OCBDMTk1IDUzIDE5MCA1MyAxOTAgNTMgSDEyMSBWNjkgSDEyMi41IEMxMjcuNSA2OSAxMjcuNSA3NCAxMjcuNSA3NCBWOTQgQzEyNy41IDk5IDEyMi41IDk5IDEyMi41IDk5IEg4Mi41IEM3Ny41IDk5IDc3LjUgOTQgNzcuNSA5NCBWNzQgQzc3LjUgNjkgODIuNSA2OSA4Mi41IDY5IEg4NCBWNTMgSDE1IEMxMCA1MyAxMCA0OCAxMCA0OCBWMzUgQzEwIDMwIDE1IDMwIDE1IDMwIFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHJlY3QgeD0iMzYiIHk9IjM3IiB3aWR0aD0iMjYiIGhlaWdodD0iOCIgcng9IjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iMTQ1IiB5PSIzOCIgd2lkdGg9IjI1IiBoZWlnaHQ9IjgiIHJ4PSI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMyIvPjx0ZXh0IHg9IjEwMi41IiB5PSI3MiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjMUMxQzFFIj48dHNwYW4geD0iMTAyLjUiIGR5PSIwIj5NPC90c3Bhbj48dHNwYW4geD0iMTAyLjUiIGR5PSIxNiI+VDwvdHNwYW4+PC90ZXh0Pjwvc3ZnPg==';
 const iconF2Max = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDMwIEgxOTAgQzE5NSAzMCAxOTUgMzUgMTk1IDM1IFY0OCBDMTk1IDUzIDE5MCA1MyAxOTAgNTMgSDEyMSBWNjkgSDEyMi41IEMxMjcuNSA2OSAxMjcuNSA3NCAxMjcuNSA3NCBWOTQgQzEyNy41IDk5IDEyMi41IDk5IDEyMi41IDk5IEg4Mi41IEM3Ny41IDk5IDc3LjUgOTQgNzcuNSA5NCBWNzQgQzc3LjUgNjkgODIuNSA2OSA4Mi41IDY5IEg4NCBWNTMgSDE1IEMxMCA1MyAxMCA0OCAxMCA0OCBWMzUgQzEwIDMwIDE1IDMwIDE1IDMwIFoiIGZpbGw9IiMxQzFDMUUiLz48cmVjdCB4PSIzNiIgeT0iMzciIHdpZHRoPSIyNiIgaGVpZ2h0PSI4IiByeD0iNSIgZmlsbD0iI0ZGRkZGRiIvPjxyZWN0IHg9IjE0NSIgeT0iMzgiIHdpZHRoPSIyNSIgaGVpZ2h0PSI4IiByeD0iNCIgZmlsbD0iI0ZGRkZGRiIvPjx0ZXh0IHg9IjEwMi41IiB5PSI3MiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjRkZGRkZGIj48dHNwYW4geD0iMTAyLjUiIGR5PSIwIj5NPC90c3Bhbj48dHNwYW4geD0iMTAyLjUiIGR5PSIxNiI+VDwvdHNwYW4+PC90ZXh0Pjwvc3ZnPg==';
-// F2 PRO Long 图标（独立）
-const iconF2ProLong = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDI5SDE5MEMxOTUgMjkgMTk1IDM0LjE0NjQgMTk1IDM0LjE0NjRWNDcuNTI2OUMxOTUgNTIuNjczMiAxOTAgNTIuNjczMiAxOTAgNTIuNjczMkgxMjFWMTEwLjVIMTIyLjVDMTMwLjg0NSAxMTAuNSAxMzAuODQ1IDExNy40NiAxMzAuODQ1IDExNy40NlYxMzcuNzI5QzEzMC44NDUgMTQ0LjUgMTIyLjUgMTQ0LjUgMTIyLjUgMTQ0LjVIODIuNUM3NC4xNTQ1IDE0NC41IDc0LjE1NDUgMTM3LjcyOSA3NC4xNTQ1IDEzNy43MjlWMTE3LjQ2Qzc0LjE1NDUgMTEwLjUgODIuNSAxMTAuNSA4Mi41IDExMC41VjUyLjY3MzJIMTVDMTAgNTIuNjczMiAxMCA0Ny41MjY5IDEwIDQ3LjUyNjlWMzQuMTQ2NEMxMCAyOSAxNSAyOSAxNSAyOVoiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHBhdGggZD0iTTU2IDM3SDQwQzM3LjIzODYgMzcgMzUgMzguNzkwOSAzNSA0MUMzNSA0My4yMDkxIDM3LjIzODYgNDUgNDAgNDVINTZDNTguNzYxNCA0NSA2MSA0My4yMDkxIDYxIDQxQzYxIDM4Ljc5MDkgNTguNzYxNCAzNyA1NiAzN1oiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHBhdGggZD0iTTE2NSAzN0gxNDlDMTQ2LjIzOSAzNyAxNDQgMzguNzkwOSAxNDQgNDFDMTQ0IDQzLjIwOTEgMTQ2LjIzOSA0NSAxNDkgNDVIMTY1QzE2Ny43NjEgNDUgMTcwIDQzLjIwOTEgMTcwIDQxQzE3MCAzOC43OTA5IDE2Ny43NjEgMzcgMTY1IDM3WiIgc3Ryb2tlPSIjMUMxQzFFIiBzdHJva2Utd2lkdGg9IjMiLz48cGF0aCBkPSJNODQgODdIMTIxIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMTAyLjUgNjRDMTA0LjQzMyA2NCAxMDYgNjIuNDMzIDEwNiA2MC41QzEwNiA1OC41NjcgMTA0LjQzMyA1NyAxMDIuNSA1N0MxMDAuNTY3IDU3IDk5IDU4LjU2NyA5OSA2MC41Qzk5IDYyLjQzMyAxMDAuNTY3IDY0IDEwMi41IDY0WiIgc3Ryb2tlPSIjMUMxQzFFIiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNMTAyLjUgODJDMTA0LjQzMyA4MiAxMDYgODAuNDMzIDEwNiA3OC41QzEwNiA3Ni41NjcgMTA0LjQzMyA3NSAxMDIuNSA3NUMxMDAuNTY3IDc1IDk5IDc2LjU2NyA5OSA3OC41Qzk5IDgwLjQzMyAxMDAuNTY3IDgyIDEwMi41IDgyWiIgc3Ryb2tlPSIjMUMxQzFFIiBzdHJva2Utd2lkdGg9IjIiLz48cGF0aCBkPSJNMTAyLjUgMTAxQzEwNC40MzMgMTAxIDEwNiA5OS40MzMgMTA2IDk3LjVDMTA2IDk1LjU2NyAxMDQuNDMzIDk0IDEwMi41IDk0QzEwMC41NjcgOTQgOTkgOTUuNTY3IDk5IDk3LjVDOTkgOTkuNDMzIDEwMC41NjcgMTAxIDEwMi41IDEwMVoiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIyIi8+PHBhdGggZD0iTTkwLjMzOTggMTE5LjA5MUg5My4xODQyTDk2LjE4ODUgMTI2LjQySDk2LjMxNjNMOTkuMzIwNiAxMTkuMDkxSDEwMi4xNjVWMTMwSDk5LjkyNzhWMTIyLjlIOTkuODM3M0w5Ny4wMTQxIDEyOS45NDdIOTUuNDkwN0w5Mi42Njc1IDEyMi44NzNIOTIuNTc3VjEzMEg5MC4zMzk4VjExOS4wOTFaTTEwNy4xMjIgMTIwLjk5M1YxMTkuMDkxSDExNi4wODFWMTIwLjk5M0gxMTIuNzQxVjEzMEgxMTAuNDYxVjEyMC45OTNIMTA3LjEyMloiIGZpbGw9IiMxQzFDMUUiLz48L3N2Zz4=';
 // F2 MAX Long 图标（独立）
 const iconF2MaxLong = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDI5SDE5MEMxOTUgMjkgMTk1IDM0LjE0NjQgMTk1IDM0LjE0NjRWNDcuNTI2OUMxOTUgNTIuNjczMiAxOTAgNTIuNjczMiAxOTAgNTIuNjczMkgxMjFWMTEwLjVIMTIyLjVDMTMwLjg0NSAxMTAuNSAxMzAuODQ1IDExNy40NiAxMzAuODQ1IDExNy40NlYxMzcuNzI5QzEzMC44NDUgMTQ0LjUgMTIyLjUgMTQ0LjUgMTIyLjUgMTQ0LjVIODIuNUM3NC4xNTQ1IDE0NC41IDc0LjE1NDUgMTM3LjcyOSA3NC4xNTQ1IDEzNy43MjlWMTE3LjQ2Qzc0LjE1NDUgMTEwLjUgODIuNSAxMTAuNSA4Mi41IDExMC41VjUyLjY3MzJIMTVDMTAgNTIuNjczMiAxMCA0Ny41MjY5IDEwIDQ3LjUyNjlWMzQuMTQ2NEMxMCAyOSAxNSAyOSAxNSAyOVoiIGZpbGw9IiMxQzFDMUUiLz48cGF0aCBkPSJNNTYgMzdINDBDMzcuMjM4NiAzNyAzNSAzOC43OTA5IDM1IDQxQzM1IDQzLjIwOTEgMzcuMjM4NiA0NSA0MCA0NUg1NkM1OC43NjE0IDQ1IDYxIDQzLjIwOTEgNjEgNDFDNjEgMzguNzkwOSA1OC43NjE0IDM3IDU2IDM3WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTY1IDM3SDE0OUMxNDYuMjM5IDM3IDE0NCAzOC43OTA5IDE0NCA0MUMxNDQgNDMuMjA5MSAxNDYuMjM5IDQ1IDE0OSA0NUgxNjVDMTY3Ljc2MSA0NSAxNzAgNDMuMjA5MSAxNzAgNDFDMTcwIDM4Ljc5MDkgMTY3Ljc2MSAzNyAxNjUgMzdaIiBmaWxsPSJ3aGl0ZSIvPjxwYXRoIGQ9Ik04NCA4N0gxMjEiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMTAyLjUgNjRDMTA0LjQzMyA2NCAxMDYgNjIuNDMzIDEwNiA2MC41QzEwNiA1OC41NjcgMTA0LjQzMyA1NyAxMDIuNSA1N0MxMDAuNTY3IDU3IDk5IDU4LjU2NyA5OSA2MC41Qzk5IDYyLjQzMyAxMDAuNTY3IDY0IDEwMi41IDY0WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgODJDMTA0LjQzMyA4MiAxMDYgODAuNDMzIDEwNiA3OC41QzEwNiA3Ni41NjcgMTA0LjQzMyA3NSAxMDIuNSA3NUMxMDAuNTY3IDc1IDk5IDc2LjU2NyA5OSA3OC41Qzk5IDgwLjQzMyAxMDAuNTY3IDgyIDEwMi41IDgyWiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgMTAxQzEwNC40MzMgMTAxIDEwNiA5OS40MzMgMTA2IDk3LjVDMTA2IDk1LjU2NyAxMDQuNDMzIDk0IDEwMi41IDk0QzEwMC41NjcgOTQgOTkgOTUuNTY3IDk5IDk3LjVDOTkgOTkuNDMzIDEwMC41NjcgMTAxIDEwMi41IDEwMVoiIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTkwLjMzOTggMTE5LjA5MUg5My4xODQyTDk2LjE4ODUgMTI2LjQySDk2LjMxNjNMOTkuMzIwNiAxMTkuMDkxSDEwMi4xNjVWMTMwSDk5LjkyNzhWMTIyLjlIOTkuODM3M0w5Ny4wMTQxIDEyOS45NDdIOTUuNDkwN0w5Mi42Njc1IDEyMi44NzNIOTIuNTc3VjEzMEg5MC4zMzk4VjExOS4wOTFaTTEwNy4xMjIgMTIwLjk5M1YxMTkuMDkxSDExNi4wODFWMTIwLjk5M0gxMTIuNzQxVjEzMEgxMTAuNDYxVjEyMC45OTNIMTA3LjEyMloiIGZpbGw9IndoaXRlIi8+PC9zdmc+';
 
@@ -332,8 +330,7 @@ Page({
       { id: 2, name: 'F1', type: 'Max', tag: 'SERIES 1', icon: iconF1Max, status: 'next' },
       { id: 3, name: 'F2', type: 'Pro', tag: 'SERIES 2', icon: iconF2Pro, status: 'hidden' },
       { id: 4, name: 'F2', type: 'Max', tag: 'SERIES 2', icon: iconF2Max, status: 'hidden' },
-      { id: 5, name: 'F2', type: 'Pro Long', tag: 'SERIES 2', icon: iconF2ProLong, status: 'hidden' },
-      { id: 6, name: 'F2', type: 'Max Long', tag: 'SERIES 2', icon: iconF2MaxLong, status: 'hidden' },
+      { id: 5, name: 'F2', type: 'Max Long', tag: 'SERIES 2', icon: iconF2MaxLong, status: 'hidden' },
     ],
     currentIndex: 0,
     
@@ -355,6 +352,8 @@ Page({
     // === 权限控制 ===
     isAuthorized: false, // 密码验证一次后有效
     isAdmin: false, // 管理员身份
+    screenshotHourlyCount: 0,
+    screenshotDailyCount: 0,
 
     // === 弹窗控制 ===
     showPasswordModal: false, 
@@ -552,6 +551,7 @@ Page({
     this.updateCardStatus(restoreIndex);
 
     this.ble = new BLEHelper(wx);
+    this.initScreenshotProtection();
     
     // 重置跳转标记
     this.setData({ isNavigatingToOta: false });
@@ -708,7 +708,10 @@ Page({
       'keyModalClosing',
       'indicatorCheckModalClosing',
       'calibratingModalClosing',
-      'bluetoothAlertClosing'
+      'bluetoothAlertClosing',
+      // 兜底：防止 detail-touch-guard 偶发残留导致整页无法触摸
+      'blockDetailTouch',
+      'locked'
     ];
     closeFlags.forEach((k) => {
       if (this.data[k]) resetPatch[k] = false;
@@ -747,6 +750,133 @@ Page({
     }, 120);
 
     console.log('✅ [onShow] 页面状态已恢复');
+  },
+
+  initScreenshotProtection() {
+    try {
+      if (wx.setVisualEffectOnCapture) {
+        wx.setVisualEffectOnCapture({
+          visualEffect: 'hidden',
+          success: () => console.log('[scan] 🛡️ setVisualEffectOnCapture 已开启')
+        });
+      }
+    } catch (e) {
+      console.warn('[scan] setVisualEffectOnCapture 不可用:', e);
+    }
+
+    try {
+      wx.onUserCaptureScreen(() => {
+        this.handleIntercept('screenshot');
+      });
+    } catch (e) {
+      console.warn('[scan] onUserCaptureScreen 不可用:', e);
+    }
+
+    try {
+      if (wx.onUserScreenRecord) {
+        wx.onUserScreenRecord(() => {
+          this.handleIntercept('record');
+        });
+      }
+    } catch (e) {
+      console.warn('[scan] onUserScreenRecord 不可用:', e);
+    }
+  },
+
+  _getScreenshotEvents() {
+    try {
+      const events = wx.getStorageSync('__scan_screenshot_events__');
+      return Array.isArray(events) ? events : [];
+    } catch (e) {
+      return [];
+    }
+  },
+
+  _saveScreenshotEvents(events) {
+    try {
+      wx.setStorageSync('__scan_screenshot_events__', events);
+    } catch (e) {}
+  },
+
+  _recordScreenshotEvent() {
+    const now = Date.now();
+    const oneHourAgo = now - 60 * 60 * 1000;
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const events = this._getScreenshotEvents().filter((ts) => typeof ts === 'number' && ts >= oneDayAgo);
+    events.push(now);
+    this._saveScreenshotEvents(events);
+    const hourlyCount = events.filter((ts) => ts >= oneHourAgo).length;
+    const dailyCount = events.length;
+    this.setData({
+      screenshotHourlyCount: hourlyCount,
+      screenshotDailyCount: dailyCount
+    });
+    return { now, hourlyCount, dailyCount };
+  },
+
+  async _reportScreenshotRisk(stats) {
+    try {
+      await wx.cloud.callFunction({
+        name: 'reportScreenshotRisk',
+        data: {
+          page: 'scan',
+          hourlyCount: stats.hourlyCount,
+          dailyCount: stats.dailyCount
+        }
+      });
+      console.log('[scan] 已上报截图风险待审核队列', stats);
+    } catch (e) {
+      console.warn('[scan] 上报截图风险失败:', e);
+    }
+  },
+
+  async _banForCapture(type) {
+    wx.setStorageSync('is_user_banned', true);
+    if (type === 'screenshot') {
+      wx.setStorageSync('is_screenshot_banned', true);
+    }
+    const sysInfo = wx.getSystemInfoSync();
+    wx.cloud.callFunction({
+      name: 'banUserByScreenshot',
+      data: {
+        type,
+        banPage: 'scan',
+        deviceInfo: sysInfo.system || '',
+        phoneModel: sysInfo.model || ''
+      }
+    }).catch((err) => {
+      console.error('[scan] 封禁云函数调用失败:', err);
+    });
+    wx.reLaunch({ url: `/pages/blocked/blocked?type=${type === 'record' ? 'record' : 'screenshot'}` });
+  },
+
+  async handleIntercept(type) {
+    if (type === 'record') {
+      await this._banForCapture('record');
+      return;
+    }
+
+    const stats = this._recordScreenshotEvent();
+    // 1小时内前2次允许，第3次起直接封禁
+    if (stats.hourlyCount > 2) {
+      await this._banForCapture('screenshot');
+      return;
+    }
+
+    // 24小时内达到3次及以上，上报管理员审核（是否封禁）
+    if (stats.dailyCount >= 3) {
+      await this._reportScreenshotRisk(stats);
+      wx.showToast({
+        title: '已记录风险行为',
+        icon: 'none'
+      });
+      return;
+    }
+
+    wx.showToast({
+      title: `已记录截图（${stats.hourlyCount}/2）`,
+      icon: 'none'
+    });
   },
 
   onHide() {
@@ -853,7 +983,7 @@ Page({
   },
 
   // ===============================================
-  // 🔴 出厂设置功能（F1 MAX / F2 PRO / F2 PRO Long / F2 MAX 系列）
+  // 🔴 出厂设置功能（F1 MAX / F2 PRO / F2 MAX 系列）
   // ===============================================
   handleFactoryReset() {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
@@ -871,13 +1001,13 @@ Page({
     const type = currentModel.type || '';
 
     const isF2MaxSeries = name.includes('F2') && (type === 'Max' || type === 'Max Long');
-    const isF2ProSeries = name.includes('F2') && (type === 'Pro' || type === 'Pro Long');
+    const isF2ProSeries = name.includes('F2') && type === 'Pro';
     const isF1Max = name.includes('F1') && type === 'Max';
     const isF1Pro = name.includes('F1') && type === 'Pro';
     const isSupported = isF2MaxSeries || isF2ProSeries || isF1Max || isF1Pro;
     
     if (!isSupported) {
-      this._showCustomToast('仅支持 F1 MAX / F2 PRO / F2 PRO Long / F2 MAX 系列', 'none', 2000);
+      this._showCustomToast('仅支持 F1 MAX / F2 PRO / F2 MAX 系列', 'none', 2000);
       return;
     }
     
@@ -895,7 +1025,7 @@ Page({
     const type = currentModel.type || '';
 
     const isF2MaxSeries = name.includes('F2') && (type === 'Max' || type === 'Max Long');
-    const isF2ProSeries = name.includes('F2') && (type === 'Pro' || type === 'Pro Long');
+    const isF2ProSeries = name.includes('F2') && type === 'Pro';
     const isF1Max = name.includes('F1') && type === 'Max';
     const isF1Pro = name.includes('F1') && type === 'Pro';
 
@@ -954,7 +1084,7 @@ Page({
         }
       ];
     } else if (isF2ProSeries) {
-      // F2 PRO / F2 PRO Long：
+      // F2 PRO：
       // 文案拆成多句，每句单独显示 3 秒，
       // 第一步发送“初始化角度”，并且需要用户点击“确认”后才进入下一步
       steps = [
@@ -1369,7 +1499,7 @@ Page({
         return true;
       }
       
-      // 对于 F2 LONG 系列设备（F2 Pro Long / F2 Max Long），无需强制OTA，直接放行
+      // 对于 F2 LONG 系列设备（F2 Max Long），无需强制OTA，直接放行
       const cur = this.data.currentModel || {};
       const isF2Long = cur.name === 'F2' && cur.type && cur.type.indexOf('Long') !== -1;
       if (isF2Long) {
@@ -1850,12 +1980,25 @@ Page({
       clearTimeout(this._foldFineTuneHintTimer);
       this._foldFineTuneHintTimer = null;
     }
+    // 打开角度场景：直接退出编辑，避免“关钥匙倒计时弹窗”导致卡住感
+    if (this.data.editType === 'open') {
+      if (this.data.keyLoopTimer) {
+        clearTimeout(this.data.keyLoopTimer);
+      }
+      this.setData({
+        showKeyModal: false,
+        keyModalClosing: false,
+        keyBtnLocked: false,
+        showFoldFineTuneHint: false,
+        showAngleHint: false,
+        detailMode: 'main'
+      });
+      return;
+    }
+
+    // 折叠场景保持原有流程：完成设置 -> 关钥匙提示
     this.setData({ showKeyModal: true, showFoldFineTuneHint: false });
-    
-    // 开始循环动画
     this.startKeyAnimLoop();
-    
-    // 🔴 启动倒计时
     this.startKeyCountdown();
   },
 

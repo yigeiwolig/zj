@@ -38,8 +38,13 @@
       <input type="nickname" class="auth-input-new" placeholder="点击下方微信昵称填入" bindinput="onNickNameInput" bindchange="onNickNameChange" value="{{inputNickName}}"/>
     </view>
     
-    <view class="auth-btn-new" bindtap="handleLogin">
-      立即开启
+    <view
+      class="auth-btn-new {{isLoading ? 'auth-btn-loading' : ''}}"
+      bindtap="handleLogin"
+      hover-class="auth-btn-pressed"
+      hover-start-time="10"
+      hover-stay-time="80">
+      {{isLoading ? '正在开启…' : '立即开启'}}
     </view>
     
     <view class="auth-hint-text">安装人员请在上方输入安装码以获得权限</view>
@@ -56,12 +61,12 @@
         <text class="back-icon">←</text>
         <text class="back-text">返回</text>
       </view>
-      <text class="admin-title">{{isNicknameMode ? '昵称录入' : '封禁管理'}}</text>
+      <text class="admin-title">{{adminViewMode === 'nickname' ? '昵称录入' : (adminViewMode === 'suspicious' ? '可疑人员处理' : '封禁管理')}}</text>
       <view class="header-placeholder"></view>
     </view>
 
     <!-- 昵称录入界面 -->
-    <view class="admin-nickname-container" wx:if="{{isNicknameMode}}">
+    <view class="admin-nickname-container" wx:if="{{adminViewMode === 'nickname'}}">
       <input 
         class="nickname-input" 
         type="text" 
@@ -93,7 +98,43 @@
     </view>
 
     <!-- 封禁用户列表 -->
-    <scroll-view class="admin-user-list" scroll-y wx:if="{{!isNicknameMode}}" enhanced show-scrollbar="{{false}}">
+    <scroll-view class="admin-user-list" scroll-y wx:if="{{adminViewMode !== 'nickname'}}" enhanced show-scrollbar="{{false}}">
+      <block wx:if="{{adminViewMode === 'banned'}}">
+      <!-- 截图超限待审核 -->
+      <view class="risk-review-section" wx:if="{{screenshotRiskUsers.length > 0}}">
+        <view class="risk-review-title">截图超限待审核（24小时≥3次）</view>
+        <view class="admin-user-cards">
+          <view class="admin-user-card risk-review-card" wx:for="{{screenshotRiskUsers}}" wx:key="_id" wx:for-index="ridx">
+            <view class="user-card-header">
+              <text class="user-nickname">用户: {{item._openid}}</text>
+              <text class="user-ban-reason">待审核</text>
+            </view>
+            <view class="user-card-info">
+              <view class="info-row">
+                <text class="info-label">页面：</text>
+                <text class="info-value">{{item.page}}</text>
+              </view>
+              <view class="info-row">
+                <text class="info-label">当日次数：</text>
+                <text class="info-value">{{item.dailyCount}}</text>
+              </view>
+              <view class="info-row">
+                <text class="info-label">近1小时：</text>
+                <text class="info-value">{{item.hourlyCount}}</text>
+              </view>
+            </view>
+            <view class="user-card-actions">
+              <view class="action-btn unban-btn" catchtap="handleScreenshotRiskDecision" data-risk-id="{{item._id}}" data-action="ignore">
+                <text class="action-btn-text">放行</text>
+              </view>
+              <view class="action-btn retry-btn" catchtap="handleScreenshotRiskDecision" data-risk-id="{{item._id}}" data-action="ban">
+                <text class="action-btn-text">封禁</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
       <!-- 加载中 -->
       <view wx:if="{{isLoadingBannedUsers}}" class="admin-loading">
         <text class="loading-dot">···</text>
@@ -111,54 +152,92 @@
         <view class="admin-user-card" wx:for="{{bannedUsers}}" wx:key="_id" wx:for-index="idx">
           <!-- 用户基本信息 -->
           <view class="user-card-header">
-            <text class="user-nickname">{{item.nickname}}</text>
-            <text class="user-ban-reason">{{item.banReasonText}}</text>
           </view>
 
           <!-- 详细信息 -->
           <view class="user-card-info">
-            <view class="info-row">
-              <text class="info-label">封禁页面：</text>
-              <text class="info-value">{{item.banPageText}}</text>
+            <view class="data-section">
+              <view class="data-section-title">用户信息</view>
+              <view class="data-chip data-chip-full">
+                <text class="data-chip-k">昵称</text>
+                <text class="data-chip-v">{{item.nickname}}</text>
+              </view>
             </view>
-            
-            <!-- 地址行：拆成三种情况，避免嵌套 block / text 带来的缩进问题 -->
-            <view class="info-row" wx:if="{{item.province || item.city || item.district}}">
-              <text class="info-label">地址：</text>
-              <text class="info-value">{{item.province}}{{item.city}}{{item.district}}</text>
+
+            <view class="data-section">
+              <view class="data-section-title">封禁信息</view>
+              <view class="data-chip data-chip-full">
+                <text class="data-chip-k">封禁原因</text>
+                <text class="data-chip-v">{{item.banReasonText}}</text>
+              </view>
+              <view class="data-chip data-chip-full">
+                <text class="data-chip-k">封禁页面</text>
+                <text class="data-chip-v">{{item.banPageText}}</text>
+              </view>
             </view>
-            <view class="info-row" wx:elif="{{item.latitude && item.longitude}}">
-              <text class="info-label">地址：</text>
-              <text class="info-value">经纬度: {{item.latitude}}, {{item.longitude}}</text>
+
+            <view class="data-section">
+              <view class="data-section-head">
+                <text class="data-section-title">上报位置</text>
+                <text class="data-gps-tag {{item.latitude && item.longitude ? 'on' : 'off'}}">{{item.latitude && item.longitude ? '含GPS' : '无GPS'}}</text>
+              </view>
+              <view class="data-chip-grid data-chip-grid-3">
+                <view class="data-chip">
+                  <text class="data-chip-k">省</text>
+                  <text class="data-chip-v">{{item.province || '—'}}</text>
+                </view>
+                <view class="data-chip">
+                  <text class="data-chip-k">市</text>
+                  <text class="data-chip-v">{{item.city || '—'}}</text>
+                </view>
+                <view class="data-chip">
+                  <text class="data-chip-k">区</text>
+                  <text class="data-chip-v">{{item.district || '—'}}</text>
+                </view>
+              </view>
+              <view class="data-chip data-chip-full">
+                <text class="data-chip-k">详细门址</text>
+                <text wx:if="{{item.address}}" class="data-chip-v data-chip-link" catchtap="handleAddressTap"
+                  data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-nickname="{{item.nickname}}">{{item.address}}</text>
+                <text wx:else class="data-chip-v data-chip-muted">无（或未填写街道门牌）</text>
+              </view>
+              <view class="data-chip data-chip-full">
+                <text class="data-chip-k">经纬度</text>
+                <text wx:if="{{item.latitude && item.longitude}}" class="data-chip-v data-chip-link data-chip-mono" catchtap="handleAddressTap"
+                  data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-nickname="{{item.nickname}}">{{item.latitude}}, {{item.longitude}}</text>
+                <text wx:else class="data-chip-v data-chip-muted">无定位坐标</text>
+              </view>
+              <view class="data-chip-map {{(item.latitude && item.longitude) || item.address || item.province || item.city || item.district ? '' : 'disabled'}}"
+                catchtap="handleAddressTap"
+                data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-nickname="{{item.nickname}}">
+                地图中查看此位置
+              </view>
             </view>
-            <view class="info-row" wx:else>
-              <text class="info-label">地址：</text>
-              <text class="info-value">未获取到地址</text>
+
+            <view class="data-section" wx:if="{{item.phoneModel}}">
+              <view class="data-section-title">设备信息</view>
+              <view class="data-chip data-chip-full">
+                <text class="data-chip-k">设备</text>
+                <text class="data-chip-v">{{item.phoneModel}}</text>
+              </view>
             </view>
-            
-            <view class="info-row" wx:if="{{item.address}}">
-              <text class="info-label">详细地址：</text>
-              <text class="info-value">{{item.address}}</text>
-            </view>
-            
-            <view class="info-row" wx:if="{{item.phoneModel}}">
-              <text class="info-label">设备：</text>
-              <text class="info-value">{{item.phoneModel}}</text>
-            </view>
-            
-            <view class="info-row">
-              <text class="info-label">封禁时间：</text>
-              <text class="info-value">{{item.updateTime}}</text>
-            </view>
-            
-            <view class="info-row">
-              <text class="info-label">总访问次数：</text>
-              <text class="info-value">{{item.totalVisits}}</text>
-            </view>
-            
-            <view class="info-row" wx:if="{{item.failCount > 0}}">
-              <text class="info-label">失败次数：</text>
-              <text class="info-value">{{item.failCount}}</text>
+
+            <view class="data-section">
+              <view class="data-section-title">访问统计</view>
+              <view class="data-chip-grid data-chip-grid-2">
+                <view class="data-chip">
+                  <text class="data-chip-k">总访问</text>
+                  <text class="data-chip-v">{{item.totalVisits}}次</text>
+                </view>
+                <view class="data-chip">
+                  <text class="data-chip-k">失败次数</text>
+                  <text class="data-chip-v">{{item.failCount || 0}}次</text>
+                </view>
+              </view>
+              <view class="data-chip data-chip-full">
+                <text class="data-chip-k">封禁时间</text>
+                <text class="data-chip-v">{{item.updateTime}}</text>
+              </view>
             </view>
           </view>
 
@@ -177,14 +256,108 @@
           </view>
         </view>
       </view>
+      </block>
+
+      <block wx:elif="{{adminViewMode === 'suspicious'}}">
+        <view wx:if="{{isLoadingSuspiciousUsers}}" class="admin-loading">
+          <text class="loading-dot">···</text>
+        </view>
+        <view wx:elif="{{suspiciousUsers.length === 0}}" class="admin-empty">
+          <text class="empty-icon">🕵️</text>
+          <text class="empty-title">暂无可疑人员</text>
+          <text class="empty-desc">命中规则：多次进入 或 长时间停留</text>
+        </view>
+        <view wx:else class="admin-user-cards">
+          <view class="admin-user-card" wx:for="{{suspiciousUsers}}" wx:key="rowKey" wx:for-index="sidx">
+            <view class="user-card-info">
+              <view class="data-section">
+                <view class="data-section-title">用户信息</view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">用户昵称</text>
+                  <text class="data-chip-v">{{item.viewerNickname}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">安装员</text>
+                  <text class="data-chip-v">{{item.creatorNickname}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">分享码</text>
+                  <text class="data-chip-v">{{item.shareCode}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">触发原因</text>
+                  <text class="data-chip-v">{{item.triggerReasonText}}</text>
+                </view>
+              </view>
+
+              <view class="data-section">
+                <view class="data-section-title">行为统计</view>
+                <view class="data-chip-grid data-chip-grid-2">
+                  <view class="data-chip">
+                    <text class="data-chip-k">进入次数</text>
+                    <text class="data-chip-v">{{item.enterCount}}次</text>
+                  </view>
+                  <view class="data-chip">
+                    <text class="data-chip-k">总停留</text>
+                    <text class="data-chip-v">{{item.totalStayMinutesText}}分</text>
+                  </view>
+                  <view class="data-chip">
+                    <text class="data-chip-k">视频停留</text>
+                    <text class="data-chip-v">{{item.totalVideoMinutesText}}分</text>
+                  </view>
+                  <view class="data-chip">
+                    <text class="data-chip-k">板块点击</text>
+                    <text class="data-chip-v">{{item.sectionClicksTotal}}次</text>
+                  </view>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">最近进入</text>
+                  <text class="data-chip-v">{{item.lastViewTime}}</text>
+                </view>
+              </view>
+
+              <view class="data-section">
+                <view class="data-section-head">
+                  <text class="data-section-title">上报位置</text>
+                  <text class="data-gps-tag {{item.latitude && item.longitude ? 'on' : 'off'}}">{{item.latitude && item.longitude ? '含GPS' : '无GPS'}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">地区</text>
+                  <text class="data-chip-v">{{item.regionText}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">详细地址</text>
+                  <text wx:if="{{item.address}}" class="data-chip-v data-chip-link" catchtap="handleAddressTap"
+                    data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-nickname="{{item.viewerNickname}}">{{item.addressDisplay}}</text>
+                  <text wx:else class="data-chip-v data-chip-muted">—</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">经纬度</text>
+                  <text wx:if="{{item.latitude && item.longitude}}" class="data-chip-v data-chip-link data-chip-mono" catchtap="handleAddressTap"
+                    data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-nickname="{{item.viewerNickname}}">{{item.geoText}}</text>
+                  <text wx:else class="data-chip-v data-chip-muted">无定位坐标</text>
+                </view>
+                <view class="data-chip-map {{(item.latitude && item.longitude) || item.address || item.province || item.city || item.district ? '' : 'disabled'}}"
+                  catchtap="handleAddressTap"
+                  data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-nickname="{{item.viewerNickname}}">
+                  地图中查看此位置
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </block>
     </scroll-view>
 
     <!-- 底部切换栏 -->
     <view class="admin-bottom-tabs">
-      <view class="tab-item {{!isNicknameMode ? 'active' : ''}}" bindtap="toggleNicknameMode" wx:if="{{isNicknameMode}}">
+      <view class="tab-item {{adminViewMode === 'banned' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="banned">
         <text class="tab-text">封禁列表</text>
       </view>
-      <view class="tab-item {{isNicknameMode ? 'active' : ''}}" bindtap="toggleNicknameMode" wx:if="{{!isNicknameMode}}">
+      <view class="tab-item {{adminViewMode === 'suspicious' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="suspicious">
+        <text class="tab-text">可疑人员处理</text>
+      </view>
+      <view class="tab-item {{adminViewMode === 'nickname' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="nickname">
         <text class="tab-text">昵称录入</text>
       </view>
     </view>
@@ -298,39 +471,39 @@
   </view>
 </view>
 
-<!-- 【全局通用】自定义"内容已复制"弹窗（统一使用 copy-success-modal 样式） -->
-<view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
-  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
-    <!-- 图标：使用 Unicode 字符 -->
-    <view class="modal-icon-new success-icon">✓</view>
-    <!-- 标题 -->
-    <view class="modal-title-new">内容已复制</view>
-  </view>
-</view>
-
-<!-- 【新增】首次进入提示弹窗 -->
-<view class="custom-modal-mask" wx:if="{{showFirstTimeModal}}" catchtouchmove="noop" catchtap="closeFirstTimeModal">
+<!-- 【新增】首次进入提示弹窗（遮罩 + 卡片用 transition，关闭用 closing 关键帧） -->
+<view class="custom-modal-mask first-time-modal-mask {{firstTimeModalEnterReady ? 'first-time-modal-enter-ready' : ''}} {{firstTimeModalClosing ? 'closing' : ''}}" wx:if="{{showFirstTimeModal}}" catchtouchmove="noop" catchtap="closeFirstTimeModal">
   <view class="custom-modal-box first-time-modal" catchtouchmove="noop" catchtap="noop">
+    <!-- 弹窗出现即解码同一张图，复制后再展示区域时不必等首包 -->
+    <image class="first-time-qr-preload" src="/images/qrcode.jpg" mode="aspectFit" aria-hidden="true" />
     <view class="first-time-icon">✨</view>
     <view class="first-time-title">开启专属体验</view>
     <view class="first-time-desc">如果您是在抖音或闲鱼添加的用户，请添加管理员微信录入昵称</view>
     
     <!-- 二维码显示区域 -->
     <view class="qr-code-container" wx:if="{{showWechatQRCode}}">
-      <image class="qr-code-image" src="/images/qrcode.jpg" mode="aspectFit" lazy-load="true" />
+      <image class="qr-code-image" src="/images/qrcode.jpg" mode="aspectFit" />
       <text class="qr-code-tip">扫描二维码添加管理员微信</text>
       <text class="qr-code-wechat">微信号：{{adminWechat}}</text>
     </view>
     
     <!-- 按钮区域 -->
     <view class="first-time-btns">
-      <view class="first-time-btn primary" bindtap="copyAdminWechat">
-        {{showWechatQRCode ? '已复制微信号' : '复制微信号'}}
+      <view class="first-time-btn primary" bindtap="copyAdminWechat" hover-class="first-time-btn-active" hover-start-time="10" hover-stay-time="70">
+        {{copyWechatBusy ? '复制中...' : (showWechatQRCode ? '已复制微信号' : '复制微信号')}}
       </view>
       <view class="first-time-btn secondary" wx:if="{{showWechatQRCode}}" bindtap="toggleQRCode">
         收起二维码
       </view>
     </view>
+  </view>
+</view>
+
+<!-- 【全局通用】「内容已复制」须叠在所有页面弹窗之上，故放 DOM 后部 + 专用 z-index -->
+<view class="custom-modal-mask copy-success-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
+    <view class="modal-icon-new success-icon">✓</view>
+    <view class="modal-title-new">内容已复制</view>
   </view>
 </view>
 

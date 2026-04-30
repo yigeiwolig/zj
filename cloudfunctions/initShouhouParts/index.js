@@ -3,13 +3,22 @@ const cloud = require('wx-server-sdk')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+async function assertAdmin(db) {
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) throw new Error('UNAUTHORIZED')
+  const byOpenid = await db.collection('guanliyuan').where({ openid: OPENID }).limit(1).get()
+  if (byOpenid.data.length > 0) return OPENID
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: OPENID }).limit(1).get()
+  if (bySystemOpenid.data.length > 0) return OPENID
+  throw new Error('FORBIDDEN')
+}
+
 // 配件数据 - 与前端保持一致
 const DB_PARTS = {
   'F1 PRO': ["主板外壳", "下面板", "上面板", "合页", "合页螺丝", "90度连接件", "连杆", "摇臂", "摇臂螺丝", "电机", "固定电机件", "固定电机螺丝", "装牌螺丝包", "螺母", "主板", "按钮", "遥控", "链接线束"],
   'F1 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
   'F2 PRO': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
   'F2 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-  'F2 PRO Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
   'F2 MAX Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"]
 }
 
@@ -18,11 +27,13 @@ exports.main = async (event, context) => {
   const _ = db.command
   
   try {
+    await assertAdmin(db)
+
     const { force = true } = event // 默认强制覆盖
     
     console.log('[initShouhouParts] 开始初始化配件数据，force:', force)
     
-    const allModels = ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 PRO Long', 'F2 MAX Long']
+    const allModels = ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 MAX Long']
     let totalDeleted = 0
     let totalAdded = 0
     const results = []
@@ -115,6 +126,9 @@ exports.main = async (event, context) => {
     }
   } catch (err) {
     console.error('[initShouhouParts] 初始化失败:', err)
+    if (String(err && err.message).includes('UNAUTHORIZED') || String(err && err.message).includes('FORBIDDEN')) {
+      return { success: false, message: '无管理员权限' }
+    }
     return {
       success: false,
       message: err.message || '初始化失败'

@@ -276,29 +276,84 @@ page {
 /* ============ 2. 主页面 ============ */
 .main-scroll { height: 100vh; padding-top: 180rpx; box-sizing: border-box; }
 
-/* Hero 轮播 - 16:9比例 */
-.hero-swiper-box { 
-  width: 100%; 
-  padding-bottom: 56.25%; /* 16:9 比例 (9/16 = 0.5625) */
-  background: #000; 
-  position: relative; 
-  margin-bottom: 40rpx; 
-  height: 0;
+/* Hero 轮播：视频占满 16:9 高度的 slide；图片 slide 高度由 heroSwiperHeightPx + widthFix 决定 */
+.hero-swiper-box {
+  width: 100%;
+  background: #000;
+  position: relative;
+  margin-bottom: 40rpx;
 }
-.hero-swiper { 
+/* 无顶部素材时不撑空白 swiper，用占位块保持 16:9 视觉高度（管理员仍有上传条） */
+.hero-empty {
+  width: 100%;
+  min-height: 422rpx;
+  box-sizing: border-box;
+  background: #1c1c1e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.hero-empty-user {
+  min-height: 120rpx;
+  background: #ececf0;
+}
+.hero-empty-tip {
+  font-size: 26rpx;
+  color: #8e8e93;
+  padding: 40rpx;
+}
+.hero-swiper {
+  width: 100%;
+  display: block;
+}
+.hero-swiper-item {
+  height: 100%;
+  position: relative;
+}
+.hero-video-outer {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+.hero-image-stack {
+  position: relative;
+  width: 100%;
+  background: #000;
+}
+.hero-img-base {
+  width: 100%;
+  display: block;
+  transition: opacity 0.2s ease;
+}
+.hero-img-base.is-hidden {
+  opacity: 0;
+}
+.hero-img-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+.hero-img-overlay.is-visible {
+  opacity: 1;
+}
+.hero-img-single {
+  width: 100%;
+  display: block;
+}
+/* 顶部轮播视频：contain 完整画面不裁切（黑边可接受）；slide 高度仍为 16:9 */
+.hero-video-wrapper .hero-media,
+.hero-video-wrapper .hero-video-el {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%; 
-  height: 100%; 
-}
-.hero-media { 
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%; 
-  height: 100%; 
-  object-fit: cover; 
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .admin-del-media {
   position: absolute;
@@ -443,12 +498,16 @@ page {
   background: #000;
   margin-right: 20rpx;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .drag-preview-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  display: block;
 }
 
 .drag-preview-video {
@@ -557,20 +616,18 @@ page {
   transition: 0.2s;
 }
 .prod-card:active { transform: scale(0.98); }
+/* 无封面/图未加载时 widthFix 高度会为 0，用 min-height 避免管理员按钮叠到标题行 */
 .product-cover-wrapper {
   position: relative;
   width: 100%;
-  padding-bottom: 56.25%; /* 16:9 比例 */
-  height: 0;
+  min-height: 422rpx;
   overflow: hidden;
+  background: #e8eaed;
 }
-.p-img { 
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%; 
-  height: 100%; 
-  object-fit: cover; 
+.p-img {
+  width: 100%;
+  display: block;
+  height: auto;
 }
 .p-img-low {
   filter: blur(1.2px);
@@ -680,13 +737,21 @@ page {
   margin-bottom: 0;
 }
 .detail-images { margin-bottom: 40rpx; }
-.dimg-box { 
-  position: relative; 
-  width: 100%; 
-  padding-bottom: 56.25%; /* 16:9 比例 */
-  height: 0;
+/* 详情媒体容器：视频固定 16:9；图片随比例增高（1:1 为正方形大图） */
+.dimg-box {
+  position: relative;
+  width: 100%;
   overflow: hidden;
+  background: #f2f2f7;
   transition: transform 0.3s ease-out, box-shadow 0.2s, opacity 0.2s;
+}
+.dimg-box-video {
+  padding-bottom: 56.25%;
+  height: 0;
+}
+.dimg-box-image {
+  padding-bottom: 0;
+  height: auto;
 }
 
 .dimg-box.dragging {
@@ -698,15 +763,21 @@ page {
   border: 2rpx solid #007AFF;
   will-change: transform;
 }
-.dimg { 
+.dimg {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%; 
-  height: 100%; 
-  display: block; 
-  /* 配合 image 的 mode="aspectFit"，保证完整显示，不裁切 */
+  width: 100%;
+  height: 100%;
+  display: block;
   object-fit: contain;
+}
+/* 详情静态图：参与文档流，配合 mode=widthFix */
+.dimg-box-image .dimg-detail-static {
+  position: static;
+  width: 100%;
+  height: auto;
+  display: block;
 }
 .dimg-low {
   filter: blur(1.2px);
@@ -900,6 +971,11 @@ page {
   /* 🔴 优化：如果有图片，显示图片预览 */
   overflow: hidden !important;
 }
+.admin-opt-thumb-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 14rpx;
+}
 
 /* 🔴 优化：管理员模式下文字样式 */
 .opt-grid.admin-mode .opt-card.admin-mode .opt-name {
@@ -913,21 +989,17 @@ page {
   color: #666 !important;
 }
 
-.opt-img { 
-  width: 100%; 
-  padding-bottom: 56.25%; /* 16:9 比例 */
-  height: 0;
-  background: #f0f0f0; 
+.opt-img {
+  width: 100%;
+  background: #f0f0f0;
   position: relative;
   overflow: hidden;
 }
+.opt-img .opt-img-el,
 .opt-img image {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  display: block;
+  height: auto;
 }
 .opt-info { 
   padding: 20rpx 10rpx; 
@@ -1029,13 +1101,22 @@ page {
   margin-left: 12rpx;
   font-weight: 500;
 }
-.acc-thumb { 
-  width: 100rpx; 
-  height: 56.25rpx; /* 16:9 比例 (100 * 9/16 = 56.25) */
-  border-radius: 12rpx; 
-  background: #eee; 
+/* 配件行缩略图：固定方框内 aspectFit，按真实比例完整显示（1:1 / 16:9 均不裁切） */
+.acc-thumb-box {
+  width: 100rpx;
+  height: 100rpx;
+  flex-shrink: 0;
   margin-right: 20rpx;
-  object-fit: cover;
+  border-radius: 12rpx;
+  background: #f2f2f7;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.acc-thumb {
+  width: 100%;
+  height: 100%;
 }
 .acc-info { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .acc-n { font-size: 28rpx; font-weight: 600; }
@@ -1244,26 +1325,17 @@ page {
 }
 
 /* ============ 5. 配件详情（高端极简风格） ============ */
-.acc-detail-hero { 
-  width: 100%; 
-  padding-bottom: 56.25%; /* 16:9 比例 */
-  height: 0;
+.acc-detail-hero {
+  width: 100%;
   background: #f9f9f9;
-  display: flex; 
-  flex-direction: column; 
-  align-items: center; 
-  justify-content: center;
-  overflow: hidden; 
   position: relative;
+  overflow: hidden;
 }
 
-.acc-detail-hero .dimg { 
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%; 
-  height: 100%; 
-  object-fit: cover; 
+.acc-detail-hero-img {
+  width: 100%;
+  display: block;
+  height: auto;
 }
 
 /* 占位图区域优化 */
@@ -2714,9 +2786,15 @@ page {
   margin: 0; 
 }
 
-/* 视频容器 - 16:9比例 */
-.hero-video-wrapper,
+/* 视频容器：详情内仍为 16:9 盒子；顶部 Hero 另见 .hero-video-outer */
 .detail-video-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.hero-video-wrapper {
   position: absolute;
   top: 0;
   left: 0;
@@ -2730,7 +2808,7 @@ page {
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 /* 全屏播放器的暂停覆盖层 */

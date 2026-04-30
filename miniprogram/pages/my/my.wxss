@@ -8,7 +8,7 @@
 
 /* 弹窗显示时锁定页面滚动和点击 */
 .container.modal-open {
-  height: 100vh;
+  height: auto;
   overflow: hidden !important;
   /* 🔴 修复：移除 position: fixed，改用其他方式锁定滚动，避免页面卡住 */
   /* position: fixed; */
@@ -522,30 +522,176 @@
   position: relative; border: 1px solid #E5E5E5; box-sizing: border-box;
 }
 
-/* 管理员待发：管理员引导用户去售后商城购买的配件单（整卡黄色系） */
+/* 管理员待发：引导购配件 — 白卡 + 轻灰阴影（对齐设计稿，非外扩琥珀圈） */
 .order-card.detail-mode.order-card-guided-parts {
-  background: linear-gradient(165deg, #FFFBF0 0%, #FFF3C4 55%, #FFE9A8 100%);
-  border: 2rpx solid #E8B923;
-  box-shadow: 0 12rpx 36rpx rgba(232, 185, 35, 0.22);
+  background: #fff;
+  border: 1rpx solid #e8e8ed;
+  box-shadow: 0 10rpx 32rpx rgba(0, 0, 0, 0.06);
 }
 
-.order-card-guided-parts .mini-tag-guided {
-  background: rgba(184, 134, 11, 0.14);
-  color: #8B6914;
-  border: 1rpx solid rgba(184, 134, 11, 0.35);
+.order-card-guided-parts .card-header--guided-ship {
+  margin-bottom: 16rpx;
+  padding-bottom: 16rpx;
+}
+
+.order-card-guided-parts .card-header--guided-ship .order-label {
+  color: #aeaeb2;
 }
 
 .order-card-guided-parts .status-tag.PAID.status-tag-guided {
-  background: #FFF3CD !important;
-  color: #B8860B !important;
-  border: 1rpx solid rgba(218, 165, 32, 0.45) !important;
+  background: #fff4e0 !important;
+  color: #c45f00 !important;
+  border: 1rpx solid rgba(255, 173, 51, 0.45) !important;
 }
 
+/* 浅灰收件块（设计稿中间区域） */
+.guided-ship-recipient {
+  margin: 0 0 24rpx;
+  padding: 24rpx 22rpx 20rpx;
+  border-radius: 20rpx;
+  background: #f2f2f7;
+  box-sizing: border-box;
+}
+
+.guided-ship-line1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-bottom: 12rpx;
+}
+
+.guided-ship-line1-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8rpx 20rpx;
+}
+
+.guided-ship-who {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #000;
+}
+
+.guided-ship-phone-inline {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #000;
+}
+
+.guided-ship-copy-btn {
+  flex-shrink: 0;
+  padding: 10rpx 22rpx;
+  border-radius: 12rpx;
+  background: #fff;
+  border: 1rpx solid #d1d1d6;
+  box-sizing: border-box;
+}
+
+.guided-ship-copy-btn-text {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #3a3a3c;
+}
+
+.guided-ship-copy-btn:active {
+  opacity: 0.85;
+  background: #fafafa;
+}
+
+.guided-ship-addr {
+  display: block;
+  font-size: 24rpx;
+  color: #1d1d1f;
+  line-height: 1.5;
+  font-weight: 400;
+}
+
+/* 备注：浅橙底 + 橙字（整块在灰底区域内） */
+.guided-ship-remark {
+  margin-top: 16rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 237, 213, 0.95);
+}
+
+.guided-ship-remark-full {
+  font-size: 24rpx;
+  line-height: 1.45;
+  color: #c2410c;
+  font-weight: 500;
+}
+
+/* 「| 配件清单」橙色竖条标题 */
+.goods-detail-list--guided-ship {
+  margin: 0 0 20rpx;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+.guided-parts-list-head {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 8rpx 4rpx 16rpx;
+}
+
+.guided-parts-list-bar {
+  width: 6rpx;
+  height: 26rpx;
+  border-radius: 3rpx;
+  background: #ff9500;
+  flex-shrink: 0;
+}
+
+.guided-parts-list-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: 0.5rpx;
+}
+
+.goods-detail-list--guided-ship .g-item--guided-ship {
+  padding-left: 4rpx;
+  padding-right: 4rpx;
+  border-bottom: 1rpx dashed #e5e5ea;
+}
+
+.goods-detail-list--guided-ship .g-item--guided-ship:last-child {
+  border-bottom: 1rpx dashed #e5e5ea;
+  padding-bottom: 8rpx;
+}
+
+.card-footer-new--guided-ship {
+  padding-top: 4rpx;
+}
+
+.total-row--guided-ship .guided-ship-order-time {
+  color: #8e8e93;
+  font-size: 24rpx;
+}
+
+.total-row--guided-ship .guided-ship-pay-num {
+  color: #1d1d1f;
+  font-size: 32rpx;
+}
+
+/* 主按钮：橙色胶囊 */
 .order-card-guided-parts .admin-ship-btn-guided {
-  background: linear-gradient(180deg, #1c1c1e 0%, #000 100%);
+  margin-top: 22rpx;
+  background: linear-gradient(180deg, #ffb24d 0%, #ff9500 52%, #f58300 100%);
   color: #fff;
-  border: 2rpx solid #5c4a00;
-  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.18);
+  border: none;
+  box-shadow: 0 8rpx 22rpx rgba(255, 149, 0, 0.32);
+}
+
+.order-card-guided-parts .admin-ship-btn-guided:active {
+  opacity: 0.92;
+  transform: scale(0.98);
 }
 .order-card {
   background: #fff; 
@@ -1142,6 +1288,21 @@
   display: flex;
   justify-content: center;
   box-sizing: border-box;
+}
+
+/* 与「需寄回」票据卡一致的琥珀色外圈光晕，突出待办 */
+.pp-card-container.pp-card-highlight {
+  padding: 12rpx 52rpx 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.pp-card-container.pp-card-highlight .pp-card {
+  border-radius: 28rpx;
+  border: 1rpx solid #ebebeb;
+  box-shadow:
+    0 0 0 8rpx rgba(255, 173, 51, 0.2),
+    0 16rpx 40rpx rgba(255, 173, 51, 0.24),
+    0 4rpx 20rpx rgba(0, 0, 0, 0.06);
 }
 
 .pp-card {
@@ -4454,6 +4615,8 @@
 .act-left { flex: 1; display: flex; flex-direction: column; gap: 12rpx; margin-right: 20rpx; } /* 🔴 增加左侧内容间距，添加右边距避免与状态标签挤压 */
 
 .act-title { display: flex; align-items: center; gap: 12rpx; } /* 🔴 确保标签和标题之间有间距 */
+.act-title-repair { align-items: flex-start; }
+.act-repair-title-lines { display: flex; flex-direction: column; gap: 2rpx; min-width: 0; }
 
 .act-tag {
   font-size: 18rpx; padding: 4rpx 10rpx; border-radius: 8rpx; margin-right: 12rpx; font-weight: 700;
@@ -4463,6 +4626,8 @@
 .act-tag.repair { background: #F3E5F5; color: #7B1FA2; border: 1px solid rgba(123, 31, 162, 0.25); }
 
 .act-name { font-size: 28rpx; font-weight: 600; color: #333; }
+.act-name-repair-main { line-height: 1.2; }
+.act-name-repair-model { line-height: 1.2; }
 .act-time { font-size: 22rpx; color: #999; }
 
 .status-pill {
@@ -4598,6 +4763,17 @@
 
 .logistics-btn-wrapper.two-btn .btn-logistics-action {
   width: 50%;
+}
+
+.logistics-btn-wrapper .btn-return-fill-act {
+  background: #f87171;
+  border: 2rpx solid #ef4444;
+  color: #fff;
+}
+
+.logistics-btn-wrapper .btn-return-fill-act:active {
+  background: #ef4444;
+  color: #fff;
 }
 
 .logistics-btn-wrapper .btn-repair-order {
@@ -4922,6 +5098,367 @@
 
 .rr-card-body {
   padding: 32rpx 32rpx 36rpx;
+}
+
+/* ========= 需寄回 · 票据式提醒卡（撕线 + 双按钮横排，与 .container 背景咬合半圆） ========= */
+.return-required-card.new-style.rr-reminder-card .rr-reminder-inner {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: inherit;
+  position: relative;
+  z-index: 1;
+  box-shadow: inset 0 0 0 1rpx rgba(0, 0, 0, 0.05);
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-card-body.rr-ticket-body {
+  flex: 1;
+  padding: 4rpx 24rpx 24rpx;
+  background: #fff;
+}
+
+.rr-card-block--primary {
+  padding: 0 24rpx;
+  margin-top: 20rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-card-block--primary {
+  padding: 0;
+  margin-top: 0;
+  margin-bottom: 16rpx;
+}
+
+.rr-card-block--secondary {
+  padding: 0 24rpx;
+  margin-top: 28rpx;
+}
+
+.rr-card-block--cta {
+  padding: 0 24rpx;
+  margin-top: 24rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #F0F0F2;
+}
+
+.rr-section-caption {
+  font-size: 22rpx;
+  color: #9CA3AF;
+  font-weight: 600;
+  letter-spacing: 0.5rpx;
+  margin-bottom: 14rpx;
+}
+
+/* 寄件警示：强对比、左色条 + 图标，避免像普通说明文 */
+.rr-ship-alert {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  margin-bottom: 20rpx;
+  padding: 18rpx 18rpx 18rpx 16rpx;
+  border-radius: 14rpx;
+  background: linear-gradient(90deg, #fff1f2 0%, #fff7ed 38%, #fffbeb 100%);
+  border: 1rpx solid #fecaca;
+  box-shadow: 0 2rpx 10rpx rgba(220, 38, 38, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.rr-ship-alert::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8rpx;
+  background: linear-gradient(180deg, #ef4444 0%, #f97316 100%);
+}
+
+.rr-ship-alert-icon {
+  flex-shrink: 0;
+  width: 40rpx;
+  height: 40rpx;
+  margin-left: 10rpx;
+  margin-right: 14rpx;
+  margin-top: 2rpx;
+  border-radius: 999rpx;
+  background: #dc2626;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 800;
+  line-height: 40rpx;
+  text-align: center;
+}
+
+.rr-ship-alert-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.rr-ship-alert-title {
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #b91c1c;
+  letter-spacing: 0.5rpx;
+}
+
+.rr-ship-alert-desc {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #9a3412;
+  line-height: 1.45;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-kv {
+  margin-top: 4rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-kv-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: none;
+  gap: 32rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-kv-row:last-child {
+  border-bottom: none;
+  align-items: flex-start;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-kv-row .rr-label {
+  flex-shrink: 0;
+  font-size: 26rpx;
+  color: #8e8e93;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-kv-row .rr-value {
+  flex: 1;
+  text-align: right;
+  font-size: 28rpx;
+  color: #000;
+  font-weight: 500;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-value--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: 0.5rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-user-actions-simple {
+  margin-top: 0;
+  gap: 20rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-user-actions-row {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 16rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-user-actions-row .rr-simple-btn {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  padding: 20rpx 12rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-repair-table {
+  background: #fff;
+  border: 1rpx solid #e5e5ea;
+  border-radius: 12rpx;
+  box-shadow: none;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-table-header {
+  background: #f5f5f7;
+  border-bottom: 1rpx solid #e5e5ea;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-table-row {
+  background: #fff;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-simple-btn.primary {
+  background: #fff;
+  color: #dc2626;
+  font-weight: 800;
+  border: 2rpx solid #fecaca;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 10rpx rgba(220, 38, 38, 0.08);
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-simple-btn.primary:active {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #b91c1c;
+  box-shadow: 0 2rpx 8rpx rgba(220, 38, 38, 0.1);
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-simple-btn.secondary {
+  border-width: 1rpx;
+  border-color: #e5e5ea;
+  color: #000;
+  font-weight: 700;
+  font-size: 26rpx;
+  background: #fff;
+  border-radius: 12rpx;
+  box-shadow: none;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-simple-btn.secondary:active {
+  background: #f2f2f7;
+}
+
+/* 票据撕线：与页面 .container 背景 #F7F7F7 同色半圆 */
+.return-required-card.new-style.rr-reminder-card .rr-ticket-divider-wrap {
+  position: relative;
+  height: 34rpx;
+  margin: 0;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-notch {
+  position: absolute;
+  top: 3rpx;
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 50%;
+  background: #f7f7f7;
+  z-index: 2;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-notch-l {
+  left: -14rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-notch-r {
+  right: -14rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-dash {
+  position: absolute;
+  left: 32rpx;
+  right: 32rpx;
+  top: 16rpx;
+  height: 2rpx;
+  background-image: repeating-linear-gradient(
+    to right,
+    #d1d5db 0,
+    #d1d5db 12rpx,
+    transparent 12rpx,
+    transparent 24rpx
+  );
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-footer {
+  padding: 18rpx 24rpx 24rpx;
+  background: #fff;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-ship-line {
+  margin-bottom: 22rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-ship-text {
+  display: block;
+  font-size: 24rpx;
+  line-height: 1.4;
+  font-weight: 700;
+  color: #ef4444;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-payment-section {
+  margin-left: 0;
+  margin-right: 0;
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #ececec;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-repair-details-title {
+  color: #1d1d1f;
+  font-weight: 700;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-repair-details {
+  margin-left: 0;
+  margin-right: 0;
+  margin-top: 20rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert {
+  background: #fafafa;
+  border: 1rpx solid #f0f0f0;
+  border-radius: 12rpx;
+  box-shadow: none;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert .alert-bar {
+  width: 6rpx;
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 100%);
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert .alert-kicker {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  font-size: 22rpx;
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert .alert-lead,
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert .alert-desc {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert .highlight-days,
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert .highlight-penalty {
+  color: #dc2626;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert.overdue {
+  background: #fff5f5;
+  border-color: #fecaca;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert.overdue .alert-bar {
+  background: linear-gradient(180deg, #f87171 0%, #dc2626 100%);
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert.overdue .alert-kicker {
+  color: #b91c1c;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert.overdue .alert-lead,
+.return-required-card.new-style.rr-reminder-card .rr-warranty-alert.overdue .alert-desc {
+  color: #991b1b;
+}
+
+.rr-info-box {
+  background: #F9FAFB;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-top: 24rpx;
+  border: 1rpx solid #F3F4F6;
 }
 
 .rr-info-row {
@@ -5347,57 +5884,149 @@
   box-shadow: 0 4rpx 12rpx rgba(255, 59, 48, 0.3);
 }
 
-/* ================= 用户页面需寄回提示卡片样式（现代化设计） ================= */
+/* ================= 需寄回：票据提醒卡外壳（浅灰白 + 撕线半圆露出 #F7F7F7） ================= */
 .return-required-card {
   background: #fff;
-  border-radius: 24rpx;
-  margin: 0 40rpx 30rpx;
+  border-radius: 20rpx;
+  margin: 0 28rpx 22rpx;
   padding: 0;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.12);
+  box-shadow: 0 6rpx 20rpx rgba(0, 0, 0, 0.06);
   border: none;
   position: relative;
   overflow: hidden;
   box-sizing: border-box;
 }
 
-/* 用户操作按钮区域：填写寄回信息 / 一键复制寄回地址（简洁版） */
-.rr-user-actions-simple {
-  margin-top: 32rpx;
+.return-required-card.new-style.rr-reminder-card {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  align-items: stretch;
+  position: relative;
+  margin: 12rpx 52rpx 32rpx;
+  border-radius: 28rpx;
+  border: 1rpx solid #ebebeb;
+  background: #fff;
+  /* 需寄回票据卡：外发光改为红色系（仅本卡 .new-style.rr-reminder-card） */
+  box-shadow:
+    0 0 0 8rpx rgba(239, 68, 68, 0.16),
+    0 16rpx 40rpx rgba(220, 38, 38, 0.22),
+    0 4rpx 20rpx rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+/* 邮票感：轻微「贴歪」+ 四边齿孔 + 内凹线框 */
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card {
+  transform: none;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-edge {
+  display: none;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-edge--left {
+  left: 8rpx;
+  top: 108rpx;
+  bottom: 168rpx;
+  align-items: flex-start;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-edge--right {
+  right: 8rpx;
+  top: 108rpx;
+  bottom: 168rpx;
+  align-items: flex-end;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-dot-v {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #f7f7f7;
+  box-shadow: 0 0 0 1rpx rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-edge--left .rr-stamp-perf-dot-v {
+  margin-left: -8rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-edge--right .rr-stamp-perf-dot-v {
+  margin-right: -8rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-row {
+  display: none;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-row--top {
+  margin-bottom: 4rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-row--bottom {
+  margin-top: -4rpx;
+  align-items: flex-end;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-dot {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  background: #f7f7f7;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1rpx rgba(0, 0, 0, 0.04);
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-row--top .rr-stamp-perf-dot {
+  margin-top: -9rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-stamp-perf-row--bottom .rr-stamp-perf-dot {
+  margin-bottom: -9rpx;
+}
+
+/* 用户操作按钮区域：填写寄回信息 / 一键复制寄回地址（简洁版） */
+.rr-user-actions-simple {
+  margin-top: 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
 }
 
 .rr-simple-btn {
   width: 100%;
-  padding: 24rpx 0;
+  padding: 22rpx 0;
   border-radius: 16rpx;
   font-size: 28rpx;
-  font-weight: 500;
+  font-weight: 600;
   text-align: center;
   transition: all 0.2s ease;
+  box-sizing: border-box;
 }
 
 .rr-simple-btn.primary {
   background: #000000;
   color: #FFFFFF;
+  border: 1rpx solid #000000;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.15);
 }
 
 .rr-simple-btn.primary:active {
   background: #1A1A1A;
+  border-color: #1A1A1A;
   transform: scale(0.98);
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
 }
 
 .rr-simple-btn.secondary {
-  background: #F5F5F5;
-  color: #333333;
-  border: 1rpx solid #E0E0E0;
+  background: #FFFFFF;
+  color: #1D1D1F;
+  border: 2rpx solid #E5E5EA;
 }
 
 .rr-simple-btn.secondary:active {
-  background: #EBEBEB;
+  background: #F2F2F7;
   transform: scale(0.98);
 }
 
@@ -5405,50 +6034,71 @@
   display: none;
 }
 
-.rr-card-header {
+.return-required-card.new-style.rr-reminder-card .rr-card-header.rr-ticket-header {
   display: flex;
+  flex-direction: row;
   justify-content: space-between;
-  align-items: center;
-  padding: 36rpx 32rpx 28rpx;
-  border-bottom: 2rpx solid #F5F5F7;
+  align-items: flex-start;
+  gap: 24rpx;
+  padding: 28rpx 24rpx 16rpx;
+  border-bottom: none;
+  background: #fff;
 }
 
-.rr-card-title {
+.return-required-card.new-style.rr-reminder-card .rr-ticket-header-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-header-main .rr-card-title {
   font-size: 32rpx;
   font-weight: 700;
   color: #000;
-  letter-spacing: -0.5rpx;
+  line-height: 1.3;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-header-main .rr-card-subtitle {
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: #aeaeb2;
+  font-weight: 400;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-status {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10rpx;
+  padding-top: 4rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-status-dot {
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #dc2626;
+}
+
+.return-required-card.new-style.rr-reminder-card .rr-ticket-status-text {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+.rr-card-title-wrap {
   display: flex;
   align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+  flex: 1;
 }
 
 .rr-card-title::before {
-  content: '';
-  display: inline-block;
-  width: 10rpx;
-  height: 10rpx;
-  background: #FF9500;
-  border-radius: 50%;
-  margin-right: 14rpx;
-  flex-shrink: 0;
-}
-
-.rr-card-tag {
-  font-size: 24rpx;
-  color: #FF9500;
-  background: #FFF4E6;
-  padding: 8rpx 20rpx;
-  border-radius: 12rpx;
-  font-weight: 600;
-  flex-shrink: 0;
-  letter-spacing: 0;
-  border: 1rpx solid #FFE5CC;
-}
-
-.rr-card-tag.pending {
-  color: #FF9500;
-  background: #FFF4E6;
-  border: 1rpx solid #FFE5CC;
+  display: none;
 }
 
 .rr-card-badge {
@@ -5548,6 +6198,94 @@
   color: #000;
   line-height: 1.7;
   font-weight: 500;
+}
+
+/* 主焦点：时限与质保（左侧色条 + 层级文案） */
+.rr-warranty-alert {
+  margin-top: 0;
+  padding: 0;
+  border-radius: 16rpx;
+  background: #FFF5F5;
+  border: 1rpx solid #FFCDD2;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  box-shadow: 0 2rpx 12rpx rgba(198, 40, 40, 0.08);
+}
+
+.rr-warranty-alert .alert-bar {
+  width: 10rpx;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, #E53935 0%, #C62828 100%);
+}
+
+.rr-warranty-alert .alert-main-col {
+  flex: 1;
+  padding: 24rpx 22rpx 24rpx 20rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  min-width: 0;
+}
+
+.rr-warranty-alert .alert-kicker {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #B71C1C;
+  letter-spacing: 0.5rpx;
+  line-height: 1.35;
+  padding: 8rpx 18rpx;
+  border-radius: 10rpx;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1rpx solid rgba(198, 40, 40, 0.35);
+  box-shadow: 0 2rpx 6rpx rgba(198, 40, 40, 0.08);
+}
+
+.rr-warranty-alert .alert-lead {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.rr-warranty-alert .alert-desc {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1D1D1F;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.rr-warranty-alert .highlight-days {
+  font-size: inherit;
+  font-weight: 700;
+  color: #C62828;
+}
+
+.rr-warranty-alert .highlight-penalty {
+  font-size: inherit;
+  font-weight: 700;
+  color: #C62828;
+}
+
+.rr-warranty-alert.overdue {
+  background: #FFEBEE;
+  border-color: #EF9A9A;
+}
+
+.rr-warranty-alert.overdue .alert-kicker {
+  color: #B71C1C;
+}
+
+.rr-warranty-alert.overdue .alert-lead {
+  color: #B71C1C;
+}
+
+.rr-warranty-alert.overdue .alert-desc {
+  color: #B71C1C;
 }
 
 .rr-card-status {
@@ -5782,7 +6520,7 @@
 
 /* ================= 维修工单卡片 (管理员) - 优化版 ================= */
 .repair-list-admin {
-  padding: 0 32rpx 40rpx;
+  padding: 0 32rpx calc(40rpx + env(safe-area-inset-bottom));
 }
 
 .repair-section-label {
@@ -5917,9 +6655,10 @@
   z-index: 10;
   display: flex; 
   flex-direction: column;
-  padding: 24rpx 28rpx 28rpx;
+  padding: 24rpx 24rpx 28rpx;
   gap: 16rpx;
   border-top: 1rpx solid #F0F0F0;
+  background: #fff;
 }
 
 /* 主操作：需要用户寄回 - 长椭圆 */
@@ -5929,66 +6668,85 @@
 
 .repair-actions-primary .r-btn {
   width: 100%;
-  min-height: 88rpx;
-  padding: 28rpx 32rpx;
-  border-radius: 44rpx;
+  min-height: 92rpx;
+  padding: 22rpx 28rpx;
+  border-radius: 28rpx;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 30rpx;
+  box-shadow: 0 6rpx 16rpx rgba(0, 0, 0, 0.08);
 }
 
-/* 次要操作区：竖向排列 - 长椭圆 */
+/* 次要操作区：改为网格布局 */
 .repair-actions-secondary {
-  display: flex;
-  flex-direction: column;
-  gap: 12rpx;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14rpx 12rpx;
   background: transparent;
 }
 
 .repair-actions-secondary .r-btn { 
   width: 100%;
-  min-height: 80rpx;
-  padding: 24rpx 32rpx;
-  border-radius: 40rpx;
+  min-height: 82rpx;
+  padding: 18rpx 22rpx;
+  border-radius: 22rpx;
   text-align: center;
   font-size: 28rpx; 
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2rpx solid #E8E8ED;
+  border: 2rpx solid #DADCE0;
   background: #fff;
-}
-
-.repair-actions-secondary .r-btn:last-child {
-  border-bottom: 2rpx solid #E8E8ED;
+  color: #000;
+  box-sizing: border-box;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
 }
 
 .r-btn { 
   text-align: center; 
-  padding: 28rpx 32rpx; 
-  font-size: 30rpx; 
+  padding: 20rpx 26rpx; 
+  font-size: 28rpx; 
   font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  letter-spacing: 0;
   box-sizing: border-box;
 }
 
+.repair-actions-grid .grid-half {
+  grid-column: span 1;
+}
+
+.repair-actions-grid .grid-full {
+  grid-column: 1 / -1;
+}
+
 .r-btn.tutorial { 
-  color: #007AFF;
-  border-color: #E8E8ED;
+  color: #E53935;
+  border-color: #FF3B30;
+  background: #FFF2F2;
 }
 
 .r-btn.ship { 
-  color: #333;
+  color: #1565C0;
+  border-color: #64B5F6;
+  background: #EFF6FF;
 }
 
 .r-btn.purchase {
-  color: #333;
+  color: #000;
+  border-color: #000;
+  background: #fff;
 }
 
 .r-btn.return { 
-  background: #FF9500; 
-  color: #fff;
-  border: none;
+  background: #FFF7E6; 
+  color: #F57C00;
+  border: 2rpx solid #F57C00;
 }
 
 .r-btn.complete { 
@@ -6020,7 +6778,7 @@
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  z-index: 10000000004 !important; /* 🔴 修复：确保在所有弹窗之上，包括填写售后单弹窗（最高层级） */
+  z-index: 10000000050 !important; /* 必须高于 .fill-repair-mask(1e10)，否则填写售后单时看不到提示 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6051,7 +6809,7 @@
     0 8rpx 24rpx rgba(0, 0, 0, 0.08);
   animation: autoToastFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; /* 移除自动退出，改为手动触发 */
   position: relative;
-  z-index: 10000000005 !important; /* 🔴 修复：确保 toast 内容在最上层（最高层级） */
+  z-index: 10000000051 !important; /* 与 .auto-toast-mask 同栈，略高于遮罩 */
   pointer-events: auto !important; /* 🔴 修复：确保内容可交互 */
   overflow: hidden;
 }
@@ -6321,6 +7079,14 @@
   display: flex;
   flex-direction: column;
   gap: 4rpx;
+}
+
+/* 全局确认弹窗（showMyDialog）在填写售后单之上，避免提交失败时看不到 */
+.custom-dialog-mask.z-over-fill-repair {
+  z-index: 10000000020 !important;
+}
+.custom-dialog-mask.z-over-fill-repair .custom-dialog-box {
+  z-index: 10000000021 !important;
 }
 
 /* 🔴 优化：填写售后单弹窗样式 - 现代化设计 */
@@ -6599,6 +7365,37 @@
   font-weight: 800;
   color: #000;
   letter-spacing: -0.5rpx;
+}
+
+.fr-switch-section {
+  margin-bottom: 28rpx;
+  padding: 24rpx 28rpx;
+  background: #fff;
+  border-radius: 42rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.fr-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+}
+
+.fr-switch-row .fr-label {
+  margin-bottom: 0;
+  flex: 1;
+  color: #1D1D1F;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.fr-switch-hint {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #8E8E93;
+  line-height: 1.5;
 }
 
 .fr-tracking-section {
@@ -6880,7 +7677,7 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.5);
   z-index: 100000000; /* 应在需寄回订单确认弹窗之上 */
-  display: none;
+  display: flex;
   align-items: flex-end;
   justify-content: center;
   opacity: 0;
@@ -6890,9 +7687,13 @@
 }
 
 .bottom-modal-mask.show {
-  display: flex;
   opacity: 1;
   visibility: visible;
+}
+
+.bottom-modal-mask.closing {
+  opacity: 0;
+  visibility: hidden;
 }
 
 .bottom-modal-content {
@@ -6906,6 +7707,7 @@
   flex-direction: column;
   transform: translateY(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: bottomSheetSlideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   overflow: hidden; /* 🔴 确保内容不会溢出 */
   box-shadow: 0 -4rpx 20rpx rgba(0, 0, 0, 0.15);
   box-sizing: border-box;
@@ -6914,6 +7716,19 @@
 
 .bottom-modal-mask.show .bottom-modal-content {
   transform: translateY(0);
+}
+
+.bottom-modal-mask.closing .bottom-modal-content {
+  transform: translateY(100%);
+}
+
+@keyframes bottomSheetSlideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .bottom-modal-header {

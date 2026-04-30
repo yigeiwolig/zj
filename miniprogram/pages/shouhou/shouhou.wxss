@@ -277,6 +277,108 @@ page {
   margin-bottom: 60rpx; /* 增大卡片组之间的间距 */
 }
 
+/* 单列：整行融合卡 */
+.card-grid-single {
+  justify-content: stretch;
+}
+.card-grid-single .fusion-card {
+  width: 100%;
+  flex: 1;
+}
+
+/* 融合版本长按钮 */
+.fusion-card {
+  position: relative;
+  height: 290rpx;
+  background-color: #1c1c1e;
+  border-radius: 36rpx;
+  overflow: hidden;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.04);
+}
+
+/* 点击反馈效果 */
+.card-hover {
+  transform: scale(0.98);
+  transition: all 0.2s ease;
+}
+
+/* 左侧白色大曲率嵌套层 */
+.white-section {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 74%;
+  height: 80%;
+  background-color: #FFFFFF;
+  border-radius: 0 0 320rpx 0;
+  z-index: 0;
+}
+
+/* 右下角装饰圆圈 */
+.circle-symbol {
+  position: absolute;
+  bottom: -40rpx;
+  right: -40rpx;
+  width: 180rpx;
+  height: 180rpx;
+  background-color: #2C2C2E;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+/* 文字内容层 */
+.content-area {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 28rpx 30rpx 30rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+/* 工业指示灯标签 */
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  margin-bottom: 30rpx;
+  padding: 8rpx 16rpx;
+  background: #F2F2F7;
+  border-radius: 999rpx;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.75);
+}
+
+.status-dot {
+  width: 12rpx;
+  height: 12rpx;
+  background-color: #ffffff;
+  border-radius: 50%;
+  margin-right: 12rpx;
+}
+
+.tag-text {
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #000000;
+  letter-spacing: 1rpx;
+}
+
+/* 标题文字样式 */
+.main-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #000000;
+  line-height: 1.08;
+}
+
+.sub-title {
+  font-size: 24rpx;
+  font-weight: 500;
+  color: #86868b;
+  margin-top: 6rpx;
+}
+
 /* === 卡片核心样式修复 === */
 .i-card {
   width: 48%;

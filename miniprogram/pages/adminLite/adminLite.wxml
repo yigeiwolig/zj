@@ -24,7 +24,13 @@
       <block wx:for="{{productList}}" wx:key="id" wx:for-item="item" wx:for-index="idx">
         <view class="product-card" bindtap="{{isAdmin ? '' : 'handleProductClick'}}" data-index="{{idx}}">
           <view class="product-cover-wrapper">
-            <image class="product-cover" src="{{item.cover || ''}}" mode="aspectFill" lazy-load="true" binderror="onAdminLiteCoverError" data-index="{{idx}}" />
+            <block wx:if="{{item.dualCover}}">
+              <view class="admin-cover-stack">
+                <image class="product-cover product-cover-low {{productCoverLoadedMap[idx] ? 'is-hidden' : ''}}" src="{{item.coverThumb}}" mode="widthFix" lazy-load="true" binderror="onAdminLiteCoverError" data-index="{{idx}}" />
+                <image class="product-cover product-cover-high {{productCoverLoadedMap[idx] ? 'is-visible' : ''}}" src="{{item.coverFull}}" mode="aspectFit" lazy-load="true" bindload="onAdminLiteCoverLoad" binderror="onAdminLiteCoverError" data-index="{{idx}}" />
+              </view>
+            </block>
+            <image wx:else class="product-cover" src="{{item.coverFull || item.cover || ''}}" mode="widthFix" lazy-load="true" binderror="onAdminLiteCoverError" data-index="{{idx}}" />
             
             <!-- 号码显示（管理员模式，图片中间） -->
             <view wx:if="{{isAdmin}}" class="jump-number-badge" catchtap="adminEditJumpNumber" data-index="{{idx}}" hover-class="jump-number-badge-hover" style="z-index: 9999;">

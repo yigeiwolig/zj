@@ -96,7 +96,7 @@ module.exports = {
         <!-- 左侧文字信息 -->
         <view class="card-info">
           <view class="card-title">{{item.title}}</view>
-          <view class="card-sub">{{item.en}}</view>
+          <view class="card-hint" wx:if="{{item.hint}}">{{item.hint}}</view>
         </view>
         
         <!-- 右侧图标容器 -->
@@ -146,7 +146,7 @@ module.exports = {
           </view>
           <view class="fc-info">
             <text class="fc-title">{{item.title}}</text>
-            <text class="fc-sub">{{item.en}}</text>
+            <text class="fc-hint" wx:if="{{item.hint}}">{{item.hint}}</text>
           </view>
         </view>
       </block>
@@ -171,8 +171,8 @@ module.exports = {
 </view>
 
 <!-- 🆕 产品上新弹窗（首进 PRODUCTS 时，复用 pagenew 数据） -->
-<view class="new-arrival-mask" wx:if="{{showNewArrivalModal}}" catchtouchmove="noop" catchtap="closeNewArrivalModal">
-  <view class="new-arrival-box" catchtap="noop" catchtouchmove="noop">
+<view class="new-arrival-mask {{newArrivalClosing ? 'is-closing' : 'is-opening'}}" wx:if="{{showNewArrivalModal}}" catchtouchmove="noop" catchtap="closeNewArrivalModal">
+  <view class="new-arrival-box {{newArrivalClosing ? 'is-closing' : 'is-opening'}}" catchtap="noop" catchtouchmove="noop">
     <view class="na-bg-glow"></view>
     <view class="na-close-icon" catchtap="closeNewArrivalModal">×</view>
     

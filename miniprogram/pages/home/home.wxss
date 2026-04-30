@@ -6002,6 +6002,10 @@ page {
 .cd-btn.confirm { background: #000; color: #fff; }
 .cd-btn:active { opacity: 0.8; transform: scale(0.98); }
 .p-img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.1); opacity: 0; transition: 0.4s; }
+.p-img-high { opacity: 0; transition: opacity .22s ease; }
+.p-img-high.is-visible { opacity: 1; }
+.p-img-low { opacity: 1; transition: opacity .2s ease; }
+.p-img-low.is-hidden { opacity: 0; }
 
 /* ================= 自动消失提示（无按钮，3秒后自动消失，带收缩退出动画） ================= */
 .auto-toast-mask {

@@ -3,6 +3,17 @@ const cloud = require('wx-server-sdk')
 const http = require('http')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+async function assertAdmin(db) {
+  const wxContext = cloud.getWXContext()
+  const openid = wxContext.OPENID
+  if (!openid) throw new Error('UNAUTHORIZED')
+  const byOpenid = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+  if (byOpenid.data.length > 0) return openid
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+  if (bySystemOpenid.data.length > 0) return openid
+  throw new Error('FORBIDDEN')
+}
+
 // 🔴 调试日志辅助函数
 function sendDebugLog(location, message, data, hypothesisId) {
   try {
@@ -44,6 +55,8 @@ exports.main = async (event, context) => {
   const { item, action, rejectReason } = event
 
   try {
+    await assertAdmin(db)
+
     // 1. 拒绝逻辑
     if (action === 'reject') {
       await db.collection('video').doc(item._id).update({
@@ -163,6 +176,9 @@ exports.main = async (event, context) => {
     }
 
   } catch (err) {
+    if (String(err && err.message).includes('UNAUTHORIZED') || String(err && err.message).includes('FORBIDDEN')) {
+      return { success: false, errMsg: '无管理员权限' }
+    }
     return { success: false, errMsg: err.toString() }
   }
 }

@@ -50,15 +50,18 @@ App({
       });
     },
     
-    // 🔴 shop页面数据预加载缓存
+    // 🔴 shop页面数据预加载缓存（启动时拉全量 + 合并临时链 + 预热图片，进商城页可秒开）
     shopDataCache: {
       shopTitle: null,
       topMediaList: null,
+      heroAutoCarouselEnabled: false,
       seriesList: null,
       accessoryList: null,
       cacheTime: null, // 缓存时间戳
       isLoading: false // 是否正在加载
-    }
+    },
+    // 从商城返回 PRODUCTS 后保留的 UI 快照（详情弹层/配件弹层），再进商城时恢复，避免整页像重刷）
+    shopUiSnapshot: null
   },
 
   // ======================== 全局 UI API（替代 wx.showToast/showModal/showLoading/showActionSheet） ========================
@@ -735,15 +738,15 @@ App({
     }
   },
 
-  // 🔴 记录分享码用户在 azjc 页面的停留和行为统计
-  async recordShareCodeSession(sessionStats, isUpdate = false) {
-    console.log('[app] recordShareCodeSession 被调用');
+  // 🔴 记录 azjc 页面停留与行为：分享码用户走 shareCodeInfo；普通安装用户走 poolId（chakan 汇总文档 _id）
+  async recordShareCodeSession(sessionStats, isUpdate = false, poolId = null) {
+    console.log('[app] recordShareCodeSession 被调用', { poolId: !!poolId });
     console.log('[app] isShareCodeUser:', this.globalData.isShareCodeUser);
     console.log('[app] shareCodeInfo:', this.globalData.shareCodeInfo);
-    
-    if (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo) {
+
+    if (!poolId && (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo)) {
       console.log('[app] ❌ 不是分享码用户或缺少 shareCodeInfo，退出');
-      return
+      return;
     }
 
     try {
@@ -757,14 +760,14 @@ App({
         console.error('[app] 获取 openid 失败:', e);
       }
 
-      const baseInfo = this.globalData.shareCodeInfo
-      
+      const baseInfo = poolId ? { _id: poolId, code: 'POOL' } : this.globalData.shareCodeInfo;
+
       if (!baseInfo || !baseInfo._id) {
-        console.error('[app] ❌ shareCodeInfo 缺少 _id 字段:', baseInfo);
+        console.error('[app] ❌ 缺少 chakan 文档 _id:', baseInfo);
         return;
       }
-      
-      console.log('[app] 分享码信息 - _id:', baseInfo._id, ', code:', baseInfo.code);
+
+      console.log('[app] 写入 chakan 文档 _id:', baseInfo._id, poolId ? '(普通安装汇总池)' : ', code:', baseInfo.code);
       const durationMs = sessionStats && typeof sessionStats.durationMs === 'number'
         ? sessionStats.durationMs
         : 0
@@ -845,7 +848,7 @@ App({
       const cloudRes = await wx.cloud.callFunction({
         name: 'recordShareCodeViewer',
         data: {
-          shareCodeId: baseInfo._id,
+          shareCodeId: poolId || baseInfo._id,
           isUpdate: isUpdate, // 🔴 是否更新现有记录
           viewerData: {
             nickname: viewerNickname,
@@ -1011,30 +1014,50 @@ App({
     this.getLocationAndCheck();
   },
 
-  // 🔴 预加载shop页面数据（应用启动时调用，提升用户体验）
+  /**
+   * 等待启动预拉完成（或超时），避免用户秒点商城时重复打云、首屏分多帧闪动。
+   * @param {number} maxMs 最长等待毫秒，默认 4000
+   * @returns {Promise<void>}
+   */
+  waitShopPreloadReady(maxMs = 4000) {
+    const p = this.preloadShopData();
+    if (!maxMs || maxMs <= 0) return Promise.resolve();
+    return Promise.race([
+      p.catch(() => {}),
+      new Promise(resolve => setTimeout(resolve, maxMs))
+    ]);
+  },
+
+  // 🔴 预加载shop页面数据（应用启动时调用：全量元数据 + cloud 临时链 + 图片预热）；返回 Promise 供商城页等待
   preloadShopData() {
-    // 防止重复加载
-    if (this.globalData.shopDataCache.isLoading) {
-      console.log('[app] shop数据正在加载中，跳过重复请求');
-      return;
+    if (this._shopPreloadInflight) {
+      return this._shopPreloadInflight;
     }
 
-    // 检查缓存是否有效（5分钟内有效）
+    let shopPreload;
+    try {
+      shopPreload = require('./utils/shopPreloadBundle.js');
+    } catch (reqErr) {
+      console.error('[app] 加载 shopPreloadBundle 失败:', reqErr);
+      this.globalData.shopDataCache.isLoading = false;
+      return Promise.resolve();
+    }
+
+    const ttl = shopPreload.SHOP_GLOBAL_CACHE_TTL_MS || 12 * 60 * 1000;
     const now = Date.now();
     const cacheTime = this.globalData.shopDataCache.cacheTime;
-    if (cacheTime && (now - cacheTime < 5 * 60 * 1000)) {
-      console.log('[app] shop数据缓存有效，无需重新加载');
-      return;
+    if (cacheTime && now - cacheTime < ttl) {
+      return Promise.resolve();
     }
-
-    console.log('[app] 开始预加载shop页面数据...');
-    this.globalData.shopDataCache.isLoading = true;
 
     if (!wx.cloud) {
       console.warn('[app] 云开发未初始化，跳过shop数据预加载');
       this.globalData.shopDataCache.isLoading = false;
-      return;
+      return Promise.resolve();
     }
+
+    console.log('[app] 开始预加载shop页面数据（含 hydrate 与图片预热）...');
+    this.globalData.shopDataCache.isLoading = true;
 
     const db = wx.cloud.database();
     const cache = this.globalData.shopDataCache;
@@ -1043,9 +1066,7 @@ App({
       return msg.indexOf('cannot find document') !== -1;
     };
 
-    // 并行加载所有数据
-    Promise.all([
-      // 1. 加载商店标题
+    this._shopPreloadInflight = Promise.all([
       db.collection('shop_config').doc('shopTitle').get().catch(err => {
         if (isDocNotFoundError(err)) {
           console.log('[app] shopTitle 文档不存在，按空配置处理');
@@ -1054,7 +1075,6 @@ App({
         }
         return { data: null };
       }),
-      // 2. 加载顶部媒体
       db.collection('shop_config').doc('topMedia').get().catch(err => {
         if (isDocNotFoundError(err)) {
           console.log('[app] topMedia 文档不存在，按空配置处理');
@@ -1063,42 +1083,83 @@ App({
         }
         return { data: null };
       }),
-      // 3. 加载产品系列
       db.collection('shop_series').get().catch(err => {
         console.warn('[app] 预加载shop_series失败:', err);
         return { data: [] };
       }),
-      // 4. 加载配件
       db.collection('shop_accessories').get().catch(err => {
         console.warn('[app] 预加载shop_accessories失败:', err);
         return { data: [] };
       })
-    ]).then(([titleRes, mediaRes, seriesRes, accRes]) => {
-      // 保存到缓存
-      if (titleRes.data && titleRes.data.title) {
-        cache.shopTitle = titleRes.data.title;
-      }
-      if (mediaRes.data && mediaRes.data.list) {
-        cache.topMediaList = mediaRes.data.list;
-      }
-      if (seriesRes.data && Array.isArray(seriesRes.data)) {
-        cache.seriesList = seriesRes.data;
-      }
-      if (accRes.data && Array.isArray(accRes.data)) {
-        cache.accessoryList = accRes.data;
-      }
-      cache.cacheTime = Date.now();
-      cache.isLoading = false;
-      
-      console.log('[app] ✅ shop数据预加载完成');
-      console.log('[app] - shopTitle:', cache.shopTitle ? '已加载' : '无数据');
-      console.log('[app] - topMediaList:', cache.topMediaList ? `${cache.topMediaList.length}项` : '无数据');
-      console.log('[app] - seriesList:', cache.seriesList ? `${cache.seriesList.length}项` : '无数据');
-      console.log('[app] - accessoryList:', cache.accessoryList ? `${cache.accessoryList.length}项` : '无数据');
-    }).catch(err => {
-      console.error('[app] shop数据预加载失败:', err);
-      cache.isLoading = false;
-    });
+    ])
+      .then(async ([titleRes, mediaRes, seriesRes, accRes]) => {
+        if (titleRes.data && titleRes.data.title) {
+          cache.shopTitle = titleRes.data.title;
+        }
+
+        if (mediaRes.data && mediaRes.data.list) {
+          const { list: fixedTop, autoCarouselEnabled } = shopPreload.fixTopMediaListFromDoc(mediaRes.data);
+          cache.heroAutoCarouselEnabled = autoCarouselEnabled;
+          try {
+            cache.topMediaList = await shopPreload.resolveTopMediaRenderUrls(fixedTop);
+          } catch (e) {
+            console.warn('[app] topMedia renderUrl 解析失败，使用未解析列表', e);
+            cache.topMediaList = fixedTop.map(item => (item ? { ...item, renderUrl: item.url } : item));
+          }
+        }
+
+        const seriesData = Array.isArray(seriesRes.data) ? seriesRes.data : [];
+        const accRaw = Array.isArray(accRes.data) ? accRes.data : [];
+        const decorated = shopPreload.decorateSeriesImageFields(shopPreload.normalizeSeriesListFromDb(seriesData));
+        const cleanList = accRaw.map(item => ({
+          ...item,
+          selected: false,
+          isRequired: false
+        }));
+
+        let seriesOut = decorated;
+        let accOut = cleanList;
+        try {
+          const hydrated = await shopPreload.hydrateSeriesAndAccessoriesTogether(decorated, cleanList);
+          seriesOut = hydrated.series;
+          accOut = hydrated.accessories;
+        } catch (e) {
+          console.warn('[app] 预加载 hydrate 失败，缓存为未解析 cloud 链', e);
+          seriesOut = decorated;
+          accOut = cleanList;
+        }
+
+        cache.seriesList = seriesOut;
+        cache.accessoryList = accOut;
+
+        cache.cacheTime = Date.now();
+
+        if (!this.globalData.__shopWarmImageSet) {
+          this.globalData.__shopWarmImageSet = new Set();
+        }
+        const warmUrls = shopPreload.collectShopWarmImageUrls(cache.topMediaList, seriesOut, accOut, {
+          top: 16,
+          seriesCovers: 40,
+          accThumbs: 40
+        });
+        shopPreload.runShopImageWarm(warmUrls, this.globalData.__shopWarmImageSet);
+
+        console.log('[app] ✅ shop数据预加载完成（含临时链与图片预热队列）');
+        console.log('[app] - shopTitle:', cache.shopTitle ? '已加载' : '无数据');
+        console.log('[app] - topMediaList:', cache.topMediaList ? `${cache.topMediaList.length}项` : '无数据');
+        console.log('[app] - seriesList:', cache.seriesList ? `${cache.seriesList.length}项` : '无数据');
+        console.log('[app] - accessoryList:', cache.accessoryList ? `${cache.accessoryList.length}项` : '无数据');
+        console.log('[app] - 预热图片数:', warmUrls.length);
+      })
+      .catch(err => {
+        console.error('[app] shop数据预加载失败:', err);
+      })
+      .finally(() => {
+        this.globalData.shopDataCache.isLoading = false;
+        this._shopPreloadInflight = null;
+      });
+
+    return this._shopPreloadInflight;
   },
 
   // 🔴 刷新shop数据缓存（后台刷新，不影响当前页面）

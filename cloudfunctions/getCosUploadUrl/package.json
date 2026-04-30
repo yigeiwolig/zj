@@ -1,0 +1,10 @@
+{
+  "name": "getCosUploadUrl",
+  "version": "1.0.0",
+  "description": "Generate pre-signed COS upload URL",
+  "main": "index.js",
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "latest",
+    "wx-server-sdk": "~2.6.3"
+  }
+}

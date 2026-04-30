@@ -45,8 +45,11 @@ Page({
     
     // 【新增】首次进入提示弹窗
     showFirstTimeModal: false,
+    firstTimeModalEnterReady: false, // 下一帧再开过渡，避免 wx:if 首帧「硬切」
+    firstTimeModalClosing: false,
     showWechatQRCode: false, // 是否显示微信二维码
     adminWechat: 'MT-摩改社', // 管理员微信号（可以修改）
+    copyWechatBusy: false, // 复制微信号进行中（用于即时反馈）
     
     // Loading 状态（合并重复定义）
     isLoading: false,
@@ -62,8 +65,13 @@ Page({
     // 【新增】管理员相关状态
     isAdmin: false,        // 是否是管理员
     isAdminMode: false,    // 是否开启了管理员模式
+    adminViewMode: 'banned', // banned | suspicious | nickname
     bannedUsers: [],       // 被封禁的用户列表
+    screenshotRiskUsers: [], // 截图超限待审核列表
+    suspiciousUsers: [],   // 可疑用户列表（多次进入/长停留）
     isLoadingBannedUsers: false,  // 是否正在加载封禁用户列表
+    isLoadingScreenshotRiskUsers: false,
+    isLoadingSuspiciousUsers: false,
     // 🔴 昵称录入相关状态
     isNicknameMode: false, // false=封禁管理, true=昵称录入
     nicknameInput: '',    // 昵称输入
@@ -120,9 +128,9 @@ Page({
       // 🔴 只有未通过验证的用户才检查是否显示首次进入弹窗
       const hasSeenFirstTimeModal = wx.getStorageSync('has_seen_first_time_modal');
       if (!hasSeenFirstTimeModal) {
-        // 延迟显示，确保页面加载完成
+        // 延迟显示，确保页面加载完成（用下一帧再开过渡，避免弹层硬切）
         setTimeout(() => {
-          this.setData({ showFirstTimeModal: true });
+          this._openFirstTimeModalAnimated();
         }, 500);
       }
     }
@@ -156,6 +164,10 @@ Page({
       app.stopQiangliCheck();
     }
     this._stopWaitingForPendingJump();
+    if (this._firstTimeModalEnterTimer) {
+      clearTimeout(this._firstTimeModalEnterTimer);
+      this._firstTimeModalEnterTimer = null;
+    }
   },
 
   // 🔴 从 valid_users 集合检查用户是否有记录
@@ -197,7 +209,9 @@ Page({
             isAuthorized: true, 
             isShowNicknameUI: false,
             inputNickName: nickname,
-            showFirstTimeModal: false // 🔴 确保不显示首次进入弹窗
+            showFirstTimeModal: false,
+            firstTimeModalEnterReady: false,
+            firstTimeModalClosing: false
           });
           
           console.log('[index] 从 valid_users 自动恢复用户昵称:', nickname);
@@ -253,164 +267,176 @@ Page({
   },
 
   // === 核心验证逻辑 ===
-  handleLogin() {
+  async handleLogin() {
     if (this.data.isLoading) return;
-    const name = this.data.inputNickName.trim();
-    if (!name) {
-      this.showAutoToast('提示', '请输入昵称');
+    const raw = this.data.inputNickName.trim();
+    if (!raw) {
+      this.showAutoToast('提示', '请输入昵称或安装分享码');
       return;
     }
-
-    // 🔴 临时屏蔽任何 Loading（完全不显示）
-    const oldWxShowLoading = wx.showLoading;
-    const oldOldWxShowLoading = wx.__mt_oldShowLoading;
-    const oldAppShowLoading = app && app.showLoading;
-    const restoreLoading = () => {
-      if (oldWxShowLoading) wx.showLoading = oldWxShowLoading;
-      if (oldOldWxShowLoading) wx.__mt_oldShowLoading = oldOldWxShowLoading;
-      if (app && oldAppShowLoading) app.showLoading = oldAppShowLoading;
-      if (this._noLoadingTimer) {
-        clearInterval(this._noLoadingTimer);
-        this._noLoadingTimer = null;
+    const normalizedCode = raw.replace(/[\s-]/g, '').toUpperCase();
+    const isShareCode = /^MT[A-Z0-9]{6}$/.test(normalizedCode);
+    if (isShareCode && app && typeof app.verifyShareCode === 'function') {
+      this.setData({ isLoading: true });
+      this.showMyLoading('验证分享码...');
+      let verifyRes = null;
+      try {
+        verifyRes = await app.verifyShareCode(normalizedCode);
+      } catch (e) {
+        console.error('[index] 分享码验证异常:', e);
+        this.showAutoToast('提示', '分享码验证失败，请稍后重试');
+        return;
+      } finally {
+        this.setData({ isLoading: false });
+        this.hideMyLoading();
       }
-    };
-    wx.showLoading = () => {};
-    if (wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = () => {};
-    if (app) {
-      app.showLoading = () => {};
-      if (app.hideLoading) app.hideLoading();
-      // 直接关闭全局 UI Loading
-      try {
-        if (app.globalData && app.globalData.ui && app.globalData.ui.loading) {
-          app.globalData.ui.loading = { ...app.globalData.ui.loading, show: false };
-          if (app._emitUI) app._emitUI();
-        }
-      } catch (e) {}
-    }
-    // 🔴 优化：只在确实需要隐藏时才调用 hideLoading，避免不配对警告
-    let lastHideTime = 0;
-    const hideAllLoading = () => {
-      const now = Date.now();
-      // 限制调用频率，避免频繁调用导致警告
-      if (now - lastHideTime < 200) return;
-      lastHideTime = now;
-      
-      try {
-        // 只隐藏确实存在的 loading，避免不配对
-        const toast = this.selectComponent('#custom-toast');
-        if (toast && toast.hideLoading) {
-          try { toast.hideLoading(); } catch (e) {}
-        }
-        if (this.data.showLoadingAnimation) {
-          this.setData({ showLoadingAnimation: false });
-        }
-        // 直接设置全局状态，不调用可能不配对的 hideLoading
-        if (app && app.globalData && app.globalData.ui && app.globalData.ui.loading?.show) {
-          app.globalData.ui.loading = { ...app.globalData.ui.loading, show: false };
-          if (app._emitUI) app._emitUI();
-        }
-      } catch (e) {}
-    };
-    hideAllLoading();
-    // 降低调用频率，从 100ms 改为 300ms
-    this._noLoadingTimer = setInterval(hideAllLoading, 300);
 
+      if (!verifyRes || verifyRes.success !== true) {
+        this.showAutoToast('提示', (verifyRes && verifyRes.error) || '分享码无效');
+        return;
+      }
+
+      try { wx.setStorageSync('is_share_code_user', true); } catch (e) {}
+      try { wx.setStorageSync('share_code_value', normalizedCode); } catch (e) {}
+      if (app && app.globalData) {
+        app.globalData.isShareCodeUser = true;
+        app.globalData.shareCodeInfo = app.globalData.shareCodeInfo || { code: normalizedCode };
+      }
+      this.setData({
+        inputNickName: normalizedCode,
+        isAuthorized: true,
+        isShowNicknameUI: false,
+        showFirstTimeModal: false,
+        firstTimeModalEnterReady: false,
+        firstTimeModalClosing: false
+      }, () => {
+        wx.reLaunch({ url: '/pages/azjc/azjc' });
+      });
+      return;
+    }
+    const name = raw;
+    // 先让按钮进入加载态，避免首点「一大段同步逻辑」期间界面毫无反馈
     this.setData({ isLoading: true });
-    
-    // 🔴 确保在云函数调用前关闭任何官方 loading
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
-    try { wx.hideLoading(); } catch (e) {}
-
-    // 🔴 获取设备信息（使用新的 API）
-    let sysInfo = {};
-    try {
-      // 使用新的 API 替代已废弃的 wx.getSystemInfoSync
-      const deviceInfo = wx.getDeviceInfo();
-      const windowInfo = wx.getWindowInfo();
-      sysInfo = {
-        system: deviceInfo.system || '',
-        model: deviceInfo.model || '',
-        ...windowInfo
+    setTimeout(() => {
+      // 🔴 临时屏蔽任何 Loading（完全不显示）
+      const oldWxShowLoading = wx.showLoading;
+      const oldOldWxShowLoading = wx.__mt_oldShowLoading;
+      const oldAppShowLoading = app && app.showLoading;
+      const restoreLoading = () => {
+        if (oldWxShowLoading) wx.showLoading = oldWxShowLoading;
+        if (oldOldWxShowLoading) wx.__mt_oldShowLoading = oldOldWxShowLoading;
+        if (app && oldAppShowLoading) app.showLoading = oldAppShowLoading;
+        if (this._noLoadingTimer) {
+          clearInterval(this._noLoadingTimer);
+          this._noLoadingTimer = null;
+        }
       };
-    } catch (e) {
-      // 降级方案：如果新 API 不支持，使用旧 API
-      try {
-        sysInfo = wx.getSystemInfoSync();
-      } catch (e2) {
-        console.warn('[index] 无法获取设备信息:', e2);
-      }
-    }
-    // 🔴 尝试获取位置信息（从缓存或实时获取）
-    const cachedLocation = wx.getStorageSync('last_location') || {};
-
-    wx.cloud.callFunction({
-      name: 'verifyNickname',
-      data: {
-        nickname: name,
-        province: cachedLocation.province || '',
-        city: cachedLocation.city || '',
-        district: cachedLocation.district || '',
-        address: cachedLocation.address || '',
-        latitude: cachedLocation.latitude,
-        longitude: cachedLocation.longitude,
-        deviceInfo: sysInfo.system || '',
-        phoneModel: sysInfo.model || ''
-      }
-    }).then(res => {
-      // 恢复 Loading
-      restoreLoading();
-      this.setData({ isLoading: false });
-      
-      const result = res.result || {};
-
-      if (result.success) {
-        // --- 成功 ---
-        // 🔴 关键修复：验证成功后，需要再次检查全局封禁状态（只检查 login_logs）
-        // 如果数据库里还是封禁状态，不应该清除黑名单标记
-        // 🔴 确保在云函数调用前关闭任何官方 loading
-        if (wx.__mt_oldHideLoading) {
-          wx.__mt_oldHideLoading();
-        }
-        // 🔴 封禁状态已完全由 login_logbutton 管理，不再检查 login_logs.isBanned
-        // 如果 verifyNickname 返回 success，说明已经通过验证，直接放行
-              wx.setStorageSync('has_permanent_auth', true);
-              wx.setStorageSync('user_nickname', name);
-        // 🔴 验证通过后，标记为已看过首次进入弹窗
-        wx.setStorageSync('has_seen_first_time_modal', true);
-              wx.removeStorageSync('is_user_banned');
-        this.setData({
-          isAuthorized: true,
-          isShowNicknameUI: false,
-          showFirstTimeModal: false, // 🔴 确保不显示首次进入弹窗
-          showCustomSuccessModal: false
-        }, () => {
-          // 昵称验证通过后立即进入主流程，避免“点了立即开启还要再等一段”的体感
-          if (!this._postVerifyEnterTriggered) {
-            this._postVerifyEnterTriggered = true;
-            setTimeout(() => {
-              this.handleAccess();
-            }, 0);
+      wx.showLoading = () => {};
+      if (wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = () => {};
+      if (app) {
+        app.showLoading = () => {};
+        if (app.hideLoading) app.hideLoading();
+        try {
+          if (app.globalData && app.globalData.ui && app.globalData.ui.loading) {
+            app.globalData.ui.loading = { ...app.globalData.ui.loading, show: false };
+            if (app._emitUI) app._emitUI();
           }
-        });
-      } else {
-        // --- 失败 ---
-        
-        if (result.isBlocked === true || result.type === 'banned') {
-          wx.setStorageSync('is_user_banned', true);
-          wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-        } else {
-          // 【核心修改】验证失败，显示自定义黑白弹窗
-          this.setData({ showCustomErrorModal: true });
+        } catch (e) {}
+      }
+      let lastHideTime = 0;
+      const hideAllLoading = () => {
+        const now = Date.now();
+        if (now - lastHideTime < 200) return;
+        lastHideTime = now;
+        try {
+          const toast = this.selectComponent('#custom-toast');
+          if (toast && toast.hideLoading) {
+            try { toast.hideLoading(); } catch (e) {}
+          }
+          if (this.data.showLoadingAnimation) {
+            this.setData({ showLoadingAnimation: false });
+          }
+          if (app && app.globalData && app.globalData.ui && app.globalData.ui.loading?.show) {
+            app.globalData.ui.loading = { ...app.globalData.ui.loading, show: false };
+            if (app._emitUI) app._emitUI();
+          }
+        } catch (e) {}
+      };
+      hideAllLoading();
+      this._noLoadingTimer = setInterval(hideAllLoading, 300);
+
+      if (wx.__mt_oldHideLoading) {
+        wx.__mt_oldHideLoading();
+      }
+      try { wx.hideLoading(); } catch (e) {}
+
+      let sysInfo = {};
+      try {
+        const deviceInfo = wx.getDeviceInfo();
+        const windowInfo = wx.getWindowInfo();
+        sysInfo = {
+          system: deviceInfo.system || '',
+          model: deviceInfo.model || '',
+          ...windowInfo
+        };
+      } catch (e) {
+        try {
+          sysInfo = wx.getSystemInfoSync();
+        } catch (e2) {
+          console.warn('[index] 无法获取设备信息:', e2);
         }
       }
-    }).catch(err => {
-      // 恢复 Loading
-      restoreLoading();
-      this.setData({ isLoading: false });
-      this.showAutoToast('错误', '网络错误，请重试');
-    });
+      const cachedLocation = wx.getStorageSync('last_location') || {};
+
+      wx.cloud.callFunction({
+        name: 'verifyNickname',
+        data: {
+          nickname: name,
+          province: cachedLocation.province || '',
+          city: cachedLocation.city || '',
+          district: cachedLocation.district || '',
+          address: cachedLocation.address || '',
+          latitude: cachedLocation.latitude,
+          longitude: cachedLocation.longitude,
+          deviceInfo: sysInfo.system || '',
+          phoneModel: sysInfo.model || ''
+        }
+      }).then(res => {
+        restoreLoading();
+        this.setData({ isLoading: false });
+
+        const result = res.result || {};
+
+        if (result.success) {
+          if (wx.__mt_oldHideLoading) {
+            wx.__mt_oldHideLoading();
+          }
+          wx.setStorageSync('has_permanent_auth', true);
+          wx.setStorageSync('user_nickname', name);
+          wx.setStorageSync('has_seen_first_time_modal', true);
+          wx.removeStorageSync('is_user_banned');
+          this.setData({
+            isAuthorized: true,
+            isShowNicknameUI: false,
+            showFirstTimeModal: false,
+            firstTimeModalEnterReady: false,
+            firstTimeModalClosing: false,
+            showCustomSuccessModal: false
+          });
+        } else {
+          if (result.isBlocked === true || result.type === 'banned') {
+            wx.setStorageSync('is_user_banned', true);
+            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
+          } else {
+            this.setData({ showCustomErrorModal: true });
+          }
+        }
+      }).catch(err => {
+        restoreLoading();
+        this.setData({ isLoading: false });
+        this.showAutoToast('错误', '网络错误，请重试');
+      });
+    }, 0);
   },
 
   // 【新增】处理自定义弹窗的按钮点击 (复制微信号)
@@ -484,64 +510,114 @@ Page({
       return; 
     }
 
-    // 🔴 按下按钮当下先检查定位权限，避免动画过程中再弹定位请求
-    wx.getSetting({
-      success: (settingRes) => {
-        const locationAuth = settingRes.authSetting['scope.userLocation'];
-        console.log('[handleAccess] 点击瞬间定位权限状态:', locationAuth);
+    // 🔴 分享码用户：不做地址/定位流程，直接进入安装教程
+    const inputAsCode = /^MT[A-Z0-9]{6}$/.test(String(this.data.inputNickName || '').replace(/[\s-]/g, '').toUpperCase());
+    const isShareCodeUser =
+      !!(app && app.globalData && (app.globalData.isShareCodeUser || app.globalData.shareCodeInfo)) ||
+      !!wx.getStorageSync('is_share_code_user') ||
+      inputAsCode;
+    console.log('[handleAccess] shareCode flags =>', {
+      globalFlag: !!(app && app.globalData && app.globalData.isShareCodeUser),
+      globalInfo: !!(app && app.globalData && app.globalData.shareCodeInfo),
+      localFlag: !!wx.getStorageSync('is_share_code_user'),
+      inputAsCode
+    });
+    if (isShareCodeUser) {
+      console.log('[handleAccess] 分享码用户直达教程，跳过定位与地址校验');
+      wx.reLaunch({ url: '/pages/azjc/azjc' });
+      return;
+    }
 
-        if (locationAuth !== true) {
-          console.log('[handleAccess] 定位权限未开启，立即提示，不进入动画');
+    // 点击后立刻走定位链路：不用异步 getSetting 挡在弹窗前面；仅「曾拒绝」用同步 getSettingSync 立即出引导层
+    const phoneModel = this._getPhoneModelBrief();
+    try {
+      if (typeof wx.getSettingSync === 'function') {
+        const auth = wx.getSettingSync().authSetting['scope.userLocation'];
+        if (auth === false) {
+          console.log('[handleAccess] 用户曾拒绝位置权限，立即引导去设置页');
           this.setData({
             showAuthForceModal: true,
-            authMissingType: 'location'
+            authMissingType: 'location',
           });
           return;
         }
-
-        console.log('[handleAccess] 开始获取位置...');
-        // 只有定位权限已开启，才进入动画和定位流程
-        this.runAnimation();
-
-        let sysInfo = {};
-        try {
-          const deviceInfo = wx.getDeviceInfo();
-          sysInfo = { model: deviceInfo.model || '未知机型' };
-        } catch (e) {
-          try {
-            sysInfo = wx.getSystemInfoSync();
-          } catch (e2) {
-            sysInfo = { model: '未知机型' };
-          }
-        }
-        const phoneModel = sysInfo.model || '未知机型';
-
-        wx.getLocation({
-          type: 'gcj02',
-          isHighAccuracy: true,
-          success: (res) => {
-            console.log('[handleAccess] 位置获取成功:', res);
-            this.analyzeRegion(res.latitude, res.longitude, phoneModel);
-          },
-          fail: (err) => {
-            console.error('[handleAccess] 位置获取失败:', err);
-            // 权限已开但定位失败（GPS/网络），不阻断进入
-            this.showAutoToast('提示', '无法获取当前位置，将使用默认设置');
-            this.setData({
-              pendingJumpTarget: '/pages/products/products',
-              pendingJumpData: null
-            });
-          }
-        });
-      },
-      fail: () => {
-        console.log('[handleAccess] 无法获取权限状态，要求开启定位权限');
-        this.setData({
-          showAuthForceModal: true,
-          authMissingType: 'location'
-        });
       }
-    });
+    } catch (e) {
+      console.warn('[handleAccess] getSettingSync 异常，继续走定位', e);
+    }
+    this._startIndexAccessWithLocation(phoneModel);
+  },
+
+  _getPhoneModelBrief() {
+    try {
+      const deviceInfo = wx.getDeviceInfo();
+      return deviceInfo.model || '未知机型';
+    } catch (e) {
+      try {
+        const sys = wx.getSystemInfoSync();
+        return sys.model || '未知机型';
+      } catch (e2) {
+        return '未知机型';
+      }
+    }
+  },
+
+  /** 隐私（若需要）→ 先 wx.getLocation 再开动画，避免 setData 动画抢在系统授权框前面 */
+  _startIndexAccessWithLocation(phoneModel) {
+    const runGetLocation = () => {
+      console.log('[handleAccess] 立即请求位置（系统/隐私弹窗优先于入场动画）');
+      this._forceBlockedTriggered = false;
+      this._animationFinished = false;
+      this._pendingLocationBanData = null;
+
+      wx.getLocation({
+        type: 'gcj02',
+        isHighAccuracy: true,
+        success: (res) => {
+          console.log('[handleAccess] 位置获取成功:', res);
+          this.runAnimation();
+          this.analyzeRegion(res.latitude, res.longitude, phoneModel);
+        },
+        fail: (err) => {
+          console.error('[handleAccess] 位置获取失败:', err);
+          const msg = err && err.errMsg ? String(err.errMsg) : '';
+          const errno = err && err.errno;
+          const authOrPrivacyBlocked =
+            msg.includes('auth deny') ||
+            msg.includes('system permission denied') ||
+            msg.includes('privacy') ||
+            msg.includes('authorize') ||
+            errno === 104 ||
+            errno === 103;
+          if (authOrPrivacyBlocked) {
+            this.clearAnimationTimers();
+            this.setData({ step: 0 });
+            this.setData({
+              showAuthForceModal: true,
+              authMissingType: 'location',
+            });
+            return;
+          }
+          this.runAnimation();
+          this.showAutoToast('提示', '无法获取当前位置，将使用默认设置');
+          this.setData({
+            pendingJumpTarget: '/pages/products/products',
+            pendingJumpData: null,
+          });
+        },
+      });
+    };
+
+    if (typeof wx.requirePrivacyAuthorize === 'function') {
+      wx.requirePrivacyAuthorize({
+        success: () => runGetLocation(),
+        fail: () => {
+          this.showAutoToast('提示', '请先同意小程序隐私保护指引后再使用定位');
+        },
+      });
+    } else {
+      runGetLocation();
+    }
   },
 
   addAnimationTimer(timerId) {
@@ -579,38 +655,52 @@ Page({
   doFallAndSwitch() {
     this.setData({ step: 5 });
 
-    // ✅ 小齿轮掉落动画结束后执行跳转（0.8s + 少量缓冲）
+    // ✅ 小齿轮掉落动画结束后直接进入产品页
+    // 地址查询/免死金牌检查在后台继续执行，若命中拦截再强制跳转到 blocked
     const jumpTimer = setTimeout(() => {
-      // 🔴 检查是否有待跳转的目标（由地址检查结果决定）
-      if (this.data.pendingJumpTarget) {
-        console.log('[index] 动画完成，执行待跳转:', this.data.pendingJumpTarget);
-        // 动画期间并行同步，不再阻塞跳转
-        if (this.data.pendingJumpData && this.data.pendingJumpData.collectionName) {
-          this._syncPendingDataInBackground();
-        }
-        console.log('[index] 动画结束，立即跳转（不等待同步完成）');
-        wx.reLaunch({ url: this.data.pendingJumpTarget });
-      } else {
-        // 不兜底：动画结束后继续等待，目标一到立即跳
-        console.log('[index] 动画完成但目标未就绪，继续等待目标...');
-        this._waitForPendingJumpTarget();
+      this._animationFinished = true;
+      if (this._pendingLocationBanData) {
+        console.log('[index] 动画已完成，执行延迟拦截跳转');
+        const banData = this._pendingLocationBanData;
+        this._pendingLocationBanData = null;
+        this._doLocationBanJump(banData);
+        return;
       }
+      if (this._forceBlockedTriggered) {
+        console.log('[index] 已触发拦截跳转，取消进入产品页');
+        return;
+      }
+      if (this.data.pendingJumpData && this.data.pendingJumpData.collectionName) {
+        this._syncPendingDataInBackground();
+      }
+      console.log('[index] 动画结束，直接跳转到产品页；后台继续执行地址检查');
+      wx.reLaunch({ url: '/pages/products/products' });
     }, 900);
     this.addAnimationTimer(jumpTimer);
   },
 
   _waitForPendingJumpTarget() {
     this._stopWaitingForPendingJump();
+    // 降低轮询频率并增加超时兜底，避免高频 setInterval 导致卡顿
+    const startAt = Date.now();
+    const maxWaitMs = 5000;
     this._waitPendingJumpTimer = setInterval(() => {
       const target = this.data.pendingJumpTarget;
-      if (!target) return;
+      if (!target) {
+        if (Date.now() - startAt >= maxWaitMs) {
+          console.warn('[index] 等待目标超时，兜底跳转到产品页');
+          this._stopWaitingForPendingJump();
+          wx.reLaunch({ url: '/pages/products/products' });
+        }
+        return;
+      }
       console.log('[index] 目标已就绪，立即跳转:', target);
       if (this.data.pendingJumpData && this.data.pendingJumpData.collectionName) {
         this._syncPendingDataInBackground();
       }
       this._stopWaitingForPendingJump();
       wx.reLaunch({ url: target });
-    }, 80);
+    }, 250);
   },
 
   _stopWaitingForPendingJump() {
@@ -618,6 +708,45 @@ Page({
       clearInterval(this._waitPendingJumpTimer);
       this._waitPendingJumpTimer = null;
     }
+  },
+
+  // 后台地址检查命中时，立即执行地域拦截跳转
+  _executeLocationBan(locData = {}) {
+    // 需求：动画要播放完成后再拦截，避免中途打断
+    if (!this._animationFinished) {
+      console.log('[index] 拦截命中，但动画未结束，等待动画完成后拦截');
+      this._forceBlockedTriggered = true;
+      this._pendingLocationBanData = locData || {};
+      return;
+    }
+    this._doLocationBanJump(locData);
+  },
+
+  _doLocationBanJump(locData = {}) {
+    this._forceBlockedTriggered = true;
+    this.clearAnimationTimers();
+    this._stopWaitingForPendingJump();
+    try {
+      const sysInfo = wx.getSystemInfoSync();
+      wx.cloud.callFunction({
+        name: 'banUserByLocation',
+        data: {
+          province: locData.province || '',
+          city: locData.city || '',
+          district: locData.district || '',
+          address: locData.full_address || locData.address || '',
+          full_address: locData.full_address || locData.address || '',
+          latitude: locData.latitude,
+          longitude: locData.longitude,
+          deviceInfo: sysInfo.system || '',
+          phoneModel: locData.phoneModel || sysInfo.model || '',
+          banPage: 'index'
+        },
+        success: () => console.log('[index] banUserByLocation 调用成功'),
+        fail: (err) => console.error('[index] banUserByLocation 调用失败:', err)
+      });
+    } catch (e) {}
+    wx.reLaunch({ url: '/pages/blocked/blocked?type=location' });
   },
 
   // 🔴 后台同步：动画期间并行执行，不阻塞页面跳转
@@ -756,7 +885,6 @@ Page({
       // 🔴 关键检查：如果 city 为空，无法进行拦截判断
       if (!locData.city || locData.city.trim() === '') {
         console.warn('[index] ⚠️ 逆地理编码后 city 仍为空，无法进行城市拦截判断');
-        // 无法判断城市，直接放行
         this.setData({
           pendingJumpTarget: '/pages/products/products',
           pendingJumpData: { collectionName: 'user_list', locData: locData }
@@ -765,23 +893,27 @@ Page({
       }
 
       console.log('[index] 解析后的地址数据:', locData);
+      try {
+        wx.setStorageSync('last_location', locData);
+      } catch (e) {}
 
       // 🔴 调用统一的拦截判断方法
       this._checkLocationBlocking(locData);
     } catch (err) {
       console.error('[index] analyzeRegion 异常:', err);
-      // 异常情况下，至少保存经纬度并放行
-        const locData = {
-          latitude: lat,
-          longitude: lng,
+      const locData = {
+        latitude: lat,
+        longitude: lng,
         province: '',
         city: '',
         district: '',
         full_address: '位置解析失败',
         address: '位置解析失败',
-          phoneModel: phoneModel
-        };
-      wx.setStorageSync('last_location', locData);
+        phoneModel: phoneModel
+      };
+      try {
+        wx.setStorageSync('last_location', locData);
+      } catch (e2) {}
       this.setData({
         pendingJumpTarget: '/pages/products/products',
         pendingJumpData: { collectionName: 'user_list', locData: locData }
@@ -792,6 +924,24 @@ Page({
   // 🔴 提取拦截判断逻辑为独立方法，供 success 和 fail 回调共用
   async _checkLocationBlocking(locData) {
     try {
+      // 管理员：不参与地域拦截（仍写入 last_location 供后台查看）
+      try {
+        await this.checkAdminPrivilege();
+      } catch (e) {
+        console.warn('[index] checkAdminPrivilege 异常，继续非管理员拦截逻辑', e);
+      }
+      if (this.data.isAdmin) {
+        console.log('[index] 管理员账号，跳过地域拦截');
+        try {
+          wx.setStorageSync('last_location', locData);
+        } catch (e2) {}
+        this.setData({
+          pendingJumpTarget: '/pages/products/products',
+          pendingJumpData: { collectionName: 'user_list', locData: locData }
+        });
+        return;
+      }
+
       // 1. 获取拦截配置
       console.log('[index] 开始获取拦截配置...');
       const configRes = await db.collection('app_config').doc('blocking_rules').get();
@@ -936,31 +1086,7 @@ Page({
         }
 
         // 分支 B：普通用户 -> 进入封禁页
-        this.setData({
-          pendingJumpTarget: '/pages/blocked/blocked?type=location',
-          pendingJumpData: null
-        });
-        const sysInfo = wx.getSystemInfoSync();
-        wx.cloud.callFunction({
-          name: 'banUserByLocation',
-          data: {
-            province: locData.province || '',
-            city: locData.city || '',
-            district: locData.district || '',
-            address: locData.full_address || locData.address || '',
-            full_address: locData.full_address || locData.address || '',
-            latitude: locData.latitude,
-            longitude: locData.longitude,
-            deviceInfo: sysInfo.system || '',
-            phoneModel: locData.phoneModel || sysInfo.model || '',
-            banPage: 'index'
-          },
-          success: () => console.log('[index] banUserByLocation 调用成功'),
-          fail: (err) => {
-            console.error('[index] banUserByLocation 调用失败:', err);
-            console.warn('[index] 预览模式可能无法调用云函数，但已跳转到封禁页');
-          }
-        });
+        this._executeLocationBan(locData);
         return;
       }
 
@@ -974,7 +1100,6 @@ Page({
     } catch (err) {
       console.error('[index] 地址检查异常:', err);
       console.error('[index] 错误详情:', err.message, err.stack);
-      // 出错时直接放行，不阻塞用户
       this.setData({
         pendingJumpTarget: '/pages/products/products',
         pendingJumpData: { collectionName: 'user_list', locData: locData }
@@ -1249,6 +1374,20 @@ Page({
   // 空函数，用于阻止事件冒泡
   noop() {},
 
+  showAutoToast(title = '提示', content = '') {
+    const full = content ? `${title}：${content}` : String(title || '提示');
+    try {
+      const toast = this.selectComponent('#custom-toast');
+      if (toast && typeof toast.showToast === 'function') {
+        toast.showToast({ title: full.length > 90 ? full.slice(0, 87) + '...' : full, icon: 'none', duration: 2500 });
+        return;
+      }
+    } catch (e) {}
+    if (wx.__mt_oldShowToast) {
+      wx.__mt_oldShowToast({ title: full.length > 90 ? full.slice(0, 87) + '...' : full, icon: 'none', duration: 2500 });
+    }
+  },
+
   // 显示 Loading（使用自定义动画，不使用微信官方弹窗和全局 UI）
   showMyLoading(title = '加载中...') {
     // 🔴 关键：先隐藏全局 UI 的 loading（如果存在）
@@ -1395,19 +1534,47 @@ Page({
     
     // 如果进入管理员模式，加载被封禁的用户列表
     if (newMode) {
+      this.setData({ adminViewMode: 'banned' });
       this.loadBannedUsers();
+      this.loadScreenshotRiskUsers();
+      this.loadSuspiciousUsers();
     }
     
     // 如果退出管理员模式，重置 step
     if (!newMode) {
-      this.setData({ step: 0, bannedUsers: [] });
+      this.setData({
+        step: 0,
+        adminViewMode: 'banned',
+        bannedUsers: [],
+        screenshotRiskUsers: [],
+        suspiciousUsers: []
+      });
     }
   },
 
   // 退出管理员模式
   exitAdminMode() {
-    this.setData({ isAdminMode: false, step: 0, bannedUsers: [] });
+    this.setData({
+      isAdminMode: false,
+      step: 0,
+      adminViewMode: 'banned',
+      bannedUsers: [],
+      screenshotRiskUsers: [],
+      suspiciousUsers: []
+    });
     console.log('[index] 已退出管理员模式');
+  },
+
+  switchAdminTab(e) {
+    const mode = (e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.mode) || 'banned';
+    if (!mode || mode === this.data.adminViewMode) return;
+    this.setData({ adminViewMode: mode });
+    if (mode === 'banned' && this.data.bannedUsers.length === 0) {
+      this.loadBannedUsers();
+      this.loadScreenshotRiskUsers();
+    } else if (mode === 'suspicious' && this.data.suspiciousUsers.length === 0) {
+      this.loadSuspiciousUsers();
+    }
   },
 
   // 🔴 加载被封禁的用户列表
@@ -1428,6 +1595,127 @@ Page({
     } finally {
       this.setData({ isLoadingBannedUsers: false });
     }
+  },
+
+  // 🔴 加载截图超限待审核列表（24小时>=3次）
+  async loadScreenshotRiskUsers() {
+    this.setData({ isLoadingScreenshotRiskUsers: true });
+    try {
+      const res = await wx.cloud.callFunction({ name: 'getScreenshotRiskQueue' });
+      if (res.result && res.result.success) {
+        this.setData({ screenshotRiskUsers: res.result.users || [] });
+      } else {
+        console.error('[index] 加载截图风险列表失败:', res.result?.error);
+        this.setData({ screenshotRiskUsers: [] });
+      }
+    } catch (err) {
+      console.error('[index] 加载截图风险列表异常:', err);
+      this.setData({ screenshotRiskUsers: [] });
+    } finally {
+      this.setData({ isLoadingScreenshotRiskUsers: false });
+    }
+  },
+
+  async loadSuspiciousUsers() {
+    this.setData({ isLoadingSuspiciousUsers: true });
+    try {
+      const res = await wx.cloud.callFunction({ name: 'getSuspiciousUsers' });
+      if (res.result && res.result.success) {
+        this.setData({ suspiciousUsers: res.result.users || [] });
+      } else {
+        console.error('[index] 加载可疑用户列表失败:', res.result?.error);
+        this.setData({ suspiciousUsers: [] });
+      }
+    } catch (err) {
+      console.error('[index] 加载可疑用户列表异常:', err);
+      this.setData({ suspiciousUsers: [] });
+    } finally {
+      this.setData({ isLoadingSuspiciousUsers: false });
+    }
+  },
+
+  // 🔴 管理员对截图超限做决策：ban / ignore
+  async handleScreenshotRiskDecision(e) {
+    const riskId = e.currentTarget.dataset.riskId;
+    const action = e.currentTarget.dataset.action; // ban | ignore
+    if (!riskId || !action) return;
+
+    const actionText = action === 'ban' ? '封禁' : '放行';
+    this.showMyDialog({
+      title: '确认操作',
+      content: `确定要${actionText}该截图超限用户吗？`,
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      success: async (res) => {
+        if (!res.confirm) return;
+        try {
+          this.showMyLoading('处理中...');
+          const result = await wx.cloud.callFunction({
+            name: 'handleScreenshotRiskDecision',
+            data: { riskId, action }
+          });
+          this.hideMyLoading();
+          if (result.result && result.result.success) {
+            this.showAutoToast('成功', `已${actionText}`);
+            this.loadScreenshotRiskUsers();
+            if (action === 'ban') this.loadBannedUsers();
+          } else {
+            this.showAutoToast('失败', result.result?.error || '处理失败');
+          }
+        } catch (err) {
+          this.hideMyLoading();
+          this.showAutoToast('失败', err.message || '处理失败');
+        }
+      }
+    });
+  },
+
+  handleAddressTap(e) {
+    const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const latitude = Number(dataset.latitude);
+    const longitude = Number(dataset.longitude);
+    const province = dataset.province || '';
+    const city = dataset.city || '';
+    const district = dataset.district || '';
+    const detailAddress = dataset.address || '';
+    const nickname = dataset.nickname || '用户位置';
+    const fullAddress = `${province}${city}${district}${detailAddress}`.trim();
+
+    const openMap = (lat, lng) => {
+      wx.openLocation({
+        latitude: lat,
+        longitude: lng,
+        name: nickname,
+        address: fullAddress || detailAddress || `${province}${city}${district}` || '位置',
+        scale: 16
+      });
+    };
+
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      openMap(latitude, longitude);
+      return;
+    }
+
+    if (!fullAddress) {
+      this.showAutoToast('提示', '该用户暂无可用地址信息');
+      return;
+    }
+
+    qqmapsdk.geocoder({
+      address: fullAddress,
+      success: (res) => {
+        const loc = res && res.result && res.result.location;
+        if (loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng)) {
+          openMap(loc.lat, loc.lng);
+        } else {
+          this.showAutoToast('提示', '地址解析失败，无法打开地图');
+        }
+      },
+      fail: () => {
+        this.showAutoToast('提示', '地址解析失败，无法打开地图');
+      }
+    });
   },
 
   // 🔴 放行用户（根据封禁类型执行不同逻辑）
@@ -1462,19 +1750,60 @@ Page({
     });
   },
 
+  _openFirstTimeModalAnimated() {
+    if (this._firstTimeModalEnterTimer) {
+      clearTimeout(this._firstTimeModalEnterTimer);
+      this._firstTimeModalEnterTimer = null;
+    }
+    this.setData({
+      showFirstTimeModal: true,
+      firstTimeModalEnterReady: false,
+      firstTimeModalClosing: false,
+    });
+    this._preloadFirstTimeQrcode();
+    const armEnter = () => {
+      this._firstTimeModalEnterTimer = null;
+      if (!this.data.showFirstTimeModal || this.data.firstTimeModalClosing) return;
+      this.setData({ firstTimeModalEnterReady: true });
+    };
+    this._firstTimeModalEnterTimer = setTimeout(armEnter, 40);
+  },
+
+  /** 弹窗出现即预拉取本地包内二维码，复制展示时多半已进缓存，避免首帧空白久等 */
+  _preloadFirstTimeQrcode() {
+    if (this._firstTimeQrcodePreloadDone) return;
+    const src = '/images/qrcode.jpg';
+    wx.getImageInfo({
+      src,
+      success: () => {
+        this._firstTimeQrcodePreloadDone = true;
+      },
+      fail: () => {
+        // 文件缺失或路径错误时不打标，便于重试
+      },
+    });
+  },
+
   // 🔴 关闭首次进入提示弹窗
   closeFirstTimeModal() {
-    // 标记用户已看过提示
+    if (this.data.firstTimeModalClosing) return;
     wx.setStorageSync('has_seen_first_time_modal', true);
-    this.setData({ 
-      showFirstTimeModal: false,
-      showWechatQRCode: false,
-    });
+    this.setData({ firstTimeModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showFirstTimeModal: false,
+        firstTimeModalClosing: false,
+        firstTimeModalEnterReady: false,
+        showWechatQRCode: false,
+      });
+    }, 380);
   },
 
   // 🔴 复制管理员微信号
   copyAdminWechat() {
+    if (this.data.copyWechatBusy) return;
     const wechat = this.data.adminWechat;
+    this.setData({ copyWechatBusy: true });
     // 🔴 复制前立即隐藏可能的官方弹窗（使用原生API）
     const hideOfficialToast = () => {
       try {
@@ -1487,38 +1816,22 @@ Page({
     wx.setClipboardData({
       data: wechat,
       success: () => {
-        // 🔴 立即疯狂隐藏微信官方弹窗（使用原生API，多次尝试）
+        // 轻量隐藏一次系统默认 toast，避免覆盖自定义提示
         hideOfficialToast();
-        setTimeout(hideOfficialToast, 1);
-        setTimeout(hideOfficialToast, 3);
-        setTimeout(hideOfficialToast, 5);
-        setTimeout(hideOfficialToast, 10);
-        setTimeout(hideOfficialToast, 15);
-        setTimeout(hideOfficialToast, 20);
-        setTimeout(hideOfficialToast, 30);
-        setTimeout(hideOfficialToast, 50);
-        setTimeout(hideOfficialToast, 80);
-        setTimeout(hideOfficialToast, 120);
-        setTimeout(hideOfficialToast, 180);
-        setTimeout(hideOfficialToast, 250);
-        setTimeout(hideOfficialToast, 350);
-        setTimeout(hideOfficialToast, 500);
-        
-        // 🔴 延迟800ms后显示自定义弹窗
-        setTimeout(() => {
-        // 显示二维码
-        this.setData({ 
-          showWechatQRCode: true
+        this._preloadFirstTimeQrcode();
+        // 二维码 + 复制态 + 成功提示一次 setData，减少重排
+        this.setData({
+          showWechatQRCode: true,
+          copyWechatBusy: false,
+          showCopySuccessModal: true,
         });
-          // 显示自定义"内容已复制"弹窗
-          this.setData({ showCopySuccessModal: true });
-          // 2秒后自动关闭
-          setTimeout(() => {
-            this.setData({ showCopySuccessModal: false });
-          }, 2000);
-        }, 800);
+        // 2秒后自动关闭
+        setTimeout(() => {
+          this.setData({ showCopySuccessModal: false });
+        }, 2000);
       },
       fail: () => {
+        this.setData({ copyWechatBusy: false });
         this.showAutoToast('提示', '复制失败，请重试');
       }
     });
@@ -1526,15 +1839,18 @@ Page({
 
   // 🔴 收起二维码并跳转到昵称输入页面
   toggleQRCode() {
-    // 关闭首次进入弹窗
+    if (this.data.firstTimeModalClosing) return;
     wx.setStorageSync('has_seen_first_time_modal', true);
-    this.setData({ 
-      showFirstTimeModal: false,
-      showWechatQRCode: false,
-    });
-    
-    // 显示昵称输入界面
-    this.setData({ isShowNicknameUI: true });
+    this.setData({ firstTimeModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showFirstTimeModal: false,
+        firstTimeModalClosing: false,
+        firstTimeModalEnterReady: false,
+        showWechatQRCode: false,
+        isShowNicknameUI: true,
+      });
+    }, 380);
   },
 
   // 🔴 确认执行放行
@@ -1742,10 +2058,12 @@ Page({
 
   // 🔴 切换昵称录入模式
   toggleNicknameMode() {
+    // 兼容旧调用：切换到昵称录入页
     this.setData({
-      isNicknameMode: !this.data.isNicknameMode,
-      nicknameInput: '', // 切换时清空输入
-      nicknameBypassLocation: false // 重置开关
+      adminViewMode: this.data.adminViewMode === 'nickname' ? 'banned' : 'nickname',
+      isNicknameMode: this.data.adminViewMode !== 'nickname',
+      nicknameInput: '',
+      nicknameBypassLocation: false
     });
   },
 

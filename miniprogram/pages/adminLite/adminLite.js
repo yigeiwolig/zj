@@ -34,6 +34,20 @@ Page({
     customEditCallback: null
   },
 
+  buildLowQualityUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    const u = url.trim();
+    if (u.indexOf('http://') !== 0 && u.indexOf('https://') !== 0) return url;
+    if (/imageMogr2|imageView2/i.test(u)) return u;
+    const host = (() => {
+      try { return new URL(u).hostname || ''; } catch (e) { return ''; }
+    })();
+    const cosLike = /myqcloud\.com$|tcb\.qcloud\.la$|tencentcos\.cn$|file\.myqcloud\.com$/i.test(host) || /^cos\.[^.]+\.myqcloud\.com$/i.test(host);
+    if (!cosLike) return u;
+    const sep = u.indexOf('?') === -1 ? '?' : '&';
+    return `${u}${sep}imageMogr2/thumbnail/960x`;
+  },
+
   async _buildRetryImageUrl(url) {
     if (!url || typeof url !== 'string') return url;
     if (url.indexOf('cloud://') === 0 && wx.cloud && wx.cloud.getTempFileURL) {
@@ -59,8 +73,15 @@ Page({
     this._adminLiteImgRetryMap[idx] = true;
     const item = (this.data.productList || [])[idx];
     if (!item || !item.cover) return;
-    const next = await this._buildRetryImageUrl(item.cover);
-    this.setData({ [`productList[${idx}].cover`]: next });
+    const next = await this._buildRetryImageUrl(item.coverFull || item.cover);
+    const thumb = this.buildLowQualityUrl(next);
+    this.setData({
+      [`productList[${idx}].cover`]: next,
+      [`productList[${idx}].coverFull`]: next,
+      [`productList[${idx}].coverThumb`]: thumb,
+      [`productList[${idx}].dualCover`]: thumb !== next,
+      [`productCoverLoadedMap.${idx}`]: false
+    });
   },
 
   onAdminLiteCoverLoad(e) {
@@ -179,12 +200,17 @@ Page({
         console.log('[adminLite] 当前管理员状态:', this.data.isAdmin);
         // 确保数据是数组，并添加必要的字段
         const productList = (res.data || []).map(item => {
+          const coverFull = item.cover || '';
+          const coverThumb = coverFull ? this.buildLowQualityUrl(coverFull) : '';
           // 确保每个产品都有必要的字段
           return {
             ...item,
             id: item._id || item.id || Date.now() + Math.random(),
             name: item.name || '未命名产品',
-            cover: item.cover || '',
+            cover: coverFull,
+            coverFull,
+            coverThumb,
+            dualCover: !!(coverFull && coverThumb && coverThumb !== coverFull),
             models: item.models || [],
             jumpNumber: item.jumpNumber || null
           };

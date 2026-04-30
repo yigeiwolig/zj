@@ -1,5 +1,6 @@
 // pages/pagenew/pagenew.js
-const app = getApp()
+const app = getApp();
+const cosUpload = require('../../utils/cosUpload.js');
 
 Page({
   data: {
@@ -25,9 +26,6 @@ Page({
   },
 
   onLoad: function() {
-    // #region agent log
-    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:onLoad',message:'onLoad called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'loading-trace',hypothesisId:'A'},fail:()=>{}});
-    // #endregion
     // 🔴 计算导航栏高度（适配所有机型）
     this.calcNavBarInfo();
     // 🔴 更新页面访问统计
@@ -132,9 +130,6 @@ Page({
       }
     } catch (e) {}
 
-    // #region agent log
-    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:checkAdminPrivilege',message:'checkAdminPrivilege called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'loading-trace',hypothesisId:'C'},fail:()=>{}});
-    // #endregion
     try {
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
@@ -160,9 +155,6 @@ Page({
 
   // 管理员模式手动切换开关
   toggleAdminMode() {
-    // #region agent log
-    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:toggleAdminMode',message:'toggleAdminMode called',data:{isAuthorized:this.data.isAuthorized,isAdmin:this.data.isAdmin},timestamp:Date.now(),sessionId:'debug-session',runId:'admin-toggle',hypothesisId:'A'},fail:()=>{}});
-    // #endregion
     console.log('[pagenew] toggleAdminMode called, isAuthorized:', this.data.isAuthorized, 'isAdmin:', this.data.isAdmin);
     
     if (!this.data.isAuthorized) {
@@ -193,12 +185,28 @@ Page({
 
   // 左上角返回
   goBack: function() {
-    // 返回 products 时，固定聚焦到“产品选购”卡片
+    // 返回 products：仅“普通返回”时跳过自动定位；
+    // 若本次链路是“pagenew 卡片 -> shop”，则保留回到产品选购卡片的落点
     try {
-      wx.setStorageSync('__products_return_focus__', {
-        cardId: 4,
-        ts: Date.now()
-      });
+      const ret = wx.getStorageSync('__products_return_focus__');
+      const keepFocus = !!(
+        ret &&
+        ret.source === 'pagenew_card_to_shop' &&
+        ret.ts &&
+        (Date.now() - ret.ts < 10 * 60 * 1000)
+      );
+
+      if (keepFocus) {
+        // 保留 __products_return_focus__，让 products 回到“产品选购”卡片
+        wx.removeStorageSync('__products_skip_return_focus_once__');
+      } else {
+        // 普通返回：不改焦点，并跳过一次自动定位
+        wx.removeStorageSync('__products_return_focus__');
+        wx.setStorageSync('__products_skip_return_focus_once__', {
+          source: 'pagenew_goBack',
+          ts: Date.now()
+        });
+      }
     } catch (e) {}
     wx.navigateBack({
       fail: () => { wx.reLaunch({ url: '/pages/index/index' }); }
@@ -207,9 +215,6 @@ Page({
 
   // 读取数据
   fetchProducts: function() {
-    // #region agent log
-    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'miniprogram/pages/pagenew/pagenew.js:fetchProducts',message:'fetchProducts called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'loading-trace',hypothesisId:'B'},fail:()=>{}});
-    // #endregion
     var _this = this;
     this.db.collection('products').get().then(res => {
       // 确保每个产品都有jumpNumber字段
@@ -329,23 +334,25 @@ Page({
       success: function(res) {
         var path = res.tempFiles[0].tempFilePath;
         _this.setData({ [`products[${idx}].cover`]: path }); // 预览
-        _this.uploadFile(path, 'cover').then(id => {
-          _this.db.collection('products').doc(item._id).update({ data: { cover: id } });
+        _this.uploadCoverToCos(path).then(id => {
+          return new Promise(function(resolve, reject) {
+            _this.db.collection('products').doc(item._id).update({
+              data: { cover: id },
+              success: resolve,
+              fail: reject
+            });
+          });
+        }).catch(err => {
+          console.error('[pagenew] 封面上传或保存失败:', err);
+          wx.showToast({ title: '上传失败', icon: 'none' });
         });
       }
     });
   },
 
-  uploadFile: function(path, prefix) {
-    return new Promise((resolve, reject) => {
-      var suffix = path.match(/\.[^.]+?$/)[0] || '.png';
-      wx.cloud.uploadFile({
-        cloudPath: 'mt_products/' + prefix + '_' + Date.now() + suffix,
-        filePath: path,
-        success: res => resolve(res.fileID),
-        fail: reject
-      });
-    });
+  /** 产品封面 → COS（数据桶），禁止云存储 uploadFile */
+  uploadCoverToCos: function(path) {
+    return cosUpload.uploadImageToCos(path, 'mt_products');
   },
 
   // 触发管理员（已废弃旧逻辑）
@@ -372,8 +379,11 @@ Page({
 
     // 从“产品上新”进入“产品选购”详情时，提前写入返回落点
     try {
+      // 明确这是“需要回到产品选购卡片”的路径，清理可能残留的跳过标记
+      wx.removeStorageSync('__products_skip_return_focus_once__');
       wx.setStorageSync('__products_return_focus__', {
         cardId: 4,
+        source: 'pagenew_card_to_shop',
         ts: Date.now()
       });
     } catch (e) {}

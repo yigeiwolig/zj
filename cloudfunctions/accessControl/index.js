@@ -2,6 +2,14 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
+async function isGuanliyuan(openid) {
+  if (!openid) return false;
+  let r = await db.collection('guanliyuan').where({ openid }).limit(1).get();
+  if (r.data && r.data.length > 0) return true;
+  r = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get();
+  return !!(r.data && r.data.length > 0);
+}
+
 // 工具：判断浙江 (用于拦截逻辑)
 function checkIsZhejiang(lat, lng) {
   return (lat > 27.0 && lat < 31.2 && lng > 118.0 && lng < 123.0);
@@ -62,6 +70,8 @@ exports.main = async (event, context) => {
 
     const [blockedLogRecord, userRecord, buttonRecordRes, validUsersBypassRes] =
       await Promise.all([blockedLogPromise, userPromise, buttonPromise, validUsersBypassPromise]);
+
+    const adminBypassLocation = await isGuanliyuan(openid);
 
     let historyIsAllowed = false;
     let globalBan = false;               // 对应 nickname_verify_fail
@@ -124,8 +134,8 @@ exports.main = async (event, context) => {
       finalIsBlocked = true; 
       finalMsg = "🚫 账号已被永久封禁"; 
     }
-    // 2. login_logbutton 标记的地址封禁（且没有免死金牌）
-    else if (locationBannedByButton) {
+    // 2. login_logbutton 标记的地址封禁（且没有免死金牌；管理员不参与地址拦截）
+    else if (locationBannedByButton && !adminBypassLocation) {
       finalIsBlocked = true;
       finalMsg = "⚠️ 当前区域暂无法访问";
     }
@@ -187,7 +197,7 @@ exports.main = async (event, context) => {
             }
           });
 
-          if (isBlockedCity && !bypassLocationCheck) {
+          if (isBlockedCity && !bypassLocationCheck && !adminBypassLocation) {
           // 城市被拦截，更新 login_logbutton
           // 🔴 构建地址和设备信息对象
           const locationInfo = {
@@ -243,15 +253,15 @@ exports.main = async (event, context) => {
         console.error('[accessControl] 检查拦截配置失败:', e);
         // 配置检查失败，使用旧的经纬度判断作为兜底
         if (isValidGPS) {
-          if (!isChina) { 
-            finalIsBlocked = true; 
-            finalMsg = "⚠️ 海外IP访问受限"; 
-          } else if (isZhejiang) { 
-            finalIsBlocked = true; 
-            finalMsg = "⚠️ 当前区域暂无法访问"; 
-          } else { 
-            finalIsBlocked = false; 
-            finalMsg = "📍 访问通过"; 
+          if (!adminBypassLocation && !isChina) {
+            finalIsBlocked = true;
+            finalMsg = "⚠️ 海外IP访问受限";
+          } else if (!adminBypassLocation && isZhejiang) {
+            finalIsBlocked = true;
+            finalMsg = "⚠️ 当前区域暂无法访问";
+          } else {
+            finalIsBlocked = false;
+            finalMsg = adminBypassLocation ? "📍 管理员跳过地域规则" : "📍 访问通过";
           }
     } else {
           finalIsBlocked = false; 
@@ -262,15 +272,15 @@ exports.main = async (event, context) => {
     // 5. 兜底：使用旧的经纬度判断（如果没有传省市信息）
     else {
       if (isValidGPS) {
-        if (!isChina) { 
-          finalIsBlocked = true; 
-          finalMsg = "⚠️ 海外IP访问受限"; 
-        } else if (isZhejiang) { 
-          finalIsBlocked = true; 
-          finalMsg = "⚠️ 当前区域暂无法访问"; 
-        } else { 
-          finalIsBlocked = false; 
-          finalMsg = "📍 访问通过"; 
+        if (!adminBypassLocation && !isChina) {
+          finalIsBlocked = true;
+          finalMsg = "⚠️ 海外IP访问受限";
+        } else if (!adminBypassLocation && isZhejiang) {
+          finalIsBlocked = true;
+          finalMsg = "⚠️ 当前区域暂无法访问";
+        } else {
+          finalIsBlocked = false;
+          finalMsg = adminBypassLocation ? "📍 管理员跳过地域规则" : "📍 访问通过";
         }
       } else {
         finalIsBlocked = false; 

@@ -64,7 +64,7 @@
   <!-- ======================= -->
   <!-- 2. 操作指引弹窗 -->
   <!-- ======================= -->
-  <view class="password-modal-mask {{tutorialModalClosing ? 'closing' : ''}}" wx:if="{{showTutorialModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="password-modal-mask tutorial-guide-mask {{tutorialModalClosing ? 'closing' : ''}}" wx:if="{{showTutorialModal}}" catchtouchmove="noop" catchtap="noop">
     <view class="password-box" catchtouchmove="noop" catchtap="noop">
       <view class="pass-title" style="margin-bottom: 60rpx;">操作指引</view>
       <view class="anim-stage">
@@ -114,7 +114,7 @@
             style="transform: translateX({{item.status === 'active' ? (modelDragOffset + 'px') : (item.status === 'next' ? (nextCardOffsetPercent + '%') : (item.status === 'prev' ? (prevCardOffsetPercent + '%') : '0'))}}) scale({{item.status === 'active' ? modelActiveScale : modelSideScale}}); transition: {{isDraggingModel ? 'none' : 'all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1)'}};">
         <view class="card-header">
           <view class="series-tag">{{item.tag}}</view>
-          <view class="model-name">{{item.name}} <text class="model-suffix {{item.type === 'Max' ? 'max' : ''}} {{item.type === 'Pro Long' ? 'pro-long' : ''}} {{item.type === 'Max Long' ? 'max-long' : ''}}">{{item.type}}</text></view>
+          <view class="model-name">{{item.name}} <text class="model-suffix {{item.type === 'Max' ? 'max' : ''}} {{item.type === 'Max Long' ? 'max-long' : ''}}">{{item.type}}</text></view>
         </view>
         <view class="visual-area">
           <image class="custom-icon" src="{{item.icon}}" mode="aspectFit" lazy-load="true"></image>
@@ -283,8 +283,8 @@
               </view>
             </view>
 
-            <!-- 🔴 出厂设置按钮（只在管理员模式下显示，F1 MAX / F1 PRO / F2 PRO / F2 PRO Long / F2 MAX 系列） -->
-            <view class="single-btn-wrapper" wx:if="{{isAdmin && ((currentModel.name === 'F2' && (currentModel.type === 'Max' || currentModel.type === 'Max Long' || currentModel.type === 'Pro' || currentModel.type === 'Pro Long')) || (currentModel.name === 'F1' && (currentModel.type === 'Max' || currentModel.type === 'Pro')))}}">
+            <!-- 🔴 出厂设置按钮（只在管理员模式下显示，F1 MAX / F1 PRO / F2 PRO / F2 MAX 系列） -->
+            <view class="single-btn-wrapper" wx:if="{{isAdmin && ((currentModel.name === 'F2' && (currentModel.type === 'Max' || currentModel.type === 'Max Long' || currentModel.type === 'Pro')) || (currentModel.name === 'F1' && (currentModel.type === 'Max' || currentModel.type === 'Pro')))}}">
               <view class="single-btn factory-reset-btn" bindtap="handleFactoryReset">
                 <view class="btn-icon-circle mt-icon">
                   <text class="mt-text">MT</text>
@@ -461,23 +461,6 @@
           </view>
         </view>
 
-        <!-- 6. 教学引导弹窗 -->
-        <view class="tutorial-mask" wx:if="{{showAngleHint}}" catchtouchmove="noop" catchtap="noop">
-          <view class="guide-modal" catchtouchmove="noop" catchtap="noop">
-            <view class="guide-title" style="margin-bottom: 40rpx;">操作指引</view>
-            <view class="anim-stage">
-               <view class="ring-btn-wrapper {{openAngleAnimIsPressing ? 'pressing' : ''}}" bindtap="toggleOpenAngleLight">
-                  <view class="ring-outer {{openAngleAnimLightOn ? 'light-on' : ''}}">
-                     <view class="ring-inner"></view>
-                  </view>
-                  <view class="sim-finger-tap" wx:if="{{openAngleAnimIsPressing}}"></view>
-               </view>
-               <text class="anim-desc">{{openAngleAnimText || (openAngleAnimLightOn ? '指示灯已亮' : '点击使指示灯亮')}}</text>
-            </view>
-            <view class="guide-close-btn {{angleHintBtnLocked ? 'btn-locked' : ''}}" bindtap="dismissHint" style="margin-top: 60rpx;">{{angleHintBtnText}}</view>
-          </view>
-        </view>
-
       </view>
 
     </view> <!-- 结束 device-stage -->
@@ -531,6 +514,23 @@
     </view>   
 
   </view> <!-- 结束 control-page -->
+
+  <!-- 打开角度：全页教学引导弹窗（提升到根层，确保遮罩覆盖整个页面） -->
+  <view class="tutorial-mask" wx:if="{{showAngleHint}}" catchtouchmove="noop" catchtap="noop">
+    <view class="guide-modal" catchtouchmove="noop" catchtap="noop">
+      <view class="guide-title" style="margin-bottom: 40rpx;">操作指引</view>
+      <view class="anim-stage">
+        <view class="ring-btn-wrapper {{openAngleAnimIsPressing ? 'pressing' : ''}}" bindtap="toggleOpenAngleLight">
+          <view class="ring-outer {{openAngleAnimLightOn ? 'light-on' : ''}}">
+            <view class="ring-inner"></view>
+          </view>
+          <view class="sim-finger-tap" wx:if="{{openAngleAnimIsPressing}}"></view>
+        </view>
+        <text class="anim-desc">{{openAngleAnimText || (openAngleAnimLightOn ? '指示灯已亮' : '点击使指示灯亮')}}</text>
+      </view>
+      <view class="guide-close-btn {{angleHintBtnLocked ? 'btn-locked' : ''}}" bindtap="dismissHint" style="margin-top: 60rpx;">{{angleHintBtnText}}</view>
+    </view>
+  </view>
 
   <!-- 🔴 新增：指示灯确认弹窗（调整按钮用） -->
   <view class="password-modal-mask {{indicatorCheckModalClosing ? 'closing' : ''}}" wx:if="{{showIndicatorCheckModal}}" catchtouchmove="noop" catchtap="noop">

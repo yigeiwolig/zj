@@ -1,4 +1,8 @@
 const db = wx.cloud.database();
+const cosUpload = require('../../utils/cosUpload.js');
+
+/** 与云函数 getOrCreateAzjcDirectPool 内 POOL_CODE 保持一致 */
+const AZJC_DIRECT_POOL_CODE = '__AZJC_DIRECT_POOL__';
 
 Page({
   data: {
@@ -96,7 +100,18 @@ Page({
     currentSectionStartTime: 0,    // 当前板块进入时间
     autoSaveTimer: null,           // 🔴 定时保存定时器
     shareCodeLocationInfo: null,   // 🔴 分享码用户地址信息（仅在进入时获取一次）
-    shareCodeRecordCreated: false  // 🔴 是否已创建分享码记录（用于区分首次保存和更新）
+    shareCodeRecordCreated: false,  // 🔴 是否已创建分享码记录（用于区分首次保存和更新）
+    tutorialDirectPoolId: '',       // 🔴 普通用户安装教程写入的 chakan 汇总文档 _id
+    shouldRecordTutorialInstall: false,
+    installSessionRecordCreated: false,
+
+    // 🔴 管理员查看分享码统计
+    showShareCodeStats: false,
+    loadingShareCodeStats: false,
+    shareCodeStatsRows: [],
+    shareCodeStatsDisplayRows: [],
+    statsSearchKeyword: '',
+    statsScrollTop: 0
   },
 
   async _buildRetryImageUrl(url) {
@@ -180,8 +195,8 @@ Page({
       // 开始整体计时
       const startTime = Date.now();
       
-      // 🔴 只在进入页面时获取一次地址信息，之后不再更新
-      let locationInfo = {
+      // 🔴 分享码用户不采集地址信息
+      const locationInfo = {
         province: '',
         city: '',
         district: '',
@@ -189,26 +204,12 @@ Page({
         latitude: null,
         longitude: null
       };
-      try {
-        const cachedLocation = wx.getStorageSync('last_location') || {};
-        locationInfo = {
-          province: cachedLocation.province || '',
-          city: cachedLocation.city || '',
-          district: cachedLocation.district || '',
-          address: cachedLocation.address || '',
-          latitude: cachedLocation.latitude || null,
-          longitude: cachedLocation.longitude || null
-        };
-        console.log('[azjc] onLoad: 分享码用户获取地址信息（仅此一次）:', locationInfo);
-      } catch (e) {
-        console.log('[azjc] 获取地址信息失败:', e);
-      }
       
       this.setData({
         sessionStartTime: startTime,
         sectionClicks: {},
         sectionDurations: {},
-        shareCodeLocationInfo: locationInfo // 🔴 保存地址信息到页面数据，之后不再更新
+        shareCodeLocationInfo: locationInfo
       });
       console.log('[azjc] onLoad: 分享码用户开始计时，sessionStartTime:', startTime);
       
@@ -273,12 +274,11 @@ Page({
     // 🔴 停止定时保存
     this._stopAutoSave();
     
-    // 🔴 如果是分享码用户，记录当前板块时长并上传统计
-    if (this.data.isShareCodeUser && this.data.sessionStartTime > 0) {
+    if ((this.data.isShareCodeUser || this.data.shouldRecordTutorialInstall) && this.data.sessionStartTime > 0) {
       console.log('[azjc] onHide: 开始上传统计数据');
       await this._uploadSessionStats();
     } else {
-      console.log('[azjc] onHide: 不是分享码用户或未开始计时，跳过上传统计');
+      console.log('[azjc] onHide: 无需上传统计');
     }
   },
 
@@ -292,17 +292,15 @@ Page({
     // 🔴 停止定时保存
     this._stopAutoSave();
     
-    // 🔴 如果是分享码用户，记录当前板块时长并上传统计
-    if (this.data.isShareCodeUser && this.data.sessionStartTime > 0) {
+    if ((this.data.isShareCodeUser || this.data.shouldRecordTutorialInstall) && this.data.sessionStartTime > 0) {
       console.log('[azjc] onUnload: 开始上传统计数据');
-      // 注意：onUnload 中的异步操作可能无法完成，但至少尝试保存
       try {
         await this._uploadSessionStats();
       } catch (err) {
         console.error('[azjc] onUnload: 上传统计数据失败:', err);
       }
     } else {
-      console.log('[azjc] onUnload: 不是分享码用户或未开始计时，跳过上传统计');
+      console.log('[azjc] onUnload: 无需上传统计');
     }
   },
 
@@ -724,6 +722,19 @@ Page({
       return;
     }
     const nextState = !this.data.isAdmin;
+    if (nextState && this.data.shouldRecordTutorialInstall) {
+      this._stopAutoSave();
+      this._uploadSessionStats().catch(() => {});
+      this.setData({
+        shouldRecordTutorialInstall: false,
+        sessionStartTime: 0,
+        installSessionRecordCreated: false,
+        sectionClicks: {},
+        sectionDurations: {},
+        currentSectionKey: null,
+        currentSectionStartTime: 0
+      });
+    }
     this.setData({ isAdmin: nextState });
     this._showCustomToast(nextState ? '管理模式开启' : '已回到用户模式', 'none');
   },
@@ -735,7 +746,9 @@ Page({
       console.log('[azjc loadDataFromCloud] 分享码次数已用完，跳过加载教程内容');
       return;
     }
-    
+
+    this._ensureDirectTutorialRecording();
+
     // 1. 读取产品型号
     db.collection('azjc').where({
       type: 'product'
@@ -831,6 +844,56 @@ Page({
         });
       }
     });
+  },
+
+  /** 普通用户（非分享码、非编辑模式）进入教程后开始打点，写入 chakan 汇总池供管理员列表展示 */
+  async _ensureDirectTutorialRecording() {
+    try {
+      if (this.data.isShareCodeUser || this.data.shareCodeViewsExhausted) return;
+      if (this.data.isAdmin) return;
+      if (this.data.shouldRecordTutorialInstall && this.data.sessionStartTime > 0) return;
+
+      const res = await wx.cloud.callFunction({ name: 'getOrCreateAzjcDirectPool' });
+      if (!res.result || !res.result.success || !res.result._id) {
+        console.warn('[azjc] getOrCreateAzjcDirectPool 失败', res);
+        return;
+      }
+
+      let locationInfo = {
+        province: '',
+        city: '',
+        district: '',
+        address: '',
+        latitude: null,
+        longitude: null
+      };
+      try {
+        const cached = wx.getStorageSync('last_location') || {};
+        locationInfo = {
+          province: cached.province || '',
+          city: cached.city || '',
+          district: cached.district || '',
+          address: cached.address || '',
+          latitude: cached.latitude != null ? cached.latitude : null,
+          longitude: cached.longitude != null ? cached.longitude : null
+        };
+      } catch (e) {}
+
+      this.setData({
+        tutorialDirectPoolId: res.result._id,
+        shouldRecordTutorialInstall: true,
+        installSessionRecordCreated: false,
+        sessionStartTime: Date.now(),
+        sectionClicks: {},
+        sectionDurations: {},
+        currentSectionKey: null,
+        currentSectionStartTime: 0,
+        shareCodeLocationInfo: locationInfo
+      });
+      this._startAutoSave();
+    } catch (err) {
+      console.error('[azjc] _ensureDirectTutorialRecording', err);
+    }
   },
 
   // 加载视频和图文数据
@@ -1125,6 +1188,184 @@ Page({
     this.filterContent(); // 重新过滤内容
   },
 
+  toggleShareCodeStats: function() {
+    if (!this.data.isAuthorized) return;
+    const next = !this.data.showShareCodeStats;
+    this.setData({ showShareCodeStats: next }, () => {
+      if (next) {
+        this.loadShareCodeStats();
+      } else {
+        this.setData({
+          statsSearchKeyword: '',
+          statsScrollTop: 0,
+          shareCodeStatsDisplayRows: this.data.shareCodeStatsRows || []
+        });
+      }
+    });
+  },
+
+  onStatsSearchInput: function(e) {
+    const keyword = String((e && e.detail && e.detail.value) || '').trim().toUpperCase();
+    this.setData({ statsSearchKeyword: keyword }, () => {
+      this.applyShareCodeStatsFilter();
+    });
+  },
+
+  applyShareCodeStatsFilter: function() {
+    const rows = Array.isArray(this.data.shareCodeStatsRows) ? this.data.shareCodeStatsRows.slice() : [];
+    const keyword = String(this.data.statsSearchKeyword || '').trim().toUpperCase();
+    if (!keyword) {
+      this.setData({
+        shareCodeStatsDisplayRows: rows,
+        statsScrollTop: 0
+      });
+      return;
+    }
+    const matchRows = [];
+    const otherRows = [];
+    rows.forEach((item) => {
+      const raw = String((item && item.shareCodeRaw) || '').toUpperCase();
+      const disp = String((item && item.shareCode) || '').toUpperCase();
+      if (raw.indexOf(keyword) !== -1 || disp.indexOf(keyword) !== -1) matchRows.push(item);
+      else otherRows.push(item);
+    });
+    this.setData({
+      shareCodeStatsDisplayRows: matchRows.concat(otherRows),
+      statsScrollTop: 0
+    });
+  },
+
+  formatStatsDate: function(input) {
+    if (!input) return '';
+    let d = null;
+    if (input instanceof Date) d = input;
+    else if (typeof input === 'string' || typeof input === 'number') d = new Date(input);
+    else if (input && input.$date) d = new Date(input.$date);
+    if (!d || Number.isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  },
+
+  _sumVideoMinutesFromViewer: function(viewer) {
+    if (!viewer || typeof viewer !== 'object') return 0;
+    let total = 0;
+    Object.keys(viewer).forEach((k) => {
+      if (k.indexOf('sectionDurations_video_') === 0) {
+        total += Number(viewer[k]) || 0;
+      }
+    });
+    return total;
+  },
+
+  _countSectionClicksFromViewer: function(viewer) {
+    if (!viewer || typeof viewer !== 'object') return 0;
+    let n = 0;
+    Object.keys(viewer).forEach((k) => {
+      if (k.indexOf('sectionClicks_') === 0) {
+        n += Number(viewer[k]) || 0;
+      }
+    });
+    return n;
+  },
+
+  async loadShareCodeStats() {
+    if (!this.data.isAuthorized) return;
+    this.setData({ loadingShareCodeStats: true });
+    try {
+      const res = await db.collection('chakan').orderBy('createdAt', 'desc').limit(100).get();
+      const docs = Array.isArray(res.data) ? res.data : [];
+      const rows = [];
+      const docId = (d) => String((d && d._id) != null ? d._id : '');
+
+      docs.forEach((doc) => {
+        const viewers = Array.isArray(doc.viewers) ? doc.viewers : [];
+        const isPool = doc.code === AZJC_DIRECT_POOL_CODE;
+        const shareCodeDisplay = isPool ? '普通安装' : (doc.code || '—');
+        const shareCodeRaw = doc.code || '';
+        const grouped = {};
+        viewers.forEach((v) => {
+          const openid = (v && v.openid) || '';
+          const nickname = (v && v.nickname) || '未命名用户';
+          const key = `${openid}__${nickname}`;
+          if (!grouped[key]) {
+            grouped[key] = {
+              viewerNickname: nickname,
+              creatorNickname: doc.creatorNickname || '未知',
+              enterCount: 0,
+              totalStayMinutes: 0,
+              totalVideoMinutes: 0,
+              totalSectionClicks: 0,
+              lastViewTimeRaw: '',
+              province: '',
+              city: '',
+              district: '',
+              address: '',
+              latitude: null,
+              longitude: null
+            };
+          }
+          const stayMin = Number(v.durationMinutes) || 0;
+          const videoMin = this._sumVideoMinutesFromViewer(v);
+          const clicks = this._countSectionClicksFromViewer(v);
+          grouped[key].enterCount += 1;
+          grouped[key].totalStayMinutes += stayMin;
+          grouped[key].totalVideoMinutes += videoMin;
+          grouped[key].totalSectionClicks += clicks;
+          const vt = this.formatStatsDate(v.viewTime);
+          if (vt && (!grouped[key].lastViewTimeRaw || vt > grouped[key].lastViewTimeRaw)) {
+            grouped[key].lastViewTimeRaw = vt;
+            grouped[key].province = (v && v.province) || '';
+            grouped[key].city = (v && v.city) || '';
+            grouped[key].district = (v && v.district) || '';
+            grouped[key].address = (v && v.address) || '';
+            grouped[key].latitude = v && v.latitude != null ? v.latitude : null;
+            grouped[key].longitude = v && v.longitude != null ? v.longitude : null;
+          }
+        });
+
+        const codePart = String(doc.code || '');
+        Object.keys(grouped).forEach((k) => {
+          const item = grouped[k];
+          const regionParts = [item.province, item.city, item.district].filter((x) => !!String(x || '').trim());
+          const regionText = regionParts.length ? regionParts.join(' ') : '—';
+          const addr = String(item.address || '').trim();
+          const addressDisplay = addr.length > 56 ? `${addr.slice(0, 56)}…` : addr || '—';
+          const latOk = item.latitude != null && item.latitude !== '';
+          const lngOk = item.longitude != null && item.longitude !== '';
+          const geoText = latOk && lngOk ? `${item.latitude}, ${item.longitude}` : '—';
+          rows.push({
+            rowKey: `${docId(doc)}_${codePart}__${k}`,
+            shareCode: shareCodeDisplay,
+            shareCodeRaw,
+            viewerNickname: item.viewerNickname,
+            creatorNickname: item.creatorNickname,
+            enterCount: item.enterCount,
+            totalStayMinutesText: item.totalStayMinutes.toFixed(2),
+            totalVideoMinutesText: item.totalVideoMinutes.toFixed(2),
+            sectionClicksTotal: item.totalSectionClicks,
+            lastViewTime: item.lastViewTimeRaw || '—',
+            regionText,
+            addressDisplay,
+            geoText
+          });
+        });
+      });
+
+      rows.sort((a, b) => (a.lastViewTime < b.lastViewTime ? 1 : -1));
+      this.setData({
+        shareCodeStatsRows: rows,
+        shareCodeStatsDisplayRows: rows,
+        statsScrollTop: 0
+      });
+      this.applyShareCodeStatsFilter();
+    } catch (err) {
+      console.error('[azjc] 加载分享码统计失败:', err);
+      this._showCustomToast('加载分享码统计失败', 'none', 2000);
+    } finally {
+      this.setData({ loadingShareCodeStats: false });
+    }
+  },
+
 
   // 真实媒体上传
   uploadMedia: function(e) {
@@ -1143,44 +1384,33 @@ Page({
             if (resModal.confirm) {
               const title = resModal.content || '未命名步骤';
               
-              // 显示上传进度
               this.showMyLoading('上传中...');
-              
-              // 生成云存储路径
-              const suffix = mediaType === 'video' ? '.mp4' : '.jpg';
-              const cloudPath = `azjc/${mediaType}/${Date.now()}_${Math.random().toString(36).substr(2, 9)}${suffix}`;
-              
-              // 上传到云存储
-              wx.cloud.uploadFile({
-                cloudPath: cloudPath,
-                filePath: tempPath,
-                success: (uploadRes) => {
-                  // 上传成功，保存到云数据库
-                  const fileID = uploadRes.fileID;
+              const folder = `azjc/${mediaType}`;
+              const uploadPromise =
+                mediaType === 'video'
+                  ? cosUpload.uploadVideoToCos(tempPath, folder)
+                  : cosUpload.uploadImageToCos(tempPath, folder);
+              uploadPromise
+                .then(fileID => {
                   const data = {
                     type: mediaType,
                     title: title,
                     createTime: db.serverDate()
                   };
-                  
                   if (mediaType === 'video') {
                     data.url = fileID;
                   } else {
                     data.img = fileID;
-                    data.desc = ''; // 留空，不显示描述
+                    data.desc = '';
                   }
-                  
-                  // 弹出设置匹配码的弹窗
                   this.showMatchCodeModal(mediaType, fileID, title, data);
-              // 关闭上传中的 loading，等待用户选择匹配码
-              this.hideMyLoading();
-                },
-                fail: (err) => {
+                  this.hideMyLoading();
+                })
+                .catch(err => {
                   console.error('上传文件失败:', err);
                   this.hideMyLoading();
-                  this._showCustomToast('上传失败: ' + (err.errMsg || '未知错误'), 'none', 3000);
-                }
-              });
+                  this._showCustomToast('上传失败: ' + ((err && err.message) || (err && err.errMsg) || '未知错误'), 'none', 3000);
+                });
             }
           }
         });
@@ -2162,6 +2392,42 @@ Page({
       return; // 管理员逻辑执行完直接结束，不走下面的普通用户逻辑
     }
 
+    // 🔴 分享码用户：与管理员相同的手势，可在产品/车型/教程间上下滑切换（含上划回退重新选产品）
+    if (this.data.isShareCodeUser) {
+      if (Math.abs(distance) > 50) {
+        if (distance > 0 && this.data.stepIndex > 0) {
+          const newStepIndex = this.data.stepIndex - 1;
+          const patch = { stepIndex: newStepIndex };
+          if (newStepIndex < 2) {
+            patch.canScroll = newStepIndex >= 1;
+          }
+          this.setData(patch);
+          this.updatePageTitle(newStepIndex);
+          if (newStepIndex === 1) {
+            wx.nextTick(() => this.filterContent());
+          }
+        } else if (distance < 0 && this.data.stepIndex < 2) {
+          if (this.data.stepIndex === 0 && this.data.pIndex < 0) {
+            return;
+          }
+          if (this.data.stepIndex === 1 && this.data.tIndex < 0) {
+            return;
+          }
+          const newStepIndex = this.data.stepIndex + 1;
+          const patch = { stepIndex: newStepIndex };
+          if (newStepIndex >= 1) {
+            patch.canScroll = true;
+          }
+          this.setData(patch);
+          this.updatePageTitle(newStepIndex);
+          if (newStepIndex === 2) {
+            wx.nextTick(() => this.filterContent());
+          }
+        }
+      }
+      return;
+    }
+
     // --- 以下是普通用户逻辑：只能往下滑返回，不能往上滑 ---
     if (distance > 80) { // 向下滑动
       // 仅在非视频列表页（stepIndex不为2）时才允许向下滑动返回
@@ -2202,6 +2468,8 @@ Page({
   openFullScreenVideo(e) {
     const index = e.currentTarget.dataset.index;
     const videoUrl = this.data.filteredChapters[index]?.url || '';
+    const mainCurrentTime = Number((this._videoProgressMap && this._videoProgressMap[index]) || 0) || 0;
+    const mainPaused = !!(this._videoPausedMap && this._videoPausedMap[index]);
 
     // 🔴 标记正在处理全屏切换，防止 touchEnd 事件干扰
     this._isHandlingFullScreen = true;
@@ -2215,10 +2483,11 @@ Page({
           isVideoFullScreen: true,
           fullScreenVideoUrl: videoUrl,
           fullScreenVideoIndex: index,
-          fullScreenVideoPaused: false,
+          fullScreenVideoPaused: mainPaused,
           fullScreenVideoInitialStyle: '',
           locked: true
         });
+        this._fullScreenCurrentTime = mainCurrentTime;
         return;
       }
 
@@ -2257,12 +2526,22 @@ Page({
         isVideoFullScreen: true,
         fullScreenVideoUrl: videoUrl,
         fullScreenVideoIndex: index,
-        fullScreenVideoPaused: false, // 🔴 默认播放状态，如果原视频是暂停的，需要手动处理
+        fullScreenVideoPaused: mainPaused,
         fullScreenVideoInitialStyle: initialStyle,
         fullScreenVideoTransform: '', // 先不设置transform，使用内联样式
         fullScreenVideoMaskClosing: false, // 🔴 清除关闭状态，确保打开动画流畅
         locked: true
       });
+      this._fullScreenCurrentTime = mainCurrentTime;
+      this._fullScreenFromVideoIndex = index;
+      this._videoPausedMap = this._videoPausedMap || {};
+      this._videoPausedMap[index] = mainPaused;
+      this._videoProgressMap = this._videoProgressMap || {};
+      this._videoProgressMap[index] = mainCurrentTime;
+      const originalVideoContext = wx.createVideoContext(`video-${index}`);
+      if (originalVideoContext && !mainPaused) {
+        originalVideoContext.pause();
+      }
       
       // 🔴 修复：禁用页面滚动，防止视频拖拽结束后触发页面滚动
       const pages = getCurrentPages();
@@ -2287,7 +2566,14 @@ Page({
         // 🔴 修复：动画开始后，延迟一点时间再播放视频，确保视频已渲染
         setTimeout(() => {
           const videoContext = wx.createVideoContext('fullscreen-video-player');
-          videoContext.play();
+          if (mainCurrentTime > 0) {
+            videoContext.seek(mainCurrentTime);
+          }
+          if (mainPaused) {
+            videoContext.pause();
+          } else {
+            videoContext.play();
+          }
         }, 100);
       }, 50);
     }).exec();
@@ -2310,6 +2596,11 @@ Page({
     } else {
       videoContext.play();
     }
+    const idx = this.data.fullScreenVideoIndex;
+    this._videoPausedMap = this._videoPausedMap || {};
+    if (idx >= 0) {
+      this._videoPausedMap[idx] = paused;
+    }
   },
 
   // 🔴 关闭全屏视频遮罩层
@@ -2323,9 +2614,10 @@ Page({
     }
     this._isClosingFullScreen = true;
     
-    // 🔴 保存当前全屏视频的暂停状态
+    // 🔴 保存当前全屏视频的暂停状态与进度
     const pausedState = this.data.fullScreenVideoPaused;
     const videoIndex = this.data.fullScreenVideoIndex;
+    const exitTime = Number(this._fullScreenCurrentTime || 0) || 0;
     
     console.log('🔴 [closeFullScreenVideo] 开始关闭，pausedState:', pausedState, 'videoIndex:', videoIndex);
     
@@ -2349,11 +2641,18 @@ Page({
       // 🔴 同步暂停状态到原视频
       if (videoIndex >= 0) {
         const originalVideoContext = wx.createVideoContext(`video-${videoIndex}`);
+        if (exitTime > 0) {
+          originalVideoContext.seek(exitTime);
+        }
         if (pausedState) {
           originalVideoContext.pause(); // 如果全屏时是暂停的，原视频也暂停
         } else {
           originalVideoContext.play(); // 如果全屏时是播放的，原视频也播放
         }
+        this._videoProgressMap = this._videoProgressMap || {};
+        this._videoPausedMap = this._videoPausedMap || {};
+        this._videoProgressMap[videoIndex] = exitTime;
+        this._videoPausedMap[videoIndex] = pausedState;
       }
       
       this.setData({
@@ -2396,11 +2695,36 @@ Page({
 
   // 视频播放错误处理
   onVideoPlay: function(e) {
-    const index = e.currentTarget.dataset.index
+    const index = Number(e.currentTarget.dataset.index)
     // 🔴 分享码用户：记录视频播放点击
     const sectionKey = `video-${index}`
     this._trackSectionClick(sectionKey)
     this._switchToSection(sectionKey)
+    this._videoPausedMap = this._videoPausedMap || {};
+    if (!Number.isNaN(index) && index >= 0) {
+      this._videoPausedMap[index] = false;
+    }
+  },
+
+  onVideoPause: function(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    this._videoPausedMap = this._videoPausedMap || {};
+    if (!Number.isNaN(index) && index >= 0) {
+      this._videoPausedMap[index] = true;
+    }
+  },
+
+  onVideoTimeUpdate: function(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    const currentTime = Number((e && e.detail && e.detail.currentTime) || 0) || 0;
+    this._videoProgressMap = this._videoProgressMap || {};
+    if (!Number.isNaN(index) && index >= 0) {
+      this._videoProgressMap[index] = currentTime;
+    }
+  },
+
+  onFullScreenVideoTimeUpdate: function(e) {
+    this._fullScreenCurrentTime = Number((e && e.detail && e.detail.currentTime) || 0) || 0;
   },
 
   onGraphicTap: function(e) {
@@ -2548,9 +2872,9 @@ Page({
     }
   },
 
-  // 🔴 记录板块点击（分享码用户专用）
+  // 🔴 记录板块点击（分享码用户 / 普通安装用户）
   _trackSectionClick(sectionKey) {
-    if (!this.data.isShareCodeUser) return
+    if (!this.data.isShareCodeUser && !this.data.shouldRecordTutorialInstall) return
     
     const clicks = this.data.sectionClicks
     clicks[sectionKey] = (clicks[sectionKey] || 0) + 1
@@ -2559,7 +2883,7 @@ Page({
 
   // 🔴 记录板块停留时长（切换板块时调用）
   _recordCurrentSectionDuration() {
-    if (!this.data.isShareCodeUser || !this.data.currentSectionKey) return
+    if ((!this.data.isShareCodeUser && !this.data.shouldRecordTutorialInstall) || !this.data.currentSectionKey) return
     
     const now = Date.now()
     const duration = now - this.data.currentSectionStartTime
@@ -2572,7 +2896,7 @@ Page({
 
   // 🔴 切换到新板块（记录旧板块时长，开始新板块计时）
   _switchToSection(newSectionKey) {
-    if (!this.data.isShareCodeUser) return
+    if (!this.data.isShareCodeUser && !this.data.shouldRecordTutorialInstall) return
     
     // 先记录当前板块时长
     this._recordCurrentSectionDuration()
@@ -2584,25 +2908,24 @@ Page({
     })
   },
 
-  // 🔴 上传统计数据到云数据库
+  // 🔴 上传统计数据到云数据库（分享码 chakan 文档 或 普通安装汇总池）
   async _uploadSessionStats() {
-    if (!this.data.isShareCodeUser) {
-      console.log('[azjc] 不是分享码用户，跳过上传统计');
-      return
+    const trackShare = this.data.isShareCodeUser;
+    const trackDirect = this.data.shouldRecordTutorialInstall && !!this.data.tutorialDirectPoolId;
+    if (!trackShare && !trackDirect) {
+      console.log('[azjc] 无需上传统计');
+      return;
     }
-    
-    const app = getApp()
+
+    const app = getApp();
     if (!app || !app.recordShareCodeSession) {
       console.warn('[azjc] app.recordShareCodeSession 不存在，无法上传统计数据');
-      return
+      return;
     }
-    
-    // 确保记录当前板块时长
-    this._recordCurrentSectionDuration()
-    
-    const totalDuration = Date.now() - this.data.sessionStartTime
-    
-    // 🔴 使用页面保存的地址信息（仅在进入时获取一次，之后不再更新）
+
+    this._recordCurrentSectionDuration();
+
+    const totalDuration = Date.now() - this.data.sessionStartTime;
     const locationInfo = this.data.shareCodeLocationInfo || {
       province: '',
       city: '',
@@ -2611,33 +2934,25 @@ Page({
       latitude: null,
       longitude: null
     };
-    
+
     const stats = {
       durationMs: totalDuration,
       sectionClicks: this.data.sectionClicks || {},
       sectionDurations: this.data.sectionDurations || {},
-      locationInfo: locationInfo // 🔴 传递固定地址信息（不会重复获取）
-    }
-    
-    console.log('[azjc] 准备上传统计数据:', stats);
-    console.log('[azjc] sessionStartTime:', this.data.sessionStartTime);
-    console.log('[azjc] 总时长:', totalDuration, 'ms');
-    console.log('[azjc] 板块点击次数:', stats.sectionClicks);
-    console.log('[azjc] 板块停留时长:', stats.sectionDurations);
-    console.log('[azjc] 地址信息（固定，不再更新）:', locationInfo);
-    
+      locationInfo
+    };
+
+    const isUpdate = trackShare ? this.data.shareCodeRecordCreated : this.data.installSessionRecordCreated;
+
     try {
-      // 🔴 根据是否已创建记录决定是创建新记录还是更新现有记录
-      const isUpdate = this.data.shareCodeRecordCreated;
-      console.log('[azjc] 调用 recordShareCodeSession，isUpdate:', isUpdate);
-      
-      await app.recordShareCodeSession(stats, isUpdate);
-      
-      // 🔴 标记已创建记录，后续调用都是更新
-      if (!isUpdate) {
-        this.setData({ shareCodeRecordCreated: true });
+      console.log('[azjc] 调用 recordShareCodeSession，isUpdate:', isUpdate, 'direct:', trackDirect);
+      if (trackShare) {
+        await app.recordShareCodeSession(stats, isUpdate);
+        if (!isUpdate) this.setData({ shareCodeRecordCreated: true });
+      } else {
+        await app.recordShareCodeSession(stats, isUpdate, this.data.tutorialDirectPoolId);
+        if (!isUpdate) this.setData({ installSessionRecordCreated: true });
       }
-      
       console.log('[azjc] ✅ 统计数据上传成功');
     } catch (err) {
       console.error('[azjc] ❌ 统计数据上传失败:', err);
@@ -2646,24 +2961,22 @@ Page({
 
   // 🔴 启动定时自动保存
   _startAutoSave() {
-    if (!this.data.isShareCodeUser) {
+    if (!this.data.isShareCodeUser && !this.data.shouldRecordTutorialInstall) {
       return;
     }
-    
-    // 清除旧的定时器
+
     this._stopAutoSave();
-    
+
     console.log('[azjc] 启动定时自动保存（每30秒）');
-    
-    // 🔴 修复：定时器ID存储在实例变量中，而不是 data 中
+
     this.autoSaveTimer = setInterval(() => {
-      if (this.data.isShareCodeUser && this.data.sessionStartTime > 0) {
+      if ((this.data.isShareCodeUser || this.data.shouldRecordTutorialInstall) && this.data.sessionStartTime > 0) {
         console.log('[azjc] 定时自动保存触发');
-        this._uploadSessionStats().catch(err => {
+        this._uploadSessionStats().catch((err) => {
           console.error('[azjc] 定时自动保存失败:', err);
         });
       }
-    }, 30000); // 30秒
+    }, 30000);
   },
 
   // 🔴 停止定时自动保存

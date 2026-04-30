@@ -1,4 +1,12 @@
-const app = getApp()
+const app = getApp();
+const cosUpload = require('../../utils/cosUpload.js');
+
+function isLocalOrTmpImagePath(s) {
+  if (!s || typeof s !== 'string') return false;
+  if (s.indexOf('cloud://') === 0) return false;
+  if (/^https?:\/\//i.test(s)) return s.indexOf('http://tmp') === 0;
+  return s.indexOf('wxfile') === 0 || s.indexOf('/') === 0 || /^[a-zA-Z]:[\\/]/.test(s);
+}
 
 // 图标资源库 (Base64 SVG)
 const ICONS = {
@@ -363,11 +371,7 @@ Page({
     wx.chooseMedia({
       count: 1, mediaType: ['image'], sourceType: ['album', 'camera'],
       success: (res) => {
-        wx.cropImage({
-          src: res.tempFiles[0].tempFilePath,
-          cropScale: '16:9', // 强制横屏比例
-          success: (c) => { this.setData({ 'userForm.dataImg': c.tempFilePath }); }
-        })
+        this.setData({ 'userForm.dataImg': res.tempFiles[0].tempFilePath });
       }
     })
   },
@@ -417,11 +421,7 @@ Page({
     wx.chooseMedia({
       count: 1, mediaType: ['image'],
       success: (res) => {
-        wx.cropImage({
-          src: res.tempFiles[0].tempFilePath,
-          cropScale: '1:1', // 强制正方形
-          success: (c) => { this.setData({ 'form.avatar': c.tempFilePath }) }
-        })
+        this.setData({ 'form.avatar': res.tempFiles[0].tempFilePath })
       }
     })
   },
@@ -431,11 +431,7 @@ Page({
     wx.chooseMedia({
       count: 1, mediaType: ['image'],
       success: (res) => {
-        wx.cropImage({
-          src: res.tempFiles[0].tempFilePath,
-          cropScale: '1:1',
-          success: (c) => { this.setData({ 'myInfo.avatar': c.tempFilePath }) }
-        })
+        this.setData({ 'myInfo.avatar': res.tempFiles[0].tempFilePath })
       }
     })
   },
@@ -524,44 +520,57 @@ Page({
       }
 
       const finalScore = f.score || (parseFloat(f.angle||0) + parseFloat(f.dist||0)).toFixed(1);
-      const finalAvatar = f.avatar || `https://api.dicebear.com/9.x/adventurer/svg?seed=${f.name}`;
+      const defaultAvatar = `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(f.name)}`;
+      const action = this.data.isEdit ? 'update' : 'add';
 
-      // 云端 record：update 需要 _id；add 不需要
-      const record = {
-        _id: f._id || f.id || null,
-        type: f.type || this.data.rankType,
-        name: f.name,
-        bike: f.bike,
-        angle: parseFloat(f.angle || 0),
-        dist: parseFloat(f.dist || 0),
-        score: parseFloat(finalScore || 0),
-        avatar: finalAvatar
+      const syncRecordWithAvatar = (avatarUrl) => {
+        const record = {
+          _id: f._id || f.id || null,
+          type: f.type || this.data.rankType,
+          name: f.name,
+          bike: f.bike,
+          angle: parseFloat(f.angle || 0),
+          dist: parseFloat(f.dist || 0),
+          score: parseFloat(finalScore || 0),
+          avatar: avatarUrl
+        };
+        this.showMyLoading('同步中...');
+        wx.cloud.callFunction({
+          name: 'adminUpdateMotoRank',
+          data: { action, record },
+          success: (res) => {
+            this.hideMyLoading();
+            if (res.result && res.result.success) {
+              this.setData({ showEditModal: false });
+              this.fetchRankFromCloud().then(() => {
+                this.computeRankings();
+                this.showAutoToast('成功', '已发布');
+              });
+            } else {
+              this.showAutoToast('提示', (res.result && res.result.errMsg) ? res.result.errMsg : '同步失败');
+            }
+          },
+          fail: (err) => {
+            this.hideMyLoading();
+            console.error('adminUpdateMotoRank fail', err);
+            this.showAutoToast('提示', '同步失败');
+          }
+        });
       };
 
-      const action = this.data.isEdit ? 'update' : 'add';
-      this.showMyLoading('同步中...');
-      wx.cloud.callFunction({
-        name: 'adminUpdateMotoRank',
-        data: { action, record },
-        success: (res) => {
-          this.hideMyLoading();
-          if (res.result && res.result.success) {
-            this.setData({ showEditModal: false });
-            // 重新拉取云端数据，保证所有人同步
-            this.fetchRankFromCloud().then(() => {
-              this.computeRankings();
-              this.showAutoToast('成功', '已发布');
-            });
-          } else {
-            this.showAutoToast('提示', (res.result && res.result.errMsg) ? res.result.errMsg : '同步失败');
-          }
-        },
-        fail: (err) => {
-          this.hideMyLoading();
-          console.error('adminUpdateMotoRank fail', err);
-          this.showAutoToast('提示', '同步失败');
-        }
-      });
+      if (isLocalOrTmpImagePath(f.avatar)) {
+        this.showMyLoading('上传头像中...');
+        cosUpload
+          .uploadImageToCos(f.avatar, 'paihang/avatar')
+          .then(url => syncRecordWithAvatar(url))
+          .catch(err => {
+            this.hideMyLoading();
+            this.showAutoToast('提示', (err && err.message) || '头像上传失败');
+          });
+        return;
+      }
+
+      syncRecordWithAvatar(f.avatar || defaultAvatar);
     }
   },
 

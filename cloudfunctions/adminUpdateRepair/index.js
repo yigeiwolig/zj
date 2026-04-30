@@ -3,6 +3,17 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+async function assertAdmin() {
+  const wxContext = cloud.getWXContext()
+  const openid = wxContext.OPENID
+  if (!openid) throw new Error('UNAUTHORIZED')
+  const byOpenid = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+  if (byOpenid.data.length > 0) return openid
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+  if (bySystemOpenid.data.length > 0) return openid
+  throw new Error('FORBIDDEN')
+}
+
 // 云函数入口函数
 exports.main = async (event, context) => {
   const { id, action, trackingId = '', note = '' } = event
@@ -35,9 +46,13 @@ exports.main = async (event, context) => {
   }
 
   try {
+    await assertAdmin()
     await db.collection('shouhou_repair').doc(id).update({ data: updateObj })
     return { success: true }
   } catch (e) {
+    if (String(e && e.message).includes('UNAUTHORIZED') || String(e && e.message).includes('FORBIDDEN')) {
+      return { success: false, errMsg: '无管理员权限' }
+    }
     return { success: false, errMsg: e.message }
   }
 }

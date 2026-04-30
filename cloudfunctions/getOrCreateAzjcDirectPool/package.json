@@ -1,0 +1,9 @@
+{
+  "name": "getOrCreateAzjcDirectPool",
+  "version": "1.0.0",
+  "description": "安装教程普通用户观看汇总池（chakan 单文档）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

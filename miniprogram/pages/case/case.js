@@ -1,5 +1,6 @@
 const app = getApp();
 const db = wx.cloud.database();
+const cosUpload = require('../../utils/cosUpload.js');
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
 var qqmapsdk = new QQMapWX({
     key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
@@ -139,6 +140,20 @@ Page({
     loadingText: '请稍候...'
   },
 
+  buildLowQualityUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    const u = url.trim();
+    if (u.indexOf('http://') !== 0 && u.indexOf('https://') !== 0) return url;
+    if (/imageMogr2|imageView2/i.test(u)) return u;
+    const host = (() => {
+      try { return new URL(u).hostname || ''; } catch (e) { return ''; }
+    })();
+    const cosLike = /myqcloud\.com$|tcb\.qcloud\.la$|tencentcos\.cn$|file\.myqcloud\.com$/i.test(host) || /^cos\.[^.]+\.myqcloud\.com$/i.test(host);
+    if (!cosLike) return u;
+    const sep = u.indexOf('?') === -1 ? '?' : '&';
+    return `${u}${sep}imageMogr2/thumbnail/960x`;
+  },
+
   async _buildRetryImageUrl(url) {
     if (!url || typeof url !== 'string') return url;
     if (url.indexOf('cloud://') === 0 && wx.cloud && wx.cloud.getTempFileURL) {
@@ -164,8 +179,21 @@ Page({
     this._caseImgRetryMap[`cover_${index}`] = true;
     const cur = (this.data.displayList || [])[index];
     if (!cur || !cur.coverUrl) return;
-    const next = await this._buildRetryImageUrl(cur.coverUrl);
-    this.setData({ [`displayList[${index}].coverUrl`]: next });
+    const next = await this._buildRetryImageUrl(cur.coverFull || cur.coverUrl);
+    const thumb = this.buildLowQualityUrl(next);
+    this.setData({
+      [`displayList[${index}].coverUrl`]: next,
+      [`displayList[${index}].coverFull`]: next,
+      [`displayList[${index}].coverThumb`]: thumb,
+      [`displayList[${index}].dualCover`]: thumb !== next,
+      [`caseCoverLoadedMap.${index}`]: false
+    });
+  },
+
+  onCaseCoverHdLoad(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(index) || index < 0) return;
+    this.setData({ [`caseCoverLoadedMap.${index}`]: true });
   },
 
   onCaseCoverImageLoad(e) {
@@ -409,7 +437,10 @@ Page({
       .get()
       .then(res => {
         getApp().hideLoading();
-        const cloudListWithIndex = res.data.map((item, idx) => ({
+        const cloudListWithIndex = res.data.map((item, idx) => {
+          const coverFull = item.coverFileID || null;
+          const coverThumb = coverFull ? this.buildLowQualityUrl(coverFull) : null;
+          return ({
             _id: item._id,
             type: item.category || 'street',
             title: item.vehicleName || '无标题',
@@ -417,12 +448,16 @@ Page({
             categoryName: item.categoryName || null,
             color: this.getRandomColor(),
             videoUrl: item.videoFileID,
-            coverUrl: item.coverFileID || null,
+            coverUrl: coverFull,
+            coverFull: coverFull,
+            coverThumb: coverThumb,
+            dualCover: !!(coverFull && coverThumb && coverThumb !== coverFull),
           displayTime: item.createTime ? this.formatTime(item.createTime) : null,
           // 🔴 新增：用于排序的字段（没有则为 null）
           sortOrder: typeof item.sortOrder === 'number' ? item.sortOrder : null,
           originalIndex: idx,
-        }));
+          });
+        });
 
         // 先把有 sortOrder 的按 sortOrder 排在前面，其余保持原顺序
         const withOrder = cloudListWithIndex
@@ -1542,111 +1577,81 @@ Page({
         // 1. 先读取旧的视频 fileID
         db.collection('config').doc('shooting_guide').get().then(oldRes => {
           const oldFileID = oldRes.data && oldRes.data.videoFileID;
-          
-          // 2. 上传新视频到云存储
-          const cloudPath = `case/shooting-guide/${Date.now()}_guide.mp4`;
-          wx.cloud.uploadFile({
-            cloudPath: cloudPath,
-            filePath: tempFilePath,
-            success: (uploadRes) => {
-              console.log('✅ 演示视频上传成功:', uploadRes.fileID);
-              
-              // 3. 更新数据库配置
-              db.collection('config').doc('shooting_guide').set({
-                data: {
-                  videoFileID: uploadRes.fileID,
-                  updateTime: db.serverDate()
-                }
-              }).then(() => {
-                console.log('✅ 配置已保存到数据库');
-                
-                // 4. 更新页面显示
-                // 保存原始 fileID 用于删除
-                this.setData({ shootingGuideVideoFileID: uploadRes.fileID });
-                
-                // 如果是云存储路径，需要转换为临时 URL
-                if (uploadRes.fileID.startsWith('cloud://')) {
-                  wx.cloud.getTempFileURL({
-                    fileList: [uploadRes.fileID],
-                    success: (urlRes) => {
-                      if (urlRes.fileList && urlRes.fileList[0]) {
-                        this.setData({
-                          shootingGuideVideoUrl: urlRes.fileList[0].tempFileURL
-                        });
-                      }
-                    }
-                  });
-                } else {
+          cosUpload
+            .uploadVideoToCos(tempFilePath, 'case/shooting-guide')
+            .then(publicUrl => {
+              console.log('✅ 演示视频上传成功(COS):', publicUrl);
+              db.collection('config').doc('shooting_guide')
+                .set({
+                  data: {
+                    videoFileID: publicUrl,
+                    updateTime: db.serverDate()
+                  }
+                })
+                .then(() => {
+                  console.log('✅ 配置已保存到数据库');
                   this.setData({
-                    shootingGuideVideoUrl: uploadRes.fileID
+                    shootingGuideVideoFileID: publicUrl,
+                    shootingGuideVideoUrl: publicUrl
                   });
-                }
-                
-                // 5. 删除旧视频文件（如果存在）
-                if (oldFileID && oldFileID.startsWith('cloud://') && oldFileID !== uploadRes.fileID) {
-                  wx.cloud.deleteFile({
-                    fileList: [oldFileID],
-                    success: (deleteRes) => {
-                      console.log('✅ 旧视频已删除:', oldFileID);
-                      if (deleteRes.fileList && deleteRes.fileList[0] && deleteRes.fileList[0].status === 'success') {
-                        console.log('🗑️ 旧视频文件删除成功');
+                  if (oldFileID && oldFileID.startsWith('cloud://') && oldFileID !== publicUrl) {
+                    wx.cloud.deleteFile({
+                      fileList: [oldFileID],
+                      success: deleteRes => {
+                        console.log('✅ 旧云存储视频已删除:', oldFileID, deleteRes);
+                      },
+                      fail: deleteErr => {
+                        console.warn('⚠️ 删除旧云存储视频失败（不影响使用）:', deleteErr);
                       }
-                    },
-                    fail: (deleteErr) => {
-                      console.warn('⚠️ 删除旧视频失败（不影响使用）:', deleteErr);
-                      // 删除失败不影响新视频的使用，只记录警告
-                    }
-                  });
-                }
-                
-                this.hideMyLoading();
-                this._showCustomToast('上传成功', 'success');
-              }).catch(err => {
-                console.error('❌ 保存配置失败:', err);
-                this.hideMyLoading();
-                this._showCustomToast('上传成功，但保存配置失败', 'none');
-              });
-            },
-            fail: (err) => {
+                    });
+                  }
+                  this.hideMyLoading();
+                  this._showCustomToast('上传成功', 'success');
+                })
+                .catch(err => {
+                  console.error('❌ 保存配置失败:', err);
+                  this.hideMyLoading();
+                  this._showCustomToast('上传成功，但保存配置失败', 'none');
+                });
+            })
+            .catch(err => {
               console.error('❌ 上传失败:', err);
               this.hideMyLoading();
               this._showCustomToast('上传失败，请重试', 'none');
-            }
-          });
-        }).catch(err => {
-          // 如果读取旧配置失败（可能是第一次上传），直接上传新视频
+            });
+        }).catch(() => {
           console.log('📝 未找到旧配置，直接上传新视频');
-          const cloudPath = `case/shooting-guide/${Date.now()}_guide.mp4`;
-          wx.cloud.uploadFile({
-            cloudPath: cloudPath,
-            filePath: tempFilePath,
-            success: (uploadRes) => {
-              console.log('✅ 演示视频上传成功:', uploadRes.fileID);
-              this.setData({ 
-                shootingGuideVideoUrl: uploadRes.fileID 
+          cosUpload
+            .uploadVideoToCos(tempFilePath, 'case/shooting-guide')
+            .then(publicUrl => {
+              console.log('✅ 演示视频上传成功(COS):', publicUrl);
+              this.setData({
+                shootingGuideVideoUrl: publicUrl,
+                shootingGuideVideoFileID: publicUrl
               });
-              
-              db.collection('config').doc('shooting_guide').set({
-                data: {
-                  videoFileID: uploadRes.fileID,
-                  updateTime: db.serverDate()
-                }
-              }).then(() => {
-                console.log('✅ 配置已保存到数据库');
-                this.hideMyLoading();
-                this._showCustomToast('上传成功', 'success');
-              }).catch(setErr => {
-                console.error('❌ 保存配置失败:', setErr);
-                this.hideMyLoading();
-                this._showCustomToast('上传成功，但保存配置失败', 'none');
-              });
-            },
-            fail: (uploadErr) => {
+              db.collection('config').doc('shooting_guide')
+                .set({
+                  data: {
+                    videoFileID: publicUrl,
+                    updateTime: db.serverDate()
+                  }
+                })
+                .then(() => {
+                  console.log('✅ 配置已保存到数据库');
+                  this.hideMyLoading();
+                  this._showCustomToast('上传成功', 'success');
+                })
+                .catch(setErr => {
+                  console.error('❌ 保存配置失败:', setErr);
+                  this.hideMyLoading();
+                  this._showCustomToast('上传成功，但保存配置失败', 'none');
+                });
+            })
+            .catch(uploadErr => {
               console.error('❌ 上传失败:', uploadErr);
               this.hideMyLoading();
               this._showCustomToast('上传失败，请重试', 'none');
-            }
-          });
+            });
         });
       },
       fail: (err) => {
@@ -2047,26 +2052,21 @@ Page({
     const isNewVideo = adminVideoPath.startsWith('wxfile') || adminVideoPath.startsWith('http://tmp');
     const isNewCover = adminThumbPath && (adminThumbPath.startsWith('wxfile') || adminThumbPath.startsWith('http://tmp'));
 
-    const timestamp = Date.now();
     const uploadTasks = [];
-    
-    // 任务1：视频
     if (isNewVideo) {
-      uploadTasks.push(wx.cloud.uploadFile({ cloudPath: `video_go/${timestamp}_video.mp4`, filePath: adminVideoPath }));
+      uploadTasks.push(cosUpload.uploadVideoToCos(adminVideoPath, 'video_go'));
     } else {
-      uploadTasks.push(Promise.resolve({ fileID: adminVideoPath })); // 保持原ID
+      uploadTasks.push(Promise.resolve(adminVideoPath));
     }
-
-    // 任务2：封面
     if (isNewCover) {
-      uploadTasks.push(wx.cloud.uploadFile({ cloudPath: `video_go/${timestamp}_cover.jpg`, filePath: adminThumbPath }));
+      uploadTasks.push(cosUpload.uploadImageToCos(adminThumbPath, 'video_go'));
     } else {
-      uploadTasks.push(Promise.resolve({ fileID: adminThumbPath })); // 保持原ID或null
+      uploadTasks.push(Promise.resolve(adminThumbPath || null));
     }
 
     Promise.all(uploadTasks).then(results => {
-      const videoID = results[0].fileID;
-      const coverID = results[1] ? results[1].fileID : null;
+      const videoID = results[0];
+      const coverID = results[1] || null;
 
       const docData = {
         vehicleName: vehicleName,
@@ -2088,6 +2088,12 @@ Page({
         db.collection('video_go').doc(editingId).update({ data: docData })
           .then(() => {
              this.finishSubmit('修改成功');
+          })
+          .catch(err => {
+            console.error('❌ [admin] 更新失败:', err);
+            getApp().hideLoading();
+            this.setData({ isSubmitting: false });
+            this._showCustomToast('保存失败', 'none');
           });
       } else {
         // --- 新增逻辑 ---
@@ -2101,6 +2107,12 @@ Page({
           db.collection('video_go').add({ data: { ...docData, applyCount } })
             .then(() => {
                this.finishSubmit('发布成功');
+            })
+            .catch(err2 => {
+              console.error('❌ [admin] 写入 video_go 失败:', err2);
+              getApp().hideLoading();
+              this.setData({ isSubmitting: false });
+              this._showCustomToast('发布失败', 'none');
             });
         }).catch(err => {
           console.error('❌ [admin] 获取 openid / 统计次数失败:', err);
@@ -2108,6 +2120,12 @@ Page({
           db.collection('video_go').add({ data: docData })
             .then(() => {
               this.finishSubmit('发布成功');
+            })
+            .catch(err3 => {
+              console.error('❌ [admin] 兜底发布失败:', err3);
+              getApp().hideLoading();
+              this.setData({ isSubmitting: false });
+              this._showCustomToast('发布失败', 'none');
             });
         });
       }
@@ -2405,14 +2423,11 @@ Page({
     }
     console.log('🔵 [提交] 准备提交，targetSn:', targetSn || '未绑定设备');
     this.showMyLoading('上传中...');
-    const cloudPath = `video/${Date.now()}_user.mp4`;
-    
-    console.log('🔵 [提交] 开始上传视频，cloudPath:', cloudPath);
-    wx.cloud.uploadFile({
-      cloudPath: cloudPath, 
-      filePath: videoPath,
-      success: async (res) => {
-        console.log('🔵 [提交] 视频上传成功，fileID:', res.fileID);
+    console.log('🔵 [提交] 开始上传视频(COS)...');
+    cosUpload
+      .uploadVideoToCos(videoPath, 'video/user')
+      .then(async publicUrl => {
+        console.log('🔵 [提交] 视频上传成功，URL:', publicUrl);
         // 🆕 记录用户投稿次数：每次提交自增 1（管理员后台可见）
         // 方案：先查询该 openid 历史投稿次数 count，再写入本次的 applyCount = count + 1
         // 注意：这里用云函数 login 获取 openid（与项目现有逻辑保持一致）
@@ -2443,7 +2458,7 @@ Page({
           category: categoryValueArray[categoryIndex], 
           categoryName: categoryArray[categoryIndex], 
           model: modelArray[modelIndex], 
-          videoFileID: res.fileID, 
+          videoFileID: publicUrl, 
           createTime: db.serverDate(), 
           status: 0, // 0:审核中
           sn: targetSn || null, // 🔴 关联 SN（可为空）
@@ -2473,19 +2488,18 @@ Page({
           },
           fail: (dbErr) => {
             console.error('❌ [提交] 数据库写入失败:', dbErr);
-            getApp().hideLoading();
+            this.hideMyLoading();
             this.setData({ isSubmitting: false });
             this._showCustomToast('提交失败: ' + (dbErr.errMsg || '未知错误'), 'none', 3000);
           }
         });
-      },
-      fail: (uploadErr) => {
+      })
+      .catch(uploadErr => {
         console.error('❌ [提交] 视频上传失败:', uploadErr);
-        getApp().hideLoading();
+        this.hideMyLoading();
         this.setData({ isSubmitting: false });
-        this._showCustomToast('上传失败: ' + (uploadErr.errMsg || '未知错误'), 'none', 3000);
-      }
-    });
+        this._showCustomToast('上传失败: ' + ((uploadErr && uploadErr.message) || (uploadErr && uploadErr.errMsg) || '未知错误'), 'none', 3000);
+      });
   },
 
   // 🆕 关闭用户表单（带收缩退出动画）

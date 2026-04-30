@@ -5,6 +5,17 @@ const http = require('http')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+async function assertAdmin(db) {
+  const wxContext = cloud.getWXContext()
+  const openid = wxContext.OPENID
+  if (!openid) throw new Error('UNAUTHORIZED')
+  const byOpenid = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+  if (byOpenid.data.length > 0) return openid
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+  if (bySystemOpenid.data.length > 0) return openid
+  throw new Error('FORBIDDEN')
+}
+
 // 🔴 调试日志辅助函数
 function sendDebugLog(location, message, data, hypothesisId) {
   // 同时使用 console.log 和 HTTP 请求
@@ -50,12 +61,13 @@ function sendDebugLog(location, message, data, hypothesisId) {
 exports.main = async (event, context) => {
   const db = cloud.database()
   const _ = db.command
-  const wxContext = cloud.getWXContext()
   
   // 接收前端传来的自定义参数：customDate(管理员改的时间), customDays(管理员选的天数)
   const { id, action, customDate, customDays } = event
 
   try {
+    await assertAdmin(db)
+
     // 1. 获取申请详情
     const applyRes = await db.collection('my_read').doc(id).get()
     const applyData = applyRes.data
@@ -243,6 +255,9 @@ exports.main = async (event, context) => {
     }
 
   } catch (err) {
+    if (String(err && err.message).includes('UNAUTHORIZED') || String(err && err.message).includes('FORBIDDEN')) {
+      return { success: false, errMsg: '无管理员权限' }
+    }
     return { success: false, errMsg: err.toString() }
   }
 }

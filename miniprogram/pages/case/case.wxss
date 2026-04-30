@@ -1139,6 +1139,20 @@ page {
   border-radius: 24rpx; /* 加上圆角更好看 */
   transition: filter .22s ease, opacity .22s ease, transform .22s ease;
 }
+.card-cover-high {
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.card-cover-high.is-visible {
+  opacity: 1;
+}
+.card-cover-low {
+  opacity: 1;
+  transition: opacity 0.2s ease;
+}
+.card-cover-low.is-hidden {
+  opacity: 0;
+}
 .card-cover-img.is-loading { filter: blur(1.2px); transform: scale(1.01); opacity: .94; }
 .card-cover-img.is-loaded { filter: blur(0); transform: scale(1); opacity: 1; }
 

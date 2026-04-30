@@ -5,6 +5,16 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+async function assertAdmin() {
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) throw new Error('UNAUTHORIZED')
+  const byOpenid = await db.collection('guanliyuan').where({ openid: OPENID }).limit(1).get()
+  if (byOpenid.data.length > 0) return OPENID
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: OPENID }).limit(1).get()
+  if (bySystemOpenid.data.length > 0) return OPENID
+  throw new Error('FORBIDDEN')
+}
+
 exports.main = async (event, context) => {
   const { _id, updateData } = event
 
@@ -13,6 +23,8 @@ exports.main = async (event, context) => {
   console.log('[updateShouhouPart] updateData:', updateData)
 
   try {
+    await assertAdmin()
+
     // 检查参数
     if (!_id || !updateData) {
       throw new Error('缺少必要参数：_id 或 updateData')
@@ -44,6 +56,12 @@ exports.main = async (event, context) => {
     }
   } catch (err) {
     console.error('[updateShouhouPart] ❌ 更新失败:', err)
+    if (String(err && err.message).includes('UNAUTHORIZED') || String(err && err.message).includes('FORBIDDEN')) {
+      return {
+        success: false,
+        error: '无管理员权限'
+      }
+    }
     return {
       success: false,
       error: err.message || '更新失败'

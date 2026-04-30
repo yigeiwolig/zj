@@ -48,18 +48,19 @@
     </view>
   </view>
 
-  <!-- F2 Long 系列 -->
-  <view class="section-title">F2 LONG 系列</view>
-  <view class="card-grid">
-    <view class="i-card style-white" bindtap="enterModel" data-name="F2 PRO Long" data-series="F2">
-      <view class="card-top"><text class="badge">加长版</text></view>
-      <view class="card-btm"><view class="p-name">F2 PRO Long</view><view class="p-desc">加长普通</view></view>
-      <view class="circle-decor"></view>
-    </view>
-    <view class="i-card style-black" bindtap="enterModel" data-name="F2 MAX Long" data-series="F2">
-      <view class="card-top"><text class="badge">性能版</text></view>
-      <view class="card-btm"><view class="p-name">F2 MAX Long</view><view class="p-desc">加长高级</view></view>
-      <view class="circle-decor"></view>
+  <!-- F2 Long：融合版本长按钮（按提供稿实现） -->
+  <view class="section-title">F2 Long 系列</view>
+  <view class="card-grid card-grid-single">
+    <view class="fusion-card" bindtap="enterModel" data-name="F2 MAX Long" data-series="F2" hover-class="card-hover" hover-stay-time="100">
+      <view class="white-section"></view>
+      <view class="circle-symbol"></view>
+      <view class="content-area">
+        <view class="status-tag">
+          <text class="tag-text">性能版</text>
+        </view>
+        <text class="main-title">F2 MAX Long</text>
+        <text class="sub-title">加长高级融合版</text>
+      </view>
     </view>
   </view>
 

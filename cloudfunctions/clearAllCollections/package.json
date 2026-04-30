@@ -4,6 +4,7 @@
   "description": "清空所有集合数据（测试用）",
   "main": "index.js",
   "dependencies": {
+    "cos-nodejs-sdk-v5": "^2.14.0",
     "wx-server-sdk": "~2.6.3"
   }
 }

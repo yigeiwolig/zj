@@ -1,5 +1,6 @@
 const app = getApp();
 const db = wx.cloud.database();
+const cosUpload = require('../../utils/cosUpload.js');
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
 var qqmapsdk = new QQMapWX({
     key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
@@ -47,9 +48,24 @@ Page({
     // 【新增】自定义加载动画
     showLoadingAnimation: false,
     loadingText: '加载中...',
+    homeMainHdLoaded: { active: false, edit: false },
     
     // 【新增】上传选项弹窗
     showUploadOptions: false
+  },
+
+  buildLowQualityUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    const u = url.trim();
+    if (u.indexOf('http://') !== 0 && u.indexOf('https://') !== 0) return url;
+    if (/imageMogr2|imageView2/i.test(u)) return u;
+    const host = (() => {
+      try { return new URL(u).hostname || ''; } catch (e) { return ''; }
+    })();
+    const cosLike = /myqcloud\.com$|tcb\.qcloud\.la$|tencentcos\.cn$|file\.myqcloud\.com$/i.test(host) || /^cos\.[^.]+\.myqcloud\.com$/i.test(host);
+    if (!cosLike) return u;
+    const sep = u.indexOf('?') === -1 ? '?' : '&';
+    return `${u}${sep}imageMogr2/thumbnail/960x`;
   },
 
   async _buildRetryImageUrl(url) {
@@ -79,14 +95,33 @@ Page({
       const cur = (this.data.editData && this.data.editData.img) || (this.data.activeItem && this.data.activeItem.img) || '';
       if (!cur) return;
       const next = await this._buildRetryImageUrl(cur);
-      this.setData({ 'editData.img': next });
+      const thumb = this.buildLowQualityUrl(next);
+      this.setData({
+        'editData.img': next,
+        'editData.imgFull': next,
+        'editData.imgThumb': thumb,
+        'editData.imgDual': thumb !== next,
+        'homeMainHdLoaded.edit': false
+      });
       return;
     }
 
     const cur = this.data.activeItem && this.data.activeItem.img;
     if (!cur) return;
     const next = await this._buildRetryImageUrl(cur);
-    this.setData({ 'activeItem.img': next });
+    const thumb = this.buildLowQualityUrl(next);
+    this.setData({
+      'activeItem.img': next,
+      'activeItem.imgFull': next,
+      'activeItem.imgThumb': thumb,
+      'activeItem.imgDual': thumb !== next,
+      'homeMainHdLoaded.active': false
+    });
+  },
+
+  onHomeMainHdLoad(e) {
+    const mode = e.currentTarget.dataset.mode || 'active';
+    this.setData({ [`homeMainHdLoaded.${mode}`]: true });
   },
 
   onLoad() {
@@ -206,149 +241,101 @@ Page({
   // 获取用户位置（从云数据库或本地存储）
   async getUserLocation() {
     return new Promise((resolve, reject) => {
-      // 方法1：尝试从云数据库获取（user_list 集合）
-      db.collection('user_list').limit(1).get({
+      const tryCloudLocationByOpenid = async () => {
+        try {
+          const loginRes = await wx.cloud.callFunction({ name: 'login' })
+          const openid = loginRes && loginRes.result && loginRes.result.openid
+          if (!openid) return null
+          const userRes = await db.collection('user_list').where({ _openid: openid }).limit(1).get()
+          if (userRes.data.length > 0 && userRes.data[0].latitude && userRes.data[0].longitude) {
+            return {
+              latitude: userRes.data[0].latitude,
+              longitude: userRes.data[0].longitude
+            }
+          }
+          return null
+        } catch (e) {
+          console.warn('按 openid 查询 user_list 失败，转本地/实时定位兜底:', e)
+          return null
+        }
+      }
+
+      // 方法1：按当前用户 openid 从云数据库获取，避免拿到其他用户位置
+      tryCloudLocationByOpenid().then((cloudLoc) => {
+        if (cloudLoc) {
+          this.setData({ userLocation: cloudLoc })
+          console.log('从云数据库按 openid 获取用户位置:', cloudLoc)
+          resolve(cloudLoc)
+          return
+        }
+
+      // 方法2：尝试从本地存储获取
+      const cachedLoc = wx.getStorageSync('user_location');
+      if (cachedLoc && cachedLoc.latitude && cachedLoc.longitude) {
+        this.setData({ userLocation: cachedLoc });
+        console.log('从本地存储获取用户位置:', cachedLoc);
+        resolve(cachedLoc);
+        return;
+      }
+
+      // 方法3：实时获取位置并进行逆地理编码
+      wx.getLocation({
+        type: 'gcj02',
+        isHighAccuracy: true,
         success: (res) => {
-          if (res.data.length > 0 && res.data[0].latitude && res.data[0].longitude) {
-            const userLoc = {
-              latitude: res.data[0].latitude,
-              longitude: res.data[0].longitude
-            };
-            this.setData({ userLocation: userLoc });
-            console.log('从云数据库获取用户位置:', userLoc);
-            resolve(userLoc);
-            return;
-          }
+          const lat = res.latitude;
+          const lng = res.longitude;
           
-          // 方法2：尝试从本地存储获取
-          const cachedLoc = wx.getStorageSync('user_location');
-          if (cachedLoc && cachedLoc.latitude && cachedLoc.longitude) {
-            this.setData({ userLocation: cachedLoc });
-            console.log('从本地存储获取用户位置:', cachedLoc);
-            resolve(cachedLoc);
-            return;
-          }
-          
-          // 方法3：实时获取位置并进行逆地理编码
-          wx.getLocation({
-            type: 'gcj02',
-            isHighAccuracy: true,
-            success: (res) => {
-              const lat = res.latitude;
-              const lng = res.longitude;
+          // 🔴 必须进行逆地理编码获取详细地址
+          qqmapsdk.reverseGeocoder({
+            location: { latitude: lat, longitude: lng },
+            get_poi: 1,
+            poi_options: 'policy=2',
+            success: (mapRes) => {
+              const result = mapRes.result;
+              let detailedAddress = result.address;
+              if (result.formatted_addresses && result.formatted_addresses.recommend) {
+                detailedAddress = `${result.address} (${result.formatted_addresses.recommend})`;
+              }
               
-              // 🔴 必须进行逆地理编码获取详细地址
-              qqmapsdk.reverseGeocoder({
-                location: { latitude: lat, longitude: lng },
-                get_poi: 1,
-                poi_options: 'policy=2',
-                success: (mapRes) => {
-                  const result = mapRes.result;
-                  let detailedAddress = result.address;
-                  if (result.formatted_addresses && result.formatted_addresses.recommend) {
-                    detailedAddress = `${result.address} (${result.formatted_addresses.recommend})`;
-                  }
-                  
-                  const fullLocData = {
-                    latitude: lat,
-                    longitude: lng,
-                    province: result.address_component?.province || '',
-                    city: result.address_component?.city || '',
-                    district: result.address_component?.district || '',
-                    address: detailedAddress || result.address || '',
-                    full_address: detailedAddress || result.address || ''
-                  };
-                  
-                  // 保存完整地址信息到缓存
-                  wx.setStorageSync('last_location', fullLocData);
-                  wx.setStorageSync('user_location', { latitude: lat, longitude: lng });
-                  
-                  this.setData({ userLocation: { latitude: lat, longitude: lng } });
-                  console.log('实时获取用户位置并解析地址:', fullLocData);
-                  resolve({ latitude: lat, longitude: lng });
-                },
-                fail: () => {
-                  // 逆地理编码失败，至少保存经纬度
-                  const userLoc = {
-                    latitude: lat,
-                    longitude: lng
-                  };
-                  this.setData({ userLocation: userLoc });
-                  wx.setStorageSync('user_location', userLoc);
-                  console.log('实时获取用户位置（逆地理编码失败）:', userLoc);
-                  resolve(userLoc);
-                }
-              });
+              const fullLocData = {
+                latitude: lat,
+                longitude: lng,
+                province: result.address_component?.province || '',
+                city: result.address_component?.city || '',
+                district: result.address_component?.district || '',
+                address: detailedAddress || result.address || '',
+                full_address: detailedAddress || result.address || ''
+              };
+              
+              // 保存完整地址信息到缓存
+              wx.setStorageSync('last_location', fullLocData);
+              wx.setStorageSync('user_location', { latitude: lat, longitude: lng });
+              
+              this.setData({ userLocation: { latitude: lat, longitude: lng } });
+              console.log('实时获取用户位置并解析地址:', fullLocData);
+              resolve({ latitude: lat, longitude: lng });
             },
-            fail: (err) => {
-              console.error('获取用户位置失败:', err);
-              // 使用默认位置（可选）
-              const defaultLoc = { latitude: 31.2304, longitude: 121.4737 }; // 上海
-              this.setData({ userLocation: defaultLoc });
-              resolve(defaultLoc);
+            fail: () => {
+              // 逆地理编码失败，至少保存经纬度
+              const userLoc = {
+                latitude: lat,
+                longitude: lng
+              };
+              this.setData({ userLocation: userLoc });
+              wx.setStorageSync('user_location', userLoc);
+              console.log('实时获取用户位置（逆地理编码失败）:', userLoc);
+              resolve(userLoc);
             }
           });
         },
         fail: (err) => {
-          console.error('从云数据库获取位置失败:', err);
-          // 尝试其他方法（进行逆地理编码）
-          wx.getLocation({
-            type: 'gcj02',
-            isHighAccuracy: true,
-            success: (res) => {
-              const lat = res.latitude;
-              const lng = res.longitude;
-              
-              // 🔴 必须进行逆地理编码获取详细地址
-              qqmapsdk.reverseGeocoder({
-                location: { latitude: lat, longitude: lng },
-                get_poi: 1,
-                poi_options: 'policy=2',
-                success: (mapRes) => {
-                  const result = mapRes.result;
-                  let detailedAddress = result.address;
-                  if (result.formatted_addresses && result.formatted_addresses.recommend) {
-                    detailedAddress = `${result.address} (${result.formatted_addresses.recommend})`;
-                  }
-                  
-                  const fullLocData = {
-                    latitude: lat,
-                    longitude: lng,
-                    province: result.address_component?.province || '',
-                    city: result.address_component?.city || '',
-                    district: result.address_component?.district || '',
-                    address: detailedAddress || result.address || '',
-                    full_address: detailedAddress || result.address || ''
-                  };
-                  
-                  // 保存完整地址信息到缓存
-                  wx.setStorageSync('last_location', fullLocData);
-                  wx.setStorageSync('user_location', { latitude: lat, longitude: lng });
-                  
-                  this.setData({ userLocation: { latitude: lat, longitude: lng } });
-                  console.log('实时获取用户位置并解析地址（方法2）:', fullLocData);
-                  resolve({ latitude: lat, longitude: lng });
-                },
-                fail: () => {
-                  // 逆地理编码失败，至少保存经纬度
-                  const userLoc = {
-                    latitude: lat,
-                    longitude: lng
-                  };
-                  this.setData({ userLocation: userLoc });
-                  wx.setStorageSync('user_location', userLoc);
-                  console.log('实时获取用户位置（逆地理编码失败，方法2）:', userLoc);
-                  resolve(userLoc);
-                }
-              });
-            },
-            fail: () => {
-              const defaultLoc = { latitude: 31.2304, longitude: 121.4737 };
-              this.setData({ userLocation: defaultLoc });
-              resolve(defaultLoc);
-            }
-          });
+          console.error('获取用户位置失败:', err);
+          const defaultLoc = { latitude: 31.2304, longitude: 121.4737 }; // 上海
+          this.setData({ userLocation: defaultLoc });
+          resolve(defaultLoc);
         }
+      });
       });
     });
   },
@@ -955,35 +942,45 @@ Page({
         
         // 如果是编辑模式，先更新 editData
         if (that.data.isEditing) {
+          const thumb = that.buildLowQualityUrl(tempFilePath);
           that.setData({
-            'editData.img': tempFilePath
+            'editData.img': tempFilePath,
+            'editData.imgFull': tempFilePath,
+            'editData.imgThumb': thumb,
+            'editData.imgDual': thumb !== tempFilePath,
+            'homeMainHdLoaded.edit': false
           });
         }
         
         // 如果是浏览模式（管理员模式），直接更新 activeItem 显示
         if (!that.data.isEditing && that.data.isAdmin) {
+          const thumb = that.buildLowQualityUrl(tempFilePath);
           that.setData({
-            'activeItem.img': tempFilePath
+            'activeItem.img': tempFilePath,
+            'activeItem.imgFull': tempFilePath,
+            'activeItem.imgThumb': thumb,
+            'activeItem.imgDual': thumb !== tempFilePath,
+            'homeMainHdLoaded.active': false
           });
         }
         
-        // 上传到云存储
         getApp().showLoading({ title: '上传图片中...', mask: true });
-        const cloudPath = `home/images/${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
-        
-        wx.cloud.uploadFile({
-          cloudPath: cloudPath,
-          filePath: tempFilePath,
-          success: async (uploadRes) => {
-            console.log('图片上传成功，云存储文件ID:', uploadRes.fileID);
-            const cloudFileID = uploadRes.fileID;
+        cosUpload
+          .uploadImageToCos(tempFilePath, 'home/images')
+          .then(async cloudFileID => {
+            console.log('图片上传成功(COS):', cloudFileID);
             
             try {
               // 更新显示
               if (that.data.isEditing) {
                 // 编辑模式下，更新 editData
+                const thumb = that.buildLowQualityUrl(cloudFileID);
                 that.setData({
-                  'editData.img': cloudFileID
+                  'editData.img': cloudFileID,
+                  'editData.imgFull': cloudFileID,
+                  'editData.imgThumb': thumb,
+                  'editData.imgDual': thumb !== cloudFileID,
+                  'homeMainHdLoaded.edit': false
                 });
                 getApp().hideLoading();
                 this.showAutoToast('成功', '图片已更新');
@@ -994,8 +991,13 @@ Page({
                   // 更新云数据库
                   await that.updateShopImageInCloud(shopId, cloudFileID);
                   // 更新本地显示
+                  const thumb = that.buildLowQualityUrl(cloudFileID);
                   that.setData({
-                    'activeItem.img': cloudFileID
+                    'activeItem.img': cloudFileID,
+                    'activeItem.imgFull': cloudFileID,
+                    'activeItem.imgThumb': thumb,
+                    'activeItem.imgDual': thumb !== cloudFileID,
+                    'homeMainHdLoaded.active': false
                   });
                   // 更新 shops 数组中的图片
                   const shops = that.data.shops.map(shop => {
@@ -1021,13 +1023,12 @@ Page({
               getApp().hideLoading();
               this.showAutoToast('提示', '保存失败，请重试');
             }
-          },
-          fail: (err) => {
+          })
+          .catch(err => {
             console.error('图片上传失败:', err);
             getApp().hideLoading();
-            this.showAutoToast('提示', '图片上传失败: ' + (err.errMsg || '未知错误'));
-          }
-        });
+            this.showAutoToast('提示', '图片上传失败: ' + ((err && err.message) || (err && err.errMsg) || '未知错误'));
+          });
       },
       fail: (err) => {
         console.error('选择图片失败:', err);
@@ -1101,11 +1102,15 @@ Page({
       const statusColor = isOpen ? '#00C853' : '#FF3B30';
       
       // 更新 activeItem，包含最新的营业状态
+      const imgThumb = this.buildLowQualityUrl(imgPath);
       const updatedActiveItem = {
         ...item,
         isOpen,
         status,
-        statusColor
+        statusColor,
+        imgFull: imgPath,
+        imgThumb,
+        imgDual: !!(imgPath && imgThumb && imgThumb !== imgPath)
       };
       
       // 计算初始位置（卡片当前位置）
@@ -1133,6 +1138,9 @@ Page({
           endTime: endT,
           
           img: imgPath, // 确保图片路径被正确设置
+          imgFull: imgPath,
+          imgThumb,
+          imgDual: !!(imgPath && imgThumb && imgThumb !== imgPath),
           latitude: item.latitude, longitude: item.longitude,
           selectedServices: [...item.services]
         }
@@ -1671,8 +1679,10 @@ Page({
             
             // 从本地数据中删除
             const list = shops.filter(item => 
-              (item._id && item._id !== shopId) && 
-              (item.id && item.id !== shopId)
+              !(
+                (item._id && item._id === shopId) ||
+                (item.id && item.id === shopId)
+              )
             );
             
             this.closeDetail();

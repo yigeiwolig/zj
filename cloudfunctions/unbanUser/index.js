@@ -2,6 +2,16 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
+async function assertAdmin() {
+  const { OPENID } = cloud.getWXContext();
+  if (!OPENID) throw new Error('UNAUTHORIZED');
+  const byOpenid = await db.collection('guanliyuan').where({ openid: OPENID }).limit(1).get();
+  if (byOpenid.data.length > 0) return OPENID;
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: OPENID }).limit(1).get();
+  if (bySystemOpenid.data.length > 0) return OPENID;
+  throw new Error('FORBIDDEN');
+}
+
 exports.main = async (event, context) => {
   const { buttonId, updateData, openid, updateLoginLogsAuto } = event; // login_logbutton 的 _id
   
@@ -10,6 +20,8 @@ exports.main = async (event, context) => {
   }
 
   try {
+    await assertAdmin();
+
     // 🔴 如果传入了 updateData，使用自定义更新数据
     const updateButtonData = updateData || {
       isBanned: false,
@@ -120,6 +132,9 @@ exports.main = async (event, context) => {
     return { success: true };
   } catch (err) {
     console.error('[unbanUser] ❌ 解封失败:', err);
+    if (String(err && err.message).includes('UNAUTHORIZED') || String(err && err.message).includes('FORBIDDEN')) {
+      return { success: false, error: '无管理员权限' };
+    }
     return { success: false, error: err.message };
   }
 };

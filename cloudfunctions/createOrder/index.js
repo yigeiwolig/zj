@@ -206,7 +206,7 @@ function generatePaymentParams(prepayId) {
 
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
-  const { totalPrice, goods, addressData, shippingFee, shippingMethod, action, userNickname, repairId, isRepairPayment } = event
+  const { totalPrice, goods, addressData, shippingFee, shippingMethod, action, userNickname, repairId, isRepairPayment, orderSource } = event
   
   const outTradeNo = `MT${Date.now()}${Math.floor(Math.random() * 1000)}`
   const db = cloud.database()
@@ -227,6 +227,7 @@ exports.main = async (event, context) => {
           userNickname: userNickname || '', // 🔴 保存用户昵称
           isRepairPayment: isRepairPayment || false, // 🔴 标记是否为维修支付
           repairId: repairId || '', // 🔴 保存维修单ID
+          orderSource: orderSource || '', // 🔴 订单来源：shop / shouhou
           createTime: db.serverDate()
         }
       })
@@ -248,6 +249,7 @@ exports.main = async (event, context) => {
         userNickname: userNickname || '', // 🔴 保存用户昵称
         isRepairPayment: isRepairPayment || false, // 🔴 标记是否为维修支付
         repairId: repairId || '', // 🔴 保存维修单ID
+        orderSource: orderSource || '', // 🔴 订单来源：shop / shouhou
         createTime: db.serverDate()
       }
     })

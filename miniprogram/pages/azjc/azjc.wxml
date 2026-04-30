@@ -14,18 +14,25 @@
       <view class="brand-title-row">
       <text>{{pageTitle}}</text>
       </view>
-      <!-- 只有白名单用户能看到的切换开关 -->
-      <view 
-        wx:if="{{isAuthorized}}" 
-        class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
-        catchtap="toggleAdminMode">
-        {{isAdmin ? 'EXIT' : 'EDIT'}}
+      <!-- 只有白名单用户能看到的切换开关（横向排列避免重叠） -->
+      <view class="brand-admin-actions" wx:if="{{isAuthorized}}">
+        <view
+          class="admin-toggle-btn {{isAdmin ? 'on' : ''}}"
+          catchtap="toggleAdminMode">
+          {{isAdmin ? 'EXIT' : 'EDIT'}}
+        </view>
+        <view
+          class="admin-toggle-btn {{showShareCodeStats ? 'on' : ''}}"
+          catchtap="toggleShareCodeStats">
+          {{showShareCodeStats ? '收起数据' : '查看数据'}}
+        </view>
       </view>
     </view>
   </view>
 
   <!-- 核心：舞台容器，通过 translate 控制位移 -->
   <view 
+    wx:if="{{!showShareCodeStats}}"
     class="stage-wrapper" 
     style="transform: translateY(-{{stepIndex * winHeight}}px); height: {{winHeight}}px;"
     bindtouchstart="touchStart"
@@ -86,13 +93,19 @@
           <view class="m-btn {{mode === 'v' ? 'active' : ''}}" bindtap="switchMode" data-mode="v">分段视频</view>
           <view class="m-btn {{mode === 'g' ? 'active' : ''}}" bindtap="switchMode" data-mode="g">图文详情</view>
         </view>
-        <!-- 管理员模式：显示全部 -->
-        <view class="show-all-switch" wx:if="{{isAdmin}}" bindtap="toggleShowAll">
-          <text class="show-all-text">{{showAll ? '✓ 显示全部' : '显示全部'}}</text>
+        <!-- 管理员模式工具栏 -->
+        <view class="admin-tools-row" wx:if="{{isAdmin}}">
+          <view class="show-all-switch" bindtap="toggleShowAll">
+            <text class="show-all-text">{{showAll ? '✓ 显示全部' : '显示全部'}}</text>
+          </view>
+          <view class="show-all-switch" bindtap="toggleShareCodeStats">
+            <text class="show-all-text">{{showShareCodeStats ? '返回教程' : '查看数据'}}</text>
+          </view>
         </view>
-        
+
         <!-- 第三级页面内部滚动，防止教程太长 -->
         <scroll-view 
+  wx:if="{{!(isAdmin && showShareCodeStats)}}"
   id="tutorialScroll" 
   scroll-y 
   class="tutorial-scroll" 
@@ -130,6 +143,8 @@
                   vslide-gesture-in-fullscreen="{{true}}"
                   binderror="onVideoError" 
                   bindplay="onVideoPlay"
+                  bindpause="onVideoPause"
+                  bindtimeupdate="onVideoTimeUpdate"
                   data-index="{{index}}"
                   data-fileid="{{item.fileID}}"
                   object-fit="contain"
@@ -169,8 +184,10 @@
               bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
               data-index="{{index}}"
               data-type="graphics">
-              <image class="g-media-real" src="{{item.img}}" mode="aspectFill" wx:if="{{item.img}}" lazy-load="true" binderror="onAzjcGraphicImageError" data-index="{{index}}"></image>
-              <view class="g-media" wx:else></view>
+              <view class="g-media" wx:if="{{item.img}}">
+                <image class="g-media-real" src="{{item.img}}" mode="widthFix" lazy-load="true" binderror="onAzjcGraphicImageError" data-index="{{index}}"></image>
+              </view>
+              <view class="g-media g-media-placeholder" wx:else></view>
               <view class="g-info">
                 <text class="g-title">{{item.title || '安装流程图解 0' + (index+1)}}</text>
                 <text class="g-desc" wx:if="{{item.desc && item.desc !== '点击编辑详细描述'}}">{{item.desc}}</text>
@@ -254,6 +271,86 @@
   </view>
 </view>
 
+<!-- 管理员数据查看页（页面显示，不是弹窗） -->
+<view class="stats-page" wx:if="{{isAuthorized && showShareCodeStats}}">
+  <view class="stats-page-inner">
+    <view class="stats-header">
+      <text class="stats-title">分享码用户</text>
+      <text class="stats-subtitle">一人一卡 · 清晰数据块 · 仅管理员</text>
+    </view>
+    <view class="stats-search-wrap">
+      <input
+        class="stats-search-input"
+        placeholder="搜分享码或「普通安装」"
+        value="{{statsSearchKeyword}}"
+        bindinput="onStatsSearchInput"
+        confirm-type="search"
+      />
+    </view>
+    <view class="stats-loading" wx:if="{{loadingShareCodeStats}}">加载中...</view>
+    <scroll-view wx:elif="{{shareCodeStatsDisplayRows.length > 0}}" scroll-y class="stats-list" scroll-top="{{statsScrollTop}}" enable-flex="{{true}}">
+      <view class="user-stat-card" wx:for="{{shareCodeStatsDisplayRows}}" wx:key="rowKey">
+        <!-- 顶部：人员信息 -->
+        <view class="user-stat-people">
+          <view class="user-stat-person">
+            <view class="user-stat-role">访客</view>
+            <view class="user-stat-name">{{item.viewerNickname}}</view>
+          </view>
+          <view class="user-stat-divider"></view>
+          <view class="user-stat-person">
+            <view class="user-stat-role user-stat-role--installer">安装方</view>
+            <view class="user-stat-code">{{item.shareCode || '—'}}</view>
+            <view class="user-stat-installer-name">安装员：{{item.creatorNickname}}</view>
+          </view>
+        </view>
+
+        <!-- 底部：数据块 (按钮样式) -->
+        <view class="user-stat-data">
+          <!-- 4个小数据块 -->
+          <view class="user-stat-grid">
+            <view class="user-stat-btn">
+              <text class="user-stat-btn-k">进入</text>
+              <text class="user-stat-btn-v">{{item.enterCount}}次</text>
+            </view>
+            <view class="user-stat-btn">
+              <text class="user-stat-btn-k">停留</text>
+              <text class="user-stat-btn-v">{{item.totalStayMinutesText}}分</text>
+            </view>
+            <view class="user-stat-btn">
+              <text class="user-stat-btn-k">视频</text>
+              <text class="user-stat-btn-v">{{item.totalVideoMinutesText}}分</text>
+            </view>
+            <view class="user-stat-btn">
+              <text class="user-stat-btn-k">点击</text>
+              <text class="user-stat-btn-v">{{item.sectionClicksTotal}}次</text>
+            </view>
+          </view>
+
+          <!-- 整行的数据块 -->
+          <view class="user-stat-btn user-stat-btn--full">
+            <text class="user-stat-btn-k">最近进入</text>
+            <text class="user-stat-btn-v">{{item.lastViewTime}}</text>
+          </view>
+          <view class="user-stat-btn user-stat-btn--full">
+            <text class="user-stat-btn-k">地区</text>
+            <text class="user-stat-btn-v">{{item.regionText}}</text>
+          </view>
+          <view class="user-stat-btn user-stat-btn--full">
+            <text class="user-stat-btn-k">地址</text>
+            <text class="user-stat-btn-v">{{item.addressDisplay}}</text>
+          </view>
+          <view class="user-stat-btn user-stat-btn--full">
+            <text class="user-stat-btn-k">坐标</text>
+            <text class="user-stat-btn-v">{{item.geoText}}</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+    <view class="stats-empty" wx:else>暂无访问数据</view>
+    <view class="modal-btn-new btn-black stats-close-btn" bindtap="toggleShareCodeStats">返回教程</view>
+  </view>
+</view>
+
 <!-- 🔴 全屏视频遮罩层：覆盖在整个页面上，不改变 stepIndex -->
 <view class="fullscreen-video-mask {{isVideoFullScreen ? 'active' : ''}} {{fullScreenVideoMaskClosing ? 'closing' : ''}}" wx:if="{{isVideoFullScreen}}" catchtouchmove="noop" catchtap="noop">
   <view class="fullscreen-video-container {{fullScreenVideoTransform}}" style="{{fullScreenVideoInitialStyle}}" catchtap="toggleFullScreenVideoPlay" catchtouchmove="noop">
@@ -271,6 +368,7 @@
       vslide-gesture-in-fullscreen="{{true}}"
       object-fit="contain"
       paused="{{fullScreenVideoPaused}}"
+      bindtimeupdate="onFullScreenVideoTimeUpdate"
       id="fullscreen-video-player"></video>
     <!-- 🔴 暂停时显示播放按钮 -->
     <view class="fullscreen-play-overlay {{fullScreenVideoPaused ? 'show' : ''}}" catchtap="toggleFullScreenVideoPlay">

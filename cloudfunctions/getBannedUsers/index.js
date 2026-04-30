@@ -2,8 +2,20 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
+async function assertAdmin() {
+  const { OPENID } = cloud.getWXContext();
+  if (!OPENID) throw new Error('UNAUTHORIZED');
+  const byOpenid = await db.collection('guanliyuan').where({ openid: OPENID }).limit(1).get();
+  if (byOpenid.data.length > 0) return OPENID;
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: OPENID }).limit(1).get();
+  if (bySystemOpenid.data.length > 0) return OPENID;
+  throw new Error('FORBIDDEN');
+}
+
 exports.main = async (event, context) => {
   try {
+    await assertAdmin();
+
     // 获取所有被封禁的用户（isBanned = true）
     const buttonRes = await db.collection('login_logbutton')
       .where({
@@ -92,59 +104,59 @@ exports.main = async (event, context) => {
           banReasonText = button.banReason || '未知原因';
       }
 
-      // 格式化封禁页面（拼音，用于后台）
+      // 格式化封禁页面（中文，用于管理员界面展示）
       let banPageText = '';
       switch (button.banPage) {
         case 'case':
-          banPageText = 'anliye';
+          banPageText = '案例页';
           break;
         case 'my':
-          banPageText = 'gerenzhongxin';
+          banPageText = '个人中心';
           break;
         case 'products':
-          banPageText = 'chanpinye';
+          banPageText = '产品页';
           break;
         case 'shop':
-          banPageText = 'shangdianye';
+          banPageText = '商店页';
           break;
         case 'home':
-          banPageText = 'shouye';
+          banPageText = '首页';
           break;
         case 'paihang':
-          banPageText = 'paihangbang';
+          banPageText = '排行榜';
           break;
         case 'shouhou':
-          banPageText = 'weixiuzhongxin';
+          banPageText = '维修中心';
           break;
         case 'index':
-          banPageText = 'dengluye';
+          banPageText = '登录页';
           break;
         case 'blocked':
-          banPageText = 'fengjingye';
+          banPageText = '封禁页';
           break;
         case 'admin':
-          banPageText = 'guanliyuanye';
+          banPageText = '管理员页';
           break;
         case 'adminLite':
-          banPageText = 'guanliyuanjingjianye';
+          banPageText = '管理员精简页';
           break;
         case 'azjc':
-          banPageText = 'anzhuangjiaocheng';
+          banPageText = '安装教程';
           break;
         case 'call':
-          banPageText = 'lianxieye';
+          banPageText = '联系页';
           break;
         case 'scan':
-          banPageText = 'saomiaoye';
+          banPageText = '扫描页';
           break;
         case 'ota':
-          banPageText = 'otaye';
+          banPageText = 'OTA页';
           break;
         case 'pagenew':
-          banPageText = 'xinyemian';
+          banPageText = '新页面';
           break;
         default:
-          banPageText = button.banPage || 'Unknown';
+          banPageText = button.banPage || '未知页面';
       }
 
       // 格式化时间
@@ -207,6 +219,9 @@ exports.main = async (event, context) => {
     return { success: true, users: users };
   } catch (err) {
     console.error('[getBannedUsers] 查询失败:', err);
+    if (String(err && err.message).includes('UNAUTHORIZED') || String(err && err.message).includes('FORBIDDEN')) {
+      return { success: false, error: '无管理员权限' };
+    }
     return { success: false, error: err.message };
   }
 };

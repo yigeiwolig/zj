@@ -1,4 +1,5 @@
 const app = getApp();
+const cosUpload = require('../../utils/cosUpload.js');
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
 // 🔴 使用专门的行政区key（用于省市区选择器 - getCityList）
 const MAP_KEY = 'CGRBZ-FLLLL-CNCPC-MQ6YK-YENYT-2MFCD'; // 行政区key（专门用于省市区选择器）
@@ -29,7 +30,7 @@ Page({
     showModal: false,
     hasModalOpen: false, // 🔴 是否有弹窗打开（用于锁定页面滚动）
     bluetoothReady: false,
-    modelOptions: ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 PRO Long', 'F2 MAX Long'],
+    modelOptions: ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX', 'F2 MAX Long'],
     modelIndex: null,
     buyDate: '',
     userName: 'Alexander', // 用户昵称，从存储中读取
@@ -148,6 +149,7 @@ Page({
     
     // 【新增】底部弹窗控制
     showReturnAddressModal: false,
+    returnAddressModalClosing: false,
     returnTrackingIdInput: '', // 运单号输入
     
     // 【新增】物流查询弹窗
@@ -193,6 +195,7 @@ Page({
     fillRepairTrackingId: '', // 运单号（未过质保时使用）
     fillRepairTotalPrice: 0, // 总价
     fillRepairTotalPriceFormatted: '0.00', // 格式化后的总价（用于显示）
+    fillRepairRequireUserPay: false, // 未过质保：是否让用户在「我的」需寄回卡片里支付维修费
     
     // 🔴 新增：过质保用户支付后填写运单号
     returnTrackingIdForPaidRepair: '', // 过质保用户支付后填写的运单号
@@ -924,7 +927,12 @@ Page({
           const userName = item.address ? item.address.name : '匿名';
           const userNickname = item.userNickname || ''; // 🔴 获取用户昵称
           const rid = item.repairId ? String(item.repairId).trim() : '';
-          const guidedPartsPurchase = rid.length > 0;
+          const orderSource = (item.orderSource || '').toString().trim();
+          const guidedPartsPurchase = orderSource ? (orderSource === 'shouhou') : (rid.length > 0);
+          const tutorialDest = guidedPartsPurchase ? 'shouhou' : 'azjc';
+          const orderRemark = [item.remark, item.buyerMessage, item.note, item.sellerNote, item.adminNote]
+            .map(s => (s != null && String(s).trim() ? String(s).trim() : ''))
+            .find(Boolean) || '';
           return {
             id: item._id,
             orderId: item.orderId,
@@ -932,7 +940,9 @@ Page({
             realStatus: item.status, 
             statusText: this.getStatusText(item.status),
             repairId: rid,
+            orderSource,
             guidedPartsPurchase,
+            tutorialDest,
             amount: item.totalFee,
             userName: userName,
             userNickname: userNickname, // 🔴 保存用户昵称
@@ -941,6 +951,8 @@ Page({
             userAddr: item.address ? item.address.address : '',
             goodsList: item.goodsList || [],
             createTime: this.formatTime(item.createTime),
+            createTimeShort: this.formatOrderTimeShort(item.createTime),
+            orderRemark,
             trackingId: item.trackingId || "",
             shippingMethod: item.shipping && item.shipping.method ? item.shipping.method : ''
           };
@@ -1129,6 +1141,18 @@ Page({
     return `${y}-${m}-${d} ${h}:${min}`;
   },
 
+  /** 引导购配件发货卡「下单：MM-DD HH:mm」 */
+  formatOrderTimeShort(raw) {
+    if (!raw) return '';
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return '';
+    const m = (date.getMonth() + 1).toString().padStart(2, '0');
+    const d = date.getDate().toString().padStart(2, '0');
+    const h = date.getHours().toString().padStart(2, '0');
+    const min = date.getMinutes().toString().padStart(2, '0');
+    return `${m}-${d} ${h}:${min}`;
+  },
+
 
   // 2. [真实] 重新发起支付
   repayOrder(e) {
@@ -1175,7 +1199,8 @@ Page({
         goods: goods,
         addressData: addressData,
         shippingFee: shippingFee,
-        shippingMethod: shippingMethod
+        shippingMethod: shippingMethod,
+        orderSource: item.orderSource || (item.guidedPartsPurchase ? 'shouhou' : 'shop')
       },
       success: res => {
         console.log('[repayOrder] 云函数调用成功，返回结果:', res);
@@ -1501,9 +1526,18 @@ Page({
 
             // 3. 跳转到教程页面：dest=shouhou 跳售后页并自动输入 123456 解锁，否则跳安装教程页
             const isShouhou = dest === 'shouhou';
-            const tutorialUrl = isShouhou
-              ? '/pages/shouhou/shouhou' + (modelName ? '?model=' + encodeURIComponent(modelName) + '&autoUnlock=1' : '')
-              : '/pages/azjc/azjc' + (modelName ? '?model=' + encodeURIComponent(modelName) : '') + '&justConfirmed=1';
+            const tutorialUrl = (() => {
+              if (isShouhou) {
+                const q = [];
+                if (modelName) q.push('model=' + encodeURIComponent(modelName));
+                q.push('autoUnlock=1');
+                return '/pages/shouhou/shouhou' + (q.length ? ('?' + q.join('&')) : '');
+              }
+              const q = [];
+              if (modelName) q.push('model=' + encodeURIComponent(modelName));
+              q.push('justConfirmed=1');
+              return '/pages/azjc/azjc' + (q.length ? ('?' + q.join('&')) : '');
+            })();
             wx.navigateTo({
               url: tutorialUrl,
               animationType: 'none',
@@ -1791,8 +1825,19 @@ Page({
       this.loadMyOrdersPromise(),
       this.loadMyActivitiesPromise()
     ]).then(() => {
+      // 管理员页补充刷新：待处理维修、待审核、需寄回列表
+      if (this.data.isAdmin) {
+        try { this.loadPendingRepairs(); } catch (e) {}
+        try { this.loadAuditList(); } catch (e) {}
+        try { this.loadReturnRequiredList(); } catch (e) {}
+      } else {
+        // 普通用户页补充刷新：设备列表、需寄回列表
+        try { this.loadMyDevices(); } catch (e) {}
+        try { this.loadReturnRequiredList(); } catch (e) {}
+      }
       this._isLoading = false;
       wx.stopPullDownRefresh();
+      try { this.showAutoToast('已刷新', '最新数据已加载'); } catch (e) {}
     }).catch((err) => {
       console.error('[onPullDownRefresh] 刷新失败:', err);
       this._isLoading = false;
@@ -2098,7 +2143,6 @@ Page({
             'F1 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
             'F2 PRO': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
             'F2 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-            'F2 PRO Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
             'F2 MAX Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"]
           };
           
@@ -2998,12 +3042,6 @@ Page({
   // 🔴 新增：打开填写售后单弹窗
   openFillRepairModal(e) {
     const item = e.currentTarget.dataset.item;
-    const index = e.currentTarget.dataset.index;
-    
-    // #region agent log
-    console.log('[DEBUG] openFillRepairModal entry', {itemId: item?._id, itemWarrantyExpired: item?.warrantyExpired, itemWarrantyExpiredType: typeof item?.warrantyExpired, itemExpiryDate: item?.expiryDate, itemRemainingDays: item?.remainingDays});
-    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'my.js:2581',message:'openFillRepairModal entry',data:{itemId:item?._id,itemWarrantyExpired:item?.warrantyExpired,itemWarrantyExpiredType:typeof item?.warrantyExpired,itemExpiryDate:item?.expiryDate,itemRemainingDays:item?.remainingDays,itemKeys:item?Object.keys(item).slice(0,15):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'A'},fail:()=>{}});
-    // #endregion
     
     if (!item || !item._id) {
       this.showAutoToast('提示', '订单信息异常');
@@ -3022,28 +3060,9 @@ Page({
       const exp = new Date(item.expiryDate);
       const diff = Math.ceil((exp - now) / (86400000));
       actualWarrantyExpired = diff <= 0;
-      
-      // #region agent log
-      console.log('[DEBUG] recalculated warrantyExpired from expiryDate', {
-        original: item.warrantyExpired,
-        expiryDate: item.expiryDate,
-        diff: diff,
-        recalculated: actualWarrantyExpired
-      });
-      wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'my.js:2595',message:'recalculated warrantyExpired from expiryDate',data:{original:item.warrantyExpired,expiryDate:item.expiryDate,diff:diff,recalculated:actualWarrantyExpired},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'F'},fail:()=>{}});
-      // #endregion
     } else if (item.remainingDays !== undefined && item.remainingDays !== null) {
       // 方案2：根据 remainingDays 判断
       actualWarrantyExpired = item.remainingDays <= 0;
-      
-      // #region agent log
-      console.log('[DEBUG] recalculated warrantyExpired from remainingDays', {
-        original: item.warrantyExpired,
-        remainingDays: item.remainingDays,
-        recalculated: actualWarrantyExpired
-      });
-      wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'my.js:2605',message:'recalculated warrantyExpired from remainingDays',data:{original:item.warrantyExpired,remainingDays:item.remainingDays,recalculated:actualWarrantyExpired},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'G'},fail:()=>{}});
-      // #endregion
     } else if (item._openid && item.model) {
       // 方案3：从设备表查询（异步，先使用默认值，查询后再更新）
       const db = wx.cloud.database();
@@ -3062,15 +3081,6 @@ Page({
               const exp = new Date(device.expiryDate);
               const diff = Math.ceil((exp - now) / (86400000));
               const deviceWarrantyExpired = diff <= 0;
-              
-              // #region agent log
-              console.log('[DEBUG] queried warrantyExpired from device', {
-                deviceExpiryDate: device.expiryDate,
-                diff: diff,
-                deviceWarrantyExpired: deviceWarrantyExpired
-              });
-              wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'my.js:2620',message:'queried warrantyExpired from device',data:{deviceExpiryDate:device.expiryDate,diff:diff,deviceWarrantyExpired:deviceWarrantyExpired},timestamp:Date.now(),sessionId:'debug-session',runId:'run4',hypothesisId:'H'},fail:()=>{}});
-              // #endregion
               
               // 更新 currentFillRepairItem
               if (this.data.currentFillRepairItem && this.data.currentFillRepairItem._id === item._id) {
@@ -3092,17 +3102,6 @@ Page({
       warrantyExpired: actualWarrantyExpired
     };
     
-    // #region agent log
-    console.log('[DEBUG] before setData warrantyExpired check', {
-      warrantyExpired: itemWithCorrectWarranty.warrantyExpired,
-      warrantyExpiredType: typeof itemWithCorrectWarranty.warrantyExpired,
-      warrantyExpiredStrictTrue: itemWithCorrectWarranty.warrantyExpired === true,
-      warrantyExpiredLooseTrue: itemWithCorrectWarranty.warrantyExpired == true,
-      notWarrantyExpired: !itemWithCorrectWarranty.warrantyExpired
-    });
-    wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'my.js:2608',message:'before setData warrantyExpired check',data:{warrantyExpired:itemWithCorrectWarranty.warrantyExpired,warrantyExpiredType:typeof itemWithCorrectWarranty.warrantyExpired,warrantyExpiredStrictTrue:itemWithCorrectWarranty.warrantyExpired===true,warrantyExpiredLooseTrue:itemWithCorrectWarranty.warrantyExpired==true,notWarrantyExpired:!itemWithCorrectWarranty.warrantyExpired},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'B'},fail:()=>{}});
-    // #endregion
-    
     // 初始化维修项目列表（如果已有数据则使用，否则创建空列表）
     const repairItems = itemWithCorrectWarranty.repairItems && itemWithCorrectWarranty.repairItems.length > 0 
       ? JSON.parse(JSON.stringify(itemWithCorrectWarranty.repairItems)) // 深拷贝
@@ -3115,6 +3114,12 @@ Page({
     
     // 格式化总价（保留两位小数）
     const totalPriceFormatted = totalPrice.toFixed(2);
+
+    const pendingUserPay =
+      Number(itemWithCorrectWarranty.repairTotalPrice) > 0 &&
+      itemWithCorrectWarranty.repairPaid === false;
+
+    const trackingSeed = pendingUserPay ? '' : (itemWithCorrectWarranty.trackingId || '');
     
     // 🔴 修复：打开填写售后单弹窗时，先关闭需寄回订单确认弹窗，避免遮挡
     this.setData({
@@ -3123,17 +3128,11 @@ Page({
       isUserRepairOrderSimple: false,
       currentFillRepairItem: itemWithCorrectWarranty,
       fillRepairItems: repairItems,
-      fillRepairTrackingId: itemWithCorrectWarranty.trackingId || '',
+      fillRepairTrackingId: trackingSeed,
       fillRepairTotalPrice: totalPrice,
-      fillRepairTotalPriceFormatted: totalPriceFormatted
+      fillRepairTotalPriceFormatted: totalPriceFormatted,
+      fillRepairRequireUserPay: pendingUserPay
     }, () => {
-      // #region agent log
-      console.log('[DEBUG] after setData callback', {
-        currentFillRepairItemWarrantyExpired: this.data.currentFillRepairItem?.warrantyExpired,
-        currentFillRepairItemId: this.data.currentFillRepairItem?._id
-      });
-      wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'my.js:2625',message:'after setData callback currentFillRepairItem',data:{currentFillRepairItemWarrantyExpired:this.data.currentFillRepairItem?.warrantyExpired,currentFillRepairItemId:this.data.currentFillRepairItem?._id},timestamp:Date.now(),sessionId:'debug-session',runId:'run3',hypothesisId:'C'},fail:()=>{}});
-      // #endregion
       this.updateModalState(); // 🔴 更新弹窗状态，锁定页面滚动
     });
   },
@@ -3146,9 +3145,21 @@ Page({
       fillRepairItems: [],
       fillRepairTrackingId: '',
       fillRepairTotalPrice: 0,
-      fillRepairTotalPriceFormatted: '0.00'
+      fillRepairTotalPriceFormatted: '0.00',
+      fillRepairRequireUserPay: false
     });
     this.updateModalState(); // 🔴 更新弹窗状态，解锁页面滚动
+  },
+
+  onFillRepairRequireUserPayChange(e) {
+    const v = !!e.detail.value;
+    const patch = { fillRepairRequireUserPay: v };
+    if (v) patch.fillRepairTrackingId = '';
+    this.setData(patch, () => {
+      if (v) {
+        this.showAutoToast('提示', '已开启用户支付维修费，用户需在「我的」卡片中完成支付');
+      }
+    });
   },
   
   // 🔴 新增：添加维修项目
@@ -3274,9 +3285,9 @@ Page({
     });
   },
   
-  // 🔴 新增：提交填写售后单（未过质保，直接提交）
+  // 🔴 新增：提交填写售后单（未过质保：可选「需要用户支付」或免支付并填运单号）
   submitFillRepair() {
-    const { currentFillRepairItem, fillRepairItems, fillRepairTrackingId } = this.data;
+    const { currentFillRepairItem, fillRepairItems, fillRepairTrackingId, fillRepairRequireUserPay } = this.data;
     
     if (!currentFillRepairItem || !currentFillRepairItem._id) {
       setTimeout(() => {
@@ -3284,93 +3295,116 @@ Page({
       }, 100);
       return;
     }
-    
-    // 验证维修项目
-    const validItems = fillRepairItems.filter(item => item.name && item.name.trim() && (parseFloat(item.price) || 0) > 0);
-    if (validItems.length === 0) {
-      // 🔴 修复：延迟显示提示，确保弹窗层级正确，显示在填写售后单弹窗之上
+
+    if (fillRepairRequireUserPay) {
+      const validItems = fillRepairItems.filter(
+        item => item.name && String(item.name).trim() && (parseFloat(item.price) || 0) > 0
+      );
+      if (validItems.length === 0) {
+        setTimeout(() => {
+          this.showAutoToast('提示', '请至少添加一项有名称且单价大于 0 的维修项目');
+        }, 100);
+        return;
+      }
+      const totalPrice = validItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0);
+      if (totalPrice <= 0) {
+        setTimeout(() => {
+          this.showAutoToast('提示', '需要用户付款时合计须大于 0');
+        }, 100);
+        return;
+      }
+      if (fillRepairTrackingId.trim()) {
+        setTimeout(() => {
+          this.showAutoToast('提示', '用户付款完成前请勿填写寄回运单号');
+        }, 100);
+        return;
+      }
+
+      this.showMyLoading('提交中...');
+      const db = wx.cloud.database();
+      db.collection('shouhou_repair').doc(currentFillRepairItem._id).update({
+        data: {
+          repairItems: validItems,
+          repairTotalPrice: totalPrice,
+          repairPaid: false,
+          repairSubmitTime: db.serverDate()
+        }
+      }).then(() => {
+        this.hideMyLoading();
+        this.closeFillRepairModal();
+        setTimeout(() => {
+          this.loadReturnRequiredList();
+        }, 300);
+        this.loadMyOrders();
+        this.showAutoToast('提交成功', '用户可在「我的」需寄回卡片中点击「立即支付」');
+        if (!this.data.isAdmin && !this.data.isAuthorized) {
+          setTimeout(() => {
+            try {
+              wx.pageScrollTo({ selector: '#return-required-ticket', duration: 320 });
+            } catch (e) {}
+          }, 400);
+        }
+      }).catch(err => {
+        this.hideMyLoading();
+        console.error('提交失败:', err);
+        setTimeout(() => {
+          this.showAutoToast('提交失败', err.errMsg || '请稍后重试');
+        }, 100);
+      });
+      return;
+    }
+
+    const namedItems = fillRepairItems.filter(item => item.name && String(item.name).trim());
+    if (namedItems.length === 0) {
       setTimeout(() => {
-        this.showAutoToast('提示', '请至少添加一个有效的维修项目');
+        this.showAutoToast('提示', '请至少添加一个维修项目');
       }, 100);
       return;
     }
-    
-    // 验证运单号（未过质保时必须填写）
-    if (!currentFillRepairItem.warrantyExpired && !fillRepairTrackingId.trim()) {
-      this.showAutoToast('提示', '请输入寄回运单号');
+
+    const normalizedItems = namedItems.map(it => ({
+      name: String(it.name).trim(),
+      price: parseFloat(it.price) || 0
+    }));
+    const totalPrice = normalizedItems.reduce((sum, it) => sum + it.price, 0);
+
+    if (!fillRepairTrackingId.trim()) {
+      setTimeout(() => {
+        this.showAutoToast('提示', '请输入寄回运单号');
+      }, 100);
       return;
     }
-    
+
     this.showMyLoading('提交中...');
     const db = wx.cloud.database();
-    
-    // 计算总价
-    const totalPrice = validItems.reduce((sum, item) => {
-      return sum + (parseFloat(item.price) || 0);
-    }, 0);
-    
-    // 构建更新数据
+
     const updateData = {
-      repairItems: validItems,
+      repairItems: normalizedItems,
       repairTotalPrice: totalPrice,
-      repairPaid: false // 未过质保，不需要支付
+      repairPaid: true
     };
-    
-    // 如果有运单号，直接更新状态
-    if (fillRepairTrackingId.trim()) {
-      updateData.trackingId = fillRepairTrackingId.trim();
-      updateData.status = 'REPAIR_COMPLETED_SENT';
-      updateData.repairCompleteTime = db.serverDate();
-      updateData.returnCompleted = true;
-    }
-    
+
+    updateData.trackingId = fillRepairTrackingId.trim();
+    updateData.status = 'REPAIR_COMPLETED_SENT';
+    updateData.repairCompleteTime = db.serverDate();
+    updateData.returnCompleted = true;
+
     db.collection('shouhou_repair').doc(currentFillRepairItem._id).update({
       data: updateData
     }).then(() => {
       this.hideMyLoading();
-      
-      // 关闭填写售后单弹窗
       this.closeFillRepairModal();
-      
-      // 🔴 测试模式：不移除卡片，保持显示以便测试
-      // // 🔴 立即从列表中移除该订单（优化体验，无需等待数据库刷新）
-      // const currentList = this.data.returnRequiredList || [];
-      // const updatedList = currentList.filter(item => item._id !== currentFillRepairItem._id);
-      // 
-      // // 如果列表为空，关闭"需寄回订单确认"弹窗
-      // if (updatedList.length === 0) {
-      //   this.setData({
-      //     returnRequiredList: updatedList,
-      //     showReturnRequiredModal: false
-      //   });
-      // } else {
-      //   this.setData({
-      //     returnRequiredList: updatedList
-      //   });
-      // }
-      
-      // 刷新列表（确保数据同步）
       setTimeout(() => {
         this.loadReturnRequiredList();
       }, 300);
-      
-      this.loadMyOrders(); // 刷新订单列表
-      
-      let successMsg = '售后单已提交';
-      if (fillRepairTrackingId.trim()) {
-        successMsg = '售后单已提交，已寄出快递\n用户端已更新状态';
-      }
-      
-      this.showAutoToast('提交成功', successMsg);
+      this.loadMyOrders();
+      this.showAutoToast('提交成功', '售后单已提交，已寄出快递\n用户端已更新状态');
     }).catch(err => {
       this.hideMyLoading();
       console.error('提交失败:', err);
-      this.showMyDialog({
-        title: '提交失败',
-        content: err.errMsg || '请稍后重试',
-        showCancel: false,
-        confirmText: '知道了'
-      });
+      setTimeout(() => {
+        this.showAutoToast('提交失败', err.errMsg || '请稍后重试');
+      }, 100);
     });
   },
   
@@ -3453,17 +3487,20 @@ Page({
       
       this.loadMyOrders();
       
-      // 提示管理员
-      this.showAutoToast('提交成功', '用户可在界面查看并支付维修费用');
+      this.showAutoToast('提交成功', '用户可在「我的」需寄回卡片中点击「立即支付」');
+      if (!this.data.isAdmin && !this.data.isAuthorized) {
+        setTimeout(() => {
+          try {
+            wx.pageScrollTo({ selector: '#return-required-ticket', duration: 320 });
+          } catch (e) {}
+        }, 400);
+      }
     }).catch(err => {
       this.hideMyLoading();
       console.error('保存失败:', err);
-      this.showMyDialog({
-        title: '提交失败',
-        content: err.errMsg || '请稍后重试',
-        showCancel: false,
-        confirmText: '知道了'
-      });
+      setTimeout(() => {
+        this.showAutoToast('提交失败', err.errMsg || '请稍后重试');
+      }, 100);
     });
   },
   
@@ -3514,6 +3551,7 @@ Page({
         addressData: {}, // 维修支付不需要地址
         shippingFee: 0,
         shippingMethod: 'none',
+        orderSource: 'shouhou',
         userNickname: userNickname,
         repairId: repairId, // 🔴 传递维修单ID，用于支付成功后更新状态
         isRepairPayment: true // 🔴 标记这是维修支付
@@ -4298,9 +4336,17 @@ Page({
   },
 
   // 【新增】自动消失提示（无按钮，2秒后自动消失，带收缩退出动画）
-  showAutoToast(title = '提示', content = '') {
-    // 🔴 互斥：先关闭其他弹窗，避免重叠
-    this._closeAllPopups();
+  showAutoToast(title = '提示', content = '', options = {}) {
+    const preserveBindModal = !!options.preserveBindModal;
+    // 🔴 互斥：默认先关闭其他弹窗，避免重叠；
+    // 在绑定设备流程里可选择保留绑定弹层，防止提示把弹层顶掉
+    if (!preserveBindModal) {
+      this._closeAllPopups();
+    } else {
+      // 仅清理系统 toast/loading，不关闭绑定弹层本身
+      try { wx.hideToast(); } catch (e) {}
+      try { wx.hideLoading(); } catch (e) {}
+    }
     // 如果已有toast在显示，先关闭它
     if (this.data.autoToast.show) {
       this._closeAutoToastWithAnimation();
@@ -4379,12 +4425,7 @@ Page({
       return;
     }
 
-    if (password !== '123456') {
-      this.showAutoToast('提示', '密码错误');
-      return;
-    }
-
-    // 密码正确，开始清空数据
+    // 交给云函数做最终密码校验（以环境变量为准）
     this.setData({
       showTestPasswordModal: false,
       testPasswordInput: '',
@@ -4392,18 +4433,17 @@ Page({
     });
     this.updateModalState();
 
-    this.clearAllCollections();
+    this.clearAllCollections(password);
   },
 
-  // 🔴 清空所有集合数据（排除 app_config、guanliyuan）
-  // 使用云函数来删除，避免权限问题
-  async clearAllCollections() {
+  // 🔴 清空：云数据库指定集合 + COS 存储桶内全部对象（与「测试按钮」同一云函数 clearAllCollections）
+  async clearAllCollections(password) {
     try {
       // 调用云函数清空所有集合
       const res = await wx.cloud.callFunction({
         name: 'clearAllCollections',
         data: {
-          password: '123456' // 密码在云函数中再次验证
+          password: password || ''
         }
       });
 
@@ -4421,11 +4461,22 @@ Page({
         const successCount = results.success.length;
         const failCount = results.failed.length;
         const totalDeleted = results.totalDeleted;
+        const cos = res.result.cos;
+        let cosHint = '';
+        if (cos) {
+          if (cos.error) {
+            cosHint = ` 存储桶：失败（${cos.error}）`;
+          } else if (cos.skipped) {
+            cosHint = ` 存储桶：已跳过（${cos.message || '未配置 COS'}）`;
+          } else if (typeof cos.deleted === 'number') {
+            cosHint = ` 存储桶：已删 ${cos.deleted} 个对象`;
+          }
+        }
 
         if (failCount === 0) {
-          this.showAutoToast('提示', `清空完成！成功清空 ${successCount} 个集合，共删除 ${totalDeleted} 条数据`);
+          this.showAutoToast('提示', `清空完成！数据库 ${successCount} 个集合，共 ${totalDeleted} 条。${cosHint}`);
         } else {
-          this.showAutoToast('提示', `清空完成！成功 ${successCount} 个，失败 ${failCount} 个，共删除 ${totalDeleted} 条数据`);
+          this.showAutoToast('提示', `清空完成！数据库成功 ${successCount}、失败 ${failCount}，共 ${totalDeleted} 条。${cosHint}`);
           console.warn('部分集合清空失败:', results.failed);
         }
       } else {
@@ -4849,33 +4900,25 @@ Page({
         }
         
         this.showMyLoading('上传中...');
-        
-        // 上传到云存储
-        const cloudPath = `proofs/${Date.now()}-${Math.floor(Math.random()*1000)}.png`;
-        
-        wx.cloud.uploadFile({
-          cloudPath: cloudPath,
-          filePath: tempPath,
-          success: uploadRes => {
+        cosUpload
+          .uploadImageToCos(tempPath, 'proofs')
+          .then(publicUrl => {
             this.hideMyLoading();
-            // 🔴 上传成功后，保存云端 fileID（用于提交给后台）
             const updateData = {};
             if (type === 'receipt') {
-              updateData.imgReceipt = uploadRes.fileID;
+              updateData.imgReceipt = publicUrl;
             } else {
-              updateData.imgChat = uploadRes.fileID;
+              updateData.imgChat = publicUrl;
             }
-            // 确保 modelIndex 不会被清空
             if (this.data.modelIndex !== null && this.data.modelIndex !== undefined) {
               updateData.modelIndex = this.data.modelIndex;
             }
             this.setData(updateData);
-          },
-          fail: err => {
+          })
+          .catch(err => {
             this.hideMyLoading();
-            this.showAutoToast('上传失败', err.errMsg || '请重试');
-          }
-        });
+            this.showAutoToast('上传失败', (err && err.message) || (err && err.errMsg) || '请重试');
+          });
       }
     });
   },
@@ -4886,24 +4929,24 @@ Page({
   submitAudit() {
     // A. 校验蓝牙是否连接 (必须有 SN)
     if (!this.data.bluetoothReady || !this.data.currentSn) {
-      this.showAutoToast('提示', '请先连接MT设备');
+      this.showAutoToast('提示', '请先连接MT设备', { preserveBindModal: true });
       return;
     }
 
     // B. 校验型号
     if (this.data.modelIndex === null) {
-      this.showAutoToast('提示', '请选择型号');
+      this.showAutoToast('提示', '请选择型号', { preserveBindModal: true });
       return;
     }
 
     // C. 校验图片 (购买截图必传)
     if (!this.data.imgReceipt) {
-      this.showAutoToast('提示', '请上传购买截图');
+      this.showAutoToast('提示', '请上传购买截图', { preserveBindModal: true });
       return;
     }
     // 如果是二手，校验聊天记录
     if (this.data.bindType === 'used' && !this.data.imgChat) {
-      this.showAutoToast('提示', '请上传聊天记录');
+      this.showAutoToast('提示', '请上传聊天记录', { preserveBindModal: true });
       return;
     }
 
@@ -5208,6 +5251,37 @@ Page({
   },
 
   // 🔴 将 loadMyActivities 改为返回 Promise 的版本
+  /**
+   * 是否展示「需寄回」票据卡（与 my.wxml 一致）。
+   * 含：管理员已备货寄出(status=SHIPPED)但用户仍有维修费待付(repairPaid=false)时，不能仅用「审核中」状态判断。
+   * 备件已寄出(SHIPPED)且维修费已付时，原先会整卡不显示，用户看不到底部「填写寄回信息」——须把「待填寄回运单 / 在厂维修中」纳入。
+   */
+  isReturnRequiredTicketRepair(item) {
+    if (!item || item.needReturn !== true) return false;
+    if (item.returnCompleted === true) return false;
+    if (item.warrantyDeducted || item.isWarrantyDeducted) return false;
+    if (item.status === 'RETURN_RECEIVED' || item.status === 'COMPLETED') return false;
+    const st = item.status;
+    const stNorm = String(st == null ? '' : st).trim().toUpperCase();
+    const pendingLike = st === 0 || st === 'PENDING' || st === undefined || st === null;
+    const hasUnpaidRepair =
+      item.repairItems &&
+      item.repairItems.length > 0 &&
+      Number(item.repairTotalPrice) > 0 &&
+      item.repairPaid === false;
+    const retSn = String(item.returnTrackingId || '').trim();
+    const shippedLike =
+      stNorm === 'SHIPPED' || st === 1 || st === '1';
+    // 管理员已寄出备件等：用户可能仍需在卡上填「寄回故障件」运单号（与申请进度里按钮一致）
+    const shippedNeedReturnTracking = shippedLike && !retSn;
+    // 用户已寄至工厂、厂内处理中：卡内需展示支付/明细等（此前仅「未付维修费」才出卡，已付则整卡消失）
+    const userSentFactoryFlow =
+      (st === 'USER_SENT' || item.returnStatus === 'USER_SENT') &&
+      item.returnStatus === 'PENDING_RETURN' &&
+      st !== 'REPAIR_COMPLETED_SENT';
+    return pendingLike || !!hasUnpaidRepair || shippedNeedReturnTracking || userSentFactoryFlow;
+  },
+
   loadMyActivitiesPromise() {
     return new Promise((resolve, reject) => {
       console.log('🔍 [loadMyActivities] 开始加载申请记录');
@@ -5478,6 +5552,29 @@ Page({
           console.log('⚠️ [loadMyActivities] 设置状态为"工程师审核中":', i._id, 'needPurchaseParts:', i.needPurchaseParts);
         }
         
+        const firstNonEmptyStr = (...vals) => {
+          for (let k = 0; k < vals.length; k++) {
+            const v = vals[k];
+            if (v == null) continue;
+            const s = String(v).trim();
+            if (s) return s;
+          }
+          return '';
+        };
+        const spareSn = firstNonEmptyStr(
+          i.trackingId,
+          i.spareTrackingId,
+          i.expressNo,
+          i.logisticsNo,
+          i.shipSn,
+          i.outboundTrackingId
+        );
+        const stRaw = i.status;
+        const stRawNorm = String(stRaw == null ? '' : stRaw).trim().toUpperCase();
+        const shippedLike =
+          stRawNorm === 'SHIPPED' || stRaw === 1 || stRaw === '1';
+        const completedSent = stRaw === 'REPAIR_COMPLETED_SENT';
+
         const result = {
           ...i,
           type: 'repair',
@@ -5487,7 +5584,7 @@ Page({
           status: i.status, // 保留原始状态字符串，用于判断
           originalCreateTime: i.createTime,
           createTime: i.createTime ? this.formatTimeSimple(i.createTime) : '刚刚',
-          trackingId: i.trackingId || '', // 确保有 trackingId 字段
+          trackingId: spareSn || (i.trackingId || ''), // 兼容多字段运单号
           needReturn: i.needReturn || false, // 确保有 needReturn 字段
           returnStatus: i.returnStatus || '', // 确保有 returnStatus 字段
           needPurchaseParts: i.needPurchaseParts || false, // 🔴 确保有 needPurchaseParts 字段
@@ -5499,6 +5596,19 @@ Page({
           repairTotalPrice: i.repairTotalPrice || 0, // 🔴 确保有 repairTotalPrice 字段
           repairPaid: i.repairPaid || false // 🔴 确保有 repairPaid 字段
         };
+
+        const tid = String(result.trackingId || '').trim();
+        const showLogisticsRepairBtn = !!tid && (shippedLike || completedSent);
+        const showRepairOrderBtn = !!completedSent;
+        const showRepairActRow = showLogisticsRepairBtn || showRepairOrderBtn;
+        let repairActBtnCount = 0;
+        if (showLogisticsRepairBtn) repairActBtnCount++;
+        if (showRepairOrderBtn) repairActBtnCount++;
+        result.showLogisticsRepairBtn = showLogisticsRepairBtn;
+        result.showReturnFillRepairBtn = false;
+        result.showRepairOrderBtn = showRepairOrderBtn;
+        result.showRepairActRow = showRepairActRow;
+        result.repairActTwoCol = repairActBtnCount >= 2;
         
         console.log('📝 [loadMyActivities] 最终返回的维修单状态:', {
           _id: result._id,
@@ -5571,14 +5681,9 @@ Page({
       // Promise.all 的顺序：[p1, p2, p3, p4, p5, p6, p7]
       // res[0] = p1, res[1] = p2, res[2] = p3, res[3] = p4, res[4] = p5, res[5] = p6, res[6] = p7
       // 🔴 修复：即使 status 是 USER_SENT，如果有 repairItems 且未支付，也要显示
-      const returnRequiredRepairs = (res[3].data || []).filter(item => {
-        // 如果已填写售后单且未支付，即使有 returnTrackingId 也要显示
-        const hasUnpaidRepair = item.repairItems && item.repairItems.length > 0 && item.repairPaid === false;
-        // 基本过滤条件
-        const basicFilter = !item.returnCompleted && item.status !== 'COMPLETED';
-        // 如果有未支付的维修单，即使 status 是 USER_SENT 也显示
-        return basicFilter && (hasUnpaidRepair || item.status !== 'USER_SENT');
-      });
+      const returnRequiredRepairs = (res[3].data || []).filter(item =>
+        this.isReturnRequiredTicketRepair(item)
+      );
       console.log('🔍 [loadMyActivities] p4 查询结果:', {
         totalCount: res[3].data?.length || 0,
         filteredCount: returnRequiredRepairs.length,
@@ -5595,16 +5700,12 @@ Page({
       });
       let myReturnRequiredRepair = returnRequiredRepairs.length > 0 ? returnRequiredRepairs[0] : null;
       
-      // 🔴 调试：如果查询结果为空，检查是否有未支付的维修单
+      // 兜底：p4 limit(1) 若与筛选顺序不一致，再在结果里找一条应展示的需寄回单
       if (!myReturnRequiredRepair && res[3].data && res[3].data.length > 0) {
-        const unpaidRepairs = res[3].data.filter(item => 
-          item.repairItems && item.repairItems.length > 0 && item.repairPaid === false
-        );
-        console.log('⚠️ [loadMyActivities] 查询结果为空，但发现未支付的维修单:', unpaidRepairs.length, unpaidRepairs);
-        if (unpaidRepairs.length > 0) {
-          // 如果有未支付的维修单，即使有 returnTrackingId 也要显示
-          myReturnRequiredRepair = unpaidRepairs[0];
-          console.log('✅ [loadMyActivities] 使用未支付的维修单:', myReturnRequiredRepair._id);
+        const hit = res[3].data.find(item => this.isReturnRequiredTicketRepair(item));
+        if (hit) {
+          myReturnRequiredRepair = hit;
+          console.log('✅ [loadMyActivities] 兜底选中需寄回维修单:', hit._id);
         }
       }
       
@@ -5669,19 +5770,20 @@ Page({
           repairPaid: myReturnRequiredRepair.repairPaid
         });
         
-        // 🔴 检查是否需要显示付费确认弹窗（质保过期 + 需要寄回 + 未确认）
-        if (myReturnRequiredRepair.warrantyExpired === true && 
-            myReturnRequiredRepair.needReturn === true && 
-            (myReturnRequiredRepair.paidRepairAgreed === null || myReturnRequiredRepair.paidRepairAgreed === undefined)) {
-          // 延迟显示弹窗，确保页面已渲染
-          setTimeout(() => {
-            this.setData({
-              showPaidRepairConfirmModal: true,
-              currentPaidRepairItem: myReturnRequiredRepair
-            });
-            this.updateModalState(); // 🔴 更新弹窗状态，锁定页面滚动
-          }, 500);
+        // 过保且需寄回流程：不再弹「维修费用确认」弹窗，直接在卡片内完成支付流程
+        if (this.data.showPaidRepairConfirmModal) {
+          this.setData({
+            showPaidRepairConfirmModal: false,
+            currentPaidRepairItem: null
+          });
         }
+      }
+
+      if (myReturnRequiredRepair) {
+        myReturnRequiredRepair = {
+          ...myReturnRequiredRepair,
+          rrTicketVisible: this.isReturnRequiredTicketRepair(myReturnRequiredRepair)
+        };
       }
 
       // 设置仅需购买配件的维修单（needPurchaseParts 且无 needReturn，排除已完成购买的）
@@ -6133,20 +6235,32 @@ Page({
     // 设置当前运单号（如果有）
     this.setData({
       returnTrackingIdInput: repair.returnTrackingId || '',
-      showReturnAddressModal: true
+      showReturnAddressModal: true,
+      returnAddressModalClosing: false
     });
     this.updateModalState();
   },
-  
+
   // 关闭底部弹窗
-  closeReturnAddressModal() {
+  closeReturnAddressModal(onClosed) {
+    if (!this.data.showReturnAddressModal || this.data.returnAddressModalClosing) {
+      if (typeof onClosed === 'function') onClosed();
+      return;
+    }
     this.setData({
-      showReturnAddressModal: false,
-      returnTrackingIdInput: '',
-      // 🔴 清理用户填写的地址信息，避免残留
-      userReturnAddress: { name: '', phone: '', address: '' }
+      returnAddressModalClosing: true
     });
-    this.updateModalState();
+    setTimeout(() => {
+      this.setData({
+        showReturnAddressModal: false,
+        returnAddressModalClosing: false,
+        returnTrackingIdInput: '',
+        // 🔴 清理用户填写的地址信息，避免残留
+        userReturnAddress: { name: '', phone: '', address: '' }
+      });
+      this.updateModalState();
+      if (typeof onClosed === 'function') onClosed();
+    }, 260);
   },
 
   // 🔴 关闭管理员填写地址弹窗（带收缩退出动画）
@@ -7104,21 +7218,17 @@ Page({
           // 扣除质保后，继续提交运单号
           this.submitReturnTrackingId(myReturnRequiredRepair._id, trackingId, () => {
             // 提交成功后的回调：关闭弹窗
-            this.setData({
-              showReturnAddressModal: false,
-              returnTrackingIdInput: ''
+            this.closeReturnAddressModal(() => {
+              this.loadMyActivitiesPromise().catch(() => {});
             });
-            this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
           });
         }).catch(err => {
           console.error('自动扣除质保失败:', err);
           // 即使扣除失败，也继续提交运单号
           this.submitReturnTrackingId(myReturnRequiredRepair._id, trackingId, () => {
-            this.setData({
-              showReturnAddressModal: false,
-              returnTrackingIdInput: ''
+            this.closeReturnAddressModal(() => {
+              this.loadMyActivitiesPromise().catch(() => {});
             });
-            this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
           });
         });
         return;
@@ -7128,11 +7238,9 @@ Page({
     // 🔴 调用原来的 submitReturnTrackingId 函数（保留原来的逻辑）
     this.submitReturnTrackingId(myReturnRequiredRepair._id, trackingId, () => {
       // 提交成功后的回调：关闭弹窗
-      this.setData({
-        showReturnAddressModal: false,
-        returnTrackingIdInput: ''
+      this.closeReturnAddressModal(() => {
+        this.loadMyActivitiesPromise().catch(() => {});
       });
-      this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
     });
   },
   
@@ -7300,16 +7408,10 @@ Page({
         showCancel: false,
         confirmText: '好的',
         success: () => {
-          // 关闭地址弹窗
-          this.setData({
-            showReturnAddressModal: false,
-            returnTrackingIdInput: '',
-            userReturnAddress: { name: '', phone: '', address: '' }
+          this.closeReturnAddressModal(() => {
+            // 刷新数据，卡片会自动消失（因为 returnTrackingId 已存在）
+            this.loadMyActivitiesPromise().catch(() => {});
           });
-          this.updateModalState(); // 🔴 更新弹窗状态，恢复页面滚动
-          
-          // 刷新数据，卡片会自动消失（因为 returnTrackingId 已存在）
-          this.loadMyActivitiesPromise().catch(() => {});
         }
       });
     }).catch(err => {
