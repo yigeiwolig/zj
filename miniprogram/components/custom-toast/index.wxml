@@ -1,9 +1,19 @@
 <!-- components/custom-toast/index.wxml -->
 <view class="ct-mask {{modalClosing ? 'closing' : ''}}" wx:if="{{modal.show || loading.show}}" catchtouchmove="preventTouchMove">
   <!-- Modal（带收缩退出动画） -->
-  <view class="ct-modal" wx:if="{{modal.show}}">
+  <view class="ct-modal {{modal.editable ? 'editable' : ''}}" wx:if="{{modal.show}}">
     <view class="ct-modal-title" wx:if="{{modal.title}}">{{modal.title}}</view>
-    <view class="ct-modal-content">{{modal.content}}</view>
+    <view class="ct-modal-content" wx:if="{{!modal.editable}}">{{modal.content}}</view>
+    <view class="ct-modal-content ct-modal-content-editable" wx:if="{{modal.editable}}">
+      <input
+        class="ct-modal-input"
+        value="{{modal.content}}"
+        placeholder="{{modal.placeholderText || '请输入'}}"
+        maxlength="300"
+        bindinput="onModalInput"
+        focus
+      />
+    </view>
     <view class="ct-modal-footer">
       <view class="ct-modal-btn cancel" wx:if="{{modal.showCancel}}" bindtap="onCancel" style="color: {{modal.cancelColor}}">{{modal.cancelText}}</view>
       <view class="ct-modal-btn confirm" bindtap="onConfirm" style="color: {{modal.confirmColor}}">{{modal.confirmText}}</view>

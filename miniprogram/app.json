@@ -1,22 +1,37 @@
 {
   "pages": [
     "pages/index/index",
-    "pages/blocked/blocked",
-    "pages/shop/shop",
-    "pages/my/my",
-    "pages/azjc/azjc",
-    "pages/ota/ota",
-    "pages/products/products",
-    "pages/case/case",
-    "pages/pagenew/pagenew",
-    "pages/scan/scan",
-    "pages/adminLite/adminLite",
-    "pages/admin/admin",
-    "pages/paihang/paihang",
-    "pages/shouhou/shouhou",
-    "pages/call/call",
-    "pages/home/home"
+    "pages/blocked/blocked"
   ],
+  "subPackages": [
+    {
+      "root": "package-app",
+      "name": "package-app",
+      "pages": [
+        "pages/shop/shop",
+        "pages/my/my",
+        "pages/azjc/azjc",
+        "pages/ota/ota",
+        "pages/products/products",
+        "pages/case/case",
+        "pages/pagenew/pagenew",
+        "pages/scan/scan",
+        "pages/adminLite/adminLite",
+        "pages/admin/admin",
+        "pages/paihang/paihang",
+        "pages/shouhou/shouhou",
+        "pages/call/call",
+        "pages/home/home",
+        "pages/invest/invest"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/index/index": {
+      "network": "all",
+      "packages": ["package-app"]
+    }
+  },
   "usingComponents": {
     "custom-toast": "/components/custom-toast/index"
   },

@@ -14,6 +14,7 @@ Page({
 
     // 页面状态控制
     isShowNicknameUI: false,
+    nicknameUiClosing: false,
     isAuthorized: false,
     inputNickName: '', 
     step: 0, 
@@ -24,22 +25,30 @@ Page({
     
     // 原有弹窗控制
     showAuthModal: false,
+    authModalClosing: false,
     showAuthForceModal: false,
+    authForceModalClosing: false,
+    showLocationPermissionModal: false,
+    locationPermissionModalClosing: false,
     authMissingType: '',
 
     // 【新增】控制自定义错误弹窗 (黑白风)
     showCustomErrorModal: false,
+    customErrorModalClosing: false,
     
     // 【新增】控制自定义成功提示弹窗 (黑白风)
     showCustomSuccessModal: false,
+    customSuccessModalClosing: false,
     successModalTitle: '',
     successModalContent: '',
     
     // 【新增】控制"内容已复制"弹窗
     showCopySuccessModal: false,
+    copySuccessModalClosing: false,
     
     // 【新增】控制二次确认弹窗
     showConfirmModal: false,
+    confirmModalClosing: false,
     confirmModalContent: '',
     _pendingUnbanData: null, // 存储待执行的放行数据
     
@@ -50,7 +59,8 @@ Page({
     showWechatQRCode: false, // 是否显示微信二维码
     adminWechat: 'MT-摩改社', // 管理员微信号（可以修改）
     copyWechatBusy: false, // 复制微信号进行中（用于即时反馈）
-    
+    qrPressing: false, // 二维码按压态（触摸即下沉）
+
     // Loading 状态（合并重复定义）
     isLoading: false,
     loadingText: '加载中...',
@@ -65,18 +75,85 @@ Page({
     // 【新增】管理员相关状态
     isAdmin: false,        // 是否是管理员
     isAdminMode: false,    // 是否开启了管理员模式
-    adminViewMode: 'banned', // banned | suspicious | nickname
+    adminViewMode: 'banned', // banned | suspicious | suspiciousBanned | nickname
+    manualBannedMode: false, // true: 仅手动封禁名单
+    suspiciousManualBannedMode: false, // true: 仅可疑人员处理中手动封禁留存名单
     bannedUsers: [],       // 被封禁的用户列表
     screenshotRiskUsers: [], // 截图超限待审核列表
     suspiciousUsers: [],   // 可疑用户列表（多次进入/长停留）
     isLoadingBannedUsers: false,  // 是否正在加载封禁用户列表
     isLoadingScreenshotRiskUsers: false,
     isLoadingSuspiciousUsers: false,
+    adminListRefreshing: false,
     // 🔴 昵称录入相关状态
-    isNicknameMode: false, // false=封禁管理, true=昵称录入
     nicknameInput: '',    // 昵称输入
     isSubmittingNickname: false, // 是否正在提交昵称
     nicknameBypassLocation: false // 放行开关（是否跳过地域拦截）
+  },
+
+  _clearNoLoadingTimer() {
+    if (this._noLoadingTimer) {
+      clearInterval(this._noLoadingTimer);
+      this._noLoadingTimer = null;
+    }
+  },
+
+  _closeWithAnimation(showKey, closingKey, afterClosePatch = {}, duration = 360) {
+    if (!this.data[showKey]) {
+      if (Object.keys(afterClosePatch).length) {
+        this.setData(afterClosePatch);
+      }
+      return;
+    }
+    this.setData({ [closingKey]: true });
+    setTimeout(() => {
+      this.setData({
+        [showKey]: false,
+        [closingKey]: false,
+        ...afterClosePatch
+      });
+    }, duration);
+  },
+
+  _showNicknameUI() {
+    if (this.data.isAdmin) return;
+    this.setData({
+      isShowNicknameUI: true,
+      nicknameUiClosing: false
+    });
+  },
+
+  _hideNicknameUIWithAnimation(extraPatch = {}, duration = 320) {
+    if (!this.data.isShowNicknameUI) {
+      if (Object.keys(extraPatch).length) {
+        this.setData(extraPatch);
+      }
+      return;
+    }
+    this.setData({ nicknameUiClosing: true });
+    setTimeout(() => {
+      this.setData({
+        isShowNicknameUI: false,
+        nicknameUiClosing: false,
+        ...extraPatch
+      });
+    }, duration);
+  },
+
+  async _isReviewPassMode() {
+    if (typeof this._reviewPassModeCache === 'boolean') {
+      return this._reviewPassModeCache;
+    }
+    try {
+      const res = await db.collection('app_config').doc('blocking_rules').get();
+      const config = res && res.data ? res.data : {};
+      const reviewPassMode = config.is_active === false;
+      this._reviewPassModeCache = reviewPassMode;
+      return reviewPassMode;
+    } catch (e) {
+      this._reviewPassModeCache = false;
+      return false;
+    }
   },
 
   // 互斥：确保同一时间只显示一个弹窗/提示
@@ -111,75 +188,110 @@ Page({
     // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
     this.calcNavBarInfo();
 
-    // 1. 先检查缓存（不立即跳转，等异步检查完成）
+    // 1. 先校验身份（管理员优先，无需填昵称/口令）
+    this._initIndexAuthFlow();
+
+    // 2. 异步检查全局黑名单（避免死循环）
+    this.checkGlobalBanStatus();
+  },
+
+  async _initIndexAuthFlow() {
+    const isAdmin = await this._checkAdminPrivilegeAsync();
+    if (isAdmin) {
+      this._bypassAuthForAdmin();
+      return;
+    }
+
     const hasAuth = wx.getStorageSync('has_permanent_auth');
     const savedNickname = wx.getStorageSync('user_nickname');
-    
-    // 🔴 如果用户已经通过验证，不显示首次进入弹窗，并标记为已看过
+
     if (hasAuth && savedNickname) {
-      // 缓存中有授权和昵称，直接使用
       this.setData({ isAuthorized: true, isShowNicknameUI: false });
-      // 已通过验证的用户不需要显示首次进入弹窗
       wx.setStorageSync('has_seen_first_time_modal', true);
-    } else {
-      // 缓存中没有，先检查 valid_users 集合
-      this.checkValidUserFromDatabase();
-      
-      // 🔴 只有未通过验证的用户才检查是否显示首次进入弹窗
-      const hasSeenFirstTimeModal = wx.getStorageSync('has_seen_first_time_modal');
-      if (!hasSeenFirstTimeModal) {
-        // 延迟显示，确保页面加载完成（用下一帧再开过渡，避免弹层硬切）
-        setTimeout(() => {
-          this._openFirstTimeModalAnimated();
-        }, 500);
-      }
+      return;
     }
-    
-    // 2. 异步检查全局黑名单（避免死循环）
-    // 如果从封禁页跳转过来，标记可能已经被清除，所以先不检查本地缓存
-    this.checkGlobalBanStatus();
-    
-    // 3. 检查管理员权限
-    this.checkAdminPrivilege();
+
+    await this.checkValidUserFromDatabase();
+  },
+
+  /** 管理员：跳过昵称/口令与「专属体验」引导 */
+  _bypassAuthForAdmin() {
+    wx.setStorageSync('has_seen_first_time_modal', true);
+    this._hideNicknameUIWithAnimation({
+      isAdmin: true,
+      isAuthorized: true,
+      isShowNicknameUI: false,
+      showFirstTimeModal: false,
+      firstTimeModalEnterReady: false,
+      firstTimeModalClosing: false
+    });
   },
 
   onShow() {
+    this._pageAlive = true;
     // 🔴 启动定时检查 qiangli 强制封禁
     if (app && app.startQiangliCheck) {
       app.startQiangliCheck();
     }
+    this._startSuspiciousAutoRefresh();
   },
 
   onHide() {
+    this._pageAlive = false;
     // 🔴 停止定时检查
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
     }
     this._stopWaitingForPendingJump();
+    this._stopSuspiciousAutoRefresh();
+    this._clearNoLoadingTimer();
   },
 
   onUnload() {
+    this._pageAlive = false;
     // 🔴 停止定时检查
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
     }
     this._stopWaitingForPendingJump();
+    this._stopSuspiciousAutoRefresh();
     if (this._firstTimeModalEnterTimer) {
       clearTimeout(this._firstTimeModalEnterTimer);
       this._firstTimeModalEnterTimer = null;
     }
+    this._clearNoLoadingTimer();
   },
 
   // 🔴 从 valid_users 集合检查用户是否有记录
   async checkValidUserFromDatabase() {
+    if (this.data.isAdmin) return;
     try {
+      const reviewPassMode = await this._isReviewPassMode();
+      if (reviewPassMode) {
+        const cachedNick = wx.getStorageSync('user_nickname');
+        if (!cachedNick) {
+          wx.setStorageSync('user_nickname', '审核用户');
+        }
+        wx.setStorageSync('has_permanent_auth', true);
+        wx.setStorageSync('has_seen_first_time_modal', true);
+        this.setData({
+          isAuthorized: true,
+          isShowNicknameUI: false,
+          showFirstTimeModal: false,
+          firstTimeModalEnterReady: false,
+          firstTimeModalClosing: false
+        });
+        return;
+      }
+
       // 1. 获取当前用户 openid
       const loginRes = await wx.cloud.callFunction({ name: 'login' });
       const openid = loginRes.result?.openid;
       
       if (!openid) {
         console.warn('[index] 无法获取 openid，显示昵称输入界面');
-        this.setData({ isShowNicknameUI: true });
+        this._showNicknameUI();
+        this._maybeShowFirstTimeModal();
         return;
       }
 
@@ -201,13 +313,10 @@ Page({
           // 保存昵称和授权状态到本地存储
           wx.setStorageSync('user_nickname', nickname);
           wx.setStorageSync('has_permanent_auth', true);
-          // 🔴 已通过验证的用户不需要显示首次进入弹窗
+          // 云端已有昵称 = 已录入，不再展示抖音/闲鱼专属引导（并关掉可能因定时器已拉起的弹窗）
           wx.setStorageSync('has_seen_first_time_modal', true);
-          
-          // 更新页面状态，直接进入
-          this.setData({ 
-            isAuthorized: true, 
-            isShowNicknameUI: false,
+          this._hideNicknameUIWithAnimation({
+            isAuthorized: true,
             inputNickName: nickname,
             showFirstTimeModal: false,
             firstTimeModalEnterReady: false,
@@ -221,39 +330,56 @@ Page({
       
       // 没有找到记录，显示昵称输入界面
       console.log('[index] valid_users 中未找到用户记录，显示昵称输入界面');
-      this.setData({ isShowNicknameUI: true });
+      this._showNicknameUI();
+      this._maybeShowFirstTimeModal();
       
     } catch (err) {
       console.error('[index] 检查 valid_users 失败:', err);
       // 出错时显示昵称输入界面
-      this.setData({ isShowNicknameUI: true });
+      this._showNicknameUI();
+      this._maybeShowFirstTimeModal();
     }
+  },
+
+  /** 仅新用户且未看过引导时弹「专属体验」 */
+  _maybeShowFirstTimeModal() {
+    if (this.data.isAdmin) return;
+    if (this.data.isAuthorized) return;
+    if (wx.getStorageSync('has_seen_first_time_modal')) return;
+    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return;
+    this._openFirstTimeModalAnimated();
   },
 
   // === 全局封号检查 ===
   checkGlobalBanStatus() {
-    // 🔴 确保在云函数调用前关闭任何官方 loading
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
-    // 添加超时和错误处理，避免卡死
-    wx.cloud.callFunction({ 
-      name: 'login',
-      timeout: 5000 // 5秒超时
-    }).then(res => {
-      if (!res || !res.result || !res.result.openid) {
-        console.warn('登录云函数返回异常，跳过封号检查');
+    this._isReviewPassMode().then(reviewPassMode => {
+      if (reviewPassMode) {
+        console.log('[index] 审核放行模式：跳过全局封禁检查');
         return;
       }
-      
-      // 🔴 封禁状态已完全由 login_logbutton 管理，不再检查 login_logs.isBanned
-      // 封禁检查通过 checkUnlockStatus 云函数完成（在 blocked 页面中）
-      // 这里不再进行封禁检查，避免误判
-    })
-    .catch(err => {
-      console.error('登录云函数调用失败:', err);
-      // 云函数失败不影响正常使用，静默处理，避免卡死
-    });
+      // 🔴 确保在云函数调用前关闭任何官方 loading
+      if (wx.__mt_oldHideLoading) {
+        wx.__mt_oldHideLoading();
+      }
+      // 添加超时和错误处理，避免卡死
+      wx.cloud.callFunction({ 
+        name: 'login',
+        timeout: 5000 // 5秒超时
+      }).then(res => {
+        if (!res || !res.result || !res.result.openid) {
+          console.warn('登录云函数返回异常，跳过封号检查');
+          return;
+        }
+        
+        // 🔴 封禁状态已完全由 login_logbutton 管理，不再检查 login_logs.isBanned
+        // 封禁检查通过 checkUnlockStatus 云函数完成（在 blocked 页面中）
+        // 这里不再进行封禁检查，避免误判
+      })
+      .catch(err => {
+        console.error('登录云函数调用失败:', err);
+        // 云函数失败不影响正常使用，静默处理，避免卡死
+      });
+    }).catch(() => {});
   },
 
   // === 昵称输入处理 ===
@@ -302,16 +428,16 @@ Page({
         app.globalData.isShareCodeUser = true;
         app.globalData.shareCodeInfo = app.globalData.shareCodeInfo || { code: normalizedCode };
       }
-      this.setData({
+      this._hideNicknameUIWithAnimation({
         inputNickName: normalizedCode,
         isAuthorized: true,
-        isShowNicknameUI: false,
         showFirstTimeModal: false,
         firstTimeModalEnterReady: false,
         firstTimeModalClosing: false
-      }, () => {
-        wx.reLaunch({ url: '/pages/azjc/azjc' });
       });
+      setTimeout(() => {
+        wx.reLaunch({ url: '/package-app/pages/azjc/azjc' });
+      }, 320);
       return;
     }
     const name = raw;
@@ -345,6 +471,7 @@ Page({
       }
       let lastHideTime = 0;
       const hideAllLoading = () => {
+        if (!this._pageAlive) return;
         const now = Date.now();
         if (now - lastHideTime < 200) return;
         lastHideTime = now;
@@ -363,6 +490,7 @@ Page({
         } catch (e) {}
       };
       hideAllLoading();
+      this._clearNoLoadingTimer();
       this._noLoadingTimer = setInterval(hideAllLoading, 300);
 
       if (wx.__mt_oldHideLoading) {
@@ -415,9 +543,8 @@ Page({
           wx.setStorageSync('user_nickname', name);
           wx.setStorageSync('has_seen_first_time_modal', true);
           wx.removeStorageSync('is_user_banned');
-          this.setData({
+          this._hideNicknameUIWithAnimation({
             isAuthorized: true,
-            isShowNicknameUI: false,
             showFirstTimeModal: false,
             firstTimeModalEnterReady: false,
             firstTimeModalClosing: false,
@@ -428,7 +555,10 @@ Page({
             wx.setStorageSync('is_user_banned', true);
             wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           } else {
-            this.setData({ showCustomErrorModal: true });
+            this.setData({
+              showCustomErrorModal: true,
+              customErrorModalClosing: false
+            });
           }
         }
       }).catch(err => {
@@ -473,12 +603,15 @@ Page({
         // 🔴 延迟800ms后显示自定义弹窗
         setTimeout(() => {
         // 复制成功后关闭错误弹窗
-        this.setData({ showCustomErrorModal: false });
+        this._closeWithAnimation('showCustomErrorModal', 'customErrorModalClosing');
           // 显示自定义"内容已复制"弹窗
-          this.setData({ showCopySuccessModal: true });
+          this.setData({
+            showCopySuccessModal: true,
+            copySuccessModalClosing: false
+          });
           // 2秒后自动关闭
           setTimeout(() => {
-            this.setData({ showCopySuccessModal: false });
+            this._closeWithAnimation('showCopySuccessModal', 'copySuccessModalClosing');
           }, 2000);
         }, 800);
       }
@@ -487,7 +620,32 @@ Page({
 
   // 【新增】关闭弹窗
   closeCustomErrorModal() {
-    this.setData({ showCustomErrorModal: false });
+    this._closeWithAnimation('showCustomErrorModal', 'customErrorModalClosing');
+  },
+
+  // 自定义提示弹窗：点击任意位置立即关闭
+  dismissTransientModals() {
+    this._closeWithAnimation('showCustomErrorModal', 'customErrorModalClosing');
+    this._closeWithAnimation('showCustomSuccessModal', 'customSuccessModalClosing');
+    this._closeWithAnimation('showConfirmModal', 'confirmModalClosing', {
+      confirmModalContent: '',
+      _pendingUnbanData: null
+    });
+    this._closeWithAnimation('showCopySuccessModal', 'copySuccessModalClosing');
+    this._closeWithAnimation('showAuthModal', 'authModalClosing');
+    this._closeWithAnimation('showAuthForceModal', 'authForceModalClosing');
+    this._closeWithAnimation('showLocationPermissionModal', 'locationPermissionModalClosing');
+    if (this.data.showFirstTimeModal) {
+      wx.setStorageSync('has_seen_first_time_modal', true);
+      this.setData({
+        firstTimeModalEnterReady: false,
+        firstTimeModalClosing: false,
+        showFirstTimeModal: false
+      });
+    }
+    if (this.data.dialog && this.data.dialog.show) {
+      this.closeCustomDialog();
+    }
   },
 
   // === 点击进入逻辑 ===
@@ -524,7 +682,7 @@ Page({
     });
     if (isShareCodeUser) {
       console.log('[handleAccess] 分享码用户直达教程，跳过定位与地址校验');
-      wx.reLaunch({ url: '/pages/azjc/azjc' });
+      wx.reLaunch({ url: '/package-app/pages/azjc/azjc' });
       return;
     }
 
@@ -537,6 +695,7 @@ Page({
           console.log('[handleAccess] 用户曾拒绝位置权限，立即引导去设置页');
           this.setData({
             showAuthForceModal: true,
+            authForceModalClosing: false,
             authMissingType: 'location',
           });
           return;
@@ -594,6 +753,7 @@ Page({
             this.setData({ step: 0 });
             this.setData({
               showAuthForceModal: true,
+              authForceModalClosing: false,
               authMissingType: 'location',
             });
             return;
@@ -601,7 +761,7 @@ Page({
           this.runAnimation();
           this.showAutoToast('提示', '无法获取当前位置，将使用默认设置');
           this.setData({
-            pendingJumpTarget: '/pages/products/products',
+            pendingJumpTarget: '/package-app/pages/products/products',
             pendingJumpData: null,
           });
         },
@@ -636,19 +796,20 @@ Page({
 
   runAnimation() {
     this.clearAnimationTimers();
-    this.setData({ step: 1 });
+    this._preloadNewArrivalCacheForProducts();
+    // 强震动配合巨幕展开，极具冲击力
+    wx.vibrateShort({ type: 'heavy' });
+    
+    this.setData({ step: 1 }); // 触发纯白巨幕
+    
     const t1 = setTimeout(() => {
-      this.setData({ step: 2 });
+      this.setData({ step: 3 }); // 显示深色文字
+      
       const t2 = setTimeout(() => {
-        this.setData({ step: 3 });
-        const t3 = setTimeout(() => {
-          this.setData({ step: 4 }); 
-          this.doFallAndSwitch();
-        }, 1900); 
-        this.addAnimationTimer(t3);
-      }, 800); 
+        this.doFallAndSwitch(); // 结束跳转
+      }, 1600); // 稍微多留一点时间欣赏文字
       this.addAnimationTimer(t2);
-    }, 500);
+    }, 600); // 延迟出字，配合变慢的巨幕
     this.addAnimationTimer(t1);
   },
 
@@ -674,7 +835,7 @@ Page({
         this._syncPendingDataInBackground();
       }
       console.log('[index] 动画结束，直接跳转到产品页；后台继续执行地址检查');
-      wx.reLaunch({ url: '/pages/products/products' });
+      this._relaunchToProductsAfterIntro();
     }, 900);
     this.addAnimationTimer(jumpTimer);
   },
@@ -690,7 +851,7 @@ Page({
         if (Date.now() - startAt >= maxWaitMs) {
           console.warn('[index] 等待目标超时，兜底跳转到产品页');
           this._stopWaitingForPendingJump();
-          wx.reLaunch({ url: '/pages/products/products' });
+          this._relaunchToProductsAfterIntro();
         }
         return;
       }
@@ -699,7 +860,11 @@ Page({
         this._syncPendingDataInBackground();
       }
       this._stopWaitingForPendingJump();
-      wx.reLaunch({ url: target });
+      if (String(target).indexOf('/products/products') !== -1) {
+        this._relaunchToProductsAfterIntro();
+      } else {
+        wx.reLaunch({ url: target });
+      }
     }, 250);
   },
 
@@ -886,7 +1051,7 @@ Page({
       if (!locData.city || locData.city.trim() === '') {
         console.warn('[index] ⚠️ 逆地理编码后 city 仍为空，无法进行城市拦截判断');
         this.setData({
-          pendingJumpTarget: '/pages/products/products',
+          pendingJumpTarget: '/package-app/pages/products/products',
           pendingJumpData: { collectionName: 'user_list', locData: locData }
         });
         return;
@@ -915,7 +1080,7 @@ Page({
         wx.setStorageSync('last_location', locData);
       } catch (e2) {}
       this.setData({
-        pendingJumpTarget: '/pages/products/products',
+        pendingJumpTarget: '/package-app/pages/products/products',
         pendingJumpData: { collectionName: 'user_list', locData: locData }
       });
     }
@@ -936,7 +1101,7 @@ Page({
           wx.setStorageSync('last_location', locData);
         } catch (e2) {}
         this.setData({
-          pendingJumpTarget: '/pages/products/products',
+          pendingJumpTarget: '/package-app/pages/products/products',
           pendingJumpData: { collectionName: 'user_list', locData: locData }
         });
         return;
@@ -952,7 +1117,7 @@ Page({
       if (!config.is_active) {
         console.log('[index] 拦截开关未开启，正常进入');
         this.setData({
-          pendingJumpTarget: '/pages/products/products',
+          pendingJumpTarget: '/package-app/pages/products/products',
           pendingJumpData: { collectionName: 'user_list', locData: locData }
         });
         return;
@@ -964,7 +1129,7 @@ Page({
         console.warn('[index] locData:', JSON.stringify(locData, null, 2));
         console.warn('[index] 这可能是逆地理编码失败或返回数据不完整导致的');
         this.setData({
-          pendingJumpTarget: '/pages/products/products',
+          pendingJumpTarget: '/package-app/pages/products/products',
           pendingJumpData: { collectionName: 'user_list', locData: locData }
         });
         return;
@@ -1079,7 +1244,7 @@ Page({
           }
 
           this.setData({
-            pendingJumpTarget: '/pages/products/products',
+            pendingJumpTarget: '/package-app/pages/products/products',
             pendingJumpData: { collectionName: 'user_list', locData: locData }
           });
           return;
@@ -1093,7 +1258,7 @@ Page({
       // 非拦截城市，正常进入
       console.log('[index] 非拦截城市，正常进入');
       this.setData({
-        pendingJumpTarget: '/pages/products/products',
+        pendingJumpTarget: '/package-app/pages/products/products',
         pendingJumpData: { collectionName: 'user_list', locData: locData }
       });
 
@@ -1101,237 +1266,68 @@ Page({
       console.error('[index] 地址检查异常:', err);
       console.error('[index] 错误详情:', err.message, err.stack);
       this.setData({
-        pendingJumpTarget: '/pages/products/products',
+        pendingJumpTarget: '/package-app/pages/products/products',
         pendingJumpData: { collectionName: 'user_list', locData: locData }
       });
     }
   },
 
+  /** 跳转 products 前预拉新品数据，缩短 products 页弹窗等待 */
+  _preloadNewArrivalCacheForProducts() {
+    try {
+      if (!wx.cloud) return;
+      const app = getApp();
+      if (!app.globalData) return;
+      if (!app.globalData.newArrivalCache) {
+        app.globalData.newArrivalCache = { list: null, cacheTime: 0 };
+      }
+      const cache = app.globalData.newArrivalCache;
+      const now = Date.now();
+      if (cache.list && cache.list.length && now - cache.cacheTime < 5 * 60 * 1000) return;
+      if (app._newArrivalPreloadInflight) return;
+      app._newArrivalPreloadInflight = true;
+      db.collection('products').get().then((res) => {
+        const list = (res.data || []).map((item) => ({
+          ...item,
+          jumpNumber: item.jumpNumber || null
+        }));
+        if (list.length) {
+          app.globalData.newArrivalCache = { list, cacheTime: Date.now() };
+        }
+      }).catch(() => {}).finally(() => {
+        app._newArrivalPreloadInflight = false;
+      });
+    } catch (e) {}
+  },
+
+  /** index 入场动画结束后进入 products：写入一次性标记，供 products 页弹「产品上新」 */
+  _relaunchToProductsAfterIntro() {
+    this._preloadNewArrivalCacheForProducts();
+    try {
+      wx.setStorageSync('__products_new_arrival_from_index__', Date.now());
+    } catch (e) {}
+    wx.reLaunch({ url: '/package-app/pages/products/products' });
+  },
+
   // 🔴 执行待跳转（动画完成后调用）
   _executePendingJump() {
-    const { collectionName, locData } = this.data.pendingJumpData;
-    const targetPage = this.data.pendingJumpTarget;
-    
-    console.log('[index] 执行待跳转，写入数据到:', collectionName, '目标页面:', targetPage);
-    
-    const nickName = wx.getStorageSync('user_nickname') || '未知用户';
-    
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
+    const targetPage = this.data.pendingJumpTarget || '/package-app/pages/products/products';
+    this._syncPendingDataInBackground();
+    if (String(targetPage).indexOf('/products/products') !== -1) {
+      this._preloadNewArrivalCacheForProducts();
+      try {
+        wx.setStorageSync('__products_new_arrival_from_index__', Date.now());
+      } catch (e) {}
     }
-    
-    wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
-      const openid = loginRes.result.openid;
-
-      // 🔴 并行查询：登录日志、用户集合、封禁令牌
-      const p1 = db.collection('login_logs')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
-      const p2 = db.collection(collectionName)
-        .where({ _openid: openid })
-        .orderBy('createTime', 'desc')
-        .limit(1)
-        .get();
-      const p3 = db.collection('login_logbutton')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
-
-      Promise.all([p1, p2, p3]).then(results => {
-        const logRes = results[0]; // login_logs
-        const userRes = results[1];
-        const buttonRes = results[2];
-
-        // 🔴 最高优先级：检查强制封禁按钮 qiangli（同时检查 login_logbutton 和 login_logs）
-        // 先检查 login_logbutton
-        if (buttonRes.data && buttonRes.data.length > 0) {
-          const btn = buttonRes.data[0];
-          const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
-          if (qiangli) {
-            console.log('[index] ⚠️ 最终安检：检测到强制封禁按钮 qiangli 已开启（login_logbutton），无视一切放行，直接封禁');
-            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-            return;
-          }
-        }
-
-        // 🔴 同时检查 login_logs 集合（兼容用户在 login_logs 中设置 qiangli 的情况）
-        if (logRes.data && logRes.data.length > 0) {
-          const log = logRes.data[0];
-          const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
-          if (qiangli) {
-            console.log('[index] ⚠️ 最终安检：检测到强制封禁按钮 qiangli 已开启（login_logs），无视一切放行，直接封禁');
-            wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
-            return;
-          }
-        }
-
-        // 🔴 最终安检：检查 login_logbutton，确保没有封禁
-        if (buttonRes.data && buttonRes.data.length > 0) {
-          const btn = buttonRes.data[0];
-          
-          const rawFlag = btn.isBanned;
-          const isBanned =
-            rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
-          const bypassLocationCheck = btn.bypassLocationCheck === true;
-
-          if (isBanned) {
-            // 🔴 截屏/录屏封禁：最高优先级，不允许任何方式绕过
-            if (btn.banReason === 'screenshot' || btn.banReason === 'screen_record') {
-              console.log('[index] 最终安检：检测到截屏/录屏封禁，跳转到封禁页');
-              wx.reLaunch({ url: '/pages/blocked/blocked?type=screenshot' });
-              return;
-            } else if (!bypassLocationCheck) {
-              console.log('[index] 最终安检：检测到封禁，跳转到封禁页');
-              const banType = btn.banReason === 'location_blocked' ? 'location' : 'banned';
-              wx.reLaunch({ url: `/pages/blocked/blocked?type=${banType}` });
-              return;
-            }
-          }
-        }
-
-        // 更新或创建用户位置记录
-        if (userRes.data && userRes.data.length > 0) {
-          db.collection(collectionName)
-            .doc(userRes.data[0]._id)
-            .update({
-              data: {
-                ...locData,
-                nickName: nickName,
-                updateTime: db.serverDate()
-              }
-            })
-            .then(() => {
-              console.log('[index] 用户位置已更新');
-              wx.reLaunch({ url: targetPage });
-            })
-            .catch(err => {
-              console.error('[index] 更新用户位置失败:', err);
-              wx.reLaunch({ url: targetPage });
-            });
-          } else {
-          // 🔴 修复：不能手动设置 _openid，云数据库会自动根据当前用户设置
-          db.collection(collectionName)
-            .add({
-              data: {
-                ...locData,
-                nickName: nickName,
-                createTime: db.serverDate(),
-                updateTime: db.serverDate()
-              }
-            })
-            .then(() => {
-              console.log('[index] 用户位置已创建');
-              wx.reLaunch({ url: targetPage });
-            })
-            .catch(err => {
-              console.error('[index] 创建用户位置失败:', err);
-              wx.reLaunch({ url: targetPage });
-            });
-        }
-      }).catch(err => {
-        console.error('[index] 查询失败:', err);
-        wx.reLaunch({ url: targetPage });
-      });
-    }).catch(err => {
-      console.error('[index] 获取 OpenID 失败:', err);
-      wx.reLaunch({ url: targetPage });
-    });
+    wx.reLaunch({ url: targetPage });
   },
 
   appendDataAndJump(collectionName, locData, targetPage) {
-    const nickName = wx.getStorageSync('user_nickname') || '未知用户';
-    
-    if (wx.__mt_oldHideLoading) {
-      wx.__mt_oldHideLoading();
-    }
-    
-    wx.cloud.callFunction({ name: 'login' }).then(loginRes => {
-      const openid = loginRes.result.openid;
-
-      // 🔴 并行查询：登录日志、用户集合、封禁令牌
-      const p1 = db.collection('login_logs')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
-      const p2 = db.collection(collectionName)
-        .where({ _openid: openid })
-        .orderBy('createTime', 'desc')
-        .limit(1)
-        .get();
-      const p3 = db.collection('login_logbutton')
-        .where({ _openid: openid })
-        .orderBy('updateTime', 'desc')
-        .limit(1)
-        .get();
-
-      Promise.all([p1, p2, p3]).then(results => {
-        const userRes = results[1];
-        const buttonRes = results[2];
-
-        // 🔴 最终安检：检查 login_logbutton，确保没有封禁
-        if (buttonRes.data && buttonRes.data.length > 0) {
-          const btn = buttonRes.data[0];
-          const rawFlag = btn.isBanned;
-          const isBanned =
-            rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
-          const hasGoldMedal = btn.bypassLocationCheck === true;
-        
-        if (isBanned) {
-            // 🔴 截屏/录屏封禁：最高优先级，不允许任何方式绕过
-            if (btn.banReason === 'screenshot' || btn.banReason === 'screen_record') {
-              console.warn('[index] 最终检查：检测到截屏/录屏封禁，立即拦截！', btn);
-              wx.reLaunch({ url: '/pages/blocked/blocked?type=screenshot' });
-          return;
-            } else if (btn.banReason === 'location_blocked' && hasGoldMedal) {
-              console.log('[index] 最终检查：地址拦截但有金牌，放行');
-            } else {
-              console.warn('[index] 最终检查：发现封禁记录，拦截跳转！', btn);
-              const banType = btn.banReason === 'location_blocked' ? 'location' : 'banned';
-              wx.reLaunch({ url: `/pages/blocked/blocked?type=${banType}` });
-              return;
-            }
-          }
-        }
-
-        let lastCount = 0;
-        if (userRes.data.length > 0) {
-          lastCount = userRes.data[0].visitCount || 0;
-        }
-        
-        const newData = {
-          nickName,
-          province: locData.province,
-          city: locData.city,
-          district: locData.district,
-          address: locData.full_address,
-          phoneModel: locData.phoneModel, 
-          visitCount: lastCount + 1,
-          createTime: db.serverDate(),
-          updateTime: db.serverDate()
-        };
-
-        const jump = () => {
-          wx.reLaunch({ url: targetPage });
-        };
-
-        // 🔴 移除写入超时的兜底跳转，严格等待数据库操作完成
-        // 如果数据库操作失败，仍然跳转（因为用户已经授权，不应该因为数据库问题阻止进入）
-
-        db.collection(collectionName).add({ data: newData })
-          .then(() => {
-            setTimeout(jump, 200);
-          })
-          .catch(err => {
-            console.error('[index] 写入失败', err);
-            // 🔴 数据库写入失败时，仍然跳转（因为用户已经授权，不应该因为数据库问题阻止进入）
-            setTimeout(jump, 200);
-          }); 
-      });
+    this.setData({
+      pendingJumpData: { collectionName, locData },
+      pendingJumpTarget: targetPage || '/package-app/pages/products/products'
     });
+    this._executePendingJump();
   },
 
   // 显示自定义弹窗
@@ -1432,11 +1428,12 @@ Page({
       this._closeAllPopups();
       this.setData({
         showCustomSuccessModal: true,
+        customSuccessModalClosing: false,
         successModalTitle: '定位已开启',
         successModalContent: ''
       });
       setTimeout(() => {
-        this.setData({ showCustomSuccessModal: false });
+        this._closeWithAnimation('showCustomSuccessModal', 'customSuccessModalClosing');
         // 🔴 关键修复：用户开启权限后，自动重新尝试获取位置
         console.log('[onOpenSettingResult] 用户已开启定位权限，重新获取位置');
         this.handleAccess();
@@ -1449,19 +1446,35 @@ Page({
       });
     }
   },
-  retryBluetooth() { this.setData({ showAuthForceModal: false }); },
+  hideLocationPermissionModal() {
+    this._closeWithAnimation('showLocationPermissionModal', 'locationPermissionModalClosing');
+  },
+  openLocationSetting() {
+    wx.openSetting({
+      success: (res) => {
+        if (res.authSetting && res.authSetting['scope.userLocation']) {
+          this._closeWithAnimation('showLocationPermissionModal', 'locationPermissionModalClosing');
+          this.handleAccess();
+        }
+      }
+    });
+  },
+  retryBluetooth() {
+    this._closeWithAnimation('showAuthForceModal', 'authForceModalClosing');
+  },
   onOpenSetting(e) {
      if (e.detail.authSetting && e.detail.authSetting['scope.userLocation']) {
-      this.setData({ showAuthModal: false });
+      this._closeWithAnimation('showAuthModal', 'authModalClosing');
       // 显示自定义成功弹窗
       this._closeAllPopups();
       this.setData({
         showCustomSuccessModal: true,
+        customSuccessModalClosing: false,
         successModalTitle: '授权成功',
         successModalContent: ''
       });
       setTimeout(() => {
-        this.setData({ showCustomSuccessModal: false });
+        this._closeWithAnimation('showCustomSuccessModal', 'customSuccessModalClosing');
         // 🔴 关键修复：用户开启权限后，自动重新尝试获取位置
         console.log('[onOpenSetting] 用户已开启定位权限，重新获取位置');
         this.handleAccess();
@@ -1469,7 +1482,8 @@ Page({
     } else {
       // 显示自定义错误弹窗
       this.setData({ 
-        showCustomErrorModal: true
+        showCustomErrorModal: true,
+        customErrorModalClosing: false
       });
     }
   },
@@ -1488,6 +1502,10 @@ Page({
 
   // ================== 管理员权限检查 ==================
   async checkAdminPrivilege() {
+    return this._checkAdminPrivilegeAsync();
+  },
+
+  async _checkAdminPrivilegeAsync() {
     try {
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
@@ -1500,13 +1518,15 @@ Page({
       if (adminCheck.data.length > 0) {
         this.setData({ isAdmin: true });
         console.log('[index] 身份验证成功：合法管理员');
-      } else {
-        this.setData({ isAdmin: false });
-        console.log('[index] 未在管理员白名单中');
+        return true;
       }
+      this.setData({ isAdmin: false });
+      console.log('[index] 未在管理员白名单中');
+      return false;
     } catch (err) {
       console.error('[index] 权限检查失败', err);
       this.setData({ isAdmin: false });
+      return false;
     }
   },
 
@@ -1534,7 +1554,7 @@ Page({
     
     // 如果进入管理员模式，加载被封禁的用户列表
     if (newMode) {
-      this.setData({ adminViewMode: 'banned' });
+      this.setData({ adminViewMode: 'banned', manualBannedMode: false, suspiciousManualBannedMode: false });
       this.loadBannedUsers();
       this.loadScreenshotRiskUsers();
       this.loadSuspiciousUsers();
@@ -1545,6 +1565,8 @@ Page({
       this.setData({
         step: 0,
         adminViewMode: 'banned',
+        manualBannedMode: false,
+        suspiciousManualBannedMode: false,
         bannedUsers: [],
         screenshotRiskUsers: [],
         suspiciousUsers: []
@@ -1558,6 +1580,8 @@ Page({
       isAdminMode: false,
       step: 0,
       adminViewMode: 'banned',
+      manualBannedMode: false,
+      suspiciousManualBannedMode: false,
       bannedUsers: [],
       screenshotRiskUsers: [],
       suspiciousUsers: []
@@ -1568,20 +1592,81 @@ Page({
   switchAdminTab(e) {
     const mode = (e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.mode) || 'banned';
     if (!mode || mode === this.data.adminViewMode) return;
-    this.setData({ adminViewMode: mode });
+    const patch = { adminViewMode: mode };
+    if (mode === 'banned') {
+      patch.manualBannedMode = false;
+      patch.suspiciousManualBannedMode = false;
+    }
+    this.setData(patch);
     if (mode === 'banned' && this.data.bannedUsers.length === 0) {
       this.loadBannedUsers();
       this.loadScreenshotRiskUsers();
     } else if (mode === 'suspicious' && this.data.suspiciousUsers.length === 0) {
       this.loadSuspiciousUsers();
     }
+    this._startSuspiciousAutoRefresh();
+  },
+
+  goToBannedUsersFromHeader() {
+    if (this.data.adminViewMode === 'suspiciousBanned') return;
+    this.setData({
+      adminViewMode: 'suspiciousBanned',
+      manualBannedMode: false,
+      suspiciousManualBannedMode: true
+    });
+    this.loadBannedUsers({ suspiciousManualOnly: true });
+    this._startSuspiciousAutoRefresh();
+  },
+
+  _suspiciousAutoRefreshTimer: null,
+
+  _startSuspiciousAutoRefresh() {
+    this._stopSuspiciousAutoRefresh();
+    if (!this.data.isAdminMode || this.data.adminViewMode !== 'suspicious') return;
+    this._suspiciousAutoRefreshTimer = setInterval(() => {
+      if (this.data.isLoadingSuspiciousUsers) return;
+      this.loadSuspiciousUsers({ silent: true });
+    }, 15000);
+  },
+
+  _stopSuspiciousAutoRefresh() {
+    if (this._suspiciousAutoRefreshTimer) {
+      clearInterval(this._suspiciousAutoRefreshTimer);
+      this._suspiciousAutoRefreshTimer = null;
+    }
+  },
+
+  // 管理页列表下拉刷新
+  async onAdminListRefresh() {
+    if (this.data.adminListRefreshing) return;
+    this.setData({ adminListRefreshing: true });
+    try {
+      if (this.data.adminViewMode === 'banned' || this.data.adminViewMode === 'suspiciousBanned') {
+        if (this.data.suspiciousManualBannedMode) {
+          await this.loadBannedUsers({ suspiciousManualOnly: true });
+        } else {
+          await Promise.all([this.loadBannedUsers(), this.loadScreenshotRiskUsers()]);
+        }
+      } else if (this.data.adminViewMode === 'suspicious') {
+        await this.loadSuspiciousUsers();
+      }
+    } catch (err) {
+      console.warn('[index] 管理列表刷新失败:', err);
+    } finally {
+      this.setData({ adminListRefreshing: false });
+    }
   },
 
   // 🔴 加载被封禁的用户列表
-  async loadBannedUsers() {
+  async loadBannedUsers(options = {}) {
+    const manualOnly = options.manualOnly === true ? true : !!this.data.manualBannedMode;
+    const suspiciousManualOnly = options.suspiciousManualOnly === true ? true : !!this.data.suspiciousManualBannedMode;
     this.setData({ isLoadingBannedUsers: true });
     try {
-      const res = await wx.cloud.callFunction({ name: 'getBannedUsers' });
+      const res = await wx.cloud.callFunction({
+        name: 'getBannedUsers',
+        data: { manualOnly, suspiciousManualOnly }
+      });
       if (res.result && res.result.success) {
         this.setData({ bannedUsers: res.result.users || [] });
         console.log('[index] 已加载封禁用户列表，数量:', res.result.users?.length || 0);
@@ -1616,21 +1701,59 @@ Page({
     }
   },
 
-  async loadSuspiciousUsers() {
-    this.setData({ isLoadingSuspiciousUsers: true });
+  _isSameSuspiciousUsers(oldList = [], newList = []) {
+    if (oldList.length !== newList.length) return false;
+    for (let i = 0; i < oldList.length; i += 1) {
+      const a = oldList[i] || {};
+      const b = newList[i] || {};
+      if ((a.rowKey || '') !== (b.rowKey || '')) return false;
+      if ((a.lastViewTime || '') !== (b.lastViewTime || '')) return false;
+      if ((a.totalStayMinutesText || '') !== (b.totalStayMinutesText || '')) return false;
+      if ((a.enterCount || 0) !== (b.enterCount || 0)) return false;
+      if ((a.sectionClicksTotal || 0) !== (b.sectionClicksTotal || 0)) return false;
+    }
+    return true;
+  },
+
+  async loadSuspiciousUsers(options = {}) {
+    const silent = !!options.silent;
+    if (!silent) {
+      this.setData({ isLoadingSuspiciousUsers: true });
+    }
     try {
+      await this._backfillLegacyScreenshotRiskQueue();
       const res = await wx.cloud.callFunction({ name: 'getSuspiciousUsers' });
       if (res.result && res.result.success) {
-        this.setData({ suspiciousUsers: res.result.users || [] });
+        const version = res.result.version || '';
+        if (version && version.indexOf('v2_sessions_fenxi_') !== 0) {
+          console.warn('[index] getSuspiciousUsers 版本异常:', version);
+        }
+        console.log('[index] getSuspiciousUsers version/stats:', version, res.result.stats || {});
+        const nextUsers = res.result.users || [];
+        if (!this._isSameSuspiciousUsers(this.data.suspiciousUsers || [], nextUsers)) {
+          this.setData({ suspiciousUsers: nextUsers });
+        }
       } else {
         console.error('[index] 加载可疑用户列表失败:', res.result?.error);
-        this.setData({ suspiciousUsers: [] });
+        if (!silent) this.setData({ suspiciousUsers: [] });
       }
     } catch (err) {
       console.error('[index] 加载可疑用户列表异常:', err);
-      this.setData({ suspiciousUsers: [] });
+      if (!silent) this.setData({ suspiciousUsers: [] });
     } finally {
-      this.setData({ isLoadingSuspiciousUsers: false });
+      if (!silent) {
+        this.setData({ isLoadingSuspiciousUsers: false });
+      }
+    }
+  },
+
+  async _backfillLegacyScreenshotRiskQueue() {
+    if (this._legacyScreenshotBackfillDone) return;
+    this._legacyScreenshotBackfillDone = true;
+    try {
+      await wx.cloud.callFunction({ name: 'backfillScreenshotRiskQueue' });
+    } catch (err) {
+      console.warn('[index] 旧截图数据回填失败（已忽略）:', err);
     }
   },
 
@@ -1660,6 +1783,112 @@ Page({
             this.showAutoToast('成功', `已${actionText}`);
             this.loadScreenshotRiskUsers();
             if (action === 'ban') this.loadBannedUsers();
+          } else {
+            this.showAutoToast('失败', result.result?.error || '处理失败');
+          }
+        } catch (err) {
+          this.hideMyLoading();
+          this.showAutoToast('失败', err.message || '处理失败');
+        }
+      }
+    });
+  },
+
+  // 可疑人员页：截图记录的手动处理（无视/封禁）
+  async handleSuspiciousScreenshotDecision(e) {
+    const riskId = e.currentTarget.dataset.riskId;
+    const action = e.currentTarget.dataset.action; // ban | ignore
+    const viewerNickname = e.currentTarget.dataset.viewerNickname || '该用户';
+    if (!riskId || !action) return;
+    const actionText = action === 'ban' ? '封禁' : '无视';
+    this.showMyDialog({
+      title: '确认操作',
+      content: `确定要${actionText}「${viewerNickname}」吗？`,
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      success: async (res) => {
+        if (!res.confirm) return;
+        try {
+          this.showMyLoading('处理中...');
+          const result = await wx.cloud.callFunction({
+            name: 'handleScreenshotRiskDecision',
+            data: { riskId, action }
+          });
+          this.hideMyLoading();
+          if (result.result && result.result.success) {
+            this.showAutoToast('成功', `已${actionText}`);
+            this.loadSuspiciousUsers();
+            this.loadScreenshotRiskUsers();
+            if (action === 'ban') this.loadBannedUsers();
+          } else {
+            this.showAutoToast('失败', result.result?.error || '处理失败');
+          }
+        } catch (err) {
+          this.hideMyLoading();
+          this.showAutoToast('失败', err.message || '处理失败');
+        }
+      }
+    });
+  },
+
+  // 可疑人员页统一处理（每张卡都支持：无视/封禁）
+  async handleSuspiciousDecision(e) {
+    const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const action = dataset.action; // ban | ignore
+    const sourceType = dataset.sourceType || '';
+    const viewerNickname = dataset.viewerNickname || '该用户';
+    const riskId = dataset.riskId || '';
+    const viewerOpenid = dataset.viewerOpenid || '';
+    const rowKey = dataset.rowKey || '';
+    if (!action) return;
+
+    // 截图待审核仍走原有云函数，保持兼容
+    if (sourceType === 'screenshot' && riskId) {
+      this.handleSuspiciousScreenshotDecision({
+        currentTarget: {
+          dataset: { riskId, action, viewerNickname }
+        }
+      });
+      return;
+    }
+
+    const actionText = action === 'ban' ? '封禁' : '无视';
+    this.showMyDialog({
+      title: '确认操作',
+      content: `确定要${actionText}「${viewerNickname}」吗？`,
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      success: async (res) => {
+        if (!res.confirm) return;
+        try {
+          this.showMyLoading('处理中...');
+          const result = await wx.cloud.callFunction({
+            name: 'handleSuspiciousUserDecision',
+            data: {
+              action,
+              sourceType,
+              viewerOpenid,
+              viewerNickname,
+              rowKey,
+              riskId,
+              locationInfo: {
+                province: dataset.province || '',
+                city: dataset.city || '',
+                district: dataset.district || '',
+                address: dataset.address || '',
+                latitude: dataset.latitude,
+                longitude: dataset.longitude
+              }
+            }
+          });
+          this.hideMyLoading();
+          if (result.result && result.result.success) {
+            this.showAutoToast('成功', `已${actionText}`);
+            this.loadSuspiciousUsers();
+            this.loadScreenshotRiskUsers();
+            if (action === 'ban') this.loadBannedUsers({ suspiciousManualOnly: true });
           } else {
             this.showAutoToast('失败', result.result?.error || '处理失败');
           }
@@ -1736,6 +1965,7 @@ Page({
     // 🔴 1. 显示二次确认弹窗
     this.setData({
       showConfirmModal: true,
+      confirmModalClosing: false,
       confirmModalContent: `确定要解除对"${nickname}"的封禁吗？`,
       _pendingUnbanData: { buttonId, userIndex, banReason, openid, nickname }
     });
@@ -1743,18 +1973,23 @@ Page({
 
   // 🔴 隐藏确认弹窗
   hideConfirmModal() {
-    this.setData({
-      showConfirmModal: false,
+    this._closeWithAnimation('showConfirmModal', 'confirmModalClosing', {
       confirmModalContent: '',
       _pendingUnbanData: null
     });
   },
 
   _openFirstTimeModalAnimated() {
+    // 防抖：本次进入 index 只允许弹一次，避免异步流程里重复触发
+    if (this._firstTimeModalShownOnce) return;
+    if (this.data.isAuthorized) return;
+    if (wx.getStorageSync('has_seen_first_time_modal')) return;
+    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return;
     if (this._firstTimeModalEnterTimer) {
       clearTimeout(this._firstTimeModalEnterTimer);
       this._firstTimeModalEnterTimer = null;
     }
+    this._firstTimeModalShownOnce = true;
     this.setData({
       showFirstTimeModal: true,
       firstTimeModalEnterReady: false,
@@ -1784,6 +2019,50 @@ Page({
     });
   },
 
+  onFirstTimeQrTouchStart() {
+    this.setData({ qrPressing: true });
+  },
+
+  onFirstTimeQrTouchEnd() {
+    this.setData({ qrPressing: false });
+  },
+
+  saveFirstTimeQrcode() {
+    const src = '/images/qrcode.jpg';
+    wx.getImageInfo({
+      src,
+      success: (imgRes) => {
+        const filePath = imgRes && imgRes.path;
+        if (!filePath) {
+          this.showAutoToast('提示', '二维码读取失败，请重试');
+          return;
+        }
+        wx.saveImageToPhotosAlbum({
+          filePath,
+          success: () => {
+            this.showAutoToast('成功', '二维码已保存到相册');
+          },
+          fail: (err) => {
+            const msg = (err && err.errMsg) || '';
+            if (msg.indexOf('auth deny') > -1 || msg.indexOf('authorize') > -1) {
+              this.showMyDialog({
+                title: '需要相册权限',
+                content: '请在设置中开启“保存到相册”权限后重试',
+                showCancel: false,
+                confirmText: '知道了'
+              });
+              return;
+            }
+            this.showAutoToast('提示', '保存失败，请重试');
+          }
+        });
+      },
+      fail: () => {
+        this.showAutoToast('提示', '二维码读取失败，请重试');
+      }
+    });
+  },
+
   // 🔴 关闭首次进入提示弹窗
   closeFirstTimeModal() {
     if (this.data.firstTimeModalClosing) return;
@@ -1795,6 +2074,8 @@ Page({
         firstTimeModalClosing: false,
         firstTimeModalEnterReady: false,
         showWechatQRCode: false,
+        isShowNicknameUI: true,
+        nicknameUiClosing: false,
       });
     }, 380);
   },
@@ -1816,6 +2097,7 @@ Page({
     wx.setClipboardData({
       data: wechat,
       success: () => {
+        wx.setStorageSync('has_seen_first_time_modal', true);
         // 轻量隐藏一次系统默认 toast，避免覆盖自定义提示
         hideOfficialToast();
         this._preloadFirstTimeQrcode();
@@ -1824,10 +2106,11 @@ Page({
           showWechatQRCode: true,
           copyWechatBusy: false,
           showCopySuccessModal: true,
+          copySuccessModalClosing: false,
         });
         // 2秒后自动关闭
         setTimeout(() => {
-          this.setData({ showCopySuccessModal: false });
+          this._closeWithAnimation('showCopySuccessModal', 'copySuccessModalClosing');
         }, 2000);
       },
       fail: () => {
@@ -1849,6 +2132,7 @@ Page({
         firstTimeModalEnterReady: false,
         showWechatQRCode: false,
         isShowNicknameUI: true,
+        nicknameUiClosing: false,
       });
     }, 380);
   },
@@ -1883,7 +2167,7 @@ Page({
       }
 
       // 根据不同的封禁类型执行不同的逻辑
-      if (banReason === 'screenshot' || banReason === 'screen_record') {
+      if (banReason === 'screenshot' || banReason === 'screen_record' || banReason === 'screenshot_risk_review') {
         // 截图封禁：只把 isBanned 设置为 false
         console.log('[unbanUser] 截图封禁，更新 isBanned 为 false');
         const res = await wx.cloud.callFunction({
@@ -1941,6 +2225,7 @@ Page({
       this._closeAllPopups();
       this.setData({
         showCustomSuccessModal: true,
+        customSuccessModalClosing: false,
         successModalTitle: '已解除封禁',
         successModalContent: '用户现在可以正常访问了'
       });
@@ -2061,7 +2346,6 @@ Page({
     // 兼容旧调用：切换到昵称录入页
     this.setData({
       adminViewMode: this.data.adminViewMode === 'nickname' ? 'banned' : 'nickname',
-      isNicknameMode: this.data.adminViewMode !== 'nickname',
       nicknameInput: '',
       nicknameBypassLocation: false
     });

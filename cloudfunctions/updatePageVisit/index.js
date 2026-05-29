@@ -34,17 +34,19 @@ const PAGE_NAME_MAP = {
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
-  const pageRoute = event.pageRoute || ''; // 例如 'pages/my/my' 或 'my'
+  const pageRoute = event.pageRoute || ''; // 例如 'pages/my/my' / 'my'
   
-  // 从路由中提取页面名称
+  // 从路由中提取页面名称（优先 pages/x/x 结构，兜底再用最后段）
   let pageName = '';
-  if (pageRoute.includes('/')) {
-    // 如果是完整路由，提取最后一部分
-    const parts = pageRoute.split('/');
+  const routeText = String(pageRoute || '').trim();
+  const match = routeText.match(/^pages\/([^/]+)\/\1$/);
+  if (match && match[1]) {
+    pageName = match[1];
+  } else if (routeText.includes('/')) {
+    const parts = routeText.split('/').filter(Boolean);
     pageName = parts[parts.length - 1] || parts[parts.length - 2] || '';
   } else {
-    // 如果直接是页面名称
-    pageName = pageRoute;
+    pageName = routeText;
   }
   
   // 🔴 获取拼音页面名称（用于后台，禁止使用中文！）
@@ -63,7 +65,7 @@ exports.main = async (event, context) => {
   }
   
   try {
-    // 查找该用户的记录
+    // 查找该用户记录
     const recordRes = await db.collection('fenxishuju')
       .where({ _openid: openid })
       .limit(1)
@@ -72,13 +74,9 @@ exports.main = async (event, context) => {
     const now = db.serverDate();
     
     if (recordRes.data && recordRes.data.length > 0) {
-      // 更新现有记录
       const record = recordRes.data[0];
-      
-      // 🔴 兼容旧数据：如果存在中文字段名或英文字段名，尝试迁移到拼音字段名
-      // 旧字段名映射（仅用于读取旧数据，新数据必须使用拼音）
+      // 兼容旧字段：中文/英文旧字段合并到拼音字段后删除
       const OLD_FIELD_MAP = {
-        // 中文字段名 → 拼音
         '登录页': 'dengluye',
         '产品页': 'chanpinye',
         '商店页': 'shangdianye',
@@ -114,59 +112,36 @@ exports.main = async (event, context) => {
         'NewPage': 'xinyemian'
       };
       
-      // 🔴 检查是否存在对应的旧字段名（用于数据迁移）
-      let hasOldField = false;
-      let oldFieldName = null;
-      let oldFieldValue = 0;
-      
-      // 检查中文字段和英文字段
-      for (const [oldName, pinyinName] of Object.entries(OLD_FIELD_MAP)) {
-        if (pinyinName === pageNamePinyin && record[oldName] !== undefined) {
-          hasOldField = true;
-          oldFieldName = oldName;
-          oldFieldValue = record[oldName] || 0;
-          break;
-        }
-      }
-      
-      // 计算当前计数（合并旧字段和拼音字段的值）
-      const pinyinCount = record[pageNamePinyin] || 0;
-      const totalCount = pinyinCount + oldFieldValue;
-      const newCount = totalCount + 1;
-      
-      // 准备更新数据
+      let migrateDelta = 0;
       const updateData = {
-        [pageNamePinyin]: newCount,
+        [pageNamePinyin]: db.command.inc(1),
         updateTime: now
       };
-      
-      // 🔴 如果存在旧的字段（中文或英文），删除它（使用 remove 命令）
-      if (hasOldField && oldFieldName) {
-        updateData[oldFieldName] = db.command.remove();
-        console.log(`[updatePageVisit] 🔄 发现旧的字段 "${oldFieldName}"，正在迁移到 "${pageNamePinyin}"`);
-        console.log(`[updatePageVisit] 📊 合并数据：旧字段=${oldFieldValue}, 拼音=${pinyinCount}, 总计=${newCount}`);
-      }
-      
-      // 🔴 同时检查并删除所有其他旧字段（一次性清理所有旧数据）
-      const allOldFields = Object.keys(OLD_FIELD_MAP);
-      for (const oldField of allOldFields) {
-        if (record[oldField] !== undefined && oldField !== oldFieldName) {
-          updateData[oldField] = db.command.remove();
-          console.log(`[updatePageVisit] 🗑️ 删除其他旧字段: "${oldField}"`);
+
+      for (const [oldName, pinyinName] of Object.entries(OLD_FIELD_MAP)) {
+        if (pinyinName === pageNamePinyin && record[oldName] !== undefined) {
+          const oldVal = Number(record[oldName] || 0);
+          if (oldVal > 0) migrateDelta += oldVal;
+          updateData[oldName] = db.command.remove();
         }
       }
-      
-      // 执行更新
+
+      if (migrateDelta > 0) {
+        updateData[pageNamePinyin] = db.command.inc(1 + migrateDelta);
+      }
+
+      // 一次性清理其他旧字段（避免后续读取歧义）
+      const allOldFields = Object.keys(OLD_FIELD_MAP);
+      for (const oldField of allOldFields) {
+        if (record[oldField] !== undefined && updateData[oldField] === undefined) {
+          updateData[oldField] = db.command.remove();
+        }
+      }
+
       await db.collection('fenxishuju').doc(record._id).update({
         data: updateData
       });
-      
-      if (hasOldField) {
-        console.log(`[updatePageVisit] ✅ 已迁移并更新 ${pageNamePinyin} 访问次数: ${newCount}`);
-        return { success: true, pageName: pageNamePinyin, migrated: true };
-      } else {
-        console.log(`[updatePageVisit] ✅ 已更新 ${pageNamePinyin} 访问次数: ${newCount}`);
-      }
+      console.log(`[updatePageVisit] ✅ 已原子更新 ${pageNamePinyin}`);
     } else {
       // 创建新记录
       const initialData = {
@@ -180,7 +155,7 @@ exports.main = async (event, context) => {
         data: initialData
       });
       
-      console.log(`[updatePageVisit] ✅ 已创建新记录，${pageNamePinyin} 访问次数: 1`);
+      console.log(`[updatePageVisit] ✅ 已创建新记录，${pageNamePinyin}: 1`);
     }
     
     return { success: true, pageName: pageNamePinyin };

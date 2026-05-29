@@ -7,6 +7,13 @@ function getEnv(name) {
   return (process.env[name] || '').trim();
 }
 
+function shouldUseAccelerateHost() {
+  return (
+    getEnv('COS_PUBLIC_USE_ACCELERATE') === '1' ||
+    /^true$/i.test(getEnv('COS_PUBLIC_USE_ACCELERATE'))
+  );
+}
+
 function normalizeBucket(bucket) {
   const raw = String(bucket || '').trim();
   if (!raw) return '';
@@ -17,6 +24,8 @@ function normalizeBucket(bucket) {
     .replace(/\/+$/g, '');
 }
 
+const OBJECT_ACL = 'public-read';
+
 /** 与 PUT 的桶一致的可读直链域名（勿填云开发 *.tcb.qcloud.la，否则会 403） */
 function resolvePublicBase(bucket, region) {
   let base = getEnv('COS_PUBLIC_DOMAIN');
@@ -25,9 +34,7 @@ function resolvePublicBase(bucket, region) {
     note = 'COS_PUBLIC_DOMAIN 为云开发静态域名，已忽略并改用 COS 桶默认域名（文件实际在 COS，与 tcb 域名不一致会导致 403）';
     base = '';
   }
-  const useAcc =
-    getEnv('COS_PUBLIC_USE_ACCELERATE') === '1' ||
-    /^true$/i.test(getEnv('COS_PUBLIC_USE_ACCELERATE'));
+  const useAcc = shouldUseAccelerateHost();
   if (!base) {
     const fallback = useAcc
       ? `https://${bucket}.cos.accelerate.myqcloud.com`
@@ -77,7 +84,11 @@ exports.main = async (event = {}) => {
       Key: key,
       Sign: true,
       Method: 'PUT',
-      Expires: 300
+      Expires: 1200,
+      UseAccelerate: shouldUseAccelerateHost(),
+      Headers: {
+        'x-cos-acl': OBJECT_ACL
+      }
     });
 
     const { publicBase, note } = resolvePublicBase(bucket, region);
@@ -89,6 +100,9 @@ exports.main = async (event = {}) => {
       publicUrl,
       key,
       contentType,
+      uploadHeaders: {
+        'x-cos-acl': OBJECT_ACL
+      },
       debug: {
         bucket,
         region,

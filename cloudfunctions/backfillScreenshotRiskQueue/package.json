@@ -1,0 +1,9 @@
+{
+  "name": "backfillScreenshotRiskQueue",
+  "version": "1.0.0",
+  "description": "Backfill legacy screenshot risk queue for admin review",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

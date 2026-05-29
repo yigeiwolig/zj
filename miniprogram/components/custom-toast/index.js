@@ -25,11 +25,14 @@ Component({
       // 🔴 修复：函数不能通过 setData 保存，使用实例变量保存回调
       this._modalSuccess = opts.success;
       this._modalFail = opts.fail;
+      this._modalInputValue = (opts.content || '').toString();
       this.setData({
         modal: {
           show: true,
           title: opts.title || '',
           content: opts.content || '',
+          editable: !!opts.editable,
+          placeholderText: opts.placeholderText || '',
           showCancel: opts.showCancel !== false,
           cancelText: opts.cancelText || '取消',
           confirmText: opts.confirmText || '确定',
@@ -37,6 +40,9 @@ Component({
           confirmColor: opts.confirmColor
         }
       });
+    },
+    onModalInput(e) {
+      this._modalInputValue = (e && e.detail && e.detail.value) || '';
     },
     hideModal() {
       this.setData({ modalClosing: true });
@@ -73,10 +79,19 @@ Component({
           modalClosing: false
         });
         // 🔴 修复：从实例变量读取回调
-        if (success) success({ confirm: true, cancel: false, errMsg: "showModal:ok" });
+        const payload = {
+          confirm: true,
+          cancel: false,
+          errMsg: "showModal:ok"
+        };
+        if (this.data.modal && this.data.modal.editable) {
+          payload.content = this._modalInputValue || '';
+        }
+        if (success) success(payload);
         // 清理回调
         this._modalSuccess = null;
         this._modalFail = null;
+        this._modalInputValue = '';
       }, 420);
     },
 

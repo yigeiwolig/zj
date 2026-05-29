@@ -1,0 +1,27 @@
+.invest-page {
+  min-height: 100vh;
+  padding: 48rpx 32rpx;
+  background: #f5f6fa;
+  box-sizing: border-box;
+}
+
+.invest-card {
+  background: #ffffff;
+  border-radius: 24rpx;
+  padding: 40rpx 32rpx;
+}
+
+.invest-title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 16rpx;
+}
+
+.invest-desc {
+  display: block;
+  font-size: 26rpx;
+  color: #6b7280;
+  line-height: 1.6;
+}

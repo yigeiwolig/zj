@@ -1,0 +1,10 @@
+{
+  "name": "cosMultipartUpload",
+  "version": "1.0.0",
+  "description": "COS multipart upload init/complete/abort for large files from miniprogram",
+  "main": "index.js",
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "latest",
+    "wx-server-sdk": "~2.6.3"
+  }
+}

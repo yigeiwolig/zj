@@ -89,38 +89,42 @@ input, textarea { text-align: left; }
   transform: translateY(-50%);
   display: flex;
   justify-content: center;
-  gap: 16rpx; /* 字间距稍微拉开一点点，配合滚动距离 */
-  z-index: 120; /* 文字在最上层，在遮罩层上方 */
+  gap: 16rpx;
+  z-index: 300; /* 确保在黑幕之上 */
   padding-left: 10rpx;
 }
 
+/* 移除旧的动画 */
+.index-page.animating .text-track {
+  animation: none;
+  clip-path: none;
+}
+
 .char {
-  font-size: 40rpx; font-weight: 900; color: #1d1d1f;
-  opacity: 0; 
-  transform: scale(0) translateY(20rpx); /* 初始状态：压缩在地下 */
-  transform-origin: bottom center;
+  font-size: 42rpx; font-weight: 900; color: #1d1d1f;
+  opacity: 0;
+  transform: scale(0.8) translateY(20rpx);
+  filter: blur(10rpx);
 }
 
-/* 文字弹出动画：更Q弹的效果 */
-@keyframes popChar {
-  0% { opacity: 0; transform: scale(0) translateY(20rpx); }
-  50% { opacity: 1; transform: scale(1.4) translateY(-10rpx); } /* 冲出来 */
-  80% { transform: scale(0.9) translateY(0); } /* 回弹一下 */
-  100% { opacity: 1; transform: scale(1) translateY(0); }
+/* 极简高级淡入：带一点点模糊变清晰的效果 */
+@keyframes cinematicText {
+  0% { opacity: 0; transform: scale(0.8) translateY(20rpx); filter: blur(10rpx); }
+  100% { opacity: 1; transform: scale(1) translateY(0); filter: blur(0); }
 }
 
-/* 
-   关键调整：时间配合
-   齿轮向右滚总时长设定为 1.6s
-   文字必须在齿轮滚过对应位置后才出现
-   延迟时间要足够长，确保齿轮先经过
-*/
-.index-page .char-1 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s forwards; } /* M - 齿轮滚过M后 */
-.index-page .char-2 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.7s forwards; } /* T - 齿轮滚过T后 */
-.index-page .char-3 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.9s forwards; } /* 引 - 齿轮滚过引后 */
-.index-page .char-4 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.1s forwards; } /* 领 - 齿轮滚过领后 */
-.index-page .char-5 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.3s forwards; } /* 创 - 齿轮滚过创后 */
-.index-page .char-6 { animation: popChar 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 1.5s forwards; } /* 新 - 齿轮滚过新后 */
+/* 错峰出现，如流水般顺滑，加快整体节奏 */
+.index-page.animating .char-1 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.0s forwards; }
+.index-page.animating .char-2 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.04s forwards; }
+.index-page.animating .char-3 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.12s forwards; } /* 稍微停顿区分词组 */
+.index-page.animating .char-4 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.16s forwards; }
+.index-page.animating .char-5 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.20s forwards; }
+.index-page.animating .char-6 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.24s forwards; }
+.index-page.animating .char-7 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.32s forwards; }
+.index-page.animating .char-8 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.36s forwards; }
+.index-page.animating .char-9 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.40s forwards; }
+.index-page.animating .char-10 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.44s forwards; }
+.index-page.animating .char-11 { animation: cinematicText 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.48s forwards; }
 
 /* --- 主角：从水滴到齿轮 --- */
 .liquid-btn {
@@ -141,83 +145,49 @@ input, textarea { text-align: left; }
 /* 齿轮内部结构 (默认透明) */
 .gear-shape {
   width: 100%; height: 100%; position: absolute; opacity: 0; transition: opacity 0.3s;
-  display: flex; justify-content: center; align-items: center;
-}
-.gear-shape .teeth {
-  width: 100%; height: 100%; border-radius: 50%;
-  border: 10rpx dashed #555; /* 深色虚线做齿牙 */
+  border-radius: 50%;
+  border: 4rpx solid rgba(29, 29, 31, 0.15); /* 极简的浅色轨道 */
   box-sizing: border-box;
 }
-.gear-shape .hub {
-  position: absolute; width: 40%; height: 40%; background: #555; border-radius: 50%;
-}
-
-/* === Step 1: 变成小齿轮 (中间) === */
-.liquid-btn.step-1 {
-  width: 70rpx; height: 70rpx; /* 尺寸缩小 */
+/* 轨道上的小圆点，旋转时像雷达或旋钮 */
+.gear-shape::after {
+  content: '';
+  position: absolute;
+  top: -4rpx; left: 50%; transform: translateX(-50%);
+  width: 12rpx; height: 12rpx;
+  background: #1d1d1f;
   border-radius: 50%;
-  box-shadow: 4rpx 4rpx 12rpx rgba(0,0,0,0.1);
-  animation: none; /* 停止蠕动 */
+  box-shadow: 0 0 8rpx rgba(0,0,0,0.2);
 }
-.liquid-btn.step-1 .btn-text, .liquid-btn.step-1 .highlight-dot { opacity: 0; }
-.liquid-btn.step-1 .gear-shape { opacity: 1; }
-
-/* === Step 2: 向左滚 (蓄力) === */
-.liquid-btn.step-2 {
-  width: 70rpx; height: 70rpx; border-radius: 50%;
-  animation: none;
-  /* 移动动画 */
-  animation: rollToLeft 0.8s cubic-bezier(0.5, 0, 0.5, 1) forwards;
-}
-.liquid-btn.step-2 .gear-shape { opacity: 1; animation: spinLeft 0.8s cubic-bezier(0.5, 0, 0.5, 1) forwards; }
-.liquid-btn.step-2 .btn-text, .liquid-btn.step-2 .highlight-dot { display: none; }
-
-/* === Step 3: 向右滚 (冲刺) - 调整时长 === */
-.liquid-btn.step-3 {
-  width: 70rpx; height: 70rpx; border-radius: 50%;
-  /* 
-     时长调整为 1.6s
-     timing-function 改为 ease-in-out 让启动和停止更自然，
-     或者 linear 保持匀速，配合文字弹出节奏。
-     这里推荐 cubic-bezier 让它有个加速过程
-  */
-  animation: rollToRight 1.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards; 
-}
-.liquid-btn.step-3 .gear-shape { opacity: 1; animation: spinRight 1.6s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards; }
-.liquid-btn.step-3 .btn-text, .liquid-btn.step-3 .highlight-dot { display: none; }
-
-/* === Step 4: 停留展示 (等待状态) === */
-/* 这个状态下，齿轮保持在最右边，不做任何动作，给用户看文字的时间 */
-.liquid-btn.step-4 {
-  width: 70rpx; height: 70rpx; border-radius: 50%;
-  animation: none;
-  /* 必须手动固定在动画结束的位置，否则 animation remove 后会跳回原位 */
-  /* rollToRight 的终点是 translateX(280rpx) */
-  transform: translateX(280rpx); 
-}
-.liquid-btn.step-4 .gear-shape { 
-  opacity: 1; 
-  transform: rotate(720deg); /* 保持旋转结束的角度 */
-}
-.liquid-btn.step-4 .btn-text, .liquid-btn.step-4 .highlight-dot { display: none; }
-
-/* === Step 5: 掉落 (优化版) === */
-.liquid-btn.step-5 {
-  width: 70rpx; height: 70rpx; border-radius: 50%;
-  transform: translateX(280rpx); /* 保持水平位置不变 */
-  /* 
-     时长 0.8s 足够了
-     cubic-bezier(0.6, -0.28, 0.735, 0.045) 是一个类似"先往上弹一下再掉下去"的物理曲线
-     或者拆分 keyframes 来做更精准控制，下面 keyframes 我们手动写物理逻辑，这里用 ease-in 加速下落
-  */
-  animation: fallDown 0.8s cubic-bezier(0.55, 0.055, 0.675, 0.19) forwards;
+.gear-shape .teeth { display: none; } /* 隐藏旧的十字准星/虚线 */
+.gear-shape .hub {
+  position: absolute; width: 16rpx; height: 16rpx; background: #1d1d1f; border-radius: 50%;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
 }
 
-/* 保持内部形状可见 */
-.liquid-btn.step-5 .gear-shape { opacity: 1; }
+/* === 极简点击反馈：点击瞬间缩小并震动 === */
+.liquid-btn:active {
+  transform: scale(0.92);
+  box-shadow: 12rpx 12rpx 30rpx rgba(174, 174, 192, 0.4), -12rpx -12rpx 30rpx rgba(255, 255, 255, 1);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
 
-/* 隐藏不需要的元素 */
-.liquid-btn.step-5 .btn-text, .liquid-btn.step-5 .highlight-dot { display: none; }
+/* === Step 1: 纯净巨幕 (Cinematic Light Expansion) === */
+.liquid-btn.expanded-light {
+  animation: expandToLight 1.4s cubic-bezier(0.65, 0, 0.15, 1) forwards;
+  pointer-events: none;
+}
+.liquid-btn.expanded-light .btn-text, 
+.liquid-btn.expanded-light .highlight-dot,
+.liquid-btn.expanded-light .gear-shape { 
+  opacity: 0 !important; 
+  transition: opacity 0.1s; 
+}
+
+/* 隐藏其他多余的 step，因为我们直接跳到文字显示和跳转 */
+.liquid-btn.step-2, .liquid-btn.step-4 {
+  display: none;
+}
 
 /* --- 动画关键帧 --- */
 @keyframes morph {
@@ -226,44 +196,10 @@ input, textarea { text-align: left; }
   100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
 }
 
-/* 向左滚：从中间(0) 到 左侧边缘(-300rpx) */
-@keyframes rollToLeft {
-  from { transform: translateX(0); }
-  to { transform: translateX(-300rpx); }
-}
-@keyframes spinLeft { from { transform: rotate(0); } to { transform: rotate(-360deg); } }
-
-/* rollToRight 终点位置确认 */
-@keyframes rollToRight {
-  from { transform: translateX(-300rpx); }
-  to { transform: translateX(280rpx); } 
-}
-@keyframes spinRight { from { transform: rotate(-360deg); } to { transform: rotate(720deg); } }
-
-/* 优化后的掉落关键帧：腾空 -> 加速坠落 */
-@keyframes fallDown {
-  0% { 
-    /* 初始状态：接上一步的结尾 */
-    transform: translateX(280rpx) translateY(0) rotate(720deg) scale(1); 
-    opacity: 1;
-  }
-  
-  /* 30%的时间点：向上腾空，做一个"起跳"的动作 */
-  30% { 
-    /* 往上跳得更高，同时稍微反向旋转一点(蓄力感)，或者减速旋转 */
-    transform: translateX(280rpx) translateY(-120rpx) rotate(700deg) scale(1.1); 
-    opacity: 1;
-    /* 此时 animation-timing-function 应该是减速 (ease-out) */
-  }
-  /* 100%的时间点：掉出屏幕 */
-  100% {
-    /* 
-       translateY 设为 600rpx 或更大，确保完全掉出视线
-       rotate 设为 1000deg+，下落时旋转加速
-    */
-    transform: translateX(280rpx) translateY(800rpx) rotate(1080deg) scale(0.6); 
-    opacity: 0; /* 最后完全消失 */
-  }
+@keyframes expandToLight {
+  0% { transform: scale(1); border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; background: #F9F9F9; }
+  10% { transform: scale(0.8); border-radius: 50%; background: #ffffff; box-shadow: none; } /* 蓄力并变纯白 */
+  100% { transform: scale(40); border-radius: 50%; background: #ffffff; box-shadow: none; } /* 爆盖全屏纯白 */
 }
 
 /* ================= 遮罩层（布的效果） ================= */
@@ -301,6 +237,15 @@ input, textarea { text-align: left; }
   justify-content: center; /* 改为居中 */
   align-items: center;     /* 改为居中 */
   opacity: 1; transition: opacity 0.3s;
+}
+
+.auth-mask.closing {
+  animation: authMaskFadeOut 0.32s ease forwards;
+}
+
+@keyframes authMaskFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 /* 底部面板 */
@@ -430,9 +375,18 @@ input, textarea { text-align: left; }
   animation: authPopIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
+.auth-panel-new.closing {
+  animation: authPopOut 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 @keyframes authPopIn {
   from { opacity: 0; transform: scale(0.9) translateY(20rpx); }
   to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes authPopOut {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.88) translateY(24rpx); }
 }
 
 /* 图标 */
@@ -612,7 +566,7 @@ input, textarea { text-align: left; }
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
   background: rgba(0, 0, 0, 0.7); /* 深色遮罩 */
   backdrop-filter: blur(10px); /* 强力毛玻璃 */
-  z-index: 1000000001 !important; /* 🔴 修复：页面级弹窗应该高于组件级，和 my 页面一致 */
+  z-index: 10100 !important; /* 高于 .auth-mask(9999)，确保昵称错误提示可见 */
   display: flex; align-items: center; justify-content: center;
 }
 
@@ -642,7 +596,7 @@ input, textarea { text-align: left; }
 
 /* 复制成功提示：高于首次加微信等其它 custom-modal-mask（同 z-index 时后渲染者在上，仍显式抬高） */
 .custom-modal-mask.copy-success-modal-mask {
-  z-index: 1000000010 !important;
+  z-index: 10110 !important;
 }
 
 /* 定位权限提示弹窗样式（白底黑字） */
@@ -992,6 +946,20 @@ input, textarea { text-align: left; }
   width: 400rpx;
   height: 400rpx;
   margin-bottom: 16rpx;
+  border-radius: 12rpx;
+  transition: transform 0.14s ease, filter 0.14s ease, opacity 0.14s ease;
+}
+
+.qr-code-image:active {
+  transform: scale(0.965);
+  filter: brightness(0.92);
+  opacity: 0.96;
+}
+
+.qr-code-image.is-pressing {
+  transform: scale(0.94);
+  filter: brightness(0.86);
+  opacity: 0.92;
 }
 
 .qr-code-tip {
@@ -1058,7 +1026,7 @@ input, textarea { text-align: left; }
   height: 100%;
   background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(12px);
-  z-index: 99999;
+  z-index: 9200;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1097,18 +1065,18 @@ input, textarea { text-align: left; }
   background: #1c1c1e;
   border-radius: 20rpx;
   z-index: 1;
-  animation: loadingBar 0.6s alternate infinite ease-in-out;
+  animation: loadingBar 0.3s alternate infinite ease-in-out;
 }
 
 .loader-label {
   color: #1c1c1e;
   font-size: 28rpx;
   font-weight: 700;
-  animation: labelBlink 0.6s alternate infinite;
+  animation: labelBlink 0.26s alternate infinite ease-in-out;
 }
 
 @keyframes labelBlink {
-  from { opacity: 0.35; }
+  from { opacity: 0.5; }
   to   { opacity: 1; }
 }
 
@@ -1175,6 +1143,28 @@ input, textarea { text-align: left; }
   width: 120rpx;
 }
 
+.header-shortcut-btn {
+  min-width: 172rpx;
+  height: 64rpx;
+  padding: 0 16rpx;
+  box-sizing: border-box;
+  border-radius: 32rpx;
+  border: 1rpx solid #111827;
+  background: #fff;
+  color: #111827;
+  font-size: 22rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.header-shortcut-btn:active {
+  opacity: 0.82;
+}
+
 /* 列表容器 */
 .admin-user-list {
   flex: 1;
@@ -1203,8 +1193,9 @@ input, textarea { text-align: left; }
   display: flex;
   gap: 12rpx;
   padding: 16rpx 24rpx calc(16rpx + env(safe-area-inset-bottom));
-  background: #fff;
-  border-top: 1rpx solid #eee;
+  background: rgba(255, 255, 255, 0.94);
+  border-top: 1rpx solid #e8edf3;
+  backdrop-filter: blur(8rpx);
 }
 
 .tab-item {
@@ -1213,8 +1204,8 @@ input, textarea { text-align: left; }
   align-items: center;
   justify-content: center;
   height: 92rpx;
-  background: #e5e7eb;
-  border: 1rpx solid #d1d5db;
+  background: #f2f4f7;
+  border: 1rpx solid #dbe2ea;
   border-radius: 46rpx;
 }
 
@@ -1223,14 +1214,15 @@ input, textarea { text-align: left; }
 }
 
 .tab-item.active {
-  background: #000;
-  border-color: #000;
+  background: linear-gradient(135deg, #111827, #1f2937);
+  border-color: #111827;
+  box-shadow: 0 10rpx 22rpx rgba(15, 23, 42, 0.2);
 }
 
 .tab-text {
   font-size: 26rpx;
-  font-weight: 500;
-  color: #374151;
+  font-weight: 600;
+  color: #475569;
 }
 
 .tab-item.active .tab-text {
@@ -1284,16 +1276,16 @@ input, textarea { text-align: left; }
 
 /* 用户卡片列表 */
 .admin-user-cards {
-  padding: 24rpx 20rpx 42rpx;
+  padding: 22rpx 20rpx 42rpx;
 }
 
 .admin-user-card {
-  background: #f2f2f7;
-  border-radius: 28rpx;
-  padding: 26rpx 22rpx;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  border-radius: 24rpx;
+  padding: 22rpx 18rpx;
   margin-bottom: 20rpx;
-  border: 3rpx solid #111111;
-  box-shadow: 0 8rpx 16rpx rgba(17, 24, 39, 0.06);
+  border: 1rpx solid #e2e8f0;
+  box-shadow: 0 10rpx 24rpx rgba(15, 23, 42, 0.06);
 }
 
 /* 卡片头部 */
@@ -1325,12 +1317,12 @@ input, textarea { text-align: left; }
 
 /* azjc 风格：一块块数据区域 */
 .data-section {
-  margin-bottom: 14rpx;
-  padding: 14rpx;
+  margin-bottom: 12rpx;
+  padding: 16rpx;
   background: #ffffff;
-  border: 2rpx solid #d7dce3;
-  border-radius: 16rpx;
-  box-shadow: none;
+  border: 1rpx solid #e6ebf2;
+  border-radius: 14rpx;
+  box-shadow: 0 4rpx 12rpx rgba(15, 23, 42, 0.035);
 }
 
 .data-section-head {
@@ -1343,10 +1335,10 @@ input, textarea { text-align: left; }
 .data-section-title {
   margin-bottom: 0;
   font-size: 22rpx;
-  font-weight: 700;
+  font-weight: 800;
   color: #0f172a;
-  padding-left: 10rpx;
-  border-left: 6rpx solid #2f6f95;
+  padding-left: 12rpx;
+  border-left: 6rpx solid #3b82f6;
 }
 
 .data-gps-tag {
@@ -1386,10 +1378,10 @@ input, textarea { text-align: left; }
   align-items: center;
   justify-content: space-between;
   min-height: 72rpx;
-  background: #ffffff;
-  border: 2rpx solid #d9dee6;
+  background: #f8fafc;
+  border: 1rpx solid #dde5ef;
   border-radius: 12rpx;
-  padding: 12rpx 14rpx;
+  padding: 10rpx 14rpx;
   box-sizing: border-box;
   width: 100%;
 }
@@ -1401,30 +1393,36 @@ input, textarea { text-align: left; }
 
 .data-chip-k {
   flex-shrink: 0;
-  margin-right: 12rpx;
-  color: #334155;
+  margin-right: 14rpx;
+  color: #7a8798;
   font-size: 22rpx;
   font-weight: 600;
+  letter-spacing: 0.4rpx;
 }
 
 .data-chip-v {
   flex: 1;
   text-align: right;
-  color: #0f172a;
+  color: #111827;
   font-size: 24rpx;
-  font-weight: 700;
-  line-height: 1.35;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0.2rpx;
   word-break: break-all;
 }
 
 .data-chip-link {
-  color: #0e7490;
-  font-weight: 700;
+  color: #0b72c9;
+  font-weight: 800;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5rpx;
+  text-underline-offset: 4rpx;
 }
 
 .data-chip-muted {
-  color: #475569;
-  font-weight: 600;
+  color: #7b8797;
+  font-weight: 700;
+  font-size: 24rpx;
 }
 
 .data-chip-mono {
@@ -1432,23 +1430,68 @@ input, textarea { text-align: left; }
   font-size: 22rpx;
 }
 
+.visit-detail-list {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.visit-detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 44rpx;
+  border-bottom: 1rpx dashed #dbe4ef;
+}
+
+.visit-detail-item:last-child {
+  border-bottom: none;
+}
+
+.visit-detail-name {
+  color: #334155;
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+.visit-detail-count {
+  color: #0f172a;
+  font-size: 23rpx;
+  font-weight: 800;
+}
+
 .data-chip-map {
-  margin-top: 4rpx;
-  height: 72rpx;
-  line-height: 72rpx;
+  margin-top: 6rpx;
+  height: 76rpx;
+  line-height: 76rpx;
   text-align: center;
   border-radius: 12rpx;
   font-size: 24rpx;
   font-weight: 700;
   color: #fff;
-  background: #2f6f95;
-  border: 2rpx solid #2b678a;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  border: 1rpx solid #1d4ed8;
+}
+
+/* 封禁信息块：提高重点识别度 */
+.data-section:nth-child(2) .data-chip {
+  background: #fff8f8;
+  border-color: #f7d3d3;
+}
+.data-section:nth-child(2) .data-chip-v {
+  color: #c2410c;
 }
 
 .data-chip-map.disabled {
   background: #d5dde4;
   color: #75889b;
   border-color: #c4ced8;
+}
+
+/* 访问统计保持统一字号，仅靠颜色层级提升可读性 */
+.data-section:last-child .data-chip-v {
+  color: #0f172a;
 }
 
 .user-card-actions {
@@ -1586,7 +1629,7 @@ input, textarea { text-align: left; }
   height: 100%;
   background: rgba(0, 0, 0, 0.4); /* 统一背景色，和 shop 页面一样 */
   backdrop-filter: blur(5px);
-  z-index: 9999;
+  z-index: 9150;
   display: flex;
   align-items: center;
   justify-content: center;

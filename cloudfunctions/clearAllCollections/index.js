@@ -90,9 +90,12 @@ exports.main = async (event, context) => {
   const collectionsToClear = [
     'azjc',
     'blocked_logs',
+    'chakan',            // 分享码 / 安装教程观看池
+    'config',            // 案例拍摄指引等配置文档
     'home',
     'login_logbutton',
     'login_logs',
+    'logistics_cache',
     'moto_records_cloud',
     'my_read',
     'ota_connections',
@@ -105,8 +108,16 @@ exports.main = async (event, context) => {
     'shouhou_read',
     'shouhou_repair',
     'shouhouvideo',
+    'shouhouguoqi',
     'sn',
+    'guanliyuanSN',      // 管理员预登记 SN
+    'pending_warranty',  // 待生效延保（绑定/案例相关）
     'system_config',
+    // 可疑人员/风控相关
+    'fenxishuju',
+    'suspicious_user_sessions',
+    'screenshot_risk_queue',
+    'suspicious_review_archive',
     'user_list',
     'valid_users',
     'video',
@@ -122,37 +133,30 @@ exports.main = async (event, context) => {
   // 遍历每个集合，批量删除所有文档
   for (const collectionName of collectionsToClear) {
     try {
-      // 使用云函数的批量删除能力
-      // 先获取所有文档的 _id
-      const res = await db.collection(collectionName)
-        .field({ _id: true })
-        .get();
+      // 循环删除直到集合为空（避免仅删除首批文档）
+      const batchSize = 100;
+      let deletedCount = 0;
+      while (true) {
+        const res = await db.collection(collectionName)
+          .field({ _id: true })
+          .limit(batchSize)
+          .get();
+        const rows = res.data || [];
+        if (rows.length === 0) break;
+        const ids = rows.map(doc => doc._id);
+        const deleteRes = await db.collection(collectionName)
+          .where({ _id: _.in(ids) })
+          .remove();
+        deletedCount += deleteRes.stats.removed || 0;
+        if (rows.length < batchSize) break;
+      }
 
-      if (res.data && res.data.length > 0) {
-        // 分批删除（每次最多删除 500 条）
-        const batchSize = 500;
-        let deletedCount = 0;
-        
-        for (let i = 0; i < res.data.length; i += batchSize) {
-          const batch = res.data.slice(i, i + batchSize);
-          const ids = batch.map(doc => doc._id);
-          
-          // 批量删除
-          const deleteRes = await db.collection(collectionName)
-            .where({
-              _id: _.in(ids)
-            })
-            .remove();
-          
-          deletedCount += deleteRes.stats.removed || 0;
-        }
-
+      if (deletedCount > 0) {
         results.success.push({
           collection: collectionName,
           deleted: deletedCount
         });
         results.totalDeleted += deletedCount;
-        
         console.log(`✅ 清空集合 ${collectionName} 成功，共删除 ${deletedCount} 条数据`);
       } else {
         results.success.push({

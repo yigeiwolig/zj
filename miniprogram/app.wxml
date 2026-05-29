@@ -7,8 +7,9 @@
   <!-- ================= 全局 Loading（自定义白色模糊 + 你的 loader 动画） ================= -->
   <view class="g-loading-mask" wx:if="{{ui.loading.show}}">
     <view class="g-loader">
+      <view class="g-loader-spinner" aria-hidden="true"></view>
       <text class="g-loader-label">{{ui.loading.text}}</text>
-      <view class="g-loading-bar"></view>
+      <view class="g-loading-bar" aria-hidden="true"></view>
     </view>
   </view>
 

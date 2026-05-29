@@ -1,5 +1,5 @@
 <!-- 强制授权弹窗 (蓝牙/定位失败时显示) - 黑白风格 -->
-<view class="custom-modal-mask" wx:if="{{showAuthForceModal}}" catchtouchmove="noop" catchtap="noop">
+<view class="custom-modal-mask {{authForceModalClosing ? 'closing' : ''}}" wx:if="{{showAuthForceModal || authForceModalClosing}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box" catchtouchmove="noop" catchtap="noop">
     <!-- 图标：使用 Unicode 字符，无需加载图片 -->
     <view class="modal-icon-new">📍</view>
@@ -28,8 +28,8 @@
 </view>
 
 <!-- 昵称授权窗口 (改为高级身份验证模式) -->
-<view class="auth-mask" wx:if="{{!isAuthorized && isShowNicknameUI}}" catchtouchmove="noop">
-  <view class="auth-panel-new" catchtouchmove="noop">
+<view class="auth-mask {{nicknameUiClosing ? 'closing' : ''}}" wx:if="{{(!isAuthorized && isShowNicknameUI && !showFirstTimeModal) || nicknameUiClosing}}" catchtouchmove="noop">
+  <view class="auth-panel-new {{nicknameUiClosing ? 'closing' : ''}}" catchtouchmove="noop">
     <view class="auth-icon-lock">✨</view>
     <view class="auth-title-new">开启专属体验</view>
     <view class="auth-subtitle-new">请输入访问口令，解锁更多精彩内容</view>
@@ -61,8 +61,11 @@
         <text class="back-icon">←</text>
         <text class="back-text">返回</text>
       </view>
-      <text class="admin-title">{{adminViewMode === 'nickname' ? '昵称录入' : (adminViewMode === 'suspicious' ? '可疑人员处理' : '封禁管理')}}</text>
-      <view class="header-placeholder"></view>
+      <text class="admin-title">{{adminViewMode === 'nickname' ? '昵称录入' : (adminViewMode === 'suspicious' ? '可疑人员处理' : (adminViewMode === 'suspiciousBanned' ? '可疑手动封禁留存' : (manualBannedMode ? '手动封禁处理' : '封禁管理')) )}}</text>
+      <view wx:if="{{adminViewMode === 'suspicious'}}" class="header-shortcut-btn" catchtap="goToBannedUsersFromHeader">
+        被封禁人员处理
+      </view>
+      <view wx:else class="header-placeholder"></view>
     </view>
 
     <!-- 昵称录入界面 -->
@@ -98,10 +101,19 @@
     </view>
 
     <!-- 封禁用户列表 -->
-    <scroll-view class="admin-user-list" scroll-y wx:if="{{adminViewMode !== 'nickname'}}" enhanced show-scrollbar="{{false}}">
-      <block wx:if="{{adminViewMode === 'banned'}}">
+    <scroll-view
+      class="admin-user-list"
+      scroll-y
+      wx:if="{{adminViewMode !== 'nickname'}}"
+      enhanced
+      show-scrollbar="{{false}}"
+      enable-back-to-top="{{true}}"
+      refresher-enabled="{{true}}"
+      refresher-triggered="{{adminListRefreshing}}"
+      bindrefresherrefresh="onAdminListRefresh">
+      <block wx:if="{{adminViewMode === 'banned' || adminViewMode === 'suspiciousBanned'}}">
       <!-- 截图超限待审核 -->
-      <view class="risk-review-section" wx:if="{{screenshotRiskUsers.length > 0}}">
+      <view class="risk-review-section" wx:if="{{adminViewMode === 'banned' && screenshotRiskUsers.length > 0}}">
         <view class="risk-review-title">截图超限待审核（24小时≥3次）</view>
         <view class="admin-user-cards">
           <view class="admin-user-card risk-review-card" wx:for="{{screenshotRiskUsers}}" wx:key="_id" wx:for-index="ridx">
@@ -143,8 +155,8 @@
       <!-- 空状态 -->
       <view wx:elif="{{bannedUsers.length === 0}}" class="admin-empty">
         <text class="empty-icon">📭</text>
-        <text class="empty-title">暂无封禁用户</text>
-        <text class="empty-desc">违规用户会自动显示在这里</text>
+        <text class="empty-title">{{adminViewMode === 'suspiciousBanned' ? '暂无可疑手动封禁留存' : '暂无封禁用户'}}</text>
+        <text class="empty-desc">{{adminViewMode === 'suspiciousBanned' ? '在可疑人员处理中手动封禁的用户会显示在这里' : '违规用户会自动显示在这里'}}</text>
       </view>
 
       <!-- 用户卡片列表 -->
@@ -250,9 +262,6 @@
             <view class="action-btn unban-btn" catchtap="unbanUser" data-button-id="{{item._id}}" data-index="{{idx}}" data-ban-reason="{{item.banReason}}" data-openid="{{item._openid}}" data-nickname="{{item.nickname}}">
               <text class="action-btn-text">放行</text>
             </view>
-            <view class="action-btn ignore-btn" catchtap="ignoreUser" data-button-id="{{item._id}}" data-index="{{idx}}">
-              <text class="action-btn-text">无视</text>
-            </view>
           </view>
         </view>
       </view>
@@ -265,7 +274,7 @@
         <view wx:elif="{{suspiciousUsers.length === 0}}" class="admin-empty">
           <text class="empty-icon">🕵️</text>
           <text class="empty-title">暂无可疑人员</text>
-          <text class="empty-desc">命中规则：多次进入 或 长时间停留</text>
+          <text class="empty-desc">命中规则：截图行为 / 多次进入（≥3次）/ 长时间停留（>1分钟）</text>
         </view>
         <view wx:else class="admin-user-cards">
           <view class="admin-user-card" wx:for="{{suspiciousUsers}}" wx:key="rowKey" wx:for-index="sidx">
@@ -277,11 +286,11 @@
                   <text class="data-chip-v">{{item.viewerNickname}}</text>
                 </view>
                 <view class="data-chip data-chip-full">
-                  <text class="data-chip-k">安装员</text>
+                  <text class="data-chip-k">来源</text>
                   <text class="data-chip-v">{{item.creatorNickname}}</text>
                 </view>
                 <view class="data-chip data-chip-full">
-                  <text class="data-chip-k">分享码</text>
+                  <text class="data-chip-k">访问类型</text>
                   <text class="data-chip-v">{{item.shareCode}}</text>
                 </view>
                 <view class="data-chip data-chip-full">
@@ -306,13 +315,23 @@
                     <text class="data-chip-v">{{item.totalVideoMinutesText}}分</text>
                   </view>
                   <view class="data-chip">
-                    <text class="data-chip-k">板块点击</text>
+                    <text class="data-chip-k">页面访问</text>
                     <text class="data-chip-v">{{item.sectionClicksTotal}}次</text>
                   </view>
                 </view>
                 <view class="data-chip data-chip-full">
                   <text class="data-chip-k">最近进入</text>
                   <text class="data-chip-v">{{item.lastViewTime}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">页面访问明细</text>
+                  <view wx:if="{{item.pageVisitsDetailList && item.pageVisitsDetailList.length}}" class="visit-detail-list">
+                    <view class="visit-detail-item" wx:for="{{item.pageVisitsDetailList}}" wx:key="pageKey">
+                      <text class="visit-detail-name">{{item.pageName}}</text>
+                      <text class="visit-detail-count">{{item.count}}次</text>
+                    </view>
+                  </view>
+                  <text wx:else class="data-chip-v data-chip-muted">暂无页面访问记录</text>
                 </view>
               </view>
 
@@ -344,6 +363,14 @@
                 </view>
               </view>
             </view>
+            <view class="user-card-actions">
+              <view class="action-btn unban-btn" catchtap="handleSuspiciousDecision" data-action="ignore" data-risk-id="{{item.riskId}}" data-source-type="{{item.sourceType}}" data-viewer-openid="{{item.viewerOpenid}}" data-viewer-nickname="{{item.viewerNickname}}" data-row-key="{{item.rowKey}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}">
+                <text class="action-btn-text">无视</text>
+              </view>
+              <view class="action-btn retry-btn" catchtap="handleSuspiciousDecision" data-action="ban" data-risk-id="{{item.riskId}}" data-source-type="{{item.sourceType}}" data-viewer-openid="{{item.viewerOpenid}}" data-viewer-nickname="{{item.viewerNickname}}" data-row-key="{{item.rowKey}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}">
+                <text class="action-btn-text">封禁</text>
+              </view>
+            </view>
           </view>
         </view>
       </block>
@@ -354,7 +381,7 @@
       <view class="tab-item {{adminViewMode === 'banned' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="banned">
         <text class="tab-text">封禁列表</text>
       </view>
-      <view class="tab-item {{adminViewMode === 'suspicious' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="suspicious">
+      <view class="tab-item {{adminViewMode === 'suspicious' || adminViewMode === 'suspiciousBanned' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="suspicious">
         <text class="tab-text">可疑人员处理</text>
       </view>
       <view class="tab-item {{adminViewMode === 'nickname' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="nickname">
@@ -383,13 +410,18 @@
       <view class="text-track" wx:if="{{step >= 3}}">
         <text class="char char-1">M</text>
         <text class="char char-2">T</text>
-        <text class="char char-3">引</text>
-        <text class="char char-4">领</text>
-        <text class="char char-5">创</text>
-        <text class="char char-6">新</text>
+        <text class="char char-3">用</text>
+        <text class="char char-4">心</text>
+        <text class="char char-5">服</text>
+        <text class="char char-6">务</text>
+        <text class="char char-7">每</text>
+        <text class="char char-8">一</text>
+        <text class="char char-9">位</text>
+        <text class="char char-10">用</text>
+        <text class="char char-11">户</text>
       </view>
       <!-- 按钮 -->
-      <view class="liquid-btn step-{{step}}" bindtap="handleAccess">
+      <view class="liquid-btn {{step >= 1 ? 'expanded-light' : ''}}" bindtap="handleAccess">
         <view class="gear-shape"><view class="teeth"></view><view class="hub"></view></view>
         <view class="highlight-dot"></view>
         <text class="btn-text" wx:if="{{step === 0}}">MT  RIDE</text>
@@ -402,7 +434,7 @@
 </view>
 
 <!-- 【新增】强制授权弹窗 - 黑白风格 -->
-<view class="custom-modal-mask" wx:if="{{showAuthModal}}" catchtouchmove="noop" catchtap="noop">
+<view class="custom-modal-mask {{authModalClosing ? 'closing' : ''}}" wx:if="{{showAuthModal || authModalClosing}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box" catchtouchmove="noop" catchtap="noop">
     <!-- 图标：使用 Unicode 字符，无需加载图片 -->
     <view class="modal-icon-new">📍</view>
@@ -423,8 +455,8 @@
 </view>
 
 <!-- 【全局通用】自定义黑白极简弹窗 - 错误类型 -->
-<view class="custom-modal-mask" wx:if="{{showCustomErrorModal}}" catchtouchmove="noop" catchtap="noop">
-  <view class="custom-modal-box" catchtouchmove="noop" catchtap="noop">
+<view class="custom-modal-mask {{customErrorModalClosing ? 'closing' : ''}}" wx:if="{{showCustomErrorModal || customErrorModalClosing}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="custom-modal-box" catchtouchmove="noop" bindtap="dismissTransientModals">
     
     <!-- 1. 图标：使用 CSS 绘制的圆形图标，无需加载图片 -->
     <view class="modal-icon-new error-icon">
@@ -448,8 +480,8 @@
 </view>
 
 <!-- 【全局通用】自定义黑白极简弹窗 - 成功类型（统一使用 copy-success-modal 样式） -->
-<view class="custom-modal-mask" wx:if="{{showCustomSuccessModal}}" catchtouchmove="noop" catchtap="noop">
-  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
+<view class="custom-modal-mask {{customSuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCustomSuccessModal || customSuccessModalClosing}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" bindtap="dismissTransientModals">
     <!-- 图标：使用 Unicode 字符 -->
     <view class="modal-icon-new success-icon">✓</view>
     <!-- 标题 -->
@@ -458,8 +490,8 @@
 </view>
 
 <!-- 【新增】自定义二次确认弹窗 - 白底黑字 -->
-<view class="custom-modal-mask" wx:if="{{showConfirmModal}}" catchtouchmove="noop" catchtap="noop">
-  <view class="custom-modal-box confirm-modal" catchtouchmove="noop" catchtap="noop">
+<view class="custom-modal-mask {{confirmModalClosing ? 'closing' : ''}}" wx:if="{{showConfirmModal || confirmModalClosing}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="custom-modal-box confirm-modal" catchtouchmove="noop" bindtap="dismissTransientModals">
     <view class="modal-title-new">确认操作</view>
     <view class="modal-content-new">
       <view class="content-main">{{confirmModalContent}}</view>
@@ -472,7 +504,7 @@
 </view>
 
 <!-- 【新增】首次进入提示弹窗（遮罩 + 卡片用 transition，关闭用 closing 关键帧） -->
-<view class="custom-modal-mask first-time-modal-mask {{firstTimeModalEnterReady ? 'first-time-modal-enter-ready' : ''}} {{firstTimeModalClosing ? 'closing' : ''}}" wx:if="{{showFirstTimeModal}}" catchtouchmove="noop" catchtap="closeFirstTimeModal">
+<view class="custom-modal-mask first-time-modal-mask {{firstTimeModalEnterReady ? 'first-time-modal-enter-ready' : ''}} {{firstTimeModalClosing ? 'closing' : ''}}" wx:if="{{showFirstTimeModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box first-time-modal" catchtouchmove="noop" catchtap="noop">
     <!-- 弹窗出现即解码同一张图，复制后再展示区域时不必等首包 -->
     <image class="first-time-qr-preload" src="/images/qrcode.jpg" mode="aspectFit" aria-hidden="true" />
@@ -482,7 +514,7 @@
     
     <!-- 二维码显示区域 -->
     <view class="qr-code-container" wx:if="{{showWechatQRCode}}">
-      <image class="qr-code-image" src="/images/qrcode.jpg" mode="aspectFit" />
+      <image class="qr-code-image {{qrPressing ? 'is-pressing' : ''}}" src="/images/qrcode.jpg" mode="aspectFit" bindtouchstart="onFirstTimeQrTouchStart" bindtouchend="onFirstTimeQrTouchEnd" bindtouchcancel="onFirstTimeQrTouchEnd" bindtap="saveFirstTimeQrcode" />
       <text class="qr-code-tip">扫描二维码添加管理员微信</text>
       <text class="qr-code-wechat">微信号：{{adminWechat}}</text>
     </view>
@@ -490,7 +522,7 @@
     <!-- 按钮区域 -->
     <view class="first-time-btns">
       <view class="first-time-btn primary" bindtap="copyAdminWechat" hover-class="first-time-btn-active" hover-start-time="10" hover-stay-time="70">
-        {{copyWechatBusy ? '复制中...' : (showWechatQRCode ? '已复制微信号' : '复制微信号')}}
+        {{copyWechatBusy ? '复制中...' : '点击复制微信号'}}
       </view>
       <view class="first-time-btn secondary" wx:if="{{showWechatQRCode}}" bindtap="toggleQRCode">
         收起二维码
@@ -500,8 +532,8 @@
 </view>
 
 <!-- 【全局通用】「内容已复制」须叠在所有页面弹窗之上，故放 DOM 后部 + 专用 z-index -->
-<view class="custom-modal-mask copy-success-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
-  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
+<view class="custom-modal-mask copy-success-modal-mask {{copySuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCopySuccessModal || copySuccessModalClosing}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" bindtap="dismissTransientModals">
     <view class="modal-icon-new success-icon">✓</view>
     <view class="modal-title-new">内容已复制</view>
   </view>
@@ -516,8 +548,8 @@
 </view>
 
 <!-- ================= 自定义弹窗（替换 wx.showModal） ================= -->
-<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="closeCustomDialog" catchtouchmove="noop" catchtap="noop">
-  <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop">
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="dismissTransientModals" catchtouchmove="noop">
+  <view class="custom-dialog-box" bindtap="dismissTransientModals" catchtouchmove="noop">
     <view class="cd-title">{{dialog.title}}</view>
     <view class="cd-content">{{dialog.content}}</view>
     <view class="cd-btn-row">
@@ -528,7 +560,7 @@
 </view>
 
 <!-- 定位权限提示弹窗（白底黑字） -->
-<view class="custom-modal-mask {{showLocationPermissionModal ? 'active' : ''}}" wx:if="{{showLocationPermissionModal}}" catchtouchmove="noop" catchtap="noop">
+<view class="custom-modal-mask {{showLocationPermissionModal ? 'active' : ''}} {{locationPermissionModalClosing ? 'closing' : ''}}" wx:if="{{showLocationPermissionModal || locationPermissionModalClosing}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box location-permission-modal" catchtouchmove="noop" catchtap="noop">
     <view class="modal-icon-new">📍</view>
     <view class="modal-title-new">需要定位权限</view>

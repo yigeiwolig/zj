@@ -1,0 +1,504 @@
+<view class="app-container">
+  <!-- 顶部导航 - 分享码用户隐藏返回键 -->
+  <view class="header" wx:if="{{!isVideoFullScreen && !isShareCodeUser}}">
+    <view class="back-icon" catchtap="handleBack" style="top: {{statusBarHeight + 8}}px;">
+      <text class="back-arrow">‹</text>
+    </view>
+  </view>
+  <!-- 顶部标题保持固定 -->
+  <view class="fixed-nav" wx:if="{{!isVideoFullScreen}}">
+    <view class="back-btn" catchtap="handleBack" wx:if="{{!isShareCodeUser}}" style="top: {{statusBarHeight + 8}}px;">
+      <text class="back-icon">‹</text>
+    </view>
+    <view class="brand">
+      <view class="brand-title-row">
+      <text>{{pageTitle}}</text>
+      </view>
+      <!-- 只有白名单用户能看到的切换开关（横向排列避免重叠） -->
+      <view class="brand-admin-actions" wx:if="{{isAuthorized}}">
+        <view
+          class="admin-toggle-btn {{isAdmin ? 'on' : ''}}"
+          catchtap="toggleAdminMode">
+          {{isAdmin ? 'EXIT' : 'EDIT'}}
+        </view>
+        <view
+          class="admin-toggle-btn {{showShareCodeStats ? 'on' : ''}}"
+          catchtap="toggleShareCodeStats">
+          {{showShareCodeStats ? '收起数据' : '查看数据'}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 核心：舞台容器，通过 translate 控制位移 -->
+  <view 
+    wx:if="{{!showShareCodeStats}}"
+    class="stage-wrapper" 
+    style="transform: translateY(-{{stepIndex * winHeight}}px); height: {{winHeight}}px;"
+    bindtouchstart="touchStart"
+    bindtouchend="touchEnd">
+    
+    <!-- STEP 01: 产品选择 (100vh) -->
+    <view class="step-view">
+      <view class="view-content">
+        <!-- 🔴 移除标题 "选择产品型号" -->
+        <view class="card-stack">
+          <view wx:for="{{products}}" wx:key="index" 
+                class="p-card {{pIndex === index ? 'active' : ''}}" 
+                bindtap="selectProduct" data-index="{{index}}">
+            <view class="p-info">
+              <text class="p-name">{{item.name}}</text>
+            </view>
+            <text class="mt-logo">MT</text>
+            <view class="admin-del" wx:if="{{isAdmin}}" catchtap="deleteItem" data-type="products" data-index="{{index}}">×</view>
+            <view class="admin-number" wx:if="{{isAdmin}}" catchtap="setNumber" data-type="products" data-index="{{index}}">
+              <text class="number-text">{{item.number || (index + 1)}}</text>
+            </view>
+          </view>
+          <!-- 管理员添加块 -->
+          <view class="add-card-btn" wx:if="{{isAdmin}}" bindtap="addItem" data-type="products">+ 添加型号</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- STEP 02: 车型选择 (100vh) -->
+    <view class="step-view">
+      <view class="view-content">
+        <!-- 🔴 移除标题 "确认安装车型" -->
+        <view class="type-stack">
+          <view 
+            wx:for="{{types}}" wx:key="index"
+            class="t-card {{tIndex === index ? 'active' : ''}}"
+            bindtap="selectType" data-index="{{index}}">
+            
+            <!-- 只有标题，不放任何副标题或编号 -->
+            <text class="t-name">{{item.name || item}}</text>
+
+            <!-- 纯粹的品牌水印 -->
+            <text class="mt-logo">MT</text>
+            <view class="admin-del" wx:if="{{isAdmin}}" catchtap="deleteItem" data-type="types" data-index="{{index}}">×</view>
+            <view class="admin-number" wx:if="{{isAdmin}}" catchtap="setNumber" data-type="types" data-index="{{index}}">
+              <text class="number-text">{{item.number || (index + 1)}}</text>
+            </view>
+          </view>
+          <view class="add-card-btn" wx:if="{{isAdmin}}" bindtap="addItem" data-type="types">+ 添加车型分类</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- STEP 03: 教程详情 (100vh，内部可局部滚动) -->
+    <view class="step-view" id="step3">
+      <view class="view-content" style="padding-bottom: 0;">
+        <view class="mode-switch">
+          <view class="m-btn {{mode === 'v' ? 'active' : ''}}" bindtap="switchMode" data-mode="v">分段视频</view>
+          <view class="m-btn {{mode === 'g' ? 'active' : ''}}" bindtap="switchMode" data-mode="g">图文详情</view>
+        </view>
+        <!-- 管理员模式工具栏 -->
+        <view class="admin-tools-row" wx:if="{{isAdmin}}">
+          <view class="show-all-switch" bindtap="toggleShowAll">
+            <text class="show-all-text">{{showAll ? '✓ 显示全部' : '显示全部'}}</text>
+          </view>
+          <view class="show-all-switch" bindtap="toggleShareCodeStats">
+            <text class="show-all-text">{{showShareCodeStats ? '返回教程' : '查看数据'}}</text>
+          </view>
+        </view>
+
+        <!-- 第三级页面内部滚动，防止教程太长 -->
+        <!-- 与 shouhou content-scroll 一致：用 view 滚动，避免 scroll-view 裁切 box-shadow -->
+        <view
+  wx:if="{{!(isAdmin && showShareCodeStats)}}"
+  id="tutorialScroll"
+  class="tutorial-scroll">
+          <!-- 视频模式 -->
+          <view class="tutorial-body" wx:if="{{mode === 'v'}}">
+            <view
+              class="v-card v-card--chapter video-card video-card--tutorial-chapter {{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'dragging' : ''}}"
+              wx:for="{{filteredChapters}}"
+              wx:key="_id"
+              style="{{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
+              bindtouchstart="{{isAdmin ? 'onDragStart' : ''}}"
+              catchtouchmove="{{isAdmin && isDragging ? 'onDragMove' : ''}}"
+              bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
+              bindtouchcancel="{{isAdmin ? 'onDragEnd' : ''}}"
+              catchtouchstart="onVideoTouchStart"
+              catchtouchend="onVideoTouchEnd"
+              data-index="{{index}}"
+              data-type="chapters"
+              id="video-card-{{index}}">
+              <!-- 列表内嵌视频：原生 controls + 居中播放；全屏入口在下方白区（与 shouhou 一致） -->
+              <view class="v-chapter-cover-wrap" wx:if="{{item.url}}">
+                <view class="v-chapter-cover-tap">
+                  <video
+                    id="azjc-inline-{{index}}"
+                    class="v-chapter-inline-video"
+                    src="{{item.url}}"
+                    poster="{{item.coverUrl || ''}}"
+                    data-index="{{index}}"
+                    mark:listIdx="{{index}}"
+                    object-fit="contain"
+                    show-fullscreen-btn="{{false}}"
+                    show-center-play-btn="{{true}}"
+                    show-casting-button="{{false}}"
+                    show-background-playback-button="{{false}}"
+                    picture-in-picture-mode=""
+                    controls="{{true}}"
+                    enable-play-gesture="{{true}}"
+                    muted="{{false}}"
+                    bindloadedmetadata="onChapterInlineLoadedMeta"
+                    bindtimeupdate="onChapterInlineTimeUpdate"
+                    bindplay="onChapterInlinePlay"
+                    bindpause="onChapterInlinePause"
+                    bindended="onChapterInlineEnded"
+                  ></video>
+                </view>
+              </view>
+              <view class="v-player" wx:else>
+                <text style="color:#666">视频待上传</text>
+              </view>
+              <view class="v-info">
+                <view class="v-info-head">
+                  <text class="v-title">{{item.title || '安装阶段说明及注意事项'}}</text>
+                  <view class="v-mt-brand">
+                    <text class="v-mt-m">M</text>
+                    <view class="v-mt-t-block">
+                      <text class="v-mt-t">T</text>
+                      <view class="v-mt-mark"></view>
+                    </view>
+                  </view>
+                </view>
+                <view class="azjc-chapter-meta-row">
+                  <text class="azjc-chapter-hint-in-card">双击屏幕暂停播放视频</text>
+                  <view class="azjc-chapter-card-actions">
+                    <view class="azjc-chapter-action-cell azjc-chapter-action-cell--primary" catchtap="openFullScreenVideo" data-index="{{index}}" mark:listIdx="{{index}}">
+                      <text class="azjc-chapter-action-text">全屏播放</text>
+                    </view>
+                  </view>
+                </view>
+                <view class="admin-actions" wx:if="{{isAdmin}}">
+                  <view class="admin-edit-btn" bindtap="editItem" data-type="chapters" data-index="{{index}}">编辑</view>
+                  <view class="admin-edit-btn" catchtap="uploadChapterVideo" data-index="{{index}}" mark:listIdx="{{index}}">上传视频</view>
+                  <view class="admin-del-btn" bindtap="deleteItem" data-type="chapters" data-index="{{index}}">删除</view>
+                  <view class="admin-match-code">
+                    <text class="match-code-text">{{item.matchCode || '未设置'}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+            
+            <!-- 视频模式下添加按钮 -->
+            <view class="add-card-btn" wx:if="{{isAdmin && mode === 'v'}}" bindtap="uploadMedia" data-type="video">+ 添加视频章节</view>
+          </view>
+          <!-- 图文模式 -->
+          <view class="tutorial-body" wx:else>
+            <view
+              class="g-article g-article--tutorial {{isAdmin && isDragging && dragIndex === index && dragType === 'graphics' ? 'dragging' : ''}}"
+              wx:for="{{filteredGraphics}}"
+              wx:key="_id"
+              style="{{isAdmin && isDragging && dragIndex === index && dragType === 'graphics' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
+              bindtouchstart="{{isAdmin ? 'onDragStart' : 'onGraphicTap'}}"
+              catchtouchmove="{{isAdmin && isDragging ? 'onDragMove' : ''}}"
+              bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
+              bindtouchcancel="{{isAdmin ? 'onDragEnd' : ''}}"
+              data-index="{{index}}"
+              data-type="graphics">
+              <view class="g-media" wx:if="{{item.img || item.previewLocal}}">
+                <image
+                  class="g-media-real"
+                  src="{{item.previewLocal || item.img}}"
+                  mode="widthFix"
+                  lazy-load="{{false}}"
+                  show-menu-by-longpress="{{false}}"
+                  bindload="onAzjcGraphicImageLoad"
+                  binderror="onAzjcGraphicImageError"
+                  data-index="{{index}}"
+                ></image>
+              </view>
+              <view class="g-media g-media-placeholder" wx:else></view>
+              <view class="g-info">
+                <text class="g-title">{{item.title || '安装流程图解 0' + (index+1)}}</text>
+                <text class="g-desc" wx:if="{{item.desc && item.desc !== '点击编辑详细描述'}}">{{item.desc}}</text>
+                <view class="admin-actions" wx:if="{{isAdmin}}">
+                  <view class="admin-edit-btn" bindtap="editItem" data-type="graphics" data-index="{{index}}">编辑</view>
+                  <view class="admin-del-btn" bindtap="deleteItem" data-type="graphics" data-index="{{index}}">删除</view>
+                  <view class="admin-match-code">
+                    <text class="match-code-text">{{item.matchCode || '未设置'}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+            
+            <!-- 图文模式下添加按钮 -->
+            <view class="add-card-btn" wx:if="{{isAdmin && mode === 'g'}}" bindtap="uploadMedia" data-type="image">+ 添加图文步骤</view>
+          </view>
+          <view style="height: 100rpx;"></view>
+        </view>
+      </view>
+    </view>
+
+  </view>
+
+
+  <!-- 匹配码选择弹窗 -->
+  <view class="match-code-modal {{matchCodePickerClosing ? 'closing' : ''}}" wx:if="{{showMatchCodePicker}}" catchtouchmove="noop">
+    <view class="match-code-overlay" catchtap="hideMatchCodePicker"></view>
+    <view class="match-code-content">
+      <view class="match-code-header">
+        <text class="match-code-title">选择匹配码</text>
+        <text class="match-code-close" catchtap="hideMatchCodePicker">×</text>
+      </view>
+      <view class="match-code-body">
+        <view class="picker-group">
+          <text class="picker-label">产品号码：</text>
+          <picker mode="selector" range="{{availableProducts}}" range-key="name" value="{{matchCodeProductIndex}}" bindchange="onProductNumChange">
+            <view class="picker-display">{{currentProductName}} ({{matchCodeProductNum}})</view>
+          </picker>
+        </view>
+        <view class="picker-group">
+          <text class="picker-label">车型号码：</text>
+          <picker mode="selector" range="{{availableTypes}}" range-key="name" value="{{matchCodeTypeIndex}}" bindchange="onTypeNumChange">
+            <view class="picker-display">{{currentTypeName}} ({{matchCodeTypeNum}})</view>
+          </picker>
+        </view>
+        <view class="match-code-preview">
+          <text>匹配码：{{matchCodeProductNum}}+{{matchCodeTypeNum}}</text>
+        </view>
+      </view>
+      <view class="match-code-footer">
+        <view class="match-code-btn cancel" catchtap="hideMatchCodePicker">取消</view>
+        <view class="match-code-btn confirm" catchtap="confirmMatchCode">确认</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 编辑弹窗 -->
+  <view class="edit-modal {{editModalClosing ? 'closing' : ''}}" wx:if="{{showEditModal}}" catchtouchmove="noop">
+    <view class="edit-overlay" catchtap="hideEditModal"></view>
+    <view class="edit-content">
+      <view class="edit-header">
+        <text class="edit-title">编辑内容</text>
+        <text class="edit-close" catchtap="hideEditModal">×</text>
+      </view>
+      <view class="edit-body">
+        <view class="edit-item">
+          <text class="edit-label">标题：</text>
+          <text class="edit-value">{{editItemData.title || ''}}</text>
+        </view>
+        <view class="edit-item">
+          <text class="edit-label">匹配码：</text>
+          <text class="edit-value">{{editItemData.matchCode || '未设置'}}</text>
+        </view>
+      </view>
+      <view class="edit-footer">
+        <view class="edit-btn" wx:if="{{editItemType === 'graphics'}}" bindtap="replaceGraphicImage">更换配图</view>
+        <view class="edit-btn" bindtap="saveEdit">编辑标题</view>
+        <view class="edit-btn" bindtap="editMatchCode">编辑匹配码</view>
+        <view class="edit-btn cancel" catchtap="hideEditModal">取消</view>
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- 管理员数据查看页（页面显示，不是弹窗） -->
+<view class="stats-page" wx:if="{{isAuthorized && showShareCodeStats}}">
+  <view class="stats-page-inner">
+    <view class="stats-header">
+      <text class="stats-title">分享码用户</text>
+      <text class="stats-subtitle">一人一卡 · 清晰数据块 · 仅管理员</text>
+    </view>
+    <view class="stats-search-wrap">
+      <input
+        class="stats-search-input"
+        placeholder="搜分享码或「普通安装」"
+        value="{{statsSearchKeyword}}"
+        bindinput="onStatsSearchInput"
+        confirm-type="search"
+      />
+    </view>
+    <view class="stats-loading" wx:if="{{loadingShareCodeStats}}">加载中...</view>
+    <scroll-view wx:elif="{{shareCodeStatsDisplayRows.length > 0}}" scroll-y class="stats-list" scroll-top="{{statsScrollTop}}" enable-flex="{{true}}">
+      <view class="user-stat-card" wx:for="{{shareCodeStatsDisplayRows}}" wx:key="rowKey">
+        <!-- 顶部：人员信息 -->
+        <view class="user-stat-people">
+          <view class="user-stat-person">
+            <view class="user-stat-role">访客</view>
+            <view class="user-stat-name">{{item.viewerNickname}}</view>
+          </view>
+          <view class="user-stat-divider"></view>
+          <view class="user-stat-person">
+            <view class="user-stat-role user-stat-role--installer">安装方</view>
+            <view class="user-stat-code">{{item.shareCode || '—'}}</view>
+            <view class="user-stat-installer-name">安装员：{{item.creatorNickname}}</view>
+          </view>
+        </view>
+
+        <!-- 底部：数据块 (按钮样式) -->
+        <view class="user-stat-data">
+          <!-- 4个小数据块 -->
+          <view class="user-stat-grid">
+            <view class="user-stat-btn">
+              <text class="user-stat-btn-k">进入</text>
+              <text class="user-stat-btn-v">{{item.enterCount}}次</text>
+            </view>
+            <view class="user-stat-btn">
+              <text class="user-stat-btn-k">停留</text>
+              <text class="user-stat-btn-v">{{item.totalStayMinutesText}}分</text>
+            </view>
+            <view class="user-stat-btn">
+              <text class="user-stat-btn-k">视频</text>
+              <text class="user-stat-btn-v">{{item.totalVideoMinutesText}}分</text>
+            </view>
+            <view class="user-stat-btn">
+              <text class="user-stat-btn-k">点击</text>
+              <text class="user-stat-btn-v">{{item.sectionClicksTotal}}次</text>
+            </view>
+          </view>
+
+          <!-- 整行的数据块 -->
+          <view class="user-stat-btn user-stat-btn--full">
+            <text class="user-stat-btn-k">最近进入</text>
+            <text class="user-stat-btn-v">{{item.lastViewTime}}</text>
+          </view>
+          <view class="user-stat-btn user-stat-btn--full">
+            <text class="user-stat-btn-k">地区</text>
+            <text class="user-stat-btn-v">{{item.regionText}}</text>
+          </view>
+          <view class="user-stat-btn user-stat-btn--full">
+            <text class="user-stat-btn-k">地址</text>
+            <text class="user-stat-btn-v">{{item.addressDisplay}}</text>
+          </view>
+          <view class="user-stat-btn user-stat-btn--full">
+            <text class="user-stat-btn-k">坐标</text>
+            <text class="user-stat-btn-v">{{item.geoText}}</text>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+    <view class="stats-empty" wx:else>暂无访问数据</view>
+    <view class="modal-btn-new btn-black stats-close-btn" bindtap="toggleShareCodeStats">返回教程</view>
+  </view>
+</view>
+
+<!-- 🔴 全屏视频遮罩层：覆盖在整个页面上，不改变 stepIndex -->
+<view class="fullscreen-video-mask {{isVideoFullScreen ? 'active' : ''}} {{fullScreenVideoMaskClosing ? 'closing' : ''}}" wx:if="{{isVideoFullScreen}}" catchtouchmove="noop" catchtap="noop">
+  <view class="fullscreen-video-container {{fullScreenVideoTransform}}" style="{{fullScreenVideoInitialStyle}}" catchtouchmove="noop">
+    <!-- 全屏时：播放态控件仍为 video 子级 cover-view；竖屏门闸为容器内普通 view（同层叠在 video 上） -->
+    <video 
+      class="fullscreen-video-player" 
+      src="{{fullScreenVideoUrl}}" 
+      preload="metadata"
+      wx:if="{{fullScreenVideoUrl}}"
+      controls="{{true}}"
+      show-play-btn="{{true}}"
+      show-center-play-btn="{{false}}"
+      show-mute-btn="{{true}}"
+      show-progress="{{true}}"
+      show-fullscreen-btn="{{false}}"
+      enable-play-gesture="{{false}}"
+      vslide-gesture="{{false}}"
+      vslide-gesture-in-fullscreen="{{false}}"
+      object-fit="contain"
+      paused="{{fullScreenVideoPaused}}"
+      bindplay="onFullScreenNativePlay"
+      bindpause="onFullScreenNativePause"
+      bindtimeupdate="onFullScreenVideoTimeUpdate"
+      bindloadedmetadata="onFullScreenVideoLoadedMetadata"
+      binderror="onFullScreenVideoError"
+      id="fullscreen-video-player"
+    >
+      <cover-view wx:if="{{fullScreenLandscapeOk}}" class="azjc-close-video-btn" style="{{fullScreenCloseCoverStyle}}" catchtap="closeFullScreenVideo">×</cover-view>
+      <!-- 透明点击层：单击切换播放/暂停（仅横屏时生效，底部留空给进度条） -->
+      <cover-view wx:if="{{fullScreenLandscapeOk}}" class="azjc-fs-video-tap-layer" catchtap="onFullScreenCoverTap"></cover-view>
+    </video>
+    <!-- MT 自定义暂停键（横屏且暂停时显示，竖屏提示出现时隐藏） -->
+    <view class="azjc-fs-center-play-wrap" wx:if="{{fullScreenVideoPaused && fullScreenLandscapeOk && !fullScreenExitPortraitHint && fullScreenRotateHintDismissed}}" catchtap="onFullScreenCoverTap">
+      <view class="center-play-triangle">
+        <text class="mt-logo-text">MT</text>
+      </view>
+    </view>
+    <!-- 竖握退出示意：WebView 层，手机从横屏姿态转到竖屏（video 内 cover-view 旋转动画常不生效） -->
+    <view
+      wx:if="{{fullScreenExitPortraitHint}}"
+      class="fs-portrait-exit-web-root"
+      catchtouchmove="noop"
+      catchtap="noop"
+    >
+      <view class="fs-portrait-exit-card" catchtap="noop">
+        <view class="fs-portrait-exit-phone-stage">
+          <view class="fs-portrait-exit-phone"></view>
+        </view>
+        <view class="fs-portrait-exit-title">请竖握手机</view>
+        <view class="fs-portrait-exit-desc">即将返回教程</view>
+        <view class="fs-portrait-exit-skip" catchtap="closeFullScreenVideo">跳过</view>
+      </view>
+    </view>
+    <!-- 竖屏门闸：与 video 同层叠在上方（普通 view 支持 CSS 旋转动画；video 内 cover-view 动画常失效） -->
+    <view
+      wx:if="{{!fullScreenLandscapeOk && !fullScreenRotateHintDismissed}}"
+      class="fs-landscape-gate-web-root"
+      catchtouchmove="noop"
+      catchtap="noop"
+    >
+      <view class="fs-landscape-gate-close" catchtap="closeFullScreenVideo">×</view>
+      <view class="fs-landscape-gate-card" catchtap="noop">
+        <view class="fs-landscape-gate-body">
+          <view class="fs-landscape-gate-stage">
+            <view class="fs-landscape-gate-phone-wrap">
+              <view class="fs-landscape-gate-phone-stage">
+                <view class="fs-landscape-gate-phone-dial"></view>
+              </view>
+            </view>
+            <view class="fs-landscape-gate-title">请横屏观看</view>
+            <view class="fs-landscape-gate-desc-block">
+              <view class="fs-landscape-gate-desc-line">竖屏窗口下暂不播放。</view>
+              <view class="fs-landscape-gate-desc-line">请将手机横握。</view>
+              <view class="fs-landscape-gate-desc-line">横屏后会尽量接着播放。</view>
+            </view>
+            <view class="fs-landscape-gate-lock-tip">
+              <view class="fs-landscape-gate-lock-tip-badge">重点提示</view>
+              <view class="fs-landscape-gate-desc-line fs-landscape-gate-desc-line--sub">若无法横屏，请从屏幕边缘下滑打开控制中心，</view>
+              <view class="fs-landscape-gate-desc-line fs-landscape-gate-desc-line--sub fs-landscape-gate-lock-tip-strong">先关闭「竖排锁定」后再横握手机。</view>
+            </view>
+          </view>
+        </view>
+        <view class="fs-landscape-gate-footer">
+          <view class="fs-landscape-gate-portrait-primary" catchtap="onAllowPortraitPlayback">竖屏播放（画面较小）</view>
+          <view class="fs-landscape-gate-exit" catchtap="closeFullScreenVideo">退出全屏</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- 自定义加载动画 -->
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
+  <view class="loader" catchtouchmove="noop" catchtap="noop">
+    <text class="loader-label">请稍候...</text>
+    <view class="loading-bar"></view>
+  </view>
+</view>
+
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />
+
+<!-- 自定义分享码剩余次数弹窗 -->
+<view class="custom-modal-mask {{showShareCodeModal ? 'active' : ''}}" wx:if="{{showShareCodeModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box share-code-modal" catchtouchmove="noop" catchtap="noop">
+    
+    <block wx:if="{{shareCodeExhausted}}">
+      <view class="modal-icon-warn">⚠️</view>
+      <view class="modal-title-large">次数已用完</view>
+      <view class="modal-desc">您已无法继续查看安装教程</view>
+      <view class="modal-sub-desc">如需帮助，请联系管理员</view>
+    </block>
+    
+    <block wx:else>
+      <view class="modal-header-label">剩余查看次数</view>
+      <view class="modal-big-number">{{shareCodeRemaining}}</view>
+      <view class="modal-footer-label">总计 {{shareCodeTotal}} 次机会</view>
+    </block>
+
+    <view class="modal-btn-new {{shareCodeExhausted ? 'btn-red' : 'btn-black'}}" bindtap="closeShareCodeModal">
+      我知道了
+    </view>
+  </view>
+</view>

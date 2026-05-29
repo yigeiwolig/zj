@@ -59,14 +59,14 @@ exports.main = async (event, context) => {
       .limit(1)
       .get();
     
-    // 🔴 检查 valid_users 白名单中是否有该昵称对应的记录且 bypassLocationCheck 为 true
-    const validUsersBypassPromise = nickName ? db.collection('valid_users')
-      .where({ 
-        nickname: nickName,
+    // 以 openid 为主键检查 valid_users 白名单放行，昵称仅作为兜底兼容
+    const validUsersBypassPromise = db.collection('valid_users')
+      .where({
+        _openid: openid,
         bypassLocationCheck: true
       })
       .limit(1)
-      .get() : Promise.resolve({ data: [] });
+      .get();
 
     const [blockedLogRecord, userRecord, buttonRecordRes, validUsersBypassRes] =
       await Promise.all([blockedLogPromise, userPromise, buttonPromise, validUsersBypassPromise]);
@@ -83,10 +83,10 @@ exports.main = async (event, context) => {
       historyIsAllowed = blockedLogRecord.data[0].isAllowed; 
     }
 
-    // 🔴 1.5. 检查 valid_users 白名单中是否有该昵称对应的记录且 bypassLocationCheck 为 true（白名单放行）
+    // 1.5. 检查 valid_users 白名单放行（openid 主键）
     if (validUsersBypassRes.data && validUsersBypassRes.data.length > 0) {
       bypassLocationCheck = true;
-      console.log('[accessControl] ✅ 检测到白名单放行（valid_users 中昵称匹配且放行开关已开启）:', nickName);
+      console.log('[accessControl] ✅ 检测到白名单放行（valid_users openid 匹配）:', openid);
     }
 
     // 2. 🔴 核心：从 login_logbutton 检查所有封禁状态

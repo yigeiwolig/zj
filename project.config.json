@@ -1,7 +1,10 @@
 {
   "compileType": "miniprogram",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "suffix", "value": ".backup" },
+      { "type": "suffix", "value": ".map" }
+    ],
     "include": []
   },
   "miniprogramRoot": "miniprogram/",
@@ -28,7 +31,8 @@
     "minifyWXSS": true,
     "postcss": true,
     "uglifyFileName": false,
-    "condition": false
+    "condition": false,
+    "bigPackageSizeSupport": true
   },
   "cloudfunctionTemplateRoot": "cloudfunctionTemplate/",
   "cloudfunctionRoot": "cloudfunctions/",

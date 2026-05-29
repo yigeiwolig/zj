@@ -1,6 +1,7 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
+const _ = db.command;
 
 async function assertAdmin() {
   const { OPENID } = cloud.getWXContext();
@@ -48,12 +49,12 @@ exports.main = async (event, context) => {
         const buttonData = buttonRes.data;
         const nickname = buttonData?.nickname;
 
-        if (nickname) {
+        if (openid || nickname) {
           // 1. 更新 valid_users 白名单中的 bypassLocationCheck
           try {
-            const validUsersRes = await db.collection('valid_users')
-              .where({ nickname: nickname })
-              .get();
+            const validUsersRes = openid
+              ? await db.collection('valid_users').where({ _openid: openid }).get()
+              : await db.collection('valid_users').where({ nickname: nickname }).get();
             
             if (validUsersRes.data && validUsersRes.data.length > 0) {
               const updateValidPromises = validUsersRes.data.map(valid => 
@@ -72,18 +73,16 @@ exports.main = async (event, context) => {
           }
 
           // 2. 更新 user_list 中所有匹配该 openid 或 nickname 的记录
-          if (openid) {
+          if (openid || nickname) {
+            const orList = [];
+            if (openid) orList.push({ _openid: openid });
+            if (nickname) orList.push({ nickName: nickname });
             const userListRes = await db.collection('user_list')
-              .where({
-                $or: [
-                  { _openid: openid },
-                  { nickName: nickname }
-                ]
-              })
+              .where(_.or(orList))
               .get();
-            
+
             if (userListRes.data && userListRes.data.length > 0) {
-              const updateUserPromises = userListRes.data.map(user => 
+              const updateUserPromises = userListRes.data.map(user =>
                 db.collection('user_list').doc(user._id).update({
                   data: {
                     bypassLocationCheck: true,

@@ -135,13 +135,17 @@ async function hydrateSeriesAndAccessoriesTogether(decoratedSeriesList, accessor
   };
 }
 
-/** 与 shop 页 topMedia 读取逻辑一致：补 type、读轮播开关 */
+/** 与 shop 页 topMedia 读取逻辑一致：补 type、读轮播开关（支持 shopMain.topMediaList 与旧 topMedia.list） */
 function fixTopMediaListFromDoc(docData) {
-  if (!docData || !Array.isArray(docData.list)) {
+  if (!docData) {
     return { list: [], autoCarouselEnabled: false };
   }
+  const raw = docData.topMediaList || docData.list;
+  if (!Array.isArray(raw)) {
+    return { list: [], autoCarouselEnabled: docData.autoCarouselEnabled === true };
+  }
   const autoCarouselEnabled = docData.autoCarouselEnabled === true;
-  const list = (docData.list || []).map(item => {
+  const list = raw.map(item => {
     if (item.type) return item;
     const url = (item.url || '').toLowerCase();
     const isVideo =
@@ -157,26 +161,68 @@ function fixTopMediaListFromDoc(docData) {
   return { list, autoCarouselEnabled };
 }
 
-async function resolveTopMediaRenderUrls(list) {
-  const safeList = Array.isArray(list) ? list : [];
-  const cloudFileIds = [];
-  safeList.forEach(item => {
+function collectTopMediaCloudFileIds(list) {
+  const ids = [];
+  (list || []).forEach(item => {
     if (!item || typeof item.url !== 'string' || item.url.indexOf('cloud://') !== 0) return;
-    cloudFileIds.push(item.url);
+    if (!item.renderUrl) ids.push(item.url);
   });
-  const uniqueFileIds = [...new Set(cloudFileIds)];
-  if (uniqueFileIds.length === 0) {
-    return safeList.map(item => (item ? { ...item, renderUrl: item.url } : item));
-  }
-  const tempUrlMap = await batchResolveCloudFileIds(uniqueFileIds);
-  return safeList.map(item => {
+  return ids;
+}
+
+function topMediaNeedsCloudResolve(list) {
+  return collectTopMediaCloudFileIds(list).length > 0;
+}
+
+/** 与 shop.setTopMediaListForRender 一致：图片先缩略图后高清，视频用解析后的直链 */
+function buildTopMediaRenderList(safeList, tempUrlMap, buildLowQualityUrl) {
+  const toLow = typeof buildLowQualityUrl === 'function' ? buildLowQualityUrl : u => u;
+  const map = tempUrlMap || {};
+  return (safeList || []).map(item => {
     if (!item) return item;
-    const mapped = tempUrlMap[item.url];
-    if (mapped && typeof item.url === 'string' && item.url.indexOf('cloud://') === 0) {
-      return { ...item, renderUrl: mapped };
+    const resolveRaw = () => {
+      const mapped = map[item.url];
+      if (mapped && typeof item.url === 'string' && item.url.indexOf('cloud://') === 0) return mapped;
+      return item.renderUrl || item.url;
+    };
+    const raw = resolveRaw();
+    if (item.type === 'image') {
+      const thumb = toLow(raw);
+      return {
+        ...item,
+        renderUrl: thumb,
+        renderThumb: thumb,
+        renderFull: raw,
+        dualRender: thumb !== raw
+      };
     }
-    return { ...item, renderUrl: item.url };
+    return { ...item, renderUrl: raw, renderThumb: '', renderFull: '', dualRender: false };
   });
+}
+
+async function resolveTopMediaRenderUrls(list, buildLowQualityUrl) {
+  const safeList = Array.isArray(list) ? list : [];
+  if (!topMediaNeedsCloudResolve(safeList)) {
+    return buildTopMediaRenderList(safeList, {}, buildLowQualityUrl);
+  }
+  const tempUrlMap = await batchResolveCloudFileIds(collectTopMediaCloudFileIds(safeList));
+  return buildTopMediaRenderList(safeList, tempUrlMap, buildLowQualityUrl);
+}
+
+/**
+ * 顶部轮播 + 产品/配件：合并一次 getTempFileURL，避免视频比卡片晚几秒才出现。
+ */
+async function hydrateShopFirstScreenTogether(rawTopList, decoratedSeriesList, accessoryCleanList, buildLowQualityUrl) {
+  const topIds = collectTopMediaCloudFileIds(rawTopList);
+  const seriesIds = collectSeriesCloudFileIdsFromList(decoratedSeriesList);
+  const accIds = collectAccessoryCloudFileIdsFromList(accessoryCleanList);
+  const allIds = [...new Set([...topIds, ...seriesIds, ...accIds])];
+  const map = allIds.length ? await batchResolveCloudFileIds(allIds) : {};
+  return {
+    topRender: buildTopMediaRenderList(rawTopList, map, buildLowQualityUrl),
+    series: applySeriesCloudUrlMap(decoratedSeriesList, map),
+    accessories: applyAccessoryCloudUrlMap(accessoryCleanList, map)
+  };
 }
 
 /** 若每条 cloud:// 已有对应 *Display，则无需再 getTempFileURL */
@@ -233,8 +279,13 @@ function collectShopWarmImageUrls(topMediaList, seriesList, accessoryList, limit
   };
 
   (topMediaList || []).slice(0, lim.top).forEach(item => {
-    if (item && item.type === 'image') {
-      push(item.renderUrl || item.url);
+    if (!item) return;
+    if (item.type === 'image') {
+      push(item.renderUrl || item.renderThumb || item.url);
+    } else if (item.type === 'video') {
+      const v = item.renderUrl || item.url;
+      if (v && v.indexOf('cloud://') !== 0) push(v);
+      if (item.poster) push(item.poster);
     }
   });
   (seriesList || []).slice(0, lim.seriesCovers).forEach(s => {
@@ -282,7 +333,13 @@ module.exports = {
   normalizeSeriesListFromDb,
   decorateSeriesImageFields,
   hydrateSeriesAndAccessoriesTogether,
+  hydrateShopFirstScreenTogether,
   fixTopMediaListFromDoc,
+  collectTopMediaCloudFileIds,
+  collectSeriesCloudFileIdsFromList,
+  collectAccessoryCloudFileIdsFromList,
+  topMediaNeedsCloudResolve,
+  buildTopMediaRenderList,
   resolveTopMediaRenderUrls,
   listsHaveCompleteCloudDisplays,
   collectShopWarmImageUrls,

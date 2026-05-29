@@ -9,6 +9,131 @@ const qqmapsdk = new QQMapWX({
   key: 'CFDBZ-B6K6N-B3EFF-SPDJ2-Y2MRZ-7UBH2'
 });
 
+/** 直辖市省级名称（省市区联动：省=直辖市全称，中间「市」留空） */
+const MUNICIPALITY_PROVINCES = ['北京市', '上海市', '天津市', '重庆市'];
+
+/** 直辖市标准区县名（用于从粘贴文本反查纠偏） */
+const MUNICIPALITY_DISTRICTS = {
+  '北京市': ['东城区', '西城区', '朝阳区', '海淀区', '丰台区', '石景山区', '通州区', '顺义区', '昌平区', '大兴区', '房山区', '门头沟区', '怀柔区', '平谷区', '密云区', '延庆区'],
+  '上海市': ['黄浦区', '徐汇区', '长宁区', '静安区', '普陀区', '虹口区', '杨浦区', '浦东新区', '闵行区', '宝山区', '嘉定区', '金山区', '松江区', '青浦区', '奉贤区', '崇明区'],
+  '天津市': ['和平区', '河东区', '河西区', '南开区', '河北区', '红桥区', '东丽区', '西青区', '津南区', '北辰区', '武清区', '宝坻区', '滨海新区', '宁河区', '静海区', '蓟州区'],
+  '重庆市': ['渝中区', '江北区', '南岸区', '沙坪坝区', '九龙坡区', '大渡口区', '北碚区', '渝北区', '巴南区', '两江新区', '涪陵区', '万州区', '黔江区', '长寿区', '江津区', '合川区']
+};
+
+/** 常见地级市 → 省级（含直辖市：市名→自身） */
+const CITY_TO_PROVINCE_MAP = {
+  '东莞市': '广东省', '深圳市': '广东省', '广州市': '广东省', '佛山市': '广东省', '中山市': '广东省',
+  '珠海市': '广东省', '惠州市': '广东省', '江门市': '广东省', '肇庆市': '广东省', '汕头市': '广东省',
+  '潮州市': '广东省', '揭阳市': '广东省', '汕尾市': '广东省', '湛江市': '广东省', '茂名市': '广东省',
+  '阳江市': '广东省', '韶关市': '广东省', '清远市': '广东省', '云浮市': '广东省', '梅州市': '广东省',
+  '河源市': '广东省', '北京市': '北京市', '上海市': '上海市', '天津市': '天津市', '重庆市': '重庆市',
+  '杭州市': '浙江省', '宁波市': '浙江省', '温州市': '浙江省', '嘉兴市': '浙江省', '湖州市': '浙江省',
+  '绍兴市': '浙江省', '金华市': '浙江省', '衢州市': '浙江省', '舟山市': '浙江省', '台州市': '浙江省',
+  '丽水市': '浙江省', '南京市': '江苏省', '苏州市': '江苏省', '无锡市': '江苏省', '常州市': '江苏省',
+  '镇江市': '江苏省', '扬州市': '江苏省', '泰州市': '江苏省', '南通市': '江苏省', '盐城市': '江苏省',
+  '淮安市': '江苏省', '宿迁市': '江苏省', '连云港市': '江苏省', '徐州市': '江苏省', '成都市': '四川省',
+  '武汉市': '湖北省', '长沙市': '湖南省', '郑州市': '河南省', '西安市': '陕西省', '济南市': '山东省',
+  '青岛市': '山东省', '石家庄市': '河北省', '太原市': '山西省', '沈阳市': '辽宁省', '长春市': '吉林省',
+  '哈尔滨市': '黑龙江省', '合肥市': '安徽省', '福州市': '福建省', '厦门市': '福建省', '南昌市': '江西省',
+  '南宁市': '广西壮族自治区', '海口市': '海南省', '昆明市': '云南省', '贵阳市': '贵州省', '拉萨市': '西藏自治区',
+  '兰州市': '甘肃省', '西宁市': '青海省', '银川市': '宁夏回族自治区', '乌鲁木齐市': '新疆维吾尔自治区',
+  '呼和浩特市': '内蒙古自治区'
+};
+
+function inferProvinceFromCity(cityName) {
+  if (!cityName || !String(cityName).trim()) return '';
+  const key = String(cityName).trim();
+  if (MUNICIPALITY_PROVINCES.includes(key)) return key;
+  return CITY_TO_PROVINCE_MAP[key] || '';
+}
+
+function localParseQualifiesForSkipApi(lp) {
+  if (!lp || !(lp.province || '').trim()) return false;
+  const p = lp.province.trim();
+  if (MUNICIPALITY_PROVINCES.includes(p)) return true;
+  return !!(lp.city && lp.city.trim());
+}
+
+/**
+ * 统一直辖市字段：省=直辖市全称、地级「市」留空、区县纠偏（与各页智能粘贴逻辑一致）
+ */
+function normalizeMunicipalityRegion(parsed, originalText = '') {
+  let province = (parsed.province || '').trim();
+  let city = (parsed.city || '').trim();
+  let district = (parsed.district || '').trim();
+  let detail = (parsed.detail || '').trim();
+  const address = (parsed.address || parsed.fullAddress || '').trim();
+  const rawCityFromParser = city;
+
+  if (!province && city) {
+    province = inferProvinceFromCity(city);
+  }
+  if (!province && originalText) {
+    const hit = MUNICIPALITY_PROVINCES.find((m) => originalText.includes(m));
+    if (hit) province = hit;
+  }
+
+  if (MUNICIPALITY_PROVINCES.includes(province) && city === province) {
+    city = '';
+  }
+  if (!province && MUNICIPALITY_PROVINCES.includes(city)) {
+    province = city;
+    city = '';
+  }
+
+  if (MUNICIPALITY_PROVINCES.includes(province)) {
+    const isDistrictLike = (v = '') => /(区|县|镇|乡|街道)$/.test(String(v).trim());
+    const isStreetLike = (v = '') => /(\d|路|街|号|栋|单元|室|园|小区|大厦|广场|村|巷)/.test(String(v).trim());
+
+    let targetCity = city;
+    let targetDistrict = district;
+    let targetDetail = detail;
+
+    if (!targetCity || isDistrictLike(targetCity)) {
+      if (!targetDistrict && targetCity) targetDistrict = targetCity;
+      targetCity = province;
+    }
+
+    if (targetDistrict && isStreetLike(targetDistrict) && rawCityFromParser && isDistrictLike(rawCityFromParser)) {
+      targetDetail = `${targetDistrict} ${targetDetail}`.trim();
+      targetDistrict = rawCityFromParser;
+      targetCity = province;
+    }
+
+    if (!targetDistrict && rawCityFromParser && isDistrictLike(rawCityFromParser)) {
+      targetDistrict = rawCityFromParser;
+    }
+
+    const muniDistricts = MUNICIPALITY_DISTRICTS[province] || [];
+    const sourceText = `${originalText || ''} ${address || ''} ${parsed.detail || ''}`;
+    const hitDistrict = muniDistricts.find((name) => sourceText.includes(name));
+    if (hitDistrict) {
+      targetDistrict = hitDistrict;
+    }
+
+    city = '';
+    district = targetDistrict;
+    detail = targetDetail;
+  }
+
+  const parts = [];
+  if (province) parts.push(province);
+  if (city) parts.push(city);
+  if (district) parts.push(district);
+  if (detail) parts.push(detail);
+  const fullAddress = parts.join(' ').trim() || (parsed.fullAddress || '').trim() || address;
+
+  return {
+    ...parsed,
+    province,
+    city,
+    district,
+    detail,
+    address: fullAddress,
+    fullAddress
+  };
+}
+
 /**
  * 本地地址解析（备用方案）
  * @param {String} addressText - 地址文本
@@ -96,7 +221,13 @@ function parseAddressLocally(addressText) {
   detail = remaining
     .replace(/\s+/g, ' ')
     .trim();
-  
+
+  // 直辖市：首个「XX市」为省级，不作为地级「市」
+  if (city && MUNICIPALITY_PROVINCES.includes(city)) {
+    province = city;
+    city = '';
+  }
+
   // 组装完整地址
   const parts = [];
   if (province) parts.push(province);
@@ -242,6 +373,43 @@ function extractName(text, phone) {
   return '';
 }
 
+function removePhoneLikeText(text, phone) {
+  let out = String(text || '');
+  if (!out) return out;
+  if (phone) {
+    const escaped = phone.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(escaped, 'g'), ' ');
+  }
+  out = out
+    .replace(/1[3-9]\d[\s\-\.]?\d{4}[\s\-\.]?\d{4}/g, ' ')
+    .replace(/\+?86[\s\-]?1[3-9]\d{9}/g, ' ')
+    .replace(/0\d{2,3}[\s\-]?\d{7,8}/g, ' ')
+    .replace(/\(0\d{2,3}\)[\s\-]?\d{7,8}/g, ' ');
+  return out;
+}
+
+function sanitizeDetail(detail, ctx = {}) {
+  const { name = '', phone = '', province = '', city = '', district = '' } = ctx;
+  let out = String(detail || '');
+  if (!out) return '';
+
+  // 去掉姓名（中文文本里常与其它字符连写，不能只依赖空格边界）
+  if (name) {
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(escapedName, 'g'), ' ');
+  }
+
+  // 去掉电话相关文本（含各种分隔符格式）
+  out = removePhoneLikeText(out, phone);
+
+  // 再次移除省市区前缀，避免重复
+  if (province) out = out.replace(new RegExp(province.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ');
+  if (city) out = out.replace(new RegExp(city.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ');
+  if (district) out = out.replace(new RegExp(district.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), ' ');
+
+  return out.replace(/\s+/g, ' ').trim();
+}
+
 /**
  * 使用腾讯地图API智能解析地址文本
  * @param {String} addressText - 地址文本（可能包含姓名、电话、地址）
@@ -298,11 +466,19 @@ function parseSmartAddress(addressText) {
     // 第四步：优先使用本地解析，减少API调用（节省配额）
     // 🔴 优化：先尝试本地解析，如果已经得到完整的省市区信息，就不调用API了
     let localParse = parseAddressLocally(addressTextClean);
+    localParse = normalizeMunicipalityRegion({
+      province: localParse.province,
+      city: localParse.city,
+      district: localParse.district,
+      detail: localParse.detail,
+      fullAddress: localParse.fullAddress,
+      address: localParse.fullAddress
+    }, originalText);
     console.log('[parseSmartAddress] 本地解析结果:', localParse);
-    
+
     // 🔴 优化：如果本地解析已经得到完整的省市区信息，直接返回，不调用API
     // 但需要确保详细地址不为空
-    if (localParse.province && localParse.city) {
+    if (localParseQualifiesForSkipApi(localParse)) {
       console.log('[parseSmartAddress] ✅ 本地解析已获得完整信息，跳过API调用（节省配额）');
       
       // 确保详细地址不为空
@@ -315,41 +491,40 @@ function parseSmartAddress(addressText) {
         if (localParse.district) finalDetail = finalDetail.replace(localParse.district, '').trim();
         finalDetail = finalDetail.trim();
       }
-      
-      const finalResult = {
-        name: name.trim(),
-        phone: phone.trim(),
-        address: localParse.fullAddress || addressTextClean.trim(),
+
+      const norm = normalizeMunicipalityRegion({
         province: localParse.province || '',
         city: localParse.city || '',
         district: localParse.district || '',
-        detail: (finalDetail || addressTextClean.trim()).trim()
+        detail: finalDetail || '',
+        address: localParse.fullAddress || addressTextClean.trim(),
+        fullAddress: localParse.fullAddress || addressTextClean.trim()
+      }, originalText);
+
+      const finalResult = {
+        name: name.trim(),
+        phone: phone.trim(),
+        address: norm.fullAddress || addressTextClean.trim(),
+        province: norm.province || '',
+        city: norm.city || '',
+        district: norm.district || '',
+        detail: sanitizeDetail((norm.detail || finalDetail || addressTextClean.trim()), {
+          name,
+          phone,
+          province: norm.province || '',
+          city: norm.city || '',
+          district: norm.district || ''
+        })
       };
-      
+
       console.log('[parseSmartAddress] 本地解析直接返回结果:', JSON.stringify(finalResult, null, 2));
-      
+
       resolve(finalResult);
       return;
     }
     
     // 如果本地解析不完整，再调用API（使用getSuggestion API，专门针对收货地址场景优化）
     if (addressTextClean && addressTextClean.length > 0) {
-      // 🔴 修复：如果本地解析已经有完整的省份和城市，才跳过API调用
-      // 如果只有城市没有省份，仍然调用API来获取准确的省份信息
-      if (localParse.province && localParse.city) {
-        console.log('[parseSmartAddress] ✅ 本地解析已有完整省市区信息，跳过API调用（节省配额）');
-        resolve({
-          name: name.trim(),
-          phone: phone.trim(),
-          address: localParse.fullAddress || addressTextClean.trim(),
-          province: localParse.province || '',
-          city: localParse.city || '',
-          district: localParse.district || '',
-          detail: localParse.detail || addressTextClean.trim()
-        });
-        return;
-      }
-      
       // 🔴 如果只有城市没有省份，调用API来获取准确的省份信息
       if (localParse.city && !localParse.province) {
         console.log('[parseSmartAddress] ⚠️ 本地解析只有城市没有省份，调用API获取省份信息');
@@ -476,45 +651,86 @@ function parseSmartAddress(addressText) {
               detailLength: detail ? detail.length : 0
             });
             
-            const finalResult = {
-              name: name.trim(),
-              phone: phone.trim(),
-              address: address.trim(),
+            const normGeo = normalizeMunicipalityRegion({
               province: province.trim(),
               city: city.trim(),
               district: district.trim(),
-              detail: (detail || '').trim()
+              detail: (detail || '').trim(),
+              address: address.trim(),
+              fullAddress: address.trim()
+            }, originalText);
+            const finalResult = {
+              name: name.trim(),
+              phone: phone.trim(),
+              address: normGeo.fullAddress || normGeo.address || address.trim(),
+              province: normGeo.province || '',
+              city: normGeo.city || '',
+              district: normGeo.district || '',
+              detail: sanitizeDetail((normGeo.detail || detail || ''), {
+                name,
+                phone,
+                province: normGeo.province || '',
+                city: normGeo.city || '',
+                district: normGeo.district || ''
+              })
             };
-            
+
             console.log('[parseSmartAddress] 准备返回的结果:', JSON.stringify(finalResult, null, 2));
-            
+
             resolve(finalResult);
           } else {
             // API返回空结果，使用本地解析
             console.log('[parseSmartAddress] getSuggestion返回空结果，使用本地解析');
-            resolve({
-              name: name.trim(),
-              phone: phone.trim(),
-              address: localParse.fullAddress || addressTextClean.trim(),
+            const norm = normalizeMunicipalityRegion({
               province: localParse.province || '',
               city: localParse.city || '',
               district: localParse.district || '',
-              detail: localParse.detail || addressTextClean.trim()
+              detail: localParse.detail || '',
+              address: localParse.fullAddress || addressTextClean.trim(),
+              fullAddress: localParse.fullAddress || addressTextClean.trim()
+            }, originalText);
+            resolve({
+              name: name.trim(),
+              phone: phone.trim(),
+              address: norm.fullAddress || addressTextClean.trim(),
+              province: norm.province || '',
+              city: norm.city || '',
+              district: norm.district || '',
+              detail: sanitizeDetail((norm.detail || addressTextClean.trim()), {
+                name,
+                phone,
+                province: norm.province || '',
+                city: norm.city || '',
+                district: norm.district || ''
+              })
             });
           }
         },
         fail: (err) => {
           console.error('[parseSmartAddress] getSuggestion API调用失败:', err);
           console.log('[parseSmartAddress] API失败，使用本地解析作为备用方案');
-          // API失败，使用本地解析（使用之前已经解析好的 localParse）
-          resolve({
-            name: name.trim(),
-            phone: phone.trim(),
-            address: localParse.fullAddress || addressTextClean.trim(),
+          const norm = normalizeMunicipalityRegion({
             province: localParse.province || '',
             city: localParse.city || '',
             district: localParse.district || '',
-            detail: localParse.detail || addressTextClean.trim()
+            detail: localParse.detail || '',
+            address: localParse.fullAddress || addressTextClean.trim(),
+            fullAddress: localParse.fullAddress || addressTextClean.trim()
+          }, originalText);
+          resolve({
+            name: name.trim(),
+            phone: phone.trim(),
+            address: norm.fullAddress || addressTextClean.trim(),
+            province: norm.province || '',
+            city: norm.city || '',
+            district: norm.district || '',
+            detail: sanitizeDetail((norm.detail || addressTextClean.trim()), {
+              name,
+              phone,
+              province: norm.province || '',
+              city: norm.city || '',
+              district: norm.district || ''
+            })
           });
         }
         });
@@ -529,12 +745,16 @@ function parseSmartAddress(addressText) {
         province: '',
         city: '',
         district: '',
-        detail: ''
+        detail: sanitizeDetail('', { name, phone })
       });
     }
   });
 }
 
 module.exports = {
-  parseSmartAddress
+  parseSmartAddress,
+  MUNICIPALITY_PROVINCES,
+  MUNICIPALITY_DISTRICTS,
+  inferProvinceFromCity,
+  normalizeMunicipalityRegion
 };

@@ -1,0 +1,8 @@
+{
+  "usingComponents": {
+    "custom-toast": "/components/custom-toast/index"
+  },
+  "navigationBarTitleText": "MT安装教学",
+  "navigationStyle": "custom",
+  "pageOrientation": "auto"
+}

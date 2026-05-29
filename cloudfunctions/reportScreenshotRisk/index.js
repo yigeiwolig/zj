@@ -46,13 +46,14 @@ exports.main = async (event, context) => {
 
     await db.collection('screenshot_risk_queue').add({
       data: {
+        _openid: OPENID,
         page,
         dateKey,
         hourlyCount,
         dailyCount,
         status: 'pending',
         decision: '',
-        reason: 'DAILY_SCREENSHOT_OVER_3',
+        reason: 'SCREENSHOT_CAPTURED',
         lastScreenshotAt: db.serverDate(),
         createTime: db.serverDate(),
         updateTime: db.serverDate()

@@ -12,6 +12,7 @@ Page({
     
     // 【新增】控制"内容已复制"弹窗
     showCopySuccessModal: false,
+    copySuccessModalClosing: false,
     
     // 🔴 新增：调试信息
     debugInfo: '',
@@ -26,7 +27,23 @@ Page({
     if (this.data.showCustomSuccessModal) patch.showCustomSuccessModal = false;
     if (this.data.customSuccessModalClosing) patch.customSuccessModalClosing = false;
     if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
+    if (this.data.copySuccessModalClosing) patch.copySuccessModalClosing = false;
     if (Object.keys(patch).length) this.setData(patch);
+  },
+
+  dismissTransientModals() {
+    if (this.data.showCustomSuccessModal) {
+      this.setData({ customSuccessModalClosing: true });
+      setTimeout(() => {
+        this.setData({ showCustomSuccessModal: false, customSuccessModalClosing: false });
+      }, 360);
+    }
+    if (this.data.showCopySuccessModal) {
+      this.setData({ copySuccessModalClosing: true });
+      setTimeout(() => {
+        this.setData({ showCopySuccessModal: false, copySuccessModalClosing: false });
+      }, 360);
+    }
   },
 
 
@@ -257,7 +274,7 @@ Page({
           });
           setTimeout(() => {
             this.setData({ showCustomSuccessModal: false });
-            wx.reLaunch({ url: '/pages/products/products' });
+            wx.reLaunch({ url: '/package-app/pages/products/products' });
           }, 1500);
         } else {
           // 其他情况：需要重新验证昵称
@@ -358,14 +375,17 @@ Page({
         // 🔴 延迟800ms后显示自定义弹窗
         setTimeout(() => {
           // 显示自定义"内容已复制"弹窗
-          this.setData({ showCopySuccessModal: true });
+          this.setData({ showCopySuccessModal: true, copySuccessModalClosing: false });
           // 2秒后自动关闭
           setTimeout(() => {
-            this.setData({ showCopySuccessModal: false });
-            // 🔴 复制成功后，恢复自动检测
-          if (!this._isPageDestroyed) {
-            this.startAutoCheck();
-          }
+            this.setData({ copySuccessModalClosing: true });
+            setTimeout(() => {
+              this.setData({ showCopySuccessModal: false, copySuccessModalClosing: false });
+              // 🔴 复制成功后，恢复自动检测
+              if (!this._isPageDestroyed) {
+                this.startAutoCheck();
+              }
+            }, 360);
           }, 2000);
         }, 800);
       }

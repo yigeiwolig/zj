@@ -155,10 +155,10 @@ function getTansuExpressCode(trackingId, expressCompany) {
 }
 
 // 🔹 检查缓存
-async function getCachedResult(trackingId) {
+async function getCachedResult(cacheKey) {
   try {
     const cacheRes = await db.collection('logistics_cache')
-      .where({ tracking_id: trackingId })
+      .where({ tracking_id: cacheKey })
       .orderBy('update_time', 'desc')
       .limit(1)
       .get()
@@ -170,7 +170,7 @@ async function getCachedResult(trackingId) {
       
       // 如果缓存未过期
       if (now - cacheTime < CACHE_DURATION) {
-        console.log(`[物流查询] 使用缓存数据: ${trackingId}, 轨迹数量: ${cache.result?.data?.path_list?.length || 0}`)
+        console.log(`[物流查询] 使用缓存数据: ${cacheKey}, 轨迹数量: ${cache.result?.data?.path_list?.length || 0}`)
         return cache.result
       }
     }
@@ -181,10 +181,10 @@ async function getCachedResult(trackingId) {
 }
 
 // 🔹 保存缓存
-async function saveCache(trackingId, result) {
+async function saveCache(cacheKey, result) {
   try {
     const existing = await db.collection('logistics_cache')
-      .where({ tracking_id: trackingId })
+      .where({ tracking_id: cacheKey })
       .limit(1)
       .get()
     
@@ -200,7 +200,7 @@ async function saveCache(trackingId, result) {
     } else {
       await db.collection('logistics_cache').add({
         data: {
-          tracking_id: trackingId,
+          tracking_id: cacheKey,
           result: result,
           update_time: db.serverDate()
         }
@@ -285,13 +285,15 @@ function convertStatus(statusDetail) {
 async function queryLogistics(trackingId, expressCompany, phone) {
   // 标准化运单号
   const normalizedTrackingId = String(trackingId || '').trim().toUpperCase()
+  const phoneLast4 = String(phone || '').trim().slice(-4)
+  const cacheKey = `${normalizedTrackingId}::${phoneLast4 || 'none'}`
   
   if (!normalizedTrackingId) {
     throw new Error('运单号不能为空')
   }
   
   // 先检查缓存
-  const cached = await getCachedResult(normalizedTrackingId)
+  const cached = await getCachedResult(cacheKey)
   if (cached) {
     return cached
   }
@@ -357,7 +359,7 @@ async function queryLogistics(trackingId, expressCompany, phone) {
     }
     
     // 保存缓存
-    saveCache(normalizedTrackingId, responseData).catch(err => {
+    saveCache(cacheKey, responseData).catch(err => {
       console.warn('[物流查询] 保存缓存失败:', err)
     })
     
@@ -380,7 +382,7 @@ async function queryLogistics(trackingId, expressCompany, phone) {
     }
     
     // 保存缓存
-    saveCache(normalizedTrackingId, responseData).catch(err => {
+    saveCache(cacheKey, responseData).catch(err => {
       console.warn('[物流查询] 保存缓存失败:', err)
     })
     

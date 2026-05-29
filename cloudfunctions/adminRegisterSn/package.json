@@ -1,0 +1,9 @@
+{
+  "name": "adminRegisterSn",
+  "version": "1.0.0",
+  "description": "管理员预登记设备 SN",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

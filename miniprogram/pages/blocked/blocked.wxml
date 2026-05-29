@@ -41,8 +41,8 @@
 </view>
 
 
-<view class="custom-modal-mask active {{customSuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCustomSuccessModal}}" catchtouchmove="noop" catchtap="noop">
-  <view class="custom-modal-box success-modal" catchtouchmove="noop" catchtap="noop">
+<view class="custom-modal-mask active {{customSuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCustomSuccessModal}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="custom-modal-box success-modal" catchtouchmove="noop" bindtap="dismissTransientModals">
     <view class="modal-icon-new success-icon">✓</view>
     <view class="modal-title-new">{{successModalTitle}}</view>
     <view class="modal-content-new" wx:if="{{successModalContent}}">
@@ -52,8 +52,8 @@
 </view>
 
 <!-- 【全局通用】自定义"内容已复制"弹窗（统一使用 copy-success-modal 样式） -->
-<view class="custom-modal-mask" wx:if="{{showCopySuccessModal}}" catchtouchmove="noop" catchtap="noop">
-  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" catchtap="noop">
+<view class="custom-modal-mask {{copySuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCopySuccessModal || copySuccessModalClosing}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" bindtap="dismissTransientModals">
     <!-- 图标：使用 Unicode 字符 -->
     <view class="modal-icon-new success-icon">✓</view>
     <!-- 标题 -->

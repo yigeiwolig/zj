@@ -71,27 +71,40 @@ input, textarea {
   backdrop-filter: blur(12px);
 }
 
-/* 你的 loader 卡片 */
+/* 全局 loader：转圈 → 文案 → 进度条，纵向排列 */
 .g-loader {
-  width: 600rpx;
-  border-radius: 20rpx;
+  width: 560rpx;
+  max-width: 86vw;
+  border-radius: 28rpx;
   background: #fff;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-evenly;
-  padding: 40rpx;
-  box-shadow: 0 10rpx 30rpx rgba(0,0,0,0.12);
+  justify-content: flex-start;
+  gap: 28rpx;
+  padding: 48rpx 40rpx 44rpx;
+  box-shadow: 0 12rpx 40rpx rgba(15, 23, 42, 0.1);
   box-sizing: border-box;
+}
+
+.g-loader-spinner {
+  width: 56rpx;
+  height: 56rpx;
+  border: 5rpx solid #e8e8ed;
+  border-top-color: #1c1c1e;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: gLoaderSpin 0.55s linear infinite;
 }
 
 .g-loading-bar {
   width: 100%;
-  height: 20rpx;
-  background: #E5E5EA;
-  border-radius: 20rpx;
+  height: 12rpx;
+  background: #e8e8ed;
+  border-radius: 999rpx;
   position: relative;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .g-loading-bar::after {
@@ -99,24 +112,34 @@ input, textarea {
   position: absolute;
   top: 0;
   left: 0;
-  width: 50%;
+  width: 42%;
   height: 100%;
   background: #1c1c1e;
-  border-radius: 20rpx;
+  border-radius: 999rpx;
   z-index: 1;
-  animation: gLoadingBar 0.6s alternate infinite ease-in-out;
+  animation: gLoadingBar 0.3s alternate infinite ease-in-out;
 }
 
 .g-loader-label {
   color: #1c1c1e;
   font-size: 28rpx;
-  font-weight: 700;
-  animation: gLabelBlink 0.6s alternate infinite;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+  width: 100%;
+  word-break: break-all;
+  box-sizing: border-box;
+  animation: gLabelPulse 0.26s alternate infinite ease-in-out;
 }
 
-@keyframes gLabelBlink {
-  from { opacity: 0.35; }
-  to   { opacity: 1; }
+@keyframes gLabelPulse {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
+}
+
+@keyframes gLoaderSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 @keyframes gLoadingBar {
@@ -221,4 +244,21 @@ input, textarea {
   font-size: 30rpx;
   text-align: left;
   box-sizing: border-box;
+}
+
+/* ================= 全局提示弹窗层级兜底 =================
+   目标：所有页面的提示类弹窗（toast/dialog/copy-success）都高于当前业务弹窗 */
+page view.g-dialog-mask,
+page view.g-sheet-mask,
+page view.auto-toast-mask,
+page view.custom-dialog-mask,
+page view.copy-success-modal-mask,
+page view.custom-modal-mask,
+page view.custom-modal-mask.copy-success-modal-mask {
+  z-index: 10000000080 !important;
+}
+
+page view.g-loading-mask,
+page view.loading-mask {
+  z-index: 10000000090 !important;
 }

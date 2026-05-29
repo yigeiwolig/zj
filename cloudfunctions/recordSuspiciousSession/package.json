@@ -1,0 +1,9 @@
+{
+  "name": "recordSuspiciousSession",
+  "version": "1.0.0",
+  "description": "Record user foreground session for suspicious analysis",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

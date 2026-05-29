@@ -204,61 +204,288 @@ function generatePaymentParams(prepayId) {
   }
 }
 
+async function isAdminOpenid(openid, db) {
+  if (!openid) return false
+  const byOpenid = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+  if (byOpenid.data && byOpenid.data.length > 0) return true
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+  return !!(bySystemOpenid.data && bySystemOpenid.data.length > 0)
+}
+
+/** 从地址对象或拼接字符串猜测省份（与小程序顺丰运费规则配套） */
+function guessProvince(addressData) {
+  if (!addressData || typeof addressData !== 'object') return ''
+  const direct = addressData.province || addressData.selectedProvince
+  if (direct && String(direct).trim()) return String(direct).trim()
+  const addr = addressData.address ? String(addressData.address) : ''
+  if (!addr) return ''
+  const seg = addr.split(/[\s\n]+/).filter(Boolean)
+  const first = seg[0] || ''
+  if (/省|自治区|北京市|天津市|上海市|重庆市/.test(first)) return first
+  if (first.indexOf('广东') !== -1) return first
+  return first
+}
+
+/** 与小页面 shop.reCalcFinalPrice 一致的顺丰 / 中通运费（单位：元） */
+function computeShippingFeeServer(shippingMethod, addressData) {
+  const m = String(shippingMethod || 'zto').toLowerCase()
+  if (m === 'zto') return 0
+  if (m === 'none' || m === '') return 0
+  if (m === 'sf') {
+    const province = guessProvince(addressData || {})
+    if (!province) return 0
+    if (province.indexOf('广东') !== -1) return 13
+    return 22
+  }
+  return 0
+}
+
+function roundMoney(n) {
+  return Math.round(Number(n) * 100) / 100
+}
+
+/** 商城购物车：仅含 main / accessory */
+async function computeShopCartSubtotal(db, goods) {
+  if (!Array.isArray(goods) || goods.length === 0) throw new Error('购物车为空')
+  const [seriesRes, accRes] = await Promise.all([
+    db.collection('shop_series').get(),
+    db.collection('shop_accessories').get()
+  ])
+  const seriesList = seriesRes.data || []
+  const accList = accRes.data || []
+
+  function findSeries(seriesId) {
+    return seriesList.find(s => s.id === seriesId || s._id === seriesId)
+  }
+  function findAcc(name) {
+    return accList.find(a => a.name === name)
+  }
+
+  let subtotal = 0
+  for (const item of goods) {
+    if (item.type === 'main') {
+      const s = findSeries(item.seriesId)
+      if (!s) throw new Error('商品系列不存在或已下架')
+      const models = s.models || []
+      const model = models.find(m => m.name === item.modelName)
+      if (!model) throw new Error('型号不存在：' + item.modelName)
+      const opts = s.options || []
+      let optionPrice = 0
+      if (item.optionName && opts.length > 0) {
+        const opt = opts.find(o => o.name === item.optionName)
+        if (opt) optionPrice = Number(opt.price) || 0
+        else if (item.optionName !== '默认配置') throw new Error('配置不存在：' + item.optionName)
+      }
+      const unit = (Number(model.price) || 0) + optionPrice
+      const qty = Math.max(1, Number(item.quantity) || 1)
+      subtotal += unit * qty
+    } else if (item.type === 'accessory') {
+      const a = findAcc(item.name)
+      if (!a) throw new Error('配件不存在：' + item.name)
+      const unit = Number(a.price) || 0
+      const qty = Math.max(1, Number(item.quantity) || 1)
+      subtotal += unit * qty
+    } else {
+      throw new Error('购物车包含未知条目类型')
+    }
+  }
+  return roundMoney(subtotal)
+}
+
+/** 售后配件页：按型号读 shouhou 集合价格 */
+async function computeShouhouPartsSubtotal(db, goods) {
+  if (!Array.isArray(goods) || goods.length === 0) throw new Error('订单商品为空')
+  const modelName = goods[0].spec || goods[0].modelName
+  if (!modelName) throw new Error('无法确定配件型号')
+
+  const res = await db.collection('shouhou').where({ modelName }).get()
+  const rows = res.data || []
+  const byName = {}
+  rows.forEach(r => {
+    if (r && r.name) byName[r.name] = Number(r.price) || 0
+  })
+
+  let subtotal = 0
+  for (const g of goods) {
+    const name = g.name
+    const qty = Math.max(1, Number(g.quantity) || 1)
+    if (byName[name] === undefined) {
+      throw new Error('配件「' + name + '」价格未配置')
+    }
+    subtotal += byName[name] * qty
+  }
+  return roundMoney(subtotal)
+}
+
+async function computeRepairSubtotal(db, repairId) {
+  if (!repairId) throw new Error('缺少维修单 ID')
+  const res = await db.collection('shouhou_repair').doc(repairId).get()
+  if (!res.data) throw new Error('维修单不存在')
+  const items = res.data.repairItems || []
+  const sum = items.reduce((s, it) => s + (Number(it.price) || 0), 0)
+  return roundMoney(sum)
+}
+
+/** 从补款商品 id 解析 repairId：repair_<id>_<index> */
+function extractRepairIdFromGoods(goods) {
+  if (!goods || !goods[0]) return ''
+  const id = goods[0].id
+  if (!id) return ''
+  const m = String(id).match(/^repair_(.+)_(\d+)$/)
+  return m ? m[1] : ''
+}
+
+function classifyGoods(goods) {
+  if (!Array.isArray(goods) || goods.length === 0) return 'empty'
+  const typed = goods.filter(it => it && (it.type === 'main' || it.type === 'accessory'))
+  if (typed.length === goods.length) return 'shop'
+  if (typed.length > 0) throw new Error('购物车数据异常，请清空购物车后重试')
+  return 'shouhou_parts'
+}
+
+/**
+ * 服务端权威金额（普通用户以此为准；管理员测付仍为 0.01，但会写入定价快照）
+ */
+async function resolveServerPricing(db, event, wxOpenId) {
+  const {
+    goods,
+    shippingMethod,
+    addressData,
+    isRepairPayment,
+    repairId
+  } = event
+
+  const adminUser = await isAdminOpenid(wxOpenId, db)
+
+  let goodsSubtotal = 0
+  let shippingFee = 0
+  let mode = 'unknown'
+
+  // --- 维修费用支付（个人中心发起）---
+  if (isRepairPayment && repairId) {
+    goodsSubtotal = await computeRepairSubtotal(db, repairId)
+    shippingFee = 0
+    mode = 'repair'
+  } else {
+    const first = (goods && goods[0]) || {}
+    const ridGuess = extractRepairIdFromGoods(goods)
+    if (first.spec === '维修项目' && ridGuess) {
+      goodsSubtotal = await computeRepairSubtotal(db, ridGuess)
+      shippingFee = 0
+      mode = 'repair_repay'
+    } else {
+      const cat = classifyGoods(goods || [])
+      if (cat === 'empty') throw new Error('订单商品为空')
+      shippingFee = computeShippingFeeServer(shippingMethod, addressData)
+      if (cat === 'shop') {
+        goodsSubtotal = await computeShopCartSubtotal(db, goods)
+        mode = 'shop'
+      } else {
+        goodsSubtotal = await computeShouhouPartsSubtotal(db, goods)
+        mode = 'shouhou_parts'
+      }
+    }
+  }
+
+  const fullTotal = roundMoney(goodsSubtotal + shippingFee)
+
+  if (adminUser) {
+    return {
+      adminUser: true,
+      payAmountYuan: 0.01,
+      goodsSubtotal,
+      shippingFee: mode === 'repair' || mode === 'repair_repay' ? 0 : shippingFee,
+      serverFullTotal: fullTotal,
+      pricingMode: mode
+    }
+  }
+
+  return {
+    adminUser: false,
+    payAmountYuan: fullTotal,
+    goodsSubtotal,
+    shippingFee: mode === 'repair' || mode === 'repair_repay' ? 0 : shippingFee,
+    serverFullTotal: fullTotal,
+    pricingMode: mode
+  }
+}
+
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
-  const { totalPrice, goods, addressData, shippingFee, shippingMethod, action, userNickname, repairId, isRepairPayment, orderSource } = event
+  const { goods, addressData, shippingMethod, action, userNickname, repairId, isRepairPayment, orderSource } = event
   
   const outTradeNo = `MT${Date.now()}${Math.floor(Math.random() * 1000)}`
   const db = cloud.database()
 
   try {
-    // === 情况1: 定制/存单 ===
+    const pricing = await resolveServerPricing(db, event, wxContext.OPENID)
+    console.log('[createOrder] server pricing:', pricing)
+
+    const auditBase = {
+      goodsSubtotal: pricing.goodsSubtotal,
+      shippingFee: pricing.shippingFee,
+      serverFullTotal: pricing.serverFullTotal,
+      pricingMode: pricing.pricingMode,
+      adminTestPay: !!pricing.adminUser,
+      serverPricedAt: new Date()
+    }
+
+    // === 情况1: 定制/存单（金额以服务端为准，便于后台核价）===
     if (action === 'save_only') {
       await db.collection('shop_orders').add({
         data: {
           _openid: wxContext.OPENID,
           orderId: outTradeNo,
           goodsList: goods,
-          totalFee: totalPrice,
+          totalFee: pricing.serverFullTotal,
           address: addressData,
-          shipping: { fee: shippingFee || 0, method: shippingMethod || 'zto' },
+          shipping: { fee: pricing.shippingFee, method: shippingMethod || 'zto' },
           status: 'UNPAID',
           isCustom: true,
-          userNickname: userNickname || '', // 🔴 保存用户昵称
-          isRepairPayment: isRepairPayment || false, // 🔴 标记是否为维修支付
-          repairId: repairId || '', // 🔴 保存维修单ID
-          orderSource: orderSource || '', // 🔴 订单来源：shop / shouhou
+          userNickname: userNickname || '',
+          isRepairPayment: isRepairPayment || false,
+          repairId: repairId || '',
+          orderSource: orderSource || '',
+          pricingAudit: auditBase,
           createTime: db.serverDate()
         }
       })
       return { success: true, msg: '订单已提交，等待改价' }
     }
 
-    // === 情况2: 正常立即支付（使用微信支付原生API v3）===
-    
-    // 先写入数据库
+    // === 情况2: 立即支付（应付金额完全由服务端计算；管理员仍为 0.01 测付）===
+    const payYuan = pricing.payAmountYuan
+    if (!Number.isFinite(payYuan) || payYuan <= 0) {
+      return { error: true, msg: '订单金额异常，请返回购物车刷新后重试' }
+    }
+    // 非管理员且非维修类：应付通常应大于 0.01（防止未配置价格却被下单）
+    const repairLike = pricing.pricingMode === 'repair' || pricing.pricingMode === 'repair_repay'
+    if (!pricing.adminUser && payYuan <= 0.01 && !repairLike) {
+      return { error: true, msg: '订单金额过低，请确认商品价格已配置' }
+    }
+
     await db.collection('shop_orders').add({
       data: {
         _openid: wxContext.OPENID,
         orderId: outTradeNo,
         goodsList: goods,
-        totalFee: totalPrice,
+        totalFee: payYuan,
         address: addressData,
-        shipping: { fee: shippingFee || 0, method: shippingMethod || 'zto' },
+        shipping: { fee: pricing.shippingFee, method: shippingMethod || 'zto' },
         status: 'UNPAID',
-        userNickname: userNickname || '', // 🔴 保存用户昵称
-        isRepairPayment: isRepairPayment || false, // 🔴 标记是否为维修支付
-        repairId: repairId || '', // 🔴 保存维修单ID
-        orderSource: orderSource || '', // 🔴 订单来源：shop / shouhou
+        userNickname: userNickname || '',
+        isRepairPayment: isRepairPayment || false,
+        repairId: repairId || '',
+        orderSource: orderSource || '',
+        pricingAudit: auditBase,
         createTime: db.serverDate()
       }
     })
-    
-    // 调用微信支付统一下单
+
     const orderData = {
       body: 'MT摩改社-车辆定制改装与维修服务费',
       outTradeNo: outTradeNo,
-      totalFee: Math.round(totalPrice * 100), // 转为分
+      totalFee: Math.round(payYuan * 100), // 转为分
       openid: wxContext.OPENID
     }
     

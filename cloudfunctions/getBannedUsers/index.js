@@ -15,12 +15,19 @@ async function assertAdmin() {
 exports.main = async (event, context) => {
   try {
     await assertAdmin();
+    const manualOnly = !!(event && event.manualOnly);
+    const suspiciousManualOnly = !!(event && event.suspiciousManualOnly);
 
     // 获取所有被封禁的用户（isBanned = true）
+    const query = {
+      isBanned: true
+    };
+    if (!suspiciousManualOnly && manualOnly) {
+      // 手动封禁：排除自动封禁原因（截图/录屏/地域/截图审核）
+      query.banReason = db.command.nin(['screenshot', 'screen_record', 'location_blocked', 'screenshot_risk_review']);
+    }
     const buttonRes = await db.collection('login_logbutton')
-      .where({
-        isBanned: true
-      })
+      .where(query)
       .orderBy('updateTime', 'desc')
       .get();
 
@@ -64,7 +71,7 @@ exports.main = async (event, context) => {
     });
 
     // 构建用户数据
-    const users = buttonRes.data.map((button) => {
+    let users = buttonRes.data.map((button) => {
       // 从 logMap 中获取对应的记录
       const log = logMap[button._openid];
       // 从 fenxishuju 中找到对应的记录
@@ -80,7 +87,8 @@ exports.main = async (event, context) => {
       if (visit) {
         Object.keys(visit).forEach(key => {
           if (key !== '_openid' && key !== '_id' && key !== 'createTime' && key !== 'updateTime') {
-            totalVisits += visit[key] || 0;
+            const value = Number(visit[key]);
+            if (Number.isFinite(value)) totalVisits += value;
           }
         });
       }
@@ -99,6 +107,9 @@ exports.main = async (event, context) => {
           break;
         case 'nickname_verify_fail':
           banReasonText = '昵称审核失败';
+          break;
+        case 'suspicious_manual':
+          banReasonText = '可疑人员手动封禁';
           break;
         default:
           banReasonText = button.banReason || '未知原因';
@@ -215,6 +226,20 @@ exports.main = async (event, context) => {
         failCount: button.failCount || 0
       };
     });
+
+    if (suspiciousManualOnly) {
+      const queueRes = await db.collection('screenshot_risk_queue')
+        .where({
+          status: 'resolved',
+          decision: 'ban'
+        })
+        .orderBy('updateTime', 'desc')
+        .limit(1000)
+        .get();
+      const queueRows = Array.isArray(queueRes.data) ? queueRes.data : [];
+      const screenshotOpenids = new Set(queueRows.map((it) => it && it._openid).filter(Boolean));
+      users = users.filter((u) => screenshotOpenids.has(u._openid) || u.banReason === 'suspicious_manual');
+    }
 
     return { success: true, users: users };
   } catch (err) {

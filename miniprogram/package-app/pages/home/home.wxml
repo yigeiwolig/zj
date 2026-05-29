@@ -1,0 +1,342 @@
+<wxs module="tools">
+  module.exports.includes = function(arr, target) {
+    return arr && arr.indexOf(target) > -1;
+  }
+</wxs>
+
+<view class="container" bindtap="onBgTap">
+  
+  <!-- 顶部导航 -->
+  <view class="header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
+    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
+      <text class="back-arrow">‹</text>
+    </view>
+  </view>
+  
+  <!-- 管理员切换按钮 -->
+  <view 
+    wx:if="{{isAuthorized}}" 
+    class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
+    catchtap="toggleAdminMode">
+    {{isAdmin ? 'EXIT' : 'EDIT'}}
+  </view>
+
+  <!-- 1. 轮盘列表层（含无门店时的占位卡片，可滑动） -->
+  <view class="wheel-stage {{isDetailOpen ? 'hidden' : ''}}"
+    bindtouchstart="onTouchStart" bindtouchmove="onTouchMove" bindtouchend="onTouchEnd">
+    <block wx:for="{{shops}}" wx:key="id">
+      <view class="card {{currentIndex === index ? 'active' : ''}} {{item.isOpen ? 'open' : 'closed'}} {{item.isNearbyEmptyHint || item.isNearbyInvestCard ? 'card--empty-hint' : ''}} {{item.isNearbyEmptyHint ? 'card--empty-store' : ''}} {{item.isNearbyInvestCard ? 'card--invest' : ''}}"
+        style="{{cardStyles[index]}}" id="card-{{index}}"
+        catchtap="onCardTap" data-index="{{index}}" mark:type="card">
+        <view class="c-left">
+          <block wx:if="{{item.isNearbyInvestCard}}">
+            <view class="c-name">{{item.name}}</view>
+            <view class="c-empty-hint-stack">
+              <block wx:for="{{item.investHintRows}}" wx:for-item="row" wx:for-index="ri" wx:key="ri">
+                <text class="c-empty-hint-row">{{row}}</text>
+              </block>
+            </view>
+            <view class="c-empty-invest" catchtap="onNearbyInvestTap">立即沟通</view>
+          </block>
+          <block wx:elif="{{item.isNearbyEmptyHint}}">
+            <view class="c-empty-store">
+              <view class="c-empty-store__head">
+                <text class="c-empty-store__title">{{item.name}}</text>
+                <view class="c-empty-store__chip">
+                  <text class="c-empty-store__chip-val">{{item.dist}}</text>
+                  <text class="c-empty-store__chip-unit">公里</text>
+                </view>
+              </view>
+              <text class="c-empty-store__lead">{{item.emptyStoreLead}}</text>
+              <view class="c-empty-store__callout">
+                <text class="c-empty-store__callout-line">{{item.emptyStoreCalloutLine}}</text>
+                <text class="c-empty-store__callout-action">{{item.emptyStoreCalloutAction}}</text>
+              </view>
+            </view>
+          </block>
+          <block wx:else>
+            <view class="c-name">{{item.name}}</view>
+            <view class="c-services-row">
+              <block wx:for="{{allServices}}" wx:for-item="srv" wx:key="name">
+                <view class="cs-icon has" wx:if="{{item.serviceSet[srv.name]}}">{{srv.icon}}</view>
+              </block>
+            </view>
+          </block>
+        </view>
+        <view class="c-right" wx:if="{{!item.isNearbyEmptyHint}}">
+          <block wx:if="{{item.isNearbyInvestCard}}">
+            <text class="c-invest-right-tag">合作</text>
+          </block>
+          <block wx:else>
+            <text class="c-dist">{{item.dist}}</text><text class="c-unit">KM</text>
+          </block>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 新增：管理员添加按钮 (仅管理员且详情未打开时显示) -->
+  <view class="fab-add" wx:if="{{isAdmin && !isDetailOpen}}" catchtap="onAddShop">+</view>
+
+  <!-- 2. 替身层 -->
+  <view class="phantom {{isExpanded ? 'expanded' : ''}}" style="{{phantomStyle}}" wx:if="{{showPhantom}}">
+    
+    <!-- 列表态内容 -->
+    <view class="p-list-content">
+      <view class="c-left">
+        <view class="c-name" style="color:#000;">{{activeItem.name}}</view>
+        <view class="c-services-row">
+           <block wx:for="{{allServices}}" wx:for-item="srv" wx:key="name">
+              <view class="cs-icon has" wx:if="{{activeItem.serviceSet[srv.name]}}">{{srv.icon}}</view>
+            </block>
+        </view>
+      </view>
+      <view class="c-right">
+        <block wx:if="{{activeItem.isNearbyInvestCard}}">
+          <text class="c-invest-right-tag c-invest-right-tag--phantom">合作</text>
+        </block>
+        <block wx:elif="{{!activeItem.isNearbyEmptyHint}}">
+          <text class="c-dist" style="color:#000;">{{activeItem.dist}}</text><text class="c-unit" style="color:#000;">KM</text>
+        </block>
+      </view>
+    </view>
+
+    <!-- 图片区域 (管理员模式下点击可换图，编辑模式下也可换图) -->
+    <view class="p-image-box" catchtap="{{(isAdmin || isEditing) ? 'chooseImage' : ''}}">
+      <!-- 编辑模式：优先显示 editData.img，如果没有则显示 activeItem.img -->
+      <block wx:if="{{isEditing && (editData.img || activeItem.img)}}">
+        <block wx:if="{{editData.imgDual}}">
+          <image src="{{editData.imgThumb}}" mode="aspectFill" class="p-img p-img-low {{homeMainHdLoaded.edit ? 'is-hidden' : ''}}" lazy-load="true" binderror="onHomeMainImageError" data-mode="edit"></image>
+          <image src="{{editData.imgFull || editData.img}}" mode="aspectFill" class="p-img p-img-high {{homeMainHdLoaded.edit ? 'is-visible' : ''}}" lazy-load="true" bindload="onHomeMainHdLoad" binderror="onHomeMainImageError" data-mode="edit"></image>
+        </block>
+        <image wx:else src="{{editData.img || activeItem.img}}" mode="aspectFill" class="p-img" lazy-load="true" binderror="onHomeMainImageError" data-mode="edit"></image>
+      </block>
+      <!-- 编辑模式但没有图片：显示占位图 -->
+      <view wx:elif="{{isEditing}}" class="p-img img-placeholder">
+        <text class="placeholder-text">点击添加图片</text>
+      </view>
+      <!-- 浏览模式：显示 activeItem.img -->
+      <block wx:else>
+        <block wx:if="{{activeItem.imgDual}}">
+          <image src="{{activeItem.imgThumb}}" mode="aspectFill" class="p-img p-img-low {{homeMainHdLoaded.active ? 'is-hidden' : ''}}" lazy-load="true" binderror="onHomeMainImageError" data-mode="active"></image>
+          <image src="{{activeItem.imgFull || activeItem.img || ''}}" mode="aspectFill" class="p-img p-img-high {{homeMainHdLoaded.active ? 'is-visible' : ''}}" lazy-load="true" bindload="onHomeMainHdLoad" binderror="onHomeMainImageError" data-mode="active"></image>
+        </block>
+        <image wx:else src="{{activeItem.img || ''}}" mode="aspectFill" class="p-img" lazy-load="true" binderror="onHomeMainImageError" data-mode="active"></image>
+      </block>
+      <!-- 管理员模式或编辑模式下的换图提示 -->
+      <view class="img-edit-hint" wx:if="{{isAdmin || isEditing}}">点击更换图片</view>
+    </view>
+    
+    <!-- 按钮组（右上角） -->
+    <view class="p-btn-group">
+      <!-- 浏览模式：管理员显示编辑按钮，普通用户显示关闭按钮 -->
+      <view class="circle-btn edit-btn" wx:if="{{isAdmin && !isEditing && !isAdding}}" catchtap="toggleEdit">✎</view>
+      <!-- 添加新卡片时：显示取消按钮 -->
+      <view class="circle-btn cancel-btn" wx:if="{{isAdding}}" catchtap="cancelAddShop">✕</view>
+      <!-- 编辑已有卡片时：显示保存按钮 -->
+      <view class="circle-btn save-btn-small" wx:if="{{isEditing && !isAdding}}" catchtap="saveEdit">✓</view>
+      <!-- 浏览模式（非管理员）：显示关闭按钮 -->
+      <view class="circle-btn" wx:if="{{!isEditing && !isAdmin && !isAdding}}" catchtap="closeDetail">✕</view>
+    </view>
+    
+    <!-- 详情页面左上角完成按钮（仅管理员模式下显示） -->
+    <view class="complete-btn" wx:if="{{isAdmin && !isEditing && !isAdding}}" catchtap="closeDetail">
+      <text>完成</text>
+    </view>
+    
+    <!-- 详情内容滚动区 -->
+    <view class="p-content">
+      
+      <!-- A. 浏览模式 -->
+      <view class="view-mode" wx:if="{{!isEditing}}">
+        <view class="title-row">
+          <view class="d-title">{{activeItem.name}}</view>
+          <view class="d-dist-badge">{{activeItem.dist}} KM</view>
+        </view>
+
+        <view class="d-sub-row">
+          <view class="status-pill" style="background:{{activeItem.isOpen ? '#00C853' : '#FF3B30'}}20; color:{{activeItem.isOpen ? '#00C853' : '#FF3B30'}}">
+            <view class="status-dot" style="background:{{activeItem.isOpen ? '#00C853' : '#FF3B30'}}"></view>{{activeItem.isOpen ? '营业中' : '未营业'}}
+          </view>
+          <view class="sub-text">{{activeItem.sub}}</view>
+        </view>
+
+        <!-- 服务标签 -->
+        <view class="tag-cloud">
+          <block wx:for="{{activeItem.services}}" wx:key="*this">
+             <view class="srv-tag">
+               <text class="srv-tag-icon" wx:if="{{item === '车辆快修'}}">🔧</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '车辆保养'}}">⚙️</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '车辆销售'}}">🏍️</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '机车咖啡'}}">☕</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '车辆精修'}}">🛠️</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '洗车服务'}}">🚿</text>
+               <text class="srv-tag-icon" wx:elif="{{item === '机油更换'}}">🛢️</text>
+               <text class="srv-tag-icon" wx:else>•</text>
+               {{item}}
+             </view>
+          </block>
+          <view wx:if="{{!activeItem.services.length}}" style="color:#ccc; font-size:24rpx;">暂无服务标签</view>
+        </view>
+
+        <!-- 信息块 -->
+        <view class="info-block">
+          <view class="ib-row" bindtap="openLocation">
+            <view class="ib-icon">📍</view>
+            <view class="ib-content">
+              <text class="ib-label">ADDRESS</text>
+              <view class="ib-val">{{activeItem.address}}</view>
+            </view>
+          </view>
+          <view class="ib-row">
+            <view class="ib-icon">⏰</view>
+            <view class="ib-content">
+              <text class="ib-label">HOURS</text>
+              <view class="ib-val">{{activeItem.time}}</view>
+            </view>
+          </view>
+          <view class="ib-row" bindtap="makeCall">
+            <view class="ib-icon">📞</view>
+            <view class="ib-content">
+              <text class="ib-label">PHONE</text>
+              <view class="ib-val">{{activeItem.phone}}</view>
+            </view>
+          </view>
+        </view>
+
+        <view class="d-footer">
+          <view class="btn-nav" bindtap="openLocation"><span>➤</span> 导航前往</view>
+          <view class="btn-call" bindtap="makeCall">📞</view>
+        </view>
+        
+        <!-- 管理员删除按钮 -->
+        <view class="del-btn" wx:if="{{isAdmin}}" bindtap="deleteShop">删除此卡片</view>
+      </view>
+
+      <!-- B. 编辑模式 -->
+      <view class="edit-form" wx:else>
+        <view class="edit-title">编辑信息</view>
+        
+        <!-- 上传照片按钮（只在新建卡片时显示） -->
+        <view class="upload-img-btn edit-upload-btn" wx:if="{{isAdding}}" catchtap="chooseImage">
+          <text>📷</text>
+          <text>上传照片</text>
+        </view>
+        
+        <view class="inp-group">
+           <view class="inp-label">店铺名称</view>
+           <input class="inp-field" value="{{editData.name}}" data-field="name" bindinput="onEditInput"/>
+        </view>
+        
+        <!-- 地址选择器 (修改为居中布局) -->
+        <view class="inp-group" bindtap="chooseLocation">
+           <view class="inp-label">店铺地址</view>
+           <!-- 注意这里去掉了 justify-content: space-between 的样式，改为 CSS 控制居中 -->
+           <view class="inp-field pick-field {{editData.address?'':'placeholder'}}">
+             <text>📍</text> <!-- 图标放前面或中间 -->
+             <text>{{editData.address || '点击选择地图位置'}}</text>
+           </view>
+        </view>
+
+        <view class="inp-group">
+           <view class="inp-label">副标题</view>
+           <input class="inp-field" value="{{editData.sub}}" data-field="sub" bindinput="onEditInput"/>
+        </view>
+        
+        <view class="inp-group">
+           <view class="inp-label">营业时间</view>
+           <view class="time-picker-row">
+             <!-- 开始时间 picker -->
+             <picker mode="time" value="{{editData.startTime}}" bindchange="onStartTimeChange">
+               <!-- 这里的显示必须绑定 editData.startTime -->
+               <view class="time-box">{{editData.startTime || '09:00'}}</view>
+             </picker>
+             
+             <text class="time-split">-</text>
+             
+             <!-- 结束时间 picker -->
+             <picker mode="time" value="{{editData.endTime}}" bindchange="onEndTimeChange">
+               <!-- 这里的显示必须绑定 editData.endTime -->
+               <view class="time-box">{{editData.endTime || '18:00'}}</view>
+             </picker>
+           </view>
+        </view>
+        
+        <view class="inp-group">
+           <view class="inp-label">联系电话</view>
+           <input class="inp-field" value="{{editData.phone}}" data-field="phone" bindinput="onEditInput"/>
+        </view>
+
+        <!-- 原来的输入框删掉，换成这个点选区域 -->
+        <view class="inp-group">
+           <view class="inp-label">服务内容 (点击选择)</view>
+           <view class="select-tag-grid">
+             <block wx:for="{{allServices}}" wx:key="name">
+               <!-- 判断当前服务是否在编辑数据的选中列表中 -->
+               <view 
+                 class="select-tag {{tools.includes(editData.selectedServices, item.name) ? 'active' : ''}}" 
+                 catchtap="toggleService" 
+                 data-name="{{item.name}}">
+                 <text>{{item.icon}}</text> {{item.name}}
+               </view>
+             </block>
+           </view>
+        </view>
+        
+        <!-- 添加新卡片时显示"新建"，编辑已有卡片时显示"保存更改" -->
+        <view class="btn-nav save-btn" bindtap="saveEdit">
+          {{isAdding ? '新建' : '保存更改'}}
+        </view>
+      </view>
+
+    </view> <!-- 结束 view -->
+  </view>
+
+</view> <!-- 容器结束 -->
+
+<!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
+<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="auto-toast-box" catchtouchmove="noop" bindtap="dismissTransientModals">
+    <view class="at-title">{{autoToast.title}}</view>
+    <view class="at-content">{{autoToast.content}}</view>
+  </view>
+</view>
+
+<!-- ================= 自定义对话框 ================= -->
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" bindtap="dismissTransientModals" catchtouchmove="noop">
+  <view class="custom-dialog-box" bindtap="dismissTransientModals" catchtouchmove="noop">
+    <view class="cd-title">{{dialog.title}}</view>
+    <view class="cd-content">{{dialog.content}}</view>
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText}}</view>
+      <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText}}</view>
+    </view>
+  </view>
+</view>
+
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />
+
+<!-- 🔴 新增：上传选项弹窗（选择相册/拍照） -->
+<view class="upload-modal-overlay" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions">
+  <view class="upload-modal-content" catchtap="preventBubble">
+    <view class="upload-options-container">
+      <view class="upload-modal-title">选择上传方式</view>
+      <view class="upload-options-list">
+        <view class="upload-option-card" bindtap="chooseImageFromAlbum" data-action="album">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon album-icon"></view>
+          </view>
+          <view class="upload-option-label">从相册选择</view>
+        </view>
+        <view class="upload-option-card" bindtap="chooseImageFromCamera" data-action="camera">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon video-icon"></view>
+          </view>
+          <view class="upload-option-label">拍照</view>
+        </view>
+      </view>
+    </view>
+    <view class="upload-modal-cancel" bindtap="closeUploadOptions">取消</view>
+  </view>
+</view>

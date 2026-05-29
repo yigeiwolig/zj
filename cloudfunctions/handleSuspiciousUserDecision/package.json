@@ -1,0 +1,10 @@
+{
+  "name": "handleSuspiciousUserDecision",
+  "version": "1.0.0",
+  "description": "Handle suspicious user manual decisions",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
+

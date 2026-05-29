@@ -1,20 +1,22 @@
 // app.js
+const GLOBAL_ACCESS_GUARD_INTERVAL_MS = 5 * 60 * 1000;
+
 App({
   globalData: {
-    blockedLocation: null, // 被拦截的位置信息
+    blockedLocation: null, // ????????
 
-    // 全局 UI 弹窗状态（由 app.wxml 渲染）
+    // UI ?????? app.wxml ??
     ui: {
-      loading: { show: false, text: '加载中...' },
-      dialog: { show: false, title: '提示', content: '', showCancel: false, confirmText: '确定', cancelText: '取消', maskClosable: true },
+      loading: { show: false, text: '????..' },
+      dialog: { show: false, title: '??', content: '', showCancel: false, confirmText: '??', cancelText: '??', maskClosable: true },
       sheet: { show: false, title: '', items: [] },
-      input: { show: false, title: '请输入', placeholder: '', value: '', maskClosable: true }
+      input: { show: false, title: '???', placeholder: '', value: '', maskClosable: true }
     },
 
-    // Toast 专用计时器
+    // Toast ???
     _toastTimer: null,
 
-    // 回调暂存
+    // ????
     _uiCb: {
       dialogConfirm: null,
       dialogCancel: null,
@@ -23,51 +25,77 @@ App({
       inputCancel: null
     },
 
-    // 🔴 防止重复跳转到 blocked 页面的标志
+    // ?????? blocked
     _isJumpingToBlocked: false,
 
-    // 🔴 分享码相关
-    isShareCodeUser: false, // 是否是通过分享码进入的用户
-    shareCodeInfo: null,     // 分享码信息 { code, usedViews, totalViews, expiresAt }
+    // ???????
+    isShareCodeUser: false, // ??????????
+    shareCodeInfo: null,     // ??????{ code, usedViews, totalViews, expiresAt }
     
-    // 🔴 「去购买配件」跳转：进入售后中心时要打开的型号（如 'F1 MAX'），shouhou 读后清空
+    // ?? ??????????????????????????'F1 MAX'??shouhou ????
     shouhouOpenModel: '',
-    // 🔴 需要预选高亮的配件名列表（如 ['固定牌支架','固定车上支架']），shouhou 读后清空
+    // ?? ???????????????['??????,'??????']??shouhou ????
     shouhouPreselectParts: [],
     
-    // 🔴 更新页面访问统计的辅助函数
+    // ????????
     updatePageVisit: function(pageRoute) {
-      // 异步调用，不阻塞页面加载
-      wx.cloud.callFunction({
-        name: 'updatePageVisit',
-        data: { pageRoute: pageRoute },
-        success: (res) => {
-          console.log('[app] 页面访问统计更新成功:', pageRoute, res);
-        },
-        fail: (err) => {
-          console.error('[app] 页面访问统计更新失败:', pageRoute, err);
+      let finalRoute = String(pageRoute || '').trim();
+      try {
+        const pages = getCurrentPages();
+        const current = pages && pages.length ? pages[pages.length - 1] : null;
+        if (current && current.route) {
+          finalRoute = current.route;
         }
-      });
+      } catch (e) {}
+      if (!finalRoute) return;
+
+      const now = Date.now();
+      const lastMap = this._pageVisitLastTsMap || (this._pageVisitLastTsMap = {});
+      const lastTs = Number(lastMap[finalRoute] || 0);
+      if (now - lastTs < 1200) {
+        return;
+      }
+      lastMap[finalRoute] = now;
+
+      const send = (retryLeft = 1) => {
+        wx.cloud.callFunction({
+          name: 'updatePageVisit',
+          data: { pageRoute: finalRoute },
+          success: (res) => {
+            console.log('[app] page visit updated:', finalRoute, res);
+          },
+          fail: (err) => {
+            if (retryLeft > 0) {
+              setTimeout(() => send(retryLeft - 1), 350);
+              return;
+            }
+            console.error('[app] page visit update failed:', finalRoute, err);
+          }
+        });
+      };
+      send(1);
     },
     
-    // 🔴 shop页面数据预加载缓存（启动时拉全量 + 合并临时链 + 预热图片，进商城页可秒开）
+    // shop ???????????????????
     shopDataCache: {
       shopTitle: null,
       topMediaList: null,
       heroAutoCarouselEnabled: false,
       seriesList: null,
       accessoryList: null,
-      cacheTime: null, // 缓存时间戳
-      isLoading: false // 是否正在加载
+      cacheTime: null, // ????
+      isLoading: false // ????
     },
-    // 从商城返回 PRODUCTS 后保留的 UI 快照（详情弹层/配件弹层），再进商城时恢复，避免整页像重刷）
-    shopUiSnapshot: null
+    // ??????PRODUCTS ???? UI ??????????????????????????????
+    shopUiSnapshot: null,
+    // 审核放行模式（app_config.blocking_rules.is_active === false）
+    reviewPassMode: null
   },
 
-  // ======================== 全局 UI API（替代 wx.showToast/showModal/showLoading/showActionSheet） ========================
-  // 统一 Loading：既支持字符串，也支持对象({ title:'...', mask:true })
-  showLoading(option = '加载中...') {
-    const text = typeof option === 'string' ? option : (option.title || '加载中...');
+  // ======================== ?? UI API????wx.showToast/showModal/showLoading/showActionSheet??========================
+  // ?? Loading??????????????{ title:'...', mask:true })
+  showLoading(option = '????..') {
+    const text = typeof option === 'string' ? option : (option.title || '????..');
     this.globalData.ui.loading = { show: true, text };
     this._emitUI();
   },
@@ -77,11 +105,11 @@ App({
   },
 
   showDialog({
-    title = '提示',
+    title = '??',
     content = '',
     showCancel = false,
-    confirmText = '确定',
-    cancelText = '取消',
+    confirmText = '??',
+    cancelText = '??',
     maskClosable = true,
     onConfirm = null,
     onCancel = null
@@ -109,7 +137,7 @@ App({
     this._emitUI();
   },
 
-  showInput({ title = '请输入', placeholder = '', value = '', maskClosable = true, onConfirm = null, onCancel = null } = {}) {
+  showInput({ title = '???', placeholder = '', value = '', maskClosable = true, onConfirm = null, onCancel = null } = {}) {
     this.globalData.ui.input = { show: true, title, placeholder, value, maskClosable };
     this.globalData._uiCb.inputConfirm = typeof onConfirm === 'function' ? onConfirm : null;
     this.globalData._uiCb.inputCancel = typeof onCancel === 'function' ? onCancel : null;
@@ -122,9 +150,9 @@ App({
     this._emitUI();
   },
 
-  // 事件派发：通知当前页面刷新 ui
+  // ????????????? ui
   _emitUI() {
-    // 用 getCurrentPages() 通知所有已挂载页面刷新 ui（避免进入新页面时 ui 未同步导致 loading 不显示）
+    // ??getCurrentPages() ??????????? ui??????????ui ??????loading ????
     try {
       const pages = getCurrentPages();
       if (pages && pages.length) {
@@ -139,7 +167,7 @@ App({
     }
   },
 
-  // 内部辅助：获取当前页面上的自定义弹窗组件
+  // ????????????????????
   _getCustomToast() {
     try {
       const pages = getCurrentPages();
@@ -148,27 +176,212 @@ App({
         return curPage.selectComponent('#custom-toast');
       }
     } catch (e) {
-      console.error('[app] 获取custom-toast组件失败', e);
+      console.error('[app] ??custom-toast????', e);
     }
     return null;
   },
 
-  // ======================== 生命周期 ========================
-  onLaunch: function (options) {
-    // 🔴 1. 启动时立即检查PC端
-    this.checkIsPC();
+  _isTrueFlag(v) {
+    return v === true || v === 1 || v === 'true' || v === '1';
+  },
 
-    // 🔴 2. 检测分享码参数
+  _resolveBlockedTypeFromReason(reason) {
+    if (reason === 'location_blocked') return 'location';
+    if (reason === 'screenshot' || reason === 'screen_record' || reason === 'screenshot_risk_review') {
+      return 'screenshot';
+    }
+    return 'banned';
+  },
+
+  _isBlockedPageRoute(route) {
+    return route === 'pages/blocked/blocked';
+  },
+
+  _isLocationInBlockedCities(blockedCities = [], locData = {}) {
+    const city = String(locData.city || '');
+    const district = String(locData.district || '');
+    if (!city) return false;
+    return blockedCities.some((blockedItem) => {
+      let blockedCity = '';
+      let blockedDistrict = '';
+      if (typeof blockedItem === 'object' && blockedItem) {
+        blockedCity = String(blockedItem.city || '');
+        blockedDistrict = String(blockedItem.district || '');
+      } else if (typeof blockedItem === 'string') {
+        blockedCity = blockedItem;
+      }
+      if (!blockedCity) return false;
+      const cityMatched = city.indexOf(blockedCity) !== -1 || blockedCity.indexOf(city) !== -1;
+      if (!cityMatched) return false;
+      if (!blockedDistrict) return true;
+      if (!district) return false;
+      return district.indexOf(blockedDistrict) !== -1 || blockedDistrict.indexOf(district) !== -1;
+    });
+  },
+
+  async _resolveLocationForGlobalAccessGuard() {
+    const cached = wx.getStorageSync('last_location') || {};
+    if (cached && cached.city) return cached;
+    try {
+      const locRes = await new Promise((resolve, reject) => {
+        wx.getLocation({
+          type: 'gcj02',
+          isHighAccuracy: true,
+          success: resolve,
+          fail: reject
+        });
+      });
+      const { reverseGeocodeWithRetry } = require('./utils/reverseGeocode.js');
+      const addr = await reverseGeocodeWithRetry(locRes.latitude, locRes.longitude, {
+        maxRetries: 2,
+        timeout: 8000,
+        retryDelay: 600
+      });
+      const merged = {
+        ...addr,
+        latitude: locRes.latitude,
+        longitude: locRes.longitude
+      };
+      try { wx.setStorageSync('last_location', merged); } catch (e) {}
+      return merged;
+    } catch (e) {
+      return cached || {};
+    }
+  },
+
+  async enforceGlobalAccessGuard(options = {}) {
+    if (this._accessGuardInFlight) return true;
+    this._accessGuardInFlight = true;
+    try {
+      const pages = getCurrentPages();
+      const currentPage = pages && pages.length ? pages[pages.length - 1] : null;
+      const currentRoute = currentPage && currentPage.route ? currentPage.route : '';
+      if (this._isBlockedPageRoute(currentRoute)) return true;
+
+      const reviewPassMode = await this._isReviewPassMode();
+      if (reviewPassMode) return true;
+
+      const loginRes = await wx.cloud.callFunction({ name: 'login' });
+      const openid = loginRes && loginRes.result ? loginRes.result.openid : '';
+      if (!openid) return true;
+
+      const db = wx.cloud.database();
+      let adminCheck = await db.collection('guanliyuan').where({ openid }).limit(1).get();
+      if (!adminCheck.data || adminCheck.data.length === 0) {
+        adminCheck = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get();
+      }
+      if (adminCheck.data && adminCheck.data.length > 0) return true;
+
+      const buttonRes = await db.collection('login_logbutton')
+        .where({ _openid: openid })
+        .orderBy('updateTime', 'desc')
+        .limit(1)
+        .get();
+      const button = (buttonRes.data && buttonRes.data[0]) || null;
+      if (button) {
+        const qiangli = this._isTrueFlag(button.qiangli);
+        const isBanned = this._isTrueFlag(button.isBanned);
+        if (qiangli || isBanned) {
+          const type = this._resolveBlockedTypeFromReason(button.banReason || '');
+          wx.setStorageSync('is_user_banned', true);
+          wx.reLaunch({ url: `/pages/blocked/blocked?type=${type}` });
+          return false;
+        }
+      }
+
+      const validRes = await db.collection('valid_users').where({ _openid: openid }).limit(1).get();
+      if (!validRes.data || validRes.data.length === 0) {
+        wx.removeStorageSync('has_permanent_auth');
+        wx.removeStorageSync('user_nickname');
+        wx.removeStorageSync('is_user_banned');
+        wx.reLaunch({ url: '/pages/index/index' });
+        return false;
+      }
+
+      let rules = null;
+      try {
+        const cfgRes = await db.collection('app_config').doc('blocking_rules').get();
+        rules = (cfgRes && cfgRes.data) || null;
+      } catch (e) {
+        rules = null;
+      }
+      const blockingEnabled = !!(rules && rules.is_active === true);
+      if (blockingEnabled) {
+        const blockedCities = Array.isArray(rules.blocked_cities) ? rules.blocked_cities : [];
+        const validUser = validRes.data[0] || {};
+        const hasBypass = !!(validUser.bypassLocationCheck === true || (button && button.bypassLocationCheck === true));
+        if (!hasBypass && blockedCities.length > 0) {
+          const locData = await this._resolveLocationForGlobalAccessGuard();
+          if (this._isLocationInBlockedCities(blockedCities, locData)) {
+            wx.setStorageSync('is_user_banned', true);
+            wx.reLaunch({ url: '/pages/blocked/blocked?type=location' });
+            return false;
+          }
+        }
+      }
+
+      return true;
+    } catch (e) {
+      console.warn('[app] global access guard failed:', e);
+      return true;
+    } finally {
+      this._accessGuardInFlight = false;
+    }
+  },
+
+  _startGlobalAccessGuardTimer() {
+    this._stopGlobalAccessGuardTimer();
+    this._globalAccessGuardTimer = setInterval(() => {
+      this.enforceGlobalAccessGuard({ silent: true });
+    }, GLOBAL_ACCESS_GUARD_INTERVAL_MS);
+  },
+
+  _stopGlobalAccessGuardTimer() {
+    if (this._globalAccessGuardTimer) {
+      clearInterval(this._globalAccessGuardTimer);
+      this._globalAccessGuardTimer = null;
+    }
+  },
+
+  _installGlobalPageShowGuard() {
+    if (wx.__mt_page_guard_installed) return;
+    const rawPage = Page;
+    Page = function(definition) {
+      const pageDef = definition || {};
+      const originalOnShow = pageDef.onShow;
+      pageDef.onShow = async function(...args) {
+        try {
+          const app = getApp();
+          if (app && typeof app.enforceGlobalAccessGuard === 'function') {
+            const pass = await app.enforceGlobalAccessGuard({ silent: true });
+            if (!pass) return;
+          }
+        } catch (e) {}
+        if (typeof originalOnShow === 'function') {
+          return originalOnShow.apply(this, args);
+        }
+      };
+      return rawPage(pageDef);
+    };
+    wx.__mt_page_guard_installed = true;
+  },
+
+  // ======================== ???? ========================
+  onLaunch: function (options) {
+    this._installGlobalPageShowGuard();
+    // ?? 1. ???????PC??    this.checkIsPC();
+
+    // ?? 2. ???????
     if (options && options.query && options.query.shareCode) {
       const shareCode = options.query.shareCode
-      console.log('[app] 检测到分享码参数:', shareCode)
+      console.log('[app] ?????????', shareCode)
       this.verifyShareCode(shareCode)
     }
 
-    // ======================== 方案A：全局拦截微信官方弹窗 ========================
-    // 将 wx.showModal / wx.showToast / wx.showLoading / wx.hideLoading 统一替换为自定义白底黑字 UI
+    // ======================== ??A??????????? ========================
+    // ??wx.showModal / wx.showToast / wx.showLoading / wx.hideLoading ???????????? UI
     try {
-      // 保存原生 API (防止重复保存)
+      // ???? API (??????)
       if (!wx.__mt_oldShowModal) wx.__mt_oldShowModal = wx.showModal;
       if (!wx.__mt_oldShowToast) wx.__mt_oldShowToast = wx.showToast;
       if (!wx.__mt_oldHideToast) wx.__mt_oldHideToast = wx.hideToast;
@@ -176,7 +389,7 @@ App({
       if (!wx.__mt_oldHideLoading) wx.__mt_oldHideLoading = wx.hideLoading;
       if (!wx.__mt_oldSetClipboardData) wx.__mt_oldSetClipboardData = wx.setClipboardData;
 
-      // 辅助函数：获取自定义弹窗组件
+      // ??????????????
       const getToast = () => {
         try {
           const pages = getCurrentPages();
@@ -185,12 +398,12 @@ App({
             return curPage.selectComponent('#custom-toast');
           }
         } catch (e) {
-          console.error('[app] 获取custom-toast组件失败', e);
+          console.error('[app] ??custom-toast????', e);
         }
         return null;
       };
 
-      // 互斥：尝试关闭页面上可能存在的自定义弹窗/遮罩，避免与 custom-toast 重叠
+      // ????????????????????/?????? custom-toast ??
       const hideKnownPagePopups = () => {
         try {
           const pages = getCurrentPages();
@@ -204,13 +417,13 @@ App({
             'showCopySuccessModal',
             'showShareCodeGenerateModal',
             'showConfirmModal',
-            'showModal', // my 页底部自定义 modal
-            'autoToastClosing' // my 页自动提示退出动画
+            'showModal', // my ?????? modal
+            'autoToastClosing' // my ?????? toast
           ];
           knownFlags.forEach(k => {
             if (d[k]) patch[k] = false;
           });
-          // 🔴 特殊处理：autoToast 是对象，需要单独处理
+          // ?????? autoToast ??
           if (d.autoToast && d.autoToast.show) {
             patch['autoToast.show'] = false;
           }
@@ -222,36 +435,30 @@ App({
 
       // 1) showModal
       wx.showModal = (opt = {}) => {
-        // 如果使用了 editable 等高级特性，直接调用官方原方法（组件暂不支持）
-        if (opt && opt.editable) {
-          return wx.__mt_oldShowModal ? wx.__mt_oldShowModal(opt) : undefined;
-        }
-        
         const toast = getToast();
         if (toast) {
           hideKnownPagePopups();
           toast.showModal(opt);
         } else {
-          // 降级回退到原生
-          console.warn('[app] 当前页面未找到 #custom-toast 组件，降级使用原生 showModal');
+          // ????????          console.warn('[app] ????????#custom-toast ??????????showModal');
           return wx.__mt_oldShowModal(opt);
         }
       };
 
       // 2) showToast
       wx.showToast = (opt = {}) => {
-        // 处理字符串参数（兼容 wx.showToast('提示') 这种调用方式）
+        // ?? wx.showToast('text') ??
         if (typeof opt === 'string') {
           opt = { title: opt };
         }
         
         const toast = getToast();
         if (toast) {
-          console.log('[app] 使用自定义弹窗显示 Toast:', opt);
+          console.log('[app] ??????????Toast:', opt);
           hideKnownPagePopups();
           toast.showToast(opt);
         } else {
-          console.warn('[app] 当前页面未找到 #custom-toast 组件，降级使用原生 showToast', opt);
+          console.warn('[app] ????????#custom-toast ??????????showToast', opt);
           return wx.__mt_oldShowToast(opt);
         }
       };
@@ -268,7 +475,7 @@ App({
           hideKnownPagePopups();
           toast.showLoading(opt);
         } else {
-          console.warn('[app] 当前页面未找到 #custom-toast 组件，降级使用原生 showLoading');
+          console.warn('[app] ????????#custom-toast ??????????showLoading');
           return wx.__mt_oldShowLoading(opt);
         }
       };
@@ -278,12 +485,12 @@ App({
         else wx.__mt_oldHideLoading();
       };
 
-      // 4) setClipboardData - 拦截并立即隐藏官方弹窗
+      // 4) setClipboardData - ???????????
       wx.setClipboardData = (opt = {}) => {
         const originalSuccess = opt.success;
         const originalFail = opt.fail;
         
-        // 🔴 复制前立即隐藏可能的官方弹窗
+        // ?? ??????????????
         if (wx.__mt_oldHideToast) {
           wx.__mt_oldHideToast();
         }
@@ -291,9 +498,9 @@ App({
           wx.__mt_oldHideLoading();
         }
         
-        // 包装 success 回调，立即隐藏官方弹窗
+        // ?? success ??
         opt.success = (res) => {
-          // 🔴 立即疯狂隐藏官方弹窗（多次尝试，不同时机）
+          // ???????? toast/loading
           const hideOfficialToast = () => {
             try {
               if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
@@ -301,7 +508,7 @@ App({
             } catch (e) {}
           };
           
-          // 立即执行多次，确保官方弹窗不会显示
+          // ???????????
           hideOfficialToast();
           setTimeout(hideOfficialToast, 1);
           setTimeout(hideOfficialToast, 3);
@@ -318,86 +525,195 @@ App({
           setTimeout(hideOfficialToast, 350);
           setTimeout(hideOfficialToast, 500);
           
-          // 执行原始 success 回调
+          // ???? success ??
           if (originalSuccess) originalSuccess(res);
         };
         
-        // 调用原生 API
+        // ???? API
         return wx.__mt_oldSetClipboardData(opt);
       };
     } catch (e) {
-      console.error('[app] 替换API失败:', e);
+      console.error('[app] ??API??:', e);
     }
 
     if (!wx.cloud) {
-      console.error('请使用 2.2.3 或以上的基础库以使用云能力');
+      console.error('??? 2.2.3 ????????????');
     } else {
       wx.cloud.init({
         env: 'cloudbase-4gn1heip7c38ec6c',
         traceUser: true,
       });
-      console.log('✅ 云开发已在 app.js 初始化，环境ID: cloudbase-4gn1heip7c38ec6c');
+      console.log('????????app.js ??????ID: cloudbase-4gn1heip7c38ec6c');
       
-      // 🔴 预加载shop页面数据（不阻塞启动）
-      this.preloadShopData();
+      // ?? ???shop????????????      this.preloadShopData();
       
-      // 🔴 应用启动时检查封禁状态（确保重启后也能拦截）
-      // PC端检测已在onLaunch最开始执行，这里不再重复检查
-      // 开发环境下跳过封禁检查，避免误判和自动解封
+      // ?????????????????????
       try {
         const deviceInfo = wx.getDeviceInfo();
         const isDevTools = deviceInfo.platform === 'devtools';
         if (!isDevTools) {
           this.checkBanStatusOnLaunch();
         } else {
-          console.log('[app] 开发工具环境，跳过封禁状态检查');
+          console.log('[app] ???????????????');
         }
       } catch (e) {
-        console.warn('[app] 无法判断环境，跳过封禁检查', e);
+        console.warn('[app] ?????????????', e);
       }
     }
   },
 
   onShow: function () {
-    // 🔴 2. 每次从后台切回前台，或者从别的页面切回来时，再次检查
-    // 防止用户通过"浮窗"、"分享卡片"等方式绕过
+    // ???????????
     this.checkIsPC();
+    this.enforceGlobalAccessGuard({ silent: true });
+    this._startGlobalAccessGuardTimer();
+    this._suspiciousSessionStartAt = Date.now();
+    this._startSuspiciousSessionHeartbeat();
   },
 
-  // --- 🔴 核心检测函数 ---
+  onHide: function () {
+    this._stopGlobalAccessGuardTimer();
+    this._stopSuspiciousSessionHeartbeat();
+    this._flushSuspiciousSession();
+  },
+
+  onError: function () {
+    this._stopSuspiciousSessionHeartbeat();
+    this._flushSuspiciousSession();
+  },
+
+  _suspiciousSessionHeartbeatTimer: null,
+  _suspiciousSessionFlushInFlight: false,
+  _suspiciousSessionRetryQueue: [],
+  _suspiciousSessionRetryTimer: null,
+
+  _startSuspiciousSessionHeartbeat: function () {
+    if (this._suspiciousSessionHeartbeatTimer) {
+      clearInterval(this._suspiciousSessionHeartbeatTimer);
+      this._suspiciousSessionHeartbeatTimer = null;
+    }
+    this._suspiciousSessionHeartbeatTimer = setInterval(() => {
+      this._flushSuspiciousSession(true);
+    }, 60000);
+    this._startSuspiciousSessionRetryDrain();
+  },
+
+  _stopSuspiciousSessionHeartbeat: function () {
+    if (this._suspiciousSessionHeartbeatTimer) {
+      clearInterval(this._suspiciousSessionHeartbeatTimer);
+      this._suspiciousSessionHeartbeatTimer = null;
+    }
+    if (this._suspiciousSessionRetryTimer) {
+      clearInterval(this._suspiciousSessionRetryTimer);
+      this._suspiciousSessionRetryTimer = null;
+    }
+  },
+
+  _startSuspiciousSessionRetryDrain: function () {
+    if (this._suspiciousSessionRetryTimer) return;
+    this._suspiciousSessionRetryTimer = setInterval(() => {
+      this._drainSuspiciousSessionRetryQueue();
+    }, 20000);
+  },
+
+  _drainSuspiciousSessionRetryQueue: function () {
+    if (this._suspiciousSessionFlushInFlight) return;
+    const queue = this._suspiciousSessionRetryQueue || [];
+    if (!queue.length) return;
+    const payload = queue.shift();
+    this._suspiciousSessionFlushInFlight = true;
+    wx.cloud.callFunction({
+      name: 'recordSuspiciousSession',
+      data: payload
+    }).catch((err) => {
+      console.error('[app] retry recordSuspiciousSession failed', err);
+      queue.unshift(payload);
+      if (queue.length > 30) queue.length = 30;
+    }).finally(() => {
+      this._suspiciousSessionFlushInFlight = false;
+    });
+  },
+
+  _flushSuspiciousSession: function (keepRunning = false) {
+    try {
+      if (this._suspiciousSessionFlushInFlight) return;
+      const startAt = Number(this._suspiciousSessionStartAt || 0);
+      if (!startAt) return;
+      const now = Date.now();
+      const durationMs = Math.max(0, now - startAt);
+      if (durationMs < 3000) return;
+
+      const pages = getCurrentPages();
+      const current = pages && pages.length ? pages[pages.length - 1] : null;
+      const route = current && current.route ? current.route : '';
+      const loc = wx.getStorageSync('last_location') || {};
+      const payload = {
+        durationMs,
+        route,
+        locationInfo: {
+          province: loc.province || '',
+          city: loc.city || '',
+          district: loc.district || '',
+          address: loc.address || '',
+          latitude: loc.latitude,
+          longitude: loc.longitude
+        }
+      };
+
+      this._suspiciousSessionFlushInFlight = true;
+      wx.cloud.callFunction({
+        name: 'recordSuspiciousSession',
+        data: payload
+      }).then(() => {
+        this._suspiciousSessionStartAt = keepRunning ? now : 0;
+      }).catch((err) => {
+        // ???????? startAt?????????
+        console.error('[app] recordSuspiciousSession failed', err);
+        this._suspiciousSessionRetryQueue.push(payload);
+        if (this._suspiciousSessionRetryQueue.length > 30) {
+          this._suspiciousSessionRetryQueue = this._suspiciousSessionRetryQueue.slice(-30);
+        }
+      }).finally(() => {
+        this._suspiciousSessionFlushInFlight = false;
+      });
+    } catch (e) {
+      console.warn('[app] flush suspicious session failed', e);
+    }
+  },
+
+  // --- ?? ???????---
   checkIsPC() {
     try {
       const deviceInfo = wx.getDeviceInfo();
       const platform = deviceInfo.platform.toLowerCase();
 
-      // 🔴 开发工具环境下跳过检测，允许开发调试
+      // ???????? PC ??
       if (platform === 'devtools') {
-        console.log('[app] 开发工具环境，跳过PC端检测');
+        console.log('[app] ????????? PC ???');
         return;
       }
 
-      // 定义要封禁的平台
-      // windows: PC微信
-      // mac: Mac微信
+      // ????????
+      // windows: PC??
+      // mac: Mac??
       const bannedPlatforms = ['windows', 'mac']; 
 
       if (bannedPlatforms.includes(platform)) {
-        console.warn('[app] 检测到非法设备访问:', platform);
+        console.warn('[app] ?????????:', platform);
         
-        // 获取当前页面栈，避免在 blocked 页面重复跳转导致死循环
+        // ?? blocked ???????
         const pages = getCurrentPages();
         const currentPage = pages[pages.length - 1];
         if (currentPage && currentPage.route && currentPage.route.includes('pages/blocked/blocked')) {
-          console.log('[app] 已在封禁页面，跳过重复跳转');
+          console.log('[app] ?????????????');
           return; 
         }
 
-        // 强制重启动到封禁页 (使用 reLaunch 清空所有页面栈，让用户无法返回)
+        // ??????????(?? reLaunch ???????????????)
         wx.reLaunch({
           url: '/pages/blocked/blocked?type=pc',
           fail: (err) => {
-            // 如果跳转失败，延迟重试
-            console.error('[app] PC端跳转失败，延迟重试:', err);
+            // ????????????            console.error('[app] PC??????????:', err);
             setTimeout(() => {
               wx.reLaunch({
                 url: '/pages/blocked/blocked?type=pc'
@@ -406,26 +722,48 @@ App({
           }
         });
         
-        // 再次隐藏 home 按钮（虽然 reLaunch 已经清空了栈，加一层保险）
+        // ???? home ??????reLaunch ?????????????
         if (wx.hideHomeButton) {
           wx.hideHomeButton();
         }
       }
     } catch (e) {
-      // 如果获取失败，为了安全起见，可以选择放行或阻断
-      // 这里选择放行，避免误判导致正常用户无法使用
-      console.error('[app] 设备检测失败', e);
+      // ?????????????
+      console.error('[app] ??????', e);
     }
   },
 
-  // 🔴 应用启动时检查封禁状态
+  async _isReviewPassMode() {
+    if (typeof this.globalData.reviewPassMode === 'boolean') {
+      return this.globalData.reviewPassMode;
+    }
+    try {
+      const db = wx.cloud.database();
+      const res = await db.collection('app_config').doc('blocking_rules').get();
+      const cfg = (res && res.data) || {};
+      const enabled = cfg.is_active === false;
+      this.globalData.reviewPassMode = enabled;
+      return enabled;
+    } catch (e) {
+      this.globalData.reviewPassMode = false;
+      return false;
+    }
+  },
+
+  // ???????????
   async checkBanStatusOnLaunch() {
     try {
-      // 🔴 开发环境下跳过封禁检查，避免误判
+      const reviewPassMode = await this._isReviewPassMode();
+      if (reviewPassMode) {
+        console.log('[app] 审核放行模式：跳过启动封禁检查');
+        return;
+      }
+
+      // ?? ????????????????
       const deviceInfo = wx.getDeviceInfo();
       const isDevTools = deviceInfo.platform === 'devtools';
       if (isDevTools) {
-        console.log('[app] 开发工具环境，跳过封禁检查');
+        console.log('[app] ?????????????');
         return;
       }
 
@@ -433,7 +771,7 @@ App({
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
       
-      // 🔴 同时检查 login_logbutton 和 login_logs 两个集合
+      // ?? ?????login_logbutton ??login_logs ????
       const [buttonRes, logRes] = await Promise.all([
         db.collection('login_logbutton')
           .where({ _openid: openid })
@@ -447,12 +785,12 @@ App({
           .get()
       ]);
       
-      // 检查 login_logbutton 集合
+      // ???login_logbutton ??
       if (buttonRes.data && buttonRes.data.length > 0) {
         const btn = buttonRes.data[0];
         const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
         if (qiangli) {
-          console.log('[app] ⚠️ 检测到强制封禁按钮 qiangli 已开启（login_logbutton），无视一切放行，直接封禁');
+          console.log('[app] ?? ????????? qiangli ????login_logbutton?????????????');
           setTimeout(() => {
             wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           }, 500);
@@ -460,12 +798,12 @@ App({
         }
       }
 
-      // 🔴 同时检查 login_logs 集合（兼容用户在 login_logs 中设置 qiangli 的情况）
+      // ?? ?????login_logs ???????? login_logs ????qiangli ????
       if (logRes.data && logRes.data.length > 0) {
         const log = logRes.data[0];
         const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
         if (qiangli) {
-          console.log('[app] ⚠️ 检测到强制封禁按钮 qiangli 已开启（login_logs），无视一切放行，直接封禁');
+          console.log('[app] ?? ????????? qiangli ????login_logs?????????????');
           setTimeout(() => {
             wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           }, 500);
@@ -473,13 +811,13 @@ App({
         }
       }
       
-      // 🔴 关键修复：先检查是否是管理员，管理员豁免封禁检查（但qiangli优先级更高）
+      // ?? ??????????????????????????qiangli??????
       let adminCheck = await db.collection('guanliyuan')
         .where({ openid: openid })
         .limit(1)
         .get();
       
-      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      // ??? openid ????????? _openid ????
       if (adminCheck.data && adminCheck.data.length === 0) {
         adminCheck = await db.collection('guanliyuan')
           .where({ _openid: openid })
@@ -488,8 +826,8 @@ App({
       }
       
       if (adminCheck.data && adminCheck.data.length > 0) {
-        console.log('[app] ✅ 检测到管理员身份，豁免封禁检查');
-        return; // 管理员直接返回，不检查封禁状态
+        console.log('[app] ?????????');
+        return; // ???????
       }
       
       if (buttonRes.data && buttonRes.data.length > 0) {
@@ -498,12 +836,12 @@ App({
         const isBanned = rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
         
         if (isBanned) {
-          console.log('[app] 应用启动时检测到封禁状态，跳转到封禁页');
-          const banType = btn.banReason === 'screenshot' || btn.banReason === 'screen_record' 
+          console.log('[app] ???????????????????');
+          const banType = btn.banReason === 'screenshot' || btn.banReason === 'screen_record' || btn.banReason === 'screenshot_risk_review'
             ? 'screenshot' 
             : (btn.banReason === 'location_blocked' ? 'location' : 'banned');
           
-          // 延迟一下，确保页面加载完成
+          // ?????????????
           setTimeout(() => {
             wx.reLaunch({ url: `/pages/blocked/blocked?type=${banType}` });
           }, 500);
@@ -513,34 +851,34 @@ App({
     } catch (err) {
       const msg = (err.errMsg || err.message || '') + '';
       if (msg.indexOf('access_token') !== -1) {
-        console.warn('[app] 云会话未就绪，跳过启动封禁检查（请确保已登录/选择云环境）');
+        console.warn('[app] ??????????????????????/??????');
         return;
       }
-      console.error('[app] 启动时检查封禁状态失败:', err);
+      console.error('[app] ????????????', err);
     }
   },
 
-  // 🔴 全局定时检查 qiangli 强制封禁（所有页面都会调用）
-  _qiangliCheckTimer: null, // 定时器ID
+  // ?? ???????qiangli ??????????????
+  _qiangliCheckTimer: null, // ???ID
 
-  // 🔴 启动定时检查 qiangli 强制封禁
+  // ?? ???????qiangli ????
   startQiangliCheck() {
-    // 清除旧的定时器
+    // ???????
     if (this._qiangliCheckTimer) {
       clearInterval(this._qiangliCheckTimer);
       this._qiangliCheckTimer = null;
     }
 
-    // 立即检查一次
+    // ???????
     this.checkQiangliStatus();
 
-    // 每2秒检查一次
+    // ??????
     this._qiangliCheckTimer = setInterval(() => {
       this.checkQiangliStatus();
-    }, 2000);
+    }, 30000);
   },
 
-  // 🔴 停止定时检查
+  // ????
   stopQiangliCheck() {
     if (this._qiangliCheckTimer) {
       clearInterval(this._qiangliCheckTimer);
@@ -548,27 +886,32 @@ App({
     }
   },
 
-  // 🔴 检查 qiangli 强制封禁状态
+  // ?? qiangli ??
   async checkQiangliStatus() {
     try {
-      // 🔴 开发环境下跳过封禁检查，避免误判
+      const reviewPassMode = await this._isReviewPassMode();
+      if (reviewPassMode) {
+        return;
+      }
+
+      // ?? ????????????????
       const deviceInfo = wx.getDeviceInfo();
       const isDevTools = deviceInfo.platform === 'devtools';
       if (isDevTools) {
-        return; // 开发工具环境，直接返回
+        return; // ???????????
       }
 
       const loginRes = await wx.cloud.callFunction({ name: 'login' });
       const openid = loginRes.result.openid;
       const db = wx.cloud.database();
 
-      // 🔴 先检查是否是管理员，管理员豁免检查
+      // ?????
       let adminCheck = await db.collection('guanliyuan')
         .where({ openid: openid })
         .limit(1)
         .get();
       
-      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
+      // ?????? _openid ???
       if (adminCheck.data && adminCheck.data.length === 0) {
         adminCheck = await db.collection('guanliyuan')
           .where({ _openid: openid })
@@ -577,10 +920,10 @@ App({
       }
       
       if (adminCheck.data && adminCheck.data.length > 0) {
-        return; // 管理员直接返回，不检查封禁状态
+        return; // ???????
       }
 
-      // 🔴 检查 qiangli 强制封禁（同时检查 login_logbutton 和 login_logs 两个集合）
+      // ???? login_logbutton ? login_logs
       const [buttonRes, logRes] = await Promise.all([
         db.collection('login_logbutton')
           .where({ _openid: openid })
@@ -594,47 +937,47 @@ App({
           .get()
       ]);
 
-      // 检查 login_logbutton 集合
+      // ???login_logbutton ??
       if (buttonRes.data && buttonRes.data.length > 0) {
         const btn = buttonRes.data[0];
         const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
         
         if (qiangli) {
-          console.log('[app] 🚫 定时检查：检测到 qiangli 强制封禁（login_logbutton），立即跳转');
+          console.log('[app] ?? ???????? qiangli ?????login_logbutton??????');
           this.stopQiangliCheck();
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           return;
         }
       }
 
-      // 🔴 同时检查 login_logs 集合（兼容用户在 login_logs 中设置 qiangli 的情况）
+      // ?? ?????login_logs ???????? login_logs ????qiangli ????
       if (logRes.data && logRes.data.length > 0) {
         const log = logRes.data[0];
         const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
         
         if (qiangli) {
-          console.log('[app] 🚫 定时检查：检测到 qiangli 强制封禁（login_logs），立即跳转');
+          console.log('[app] ?? ???????? qiangli ?????login_logs??????');
           this.stopQiangliCheck();
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           return;
         }
       }
     } catch (err) {
-      console.error('[app] 定时检查 qiangli 状态失败:', err);
+      console.error('[app] ?????qiangli ?????', err);
     }
   },
 
-  // 🔴 验证分享码
+  // ?????
   async verifyShareCode(shareCode) {
     try {
       const db = wx.cloud.database()
       
-      // 🔴 添加超时保护（5秒超时）
+      // ?? ????????????
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('查询分享码超时')), 5000);
+        setTimeout(() => reject(new Error('???????')), 5000);
       });
       
-      // 查询分享码（带超时）
+      // ??????????
       const codeRes = await Promise.race([
         db.collection('chakan')
         .where({ code: shareCode })
@@ -643,37 +986,30 @@ App({
       ])
 
       if (!codeRes.data || codeRes.data.length === 0) {
-        console.log('[app] 分享码不存在:', shareCode)
-        // 🔴 返回错误信息，让调用方显示弹窗
-        return { success: false, error: '分享码无效' }
+        console.log('[app] ??????:', shareCode)
+        return { success: false, error: '?????' }
       }
 
       const codeInfo = codeRes.data[0]
 
-      // 检查是否过期
       const now = new Date()
       const expiresAt = new Date(codeInfo.expiresAt)
       if (now > expiresAt) {
-        console.log('[app] 分享码已过期')
-        // 🔴 返回错误信息，让调用方显示弹窗
-        return { success: false, error: '分享码已过期' }
+        console.log('[app] ??????')
+        return { success: false, error: '??????' }
       }
 
-      // 检查查看次数
       if (codeInfo.usedViews >= codeInfo.totalViews) {
-        console.log('[app] 分享码查看次数已用完')
-        // 🔴 返回错误信息，让调用方显示弹窗
-        return { success: false, error: '分享码查看次数已用完' }
+        console.log('[app] ??????????')
+        return { success: false, error: '??????????' }
       }
 
-      // 检查状态
       if (codeInfo.status !== 'active') {
-        console.log('[app] 分享码已失效')
-        // 🔴 返回错误信息，让调用方显示弹窗
-        return { success: false, error: '分享码已失效' }
+        console.log('[app] ??????')
+        return { success: false, error: '??????' }
       }
 
-      // 验证通过，设置全局标识
+      // ???????????
       this.globalData.isShareCodeUser = true
       this.globalData.shareCodeInfo = {
         code: shareCode,
@@ -683,29 +1019,27 @@ App({
         _id: codeInfo._id
       }
 
-      console.log('[app] ✅ 分享码验证通过:', this.globalData.shareCodeInfo)
-      // 位置权限改由首页在用户点击后统一请求，这里只负责验证和标记状态
+      console.log('[app] ???????:', this.globalData.shareCodeInfo)
       return { success: true }
     } catch (err) {
-      console.error('[app] 验证分享码失败:', err)
-      // 🔴 返回错误信息，让调用方显示弹窗
-      return { success: false, error: err.message || '验证分享码失败' }
+      console.error('[app] ???????', err)
+      return { success: false, error: err.message || '???????' }
     }
   },
 
-  // 🔴 更新分享码查看次数（调用云函数，不在前端处理）
+  // ?????????
   async updateShareCodeViews() {
     if (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo) {
-      return { success: false, error: '不是分享码用户或缺少分享码信息' }
+      return { success: false, error: '???????????????' }
     }
 
     try {
       const codeInfo = this.globalData.shareCodeInfo
       const shareCodeId = codeInfo._id
 
-      console.log('[app] 调用云函数更新分享码查看次数，shareCodeId:', shareCodeId)
+      console.log('[app] ???????????????shareCodeId:', shareCodeId)
 
-      // 🔴 调用云函数更新查看次数（在服务端处理，确保原子性）
+      // ?? ?????????????????????????
       const res = await wx.cloud.callFunction({
         name: 'updateShareCodeViews',
         data: {
@@ -714,17 +1048,17 @@ App({
       })
 
       if (!res.result || !res.result.success) {
-        console.error('[app] 云函数返回失败:', res.result)
-        return { success: false, error: res.result?.error || '更新失败' }
+        console.error('[app] ????????', res.result)
+        return { success: false, error: res.result?.error || '????' }
       }
 
-      // 🔴 更新全局数据（使用云函数返回的最新值）
+      // ?? ???????????????????
       this.globalData.shareCodeInfo.usedViews = res.result.usedViews
       this.globalData.shareCodeInfo.totalViews = res.result.total
 
-      console.log('[app] ✅ 查看次数更新成功，剩余:', res.result.remaining, '/', res.result.total)
+      console.log('[app] ??????????????', res.result.remaining, '/', res.result.total)
 
-      // 返回结果给调用方处理 UI
+      // ?????????? UI
       return {
         success: true,
         remaining: res.result.remaining,
@@ -733,57 +1067,57 @@ App({
         isExhausted: res.result.isExhausted
       }
     } catch (err) {
-      console.error('[app] ❌ 调用云函数更新分享码查看次数失败:', err)
-      return { success: false, error: err.message || '网络错误' }
+      console.error('[app] ??????????????????:', err)
+      return { success: false, error: err.message || '????' }
     }
   },
 
-  // 🔴 记录 azjc 页面停留与行为：分享码用户走 shareCodeInfo；普通安装用户走 poolId（chakan 汇总文档 _id）
+  // ?? azjc ?????
   async recordShareCodeSession(sessionStats, isUpdate = false, poolId = null) {
-    console.log('[app] recordShareCodeSession 被调用', { poolId: !!poolId });
+    console.log('[app] recordShareCodeSession ???', { poolId: !!poolId });
     console.log('[app] isShareCodeUser:', this.globalData.isShareCodeUser);
     console.log('[app] shareCodeInfo:', this.globalData.shareCodeInfo);
 
     if (!poolId && (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo)) {
-      console.log('[app] ❌ 不是分享码用户或缺少 shareCodeInfo，退出');
+      console.log('[app] ?????????? shareCodeInfo???');
       return;
     }
 
     try {
-      // 获取当前用户 openid（用于 viewers 记录）
+      // ?????? openid??? viewers ???
       let openid = ''
       try {
         const loginRes = await wx.cloud.callFunction({ name: 'login' })
         openid = loginRes.result.openid || ''
-        console.log('[app] 获取到 openid:', openid);
+        console.log('[app] ????openid:', openid);
       } catch (e) {
-        console.error('[app] 获取 openid 失败:', e);
+        console.error('[app] ?? openid ??:', e);
       }
 
       const baseInfo = poolId ? { _id: poolId, code: 'POOL' } : this.globalData.shareCodeInfo;
 
       if (!baseInfo || !baseInfo._id) {
-        console.error('[app] ❌ 缺少 chakan 文档 _id:', baseInfo);
+        console.error('[app] ???? chakan ?? _id:', baseInfo);
         return;
       }
 
-      console.log('[app] 写入 chakan 文档 _id:', baseInfo._id, poolId ? '(普通安装汇总池)' : ', code:', baseInfo.code);
+      console.log('[app] ?? chakan ?? _id:', baseInfo._id, poolId ? '(???????)' : ', code:', baseInfo.code);
       const durationMs = sessionStats && typeof sessionStats.durationMs === 'number'
         ? sessionStats.durationMs
         : 0
       const sectionClicks = sessionStats && sessionStats.sectionClicks ? sessionStats.sectionClicks : {}
       const sectionDurations = sessionStats && sessionStats.sectionDurations ? sessionStats.sectionDurations : {}
 
-      // 🔴 获取被分享用户的昵称
+      // ?? ??????????
       let viewerNickname = '';
       try {
         const userInfo = wx.getStorageSync('userInfo');
-        viewerNickname = userInfo?.nickName || '';
+        viewerNickname = userInfo?.nickName || wx.getStorageSync('user_nickname') || '';
       } catch (e) {
-        console.log('[app] 获取用户昵称失败:', e);
+        console.log('[app] ????????:', e);
       }
 
-      // 🔴 获取被分享用户的地址信息（如果 stats 中已包含则使用，否则从缓存读取）
+      // ?? ????????????????stats ????????????????
       let locationInfo = sessionStats.locationInfo || {
         province: '',
         city: '',
@@ -793,7 +1127,7 @@ App({
         longitude: null
       };
       
-      // 如果 stats 中没有地址信息，才从缓存读取（兼容旧逻辑）
+      // ? stats ???????????
       if (!sessionStats.locationInfo) {
         try {
           const cachedLocation = wx.getStorageSync('last_location') || {};
@@ -805,15 +1139,15 @@ App({
             latitude: cachedLocation.latitude || null,
             longitude: cachedLocation.longitude || null
           };
-          console.log('[app] 从缓存读取地址信息（兼容旧逻辑）');
+          console.log('[app] ????????????');
         } catch (e) {
-          console.log('[app] 获取地址信息失败:', e);
+          console.log('[app] ????????:', e);
         }
       } else {
-        console.log('[app] 使用传入的固定地址信息（不再重复获取）');
+        console.log('[app] ???????????????????');
       }
 
-      console.log('[app] recordShareCodeSession - 准备保存数据:');
+      console.log('[app] recordShareCodeSession - ??????:');
       console.log('[app] - shareCodeId:', baseInfo._id);
       console.log('[app] - openid:', openid);
       console.log('[app] - viewerNickname:', viewerNickname);
@@ -822,17 +1156,15 @@ App({
       console.log('[app] - sectionClicks:', JSON.stringify(sectionClicks));
       console.log('[app] - sectionDurations:', JSON.stringify(sectionDurations));
 
-      // 🔴 准备调用云函数保存数据（云函数会处理所有数据库操作）
-
-      // 🔴 构建新的 viewer 记录（注意：在客户端不能使用 db.serverDate()，需要使用 Date 对象或时间戳）
+      // ???? viewer ???viewTime ????????
       const newViewer = {
         openid: openid,
-        nickname: viewerNickname, // 🔴 被分享用户昵称
-        viewTime: new Date(), // 🔴 使用客户端时间（会自动转换为服务端时间）
-        durationMs: durationMs, // 🔴 页面查看总时长（毫秒）
-        sectionClicks: sectionClicks,       // 🔴 点击了哪些块，次数是多少 { 'product-1': 3, 'type-2': 1, 'video-0': 5, ... }
-        sectionDurations: sectionDurations, // 🔴 各板块停留时长 { 'video-0': 12000, 'graphic-1': 5000, ... }
-        // 🔴 地址信息
+        nickname: viewerNickname, // ????
+        viewTime: new Date(), // ??????
+        durationMs: durationMs, // ?????ms?
+        sectionClicks: sectionClicks, // ??????
+        sectionDurations: sectionDurations, // ?? ????????{ 'video-0': 12000, 'graphic-1': 5000, ... }
+        // ?? ????
         province: locationInfo.province,
         city: locationInfo.city,
         district: locationInfo.district,
@@ -841,15 +1173,15 @@ App({
         longitude: locationInfo.longitude
       };
 
-      console.log('[app] 准备保存的新 viewer 数据:', JSON.stringify(newViewer, null, 2));
+      console.log('[app] ?????? viewer ??:', JSON.stringify(newViewer, null, 2));
 
-      // 🔴 使用云函数保存数据（避免客户端权限问题）
-      console.log('[app] 调用云函数 recordShareCodeViewer 保存数据，isUpdate:', isUpdate);
+      // ?? ????????????????????
+      console.log('[app] ??????recordShareCodeViewer ?????isUpdate:', isUpdate);
       const cloudRes = await wx.cloud.callFunction({
         name: 'recordShareCodeViewer',
         data: {
           shareCodeId: poolId || baseInfo._id,
-          isUpdate: isUpdate, // 🔴 是否更新现有记录
+          isUpdate: isUpdate, // ?? ????????
           viewerData: {
             nickname: viewerNickname,
             durationMs: durationMs,
@@ -865,22 +1197,22 @@ App({
         }
       });
 
-      console.log('[app] 云函数返回结果:', cloudRes);
-      console.log('[app] 云函数返回结果详情:', JSON.stringify(cloudRes, null, 2));
+      console.log('[app] ????????', cloudRes);
+      console.log('[app] ??????????', JSON.stringify(cloudRes, null, 2));
 
       if (cloudRes.result && cloudRes.result.success) {
-        console.log('[app] ✅ recordShareCodeSession - 数据保存成功');
-        console.log('[app] 当前 viewers 数组长度:', cloudRes.result.viewersCount || 0);
+        console.log('[app] ??recordShareCodeSession - ??????');
+        console.log('[app] ?? viewers ????:', cloudRes.result.viewersCount || 0);
       } else {
-        console.error('[app] ❌ 云函数保存失败:', cloudRes.result?.error || '未知错误');
+        console.error('[app] ??????????', cloudRes.result?.error || '????');
       }
     } catch (err) {
-      console.error('[app] ❌ 记录分享码会话失败:', err)
-      console.error('[app] 错误详情:', JSON.stringify(err, null, 2))
+      console.error('[app] ????????????', err)
+      console.error('[app] ????:', JSON.stringify(err, null, 2))
     }
   },
 
-  // 获取模拟定位坐标
+  // ????????
   getMockLocation: function(city) {
     const mockLocations = {
       'shenzhen': {
@@ -900,14 +1232,14 @@ App({
 
     if (this.globalData.mockLocation) {
       const mockLoc = this.getMockLocation(this.globalData.mockLocation);
-      console.log('=== 使用模拟定位 ===');
-      console.log('模拟定位城市:', this.globalData.mockLocation);
-      console.log('模拟定位坐标:', mockLoc);
+      console.log('=== ?????? ===');
+      console.log('??????:', this.globalData.mockLocation);
+      console.log('??????:', mockLoc);
       this.callCloudCheck(mockLoc.latitude, mockLoc.longitude);
       return;
     }
 
-    console.log('=== 获取真实定位 ===');
+    console.log('=== ?????? ===');
 
     wx.getLocation({
       type: 'gcj02',
@@ -916,16 +1248,16 @@ App({
       success(res) {
         const latitude = res.latitude;
         const longitude = res.longitude;
-        console.log('前端获取定位成功:', latitude, longitude);
+        console.log('????????:', latitude, longitude);
         that.callCloudCheck(latitude, longitude);
       },
       fail(err) {
-        console.error('获取定位失败或用户拒绝:', err);
+        console.error('????????????', err);
       }
     });
   },
 
-  // 获取用户昵称（静默方式，不弹授权弹窗）
+  // ??????
   getUserNickName: function() {
     return new Promise((resolve) => {
       const cachedUserInfo = wx.getStorageSync('userInfo');
@@ -937,16 +1269,16 @@ App({
       try {
         wx.getUserInfo({
           success: (res) => {
-            const nickName = res.userInfo?.nickName || '未获取到昵称';
-            if (nickName !== '未获取到昵称') {
+            const nickName = res.userInfo?.nickName || '??????';
+            if (nickName !== '??????') {
               wx.setStorageSync('userInfo', res.userInfo);
             }
             resolve(nickName);
           },
-          fail: () => resolve('未获取到昵称')
+          fail: () => resolve('??????')
         });
       } catch (err) {
-        resolve('未获取到昵称');
+        resolve('??????');
       }
     });
   },
@@ -960,13 +1292,13 @@ App({
       }
 
       wx.getUserProfile({
-        desc: '用于记录访问信息',
+        desc: '????????',
         success: (res) => {
-          const nickName = res.userInfo?.nickName || '未获取到昵称';
+          const nickName = res.userInfo?.nickName || '??????';
           wx.setStorageSync('userInfo', res.userInfo);
           resolve(nickName);
         },
-        fail: () => resolve('未获取到昵称')
+        fail: () => resolve('??????')
       });
     });
   },
@@ -975,7 +1307,7 @@ App({
     if (this._isCallingCloudCheck) return;
     this._isCallingCloudCheck = true;
 
-    let nickName = '未获取到昵称';
+    let nickName = '??????';
     try {
       nickName = await this.getUserNickName();
     } catch (err) {}
@@ -994,9 +1326,9 @@ App({
         this._isCallingCloudCheck = false;
         if (res.result && res.result.isBlocked === true) {
           this.globalData.blockedLocation = {
-            city: res.result.city || '未知城市',
-            province: res.result.province || '浙江省',
-            location: res.result.location || '浙江省',
+            city: res.result.city || '????',
+            province: res.result.province || '????',
+            location: res.result.location || '????',
             latitude: res.result.latitude,
             longitude: res.result.longitude
           };
@@ -1005,7 +1337,7 @@ App({
       },
       fail: err => {
         this._isCallingCloudCheck = false;
-        console.error('云函数调用失败:', err);
+        console.error('????????', err);
       }
     });
   },
@@ -1015,8 +1347,7 @@ App({
   },
 
   /**
-   * 等待启动预拉完成（或超时），避免用户秒点商城时重复打云、首屏分多帧闪动。
-   * @param {number} maxMs 最长等待毫秒，默认 4000
+   * ?????????????????????????????????????   * @param {number} maxMs ????????? 4000
    * @returns {Promise<void>}
    */
   waitShopPreloadReady(maxMs = 4000) {
@@ -1028,7 +1359,7 @@ App({
     ]);
   },
 
-  // 🔴 预加载shop页面数据（应用启动时调用：全量元数据 + cloud 临时链 + 图片预热）；返回 Promise 供商城页等待
+  // ?? ???shop?????????????????? + cloud ????+ ???????? Promise ??????
   preloadShopData() {
     if (this._shopPreloadInflight) {
       return this._shopPreloadInflight;
@@ -1038,7 +1369,7 @@ App({
     try {
       shopPreload = require('./utils/shopPreloadBundle.js');
     } catch (reqErr) {
-      console.error('[app] 加载 shopPreloadBundle 失败:', reqErr);
+      console.error('[app] ?? shopPreloadBundle ??:', reqErr);
       this.globalData.shopDataCache.isLoading = false;
       return Promise.resolve();
     }
@@ -1051,12 +1382,12 @@ App({
     }
 
     if (!wx.cloud) {
-      console.warn('[app] 云开发未初始化，跳过shop数据预加载');
+      console.warn('[app] ?????????? shop ???');
       this.globalData.shopDataCache.isLoading = false;
       return Promise.resolve();
     }
 
-    console.log('[app] 开始预加载shop页面数据（含 hydrate 与图片预热）...');
+    console.log('[app] ?????shop?????? hydrate ??????...');
     this.globalData.shopDataCache.isLoading = true;
 
     const db = wx.cloud.database();
@@ -1067,46 +1398,45 @@ App({
     };
 
     this._shopPreloadInflight = Promise.all([
-      db.collection('shop_config').doc('shopTitle').get().catch(err => {
+      db.collection('shop_config').doc('shopMain').get().catch(err => {
         if (isDocNotFoundError(err)) {
-          console.log('[app] shopTitle 文档不存在，按空配置处理');
+          console.log('[app] shopMain 文档不存在，将尝试旧结构');
         } else {
-          console.warn('[app] 预加载shopTitle失败:', err);
-        }
-        return { data: null };
-      }),
-      db.collection('shop_config').doc('topMedia').get().catch(err => {
-        if (isDocNotFoundError(err)) {
-          console.log('[app] topMedia 文档不存在，按空配置处理');
-        } else {
-          console.warn('[app] 预加载topMedia失败:', err);
+          console.warn('[app] 读取 shopMain 失败:', err);
         }
         return { data: null };
       }),
       db.collection('shop_series').get().catch(err => {
-        console.warn('[app] 预加载shop_series失败:', err);
+        console.warn('[app] ???shop_series??:', err);
         return { data: [] };
       }),
       db.collection('shop_accessories').get().catch(err => {
-        console.warn('[app] 预加载shop_accessories失败:', err);
+        console.warn('[app] ???shop_accessories??:', err);
         return { data: [] };
       })
     ])
-      .then(async ([titleRes, mediaRes, seriesRes, accRes]) => {
-        if (titleRes.data && titleRes.data.title) {
-          cache.shopTitle = titleRes.data.title;
-        }
+      .then(async ([shopMainRes, seriesRes, accRes]) => {
+        let fixedTop = [];
+        let autoCarouselEnabled = false;
 
-        if (mediaRes.data && mediaRes.data.list) {
-          const { list: fixedTop, autoCarouselEnabled } = shopPreload.fixTopMediaListFromDoc(mediaRes.data);
-          cache.heroAutoCarouselEnabled = autoCarouselEnabled;
-          try {
-            cache.topMediaList = await shopPreload.resolveTopMediaRenderUrls(fixedTop);
-          } catch (e) {
-            console.warn('[app] topMedia renderUrl 解析失败，使用未解析列表', e);
-            cache.topMediaList = fixedTop.map(item => (item ? { ...item, renderUrl: item.url } : item));
+        if (shopMainRes.data) {
+          if (shopMainRes.data.title) cache.shopTitle = shopMainRes.data.title;
+          const fixed = shopPreload.fixTopMediaListFromDoc(shopMainRes.data);
+          fixedTop = fixed.list;
+          autoCarouselEnabled = fixed.autoCarouselEnabled;
+        } else {
+          const [titleRes, mediaRes] = await Promise.all([
+            db.collection('shop_config').doc('shopTitle').get().catch(() => ({ data: null })),
+            db.collection('shop_config').doc('topMedia').get().catch(() => ({ data: null }))
+          ]);
+          if (titleRes.data && titleRes.data.title) cache.shopTitle = titleRes.data.title;
+          if (mediaRes.data) {
+            const fixed = shopPreload.fixTopMediaListFromDoc(mediaRes.data);
+            fixedTop = fixed.list;
+            autoCarouselEnabled = fixed.autoCarouselEnabled;
           }
         }
+        cache.heroAutoCarouselEnabled = autoCarouselEnabled;
 
         const seriesData = Array.isArray(seriesRes.data) ? seriesRes.data : [];
         const accRaw = Array.isArray(accRes.data) ? accRes.data : [];
@@ -1117,18 +1447,35 @@ App({
           isRequired: false
         }));
 
+        let topRender = fixedTop;
         let seriesOut = decorated;
         let accOut = cleanList;
         try {
-          const hydrated = await shopPreload.hydrateSeriesAndAccessoriesTogether(decorated, cleanList);
-          seriesOut = hydrated.series;
-          accOut = hydrated.accessories;
+          const needsTop = shopPreload.topMediaNeedsCloudResolve(fixedTop);
+          const needsLists = !shopPreload.listsHaveCompleteCloudDisplays(decorated, cleanList) &&
+            (shopPreload.collectSeriesCloudFileIdsFromList(decorated).length > 0 ||
+              shopPreload.collectAccessoryCloudFileIdsFromList(cleanList).length > 0);
+          if (needsTop || needsLists) {
+            const hydrated = await shopPreload.hydrateShopFirstScreenTogether(
+              fixedTop,
+              decorated,
+              cleanList,
+              u => u
+            );
+            topRender = hydrated.topRender;
+            seriesOut = hydrated.series;
+            accOut = hydrated.accessories;
+          } else {
+            topRender = await shopPreload.resolveTopMediaRenderUrls(fixedTop);
+          }
         } catch (e) {
-          console.warn('[app] 预加载 hydrate 失败，缓存为未解析 cloud 链', e);
+          console.warn('[app] 商城首屏 hydrate 失败，使用未解析列表', e);
+          topRender = fixedTop.map(item => (item ? { ...item, renderUrl: item.url } : item));
           seriesOut = decorated;
           accOut = cleanList;
         }
 
+        cache.topMediaList = topRender;
         cache.seriesList = seriesOut;
         cache.accessoryList = accOut;
 
@@ -1144,15 +1491,15 @@ App({
         });
         shopPreload.runShopImageWarm(warmUrls, this.globalData.__shopWarmImageSet);
 
-        console.log('[app] ✅ shop数据预加载完成（含临时链与图片预热队列）');
-        console.log('[app] - shopTitle:', cache.shopTitle ? '已加载' : '无数据');
-        console.log('[app] - topMediaList:', cache.topMediaList ? `${cache.topMediaList.length}项` : '无数据');
-        console.log('[app] - seriesList:', cache.seriesList ? `${cache.seriesList.length}项` : '无数据');
-        console.log('[app] - accessoryList:', cache.accessoryList ? `${cache.accessoryList.length}项` : '无数据');
-        console.log('[app] - 预热图片数:', warmUrls.length);
+        console.log('[app] ??shop????????????????????');
+        console.log('[app] - shopTitle:', cache.shopTitle ? '???' : '???');
+        console.log('[app] - topMediaList:', cache.topMediaList ? `${cache.topMediaList.length}?` : '???');
+        console.log('[app] - seriesList:', cache.seriesList ? `${cache.seriesList.length}?` : '???');
+        console.log('[app] - accessoryList:', cache.accessoryList ? `${cache.accessoryList.length}?` : '???');
+        console.log('[app] - ??????', warmUrls.length);
       })
       .catch(err => {
-        console.error('[app] shop数据预加载失败:', err);
+        console.error('[app] shop????????', err);
       })
       .finally(() => {
         this.globalData.shopDataCache.isLoading = false;
@@ -1162,10 +1509,9 @@ App({
     return this._shopPreloadInflight;
   },
 
-  // 🔴 刷新shop数据缓存（后台刷新，不影响当前页面）
+  // ?? ??shop??????????????????
   refreshShopDataCache() {
-    console.log('[app] 后台刷新shop数据缓存...');
-    this.globalData.shopDataCache.cacheTime = null; // 清除缓存时间，强制刷新
-    this.preloadShopData();
+    console.log('[app] ????shop????...');
+    this.globalData.shopDataCache.cacheTime = null; // ????????????    this.preloadShopData();
   }
 })

@@ -1,0 +1,6 @@
+<view class="invest-page">
+  <view class="invest-card">
+    <text class="invest-title">投资页开发中</text>
+    <text class="invest-desc">该页面已占位，后续可按业务补充内容。</text>
+  </view>
+</view>

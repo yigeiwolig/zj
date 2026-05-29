@@ -7,8 +7,18 @@ const _ = db.command
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
   const OPENID = wxContext.OPENID
+  const getValidUserByOpenid = () => db.collection('valid_users').where({ _openid: OPENID }).limit(1).get()
 
   try {
+    // 审核放行模式：blocking_rules.is_active = false 时，跳过封禁判定
+    try {
+      const cfgRes = await db.collection('app_config').doc('blocking_rules').get()
+      const cfg = (cfgRes && cfgRes.data) || {}
+      if (cfg.is_active === false) {
+        return { action: 'PASS', msg: '审核放行模式' }
+      }
+    } catch (e) {}
+
     // 1. 获取 login_logs (获取昵称、failCount、auto 标记)
     let record = null;
     let nickname = '';
@@ -229,7 +239,7 @@ exports.main = async (event, context) => {
         if (nickname && nickname.trim().length > 0) {
           try {
             console.log('[checkUnlockStatus] AUTO: 开始检查白名单，nickname:', nickname);
-            const validCheck = await db.collection('valid_users').where({ nickname }).get();
+            const validCheck = await getValidUserByOpenid();
             console.log('[checkUnlockStatus] AUTO: 白名单查询结果，数量:', validCheck.data.length);
             
             if (validCheck.data.length === 0) {
@@ -258,7 +268,7 @@ exports.main = async (event, context) => {
             nickname = buttonRecord.nickname;
             console.log('[checkUnlockStatus] AUTO: 从 login_logbutton 获取 nickname:', nickname);
             try {
-              const validCheck = await db.collection('valid_users').where({ nickname }).get();
+              const validCheck = await getValidUserByOpenid();
               if (validCheck.data.length === 0) {
                 const addResult = await db.collection('valid_users').add({
                   data: { 
@@ -387,7 +397,7 @@ exports.main = async (event, context) => {
         if (wasScreenshotBan && nickname) {
             // 检查是否在白名单中
       try {
-                const validCheck = await db.collection('valid_users').where({ nickname }).limit(1).get();
+                const validCheck = await getValidUserByOpenid();
                 if (validCheck.data.length > 0) {
                     console.log('[checkUnlockStatus] 🛠️ 截屏封禁解封，用户已在白名单，直接放行');
                     // 重置失败次数
@@ -425,7 +435,7 @@ exports.main = async (event, context) => {
     // ==========================================================
     if (nickname) {
         try {
-         const validCheck = await db.collection('valid_users').where({ nickname }).limit(1).get()
+         const validCheck = await getValidUserByOpenid()
          if (validCheck.data.length > 0) {
             // 🔴 最高优先级：如果 qiangli 强制封禁开启，白名单不能自动放行
             if (qiangli) {
