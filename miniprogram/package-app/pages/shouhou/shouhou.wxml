@@ -611,7 +611,7 @@
               <text wx:else>待计算</text>
             </block>
             <block wx:else>
-              <view class="price-range-item">省内<text class="price-num">¥12</text><text class="price-separator">；</text>省外<text class="price-num">¥23</text></view>
+              <view class="price-range-item">省内<text class="price-num">¥13</text><text class="price-separator">；</text>省外<text class="price-num">¥22</text></view>
             </block>
           </view>
         </view>

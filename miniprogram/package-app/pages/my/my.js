@@ -33,7 +33,7 @@ function formatShippingFeeText(method, fee) {
   const m = String(method || 'zto').toLowerCase();
   const f = Number(fee) || 0;
   if (m === 'zto') return '包邮';
-  if (m === 'sf') return f > 0 ? `运费 ¥${f}` : '';
+  if (m === 'sf') return f > 0 ? `运费 ¥${f}` : '运费待计算';
   return '';
 }
 
@@ -435,13 +435,18 @@ Page({
       });
       this.updateModalState();
 
+      if (this._locationCheckInterval) {
+        clearInterval(this._locationCheckInterval);
+        this._locationCheckInterval = null;
+      }
+
       // 轮询检查权限状态
-      const checkInterval = setInterval(async () => {
+      this._locationCheckInterval = setInterval(async () => {
         const hasPermission = await this._checkLocationPermission();
         
         if (hasPermission === true) {
-          // 用户已授权
-          clearInterval(checkInterval);
+          clearInterval(this._locationCheckInterval);
+          this._locationCheckInterval = null;
           this.setData({ 
             showLocationPermissionModal: false,
             locationPermissionChecking: false
@@ -450,13 +455,8 @@ Page({
           resolve(true);
         } else if (hasPermission === false) {
           // 用户已拒绝，继续等待（不关闭遮罩）
-          // 遮罩会一直显示，等待用户去设置页面开启权限
         }
-        // hasPermission === null 表示未询问过，继续等待
-      }, 500); // 每500ms检查一次
-
-      // 🔴 不设置超时，一直等待直到用户授权
-      // 这样可以确保用户必须授权才能继续使用
+      }, 500);
     });
   },
 
@@ -801,10 +801,18 @@ Page({
 
   async onHide() {
     this._stopAccessGuardTimer();
+    if (this._locationCheckInterval) {
+      clearInterval(this._locationCheckInterval);
+      this._locationCheckInterval = null;
+    }
   },
 
   onUnload() {
     this._stopAccessGuardTimer();
+    if (this._locationCheckInterval) {
+      clearInterval(this._locationCheckInterval);
+      this._locationCheckInterval = null;
+    }
     if (this._deferQiangliTid) {
       clearTimeout(this._deferQiangliTid);
       this._deferQiangliTid = null;
@@ -1206,7 +1214,9 @@ Page({
             shippingFeeText: formatShippingFeeText(
               item.shipping && item.shipping.method,
               item.shipping && item.shipping.fee
-            )
+            ),
+            isRepairPayment: !!item.isRepairPayment,
+            repairId: item.repairId ? String(item.repairId).trim() : ''
           };
         });
 
@@ -1331,7 +1341,10 @@ Page({
         warrantyExpired,
         shippingMethod: String(userShipMethod || 'zto').toLowerCase(),
         shippingMethodLabel: formatShippingMethodLabel(userShipMethod),
-        shippingFeeText: formatShippingFeeText(userShipMethod, 0)
+        shippingFeeText: formatShippingFeeText(
+          userShipMethod,
+          (item.contact && item.contact.shippingFee != null) ? item.contact.shippingFee : 0
+        )
       };
     });
 
@@ -1466,8 +1479,7 @@ Page({
       address: item.userAddr || ''
     };
     let totalPrice = item.amount || 0;
-    const shippingFee = 0; // 从订单中获取，如果有的话
-    const shippingMethod = 'zto'; // 默认中通
+    const shippingMethod = (item.shippingMethod || 'zto').toLowerCase();
 
     // 管理员身份：支付 0.01 元；其他用户使用真实金额
     const isAdminPay = this.data.isAdmin;
@@ -1490,12 +1502,15 @@ Page({
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
+        action: 'repay',
+        existingOrderId: item.orderId,
         totalPrice: payAmount,
         goods: goods,
         addressData: addressData,
-        shippingFee: shippingFee,
         shippingMethod: shippingMethod,
-        orderSource: item.orderSource || (item.guidedPartsPurchase ? 'shouhou' : 'shop')
+        orderSource: item.orderSource || (item.guidedPartsPurchase ? 'shouhou' : 'shop'),
+        repairId: item.repairId || '',
+        isRepairPayment: !!item.isRepairPayment
       },
       success: res => {
         console.log('[repayOrder] 云函数调用成功，返回结果:', res);

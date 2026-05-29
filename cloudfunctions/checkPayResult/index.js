@@ -183,6 +183,51 @@ async function syncOrderInfoToMiniProgram(outTradeNo, transactionId, orderData, 
   })
 }
 
+/** 支付成功后的业务副作用（维修费、引导购配件等），幂等可重试 */
+async function postOrderPaidSideEffects(orderDoc) {
+  if (!orderDoc || !orderDoc.orderId) return
+
+  const repairId = orderDoc.repairId ? String(orderDoc.repairId).trim() : ''
+  const orderSource = (orderDoc.orderSource || '').toString().trim()
+
+  if (orderDoc.isRepairPayment && repairId) {
+    try {
+      await db.collection('shouhou_repair').doc(repairId).update({
+        data: {
+          repairPaid: true,
+          repairPaidTime: db.serverDate()
+        }
+      })
+      console.log('[checkPayResult] repairPaid 已更新', repairId)
+    } catch (err) {
+      console.error('[checkPayResult] 更新 repairPaid 失败:', err)
+    }
+  }
+
+  if (repairId && orderSource === 'shouhou') {
+    try {
+      const repairRes = await db.collection('shouhou_repair').doc(repairId).get()
+      if (repairRes.data && repairRes.data.purchasePartsStatus === 'completed') {
+        console.log('[checkPayResult] 引导购配件已完成，跳过 writeShouhouguoqi', repairId)
+        return
+      }
+      await cloud.callFunction({
+        name: 'writeShouhouguoqi',
+        data: {
+          repairId,
+          goodsList: orderDoc.goodsList || [],
+          addressData: orderDoc.address || {},
+          userNickname: orderDoc.userNickname || '',
+          orderId: orderDoc.orderId
+        }
+      })
+      console.log('[checkPayResult] writeShouhouguoqi 已触发', repairId)
+    } catch (err) {
+      console.error('[checkPayResult] writeShouhouguoqi 失败:', err)
+    }
+  }
+}
+
 async function handleOrderPayment(orderDoc) {
   if (!orderDoc || !orderDoc.orderId) {
     return { success: false, msg: '订单数据异常' }
@@ -214,6 +259,14 @@ async function handleOrderPayment(orderDoc) {
       payTime
     }
   })
+
+  const paidOrder = {
+    ...orderDoc,
+    status: 'PAID',
+    transactionId,
+    payTime
+  }
+  await postOrderPaidSideEffects(paidOrder)
 
   try {
     await syncOrderInfoToMiniProgram(orderDoc.orderId, transactionId, {

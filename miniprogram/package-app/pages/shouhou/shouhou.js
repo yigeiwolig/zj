@@ -1468,6 +1468,10 @@ Page({
       clearInterval(this._arrowBounceTimer);
       this._arrowBounceTimer = null;
     }
+    if (this.data.timer) {
+      clearInterval(this.data.timer);
+      this.setData({ timer: null, isRecording: false });
+    }
     // 🔴 停止定时检查
     const app = getApp();
     if (app && app.stopQiangliCheck) {
@@ -4448,9 +4452,9 @@ Page({
       } else {
         // 判断是否广东省
         if (province.indexOf('广东') > -1) {
-          fee = 12; // 广东省内 12 元
+          fee = 13; // 与 createOrder / shop 一致：省内 13 元
         } else {
-          fee = 23; // 省外 23 元
+          fee = 22; // 省外 22 元
         }
       }
     }
@@ -4810,96 +4814,9 @@ Page({
     });
   },
 
-  // 7. [核心] 提交订单并支付 (复用 createOrder) - 仅配件购买（保留兼容）
+  // 7. 兼容旧入口：统一走 submitRealOrder（含运费重算与校验）
   submitOrder() {
-    const { selectedCount, totalPrice, orderInfo, currentPartsList, currentModelName, serviceType } = this.data;
-
-    // 只处理配件购买，故障报修保持原逻辑
-    if (serviceType === 'repair') {
-      // 故障报修保持原有逻辑
-      const { contactName, contactPhone, contactAddr, contactWechat, repairDescription, videoFileName } = this.data;
-      
-      if (!repairDescription || repairDescription.trim() === '') {
-        this._showCustomToast('请填写故障描述', 'none');
-        return;
-      }
-      
-      if (!contactName || !contactPhone || !contactAddr || !contactWechat) {
-        this._showCustomToast('请完善收货信息', 'none');
-        return;
-      }
-      
-      // 提交到 shouhou_read 集合（故障报修逻辑）
-      this.showMyLoading('提交中...');
-      const db = wx.cloud.database();
-      db.collection('shouhou_read').add({
-        data: {
-          serviceType: 'repair',
-          modelName: currentModelName,
-          contactName: contactName.trim(),
-          contactPhone: contactPhone.trim(),
-          contactAddr: contactAddr.trim(),
-          contactWechat: contactWechat.trim(),
-          repairDescription: repairDescription.trim(),
-          videoFileName: videoFileName || '',
-          createTime: db.serverDate(),
-          status: 'pending'
-        },
-        success: () => {
-          this.hideMyLoading();
-          this._showCustomToast('提交成功', 'success');
-          setTimeout(() => {
-            this.setData({
-              repairDescription: '',
-              videoFileName: ''
-            });
-          }, 1500);
-        },
-        fail: (err) => {
-          this.hideMyLoading();
-          console.error('提交失败:', err);
-          this._showCustomToast('提交失败，请重试', 'none');
-        }
-      });
-      return;
-    }
-
-    // 配件购买逻辑
-    // 校验
-    if (selectedCount === 0) {
-      this._showCustomToast('请选择配件', 'none');
-      return;
-    }
-    if (!orderInfo.name || !orderInfo.phone || !orderInfo.address) {
-      this.showAutoToast('提示', '请完善收货信息');
-      return;
-    }
-
-    // 组装商品数据 (为了适配 my 页面的显示)
-    const goods = currentPartsList
-      .filter(p => p.selected)
-      .map(p => ({
-        name: p.name,
-        spec: currentModelName, // 规格显示为型号
-        quantity: 1,
-        price: p.price || 0,
-        total: p.price || 0
-      }));
-
-    // 先关闭可能存在的自动提示，确保确认弹窗能正常显示
-    this.setData({ 'autoToast.show': false });
-    
-    // 弹出免责声明
-    this.showMyDialog({
-      title: '维修服务确认',
-      content: '此为定制维修配件服务，下单后不支持退款。',
-      showCancel: true,
-      confirmText: '支付',
-      cancelText: '取消',
-      callback: () => {
-        this.doPayment(goods, totalPrice, orderInfo);
-      }
-    });
+    this.submitRealOrder();
   },
 
   // [修改] 支付执行函数 (适配新的参数结构)
@@ -4988,18 +4905,6 @@ Page({
             try {
               wx.removeStorageSync('guided_parts_repair_id');
             } catch (e) {}
-            
-            // #region agent log
-            console.log('[DEBUG shouhou doPayment] 检查写入 shouhouguoqi 的条件', {
-              repairId: repairId,
-              hasRepairId: !!repairId,
-              myOpenid: this.data.myOpenid,
-              appGlobalOpenid: getApp()?.globalData?.myOpenid,
-              goodsListLength: goodsList?.length,
-              addressData: addressData
-            });
-            wx.request({url:'http://127.0.0.1:7242/ingest/ebc7221d-3ad9-48f7-9010-43ee39582cf8',method:'POST',header:{'Content-Type':'application/json'},data:{location:'shouhou.js:4277',message:'check shouhouguoqi write conditions',data:{repairId:repairId,hasRepairId:!!repairId,myOpenid:this.data.myOpenid,appGlobalOpenid:getApp()?.globalData?.myOpenid,goodsListLength:goodsList?.length,hasAddressData:!!addressData},timestamp:Date.now(),sessionId:'debug-session',runId:'run-shouhouguoqi',hypothesisId:'I'},fail:()=>{}});
-            // #endregion
             
             if (repairId) {
               // 🔴 调用云函数写入 shouhouguoqi 集合

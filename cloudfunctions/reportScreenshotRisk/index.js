@@ -10,15 +10,35 @@ function getDateKey(ts) {
   return `${y}-${m}-${day}`
 }
 
+async function countScreenshotEvents(openid, page, sinceMs) {
+  const _ = db.command
+  const where = {
+    _openid: openid,
+    page,
+    createTime: _.gte(new Date(sinceMs))
+  }
+  const res = await db.collection('screenshot_risk_queue').where(where).count()
+  return (res && res.total) || 0
+}
+
 exports.main = async (event, context) => {
   const { OPENID } = cloud.getWXContext()
   if (!OPENID) return { success: false, error: 'NO_OPENID' }
 
   const page = (event && event.page) || 'scan'
-  const hourlyCount = Number((event && event.hourlyCount) || 0)
-  const dailyCount = Number((event && event.dailyCount) || 0)
   const now = Date.now()
   const dateKey = getDateKey(now)
+
+  let hourlyCount = 0
+  let dailyCount = 0
+  try {
+    hourlyCount = await countScreenshotEvents(OPENID, page, now - 60 * 60 * 1000)
+    dailyCount = await countScreenshotEvents(OPENID, page, now - 24 * 60 * 60 * 1000)
+  } catch (countErr) {
+    console.warn('[reportScreenshotRisk] server count failed, fallback to client:', countErr)
+    hourlyCount = Number((event && event.hourlyCount) || 0)
+    dailyCount = Number((event && event.dailyCount) || 0)
+  }
 
   try {
     const existed = await db.collection('screenshot_risk_queue')
@@ -41,7 +61,7 @@ exports.main = async (event, context) => {
           updateTime: db.serverDate()
         }
       })
-      return { success: true, queued: true, updated: true }
+      return { success: true, queued: true, updated: true, hourlyCount, dailyCount }
     }
 
     await db.collection('screenshot_risk_queue').add({
@@ -59,10 +79,9 @@ exports.main = async (event, context) => {
         updateTime: db.serverDate()
       }
     })
-    return { success: true, queued: true, created: true }
+    return { success: true, queued: true, created: true, hourlyCount, dailyCount }
   } catch (err) {
     console.error('[reportScreenshotRisk] failed:', err)
     return { success: false, error: err.message || String(err) }
   }
 }
-

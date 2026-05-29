@@ -412,13 +412,52 @@ async function resolveServerPricing(db, event, wxOpenId) {
 
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
-  const { goods, addressData, shippingMethod, action, userNickname, repairId, isRepairPayment, orderSource } = event
-  
-  const outTradeNo = `MT${Date.now()}${Math.floor(Math.random() * 1000)}`
+  const {
+    goods,
+    addressData,
+    shippingMethod,
+    action,
+    userNickname,
+    repairId,
+    isRepairPayment,
+    orderSource,
+    existingOrderId
+  } = event
+
+  let outTradeNo = `MT${Date.now()}${Math.floor(Math.random() * 1000)}`
   const db = cloud.database()
+  let repayExistingDoc = null
 
   try {
-    const pricing = await resolveServerPricing(db, event, wxContext.OPENID)
+    let pricingInput = { ...event }
+
+    if (action === 'repay' && existingOrderId) {
+      const existRes = await db.collection('shop_orders').where({
+        orderId: String(existingOrderId).trim(),
+        _openid: wxContext.OPENID
+      }).limit(1).get()
+
+      if (!existRes.data || !existRes.data.length) {
+        return { error: true, msg: '订单不存在或无权操作' }
+      }
+
+      const existing = existRes.data[0]
+      if (existing.status !== 'UNPAID') {
+        return { error: true, msg: '该订单当前不可重新支付' }
+      }
+
+      repayExistingDoc = existing
+      outTradeNo = existing.orderId
+      pricingInput = {
+        goods: existing.goodsList || goods,
+        addressData: existing.address || addressData,
+        shippingMethod: (existing.shipping && existing.shipping.method) || shippingMethod || 'zto',
+        isRepairPayment: !!existing.isRepairPayment,
+        repairId: existing.repairId || repairId || ''
+      }
+    }
+
+    const pricing = await resolveServerPricing(db, pricingInput, wxContext.OPENID)
     console.log('[createOrder] server pricing:', pricing)
 
     const auditBase = {
@@ -464,23 +503,36 @@ exports.main = async (event, context) => {
       return { error: true, msg: '订单金额过低，请确认商品价格已配置' }
     }
 
-    await db.collection('shop_orders').add({
-      data: {
-        _openid: wxContext.OPENID,
-        orderId: outTradeNo,
-        goodsList: goods,
-        totalFee: payYuan,
-        address: addressData,
-        shipping: { fee: pricing.shippingFee, method: shippingMethod || 'zto' },
-        status: 'UNPAID',
-        userNickname: userNickname || '',
-        isRepairPayment: isRepairPayment || false,
-        repairId: repairId || '',
-        orderSource: orderSource || '',
-        pricingAudit: auditBase,
-        createTime: db.serverDate()
-      }
-    })
+    const shipMethod = (repayExistingDoc && repayExistingDoc.shipping && repayExistingDoc.shipping.method)
+      || shippingMethod
+      || 'zto'
+    const orderPayload = {
+      goodsList: (repayExistingDoc && repayExistingDoc.goodsList) || goods,
+      totalFee: payYuan,
+      address: (repayExistingDoc && repayExistingDoc.address) || addressData,
+      shipping: { fee: pricing.shippingFee, method: shipMethod },
+      userNickname: userNickname || (repayExistingDoc && repayExistingDoc.userNickname) || '',
+      isRepairPayment: repayExistingDoc ? !!repayExistingDoc.isRepairPayment : !!isRepairPayment,
+      repairId: (repayExistingDoc && repayExistingDoc.repairId) || repairId || '',
+      orderSource: (repayExistingDoc && repayExistingDoc.orderSource) || orderSource || '',
+      pricingAudit: auditBase
+    }
+
+    if (repayExistingDoc) {
+      await db.collection('shop_orders').doc(repayExistingDoc._id).update({
+        data: orderPayload
+      })
+    } else {
+      await db.collection('shop_orders').add({
+        data: {
+          _openid: wxContext.OPENID,
+          orderId: outTradeNo,
+          ...orderPayload,
+          status: 'UNPAID',
+          createTime: db.serverDate()
+        }
+      })
+    }
 
     const orderData = {
       body: 'MT摩改社-车辆定制改装与维修服务费',

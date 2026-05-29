@@ -136,6 +136,11 @@ exports.main = async (event, context) => {
     }
 
     if (device.isActive) {
+      const freshRes = await db.collection('sn').doc(device._id).get()
+      const fresh = freshRes.data
+      if (fresh && fresh.openid && fresh.openid !== '' && fresh.openid !== myOpenid) {
+        return { success: false, status: 'LOCKED', msg: '设备已被绑定，请联系原主解绑' }
+      }
       await db.collection('sn').doc(device._id).update({
         data: {
           sn: normalizedSn,
@@ -150,6 +155,11 @@ exports.main = async (event, context) => {
       return { success: true, status: 'AUTO_APPROVED', msg: '绑定成功' }
     }
 
+    const freshInactive = await db.collection('sn').doc(device._id).get()
+    const freshDev = freshInactive.data
+    if (freshDev && freshDev.openid && freshDev.openid !== '' && freshDev.openid !== myOpenid) {
+      return { success: false, status: 'LOCKED', msg: '设备已被绑定，请联系原主解绑' }
+    }
     await db.collection('sn').doc(device._id).update({ data: { openid: myOpenid, sn: normalizedSn } })
     return { success: true, status: 'NEED_AUDIT', msg: '请提交审核' }
   } catch (err) {
