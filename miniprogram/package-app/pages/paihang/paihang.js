@@ -609,10 +609,12 @@ Page({
   },
 
   onUnload() {
-    // 🔴 停止定时检查
     const app = getApp();
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
+    }
+    if (typeof this._teardownScreenshotProtection === 'function') {
+      this._teardownScreenshotProtection();
     }
   },
 
@@ -626,16 +628,27 @@ Page({
       });
     }
 
-    // 截屏监听
-    wx.onUserCaptureScreen(() => {
-      this.handleIntercept('screenshot');
-    });
+    try {
+      this._onCaptureScreenHandler = () => this.handleIntercept('screenshot');
+      wx.onUserCaptureScreen(this._onCaptureScreenHandler);
+    } catch (e) {}
 
-    // 录屏监听
     if (wx.onUserScreenRecord) {
-      wx.onUserScreenRecord(() => {
-        this.handleIntercept('record');
-      });
+      try {
+        this._onScreenRecordHandler = () => this.handleIntercept('record');
+        wx.onUserScreenRecord(this._onScreenRecordHandler);
+      } catch (e) {}
+    }
+  },
+
+  _teardownScreenshotProtection() {
+    if (this._onCaptureScreenHandler && wx.offUserCaptureScreen) {
+      try { wx.offUserCaptureScreen(this._onCaptureScreenHandler); } catch (e) {}
+      this._onCaptureScreenHandler = null;
+    }
+    if (this._onScreenRecordHandler && wx.offUserScreenRecord) {
+      try { wx.offUserScreenRecord(this._onScreenRecordHandler); } catch (e) {}
+      this._onScreenRecordHandler = null;
     }
   },
 

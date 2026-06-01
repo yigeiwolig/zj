@@ -74,6 +74,27 @@ exports.main = async (event = {}) => {
 
   try {
     await assertAdmin();
+    let resolvedNickname = String(viewerNickname || '').trim();
+    if (!resolvedNickname && viewerOpenid) {
+      try {
+        const validRes = await db.collection('valid_users').where({ _openid: viewerOpenid }).limit(1).get();
+        if (validRes.data && validRes.data[0] && validRes.data[0].nickname) {
+          resolvedNickname = String(validRes.data[0].nickname).trim();
+        }
+      } catch (e) {}
+    }
+    if (!resolvedNickname && viewerOpenid) {
+      try {
+        const logRes = await db.collection('login_logs')
+          .where({ _openid: viewerOpenid })
+          .orderBy('updateTime', 'desc')
+          .limit(1)
+          .get();
+        if (logRes.data && logRes.data[0] && logRes.data[0].nickname) {
+          resolvedNickname = String(logRes.data[0].nickname).trim();
+        }
+      } catch (e) {}
+    }
 
     if (action === 'ban') {
       const buttonRes = await db.collection('login_logbutton')
@@ -93,6 +114,9 @@ exports.main = async (event = {}) => {
         longitude: loc.longitude != null ? loc.longitude : null,
         updateTime: db.serverDate()
       };
+      if (resolvedNickname) {
+        updateData.nickname = resolvedNickname;
+      }
       if (buttonRes.data && buttonRes.data.length > 0) {
         await db.collection('login_logbutton').doc(buttonRes.data[0]._id).update({ data: updateData });
       } else {
@@ -112,7 +136,7 @@ exports.main = async (event = {}) => {
       rowKey,
       riskId,
       _openid: viewerOpenid,
-      viewerNickname,
+      viewerNickname: resolvedNickname || viewerNickname,
       sourceType: 'suspicious_manual',
       fromSourceType: sourceType,
       decision: action,

@@ -226,17 +226,31 @@ function guessProvince(addressData) {
   return first
 }
 
-/** 与小页面 shop.reCalcFinalPrice 一致的顺丰 / 中通运费（单位：元） */
-function computeShippingFeeServer(shippingMethod, addressData) {
+/** 购物车是否仅含配件（单独购买配件，无主机） */
+function cartIsAccessoryOnly(goods) {
+  const typed = (goods || []).filter(it => it && (it.type === 'main' || it.type === 'accessory'))
+  if (typed.length === 0) return false
+  return typed.every(it => it.type === 'accessory')
+}
+
+/** 省内 13 / 省外 22（单位：元） */
+function provinceShippingFee(province) {
+  const p = province ? String(province).trim() : ''
+  if (!p) return 0
+  if (p.indexOf('广东') !== -1) return 13
+  return 22
+}
+
+/** 与小页面 shop.reCalcFinalPrice 一致：主机订单中通包邮；仅配件订单中通/顺丰均按省计费 */
+function computeShippingFeeServer(shippingMethod, addressData, goods) {
   const m = String(shippingMethod || 'zto').toLowerCase()
-  if (m === 'zto') return 0
   if (m === 'none' || m === '') return 0
-  if (m === 'sf') {
-    const province = guessProvince(addressData || {})
-    if (!province) return 0
-    if (province.indexOf('广东') !== -1) return 13
-    return 22
+  const province = guessProvince(addressData || {})
+  if (m === 'zto') {
+    if (cartIsAccessoryOnly(goods)) return provinceShippingFee(province)
+    return 0
   }
+  if (m === 'sf') return provinceShippingFee(province)
   return 0
 }
 
@@ -376,7 +390,7 @@ async function resolveServerPricing(db, event, wxOpenId) {
     } else {
       const cat = classifyGoods(goods || [])
       if (cat === 'empty') throw new Error('订单商品为空')
-      shippingFee = computeShippingFeeServer(shippingMethod, addressData)
+      shippingFee = computeShippingFeeServer(shippingMethod, addressData, goods)
       if (cat === 'shop') {
         goodsSubtotal = await computeShopCartSubtotal(db, goods)
         mode = 'shop'

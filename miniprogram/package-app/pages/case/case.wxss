@@ -132,34 +132,61 @@ page {
   line-height: 1;
 }
 
-.nav-header {
-  position: absolute;
+/* 顶部固定区：标题 / 管理员子模式 / Tab / 搜索 合一 */
+.case-top-chrome {
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 0 40rpx;
-  box-sizing: border-box;
-  background: rgba(242, 242, 247, 0.9);
-  backdrop-filter: blur(20px);
   z-index: 100;
+  background: rgba(242, 242, 247, 0.96);
+  backdrop-filter: blur(20px);
+  box-sizing: border-box;
 }
 
-.brand-title {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%) translateY(-50%);
-  font-size: 38rpx;
-  font-weight: 800;
-  text-align: center;
+.case-top-inner {
+  position: relative;
+  width: 100%;
+  padding-bottom: 0;
+  box-sizing: border-box;
+}
+
+.case-title-row {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 20rpx;
-  pointer-events: auto;
+  padding: 0 40rpx;
+  box-sizing: border-box;
+}
+
+.case-title-text {
+  font-size: 38rpx;
+  font-weight: 800;
+  color: #000;
+  letter-spacing: 1px;
+}
+
+/* 管理员子模式：文档流占位，不用 absolute，避免与 Tab 区双重垫高 */
+.admin-submode-row {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.28s ease, opacity 0.22s ease;
+}
+
+.admin-submode-row.is-visible {
+  max-height: 80rpx;
+  opacity: 1;
+}
+
+.admin-submode-btns {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16rpx;
+  padding: 4rpx 32rpx 12rpx;
+  box-sizing: border-box;
 }
 
 /* 管理员切换按钮 */
@@ -183,75 +210,23 @@ page {
   border-color: #000;
 }
 
-/* 管理员子模式按钮组 */
-.admin-submode-btns {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 16rpx;
-  justify-content: center;
-  pointer-events: auto;
-}
 .submode-btn {
   font-size: 24rpx;
   padding: 8rpx 24rpx;
   border-radius: 24rpx;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.85);
   color: #666;
-  transition: all 0.3s;
-}
-.submode-btn.active {
-  background: #000;
-  color: #fff;
-  font-weight: 600;
-}
-
-/* 管理员切换按钮 */
-.admin-toggle-btn {
-  display: inline-block;
-  margin-left: 20rpx;
-  font-size: 20rpx;
-  padding: 4rpx 16rpx;
-  border-radius: 20rpx;
-  background: #F2F2F7;
-  color: #8E8E93;
   border: 1rpx solid #E5E5EA;
-  vertical-align: middle;
-  transition: all 0.3s;
-  font-weight: 600;
+  transition: background 0.2s, color 0.2s;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-/* 开启状态的颜色 */
-.admin-toggle-btn.on {
+.submode-btn.active {
   background: #000;
   color: #fff;
   border-color: #000;
-}
-
-/* 管理员子模式切换按钮 */
-.admin-submode-toggle {
-  display: flex;
-  gap: 10rpx;
-  margin-top: 20rpx;
-  justify-content: center;
-}
-
-.submode-btn {
-  padding: 8rpx 24rpx;
-  font-size: 24rpx;
-  border-radius: 20rpx;
-  background: #F2F2F7;
-  color: #8E8E93;
-  border: 1rpx solid #E5E5EA;
-  transition: all 0.3s;
-  font-weight: 500;
-}
-
-.submode-btn.active {
-  background: #007AFF;
-  color: #fff;
-  border-color: #007AFF;
+  font-weight: 600;
 }
 
 .header-title {
@@ -272,16 +247,9 @@ page {
   font-weight: 600;
 }
 
-/* 1. 修复 Tab 被遮挡的问题 */
+/* 兼容旧类名（若别处引用） */
 .nav-container {
-  position: fixed;
-  left: 0;
   width: 100%;
-  z-index: 49;
-  background-color: #F2F2F7;
-  /* 🔴 修改：增加顶部内边距，把 Tab 往下挤一点，就不会被标题栏挡住了 */
-  padding-top: 20rpx; 
-  padding-bottom: 10rpx;
 }
 
 /* Tab 滚动区域 */
@@ -348,32 +316,23 @@ page {
 
 /* 🔴 核心修改：定义 scroll-view 样式 */
 .main-scroll-view {
-  width: 100%;
   position: fixed;
+  top: 0;
   left: 0;
+  width: 100%;
+  height: 100%;
   z-index: 1;
   background-color: #F2F2F7;
+  box-sizing: border-box;
 }
 
-/* 2. 把列表内容往下推，解决顶部被遮挡的问题 */
-/* 列表容器 */
 .video-list {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  padding: 20rpx 32rpx;
+  padding: 0 32rpx 20rpx;
   position: relative;
   z-index: 1;
-  /* 默认状态 (搜索框收起时)：Nav高(80) + 间距 */
-  padding-top: 40rpx; 
-  /* 关键：增加过渡动画，让列表滑上滑下 */
-  transition: padding-top 0.3s cubic-bezier(0.25, 1, 0.5, 1);
-}
-
-/* 🔴 核心修复：当搜索框出来时，列表自动往下移 */
-.video-list.pushed-down {
-  /* 展开状态：默认(40) + 搜索框高(约100)，拉开更多距离 */
-  padding-top: 140rpx; 
 }
 
 .ios-card {
@@ -661,6 +620,62 @@ page {
 
 .modal-overlay.active .ios-dialog {
   transform: scale(1);
+}
+
+/* 案例页活动弹窗：蒙层淡入 + 卡片弹跳入场 */
+.case-promo-overlay.promo-mask-in {
+  animation: casePromoMaskIn 0.38s ease-out forwards;
+}
+
+.case-promo-dialog {
+  transform: scale(0.78) translateY(120rpx);
+  opacity: 0;
+  transition: none;
+}
+
+.case-promo-dialog.promo-dialog-in {
+  animation: casePromoDialogPopIn 0.52s cubic-bezier(0.34, 1.38, 0.64, 1) forwards;
+}
+
+.case-lottery-dialog {
+  border: 2rpx solid rgba(255, 59, 48, 0.12);
+  box-shadow: 0 36rpx 100rpx rgba(255, 59, 48, 0.15), 0 30rpx 80rpx rgba(0, 0, 0, 0.18);
+}
+
+.lottery-emoji {
+  font-size: 88rpx;
+}
+
+.lottery-promo-tip {
+  font-size: 24rpx;
+  color: #8e8e93;
+  line-height: 1.5;
+  margin: -8rpx 0 28rpx;
+  padding: 0 8rpx;
+}
+
+@keyframes casePromoMaskIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes casePromoDialogPopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.78) translateY(120rpx);
+  }
+  58% {
+    opacity: 1;
+    transform: scale(1.04) translateY(-8rpx);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-overlay.closing .case-promo-dialog {
+  animation: caseModalBoxShrinkOut 0.4s cubic-bezier(0.32, 0.72, 0, 1) forwards;
 }
 
 /* 统一弹窗退场动画：和各页 0.4s 时长保持一致 */
@@ -1746,25 +1761,24 @@ page {
 /* 搜索栏外壳 */
 .search-notch {
   width: 100%;
-  height: 0;
+  max-height: 0;
   overflow: hidden;
-  transition: height 0.3s cubic-bezier(0.25, 1, 0.5, 1); /* 弹性动画 */
-  
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 5; 
-  
-  /* 🔴 稍微加大一点负边距，让连接更紧密 */
-  margin-top: -34rpx; 
-  padding-top: 34rpx; 
-  
+  transition: max-height 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+              opacity 0.25s ease;
+  opacity: 0;
   display: flex;
   justify-content: center;
+  padding: 0;
 }
 
 .search-notch.open {
-  height: 120rpx;
+  max-height: 100rpx;
+  opacity: 1;
+}
+
+.case-scroll-top-spacer {
+  width: 100%;
+  flex-shrink: 0;
 }
 
 /* 2. 修复搜索框看不见的问题 */
@@ -1881,11 +1895,10 @@ page {
 /* 管理员待审核区域 (修复滑动和显示问题) */
 .pending-section {
   position: fixed;
-  top: 180rpx; /* 标题栏下方 */
+  top: 0;
   left: 0;
   width: 100%;
-  /* 🔴 核心修改：高度占满屏幕剩余空间，不要写死 */
-  height: calc(100vh - 180rpx); 
+  box-sizing: border-box; 
   background: rgba(255,255,255,0.98); /* 微透背景 */
   z-index: 50; 
   display: flex;

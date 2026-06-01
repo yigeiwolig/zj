@@ -27,6 +27,10 @@ Page({
     // --- 页面状态 ---
     showIntro: true,
     introClosing: false, // 介绍弹窗退出动画中
+    introAnimIn: false,
+    showLotteryPromo: false,
+    lotteryPromoClosing: false,
+    lotteryPromoAnimIn: false,
     showCamera: false,
     showForm: false,
     formClosing: false, // 表单弹窗退出动画中
@@ -72,6 +76,8 @@ Page({
 
     // 滚动相关
     lastScrollTop: 0, // 上一次滚动的位置
+    caseMainScrollTop: 0,
+    caseMainScrollHeight: 0,
 
     // --- 录制状态 ---
     isRecording: false,
@@ -353,23 +359,24 @@ Page({
       console.warn('⚠️ setVisualEffectOnCapture API 不存在（可能是预览模式）');
     }
 
-    // 🔴 截屏监听：安卓和iOS通常都很灵敏
+    // 🔴 截屏/录屏监听（保存引用，onUnload 注销避免重复注册）
     try {
-    wx.onUserCaptureScreen(() => {
+      this._onCaptureScreenHandler = () => {
         console.log('🛡️ [case] 检测到截屏');
-      this.handleIntercept('screenshot');
-    });
+        this.handleIntercept('screenshot');
+      };
+      wx.onUserCaptureScreen(this._onCaptureScreenHandler);
     } catch (e) {
       console.warn('⚠️ onUserCaptureScreen 不支持（可能是预览模式）:', e);
     }
 
-    // 🔴 录屏监听：尽力而为，抓到信号就跳
     if (wx.onUserScreenRecord) {
       try {
-      wx.onUserScreenRecord(() => {
+        this._onScreenRecordHandler = () => {
           console.log('🛡️ [case] 检测到录屏');
-        this.handleIntercept('record');
-      });
+          this.handleIntercept('record');
+        };
+        wx.onUserScreenRecord(this._onScreenRecordHandler);
       } catch (e) {
         console.warn('⚠️ onUserScreenRecord 不支持（可能是预览模式）:', e);
       }
@@ -384,6 +391,46 @@ Page({
     this.refreshVideoWatermarkNickname();
     
     setTimeout(() => { this.initTabPosition(); }, 500);
+    this._scheduleCaseMainScrollLayout();
+
+    if (this.data.showIntro) {
+      this._playCasePromoDialogIn('introAnimIn');
+    }
+  },
+
+  /** 免单抽奖活动截止日（含当天） */
+  _isLotteryPromoActive() {
+    const deadline = new Date('2026-08-08T23:59:59').getTime();
+    return Date.now() <= deadline;
+  },
+
+  _shouldShowLotteryPromo() {
+    return this._isLotteryPromoActive();
+  },
+
+  _playCasePromoDialogIn(animKey) {
+    this.setData({ [animKey]: false });
+    wx.nextTick(() => {
+      setTimeout(() => {
+        const patch = {};
+        patch[animKey] = true;
+        this.setData(patch);
+      }, 48);
+    });
+  },
+
+  _openLotteryPromo() {
+    if (!this._shouldShowLotteryPromo()) return;
+    this.setData({
+      showLotteryPromo: true,
+      lotteryPromoClosing: false,
+      lotteryPromoAnimIn: false
+    });
+    this._playCasePromoDialogIn('lotteryPromoAnimIn');
+  },
+
+  onReady() {
+    this._scheduleCaseMainScrollLayout();
   },
   
   onShow() {
@@ -416,6 +463,7 @@ Page({
 
     // 刷新视频昵称水印，避免用户改昵称后仍显示旧值
     this.refreshVideoWatermarkNickname();
+    this._syncCaseMainScrollLayout();
   },
 
   refreshVideoWatermarkNickname() {
@@ -445,14 +493,6 @@ Page({
     }
   },
 
-  onUnload() {
-    // 🔴 停止定时检查
-    const app = getApp();
-    if (app && app.stopQiangliCheck) {
-      app.stopQiangliCheck();
-    }
-  },
-  
   // 🔴 计算导航栏信息（屏幕适配）
   calcNavBarInfo() {
     const menuButton = wx.getMenuButtonBoundingClientRect();
@@ -460,8 +500,77 @@ Page({
     const statusBarHeight = windowInfo.statusBarHeight;
     const gap = menuButton.top - statusBarHeight;
     const navBarHeight = (gap * 2) + menuButton.height;
-    this.setData({ statusBarHeight, navBarHeight });
+    this.setData({ statusBarHeight, navBarHeight }, () => {
+      this.setData({ caseMainScrollTop: this._caseScrollPaddingFallback() });
+      this._syncCaseMainScrollLayout();
+    });
     console.log('[case.js] 屏幕适配信息:', { statusBarHeight, navBarHeight, gap, menuButtonHeight: menuButton.height });
+  },
+
+  _caseScrollPaddingFallback() {
+    const sb = this.data.statusBarHeight || 0;
+    const nb = this.data.navBarHeight || 44;
+    const ww = wx.getWindowInfo().windowWidth || 375;
+    const rpx = (n) => Math.ceil((ww / 750) * n);
+    const tabH = rpx(80);
+    const searchH = this.data.showSearchBar ? rpx(88) : 0;
+    const adminH = this.data.isAdmin ? rpx(72) : 0;
+    return sb + nb + adminH + tabH + searchH + 4;
+  },
+
+  /** 只量可见底边：有搜索框量搜索框，否则量顶栏，避免 chrome 含多余 padding 导致留白过大 */
+  _syncCaseMainScrollLayout() {
+    wx.nextTick(() => {
+      const q = this.createSelectorQuery();
+      if (this.data.showSearchBar) {
+        q.select('#case-search-inner').boundingClientRect();
+      } else {
+        q.select('.case-top-chrome').boundingClientRect();
+      }
+      q.exec((res) => {
+        const rect = res && res[0];
+        const GAP = 6;
+        let top = rect && rect.bottom > 0
+          ? Math.ceil(rect.bottom) + GAP
+          : this._caseScrollPaddingFallback();
+        if (!top || top < 80) top = this._caseScrollPaddingFallback();
+
+        const wh = wx.getWindowInfo().windowHeight;
+        const height = Math.max(200, Math.ceil(wh - top));
+        if (top === this.data.caseMainScrollTop && height === this.data.caseMainScrollHeight) return;
+        this.setData({ caseMainScrollTop: top, caseMainScrollHeight: height });
+      });
+    });
+  },
+
+  _clearCaseLayoutTimers() {
+    if (this._caseLayoutTimers && this._caseLayoutTimers.length) {
+      this._caseLayoutTimers.forEach((tid) => clearTimeout(tid));
+    }
+    this._caseLayoutTimers = [];
+  },
+
+  _scheduleCaseMainScrollLayout() {
+    this._clearCaseLayoutTimers();
+    this._syncCaseMainScrollLayout();
+    this._caseLayoutTimers = [80, 280, 600].map((ms) =>
+      setTimeout(() => this._syncCaseMainScrollLayout(), ms)
+    );
+  },
+
+  _teardownScreenshotProtection() {
+    if (this._onCaptureScreenHandler && wx.offUserCaptureScreen) {
+      try {
+        wx.offUserCaptureScreen(this._onCaptureScreenHandler);
+      } catch (e) {}
+      this._onCaptureScreenHandler = null;
+    }
+    if (this._onScreenRecordHandler && wx.offUserScreenRecord) {
+      try {
+        wx.offUserScreenRecord(this._onScreenRecordHandler);
+      } catch (e) {}
+      this._onScreenRecordHandler = null;
+    }
   },
 
   // 🔴 新增：检测运行环境
@@ -493,10 +602,16 @@ Page({
   },
 
   onUnload() {
-    // 清理定时器
-    if (this.data.timer) {
-      clearInterval(this.data.timer);
-    }
+    this._pageDestroyed = true;
+    this._clearCaseLayoutTimers();
+    this._teardownScreenshotProtection();
+    if (this.data.timer) clearInterval(this.data.timer);
+    if (this.data.guideTimer) clearInterval(this.data.guideTimer);
+    if (this._caseCardLongPressTimer) clearTimeout(this._caseCardLongPressTimer);
+    if (this._caseFullscreenExitTimer) clearTimeout(this._caseFullscreenExitTimer);
+    if (this._loadingHideTimer) clearTimeout(this._loadingHideTimer);
+    const app = getApp();
+    if (app && app.stopQiangliCheck) app.stopQiangliCheck();
   },
 
   // ==========================================
@@ -515,18 +630,17 @@ Page({
     if (Math.abs(diff) < 20) return;
 
     if (diff > 0) {
-      // 向下滚动 (页面内容上移，手指上滑) -> 收起搜索框
       if (this.data.showSearchBar) {
-        this.setData({ showSearchBar: false });
+        this.setData({ showSearchBar: false, lastScrollTop: currentTop }, () => this._syncCaseMainScrollLayout());
+        return;
       }
     } else {
-      // 向上滚动 (页面内容下移，手指下拉) -> 显示搜索框
       if (!this.data.showSearchBar) {
-        this.setData({ showSearchBar: true });
+        this.setData({ showSearchBar: true, lastScrollTop: currentTop }, () => this._syncCaseMainScrollLayout());
+        return;
       }
     }
 
-    // 更新位置
     this.setData({ lastScrollTop: currentTop });
   },
 
@@ -580,7 +694,9 @@ Page({
         const finalList = withOrder.concat(withoutOrder);
         const hydratedList = await this._hydrateCloudFileUrls(finalList);
 
-        this.setData({ list: hydratedList, displayList: hydratedList, caseCoverLoadedMap: {}, adminThumbLoaded: false });
+        this.setData({ list: hydratedList, displayList: hydratedList, caseCoverLoadedMap: {}, adminThumbLoaded: false }, () => {
+          this._syncCaseMainScrollLayout();
+        });
         
         // 数据回来后再次校准滑块
         setTimeout(() => this.initTabPosition(), 200);
@@ -621,13 +737,14 @@ Page({
     if (!this.data.isAuthorized) return;
     const newState = !this.data.isAdmin;
     
-    this.setData({ 
+    this.setData({
       isAdmin: newState,
-      adminSubMode: 'edit' // 默认切换到编辑模式
+      adminSubMode: 'edit'
+    }, () => {
+      this._scheduleCaseMainScrollLayout();
     });
     this._showCustomToast(newState ? '管理模式' : '浏览模式', 'none');
 
-    // 【新增】如果是开启管理员，立刻拉取待审核视频
     if (newState) {
       this.fetchPendingVideos();
     }
@@ -636,7 +753,9 @@ Page({
   // 🆕 切换管理员子模式
   switchAdminSubMode(e) {
     const mode = e.currentTarget.dataset.mode;
-    this.setData({ adminSubMode: mode });
+    this.setData({ adminSubMode: mode }, () => {
+      this._scheduleCaseMainScrollLayout();
+    });
     this._showCustomToast(mode === 'edit' ? '视频编辑模式' : '管理现有视频模式', 'none');
   },
 
@@ -2086,13 +2205,13 @@ Page({
       baseList = baseList.filter(item => item.type === type);
     }
 
-    this.setData({ 
+    this.setData({
       currentTab: type,
-      displayList: baseList, 
-      showSearchBar: true,   
-      searchText: '',        
-      searchTip: ''          
-    });
+      displayList: baseList,
+      showSearchBar: true,
+      searchText: '',
+      searchTip: ''
+    }, () => this._syncCaseMainScrollLayout());
 
     // 🔴 核心修复：使用小程序专用 API 获取位置
     // 小程序不支持属性选择器，需要查询所有 tab-item 然后找到对应的
@@ -2231,6 +2350,7 @@ Page({
   // 5. 提交表单 (兼容 新增 & 修改)
   // ==========================================
   submitAdminForm() {
+    if (this.data.isSubmitting) return;
     const { vehicleName, categoryIndex, modelIndex, adminVideoPath, adminThumbPath, categoryValueArray, categoryArray, modelArray, isEditing, editingId } = this.data;
 
     if (!adminVideoPath) return this._showCustomToast('请选择视频', 'none');
@@ -3141,11 +3261,27 @@ Page({
   },
   closeIntro() { 
     if (!this.data.showIntro || this.data.introClosing) return;
-    this.setData({ introClosing: true });
+    this.setData({ introClosing: true, introAnimIn: false });
     setTimeout(() => {
       this.setData({ 
         showIntro: false,
-        introClosing: false
+        introClosing: false,
+        introAnimIn: false
+      });
+      if (this._shouldShowLotteryPromo()) {
+        this._openLotteryPromo();
+      }
+    }, 420);
+  },
+
+  closeLotteryPromo() {
+    if (!this.data.showLotteryPromo || this.data.lotteryPromoClosing) return;
+    this.setData({ lotteryPromoClosing: true, lotteryPromoAnimIn: false });
+    setTimeout(() => {
+      this.setData({
+        showLotteryPromo: false,
+        lotteryPromoClosing: false,
+        lotteryPromoAnimIn: false
       });
     }, 420);
   },
@@ -3155,6 +3291,7 @@ Page({
 
   dismissTransientModals() {
     if (this.data.showIntro) this.closeIntro();
+    if (this.data.showLotteryPromo) this.closeLotteryPromo();
     if (this.data.showSuccess) this.closeSuccess();
     if (this.data.showUploadOptions) this.closeUploadOptions();
   },

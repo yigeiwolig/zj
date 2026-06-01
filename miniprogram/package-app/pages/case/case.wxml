@@ -7,27 +7,22 @@
     <text class="back-arrow">‹</text>
   </view>
 </view>
-<view class="nav-header" wx:if="{{!showVideoPlayer}}" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
-  <view class="brand-title" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
-      <text>MT 案例库</text>
-    <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
+<!-- 顶部固定区：标题 + 管理员子模式 + Tab + 搜索（单层，避免管理员模式顶栏「双重垫高」） -->
+<view class="case-top-chrome" wx:if="{{!showVideoPlayer}}">
+  <view class="case-top-inner" style="padding-top: {{statusBarHeight}}px;">
+    <view class="case-title-row" style="min-height: {{navBarHeight}}px;">
+      <text class="case-title-text">MT 案例库</text>
+      <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
         {{isAdmin ? 'EXIT' : 'EDIT'}}
       </view>
-  </view>
-  <!-- 管理员子模式切换 -->
-  <view wx:if="{{isAdmin}}" class="admin-submode-btns" style="top: {{statusBarHeight + navBarHeight}}px;">
-    <view class="submode-btn {{adminSubMode === 'edit' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="edit">
-          视频编辑
-        </view>
-    <view class="submode-btn {{adminSubMode === 'manage' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="manage">
-          管理现有视频
     </view>
-  </view>
-</view>
+    <view class="admin-submode-row {{isAdmin ? 'is-visible' : ''}}">
+      <view class="admin-submode-btns">
+        <view class="submode-btn {{adminSubMode === 'edit' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="edit">视频编辑</view>
+        <view class="submode-btn {{adminSubMode === 'manage' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="manage">管理现有视频</view>
+      </view>
+    </view>
 
-<!-- 🆕 导航区域容器 -->
-<view class="nav-container" style="padding-top: {{statusBarHeight + navBarHeight + (isAdmin ? 80 : 20)}}px;">
-  
   <!-- 1. 可滚动的 Tab 栏 -->
   <scroll-view 
     class="scroll-wrapper" 
@@ -57,7 +52,7 @@
 
   <!-- 🆕 刘海搜索栏 (通过 CSS 负边距与上面连接) -->
   <view class="search-notch {{showSearchBar ? 'open' : ''}}">
-    <view class="search-inner">
+    <view id="case-search-inner" class="search-inner">
       <input 
         class="search-input" 
         placeholder="点这里搜索车型" 
@@ -68,10 +63,11 @@
       <view class="search-tip" wx:if="{{searchTip}}">{{searchTip}}</view>
     </view>
   </view>
+  </view>
 </view>
 
 <!-- 管理员待审核区域 (竖向大卡片版) -->
-<view class="pending-section" wx:if="{{isAdmin && adminSubMode === 'edit' && pendingList.length > 0}}">
+<view class="pending-section" wx:if="{{isAdmin && adminSubMode === 'edit' && pendingList.length > 0}}" style="padding-top: {{caseMainScrollTop}}px; height: {{caseMainScrollHeight}}px;">
   <view class="section-header">
     <text>待处理素材 ({{pendingList.length}})</text>
     <text style="font-size:22rpx; font-weight:400; color:#666; margin-left:20rpx;">需下载处理后重新上传</text>
@@ -144,10 +140,11 @@
   bindscroll="handleScrollViewScroll" 
   enhanced="{{true}}"
   show-scrollbar="{{false}}"
-  style="height: calc(100vh - {{statusBarHeight + navBarHeight + 60}}px); top: {{statusBarHeight + navBarHeight + 60}}px;"
 >
-  <!-- 视频列表 (🔴 增加 pushed-down 类，实现下移动画) -->
-  <view class="video-list {{showSearchBar ? 'pushed-down' : ''}}">
+  <!-- 顶部撑开占位：高度 = 顶栏/搜索框底边 + 间距，避免卡片被搜索栏遮住 -->
+  <view class="case-scroll-top-spacer" style="height: {{caseMainScrollTop > 0 ? caseMainScrollTop : (statusBarHeight + navBarHeight + 100)}}px;"></view>
+  <!-- 视频列表 -->
+  <view class="video-list">
     <view wx:if="{{displayList.length === 0}}" style="width:100%; text-align:center; padding:100rpx 0; color:#999;">
       暂无案例视频
     </view>
@@ -233,12 +230,23 @@
 <!-- ================= 弹窗区域 ================= -->
 
 <!-- 5. 初始福利弹窗 -->
-<view class="modal-overlay active {{introClosing ? 'closing' : ''}}" wx:if="{{showIntro || introClosing}}" catchtouchmove="noop" bindtap="closeIntro">
-  <view class="ios-dialog" catchtouchmove="noop" catchtap="preventBubble">
+<view class="modal-overlay case-promo-overlay active {{introClosing ? 'closing' : ''}} {{introAnimIn && !introClosing ? 'promo-mask-in' : ''}}" wx:if="{{showIntro || introClosing}}" catchtouchmove="noop" bindtap="closeIntro">
+  <view class="ios-dialog case-promo-dialog {{introAnimIn && !introClosing ? 'promo-dialog-in' : ''}}" catchtouchmove="noop" catchtap="preventBubble">
     <view class="emoji-icon">🎁</view>
     <view class="dialog-title">上传视频赢延保</view>
     <view class="dialog-desc">上传案例视频，审核通过后即可获得 <text class="highlight">1个月延保服务</text>。</view>
     <button class="dialog-btn" bindtap="closeIntro">我知道了</button>
+  </view>
+</view>
+
+<!-- 5b. 免单抽奖活动弹窗 -->
+<view class="modal-overlay case-promo-overlay active {{lotteryPromoClosing ? 'closing' : ''}} {{lotteryPromoAnimIn && !lotteryPromoClosing ? 'promo-mask-in' : ''}}" wx:if="{{showLotteryPromo || lotteryPromoClosing}}" catchtouchmove="noop" bindtap="closeLotteryPromo">
+  <view class="ios-dialog case-promo-dialog case-lottery-dialog {{lotteryPromoAnimIn && !lotteryPromoClosing ? 'promo-dialog-in' : ''}}" catchtouchmove="noop" catchtap="preventBubble">
+    <view class="emoji-icon lottery-emoji">🎉</view>
+    <view class="dialog-title">案例免单抽奖</view>
+    <view class="dialog-desc">活动截止到 <text class="highlight">8月8日</text>，我们将进行免单抽奖，共抽取 <text class="highlight">2个免单名额</text>。</view>
+    <view class="lottery-promo-tip">上传案例视频即有机会参与，敬请期待开奖通知</view>
+    <button class="dialog-btn" bindtap="closeLotteryPromo">我知道了</button>
   </view>
 </view>
 
@@ -478,7 +486,7 @@
     
     <view style="display: flex; gap: 20rpx;">
       <button class="dialog-btn" style="background:#eee; color:#000" bindtap="closeAdminForm">取消</button>
-      <button class="dialog-btn" bindtap="submitAdminForm">{{isSubmitting ? '保存中...' : (isEditing ? '保存修改' : '发布')}}</button>
+      <button class="dialog-btn" bindtap="submitAdminForm" disabled="{{isSubmitting}}">{{isSubmitting ? '保存中...' : (isEditing ? '保存修改' : '发布')}}</button>
     </view>
   </view>
 </view>

@@ -81,6 +81,10 @@ Page({
     bannedUsers: [],       // 被封禁的用户列表
     screenshotRiskUsers: [], // 截图超限待审核列表
     suspiciousUsers: [],   // 可疑用户列表（多次进入/长停留）
+    suspiciousDisplayList: [], // 展示用列表（含搜索高亮标记，始终含全部人员）
+    suspiciousSearchMatchCount: 0, // 当前关键词命中人数
+    adminSuspiciousSearch: '', // 可疑人员搜索关键词
+    adminSuspiciousSearchTrim: '', // 去空格后的关键词（供 WXML 判断）
     isLoadingBannedUsers: false,  // 是否正在加载封禁用户列表
     isLoadingScreenshotRiskUsers: false,
     isLoadingSuspiciousUsers: false,
@@ -259,6 +263,10 @@ Page({
       clearTimeout(this._firstTimeModalEnterTimer);
       this._firstTimeModalEnterTimer = null;
     }
+    if (this._firstTimeModalEnterFallbackTimer) {
+      clearTimeout(this._firstTimeModalEnterFallbackTimer);
+      this._firstTimeModalEnterFallbackTimer = null;
+    }
     this._clearNoLoadingTimer();
   },
 
@@ -290,8 +298,7 @@ Page({
       
       if (!openid) {
         console.warn('[index] 无法获取 openid，显示昵称输入界面');
-        this._showNicknameUI();
-        this._maybeShowFirstTimeModal();
+        this._showUnauthorizedEntryUI();
         return;
       }
 
@@ -330,24 +337,27 @@ Page({
       
       // 没有找到记录，显示昵称输入界面
       console.log('[index] valid_users 中未找到用户记录，显示昵称输入界面');
-      this._showNicknameUI();
-      this._maybeShowFirstTimeModal();
+      this._showUnauthorizedEntryUI();
       
     } catch (err) {
       console.error('[index] 检查 valid_users 失败:', err);
-      // 出错时显示昵称输入界面
-      this._showNicknameUI();
-      this._maybeShowFirstTimeModal();
+      this._showUnauthorizedEntryUI();
     }
   },
 
-  /** 仅新用户且未看过引导时弹「专属体验」 */
-  _maybeShowFirstTimeModal() {
-    if (this.data.isAdmin) return;
-    if (this.data.isAuthorized) return;
-    if (wx.getStorageSync('has_seen_first_time_modal')) return;
-    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return;
-    this._openFirstTimeModalAnimated();
+  /** 未授权入口：新用户先抖音/闲鱼引导，否则直接昵称验证（互斥，不叠两层） */
+  _showUnauthorizedEntryUI() {
+    if (this.data.isAdmin || this.data.isAuthorized) return;
+    if (this._openFirstTimeModalIfNeeded()) return;
+    this._showNicknameUI();
+  },
+
+  /** @returns {boolean} 是否已拉起首次引导 */
+  _openFirstTimeModalIfNeeded() {
+    if (this.data.isAdmin || this.data.isAuthorized) return false;
+    if (wx.getStorageSync('has_seen_first_time_modal')) return false;
+    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
+    return this._openFirstTimeModalAnimated();
   },
 
   // === 全局封号检查 ===
@@ -640,7 +650,9 @@ Page({
       this.setData({
         firstTimeModalEnterReady: false,
         firstTimeModalClosing: false,
-        showFirstTimeModal: false
+        showFirstTimeModal: false,
+        isShowNicknameUI: !this.data.isAuthorized,
+        nicknameUiClosing: false
       });
     }
     if (this.data.dialog && this.data.dialog.show) {
@@ -1197,7 +1209,7 @@ Page({
           return;
         }
 
-        // 查询 login_logbutton 检查是否有金牌
+        // 查询 login_logbutton / valid_users 检查地域放行
         let hasGoldMedal = false;
         try {
           const buttonRes = await db.collection('login_logbutton')
@@ -1210,6 +1222,13 @@ Page({
           if (buttonRes.data && buttonRes.data.length > 0) {
             hasGoldMedal = buttonRes.data[0].bypassLocationCheck === true;
             console.log('[index] 是否有免死金牌:', hasGoldMedal);
+          }
+          if (!hasGoldMedal) {
+            const validRes = await db.collection('valid_users').where({ _openid: openid }).limit(1).get();
+            if (validRes.data && validRes.data.length > 0) {
+              hasGoldMedal = validRes.data[0].bypassLocationCheck === true;
+              console.log('[index] valid_users 地域放行:', hasGoldMedal);
+            }
           }
         } catch (e) {
           console.error('[index] 查询 login_logbutton 失败（可能是预览模式）:', e);
@@ -1569,7 +1588,11 @@ Page({
         suspiciousManualBannedMode: false,
         bannedUsers: [],
         screenshotRiskUsers: [],
-        suspiciousUsers: []
+        suspiciousUsers: [],
+        suspiciousDisplayList: [],
+        suspiciousSearchMatchCount: 0,
+        adminSuspiciousSearch: '',
+        adminSuspiciousSearchTrim: ''
       });
     }
   },
@@ -1584,9 +1607,103 @@ Page({
       suspiciousManualBannedMode: false,
       bannedUsers: [],
       screenshotRiskUsers: [],
-      suspiciousUsers: []
+      suspiciousUsers: [],
+      suspiciousDisplayList: [],
+      suspiciousSearchMatchCount: 0,
+      adminSuspiciousSearch: '',
+      adminSuspiciousSearchTrim: ''
     });
     console.log('[index] 已退出管理员模式');
+  },
+
+  _parseSuspiciousSearchTokens(keyword) {
+    return String(keyword || '')
+      .trim()
+      .toLowerCase()
+      .split(/[\s,，;；、]+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+  },
+
+  _suspiciousUserHaystack(item) {
+    if (!item) return '';
+    const pageDetail = (item.pageVisitsDetailList || [])
+      .map((p) => `${p.pageName || ''} ${p.pageKey || ''} ${p.count || 0}`)
+      .join(' ');
+    return [
+      item.viewerNickname,
+      item.viewerOpenid,
+      item.nickname,
+      item.creatorNickname,
+      item.shareCode,
+      item.triggerReasonText,
+      item.regionText,
+      item.province,
+      item.city,
+      item.district,
+      item.address,
+      item.addressDisplay,
+      item.geoText,
+      item.lastViewTime,
+      item.enterCount != null ? `${item.enterCount}次` : '',
+      item.sectionClicksTotal != null ? `${item.sectionClicksTotal}次` : '',
+      item.totalStayMinutesText != null ? `${item.totalStayMinutesText}分` : '',
+      pageDetail
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+  },
+
+  _itemMatchesSuspiciousSearchTokens(item, tokens) {
+    if (!tokens || !tokens.length) return true;
+    const haystack = this._suspiciousUserHaystack(item);
+    return tokens.every((token) => haystack.indexOf(token) !== -1);
+  },
+
+  _filterSuspiciousUsers(users, keyword) {
+    const list = Array.isArray(users) ? users : [];
+    const tokens = this._parseSuspiciousSearchTokens(keyword);
+    if (!tokens.length) return list;
+    return list.filter((item) => this._itemMatchesSuspiciousSearchTokens(item, tokens));
+  },
+
+  _syncSuspiciousDisplayList() {
+    const users = Array.isArray(this.data.suspiciousUsers) ? this.data.suspiciousUsers : [];
+    const kw = String(this.data.adminSuspiciousSearch || '').trim();
+    const tokens = this._parseSuspiciousSearchTokens(kw);
+    let displayList;
+    let matchCount;
+    if (!tokens.length) {
+      displayList = users;
+      matchCount = users.length;
+    } else {
+      const matched = this._filterSuspiciousUsers(users, kw);
+      const matchKeys = new Set(matched.map((u) => u.rowKey).filter(Boolean));
+      displayList = users
+        .map((u) => ({ ...u, _searchMatch: matchKeys.has(u.rowKey) }))
+        .sort((a, b) => Number(b._searchMatch) - Number(a._searchMatch));
+      matchCount = matched.length;
+    }
+    this.setData({
+      suspiciousDisplayList: displayList,
+      suspiciousSearchMatchCount: matchCount,
+      adminSuspiciousSearchTrim: kw
+    });
+  },
+
+  _applySuspiciousUsersList(users) {
+    const list = Array.isArray(users) ? users : [];
+    this.setData({ suspiciousUsers: list }, () => this._syncSuspiciousDisplayList());
+  },
+
+  onAdminSuspiciousSearchInput(e) {
+    const keyword = (e.detail && e.detail.value) || '';
+    this.setData({ adminSuspiciousSearch: keyword }, () => this._syncSuspiciousDisplayList());
+  },
+
+  onAdminSuspiciousSearchClear() {
+    this.setData({ adminSuspiciousSearch: '' }, () => this._syncSuspiciousDisplayList());
   },
 
   switchAdminTab(e) {
@@ -1597,7 +1714,15 @@ Page({
       patch.manualBannedMode = false;
       patch.suspiciousManualBannedMode = false;
     }
-    this.setData(patch);
+    if (mode !== 'suspicious') {
+      patch.adminSuspiciousSearch = '';
+      patch.adminSuspiciousSearchTrim = '';
+    }
+    this.setData(patch, () => {
+      if (mode === 'suspicious') {
+        this._syncSuspiciousDisplayList();
+      }
+    });
     if (mode === 'banned' && this.data.bannedUsers.length === 0) {
       this.loadBannedUsers();
       this.loadScreenshotRiskUsers();
@@ -1711,6 +1836,7 @@ Page({
       if ((a.totalStayMinutesText || '') !== (b.totalStayMinutesText || '')) return false;
       if ((a.enterCount || 0) !== (b.enterCount || 0)) return false;
       if ((a.sectionClicksTotal || 0) !== (b.sectionClicksTotal || 0)) return false;
+      if ((a.viewerNickname || '') !== (b.viewerNickname || '')) return false;
     }
     return true;
   },
@@ -1731,15 +1857,17 @@ Page({
         console.log('[index] getSuspiciousUsers version/stats:', version, res.result.stats || {});
         const nextUsers = res.result.users || [];
         if (!this._isSameSuspiciousUsers(this.data.suspiciousUsers || [], nextUsers)) {
-          this.setData({ suspiciousUsers: nextUsers });
+          this._applySuspiciousUsersList(nextUsers);
+        } else if (String(this.data.adminSuspiciousSearch || '').trim()) {
+          this._syncSuspiciousDisplayList();
         }
       } else {
         console.error('[index] 加载可疑用户列表失败:', res.result?.error);
-        if (!silent) this.setData({ suspiciousUsers: [] });
+        if (!silent) this._applySuspiciousUsersList([]);
       }
     } catch (err) {
       console.error('[index] 加载可疑用户列表异常:', err);
-      if (!silent) this.setData({ suspiciousUsers: [] });
+      if (!silent) this._applySuspiciousUsersList([]);
     } finally {
       if (!silent) {
         this.setData({ isLoadingSuspiciousUsers: false });
@@ -1979,29 +2107,28 @@ Page({
     });
   },
 
+  /** @returns {boolean} 是否实际打开了首次引导 */
   _openFirstTimeModalAnimated() {
     // 防抖：本次进入 index 只允许弹一次，避免异步流程里重复触发
-    if (this._firstTimeModalShownOnce) return;
-    if (this.data.isAuthorized) return;
-    if (wx.getStorageSync('has_seen_first_time_modal')) return;
-    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return;
+    if (this._firstTimeModalShownOnce) return false;
+    if (this.data.isAuthorized) return false;
+    if (wx.getStorageSync('has_seen_first_time_modal')) return false;
+    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
     if (this._firstTimeModalEnterTimer) {
       clearTimeout(this._firstTimeModalEnterTimer);
       this._firstTimeModalEnterTimer = null;
     }
     this._firstTimeModalShownOnce = true;
+    // 首帧即 enter-ready，避免 opacity:0 期间白屏；与昵称层互斥，不再延迟盖住昵称弹窗
     this.setData({
       showFirstTimeModal: true,
-      firstTimeModalEnterReady: false,
+      firstTimeModalEnterReady: true,
       firstTimeModalClosing: false,
+      isShowNicknameUI: false,
+      nicknameUiClosing: false,
     });
     this._preloadFirstTimeQrcode();
-    const armEnter = () => {
-      this._firstTimeModalEnterTimer = null;
-      if (!this.data.showFirstTimeModal || this.data.firstTimeModalClosing) return;
-      this.setData({ firstTimeModalEnterReady: true });
-    };
-    this._firstTimeModalEnterTimer = setTimeout(armEnter, 40);
+    return true;
   },
 
   /** 弹窗出现即预拉取本地包内二维码，复制展示时多半已进缓存，避免首帧空白久等 */

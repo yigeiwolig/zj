@@ -190,20 +190,25 @@ Page({
 
       // --- 指令 A: PASS (自动录入，直接放行) ---
       if (action === 'PASS') {
+        // 地域拦截页：仅管理员解封（returnToIndex）可离开；不得因昵称白名单自动 PASS
+        const isAdminLocationPass = result.returnToIndex === true ||
+          (result.msg && String(result.msg).indexOf('管理员') !== -1);
+        if (this.data.type === 'location' && !isAdminLocationPass) {
+          console.warn('[blocked] 地域拦截：当前 PASS 非管理员解封（缺少 returnToIndex），继续等待。请部署最新 checkUnlockStatus 云函数');
+          return;
+        }
+
         this.stopAutoCheck();
         const nickname = result.nickname || '';
-        const returnToIndex = result.returnToIndex === true; // 地址拦截解封标记
-        
-        // 🔴 关键：清除所有封禁标记（包括截图封禁标记）
+        const returnToIndex = result.returnToIndex === true;
+
         wx.removeStorageSync('is_user_banned');
-        wx.removeStorageSync('is_screenshot_banned'); // 清除截图封禁标记
-        
+        wx.removeStorageSync('is_screenshot_banned');
+
         if (returnToIndex) {
-          // 🔴 地址拦截解封：直接返回 index 页面，不设置永久授权（让用户重新走流程）
-          console.log('[blocked] 地址拦截解封，返回 index 页面');
-          // 🔴 使用自定义弹窗替代微信官方弹窗
+          console.log('[blocked] 地址拦截已由管理员解封，返回 index');
           this._closeAllPopups();
-          this.setData({ 
+          this.setData({
             showCustomSuccessModal: true,
             successModalTitle: '已解封',
             successModalContent: ''
@@ -211,7 +216,7 @@ Page({
           setTimeout(() => {
             this.setData({ customSuccessModalClosing: true });
             setTimeout(() => {
-              this.setData({ 
+              this.setData({
                 showCustomSuccessModal: false,
                 customSuccessModalClosing: false
               });
@@ -219,32 +224,27 @@ Page({
             }, 420);
           }, 1500);
         } else {
-          // 其他情况：设置永久授权和昵称，直接放行
-          console.log('[blocked] 非地址拦截解封，设置永久授权，nickname:', nickname);
-        wx.setStorageSync('has_permanent_auth', true);
-        if (nickname) {
-          wx.setStorageSync('user_nickname', nickname);
-        }
-        
-        // 🔴 使用自定义弹窗替代微信官方弹窗
-          console.log('[blocked] 显示"验证通过"弹窗');
-        this._closeAllPopups();
-        this.setData({ 
-          showCustomSuccessModal: true,
-          successModalTitle: '验证通过',
-          successModalContent: '',
-          customSuccessModalClosing: false
-        });
+          console.log('[blocked] 昵称/Auto 解封，设置永久授权，nickname:', nickname);
+          wx.setStorageSync('has_permanent_auth', true);
+          if (nickname) {
+            wx.setStorageSync('user_nickname', nickname);
+          }
 
-        setTimeout(() => {
-            console.log('[blocked] 弹窗即将关闭，准备跳转到首页');
-          this.setData({ customSuccessModalClosing: true });
-        setTimeout(() => {
-          this.setData({ showCustomSuccessModal: false });
-          // 直接跳回首页，用户已通过验证，不需要重新输入昵称
-          wx.reLaunch({ url: '/pages/index/index' });
-          }, 400); // 关闭动画时间
-        }, 2000); // 显示2秒
+          this._closeAllPopups();
+          this.setData({
+            showCustomSuccessModal: true,
+            successModalTitle: '验证通过',
+            successModalContent: '',
+            customSuccessModalClosing: false
+          });
+
+          setTimeout(() => {
+            this.setData({ customSuccessModalClosing: true });
+            setTimeout(() => {
+              this.setData({ showCustomSuccessModal: false });
+              wx.reLaunch({ url: '/pages/index/index' });
+            }, 400);
+          }, 2000);
         }
       } 
       

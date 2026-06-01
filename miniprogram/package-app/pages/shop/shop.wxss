@@ -238,15 +238,21 @@ page {
 .brand-title { 
   position: absolute;
   left: 50%;
-  transform: translateX(-50%) translateY(-50%); /* 🔴 添加 translateY(-50%) 实现垂直居中 */
-  font-size: 38rpx; 
-  font-weight: 800; 
+  transform: translateX(-50%) translateY(-50%);
   text-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20rpx;
+  gap: 16rpx;
   pointer-events: auto;
+  max-width: 62%;
+}
+.brand-title-text {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #6e6e73;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
 }
 
 /* 管理员切换按钮 */
@@ -281,7 +287,7 @@ page {
   width: 100%;
   background: #000;
   position: relative;
-  margin-bottom: 40rpx;
+  margin-bottom: 20rpx;
 }
 /* 无顶部素材时不撑空白 swiper，用占位块保持 16:9 视觉高度（管理员仍有上传条） */
 .hero-empty {
@@ -292,10 +298,6 @@ page {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.hero-empty-user {
-  min-height: 120rpx;
-  background: #ececf0;
 }
 .hero-empty-tip {
   font-size: 26rpx;
@@ -607,27 +609,41 @@ page {
   background: rgba(7, 193, 96, 0.95);
   color: #fff;
 }
+.admin-upload-row-hint {
+  display: block;
+  padding: 8rpx 40rpx 0;
+  font-size: 22rpx;
+  color: #86868b;
+  line-height: 1.4;
+}
+.admin-upload-row-hint.detail-hint {
+  padding: 0 0 16rpx;
+  text-align: center;
+}
 
 /* 产品列表 (单列大卡片) */
-.product-list { padding: 0 30rpx; display: flex; flex-direction: column; gap: 40rpx; }
 .prod-card {
   background: #fff; border-radius: 30rpx; overflow: hidden;
   box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.05); position: relative;
   transition: 0.2s;
 }
 .prod-card:active { transform: scale(0.98); }
-/* 无封面/图未加载时 widthFix 高度会为 0，用 min-height 避免管理员按钮叠到标题行 */
+/* 产品系列封面：固定 4:3，与上传规范一致 */
 .product-cover-wrapper {
   position: relative;
   width: 100%;
-  min-height: 422rpx;
+  height: 0;
+  padding-bottom: 75%;
   overflow: hidden;
   background: #e8eaed;
 }
 .p-img {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
+  height: 100%;
   display: block;
-  height: auto;
 }
 .p-img-low {
   filter: blur(1.2px);
@@ -685,23 +701,346 @@ page {
   z-index: 25; 
   box-shadow: 0 4rpx 10rpx rgba(0,0,0,0.1);
 }
-/* 跳转号码标识 */
-.jump-number-badge {
+/* 分类内排序序号（管理员） */
+.sort-order-badge {
   position: absolute;
   top: 20rpx;
   left: 20rpx;
-  background: rgba(0, 0, 0, 0.7);
+  min-width: 52rpx;
+  height: 52rpx;
+  padding: 0 12rpx;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.72);
   color: #fff;
   font-size: 28rpx;
   font-weight: 700;
-  padding: 8rpx 16rpx;
-  border-radius: 20rpx;
+  border-radius: 26rpx;
   z-index: 20;
   pointer-events: auto;
   backdrop-filter: blur(10px);
   box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
+/* 管理员修改大类徽章 */
+.admin-cat-badge {
+  position: absolute;
+  top: 20rpx;
+  left: 88rpx;
+  background: rgba(0, 122, 255, 0.9);
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: bold;
+  padding: 8rpx 16rpx;
+  border-radius: 12rpx;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+/* ================= 分类区块 (Apple Store 级) ================= */
+.shop-sections {
+  padding: 8rpx 0 16rpx;
+  background: #f5f5f7;
+}
+.shop-section {
+  margin-bottom: 40rpx;
+}
+.shop-section:last-child {
+  margin-bottom: 12rpx;
+}
+.shop-section-head {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx 40rpx 16rpx;
+}
+.shop-section:first-child .shop-section-head {
+  padding-top: 28rpx;
+}
+.shop-section-head--admin {
+  gap: 16rpx;
+}
+.shop-section-drag-handle {
+  flex-shrink: 0;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 14rpx;
+  background: rgba(0, 0, 0, 0.05);
+  color: #6e6e73;
+  font-size: 28rpx;
+  line-height: 52rpx;
+  text-align: center;
+}
+.shop-section-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  letter-spacing: -0.04em;
+  line-height: 1.08;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'PingFang SC', 'Helvetica Neue', sans-serif;
+}
+.shop-section-head::before {
+  content: '';
+  width: 6rpx;
+  height: 36rpx;
+  border-radius: 6rpx;
+  background: linear-gradient(180deg, #0077ed 0%, #0071e3 100%);
+  flex-shrink: 0;
+}
+.shop-section-title.editable {
+  padding: 6rpx 0;
+}
+.shop-section-mode-toggle {
+  flex-shrink: 0;
+  display: flex;
+  padding: 4rpx;
+  border-radius: 999rpx;
+  background: rgba(0, 0, 0, 0.06);
+}
+.shop-section-mode-opt {
+  padding: 10rpx 22rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+  color: #6e6e73;
+  border-radius: 999rpx;
+  line-height: 1.2;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+.shop-section-mode-opt.is-on {
+  background: #ffffff;
+  color: #1d1d1f;
+  font-weight: 600;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.08);
+}
+.shop-section-del {
+  flex-shrink: 0;
+  padding: 10rpx 20rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+  color: #ff3b30;
+  background: rgba(255, 59, 48, 0.08);
+  border-radius: 999rpx;
+  line-height: 1.2;
+}
+.shop-section-del:active {
+  background: rgba(255, 59, 48, 0.16);
+}
+.shop-section--dragging {
+  opacity: 0.88;
+  transform: scale(1.01);
+}
+.shop-section-add-bar {
+  margin: 8rpx 40rpx 160rpx;
+  padding: 28rpx 32rpx;
+  position: relative;
+  z-index: 10;
+  border-radius: 20rpx;
+  border: 2rpx dashed #c7c7cc;
+  background: rgba(255, 255, 255, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+}
+.shop-section-add-icon {
+  font-size: 36rpx;
+  font-weight: 300;
+  color: #6e6e73;
+  line-height: 1;
+}
+.shop-section-add-text {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #6e6e73;
+}
+.shop-series-swiper {
+  width: 100%;
+  height: 600rpx;
+  overflow: visible;
+}
+.shop-series-swiper-item {
+  box-sizing: border-box;
+  height: 100%;
+  overflow: visible;
+  padding: 20rpx 12rpx 24rpx;
+}
+.shop-series-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+  padding: 6rpx 0 4rpx;
+}
+.shop-series-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: rgba(29, 29, 31, 0.16);
+  transition: transform 0.3s ease, background 0.3s ease, opacity 0.3s ease;
+}
+.shop-series-dot.is-on {
+  background: #1d1d1f;
+  transform: scale(1.2);
+}
+.shop-hero-card {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: stretch;
+  overflow: visible;
+}
+.shop-hero-card-inner {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 32rpx;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  /* 环绕式轻阴影：避免大偏移向下投影连成「横条」 */
+  box-shadow:
+    0 0 0 1rpx rgba(0, 0, 0, 0.05),
+    0 0 20rpx rgba(0, 0, 0, 0.04),
+    0 6rpx 16rpx rgba(0, 0, 0, 0.05);
+  transform: scale(0.97) translateZ(0);
+  opacity: 0.82;
+  transition:
+    transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.4s ease,
+    box-shadow 0.45s ease;
+  will-change: transform, opacity;
+}
+.shop-hero-card-inner.is-active {
+  transform: scale(1) translateZ(0);
+  opacity: 1;
+  box-shadow:
+    0 0 0 1rpx rgba(0, 0, 0, 0.07),
+    0 0 28rpx rgba(0, 0, 0, 0.06),
+    0 10rpx 24rpx rgba(0, 0, 0, 0.08);
+}
+.shop-hero-card-inner.is-inactive {
+  transform: scale(0.97) translateZ(0);
+  opacity: 0.82;
+  box-shadow:
+    0 0 0 1rpx rgba(0, 0, 0, 0.04),
+    0 0 12rpx rgba(0, 0, 0, 0.03),
+    0 4rpx 10rpx rgba(0, 0, 0, 0.04);
+}
+/* 封面 4:3，与下方文案同白底，避免像「操作栏」分割线 */
+.shop-hero-cover {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 75%;
+  overflow: hidden;
+  background: #ffffff;
+}
+.shop-hero-cover .admin-upload-hint {
+  background: #f5f5f7;
+}
+.shop-hero-cover--acc {
+  background: #f5f5f7;
+}
+.shop-hero-cover-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.shop-hero-meta {
+  padding: 24rpx 32rpx 28rpx;
+  background: #ffffff;
+}
+.shop-hero-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+  letter-spacing: -0.03em;
+  line-height: 1.3;
+}
+.shop-hero-name.editable {
+  padding: 4rpx 0;
+}
+.shop-hero-price-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6rpx;
+  margin-top: 10rpx;
+}
+.shop-hero-price {
+  font-size: 26rpx;
+  font-weight: 400;
+  color: #6e6e73;
+  letter-spacing: -0.01em;
+}
+.shop-hero-price-suffix {
+  font-size: 22rpx;
+  font-weight: 400;
+  color: #86868b;
+}
+.shop-hero-price.editable {
+  padding: 6rpx 14rpx;
+  border-radius: 10rpx;
+  background: rgba(0, 113, 227, 0.06);
+  border: 2rpx dashed rgba(0, 113, 227, 0.28);
+  color: #0071e3;
+}
+.shop-hero-add-inner {
+  width: 100%;
+  min-height: 100%;
+  border-radius: 32rpx;
+  border: 2rpx dashed #d2d2d7;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 1rpx rgba(0, 0, 0, 0.05),
+    0 0 20rpx rgba(0, 0, 0, 0.04),
+    0 6rpx 16rpx rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  box-sizing: border-box;
+  transform: scale(0.97) translateZ(0);
+  opacity: 0.82;
+  transition:
+    transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    opacity 0.4s ease,
+    box-shadow 0.45s ease;
+}
+.shop-hero-add-inner.is-active {
+  transform: scale(1) translateZ(0);
+  opacity: 1;
+  box-shadow:
+    0 0 0 1rpx rgba(0, 0, 0, 0.07),
+    0 0 28rpx rgba(0, 0, 0, 0.06),
+    0 10rpx 24rpx rgba(0, 0, 0, 0.08);
+}
+.shop-hero-add-icon {
+  font-size: 56rpx;
+  font-weight: 200;
+  color: #86868b;
+  line-height: 1;
+}
+.shop-hero-add-label {
+  font-size: 28rpx;
+  color: #86868b;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
 /* ============ 3. 产品详情全屏弹窗 ============ */
 .full-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; z-index: 200; display: flex; flex-direction: column; transform: translateY(100%); transition: 0.4s cubic-bezier(0.19, 1, 0.22, 1); }
 .full-modal.active { transform: translateY(0); }
@@ -721,6 +1060,19 @@ page {
 }
 .modal-title { font-weight: 700; font-size: 32rpx; }
 
+.detail-scroll-port {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+
+.detail-modal-scroll {
+  height: 100%;
+  width: 100%;
+}
+
 .modal-scroll { 
   flex: 1; 
   min-height: 0; /* 🔴 关键：允许 flex 子元素缩小 */
@@ -730,13 +1082,31 @@ page {
   z-index: 1; 
   -webkit-overflow-scrolling: touch; /* 🔴 iOS 平滑滚动 */
 }
-.scroll-inner { padding-bottom: 50rpx; }
+
+.detail-scroll-port .modal-scroll {
+  flex: none;
+}
+.scroll-inner {
+  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.scroll-inner--compare {
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
+}
 /* 确保 scroll-view 不会覆盖底部按钮 */
 .modal-scroll {
   padding-bottom: 0;
   margin-bottom: 0;
 }
 .detail-images { margin-bottom: 40rpx; }
+
+.detail-footer-sentinel {
+  width: 100%;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
 /* 详情媒体容器：视频占位高度由行内 padding-bottom%（aspectPaddingPercent）决定，兼容 1:1 / 竖屏；图片随比例增高 */
 .dimg-box {
   position: relative;
@@ -822,16 +1192,27 @@ page {
   align-items: center;
   padding: 22rpx 32rpx;
 }
-.compare-guide-phase1-txt {
-  font-size: 30rpx;
-  font-weight: 650;
-  color: #1d1d1f;
-  letter-spacing: 0.5rpx;
-  padding: 20rpx 36rpx;
-  border-radius: 24rpx;
+
+.compare-guide-phase1-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18rpx 56rpx;
+  border-radius: 999rpx;
   background: linear-gradient(180deg, #fafbfc 0%, #f2f4f7 100%);
   border: 1rpx solid rgba(0, 0, 0, 0.06);
   box-shadow: 0 6rpx 20rpx rgba(17, 24, 39, 0.06);
+  min-width: 420rpx;
+  box-sizing: border-box;
+}
+
+.compare-guide-phase1-txt {
+  font-size: 28rpx;
+  font-weight: 650;
+  color: #1d1d1f;
+  letter-spacing: 0.5rpx;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 /* 第2步：上方说明 + 箭头指向「开始对比」 */
 .compare-guide-phase2 {
@@ -889,10 +1270,21 @@ page {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 26rpx;
-  padding: 18rpx 44rpx;
-  border-radius: 40rpx;
   flex-shrink: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  background: #000;
+  color: #fff;
+  font-weight: 600;
+  font-size: 26rpx;
+  padding: 20rpx 40rpx;
+  border-radius: 999rpx;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.compare-guide-phase2-row .compare-start-btn-wrap {
+  max-width: 92%;
 }
 .cfg-group { margin-bottom: 60rpx; }
 .cfg-label { font-size: 28rpx; color: #1D1D1F; font-weight: 700; margin-bottom: 24rpx; }
@@ -1101,8 +1493,94 @@ page {
   margin-left: 12rpx;
   font-weight: 500;
 }
-/* 配件行缩略图：固定方框内 aspectFit，按真实比例完整显示（1:1 / 16:9 均不裁切） */
+/* 管理员：空白上传区比例提示 */
+.admin-upload-hint {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f7;
+  pointer-events: none;
+  box-sizing: border-box;
+  padding: 16rpx;
+}
+.admin-upload-hint--block {
+  position: relative;
+  min-height: 280rpx;
+  border-radius: 20rpx;
+}
+.admin-upload-hint--inline {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 8rpx;
+}
+.admin-upload-hint--sm {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 6rpx;
+}
+.admin-upload-hint--hero {
+  min-height: 320rpx;
+}
+.admin-upload-hint-ratio {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #6e6e73;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.admin-upload-hint--sm .admin-upload-hint-ratio {
+  font-size: 28rpx;
+}
+.admin-upload-hint--inline .admin-upload-hint-ratio {
+  font-size: 32rpx;
+}
+.admin-upload-hint-desc {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+.admin-upload-hint-sub {
+  margin-top: 6rpx;
+  font-size: 20rpx;
+  color: #86868b;
+  text-align: center;
+  line-height: 1.35;
+}
+.admin-upload-hint-sub.muted {
+  color: #aeaeb2;
+  font-size: 18rpx;
+}
+.acc-hero-ratio-tag {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 44rpx;
+}
+.acc-hero-placeholder-sub {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #86868b;
+  text-align: center;
+  line-height: 1.4;
+}
+.acc-hero-placeholder-sub.muted {
+  font-size: 22rpx;
+  color: #aeaeb2;
+}
+
+/* 配件行缩略图：固定方框内 aspectFit */
 .acc-thumb-box {
+  position: relative;
   width: 100rpx;
   height: 100rpx;
   flex-shrink: 0;
@@ -1332,10 +1810,78 @@ page {
   overflow: hidden;
 }
 
+.acc-detail-swiper {
+  width: 100%;
+  height: 560rpx;
+  background: #f0f0f2;
+}
+
+.acc-detail-swiper-item {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
 .acc-detail-hero-img {
   width: 100%;
+  height: 100%;
   display: block;
-  height: auto;
+}
+
+.acc-slide-del {
+  position: absolute;
+  top: 24rpx;
+  right: 24rpx;
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 28rpx;
+  line-height: 52rpx;
+  text-align: center;
+  z-index: 12;
+}
+
+.acc-hero-admin-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 24rpx 32rpx 32rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.45) 100%);
+  box-sizing: border-box;
+  z-index: 10;
+}
+
+.acc-autoplay-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 12rpx 20rpx;
+  border-radius: 100rpx;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10rpx);
+}
+
+.acc-autoplay-label {
+  font-size: 24rpx;
+  color: #fff;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.acc-autoplay-switch {
+  transform: scale(0.82);
 }
 
 /* 占位图区域优化 */
@@ -1344,6 +1890,7 @@ page {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  min-height: 560rpx;
   opacity: 0.4;
 }
 
@@ -1359,19 +1906,16 @@ page {
   letter-spacing: 1rpx;
 }
 
-/* 上传按钮优化：悬浮胶囊 */
+/* 上传按钮：底部管理条内 */
 .acc-hero-upload-btn {
-  position: absolute;
-  bottom: 40rpx;
-  right: 40rpx;
-  background: rgba(0, 0, 0, 0.6); /* 半透明黑底 */
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(10rpx);
   border-radius: 100rpx;
   padding: 12rpx 30rpx;
   display: flex;
   align-items: center;
   gap: 12rpx;
-  z-index: 10;
   transition: all 0.2s ease;
 }
 
@@ -1857,9 +2401,41 @@ page {
 }
 
 /* 显示状态 */
-.modal-footer.visible {
-  transform: translateY(0);
-  opacity: 1;
+.modal-footer.visible,
+.detail-modal-footer.is-show {
+  transform: translateY(0) !important;
+  opacity: 1 !important;
+  pointer-events: auto;
+}
+
+/* 配件详情：底栏固定显示，避免被 translateY(100%) 藏到屏外 */
+.acc-detail-modal.active .acc-detail-footer {
+  transform: translateY(0) !important;
+  opacity: 1 !important;
+  pointer-events: auto;
+}
+
+/* 配件详情发起立即购买：结算层盖住时暂存弹窗，避免被 translateY 动画带下去 */
+.acc-detail-modal.acc-detail-parked {
+  transform: translateY(0) !important;
+  transition: none !important;
+}
+
+/* 配件详情顶栏：避开状态栏，与主列表返回键不叠层 */
+.acc-detail-nav {
+  box-sizing: border-box;
+  min-height: calc(88rpx + env(safe-area-inset-top));
+}
+.acc-detail-nav .nav-close {
+  flex-shrink: 0;
+}
+.acc-detail-nav-spacer {
+  width: 60rpx;
+  flex-shrink: 0;
+}
+.acc-detail-scroll {
+  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .footer-btn-group {
@@ -2851,27 +3427,22 @@ page {
 /* 1. 优化主页卡片删除按钮：改为透明红叉风格 */
 .admin-del-card-btn {
   position: absolute !important;
-  top: 0 !important;
-  right: 0 !important;
-  
-  /* 关键：去掉红色背景，只要红色的叉 */
-  background: transparent !important; 
-  color: #FF3B30 !important;
-  font-size: 40rpx !important; 
-  font-weight: 900;
-  
-  /* 增加点击区域 */
-  width: 90rpx !important;
-  height: 90rpx !important;
-  
+  top: 16rpx !important;
+  right: 16rpx !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  color: #ff3b30 !important;
+  font-size: 24rpx !important;
+  font-weight: 600;
+  padding: 10rpx 22rpx !important;
+  width: auto !important;
+  height: auto !important;
+  border-radius: 999rpx !important;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.08);
+  border: 1rpx solid rgba(255, 59, 48, 0.2);
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding-top: 15rpx;
-  padding-right: 20rpx;
-  
-  z-index: 30; /* 层级最高 */
-  text-shadow: 0 2rpx 4rpx rgba(255,255,255,0.5); /* 增加一点白影，防止背景太乱看不清 */
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
 }
 
 .admin-del-card-btn:active {

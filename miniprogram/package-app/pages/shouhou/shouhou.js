@@ -1478,6 +1478,9 @@ Page({
       app.stopQiangliCheck();
     }
     
+    this._pageDestroyed = true;
+    this._cancelPaymentVerification();
+    this._teardownScreenshotProtection();
     this._cleanupDrag();
   },
 
@@ -4561,6 +4564,7 @@ Page({
 
   // [新增] 最终支付 (对应弹窗里的黑色按钮)
   submitRealOrder() {
+    if (this._paying) return;
     const { cart, orderInfo, detailAddress, finalTotalPrice, shippingFee, shippingMethod, serviceType, repairDescription, tempVideoPath, tempImagePath, currentModelName } = this.data;
 
     // 如果是故障报修模式，走故障报修提交逻辑
@@ -4708,6 +4712,8 @@ Page({
 
   // 统一的云函数调用
   doCloudSubmit(action, goods, addr, total, fee, method) {
+    if (this._paying) return;
+    this._paying = true;
     this.showMyLoading('处理中...');
     
     // 🔴 获取用户昵称
@@ -4756,6 +4762,12 @@ Page({
         this.hideMyLoading();
         const payment = res.result;
 
+        if (payment && payment.error) {
+          this._paying = false;
+          this._showCustomToast(payment.msg || '支付系统异常，请稍后再试', 'none');
+          return;
+        }
+
         if (action === 'pay' && payment && payment.paySign) {
           wx.requestPayment({
             ...payment,
@@ -4770,7 +4782,6 @@ Page({
                 shippingFee: 0
               });
               
-              // 🔴 支付成功后，延迟同步订单信息（等待支付回调先处理，获得交易单号）
               const orderId = payment.outTradeNo;
               let repairId = (this.data.repairId || '').toString().trim();
               if (!repairId) {
@@ -4803,11 +4814,21 @@ Page({
             },
             fail: () => {
               this._showCustomToast('支付取消', 'none');
+            },
+            complete: () => {
+              this._paying = false;
             }
           });
+          return;
+        }
+
+        this._paying = false;
+        if (action === 'pay') {
+          this._showCustomToast('获取支付参数失败，请稍后再试', 'none');
         }
       },
       fail: () => {
+        this._paying = false;
         this.hideMyLoading();
         this._showCustomToast('下单失败', 'none');
       }
@@ -4994,36 +5015,52 @@ Page({
     });
   },
 
+  _cancelPaymentVerification() {
+    this._payVerifyToken = (this._payVerifyToken || 0) + 1;
+    if (this._payVerifyDelayTimers && this._payVerifyDelayTimers.length) {
+      this._payVerifyDelayTimers.forEach((tid) => clearTimeout(tid));
+    }
+    this._payVerifyDelayTimers = [];
+  },
+
   startPaymentVerification(orderId) {
-    if (!orderId) return;
-    // 第一段：即时轮询，尽快确认支付并同步订单
+    if (!orderId || this._pageDestroyed) return;
+    this._cancelPaymentVerification();
+    const token = this._payVerifyToken;
     this.callCheckPayResult(orderId, 1, {
       maxAttempts: 6,
       intervalMs: 2500,
       showLoading: true,
-      silent: false
+      silent: false,
+      verifyToken: token
     });
-    // 第二段：延迟复查，覆盖支付回调慢到达场景
-    setTimeout(() => {
-      this.callCheckPayResult(orderId, 1, {
-        maxAttempts: 4,
-        intervalMs: 3000,
-        showLoading: false,
-        silent: true
-      });
-    }, 12000);
-    setTimeout(() => {
-      this.callCheckPayResult(orderId, 1, {
-        maxAttempts: 3,
-        intervalMs: 3500,
-        showLoading: false,
-        silent: true
-      });
-    }, 28000);
+    this._payVerifyDelayTimers = [
+      setTimeout(() => {
+        if (this._pageDestroyed || token !== this._payVerifyToken) return;
+        this.callCheckPayResult(orderId, 1, {
+          maxAttempts: 4,
+          intervalMs: 3000,
+          showLoading: false,
+          silent: true,
+          verifyToken: token
+        });
+      }, 12000),
+      setTimeout(() => {
+        if (this._pageDestroyed || token !== this._payVerifyToken) return;
+        this.callCheckPayResult(orderId, 1, {
+          maxAttempts: 3,
+          intervalMs: 3500,
+          showLoading: false,
+          silent: true,
+          verifyToken: token
+        });
+      }, 28000)
+    ];
   },
 
   callCheckPayResult(orderId, attempt = 1, options = {}) {
-    if (!orderId) return;
+    if (!orderId || this._pageDestroyed) return;
+    if (options.verifyToken != null && options.verifyToken !== this._payVerifyToken) return;
     const maxAttempts = options.maxAttempts || 6;
     const intervalMs = options.intervalMs || 2500;
     const silent = !!options.silent;
@@ -5043,7 +5080,11 @@ Page({
             this._showCustomToast('订单已确认', 'success');
           }
         } else if (attempt < maxAttempts) {
-          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1, options), intervalMs);
+          setTimeout(() => {
+            if (this._pageDestroyed) return;
+            if (options.verifyToken != null && options.verifyToken !== this._payVerifyToken) return;
+            this.callCheckPayResult(orderId, attempt + 1, options);
+          }, intervalMs);
         } else if (!silent) {
           this._showCustomToast(
             result.msg || '支付状态待确认，请稍后查看"我的订单"',
@@ -5054,7 +5095,11 @@ Page({
       fail: (err) => {
         console.error('[shouhou] checkPayResult 调用失败:', err);
         if (attempt < maxAttempts) {
-          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1, options), intervalMs);
+          setTimeout(() => {
+            if (this._pageDestroyed) return;
+            if (options.verifyToken != null && options.verifyToken !== this._payVerifyToken) return;
+            this.callCheckPayResult(orderId, attempt + 1, options);
+          }, intervalMs);
         } else if (!silent) {
           this._showCustomToast(
             '网络异常，请稍后在"我的订单"查看',
@@ -7790,16 +7835,27 @@ Page({
       });
     }
 
-    // 截屏监听
-    wx.onUserCaptureScreen(() => {
-      this.handleIntercept('screenshot');
-    });
+    try {
+      this._onCaptureScreenHandler = () => this.handleIntercept('screenshot');
+      wx.onUserCaptureScreen(this._onCaptureScreenHandler);
+    } catch (e) {}
 
-    // 录屏监听
     if (wx.onUserScreenRecord) {
-      wx.onUserScreenRecord(() => {
-        this.handleIntercept('record');
-      });
+      try {
+        this._onScreenRecordHandler = () => this.handleIntercept('record');
+        wx.onUserScreenRecord(this._onScreenRecordHandler);
+      } catch (e) {}
+    }
+  },
+
+  _teardownScreenshotProtection() {
+    if (this._onCaptureScreenHandler && wx.offUserCaptureScreen) {
+      try { wx.offUserCaptureScreen(this._onCaptureScreenHandler); } catch (e) {}
+      this._onCaptureScreenHandler = null;
+    }
+    if (this._onScreenRecordHandler && wx.offUserScreenRecord) {
+      try { wx.offUserScreenRecord(this._onScreenRecordHandler); } catch (e) {}
+      this._onScreenRecordHandler = null;
     }
   },
 

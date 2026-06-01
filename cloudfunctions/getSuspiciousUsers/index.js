@@ -232,22 +232,82 @@ function buildArchivedScreenshotRows(queueRows = []) {
   });
 }
 
-async function fillNicknameFromUserList(users) {
+function pickNickname(...candidates) {
+  for (let i = 0; i < candidates.length; i += 1) {
+    const n = String(candidates[i] || '').trim();
+    if (n) return n;
+  }
+  return '';
+}
+
+/** 与 getBannedUsers 一致：优先白名单/登录日志，避免仅 user_list 微信短昵称（如单字 J） */
+async function fillViewerNicknames(users) {
   const openids = [...new Set(users.map((u) => u.viewerOpenid).filter(Boolean))];
   if (!openids.length) return users;
-  const nicknameMap = {};
+
+  const validMap = {};
+  const logMap = {};
+  const buttonMap = {};
+  const userListMap = {};
   const BATCH = 100;
+
   for (let i = 0; i < openids.length; i += BATCH) {
     const batch = openids.slice(i, i + BATCH);
-    const res = await db.collection('user_list').where({ _openid: _.in(batch) }).get();
-    (res.data || []).forEach((row) => {
-      if (row && row._openid && row.nickName) nicknameMap[row._openid] = row.nickName;
+    const [validRes, userListRes, buttonRes, logResults] = await Promise.all([
+      db.collection('valid_users').where({ _openid: _.in(batch) }).get(),
+      db.collection('user_list').where({ _openid: _.in(batch) }).get(),
+      db.collection('login_logbutton').where({ _openid: _.in(batch) }).get(),
+      Promise.all(batch.map(async (openid) => {
+        try {
+          const logRes = await db.collection('login_logs')
+            .where({ _openid: openid })
+            .orderBy('updateTime', 'desc')
+            .limit(1)
+            .get();
+          return { openid, log: (logRes.data && logRes.data[0]) || null };
+        } catch (e) {
+          return { openid, log: null };
+        }
+      }))
+    ]);
+
+    (validRes.data || []).forEach((row) => {
+      if (row && row._openid && row.nickname) validMap[row._openid] = String(row.nickname).trim();
+    });
+    (userListRes.data || []).forEach((row) => {
+      if (!row || !row._openid) return;
+      const nick = row.nickName || row.nickname;
+      if (nick) userListMap[row._openid] = String(nick).trim();
+    });
+    (buttonRes.data || []).forEach((row) => {
+      if (row && row._openid && row.nickname) {
+        const nick = String(row.nickname).trim();
+        if (!buttonMap[row._openid] || buttonMap[row._openid].length < nick.length) {
+          buttonMap[row._openid] = nick;
+        }
+      }
+    });
+    logResults.forEach(({ openid, log }) => {
+      if (openid && log && log.nickname) {
+        const nick = String(log.nickname).trim();
+        if (!logMap[openid] || logMap[openid].length < nick.length) {
+          logMap[openid] = nick;
+        }
+      }
     });
   }
-  return users.map((u) => ({
-    ...u,
-    viewerNickname: nicknameMap[u.viewerOpenid] || u.viewerNickname || getPlaceholderNickname(u.viewerOpenid)
-  }));
+
+  return users.map((u) => {
+    const openid = u.viewerOpenid;
+    const viewerNickname = pickNickname(
+      validMap[openid],
+      logMap[openid],
+      buttonMap[openid],
+      userListMap[openid],
+      u.viewerNickname
+    ) || getPlaceholderNickname(openid);
+    return { ...u, viewerNickname };
+  });
 }
 
 async function fetchBannedOpenidSet(candidates = []) {
@@ -377,16 +437,16 @@ exports.main = async () => {
     }).filter(Boolean);
 
     users = users.filter((u) => !manualHandledOpenids.has(u.viewerOpenid));
-    users = await fillNicknameFromUserList(users);
+    users = await fillViewerNicknames(users);
     const screenshotUsersRaw = buildScreenshotSuspiciousRows(
       Array.isArray(screenshotRiskRes.data) ? screenshotRiskRes.data : []
     );
-    const screenshotUsers = await fillNicknameFromUserList(screenshotUsersRaw);
+    const screenshotUsers = await fillViewerNicknames(screenshotUsersRaw);
     users = users.concat(screenshotUsers);
     const screenshotArchiveRowsRaw = buildArchivedScreenshotRows(
       screenshotArchiveRowsData
     );
-    const screenshotArchiveRows = await fillNicknameFromUserList(screenshotArchiveRowsRaw);
+    const screenshotArchiveRows = await fillViewerNicknames(screenshotArchiveRowsRaw);
     users = users.concat(screenshotArchiveRows);
     const bannedOpenidSet = await fetchBannedOpenidSet(users);
     users = users.filter((u) => !bannedOpenidSet.has(u.viewerOpenid));

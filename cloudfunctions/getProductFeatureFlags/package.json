@@ -1,0 +1,9 @@
+{
+  "name": "getProductFeatureFlags",
+  "version": "1.0.0",
+  "description": "读取产品页功能开关（全员可读）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -4,8 +4,8 @@
 
 <!-- ================= 1. 顶部导航 ================= -->
 <!-- 顶部返回，只在主列表显示，深色背景用白色箭头 -->
-<view class="header" wx:if="{{!showOrderModal && !showDetail}}" style="padding-top: {{statusBarHeight}}px;">
-  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
+<view class="header" wx:if="{{!showOrderModal && !showDetail && !showAccDetail}}" style="padding-top: {{statusBarHeight}}px;">
+  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 4}}px;">
     <text class="back-arrow">‹</text>
   </view>
 </view>
@@ -16,7 +16,7 @@
   
   <!-- 中间区域：标题和管理员切换按钮 -->
   <view class="brand-title" bindtap="handleTitleClick" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
-    <text>{{shopTitle || 'MT 配件中心'}}</text>
+    <text class="brand-title-text">{{shopTitle || '选购'}}</text>
     <!-- 只有白名单用户能看到的切换开关 -->
     <view 
       wx:if="{{isAuthorized}}" 
@@ -33,8 +33,8 @@
 <scroll-view scroll-y class="main-scroll">
   
   <!-- 顶部轮播 (Hero)：视频固定 16:9；图片按真实比例（含 1:1），高度由 bindload + heroSwiperHeightPx 驱动 -->
-  <view class="hero-swiper-box">
-    <swiper wx:if="{{topMediaList.length > 0}}" class="hero-swiper" style="height: {{heroSwiperHeightPx}}px" indicator-dots="{{true}}" circular="{{true}}" current="{{heroCurrent}}" autoplay="{{(!isAdmin) && (!heroAutoCarouselEnabled)}}" bindchange="onSwiperChange">
+  <view class="hero-swiper-box" wx:if="{{isAdmin || topMediaList.length > 0}}">
+    <swiper wx:if="{{topMediaList.length > 0}}" class="hero-swiper" style="height: {{heroSwiperHeightPx}}px" indicator-dots="{{topMediaList.length > 1}}" circular="{{topMediaList.length > 1}}" current="{{heroCurrent}}" autoplay="{{(!isAdmin) && (!heroAutoCarouselEnabled)}}" bindchange="onSwiperChange">
       <block wx:for="{{topMediaList}}" wx:key="url">
         <swiper-item class="hero-swiper-item">
           <view wx:if="{{item.type === 'video'}}" class="hero-video-outer">
@@ -109,8 +109,13 @@
         </swiper-item>
       </block>
     </swiper>
-    <view wx:else class="hero-empty {{isAdmin ? '' : 'hero-empty-user'}}">
-      <text wx:if="{{isAdmin}}" class="hero-empty-tip">暂无顶部图片/视频，请上传</text>
+    <view wx:elif="{{isAdmin}}" class="hero-empty">
+      <view class="admin-upload-hint admin-upload-hint--block">
+        <text class="admin-upload-hint-ratio">原比例</text>
+        <text class="admin-upload-hint-desc">顶部轮播图</text>
+        <text class="admin-upload-hint-sub">宽≤1600 · 用上方按钮上传</text>
+        <text class="admin-upload-hint-sub muted">选图后自动压缩体积</text>
+      </view>
     </view>
     
     <!-- Admin: 拖拽排序模式 -->
@@ -152,42 +157,148 @@
          {{heroAutoCarouselEnabled ? '🔁 自动轮播开' : '🔁 自动轮播关'}}
        </view>
     </view>
+    <text class="admin-upload-row-hint" wx:if="{{isAdmin && !isEditingMedia}}">顶部图：原比例，宽≤1600，自动压缩</text>
   </view>
 
-  <!-- 产品列表 (单列大卡片) -->
-  <view class="product-list">
-    <block wx:for="{{seriesList}}" wx:key="id">
-      <view class="prod-card" bindtap="handleProductClick" data-index="{{index}}">
-        <view class="product-cover-wrapper">
-          <image class="p-img" src="{{item.coverDisplay || item.cover}}" mode="widthFix" lazy-load="true" binderror="onCoverImageError" data-index="{{index}}" data-kind="high" />
-          <!-- 跳转号码标识（管理员模式下可编辑） -->
-          <view wx:if="{{isAdmin}}" class="jump-number-badge" catchtap="adminEditJumpNumber" data-index="{{index}}">
-            <text wx:if="{{item.jumpNumber}}">#{{item.jumpNumber}}</text>
-            <text wx:else>#</text>
+  <!-- ================= 分类区块 (Apple Store 级) ================= -->
+  <view class="shop-sections">
+    <block wx:for="{{categorySections}}" wx:key="name" wx:for-item="section" wx:for-index="catIndex">
+      <view class="shop-section" wx:if="{{(section.rowMode === 'accessory' ? section.accItems.length : section.items.length) > 0 || isAdmin}}">
+        <view class="shop-section-head {{isAdmin ? 'shop-section-head--admin' : ''}}">
+          <text class="shop-section-title {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditCategory' : ''}}" data-index="{{catIndex}}">{{section.name}}</text>
+          <view wx:if="{{isAdmin}}" class="shop-section-mode-toggle" catchtap="toggleSectionRowMode" data-cat-index="{{catIndex}}">
+            <view class="shop-section-mode-opt {{section.rowMode !== 'accessory' ? 'is-on' : ''}}">产品</view>
+            <view class="shop-section-mode-opt {{section.rowMode === 'accessory' ? 'is-on' : ''}}">配件</view>
           </view>
-          <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadCover" data-index="{{index}}">📷</view>
-          <view class="admin-del-card-btn" wx:if="{{isAdmin}}" catchtap="adminDeleteSeries" data-index="{{index}}">✕</view>
+          <view wx:if="{{isAdmin}}" class="shop-section-del" catchtap="adminDeleteCategory" data-index="{{catIndex}}">删除</view>
         </view>
-        
-        <view class="p-info">
-           <view class="p-row">
-             <text class="p-title {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSeriesName':''}}" data-index="{{index}}">{{item.name}}</text>
-             <view class="p-price-wrapper {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditSeriesPrice' : ''}}" data-index="{{index}}">
-               <text class="p-price">{{item.priceDisplay || '¥' + item.models[0].price + ' 起'}}</text>
-             </view>
-           </view>
+        <!-- 产品系列横滑 -->
+        <block wx:if="{{section.rowMode !== 'accessory'}}">
+          <swiper
+            class="shop-series-swiper"
+            current="{{section.current}}"
+            previous-margin="36rpx"
+            next-margin="108rpx"
+            duration="{{400}}"
+            easing-function="easeOutCubic"
+            skip-hidden-item-layout="{{true}}"
+            indicator-dots="{{false}}"
+            bindchange="onSectionSwiperChange"
+            bindanimationfinish="onSectionSwiperAnimationFinish"
+            data-cat-index="{{catIndex}}"
+          >
+            <swiper-item wx:for="{{section.items}}" wx:for-item="entry" wx:for-index="slideIndex" wx:key="slideKey" class="shop-series-swiper-item">
+              <view class="shop-hero-card" bindtap="handleProductClick" data-index="{{entry.index}}">
+                <view class="shop-hero-card-inner {{section.liveCurrent === slideIndex ? 'is-active' : 'is-inactive'}}">
+                  <view class="shop-hero-cover">
+                    <image wx:if="{{entry.series.coverDisplay || entry.series.cover}}" class="shop-hero-cover-img" src="{{entry.series.coverDisplay || entry.series.cover}}" mode="aspectFit" lazy-load="true" binderror="onCoverImageError" data-index="{{entry.index}}" data-kind="high" />
+                    <view wx:elif="{{isAdmin}}" class="admin-upload-hint">
+                      <text class="admin-upload-hint-ratio">4:3</text>
+                      <text class="admin-upload-hint-desc">列表封面</text>
+                      <text class="admin-upload-hint-sub">建议 1200×900</text>
+                      <text class="admin-upload-hint-sub muted">点击 📷 · 自动压缩</text>
+                    </view>
+                    <view wx:if="{{isAdmin}}" class="sort-order-badge" catchtap="adminEditSortOrder" data-index="{{entry.index}}">
+                      <text>{{entry.series.sortOrder}}</text>
+                    </view>
+                    <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadCover" data-index="{{entry.index}}">📷</view>
+                    <view class="admin-del-card-btn" wx:if="{{isAdmin}}" catchtap="adminDeleteSeries" data-index="{{entry.index}}">删除</view>
+                    <view class="admin-cat-badge" wx:if="{{isAdmin}}" catchtap="adminChangeMainCategory" data-index="{{entry.index}}">
+                      {{entry.series.mainCategory || '电动版本'}} ▾
+                    </view>
+                  </view>
+                  <view class="shop-hero-meta">
+                    <text class="shop-hero-name {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditSeriesName' : ''}}" data-index="{{entry.index}}">{{entry.series.name}}</text>
+                    <view class="shop-hero-price-row">
+                      <text class="shop-hero-price {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditSeriesPrice' : ''}}" data-index="{{entry.index}}">{{entry.series.priceDisplay || '¥' + entry.series.models[0].price}}</text>
+                      <text class="shop-hero-price-suffix" wx:if="{{!entry.series.priceDisplay}}">起</text>
+                    </view>
+                  </view>
+                </view>
+              </view>
+            </swiper-item>
+            <swiper-item wx:if="{{isAdmin}}" class="shop-series-swiper-item">
+              <view class="shop-hero-card">
+                <view class="shop-hero-add-inner {{section.liveCurrent === section.items.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddSeries" data-category="{{section.name}}">
+                  <text class="shop-hero-add-icon">+</text>
+                  <text class="shop-hero-add-label">添加产品系列</text>
+                </view>
+              </view>
+            </swiper-item>
+          </swiper>
+        </block>
+        <!-- 配件横滑（同版式卡片，点击进入配件详情+购买） -->
+        <block wx:else>
+          <swiper
+            class="shop-series-swiper"
+            current="{{section.current}}"
+            previous-margin="36rpx"
+            next-margin="108rpx"
+            duration="{{400}}"
+            easing-function="easeOutCubic"
+            skip-hidden-item-layout="{{true}}"
+            indicator-dots="{{false}}"
+            bindchange="onSectionSwiperChange"
+            bindanimationfinish="onSectionSwiperAnimationFinish"
+            data-cat-index="{{catIndex}}"
+          >
+            <swiper-item wx:for="{{section.accItems}}" wx:for-item="entry" wx:for-index="slideIndex" wx:key="slideKey" class="shop-series-swiper-item">
+              <view class="shop-hero-card" bindtap="openAccessoryDetailFromRow" data-index="{{entry.index}}">
+                <view class="shop-hero-card-inner {{section.liveCurrent === slideIndex ? 'is-active' : 'is-inactive'}}">
+                  <view class="shop-hero-cover shop-hero-cover--acc">
+                    <image wx:if="{{entry.acc.imgDisplay || entry.acc.img}}" class="shop-hero-cover-img" src="{{entry.acc.imgDisplay || entry.acc.img}}" mode="aspectFit" lazy-load="true" />
+                    <view wx:elif="{{isAdmin}}" class="admin-upload-hint">
+                      <text class="admin-upload-hint-ratio">1:1</text>
+                      <text class="admin-upload-hint-desc">配件缩略图</text>
+                      <text class="admin-upload-hint-sub">建议 600×600</text>
+                      <text class="admin-upload-hint-sub muted">点击 📷 · 自动压缩</text>
+                    </view>
+                    <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadAccThumb" data-index="{{entry.index}}">📷</view>
+                    <view class="admin-del-card-btn" wx:if="{{isAdmin}}" catchtap="adminDelAcc" data-index="{{entry.index}}">删除</view>
+                    <view class="admin-cat-badge" wx:if="{{isAdmin}}" catchtap="adminChangeAccMainCategory" data-index="{{entry.index}}">
+                      {{entry.acc.mainCategory || section.name}} ▾
+                    </view>
+                  </view>
+                  <view class="shop-hero-meta">
+                    <text class="shop-hero-name">{{entry.acc.name}}</text>
+                    <view class="shop-hero-price-row">
+                      <text class="shop-hero-price">¥{{entry.acc.price}}</text>
+                    </view>
+                  </view>
+                </view>
+              </view>
+            </swiper-item>
+            <swiper-item wx:if="{{isAdmin}}" class="shop-series-swiper-item">
+              <view class="shop-hero-card">
+                <view class="shop-hero-add-inner {{section.liveCurrent === section.accItems.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddAcc" data-category="{{section.name}}">
+                  <text class="shop-hero-add-icon">+</text>
+                  <text class="shop-hero-add-label">添加配件</text>
+                </view>
+              </view>
+            </swiper-item>
+          </swiper>
+        </block>
+        <view class="shop-series-dots" wx:if="{{section.slideCount > 1}}">
+          <view
+            wx:for="{{section.dotIndices}}"
+            wx:key="*this"
+            wx:for-item="dotIdx"
+            class="shop-series-dot {{section.liveCurrent === dotIdx ? 'is-on' : ''}}"
+          ></view>
         </view>
       </view>
     </block>
-    <!-- Admin 添加产品 -->
-    <view class="add-series-btn" wx:if="{{isAdmin}}" bindtap="adminAddSeries">+ 添加新产品系列</view>
+    <view class="shop-section-add-bar" wx:if="{{isAdmin}}" catchtap="adminAddCategory">
+      <text class="shop-section-add-icon">+</text>
+      <text class="shop-section-add-text">添加版本分类</text>
+    </view>
   </view>
 
-  <view style="height: 100rpx;"></view>
+  <view style="height: 48rpx;"></view>
 </scroll-view>
 
 <!-- 主列表悬浮购物车：纯路径 SVG + 篮内 MT 文字叠层（小程序对 SVG 内 text 常不渲染，故用叠层） -->
-<view class="shop-float-cart" wx:if="{{!showOrderModal && !showDetail}}" catchtap="onFloatingCartTap">
+<view class="shop-float-cart" wx:if="{{!showOrderModal && !showDetail && !showAccDetail}}" catchtap="onFloatingCartTap">
   <view class="shop-float-cart-inner">
     <image class="shop-float-cart-svg" src="/images/shop-float-cart.svg" mode="aspectFit" />
     <text class="shop-float-mt-overlay">MT</text>
@@ -209,12 +320,13 @@
     <view style="width:60rpx"></view>
   </view>
 
-  <!-- 弹窗内容区 -->
-  <scroll-view scroll-y class="modal-scroll" bindscroll="onDetailScroll">
-    <view class="scroll-inner">
+  <!-- 弹窗内容区（port 供底栏显隐测量，scroll-view 本身不宜做 query 锚点） -->
+  <view id="detail-scroll-port" class="detail-scroll-port">
+  <scroll-view id="detail-modal-scroll" scroll-y class="modal-scroll detail-modal-scroll" bindscroll="onDetailScroll" enhanced="{{true}}" show-scrollbar="{{false}}">
+    <view id="detail-scroll-inner" class="scroll-inner {{isModelCompareMode ? 'scroll-inner--compare' : ''}}">
       
       <!-- (A) 详情长图/视频：图片 widthFix 按真实比例；视频用 aspectPaddingPercent（上传时 getVideoInfo）占位，1:1 与图片一致 -->
-      <view class="detail-images">
+      <view class="detail-images" id="detail-media-section">
          <block wx:for="{{currentSeries.detailImages}}" wx:key="url">
            <view class="dimg-box {{item.type === 'video' ? 'dimg-box-video' : 'dimg-box-image'}} {{isAdmin && isDetailDragging && detailDragIndex === index ? 'dragging' : ''}}"
                  style="{{(item.type === 'video' ? 'padding-bottom:' + (item.aspectPaddingPercent != null && item.aspectPaddingPercent !== '' ? item.aspectPaddingPercent : 56.25) + '%;' : '') + (isAdmin && isDetailDragging && detailDragIndex === index ? 'transform: translateY(' + detailDragOffsetY + 'px) scale(1.02);' : '')}}"
@@ -266,20 +378,21 @@
               <!-- 图片：widthFix 按真实宽高比撑开高度，兼容 1:1 / 竖图 / 横图 -->
               <block wx:else>
                 <!-- 前 2 张不参与懒加载，避免每次进详情都像「整页在加载」 -->
-                <image src="{{item.urlDisplay || item.url}}" mode="widthFix" class="dimg dimg-detail-static" lazy-load="{{index > 1}}" />
+                <image src="{{item.urlDisplay || item.url}}" mode="widthFix" class="dimg dimg-detail-static" lazy-load="{{index > 1}}" bindload="onDetailMediaImageLoad" />
               </block>
               
               <view wx:if="{{isAdmin && !isDetailDragging}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
            </view>
          </block>
          <view class="add-txt-btn" wx:if="{{isAdmin}}" bindtap="adminAddDetailMedia">+ 添加详情图片/视频</view>
+         <text class="admin-upload-row-hint detail-hint" wx:if="{{isAdmin}}">详情长图：原比例，宽≤1600，自动压缩</text>
       </view>
 
       <!-- 2. 选购配置区 -->
-      <view class="config-sec">
+      <view class="config-sec" id="detail-config-section">
         
-        <!-- 标题行 -->
-        <view class="sec-header-row">
+        <!-- 标题行：底栏在滚过此行下方后显示 -->
+        <view class="sec-header-row" id="detail-config-header">
             <view class="sec-title {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="configTitle">
               {{currentSeries.labels.configTitle || '选购配置'}}
             </view>
@@ -290,18 +403,22 @@
               {{isModelCompareMode ? '取消选择' : '参数对比'}}
             </view>
         </view>
+        <!-- 底栏显隐锚点：紧贴「选购配置」标题行底边 -->
+        <view id="detail-footer-sentinel" class="detail-footer-sentinel"></view>
 
-        <!-- 对比引导：第1步仅文案+型号按压示意；约5秒后第2步出现「开始对比」 -->
+        <!-- 对比引导：已选≥2 个即显示「开始对比」 -->
         <view wx:if="{{isModelCompareMode}}" class="compare-action-bar">
-          <view wx:if="{{compareGuidePhase == 1}}" class="compare-guide-phase1">
-            <text class="compare-guide-phase1-txt">请选中需要对比的型号</text>
+          <view wx:if="{{compareSelectedModels.length < 2}}" class="compare-guide-phase1">
+            <view class="compare-guide-phase1-pill">
+              <text class="compare-guide-phase1-txt">请选中需要对比的型号（已选 {{compareSelectedModels.length}}）</text>
+            </view>
           </view>
-          <view wx:if="{{compareGuidePhase == 2}}" class="compare-guide-phase2">
-            <text wx:if="{{compareGuidePhase2HintVisible}}" class="compare-guide-phase2-title">点击开始对比查看详细参数</text>
+          <view wx:else class="compare-guide-phase2">
+            <text class="compare-guide-phase2-title">点击开始对比查看详细参数</text>
             <view class="compare-guide-phase2-row">
               <view class="compare-start-btn-wrap">
-                <text wx:if="{{compareGuidePhase2HintVisible}}" class="compare-guide-arrow">➜</text>
-                <view class="btn-black compare-start-btn" bindtap="startCompare">
+                <text class="compare-guide-arrow">➜</text>
+                <view class="compare-start-btn" bindtap="startCompare">
                   开始对比 (已选{{compareSelectedModels.length}})
                 </view>
               </view>
@@ -317,7 +434,7 @@
           
           <block wx:for="{{currentSeries.models}}" wx:key="index">
             <view 
-              class="model-card-normal {{ (!isModelCompareMode && selectedModelIdx === index) || (isModelCompareMode && item.isCompareChecked) ? 'selected' : ''}} {{isModelCompareMode && item.isCompareChecked ? 'compare-checked' : ''}} {{isModelCompareMode && compareGuidePhase == 1 && !item.isCompareChecked ? 'compare-guide-press-cycle' : ''}}" 
+              class="model-card-normal {{ (!isModelCompareMode && selectedModelIdx === index) || (isModelCompareMode && item.isCompareChecked) ? 'selected' : ''}} {{isModelCompareMode && item.isCompareChecked ? 'compare-checked' : ''}} {{isModelCompareMode && compareSelectedModels.length < 2 && !item.isCompareChecked ? 'compare-guide-press-cycle' : ''}}" 
               bindtap="selectModel" 
               data-index="{{index}}">
               
@@ -367,7 +484,10 @@
                    <!-- 管理员模式：右边上传照片按钮 -->
                    <view wx:if="{{isAdmin}}" class="admin-add-icon" catchtap="adminUploadOptionImg" data-oidx="{{index}}">
                      <image wx:if="{{item.img}}" class="admin-opt-thumb-img" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
-                     <text wx:else style="font-size: 50rpx;">📷</text>
+                     <view wx:else class="admin-upload-hint admin-upload-hint--inline">
+                       <text class="admin-upload-hint-ratio">1:1</text>
+                       <text class="admin-upload-hint-sub">800×800</text>
+                     </view>
                    </view>
                    
                    <!-- 删除按钮 -->
@@ -389,7 +509,11 @@
                      bindtap="openAccessoryDetail" data-index="{{index}}">
             
             <view class="acc-thumb-box">
-              <image class="acc-thumb" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
+              <image wx:if="{{item.imgDisplay || item.img}}" class="acc-thumb" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
+              <view wx:elif="{{isAdmin}}" class="admin-upload-hint admin-upload-hint--sm">
+                <text class="admin-upload-hint-ratio">1:1</text>
+                <text class="admin-upload-hint-sub">600×600</text>
+              </view>
             </view>
             <view wx:if="{{isAdmin}}" class="admin-float-thumb" catchtap="adminUploadAccThumb" data-index="{{index}}">📷</view>
 
@@ -417,9 +541,10 @@
       <view style="height:200rpx;"></view> 
     </view>
   </scroll-view>
+  </view>
 
   <!-- 2. 底部结算栏 -->
-  <view class="modal-footer {{showFooterBar ? 'visible' : ''}}">
+  <view class="modal-footer detail-modal-footer {{showFooterBar && !isModelCompareMode ? 'visible is-show' : ''}}">
     <view class="footer-btn-group">
       <view class="btn-cart" id="cart-target" bindtap="addToCart">加入购物车</view>
       <view class="btn-buy" bindtap="openCartOrder">立即购买</view>
@@ -491,24 +616,73 @@
 </view>
 
 <!-- ================= 5. 配件详情弹窗 ================= -->
-<view class="full-modal {{showAccDetail ? 'active' : ''}}" style="z-index: 300;">
-  <view class="modal-nav">
-     <view class="nav-close" bindtap="closeAccessoryDetail">✕</view>
+<view class="full-modal acc-detail-modal {{showAccDetail ? 'active' : ''}} {{accCheckoutActive && showOrderModal ? 'acc-detail-parked' : ''}}" hidden="{{accCheckoutActive && showOrderModal}}" style="z-index: 300;">
+  <view class="modal-nav acc-detail-nav" style="padding-top: {{statusBarHeight}}px;">
+     <view class="nav-close" catchtap="onAccDetailNavClose">✕</view>
      <view class="modal-title">配件详情</view>
-     <view style="width:60rpx"></view>
+     <view class="acc-detail-nav-spacer"></view>
   </view>
-  <scroll-view scroll-y class="modal-scroll">
+  <scroll-view scroll-y class="modal-scroll acc-detail-scroll">
      <view class="acc-detail-hero">
-        <image wx:if="{{accessoryList[currentAccIdx].detailImages && accessoryList[currentAccIdx].detailImages.length>0}}" 
-               src="{{(accessoryList[currentAccIdx].detailImagesDisplay && accessoryList[currentAccIdx].detailImagesDisplay[0]) || accessoryList[currentAccIdx].detailImages[0]}}" mode="widthFix" class="acc-detail-hero-img" lazy-load="true"/>
+        <swiper
+          wx:if="{{accessoryList[currentAccIdx].detailImages && accessoryList[currentAccIdx].detailImages.length > 0}}"
+          class="acc-detail-swiper"
+          indicator-dots="{{accessoryList[currentAccIdx].detailImages.length > 1}}"
+          indicator-color="rgba(255,255,255,0.45)"
+          indicator-active-color="#ffffff"
+          autoplay="{{accessoryList[currentAccIdx].detailImagesAutoplay && accessoryList[currentAccIdx].detailImages.length > 1}}"
+          interval="2000"
+          duration="250"
+          circular="{{accessoryList[currentAccIdx].detailImages.length > 1}}"
+          current="{{accDetailSwiperIndex}}"
+          bindchange="onAccDetailSwiperChange"
+        >
+          <block wx:for="{{accessoryList[currentAccIdx].detailImages}}" wx:for-index="imgIdx" wx:for-item="imgId" wx:key="*this">
+            <swiper-item class="acc-detail-swiper-item">
+              <image
+                class="acc-detail-hero-img"
+                src="{{(accessoryList[currentAccIdx].detailImagesDisplay && accessoryList[currentAccIdx].detailImagesDisplay[imgIdx]) || imgId}}"
+                mode="aspectFit"
+                lazy-load="{{imgIdx > 0}}"
+              />
+              <view
+                wx:if="{{isAdmin}}"
+                class="acc-slide-del"
+                catchtap="adminDelAccDetailImg"
+                data-imgidx="{{imgIdx}}"
+              >✕</view>
+            </swiper-item>
+          </block>
+        </swiper>
         <view wx:else class="acc-hero-placeholder">
           <view class="acc-hero-placeholder-icon">📷</view>
-          <text class="acc-hero-placeholder-text">暂无图片</text>
+          <block wx:if="{{isAdmin}}">
+            <text class="admin-upload-hint-ratio acc-hero-ratio-tag">4:3</text>
+            <text class="acc-hero-placeholder-text">配件详情主图</text>
+            <text class="acc-hero-placeholder-sub">建议 1200×900 · 点击下方「添加图片」</text>
+            <text class="acc-hero-placeholder-sub muted">选图后自动压缩体积</text>
+          </block>
+          <text wx:else class="acc-hero-placeholder-text">暂无图片</text>
         </view>
-        
-        <view wx:if="{{isAdmin}}" class="acc-hero-upload-btn" bindtap="adminAddAccDetailImg">
-          <text class="acc-hero-upload-icon">📷</text>
-          <text class="acc-hero-upload-text">添加图片</text>
+
+        <view wx:if="{{isAdmin}}" class="acc-hero-admin-bar">
+          <view class="acc-hero-upload-btn" bindtap="adminAddAccDetailImg">
+            <text class="acc-hero-upload-icon">📷</text>
+            <text class="acc-hero-upload-text">添加图片</text>
+          </view>
+          <view
+            wx:if="{{accessoryList[currentAccIdx].detailImages && accessoryList[currentAccIdx].detailImages.length > 1}}"
+            class="acc-autoplay-toggle"
+            catchtap="noop"
+          >
+            <text class="acc-autoplay-label">自动轮播</text>
+            <switch
+              class="acc-autoplay-switch"
+              checked="{{accessoryList[currentAccIdx].detailImagesAutoplay}}"
+              bindchange="onAccDetailAutoplayChange"
+              color="#34C759"
+            />
+          </view>
         </view>
      </view>
      
@@ -533,7 +707,13 @@
      </view>
   </scroll-view>
   
-  <view class="modal-footer">
+  <view class="modal-footer detail-modal-footer acc-detail-footer visible is-show" wx:if="{{showAccDetail && accDetailShowPurchaseFooter}}">
+    <view class="footer-btn-group">
+      <view class="btn-cart" bindtap="addAccToCartFromDetailPurchase">加入购物车</view>
+      <view class="btn-buy" bindtap="buyAccFromDetailPurchase">立即购买</view>
+    </view>
+  </view>
+  <view class="modal-footer acc-detail-footer visible is-show" wx:elif="{{showAccDetail}}">
      <view></view>
      <view class="btn-black full" bindtap="addAccToCartFromDetail">加入购物袋</view>
   </view>
@@ -605,7 +785,13 @@
       <view class="shipping-box">
         <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
           <view class="ship-name">中通快递</view>
-          <view class="ship-price">包邮</view>
+          <view class="ship-price">
+            <block wx:if="{{checkoutAccessoryOnly}}">
+              {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
+              <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+            </block>
+            <block wx:else>包邮</block>
+          </view>
         </view>
         <!-- 顺丰选项 -->
         <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">

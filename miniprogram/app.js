@@ -76,6 +76,9 @@ App({
       send(1);
     },
     
+    // products 页功能开关（云 shop_config.productFeatureFlags）
+    productFeatureFlags: null,
+
     // shop ???????????????????
     shopDataCache: {
       shopTitle: null,
@@ -294,31 +297,16 @@ App({
         wx.removeStorageSync('has_permanent_auth');
         wx.removeStorageSync('user_nickname');
         wx.removeStorageSync('is_user_banned');
+        // 已在首页：由 index 自行展示昵称/引导，勿 reLaunch（否则会闪屏且 onShow 被短路）
+        if (currentRoute === 'pages/index/index') {
+          return true;
+        }
         wx.reLaunch({ url: '/pages/index/index' });
         return false;
       }
 
-      let rules = null;
-      try {
-        const cfgRes = await db.collection('app_config').doc('blocking_rules').get();
-        rules = (cfgRes && cfgRes.data) || null;
-      } catch (e) {
-        rules = null;
-      }
-      const blockingEnabled = !!(rules && rules.is_active === true);
-      if (blockingEnabled) {
-        const blockedCities = Array.isArray(rules.blocked_cities) ? rules.blocked_cities : [];
-        const validUser = validRes.data[0] || {};
-        const hasBypass = !!(validUser.bypassLocationCheck === true || (button && button.bypassLocationCheck === true));
-        if (!hasBypass && blockedCities.length > 0) {
-          const locData = await this._resolveLocationForGlobalAccessGuard();
-          if (this._isLocationInBlockedCities(blockedCities, locData)) {
-            wx.setStorageSync('is_user_banned', true);
-            wx.reLaunch({ url: '/pages/blocked/blocked?type=location' });
-            return false;
-          }
-        }
-      }
+      // 地域拦截不在全局守卫里主动定位封禁，仅 index 点击中间按钮后由 banUserByLocation 写入封禁态；
+      // 若用户已被封禁（login_logbutton.isBanned），上面 button 检查会送进 blocked 页。
 
       return true;
     } catch (e) {
@@ -545,7 +533,9 @@ App({
       });
       console.log('????????app.js ??????ID: cloudbase-4gn1heip7c38ec6c');
       
-      // ?? ???shop????????????      this.preloadShopData();
+      this.preloadProductFeatureFlags();
+      this.preloadShopData();
+      this.preloadNewArrivalData();
       
       // ?????????????????????
       try {
@@ -1359,7 +1349,77 @@ App({
     ]);
   },
 
-  // ?? ???shop?????????????????? + cloud ????+ ???????? Promise ??????
+  preloadProductFeatureFlags() {
+    if (!wx.cloud) return Promise.resolve();
+    if (this._productFlagsPreloadInflight) return this._productFlagsPreloadInflight;
+    this._productFlagsPreloadInflight = wx.cloud
+      .callFunction({ name: 'getProductFeatureFlags' })
+      .then((res) => {
+        const result = res && res.result;
+        if (result && result.success && result.flags) {
+          this.globalData.productFeatureFlags = result.flags;
+          console.log('[app] productFeatureFlags preloaded', Object.keys(result.flags || {}).length);
+        }
+      })
+      .catch((err) => {
+        console.warn('[app] preloadProductFeatureFlags failed:', err);
+      })
+      .finally(() => {
+        this._productFlagsPreloadInflight = null;
+      });
+    return this._productFlagsPreloadInflight;
+  },
+
+  // 🆕 预拉取产品上新数据，避免 products 页弹窗慢
+  preloadNewArrivalData() {
+    if (!wx.cloud) return;
+    const now = Date.now();
+    if (!this.globalData.newArrivalCache) {
+      this.globalData.newArrivalCache = { list: null, cacheTime: 0 };
+    }
+    const cache = this.globalData.newArrivalCache;
+    if (cache.list && cache.list.length && now - cache.cacheTime < 5 * 60 * 1000) {
+      return;
+    }
+    const db = wx.cloud.database();
+    db.collection('products').get().then(async res => {
+      let products = (res.data || []).map(item => ({
+        ...item,
+        jumpNumber: item.jumpNumber || null
+      }));
+      
+      // 预先转换 cloud:// 链接为 https://
+      const cloudIds = [...new Set(
+        products.map(i => i && i.cover).filter(c => c && String(c).indexOf('cloud://') === 0)
+      )];
+      if (cloudIds.length > 0) {
+        try {
+          const urlRes = await wx.cloud.getTempFileURL({ fileList: cloudIds });
+          const urlMap = {};
+          (urlRes.fileList || []).forEach(f => {
+            if (f.fileID && f.tempFileURL) urlMap[f.fileID] = f.tempFileURL;
+          });
+          products = products.map(item => {
+            const c = item.cover;
+            if (c && urlMap[c]) return { ...item, cover: urlMap[c] };
+            return item;
+          });
+        } catch (e) {
+          console.warn('[app] 预拉取产品上新数据解析图片失败:', e);
+        }
+      }
+
+      this.globalData.newArrivalCache = {
+        list: products,
+        cacheTime: Date.now()
+      };
+      console.log('[app] 预拉取产品上新数据完成，条数:', products.length);
+    }).catch(err => {
+      console.error('[app] 预拉取产品上新数据失败:', err);
+    });
+  },
+
+  // 🆕 预拉取 shop 页面所需核心数据 + cloud 存储桶补全 + 聚合组装为 Promise 返回给页面
   preloadShopData() {
     if (this._shopPreloadInflight) {
       return this._shopPreloadInflight;

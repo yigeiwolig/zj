@@ -1,156 +1,162 @@
-<!-- 
-  核心修复：
-  内嵌 WXS 渲染脚本，实现物理跟手动画。
-  根据 dragOffset 实时计算 scale 和 opacity。
--->
-<wxs module="renderer">
-// 配置参数：卡片间距 (单位px，对应 520rpx 大约是 260px)
-var CARD_SPACING = 260; 
-
-// 计算每个卡片的最终样式
-var getStyle = function(index, currentIndex, listLength, dragOffset, isDragging, hasEntered, skipCardTransition) {
-  if (!hasEntered) {
-    return 'transform: translate3d(0, 120vh, 0) scale(0.8); opacity: 0;';
-  }
-
-  // 1. 计算滑动进度 (progress)
-  // dragOffset：手指上滑为负，下滑为正；保持与手指同向
-  var progress = 0;
-  if (isDragging) {
-    progress = dragOffset / CARD_SPACING; 
-  }
-
-  // 2. 计算当前卡片的相对位置 (relativePos)
-  // 0 表示正中间，1 表示下面一个，-1 表示上面一个
-  // 加上 progress 后，这个值会变成小数，比如 0.5 (正处于中间和下面之间)
-  var realIndex = index - currentIndex; 
-  // 🔄 环形修正：选最近的方向，避免头尾跳变
-  if (realIndex > listLength / 2) {
-    realIndex -= listLength;
-  } else if (realIndex < -listLength / 2) {
-    realIndex += listLength;
-  }
-  var relativePos = realIndex + progress;
-
-  // 3. 计算物理属性
-  
-  // A. Y轴位移：直接根据相对位置乘以间距
-  // 这里的 constant 130rpx (65px) 是为了居中修正，根据你原来的 calc(50vh - 130rpx)
-  var translateY = 'calc(50vh - 130rpx + ' + (relativePos * 520) + 'rpx)';
-
-  // B. 缩放 (Scale)：
-  // 中心更大 (1.1)，离中心越远越小
-  var absPos = Math.abs(relativePos);
-  var scale = 1.1 - (absPos * 0.2); // 加大中心对比
-  if (scale < 0.75) scale = 0.75;    // 最小缩放，防止过小
-
-  // C. 透明度 (Opacity)：
-  // 离中心越近越不透明
-  var opacity = 1 - (absPos * 0.6);
-  if (opacity < 0) opacity = 0;
-  if (relativePos > 2 || relativePos < -2) opacity = 0; // 太远的直接隐藏
-  
-  // D. 层级 (Z-index)：
-  // 越靠近中心层级越高
-  var zIndex = 100 - Math.floor(absPos * 10);
-
-  // E. 动画过渡
-  // 拖拽时(isDragging=true) 必须设为 0ms，否则会迟滞！
-  // 松手后(isDragging=false) 设为 500ms，让它弹如正确位置
-  var transition = (isDragging || skipCardTransition) ? 'none' : 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.5s';
-
-  return 'transform: translate3d(0, ' + translateY + ', 0) scale(' + scale + '); opacity: ' + opacity + '; z-index: ' + zIndex + '; transition: ' + transition + ';';
-}
-
-module.exports = {
-  getStyle: getStyle
-};
-</wxs>
-
-<!-- 顶部导航 -->
-<view class="header" style="padding-top: {{statusBarHeight}}px;">
-  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
+<!-- pages/products/products.wxml — Bento 功能枢纽 -->
+<view class="header hub-header" style="padding-top: {{statusBarHeight}}px;">
+  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 4}}px;">
     <text class="back-arrow">‹</text>
   </view>
 </view>
 
-<view 
-  class="container"
-  bindtouchstart="onTouchStart"
-  bindtouchmove="onTouchMove"
-  bindtouchend="onTouchEnd"
-  bindtouchcancel="onTouchCancel"
->
-  <block wx:for="{{list}}" wx:key="id">
-    <view 
-      class="card {{index === currentIndex ? 'curr' : ''}}"
-      catchtap="onCardTap"
-      hover-class="card-pressed"
-      hover-start-time="10"
-      hover-stay-time="90"
-      data-id="{{item.id}}"
-      data-title="{{item.title}}"
-      data-index="{{index}}"
-      
-      style="{{ renderer.getStyle(index, currentIndex, list.length, dragOffset, isDragging, hasEntered, skipCardTransition) }}"
+<scroll-view scroll-y class="hub-scroll" enhanced show-scrollbar="{{false}}" style="padding-top: {{statusBarHeight + 52}}px;">
+  <view class="hub-page-container">
+
+    <!-- 1. 顶部搜索 -->
+    <view class="hub-search-section">
+      <view class="hub-search-bar" bindtap="onHubSearchTap">
+        <text class="hub-search-icon">⌕</text>
+        <text class="hub-search-placeholder">搜索产品或服务</text>
+      </view>
+      <view wx:if="{{isAuthorized}}" class="hub-admin-chip" catchtap="toggleDrawer">管理</view>
+    </view>
+
+    <!-- 2. 品牌画廊 -->
+    <swiper
+      wx:if="{{hubBanners.length > 0}}"
+      class="hub-banner-swiper"
+      indicator-dots="{{hubBanners.length > 1}}"
+      indicator-color="rgba(255,255,255,0.35)"
+      indicator-active-color="#ffffff"
+      autoplay="{{hubBanners.length > 1}}"
+      circular="{{hubBanners.length > 1}}"
+      interval="4500"
+      duration="400"
     >
-      
-      <!-- 卡片内部 -->
-      <view class="card-inner">
-        <!-- 左侧文字信息 -->
-        <view class="card-info">
-          <view class="card-title">{{item.title}}</view>
-          <view class="card-hint" wx:if="{{item.hint}}">{{item.hint}}</view>
-        </view>
-        
-        <!-- 右侧图标容器 -->
-        <view class="icon-container">
-          <image 
-            class="svg-icon" 
-            src="{{item.iconSvg}}" 
-            mode="aspectFit"
-            lazy-load="true"
-            style="width: {{item.iconSize}}; height: {{item.iconSize}};"
-          ></image>
+      <block wx:for="{{hubBanners}}" wx:key="_id">
+        <swiper-item>
+          <view
+            class="hub-banner-item {{item.cover ? 'hub-banner-item--img' : ''}}"
+            bindtap="onHubBannerTap"
+            data-id="{{item._id}}"
+          >
+            <image wx:if="{{item.cover}}" class="hub-banner-img" src="{{item.cover}}" mode="aspectFill" />
+            <view class="hub-banner-overlay"></view>
+            <text class="hub-banner-title">{{item.title}}</text>
+          </view>
+        </swiper-item>
+      </block>
+    </swiper>
+
+    <!-- 3. Bento 核心功能区 -->
+    <view class="hub-section-title">核心中心</view>
+    <view class="hub-bento-grid">
+      <view
+        wx:if="{{hubHero}}"
+        class="hub-tile hub-hero-card {{!isAuthorized && hubHero.pageEnabled === false ? 'hub-tile--disabled' : ''}}"
+        hover-class="hub-tile-active"
+        bindtap="onHubFeatureTap"
+        data-id="{{hubHero.id}}"
+      >
+        <view class="hub-hero-inner">
+          <view class="hub-hero-top">
+            <text class="hub-hero-title">{{hubHero.title}}</text>
+            <image class="hub-hero-icon" src="{{hubHero.iconSvg}}" mode="aspectFit" />
+          </view>
+          <text class="hub-hero-desc">{{hubHero.hint || '浏览配件与实时价格'}}</text>
         </view>
       </view>
 
+      <view
+        wx:if="{{hubMidNew}}"
+        class="hub-tile hub-mid-card hub-mid-card--blue {{!isAuthorized && hubMidNew.pageEnabled === false ? 'hub-tile--disabled' : ''}}"
+        hover-class="hub-tile-active"
+        bindtap="onHubFeatureTap"
+        data-id="{{hubMidNew.id}}"
+      >
+        <image class="hub-mid-icon" src="{{hubMidNew.iconSvg}}" mode="aspectFit" />
+        <view class="hub-mid-info">
+          <text class="hub-mid-title">{{hubMidNew.title}}</text>
+          <text class="hub-mid-desc">{{hubMidNew.hint || '查看最新上架'}}</text>
+        </view>
+      </view>
+
+      <view
+        wx:if="{{hubMidControl}}"
+        class="hub-tile hub-mid-card {{!isAuthorized && hubMidControl.pageEnabled === false ? 'hub-tile--disabled' : ''}}"
+        hover-class="hub-tile-active"
+        bindtap="onHubFeatureTap"
+        data-id="{{hubMidControl.id}}"
+      >
+        <image class="hub-mid-icon" src="{{hubMidControl.iconSvg}}" mode="aspectFit" />
+        <view class="hub-mid-info">
+          <text class="hub-mid-title">{{hubMidControl.title}}</text>
+          <text class="hub-mid-desc">{{hubMidControl.hint || '连接设备并调节'}}</text>
+        </view>
+      </view>
     </view>
-  </block>
-</view>
 
-<!-- 遮罩层 (点击关闭) -->
-<view class="drawer-mask" bindtap="closeDrawer" wx:if="{{isDrawerOpen}}" 
-  style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); z-index: 450; backdrop-filter: blur(4px); animation: fadeIn 0.3s;"></view>
+    <!-- 4. 快捷服务（8 个小入口） -->
+    <view class="hub-section-title">快捷服务</view>
+    <view class="hub-mini-grid">
+      <block wx:for="{{hubMinis}}" wx:key="id">
+        <view
+          class="hub-mini-item {{!isAuthorized && item.pageEnabled === false ? 'hub-tile--disabled' : ''}}"
+          hover-class="hub-mini-active"
+          bindtap="onHubFeatureTap"
+          data-id="{{item.id}}"
+        >
+          <view class="hub-mini-icon-box">
+            <image class="hub-mini-icon" src="{{item.iconSvg}}" mode="aspectFit" />
+          </view>
+          <text class="hub-mini-label">{{item.hubShortLabel || item.title}}</text>
+        </view>
+      </block>
+    </view>
 
-<!-- 底部触发按钮 (当抽屉关闭时显示) -->
-<view class="trigger-button {{isTriggerBtnVisible ? 'visible' : ''}} {{isTriggerBtnFaded ? 'faded' : ''}}" catchtap="toggleDrawer" wx:if="{{!isDrawerOpen}}">
-  <text class="trigger-text">查看全部功能</text>
-  <image src="{{iconArrowUp}}" class="trigger-icon" mode="aspectFit" lazy-load="true"></image>
-</view>
+    <view class="hub-safe-bottom"></view>
+  </view>
+</scroll-view>
 
-<!-- 底部抽屉功能区 -->
+<!-- 遮罩层 -->
+<view class="drawer-mask" bindtap="closeDrawer" wx:if="{{isDrawerOpen}}"></view>
+
+<!-- 底部抽屉：全部功能 + 管理员开关 -->
 <view class="bottom-drawer {{isDrawerOpen ? 'open' : ''}}">
-  <!-- 把手区域 (仅用于下拉关闭) - 只有这里可以滑动关闭 -->
-  <view class="drawer-handle-area" 
-        bindtouchstart="onDrawerTouchStart" 
-        bindtouchmove="onDrawerTouchMove"
-        bindtouchend="onDrawerTouchEnd"
-        catchtap="closeDrawer">
+  <view
+    class="drawer-handle-area"
+    bindtouchstart="onDrawerTouchStart"
+    bindtouchmove="onDrawerTouchMove"
+    bindtouchend="onDrawerTouchEnd"
+    catchtap="closeDrawer"
+  >
     <view class="drawer-handle-bar"></view>
   </view>
-  
-  <!-- 内容区域 -->
+
   <view class="drawer-content">
+    <view class="drawer-admin-bar" wx:if="{{isAuthorized}}">
+      <text class="drawer-admin-title">管理员</text>
+      <text class="drawer-admin-desc">右侧开关：开=可进入；关=对用户不可进入</text>
+    </view>
     <view class="function-grid">
       <block wx:for="{{list}}" wx:key="id">
-        <view class="function-card" catchtap="onFunctionTap" data-id="{{item.id}}">
+        <view
+          class="function-card {{!isAuthorized && item.pageEnabled === false ? 'fc-disabled' : ''}}"
+          catchtap="onFunctionTap"
+          data-id="{{item.id}}"
+        >
           <view class="fc-icon-box">
-            <image class="fc-icon" src="{{item.iconSvg}}" mode="aspectFit" lazy-load="true"></image>
+            <image class="fc-icon" src="{{item.iconSvg}}" mode="aspectFit" lazy-load="true" />
           </view>
           <view class="fc-info">
             <text class="fc-title">{{item.title}}</text>
             <text class="fc-hint" wx:if="{{item.hint}}">{{item.hint}}</text>
+          </view>
+          <view class="fc-switch-wrap" wx:if="{{isAuthorized}}" catchtap="noop">
+            <text class="fc-switch-label {{item.pageEnabled ? 'is-on' : 'is-off'}}">{{item.pageEnabled ? '开放' : '关闭'}}</text>
+            <switch
+              class="fc-feature-switch"
+              checked="{{item.pageEnabled}}"
+              data-id="{{item.id}}"
+              bindchange="onFeatureFlagChange"
+              color="#34C759"
+            />
           </view>
         </view>
       </block>
@@ -158,7 +164,7 @@ module.exports = {
   </view>
 </view>
 
-<!-- ================= 自动消失提示（无按钮，2秒后自动消失） ================= -->
+<!-- 自动消失提示 -->
 <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
   <view class="auto-toast-box" catchtouchmove="noop" bindtap="dismissTransientModals">
     <view class="at-title">{{autoToast.title}}</view>
@@ -166,7 +172,7 @@ module.exports = {
   </view>
 </view>
 
-<!-- 自定义加载动画 -->
+<!-- 加载动画 -->
 <view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
   <view class="loader" catchtouchmove="noop" catchtap="noop">
     <text class="loader-label">请稍候...</text>
@@ -174,29 +180,28 @@ module.exports = {
   </view>
 </view>
 
-<!-- 🆕 产品上新弹窗（首进 PRODUCTS 时，复用 pagenew 数据） -->
+<!-- 产品上新弹窗 -->
 <view class="new-arrival-mask {{newArrivalClosing ? 'is-closing' : ''}} {{newArrivalAnimIn && !newArrivalClosing ? 'na-mask-in' : ''}}" wx:if="{{showNewArrivalModal}}" catchtouchmove="noop" bindtap="dismissTransientModals">
   <view class="new-arrival-box {{newArrivalClosing ? 'is-closing' : ''}} {{newArrivalAnimIn && !newArrivalClosing ? 'na-box-in' : ''}}" bindtap="dismissTransientModals" catchtouchmove="noop">
     <view class="na-bg-glow"></view>
     <view class="na-close-icon" catchtap="closeNewArrivalModal">×</view>
-    
-    <!-- 顶部标题区 -->
+
     <view class="na-header-group">
       <view class="na-main-title">MT 新品推荐</view>
       <view class="na-tag-line">左右滑动查看更多</view>
     </view>
 
-    <!-- 轮播卡片区 -->
-    <swiper class="na-swiper"
-            current="{{newArrivalIndex}}"
-            bindchange="onNewArrivalChange"
-            circular="{{false}}"
-            previous-margin="30rpx"
-            next-margin="30rpx">
+    <swiper
+      class="na-swiper"
+      current="{{newArrivalIndex}}"
+      bindchange="onNewArrivalChange"
+      circular="{{false}}"
+      previous-margin="30rpx"
+      next-margin="30rpx"
+    >
       <block wx:for="{{newArrivalList}}" wx:key="_id">
         <swiper-item class="na-swiper-item">
           <view class="na-card">
-            <!-- 双图：先加载缩略图（COS imageMogr2），高清层就绪后淡入；首张禁用 lazy-load 避免首屏再等一帧 -->
             <block wx:if="{{item.dualCover}}">
               <image
                 class="na-cover-img na-cover-low {{newArrivalHdLoaded[index] ? 'is-hidden' : ''}}"
@@ -237,7 +242,6 @@ module.exports = {
       </block>
     </swiper>
 
-    <!-- 底部操作区 -->
     <button class="na-jump-btn" catchtap="handleNewArrivalJump">
       <text>立即查看</text>
       <view class="btn-arrow">→</view>
@@ -245,5 +249,4 @@ module.exports = {
   </view>
 </view>
 
-<!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />

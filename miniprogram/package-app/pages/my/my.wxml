@@ -85,18 +85,20 @@
           
           <!-- 1. 头部：修复位置不对的问题 -->
           <view class="card-header {{item.guidedPartsPurchase ? 'card-header--guided-ship' : ''}}">
-            <view class="order-id-group">
-              <text class="order-label">{{item.guidedPartsPurchase ? '订单编号' : '订单号'}}</text>
-              <text class="order-val">{{item.orderId}}</text>
-            </view>
-            <view class="card-header-tags">
-              <view class="ship-pick-chip" wx:if="{{item.shippingMethod}}">
-                <view class="ship-pick-badge ship-pick-badge--{{item.shippingMethod}}">
-                  <text class="ship-pick-icon-text">{{item.shippingMethod === 'sf' ? 'SF' : '中'}}</text>
-                </view>
-                <text class="ship-pick-desc">{{item.shippingMethodLabel}}<text wx:if="{{item.shippingFeeText}}"> · {{item.shippingFeeText}}</text></text>
+            <view class="card-header-left">
+              <view class="order-id-group">
+                <text class="order-label">{{item.guidedPartsPurchase ? '订单编号' : '订单号'}}</text>
+                <text class="order-val">{{item.orderId}}</text>
               </view>
-              <view class="status-tag {{item.realStatus}} {{item.guidedPartsPurchase ? 'status-tag-guided' : ''}}">{{item.guidedPartsPurchase ? '引导购配件·待发出' : item.statusText}}</view>
+            </view>
+            <view class="card-header-right">
+              <view class="status-tag {{item.realStatus}} {{item.guidedPartsPurchase ? 'status-tag-guided' : ''}}">
+                <text>{{item.guidedPartsPurchase ? '引导购配件·待发出' : item.statusText}}</text>
+                <block wx:if="{{item.shippingMethod}}">
+                  <view class="status-divider"></view>
+                  <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
+                </block>
+              </view>
             </view>
           </view>
 
@@ -243,11 +245,8 @@
           <view class="repair-info">
             <view class="r-title-row">
               <view class="r-title">{{item.displayModel || item.model}} - {{item.contact.name}}</view>
-              <view class="ship-pick-chip" wx:if="{{item.shippingMethod}}">
-                <view class="ship-pick-badge ship-pick-badge--{{item.shippingMethod}}">
-                  <text class="ship-pick-icon-text">{{item.shippingMethod === 'sf' ? 'SF' : '中'}}</text>
-                </view>
-                <text class="ship-pick-desc">{{item.shippingMethodLabel}}<text wx:if="{{item.shippingFeeText}}"> · {{item.shippingFeeText}}</text></text>
+              <view class="status-tag {{item.realStatus}}" style="margin-left: 16rpx;" wx:if="{{item.shippingMethod}}">
+                <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
               </view>
             </view>
             <view class="r-desc">"{{item.description}}"</view>
@@ -335,18 +334,20 @@
           
           <!-- 1. 头部 -->
           <view class="card-header">
-            <view class="order-id-group">
-              <text class="order-label">订单号</text>
-              <text class="order-val">{{item.orderId}}</text>
-            </view>
-            <view class="card-header-tags">
-              <view class="ship-pick-chip" wx:if="{{item.shippingMethod}}">
-                <view class="ship-pick-badge ship-pick-badge--{{item.shippingMethod}}">
-                  <text class="ship-pick-icon-text">{{item.shippingMethod === 'sf' ? 'SF' : '中'}}</text>
-                </view>
-                <text class="ship-pick-desc">{{item.shippingMethodLabel}}<text wx:if="{{item.shippingFeeText}}"> · {{item.shippingFeeText}}</text></text>
+            <view class="card-header-left">
+              <view class="order-id-group">
+                <text class="order-label">订单号</text>
+                <text class="order-val">{{item.orderId}}</text>
               </view>
-              <view class="status-tag {{item.realStatus}}">{{item.statusText}}</view>
+            </view>
+            <view class="card-header-right">
+              <view class="status-tag {{item.realStatus}}">
+                <text>{{item.statusText}}</text>
+                <block wx:if="{{item.shippingMethod}}">
+                  <view class="status-divider"></view>
+                  <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
+                </block>
+              </view>
             </view>
           </view>
 

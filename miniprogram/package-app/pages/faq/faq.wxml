@@ -1,0 +1,260 @@
+<view class="container">
+  <view class="faq-top-nav">
+    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 4}}px;">
+      <text class="back-arrow">‹</text>
+    </view>
+  </view>
+
+  <view class="page-home {{showDetail && !detailClosing ? 'is-detail-open' : ''}}">
+    <view class="header" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
+      <view class="header-row">
+        <text class="header-title">帮助中心</text>
+        <view
+          wx:if="{{isAuthorized}}"
+          class="admin-toggle-btn {{isAdmin ? 'on' : ''}}"
+          catchtap="toggleAdminMode"
+        >{{isAdmin ? 'EXIT' : 'EDIT'}}</view>
+      </view>
+    </view>
+
+    <view class="home-admin-tip" wx:if="{{isAdmin}}">
+      <text>「管理」进入分类添加问题；「改名」改名称；底部可「添加设备」或「添加分类」</text>
+    </view>
+
+    <view class="glass-list-section">
+      <text class="section-label">设备使用问题</text>
+      <view class="glass-container">
+        <view
+          class="glass-item"
+          wx:for="{{products}}"
+          wx:key="name"
+          hover-class="glass-item-hover"
+          bindtap="openDetail"
+          data-name="{{item.name}}"
+        >
+          <view class="item-icon item-icon--mt">MT</view>
+          <view class="glass-item-main">
+            <text class="item-text">{{item.name}}</text>
+          </view>
+          <block wx:if="{{isAdmin}}">
+            <view class="item-admin-col">
+              <text class="item-admin-tag" catchtap="onRenameTap" data-type="device" data-name="{{item.name}}">改名</text>
+              <text class="item-admin-tag item-admin-tag--primary" catchtap="onManageTap" data-name="{{item.name}}">管理</text>
+            </view>
+          </block>
+          <view class="chevron" wx:else></view>
+        </view>
+        <view
+          wx:if="{{isAdmin}}"
+          class="glass-section-add"
+          catchtap="adminAddCategory"
+          data-type="device"
+        >＋ 添加设备</view>
+      </view>
+    </view>
+
+    <view class="glass-list-section">
+      <text class="section-label">常见问题</text>
+      <view class="glass-container">
+        <view
+          class="glass-item"
+          wx:for="{{generalTopics}}"
+          wx:key="name"
+          hover-class="glass-item-hover"
+          bindtap="openDetail"
+          data-name="{{item.name}}"
+        >
+          <view class="item-icon item-icon--general">MT</view>
+          <view class="glass-item-main">
+            <text class="item-text">{{item.name}}</text>
+          </view>
+          <block wx:if="{{isAdmin}}">
+            <view class="item-admin-col">
+              <text class="item-admin-tag" catchtap="onRenameTap" data-type="general" data-name="{{item.name}}">改名</text>
+              <text class="item-admin-tag item-admin-tag--primary" catchtap="onManageTap" data-name="{{item.name}}">管理</text>
+            </view>
+          </block>
+          <view class="chevron" wx:else></view>
+        </view>
+        <view
+          wx:if="{{isAdmin}}"
+          class="glass-section-add"
+          catchtap="adminAddCategory"
+          data-type="general"
+        >＋ 添加分类</view>
+      </view>
+    </view>
+  </view>
+
+  <view
+    wx:if="{{showDetail || detailClosing}}"
+    class="page-detail {{detailAnimIn ? 'is-in' : ''}} {{detailClosing ? 'is-leaving' : ''}}"
+  >
+    <view class="nav-bar" style="padding-top: {{statusBarHeight + 8}}px;">
+      <view class="back-link" bindtap="closeDetail">帮助中心</view>
+      <view
+        wx:if="{{isAuthorized}}"
+        class="admin-toggle-btn {{isAdmin ? 'on' : ''}}"
+        catchtap="toggleAdminMode"
+      >{{isAdmin ? 'EXIT' : 'EDIT'}}</view>
+    </view>
+
+    <view class="detail-header">
+      <text class="detail-p-name">{{currentProductName}}</text>
+      <text class="detail-subtitle">常见问题 · 视频教学</text>
+    </view>
+
+    <view class="detail-admin-tip" wx:if="{{isAdmin}}">
+      <text>每条可点「编辑」改标题与说明；「视频」上传 COS；底部可添加新问题</text>
+    </view>
+
+    <view class="faq-loading" wx:if="{{faqDetailLoading}}">
+      <text>加载中...</text>
+    </view>
+
+    <view class="faq-empty" wx:elif="{{!currentFaqList.length && !isAdmin}}">
+      <text class="faq-empty-text">暂无视频教程，敬请期待</text>
+    </view>
+
+    <view class="faq-accordion" wx:elif="{{currentFaqList.length}}">
+      <view
+        class="faq-row {{item.isOpen ? 'open' : ''}}"
+        wx:for="{{currentFaqList}}"
+        wx:key="question"
+      >
+        <view class="faq-row-head">
+          <view class="faq-q" bindtap="toggleFaq" data-index="{{index}}">
+            <view class="faq-q-main">
+              <text class="faq-q-label">问题</text>
+              <text class="faq-q-text">{{item.question}}</text>
+            </view>
+            <view class="arrow"></view>
+          </view>
+          <view class="faq-q-admin" wx:if="{{isAdmin}}">
+            <text class="faq-admin-btn" bindtap="adminOpenEditModal" data-index="{{index}}">编辑</text>
+            <text class="faq-admin-btn" bindtap="adminReplaceVideo" data-index="{{index}}">视频</text>
+            <text class="faq-admin-btn faq-admin-btn--danger" bindtap="adminDeleteFaq" data-index="{{index}}">删除</text>
+          </view>
+        </view>
+
+        <view class="faq-a" style="max-height: {{item.isOpen ? item.panelHeight : '0'}}">
+          <view class="faq-a-inner">
+            <view class="faq-section faq-section--video">
+              <text class="faq-section-label">视频教学</text>
+              <view class="video-wrap">
+                <video
+                  wx:if="{{item.videoUrl}}"
+                  id="faq-video-{{index}}"
+                  class="video-player"
+                  src="{{item.videoUrl}}"
+                  controls
+                  show-center-play-btn
+                  object-fit="contain"
+                  bindplay="onVideoPlay"
+                  data-index="{{index}}"
+                ></video>
+                <view
+                  wx:else
+                  class="video-placeholder {{isAdmin ? 'video-placeholder--admin' : ''}}"
+                  bindtap="onVideoPlaceholderTap"
+                  data-index="{{index}}"
+                >
+                  <text class="video-placeholder-icon">▶</text>
+                  <text class="video-placeholder-text">{{isAdmin ? '点击上传教学视频' : '视频准备中'}}</text>
+                </view>
+              </view>
+            </view>
+
+            <view class="faq-section faq-section--answer" wx:if="{{item.answer}}">
+              <text class="faq-section-label">文字说明</text>
+              <view class="faq-answer-card">
+                <text class="faq-answer-text">{{item.answer}}</text>
+              </view>
+            </view>
+
+            <view
+              class="faq-edit-text-btn"
+              wx:if="{{isAdmin}}"
+              bindtap="adminOpenEditModal"
+              data-index="{{index}}"
+            >编辑文字说明</view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="faq-empty" wx:elif="{{isAdmin}}">
+      <text class="faq-empty-text">暂无问题，点击下方添加</text>
+    </view>
+
+    <view class="faq-admin-bar" wx:if="{{isAdmin}}">
+      <view class="faq-admin-add" bindtap="adminOpenAddModal">＋ 添加问题（视频+文字）</view>
+    </view>
+  </view>
+</view>
+
+<!-- 管理员：编辑问题 -->
+<view class="faq-modal-mask faq-modal-mask--admin {{adminModalClosing ? 'closing' : ''}}" wx:if="{{showAdminModal || adminModalClosing}}" catchtouchmove="true">
+  <view class="faq-modal-box" catchtap="stopTap" catchtouchmove="true">
+    <view class="faq-modal-title">{{adminEditingId ? '编辑问题' : '添加问题'}}</view>
+
+    <text class="faq-modal-label">问题标题</text>
+    <input
+      class="faq-modal-input"
+      placeholder="例如：无法连接蓝牙怎么办？"
+      value="{{adminFormQuestion}}"
+      bindinput="onAdminQuestionInput"
+    />
+
+    <text class="faq-modal-label">补充说明（选填）</text>
+    <textarea
+      class="faq-modal-textarea"
+      placeholder="视频下方的文字说明"
+      value="{{adminFormAnswer}}"
+      bindinput="onAdminAnswerInput"
+      maxlength="500"
+    />
+
+    <text class="faq-modal-label">教学视频（必填）</text>
+    <view class="faq-video-pick" bindtap="adminChooseVideo">
+      <block wx:if="{{adminTempVideoPath}}">
+        <video class="faq-video-preview" src="{{adminTempVideoPath}}" controls="{{false}}" show-center-play-btn="{{false}}"></video>
+        <text class="faq-video-pick-hint">已选择，点击可更换</text>
+      </block>
+      <block wx:elif="{{adminExistingVideoUrl}}">
+        <video class="faq-video-preview" src="{{adminExistingVideoUrl}}" controls="{{false}}" show-center-play-btn="{{false}}"></video>
+        <text class="faq-video-pick-hint">已有视频，点击可更换</text>
+      </block>
+      <block wx:else>
+        <text class="faq-video-pick-plus">＋</text>
+        <text class="faq-video-pick-hint">点击后从相册或拍摄选择（电脑模拟器请用相册）</text>
+      </block>
+    </view>
+
+    <view class="faq-modal-btns">
+      <view class="faq-modal-btn cancel" bindtap="closeAdminModal">取消</view>
+      <view class="faq-modal-btn confirm {{isAdminSaving ? 'disabled' : ''}}" bindtap="confirmAdminModal">
+        {{isAdminSaving ? '保存中' : '保存'}}
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- 管理员：分类改名（层级高于编辑弹窗） -->
+<view class="faq-modal-mask faq-modal-mask--rename {{renameModalClosing ? 'closing' : ''}}" wx:if="{{showRenameModal || renameModalClosing}}" catchtouchmove="true">
+  <view class="faq-modal-box faq-modal-box--sm" catchtap="stopTap" catchtouchmove="true">
+    <view class="faq-modal-title">{{renameModalMode === 'add' ? (renameTargetType === 'device' ? '添加设备' : '添加常见问题') : '修改分类名称'}}</view>
+    <text class="faq-modal-label">{{renameModalMode === 'add' ? '名称' : '新名称'}}</text>
+    <input
+      class="faq-modal-input"
+      value="{{renameNewName}}"
+      bindinput="onRenameInput"
+      placeholder="{{renameTargetType === 'device' ? '例如：F3 PRO' : '例如：退换货政策'}}"
+      focus="{{showRenameModal}}"
+    />
+    <view class="faq-modal-btns">
+      <view class="faq-modal-btn cancel" bindtap="closeRenameModal">取消</view>
+      <view class="faq-modal-btn confirm" bindtap="confirmRenameCategory">保存</view>
+    </view>
+  </view>
+</view>

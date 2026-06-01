@@ -15,6 +15,8 @@ const iconOTA = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiI
 const iconControl = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJsYWNrS25vYiIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzU1NSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAwMCIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGQ9Ik04IDE0SDQyIiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PHBhdGggZD0iTTggMjRINDIiIHN0cm9rZT0iI2RkZCIgc3Ryb2tlLXdpZHRoPSI0IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNOCAzNEg0MiIgc3Ryb2tlPSIjZGRkIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPjxjaXJjbGUgY3g9IjMyIiBjeT0iMTQiIHI9IjQiIGZpbGw9InVybCgjYmxhY2tLbm9iKSIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iMjQiIHI9IjQiIGZpbGw9InVybCgjYmxhY2tLbm9iKSIvPjxjaXJjbGUgY3g9IjM2IiBjeT0iMzQiIHI9IjQiIGZpbGw9InVybCgjYmxhY2tLbm9iKSIvPjwvc3ZnPg==";
 // 6. 联系方式 (方案 A: 微信绿色气泡 - 带MT文字，使用微信官方绿色 #07C160)
 const iconContact = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNNDQgMjRDNDQgMzUuMDQ1NyAzNS4wNDU3IDQ0IDI0IDQ0QzE5Ljk3OTEgNDQgMTYuMjIzIDQyLjgxMjMgMTMuMDY1MiA0MC43NzY2TDQgNDRMNy41NDA0OSAzNS41MDk3QzUuMjg5NDEgMzIuMTgxOCA0IDI4LjI0MzYgNCAyNEM0IDEyLjk1NDMgMTIuOTU0MyA0IDI0IDRDMzUuMDQ1NyA0IDQ0IDEyLjk1NDMgNDQgMjRaIiBmaWxsPSIjMDdDMTYwIi8+PHRleHQgeD0iMjQiIHk9IjMwIiBmb250LWZhbWlseT0iQXJpYWwsIHNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TVQ8L3RleHQ+PC9zdmc+";
+// 7. 常见问题（浅蓝底 + 蓝色圆润问号，匹配页面风格）
+const iconFaq = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjQiIGN5PSIyNCIgcj0iMjQiIGZpbGw9IiNFMUY1RkUiLz4KPHBhdGggZD0iTTE3LjUgMTguNUMxNy41IDE0LjkxMDEgMjAuNDEwMSAxMiAyNCAxMkMyNy41ODk5IDEyIDMwLjUgMTQuOTEwMSAzMC41IDE4LjVDMzAuNSAyMS41IDI3LjUgMjMuNSAyNS41IDI1QzI0LjUgMjUuNzUgMjQgMjYuNSAyNCAyOCIgc3Ryb2tlPSIjMDI4OEQxIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8Y2lyY2xlIGN4PSIyNCIgY3k9IjM1IiByPSIyLjUiIGZpbGw9IiMwMjg4RDEiLz4KPC9zdmc+";
 const iconShowcase = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJncmFkMyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzk1NTBCQiIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzZFNDhBQSIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGZpbGw9InVybCgjZ3JhZDMpIiBkPSJNOCw1djE0bDExLTdMOCw1eiIvPjwvc3ZnPg==";
 const iconProfile = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJncmFkOCIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzRGQUNGZSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzAwRjJGRSIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGZpbGw9InVybCgjZ3JhZDgpIiBkPSJNMTIsMTkuMkM5LjUsMTkuMiA3LjI5LDE3LjkyIDYsMTZDNi4wMywxNCAxMCwxMi45IDEyLDEyLjlDMTQsMTIuOSAxNy45NywxNCAxOCwxNkMxNi43MSwxNy45MiAxNC41LDE5LjIgMTIsMTkuMk0xMiw1QTMsMyAwIDAsMSAxNSw4QTMsMyAwIDAsMSAxMiwxMUEzLDMgMCAwLDEgOSw4QTMsMyAwIDAsMSAxMiw1TTEyLDJBMTAsMTAgMCAwLDAgMiwxMkExMCwxMCAwIDAsMCAxMiwyMkExMCwxMCAwIDAsMCAyMiwxMkExMCwxMCAwIDAsMCAxMiwyWiIvPjwvc3ZnPg==";
 // 3. 产品上新 (打开的礼盒 - 方正盒子，飘逸的丝带)
@@ -25,6 +27,12 @@ const iconRank = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5v
 const iconShop = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PGRlZnM+PGxpbmVhckdyYWRpZW50IGlkPSJncmFkNyIgeDE9IjAlIiB5MT0iMCUiIHgyPSIxMDAlIiB5Mj0iMTAwJSI+PHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzY2N2VlYSIvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzc2NGJhMiIvPjwvbGluZWFyR3JhZGllbnQ+PC9kZWZzPjxwYXRoIGZpbGw9InVybCgjZ3JhZDcpIiBkPSJNMTcsMThBMiwyIDAgMCwxIDE5LDIwQTIsMiAwIDAsMSAxNywyMkMxNS44OSwyMiAxNSwyMS4xIDE1LDIwQzE1LDE4Ljg5IDE1Ljg5LDE4IDE3LDE4TTEsMlY0SDJMNi42LDExLjU5TDUuMjQsMTQuMDRDNS4wOSwxNC4zMiA1LDE0LjY1IDUsMTVBMiwyIDAgMCwwIDcsMTdIMTlWMTVINy40MkEwLjI1LDAuMjUgMCAwLDEgNy4xNywxNC43NUM3LjE3LDE0LjcgNy4xOCwxNC42NiA3LjIsMTQuNjNMOC4xLDEzSDE1LjU1QzE2LjMsMTMgMTYuOTYsMTIuNTggMTcuMywxMS45N0wyMC44OCw1LjVDMjAuOTUsNS4zNCAyMSw1LjE3IDIxLDVBMSwxIDAgMCwwIDIwLDRINS4yMUw0LjI3LDJNNywxOEEyLDIgMCAwLDEgOSwyMEEyLDIgMCAwLDEgNywyMkM1Ljg5LDIyIDUsMjEuMSA1LDIwQzUsMTguODkgNS44OSwxOCA3LDE4WiIvPjwvc3ZnPg==";
 // ⬆️ 向上箭头 (用于底部触发按钮)
 const iconArrowUp = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgNVYxOU01IDEyTDEyIDVNMTkgMTJMMTIgNSIgc3Ryb2tlPSIjMzMzMzMzIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==";
+
+/** 功能入口开关（shop_config 文档），管理员控制各页面是否对用户开放 */
+const PRODUCT_FEATURE_FLAGS_DOC = 'productFeatureFlags';
+const FEATURE_FLAGS_LOCAL_KEY = '__products_feature_flags__';
+/** 功能列表里「产品上新」卡片 id：仅控制进入 pagenew，不控制 MT 新品推荐弹窗 */
+const FEATURE_ID_PAGENEW = 3;
 
 /** 新品弹窗：云端未返回前先占位，保证蒙层第一时间出现 */
 const NEW_ARRIVAL_LOADING_ITEM = {
@@ -40,6 +48,7 @@ Page({
   data: {
     // 🔴 状态栏高度
     statusBarHeight: 44,
+    isAuthorized: false,
     
     // 状态控制
     hasEntered: true,       // 默认可见，避免偶发白屏（入场状态未拉起）
@@ -63,97 +72,123 @@ Page({
     isTriggerBtnVisible: false, // 按钮是否可见（弹起）
     isTriggerBtnFaded: false,   // 按钮是否变淡沉下
     
-    // 按照你的要求 1-12 顺序排列
-    // === 在这里单独调整每个图标的大小 ===
-    iconArrowUp, // ⬆️ 注册新图标
+    // Bento 枢纽分区（由 list 同步生成）
+    hubHero: null,
+    hubMidNew: null,
+    hubMidControl: null,
+    hubMinis: [],
+    hubBanners: [],
+
+    // 功能卡顺序：买→装→用→修；排行榜单为其他产品线，默认靠后且默认关闭
+    iconArrowUp,
     list: [
-      { 
-        id: 3, 
-        title: '产品上新', 
-        en: 'NEW ARRIVALS', 
+      {
+        id: 3,
+        title: '产品上新',
+        en: 'NEW ARRIVALS',
         hint: '查看最新上架与亮点',
-        iconSvg: iconNew, 
-        iconSize: '110rpx' // <---【在这里改】因为是发散的丝带，给最大
+        iconSvg: iconNew,
+        iconSize: '110rpx',
+        pageEnabled: true
       },
-      { 
-        id: 4, 
-        title: '产品选购', 
-        en: 'PRODUCTS', 
+      {
+        id: 4,
+        title: '产品选购',
+        en: 'PRODUCTS',
         hint: '浏览配件与实时价格',
-        iconSvg: iconShop, 
-        iconSize: '72rpx'  // <---【在这里改】实心购物车，稍微改小显得精致
+        iconSvg: iconShop,
+        iconSize: '72rpx',
+        pageEnabled: true
       },
-      { 
-        id: 10, 
-        title: '案例展示', 
-        en: 'SHOWCASE', 
+      {
+        id: 10,
+        title: '案例展示',
+        en: 'SHOWCASE',
         hint: '真实装车案例参考',
-        iconSvg: iconShowcase, 
-        iconSize: '80rpx'  // <---【在这里改】标准大小
+        iconSvg: iconShowcase,
+        iconSize: '80rpx',
+        pageEnabled: true
       },
-      { 
-        id: 5, 
-        title: '排行榜单', 
-        en: 'RANKING LIST', 
-        hint: '热门榜单与排行变化',
-        iconSvg: iconRank, 
-        iconSize: '80rpx' 
-      },
-      { 
-        id: 9, 
-        title: 'OTA升级', 
-        en: 'SYSTEM UPDATE', 
-        hint: '在线升级设备固件',
-        iconSvg: iconOTA, 
-        iconSize: '80rpx' 
-      },
-      { 
-        id: 8, 
-        title: '联系方式', 
-        en: 'CONTACT US', 
-        hint: '客服咨询与联系方式',
-        iconSvg: iconContact, 
-        iconSize: '80rpx' 
-      },
-      { 
-        id: 1, 
-        title: '控制中心', 
-        en: 'CONTROL CENTER', 
-        hint: '连接设备并调节参数',
-        iconSvg: iconControl, 
-        iconSize: '80rpx' 
-      },
-      { 
-        id: 7, 
-        title: '安装教程', 
-        en: 'VIDEO GUIDE', 
+      {
+        id: 7,
+        title: '安装教程',
+        en: 'VIDEO GUIDE',
         hint: '分步视频安装教程',
-        iconSvg: iconInstall, 
-        iconSize: '80rpx' 
+        iconSvg: iconInstall,
+        iconSize: '80rpx',
+        pageEnabled: true
       },
-      { 
-        id: 6, 
-        title: '维修中心', 
-        en: 'SERVICE & REPAIR', 
+      {
+        id: 1,
+        title: '控制中心',
+        en: 'CONTROL CENTER',
+        hint: '连接设备并调节参数',
+        iconSvg: iconControl,
+        iconSize: '80rpx',
+        pageEnabled: true
+      },
+      {
+        id: 13,
+        title: '常见问题',
+        en: 'FAQ',
+        hint: '按产品查看视频解答',
+        iconSvg: iconFaq,
+        iconSize: '80rpx',
+        pageEnabled: true
+      },
+      {
+        id: 6,
+        title: '维修中心',
+        en: 'SERVICE & REPAIR',
         hint: '寄修申请与进度查看',
-        iconSvg: iconRepair, 
-        iconSize: '80rpx' 
+        iconSvg: iconRepair,
+        iconSize: '80rpx',
+        pageEnabled: true
       },
-      { 
-        id: 12, 
-        title: '附近门店', 
-        en: 'NEARBY STORES', 
+      {
+        id: 12,
+        title: '附近门店',
+        en: 'NEARBY STORES',
         hint: '查看附近门店导航',
-        iconSvg: iconStore, 
-        iconSize: '80rpx' 
+        iconSvg: iconStore,
+        iconSize: '80rpx',
+        pageEnabled: true
       },
-      { 
-        id: 2, 
-        title: '个人中心', 
-        en: 'MY PROFILE', 
+      {
+        id: 8,
+        title: '联系方式',
+        en: 'CONTACT US',
+        hint: '客服咨询与联系方式',
+        iconSvg: iconContact,
+        iconSize: '80rpx',
+        pageEnabled: true
+      },
+      {
+        id: 9,
+        title: 'OTA升级',
+        en: 'SYSTEM UPDATE',
+        hint: '在线升级设备固件',
+        iconSvg: iconOTA,
+        iconSize: '80rpx',
+        pageEnabled: true
+      },
+      {
+        id: 5,
+        title: '排行榜单',
+        en: 'RANKING LIST',
+        hint: '热门榜单与排行变化',
+        iconSvg: iconRank,
+        iconSize: '80rpx',
+        pageEnabled: false
+      },
+      {
+        id: 2,
+        title: '个人中心',
+        en: 'MY PROFILE',
         hint: '订单与账户统一管理',
-        iconSvg: iconProfile, 
-        iconSize: '80rpx' 
+        iconSvg: iconProfile,
+        iconSize: '80rpx',
+        pageEnabled: true
       }
     ],
 
@@ -194,6 +229,425 @@ Page({
     const base = url.slice(0, q);
     const parts = url.slice(q + 1).split('&').filter(p => !/^(imageMogr2|imageView2)/i.test(p));
     return parts.length ? `${base}?${parts.join('&')}` : base;
+  },
+
+  _isFlagEnabled(val) {
+    if (val === undefined || val === null) return true;
+    if (val === false || val === 0 || val === '0' || val === 'false') return false;
+    if (val === true || val === 1 || val === '1' || val === 'true') return true;
+    return !!val;
+  },
+
+  _normalizeFlagMap(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    const out = {};
+    Object.keys(src).forEach((k) => {
+      const key = String(k).trim();
+      if (!key) return;
+      out[key] = this._isFlagEnabled(src[k]);
+    });
+    return out;
+  },
+
+  _extractFlagsFromShopConfigDoc(docData) {
+    if (!docData || typeof docData !== 'object') return null;
+    if (docData.flags && typeof docData.flags === 'object') {
+      return this._normalizeFlagMap(docData.flags);
+    }
+    if (docData.data && docData.data.flags && typeof docData.data.flags === 'object') {
+      return this._normalizeFlagMap(docData.data.flags);
+    }
+    return null;
+  },
+
+  _applyFeatureFlagsToList(list, flags = {}) {
+    const normalized = this._normalizeFlagMap(flags);
+    return (list || []).map((item) => {
+      const key = String(item.id);
+      const hasFlag = Object.prototype.hasOwnProperty.call(normalized, key);
+      return {
+        ...item,
+        pageEnabled: hasFlag ? normalized[key] : item.pageEnabled !== false
+      };
+    });
+  },
+
+  /** Bento 布局：核心磁贴 + 8 个快捷服务 */
+  _rebuildHubLayout() {
+    const list = this.data.list || [];
+    const byId = (id) => list.find((i) => Number(i.id) === Number(id)) || null;
+    const miniShort = {
+      10: '案例',
+      7: '教程',
+      6: '维修',
+      13: '问答',
+      12: '门店',
+      9: 'OTA',
+      8: '联系',
+      2: '我的'
+    };
+    const miniIds = [10, 7, 6, 13, 12, 9, 8, 2];
+    const hubMinis = miniIds
+      .map((id) => {
+        const item = byId(id);
+        if (!item) return null;
+        return { ...item, hubShortLabel: miniShort[id] || item.title };
+      })
+      .filter(Boolean);
+
+    const arrivals = (this.data.newArrivalList || []).filter(
+      (x) => x && x._id && x._id !== 'fallback-loading'
+    );
+    let hubBanners = arrivals.slice(0, 5).map((a) => ({
+      _id: a._id,
+      title: a.title || '新品发布',
+      cover: a.coverThumb || a.coverFull || a.cover || ''
+    }));
+    if (!hubBanners.length) {
+      hubBanners = [{ _id: 'default', title: '旗舰新品 / 现已发布', cover: '' }];
+    }
+
+    this.setData({
+      hubHero: byId(4),
+      hubMidNew: byId(3),
+      hubMidControl: byId(1),
+      hubMinis,
+      hubBanners
+    });
+  },
+
+  _setListAndHub(list, extra = {}, callback) {
+    this.setData({ list, ...extra }, () => {
+      this._rebuildHubLayout();
+      if (typeof callback === 'function') callback();
+    });
+  },
+
+  _saveFeatureFlagsLocalCache(list, syncedToCloud = true) {
+    try {
+      wx.setStorageSync(FEATURE_FLAGS_LOCAL_KEY, {
+        flags: this._buildFeatureFlagsFromList(list),
+        ts: Date.now(),
+        syncedToCloud: syncedToCloud !== false
+      });
+    } catch (e) {}
+  },
+
+  _readFeatureFlagsLocalCacheEntry() {
+    try {
+      const cache = wx.getStorageSync(FEATURE_FLAGS_LOCAL_KEY);
+      if (cache && cache.flags && cache.ts && Date.now() - cache.ts < 7 * 24 * 60 * 60 * 1000) {
+        return cache;
+      }
+    } catch (e) {}
+    return null;
+  },
+
+  _readFeatureFlagsLocalCache() {
+    const entry = this._readFeatureFlagsLocalCacheEntry();
+    return entry ? entry.flags : null;
+  },
+
+  _mergeFeatureFlagMaps(cloudFlags = {}, localFlags = {}) {
+    const merged = { ...(cloudFlags || {}) };
+    Object.keys(localFlags || {}).forEach((key) => {
+      merged[key] = localFlags[key];
+    });
+    return merged;
+  },
+
+  _cloudUpdateTimeToMs(updateTime) {
+    if (!updateTime) return 0;
+    if (updateTime instanceof Date) return updateTime.getTime();
+    if (typeof updateTime === 'number') return updateTime;
+    if (updateTime.seconds) return updateTime.seconds * 1000;
+    return 0;
+  },
+
+  _buildFeatureFlagsFromList(list) {
+    const flags = {};
+    (list || []).forEach((item) => {
+      flags[String(item.id)] = this._isFlagEnabled(item.pageEnabled);
+    });
+    return flags;
+  },
+
+  _syncGlobalFlagsFromList(list) {
+    const flags = this._normalizeFlagMap(this._buildFeatureFlagsFromList(list));
+    try {
+      const app = getApp();
+      if (app && app.globalData) {
+        app.globalData.productFeatureFlags = flags;
+      }
+    } catch (e) {}
+    return flags;
+  },
+
+  _normalizeFeatureId(id) {
+    const num = Number(id);
+    return Number.isFinite(num) ? num : null;
+  },
+
+  _getGlobalProductFeatureFlags() {
+    try {
+      const app = getApp();
+      const flags = app && app.globalData && app.globalData.productFeatureFlags;
+      return flags && typeof flags === 'object' ? flags : null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  /** 功能是否开放：以当前页 list.pageEnabled 为准（与抽屉开关一致），global 仅作兜底 */
+  _resolveFeatureOpenState(id) {
+    const numId = this._normalizeFeatureId(id);
+    if (numId == null) return false;
+    const key = String(numId);
+    const item = (this.data.list || []).find((i) => Number(i.id) === numId);
+    if (item != null && item.pageEnabled != null) {
+      return this._isFlagEnabled(item.pageEnabled);
+    }
+    const globalFlags = this._getGlobalProductFeatureFlags();
+    if (globalFlags && Object.prototype.hasOwnProperty.call(globalFlags, key)) {
+      return this._isFlagEnabled(globalFlags[key]);
+    }
+    return true;
+  },
+
+  _isFeatureEnabledForUser(id) {
+    return this._resolveFeatureOpenState(id);
+  },
+
+  _notifyFeatureClosed(id) {
+    const numId = this._normalizeFeatureId(id);
+    const item = (this.data.list || []).find((i) => Number(i.id) === numId);
+    const title = (item && item.title) || '该功能';
+    this.showAutoToast('提示', `${title}正在开发中，敬请期待`);
+  },
+
+  /** MT 新品推荐弹窗：跟随「产品上新」(id=3) 开关，关闭入口则不再弹出 */
+  _shouldShowNewArrivalModal() {
+    const item = (this.data.list || []).find((i) => Number(i.id) === FEATURE_ID_PAGENEW);
+    if (item) return item.pageEnabled !== false;
+    const localFlags = this._readFeatureFlagsLocalCache();
+    const key = String(FEATURE_ID_PAGENEW);
+    if (localFlags && Object.prototype.hasOwnProperty.call(localFlags, key)) {
+      return this._isFlagEnabled(localFlags[key]);
+    }
+    return true;
+  },
+
+  _syncNewArrivalModalWithPagenewFlag() {
+    if (!this._shouldShowNewArrivalModal() && this.data.showNewArrivalModal) {
+      this.closeNewArrivalModal();
+    }
+  },
+
+  _readAdminPrivilegeCache() {
+    const keys = [
+      '__pagenew_admin_privilege_cache__',
+      '__shop_admin_privilege_cache__',
+      '__products_admin_privilege_cache__'
+    ];
+    const ttl = 10 * 60 * 1000;
+    let sawFalse = false;
+    for (let i = 0; i < keys.length; i++) {
+      try {
+        const cache = wx.getStorageSync(keys[i]);
+        if (!cache || typeof cache.isAuthorized !== 'boolean' || !cache.ts) continue;
+        if (Date.now() - cache.ts >= ttl) continue;
+        if (cache.isAuthorized === true) return true;
+        sawFalse = true;
+      } catch (e) {}
+    }
+    return sawFalse ? false : null;
+  },
+
+  /** 与 shop / pagenew 一致：guanliyuan 白名单 → isAuthorized */
+  async checkAdminPrivilege() {
+    const ADMIN_CACHE_KEY = '__products_admin_privilege_cache__';
+    const cached = this._readAdminPrivilegeCache();
+    if (cached === true) {
+      if (!this.data.isAuthorized) this.setData({ isAuthorized: true });
+      return;
+    }
+
+    if (!wx.cloud) return;
+    try {
+      const res = await wx.cloud.callFunction({ name: 'login' });
+      const myOpenid = (res && res.result && res.result.openid) || '';
+      if (!myOpenid) return;
+      if (!this.db) this.db = wx.cloud.database();
+      let adminCheck = await this.db.collection('guanliyuan').where({ openid: myOpenid }).get();
+      if (!adminCheck.data || adminCheck.data.length === 0) {
+        adminCheck = await this.db.collection('guanliyuan').where({ _openid: myOpenid }).get();
+      }
+      const isAuthorized = !!(adminCheck.data && adminCheck.data.length);
+      this.setData({ isAuthorized });
+      try {
+        wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized, ts: Date.now() });
+      } catch (e) {}
+      console.log('[products] checkAdminPrivilege isAuthorized:', isAuthorized);
+    } catch (err) {
+      console.error('[products] checkAdminPrivilege 失败:', err);
+    }
+  },
+
+  async _fetchProductFeatureFlagsFromCloudFn() {
+    if (!wx.cloud) return null;
+    try {
+      const res = await wx.cloud.callFunction({ name: 'getProductFeatureFlags' });
+      const result = res && res.result;
+      if (result && result.success) {
+        return {
+          flags: result.flags || {},
+          updateTime: result.updateTime || null
+        };
+      }
+    } catch (e) {
+      console.warn('[products] getProductFeatureFlags 云函数失败:', e);
+    }
+    return null;
+  },
+
+  async loadProductFeatureFlags(force = false) {
+    if (this._featureFlagsDirty && !force) return;
+
+    const localEntry = this._readFeatureFlagsLocalCacheEntry();
+    const localFlags = localEntry && localEntry.flags ? this._normalizeFlagMap(localEntry.flags) : null;
+    const isAdmin = !!this.data.isAuthorized;
+    let cloudFlags = null;
+
+    if (wx.cloud) {
+      const viaFn = await this._fetchProductFeatureFlagsFromCloudFn();
+      if (viaFn && viaFn.flags) {
+        cloudFlags = this._normalizeFlagMap(viaFn.flags);
+      }
+      if (!cloudFlags || !Object.keys(cloudFlags).length) {
+        try {
+          if (!this.db) this.db = wx.cloud.database();
+          const res = await this.db.collection('shop_config').doc(PRODUCT_FEATURE_FLAGS_DOC).get();
+          const extracted = this._extractFlagsFromShopConfigDoc(res && res.data);
+          if (extracted && Object.keys(extracted).length) {
+            cloudFlags = extracted;
+          }
+        } catch (e) {
+          console.warn('[products] loadProductFeatureFlags 直连库失败:', e);
+        }
+      }
+    }
+
+    let flagsToApply = {};
+    const pendingLocalOnly = isAdmin && localEntry && localEntry.syncedToCloud === false && localFlags;
+    if (pendingLocalOnly) {
+      flagsToApply = this._normalizeFlagMap(this._mergeFeatureFlagMaps(cloudFlags || {}, localFlags));
+    } else if (cloudFlags && Object.keys(cloudFlags).length > 0) {
+      flagsToApply = cloudFlags;
+    } else if (localFlags) {
+      flagsToApply = localFlags;
+    }
+
+    console.log('[products] feature flags applied', {
+      isAdmin,
+      pendingLocalOnly: !!pendingLocalOnly,
+      sample: { 3: flagsToApply['3'], 4: flagsToApply['4'], 5: flagsToApply['5'], 10: flagsToApply['10'] }
+    });
+
+    if (!Object.keys(flagsToApply).length) {
+      this._featureFlagsLoaded = true;
+      return;
+    }
+
+    const list = this._applyFeatureFlagsToList(this.data.list, flagsToApply);
+    this._syncGlobalFlagsFromList(list);
+    this._setListAndHub(list, {}, () => this._syncNewArrivalModalWithPagenewFlag());
+    if (!pendingLocalOnly) {
+      this._saveFeatureFlagsLocalCache(list, true);
+    }
+    this._featureFlagsLoaded = true;
+  },
+
+  async _persistProductFeatureFlags(list) {
+    if (!wx.cloud || !this.data.isAuthorized) return false;
+    const flags = this._normalizeFlagMap(this._buildFeatureFlagsFromList(list));
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'setProductFeatureFlags',
+        data: { flags }
+      });
+      const result = res && res.result;
+      if (result && result.success) {
+        this._saveFeatureFlagsLocalCache(list, true);
+        this._syncGlobalFlagsFromList(list);
+        console.log('[products] 功能开关云函数保存成功:', result.flags || flags);
+        return true;
+      }
+      console.warn('[products] setProductFeatureFlags 失败，尝试客户端写入:', result && result.error);
+    } catch (cfErr) {
+      console.warn('[products] setProductFeatureFlags 不可用，尝试客户端写入:', cfErr);
+    }
+
+    if (!this.db) this.db = wx.cloud.database();
+    const docRef = this.db.collection('shop_config').doc(PRODUCT_FEATURE_FLAGS_DOC);
+    const payload = { flags, updateTime: this.db.serverDate() };
+    try {
+      await docRef.set({ data: payload });
+      this._saveFeatureFlagsLocalCache(list, true);
+      this._syncGlobalFlagsFromList(list);
+      console.log('[products] 功能开关客户端 set 保存成功:', flags);
+      return true;
+    } catch (setErr) {
+      try {
+        await docRef.update({ data: payload });
+        this._saveFeatureFlagsLocalCache(list, true);
+        this._syncGlobalFlagsFromList(list);
+        console.log('[products] 功能开关客户端 update 保存成功:', flags);
+        return true;
+      } catch (updateErr) {
+        console.error('[products] 保存功能开关失败:', setErr, updateErr);
+        return false;
+      }
+    }
+  },
+
+  async onFeatureFlagChange(e) {
+    if (!this.data.isAuthorized) return;
+    const id = Number(e.currentTarget.dataset.id);
+    const enabled = !!e.detail.value;
+    const list = (this.data.list || []).map((item) =>
+      (Number(item.id) === id ? { ...item, pageEnabled: enabled } : item)
+    );
+    this._featureFlagsDirty = true;
+    this._saveFeatureFlagsLocalCache(list, false);
+    this._setListAndHub(list, {}, () => {
+      if (id === FEATURE_ID_PAGENEW) {
+        this._syncNewArrivalModalWithPagenewFlag();
+      }
+    });
+    const ok = await this._persistProductFeatureFlags(list);
+    if (ok) {
+      this._featureFlagsDirty = false;
+      this._syncGlobalFlagsFromList(list);
+      await this.loadProductFeatureFlags(true);
+      const toastTitle = id === FEATURE_ID_PAGENEW && !enabled
+        ? '已关闭（入口与新品弹窗均隐藏）'
+        : (enabled ? '已对用户开放' : '已关闭');
+      wx.showToast({
+        title: toastTitle,
+        icon: 'none',
+        duration: 1800
+      });
+    } else {
+      const reverted = (this.data.list || []).map((item) =>
+        (Number(item.id) === id ? { ...item, pageEnabled: !enabled } : item)
+      );
+      this._setListAndHub(reverted, {}, () => this._syncGlobalFlagsFromList(reverted));
+      wx.showToast({
+        title: '云端保存失败，开关已回滚；请部署 setProductFeatureFlags',
+        icon: 'none',
+        duration: 2600
+      });
+    }
   },
 
   async resolveProductCoverUrls(list = []) {
@@ -333,17 +787,28 @@ Page({
     return Math.min(Math.max(0, prev), newLen - 1);
   },
 
-  /** wasAlreadyOpen：setData 前的 this.data.showNewArrivalModal；首次打开时下一帧再打开动画类 */
+  /** wasAlreadyOpen：弹窗已展示且动画已播完则跳过；否则下一帧再挂动画类（避免同帧插入不播） */
   _afterSetNewArrivalVisible(wasAlreadyOpen) {
-    if (wasAlreadyOpen) return;
-    setTimeout(() => {
-      if (!this.data.showNewArrivalModal || this.data.newArrivalClosing) return;
-      this.setData({ newArrivalAnimIn: true });
-    }, 16);
+    if (wasAlreadyOpen && this.data.newArrivalAnimIn) return;
+    if (this._newArrivalAnimTimer) clearTimeout(this._newArrivalAnimTimer);
+    this.setData({ newArrivalAnimIn: false });
+    wx.nextTick(() => {
+      this._newArrivalAnimTimer = setTimeout(() => {
+        this._newArrivalAnimTimer = null;
+        if (!this.data.showNewArrivalModal || this.data.newArrivalClosing) return;
+        this.setData({ newArrivalAnimIn: true });
+      }, 48);
+    });
   },
 
   /** index 入场后进 products：onLoad 立刻出蒙层，不等卡片入场 1.1s */
   _openNewArrivalFromIndexEarly() {
+    if (!this._shouldShowNewArrivalModal()) {
+      if (!this._newArrivalFromIndexConsumed && this._consumeNewArrivalFromIndexFlag()) {
+        this._newArrivalFromIndexConsumed = true;
+      }
+      return;
+    }
     if (this._newArrivalFromIndexConsumed) return;
     if (!this._consumeNewArrivalFromIndexFlag()) return;
     this._newArrivalFromIndexConsumed = true;
@@ -370,7 +835,7 @@ Page({
     this.setData({ currentIndex: i, ...extra });
   },
 
-  onLoad() {
+  async onLoad() {
     this._deckCurrentIndex = 0;
     // 离页递增：作废仍在飞行的异步，防止晚到的云回调再写 __products_return_focus__ / navigateTo
     this._productsLifeSeq = 0;
@@ -399,14 +864,23 @@ Page({
     
     // 🔴 截屏/录屏封禁
     this.initScreenshotProtection();
-    
-    // 🔴 检查封禁状态（确保重启后也能拦截）
-    this.checkBanStatus();
 
-    // index 入场后进本页：立即弹「MT 新品推荐」，不等待卡片入场动画
+    const adminCached = this._readAdminPrivilegeCache();
+    if (adminCached === true) {
+      this.setData({ isAuthorized: true });
+    }
+
+    // 🔴 极速优化：尽早触发新品弹窗（不等待权限和开关接口），消除 1~2 秒的瀑布流延迟
     if (this._hasPendingNewArrivalFromIndex()) {
       this._openNewArrivalFromIndexEarly();
     }
+
+    // 顺序执行耗时操作，确保权限判定准确，但不再阻塞弹窗
+    this.checkAdminPrivilege().then(() => {
+      return this.loadProductFeatureFlags();
+    }).catch(() => {});
+
+    this.checkBanStatus();
 
     // 仅当全局尚无商城缓存时触发预拉（避免与 app.onLaunch 重复打云；回到本页也不会刷掉已带 renderUrl 的缓存）
     try {
@@ -416,27 +890,12 @@ Page({
       }
     } catch (e) {}
     
-    // 1. 进页面 300ms 后触发入场
+    this._rebuildHubLayout();
+
     setTimeout(() => {
       this.setData({ hasEntered: true });
-
-      // 2. 再延迟 800ms (等卡片动画稳定)，让底部按钮弹上来
-      setTimeout(() => {
-        this.setData({ isTriggerBtnVisible: true });
-        // 仅 index 入场动画结束后首进：在本页入场动画就绪后再弹「产品上新」（只弹一次）
-        this._maybeScheduleNewArrivalFromIndex();
-
-        // 3. 按钮弹起后等待 3000ms，然后变淡沉下
-        setTimeout(() => {
-          // 只有当抽屉没打开时才变淡
-          if (!this.data.isDrawerOpen) {
-            this.setData({ isTriggerBtnFaded: true });
-          }
-        }, 3000);
-
-      }, 800);
-
-    }, 300);
+      this._maybeScheduleNewArrivalFromIndex();
+    }, 200);
   },
 
   /** index 是否刚通过入场动画写入的一次性标记（未消费） */
@@ -463,6 +922,7 @@ Page({
 
   /** 仅 index → products 首进且本页入场动画结束后调用一次 */
   _maybeScheduleNewArrivalFromIndex() {
+    if (!this._shouldShowNewArrivalModal()) return;
     if (this._newArrivalFromIndexConsumed) return;
     if (!this._consumeNewArrivalFromIndexFlag()) return;
     this._newArrivalFromIndexConsumed = true;
@@ -479,6 +939,7 @@ Page({
 
   // 🆕 从云端读取 products 集合，显示产品上新弹窗（和 pagenew 复用同一份数据）
   async initNewArrivalModal() {
+    if (!this._shouldShowNewArrivalModal()) return;
     if (!this._newArrivalFromIndexConsumed) return;
     try {
       if (!wx.cloud) return;
@@ -498,6 +959,7 @@ Page({
         if (!needsCloud) {
           const enhancedCacheList = this.enhanceNewArrivalList(cache.list);
           const wasOpen = this.data.showNewArrivalModal;
+          const animDone = this.data.newArrivalAnimIn;
           this.setData({
             newArrivalList: enhancedCacheList,
             newArrivalIndex: this._pickNextNewArrivalIndex(enhancedCacheList.length),
@@ -506,13 +968,14 @@ Page({
             newArrivalHdLoaded: {},
             ...(wasOpen ? {} : { newArrivalAnimIn: false })
           });
-          this._afterSetNewArrivalVisible(wasOpen);
+          this._afterSetNewArrivalVisible(wasOpen && animDone);
           this.prewarmNewArrivalImages(enhancedCacheList, 2).catch(() => {});
           return;
         }
         const resolvedCache = await this.resolveProductCoverUrls(cache.list);
         const enhancedCacheList = this.enhanceNewArrivalList(resolvedCache);
         const wasOpen2 = this.data.showNewArrivalModal;
+        const animDone2 = this.data.newArrivalAnimIn;
         this.setData({
           newArrivalList: enhancedCacheList,
           newArrivalIndex: this._pickNextNewArrivalIndex(enhancedCacheList.length),
@@ -521,13 +984,14 @@ Page({
           newArrivalHdLoaded: {},
           ...(wasOpen2 ? {} : { newArrivalAnimIn: false })
         });
-        this._afterSetNewArrivalVisible(wasOpen2);
+        this._afterSetNewArrivalVisible(wasOpen2 && animDone2);
         this.prewarmNewArrivalImages(enhancedCacheList, 2).catch(() => {});
         return;
       }
 
       // 无缓存：先立刻展示蒙层 + 占位，再拉云端（避免「先进页面半天才出弹窗」）
       const wasOpenLoading = this.data.showNewArrivalModal;
+      const animDoneLoading = this.data.newArrivalAnimIn;
       this.setData({
         showNewArrivalModal: true,
         newArrivalClosing: false,
@@ -536,7 +1000,7 @@ Page({
         newArrivalHdLoaded: {},
         ...(wasOpenLoading ? {} : { newArrivalAnimIn: false })
       });
-      this._afterSetNewArrivalVisible(wasOpenLoading);
+      this._afterSetNewArrivalVisible(wasOpenLoading && animDoneLoading);
 
       // 确保已初始化云环境（有些场景只在 pagenew 里 init 过）
       if (!this.db) {
@@ -558,6 +1022,7 @@ Page({
       if (!enhancedProducts.length) {
         console.log('[products] 新品弹窗：products 集合为空，展示占位卡片');
         const wasOpenE = this.data.showNewArrivalModal;
+        const animDoneE = this.data.newArrivalAnimIn;
         this.setData({
           newArrivalList: [{
             _id: 'fallback-empty',
@@ -573,7 +1038,7 @@ Page({
           newArrivalHdLoaded: {},
           ...(wasOpenE ? {} : { newArrivalAnimIn: false })
         });
-        this._afterSetNewArrivalVisible(wasOpenE);
+        this._afterSetNewArrivalVisible(wasOpenE && animDoneE);
         return;
       }
 
@@ -585,6 +1050,7 @@ Page({
       console.log('[products] 新品弹窗数据条数:', enhancedProducts.length);
 
       const wasOpenFinal = this.data.showNewArrivalModal;
+      const animDoneFinal = this.data.newArrivalAnimIn;
       this.setData({
         newArrivalList: enhancedProducts,
         newArrivalIndex: this._pickNextNewArrivalIndex(enhancedProducts.length),
@@ -592,13 +1058,14 @@ Page({
         newArrivalClosing: false,
         newArrivalHdLoaded: {},
         ...(wasOpenFinal ? {} : { newArrivalAnimIn: false })
-      });
-      this._afterSetNewArrivalVisible(wasOpenFinal);
+      }, () => this._rebuildHubLayout());
+      this._afterSetNewArrivalVisible(wasOpenFinal && animDoneFinal);
       // 先展示后预热，避免首开被 await 阻塞导致“弹窗慢”
       this.prewarmNewArrivalImages(enhancedProducts, 2).catch(() => {});
     } catch (err) {
       console.error('[products] 加载新品弹窗数据失败:', err);
       const wasOpenErr = this.data.showNewArrivalModal;
+      const animDoneErr = this.data.newArrivalAnimIn;
       this.setData({
         newArrivalList: [{
           _id: 'fallback-error',
@@ -614,7 +1081,7 @@ Page({
         newArrivalHdLoaded: {},
         ...(wasOpenErr ? {} : { newArrivalAnimIn: false })
       });
-      this._afterSetNewArrivalVisible(wasOpenErr);
+      this._afterSetNewArrivalVisible(wasOpenErr && animDoneErr);
     }
   },
 
@@ -744,9 +1211,10 @@ Page({
       
       if (adminCheck.data && adminCheck.data.length > 0) {
         console.log('[products] ✅ 检测到管理员身份，豁免封禁检查');
-        return; // 管理员直接返回，不检查封禁状态
+        if (!this.data.isAuthorized) this.setData({ isAuthorized: true });
+        return;
       }
-      
+
       if (buttonRes.data && buttonRes.data.length > 0) {
         const btn = buttonRes.data[0];
         const rawFlag = btn.isBanned;
@@ -840,6 +1308,7 @@ Page({
     const savedReturnFocusLeaveDepth = this._productsReturnFocusLeaveDepth || 0;
     this._productsReturnFocusLeaveDepth = 0;
     const canApplyStorageReturnFocus = savedReturnFocusLeaveDepth >= 2;
+    const returnedFromSubPage = savedReturnFocusLeaveDepth >= 2;
 
     if (!hasReturnFocus && !skipReturnFocusOnce) {
       try {
@@ -894,12 +1363,12 @@ Page({
       isDrawerOpen: false             // 关闭底部抽屉（对应 drawer-mask）
     });
 
-    // 非 index 首进（子页返回、其它入口）：关掉残留新品弹窗；index 首进 onLoad 已消费标记时需跳过首次 onShow
+    // 仅「从子页返回」时关新品弹窗；避免关抽屉/前后台切换误关（与「产品上新」开关无关）
     const pendingFromIndex = this._hasPendingNewArrivalFromIndex();
     const skipCloseOnce = !!this._skipNewArrivalCloseOnNextShow;
     if (skipCloseOnce) this._skipNewArrivalCloseOnNextShow = false;
 
-    if (!pendingFromIndex && !skipCloseOnce) {
+    if (!pendingFromIndex && !skipCloseOnce && returnedFromSubPage) {
       if (this._newArrivalTimer) {
         clearTimeout(this._newArrivalTimer);
         this._newArrivalTimer = null;
@@ -920,7 +1389,10 @@ Page({
         app.startQiangliCheck();
       }
       
-      // 🔴 检查封禁状态
+      this.checkAdminPrivilege();
+      if (!this._featureFlagsDirty) {
+        this.loadProductFeatureFlags();
+      }
       this.checkBanStatus();
       
       // 🔴 检查未完成的寄回订单
@@ -943,10 +1415,30 @@ Page({
     setTimeout(runOnShowChecks, delay);
   },
 
+  onUnload() {
+    if (this._focusCardTimer) {
+      clearInterval(this._focusCardTimer);
+      this._focusCardTimer = null;
+    }
+    if (this._newArrivalAnimTimer) {
+      clearTimeout(this._newArrivalAnimTimer);
+      this._newArrivalAnimTimer = null;
+    }
+    if (this._newArrivalCloseTimer) {
+      clearTimeout(this._newArrivalCloseTimer);
+      this._newArrivalCloseTimer = null;
+    }
+    this._teardownScreenshotProtection();
+  },
+
   onHide() {
     if (this._newArrivalTimer) {
       clearTimeout(this._newArrivalTimer);
       this._newArrivalTimer = null;
+    }
+    if (this._focusCardTimer) {
+      clearInterval(this._focusCardTimer);
+      this._focusCardTimer = null;
     }
     let stackDepth = 1;
     try {
@@ -971,16 +1463,27 @@ Page({
       });
     }
 
-    // 截屏监听
-    wx.onUserCaptureScreen(() => {
-      this.handleIntercept('screenshot');
-    });
+    try {
+      this._onCaptureScreenHandler = () => this.handleIntercept('screenshot');
+      wx.onUserCaptureScreen(this._onCaptureScreenHandler);
+    } catch (e) {}
 
-    // 录屏监听
     if (wx.onUserScreenRecord) {
-      wx.onUserScreenRecord(() => {
-        this.handleIntercept('record');
-      });
+      try {
+        this._onScreenRecordHandler = () => this.handleIntercept('record');
+        wx.onUserScreenRecord(this._onScreenRecordHandler);
+      } catch (e) {}
+    }
+  },
+
+  _teardownScreenshotProtection() {
+    if (this._onCaptureScreenHandler && wx.offUserCaptureScreen) {
+      try { wx.offUserCaptureScreen(this._onCaptureScreenHandler); } catch (e) {}
+      this._onCaptureScreenHandler = null;
+    }
+    if (this._onScreenRecordHandler && wx.offUserScreenRecord) {
+      try { wx.offUserScreenRecord(this._onScreenRecordHandler); } catch (e) {}
+      this._onScreenRecordHandler = null;
     }
   },
 
@@ -1233,22 +1736,42 @@ Page({
     this.setData({ isDragging: false, dragOffset: 0 });
   },
 
-  onCardTap(e) {
-    const { index, id, title } = e.currentTarget.dataset;
-    const idx = parseInt(index);
-
-    if (this.data.currentIndex !== idx) {
-      this._setDeckIndex(idx);
-    } else {
-      // 如果点的是中间的，就跳转
-      wx.vibrateShort({ type: 'light' });
-      this.executeNavigation(id);
+  onHubFeatureTap(e) {
+    const numId = this._normalizeFeatureId(e.currentTarget.dataset.id);
+    if (numId == null) return;
+    wx.vibrateShort({ type: 'light' });
+    if (!this._isFeatureEnabledForUser(numId)) {
+      this._notifyFeatureClosed(numId);
+      return;
     }
+    this.executeNavigation(numId);
+  },
+
+  onHubSearchTap() {
+    this.toggleDrawer();
+  },
+
+  onHubBannerTap() {
+    wx.vibrateShort({ type: 'light' });
+    if (!this._isFeatureEnabledForUser(3)) {
+      this._notifyFeatureClosed(3);
+      return;
+    }
+    this.executeNavigation(3);
   },
 
   // 跳转逻辑
   executeNavigation(id) {
-    console.log('点击的ID:', id);
+    const numId = this._normalizeFeatureId(id);
+    const open = this._resolveFeatureOpenState(numId);
+    console.log('[products] executeNavigation', { numId, open, pageEnabled: (this.data.list || []).find((i) => Number(i.id) === numId)?.pageEnabled });
+
+    if (numId == null) return;
+
+    if (!open) {
+      this._notifyFeatureClosed(numId);
+      return;
+    }
     
     const app = getApp();
     const isShareCodeUser = app.globalData.isShareCodeUser || false;
@@ -1269,8 +1792,8 @@ Page({
     }
     
     // 联系方式直接跳转
-    if (id === 8) {
-      this.rememberReturnFocus(id);
+    if (numId === 8) {
+      this.rememberReturnFocus(numId);
       wx.navigateTo({ 
         url: '/package-app/pages/call/call',
         animationType: 'none',
@@ -1286,14 +1809,14 @@ Page({
     }
 
     // 🔴 安装教程：跳转前进行权限检查
-    if (id === 7) {
+    if (numId === 7) {
       this.checkTutorialAccess();
       return;
     }
 
     let target = '';
     // 根据 ID 匹配跳转路径
-    switch (id) {
+    switch (numId) {
       case 3: target = '/package-app/pages/pagenew/pagenew'; break; // 产品上新
       case 4: target = '/package-app/pages/shop/shop'; break;        // 产品选购
       case 10: target = '/package-app/pages/case/case'; break;      // 案例展示
@@ -1302,14 +1825,22 @@ Page({
       case 9: target = '/package-app/pages/ota/ota'; break;         // OTA升级
       case 6: target = '/package-app/pages/shouhou/shouhou'; break; // 维修中心
       case 12: target = '/package-app/pages/home/home'; break;       // 附近门店
+      case 13: target = '/package-app/pages/faq/faq'; break;         // 常见问题
       case 2: target = '/package-app/pages/my/my'; break;           // 我的信息 -> my 页面
       // 其他待开发...
       default: target = ''; break;
     }
     
     if (target) {
-      this.rememberReturnFocus(id);
-      wx.navigateTo({ url: target, animationType: 'none' });
+      this.rememberReturnFocus(numId);
+      wx.navigateTo({
+        url: target,
+        animationType: 'none',
+        fail: (err) => {
+          console.error('[products] navigateTo fail:', target, err);
+          this.showAutoToast('提示', '页面打开失败，请稍后重试');
+        }
+      });
     } else {
       this.showAutoToast('提示', '该功能暂未开放');
     }
@@ -1701,7 +2232,8 @@ Page({
 
   // 切换抽屉状态
   toggleDrawer() {
-    this.setData({ isDrawerOpen: !this.data.isDrawerOpen });
+    const willOpen = !this.data.isDrawerOpen;
+    this.setData({ isDrawerOpen: willOpen });
   },
 
   // 关闭抽屉
@@ -1760,18 +2292,20 @@ Page({
     this.drawerTouchStartTime = null;
   },
 
-  // 点击功能卡片
+  // 抽屉内点击：直接进入对应功能
   onFunctionTap(e) {
-    const id = Number(e.currentTarget.dataset.id);
+    const id = this._normalizeFeatureId(e.currentTarget.dataset.id);
     wx.vibrateShort({ type: 'light' });
 
-    // 需求：点快捷栏卡片后，先收起抽屉，再直接定位到对应主卡片（无滑动动画）
-    this.closeDrawer();
-    const list = this.data.list || [];
-    const targetIndex = list.findIndex(item => Number(item.id) === Number(id));
-    if (targetIndex >= 0) {
-      this._setDeckIndex(targetIndex);
+    if (id == null) return;
+
+    if (!this._isFeatureEnabledForUser(id)) {
+      this._notifyFeatureClosed(id);
+      return;
     }
+
+    this.closeDrawer();
+    this.executeNavigation(id);
   },
 
   // 快捷栏定位：自动滑到对应卡片（不立即跳转）

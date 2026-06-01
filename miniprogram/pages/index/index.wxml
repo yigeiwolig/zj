@@ -27,7 +27,7 @@
   </view>
 </view>
 
-<!-- 昵称授权窗口 (改为高级身份验证模式) -->
+<!-- 昵称授权窗口：与首次引导互斥，避免两层叠在一起后被盖住 -->
 <view class="auth-mask {{nicknameUiClosing ? 'closing' : ''}}" wx:if="{{(!isAuthorized && isShowNicknameUI && !showFirstTimeModal) || nicknameUiClosing}}" catchtouchmove="noop">
   <view class="auth-panel-new {{nicknameUiClosing ? 'closing' : ''}}" catchtouchmove="noop">
     <view class="auth-icon-lock">✨</view>
@@ -268,6 +268,21 @@
       </block>
 
       <block wx:elif="{{adminViewMode === 'suspicious'}}">
+        <view class="admin-search-bar" catchtap="noop">
+          <view class="admin-search-inner">
+            <text class="admin-search-icon" aria-hidden="true">⌕</text>
+            <input
+              class="admin-search-input"
+              type="text"
+              placeholder="搜索昵称、openid、地区、触发原因…"
+              value="{{adminSuspiciousSearch}}"
+              bindinput="onAdminSuspiciousSearchInput"
+              confirm-type="search"
+            />
+            <view wx:if="{{adminSuspiciousSearch}}" class="admin-search-clear" catchtap="onAdminSuspiciousSearchClear">清除</view>
+          </view>
+          <text class="admin-search-hint" wx:if="{{suspiciousUsers.length}}">共 {{suspiciousUsers.length}} 人{{adminSuspiciousSearchTrim ? ' · 匹配 ' + suspiciousSearchMatchCount + ' 人 · 全部可见' : ''}}</text>
+        </view>
         <view wx:if="{{isLoadingSuspiciousUsers}}" class="admin-loading">
           <text class="loading-dot">···</text>
         </view>
@@ -277,7 +292,11 @@
           <text class="empty-desc">命中规则：截图行为 / 多次进入（≥3次）/ 长时间停留（>1分钟）</text>
         </view>
         <view wx:else class="admin-user-cards">
-          <view class="admin-user-card" wx:for="{{suspiciousUsers}}" wx:key="rowKey" wx:for-index="sidx">
+          <view wx:if="{{adminSuspiciousSearchTrim && suspiciousSearchMatchCount === 0}}" class="admin-search-no-match">
+            <text class="admin-search-no-match-title">未找到匹配「{{adminSuspiciousSearchTrim}}」的用户</text>
+            <text class="admin-search-no-match-desc">支持多关键词（空格/逗号分隔）；下方仍显示全部可疑人员</text>
+          </view>
+          <view class="admin-user-card {{item._searchMatch ? 'admin-user-card-match' : ''}}" wx:for="{{suspiciousDisplayList}}" wx:key="rowKey" wx:for-index="sidx">
             <view class="user-card-info">
               <view class="data-section">
                 <view class="data-section-title">用户信息</view>

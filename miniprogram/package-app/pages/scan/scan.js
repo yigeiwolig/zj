@@ -803,21 +803,30 @@ Page({
     }
 
     try {
-      wx.onUserCaptureScreen(() => {
-        this.handleIntercept('screenshot');
-      });
+      this._onCaptureScreenHandler = () => this.handleIntercept('screenshot');
+      wx.onUserCaptureScreen(this._onCaptureScreenHandler);
     } catch (e) {
       console.warn('[scan] onUserCaptureScreen 不可用:', e);
     }
 
     try {
       if (wx.onUserScreenRecord) {
-        wx.onUserScreenRecord(() => {
-          this.handleIntercept('record');
-        });
+        this._onScreenRecordHandler = () => this.handleIntercept('record');
+        wx.onUserScreenRecord(this._onScreenRecordHandler);
       }
     } catch (e) {
       console.warn('[scan] onUserScreenRecord 不可用:', e);
+    }
+  },
+
+  _teardownScreenshotProtection() {
+    if (this._onCaptureScreenHandler && wx.offUserCaptureScreen) {
+      try { wx.offUserCaptureScreen(this._onCaptureScreenHandler); } catch (e) {}
+      this._onCaptureScreenHandler = null;
+    }
+    if (this._onScreenRecordHandler && wx.offUserScreenRecord) {
+      try { wx.offUserScreenRecord(this._onScreenRecordHandler); } catch (e) {}
+      this._onScreenRecordHandler = null;
     }
   },
 
@@ -952,7 +961,9 @@ Page({
       this._foldFineTuneHintTimer = null;
     }
     if (this.ble) this.ble.disconnect();
-    wx.closeBluetoothAdapter();
+    if (typeof this._teardownScreenshotProtection === 'function') {
+      this._teardownScreenshotProtection();
+    }
   },
 
   preventBubble() { return; },

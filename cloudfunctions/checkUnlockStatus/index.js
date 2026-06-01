@@ -4,6 +4,33 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
+/** 地址拦截解封后同步「地域放行」，避免首页/全局守卫再次踢回 blocked */
+async function syncLocationBypass(db, OPENID, buttonRecord) {
+  if (buttonRecord && buttonRecord._id) {
+    try {
+      await db.collection('login_logbutton').doc(buttonRecord._id).update({
+        data: {
+          isBanned: false,
+          bypassLocationCheck: true,
+          updateTime: db.serverDate()
+        }
+      })
+    } catch (e) {
+      console.error('[checkUnlockStatus] syncLocationBypass login_logbutton failed:', e)
+    }
+  }
+  try {
+    const validRes = await db.collection('valid_users').where({ _openid: OPENID }).limit(1).get()
+    if (validRes.data && validRes.data.length > 0) {
+      await db.collection('valid_users').doc(validRes.data[0]._id).update({
+        data: { bypassLocationCheck: true, updateTime: db.serverDate() }
+      })
+    }
+  } catch (e) {
+    console.error('[checkUnlockStatus] syncLocationBypass valid_users failed:', e)
+  }
+}
+
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
   const OPENID = wxContext.OPENID
@@ -132,6 +159,20 @@ exports.main = async (event, context) => {
     const isExplicitlyUnbanned = buttonRecord && (rawFlag === false || rawFlag === 0 || rawFlag === 'false' || rawFlag === '0')
     const isLocationBlock = buttonRecord && buttonRecord.banReason === 'location_blocked'
     const bypassLocationCheck = buttonRecord && buttonRecord.bypassLocationCheck === true
+
+    // 管理员已在 index 解封并开启地域放行：必须带 returnToIndex，避免与白名单 PASS 混淆
+    if (buttonRecord && isExplicitlyUnbanned && bypassLocationCheck && isLocationBlock) {
+      console.log('[checkUnlockStatus] ✅ 管理员地域放行（isBanned=false + bypassLocationCheck）');
+      await syncLocationBypass(db, OPENID, buttonRecord);
+      if (recordId) {
+        try {
+          await db.collection('login_logs').doc(recordId).update({
+            data: { failCount: 0, updateTime: db.serverDate() }
+          });
+        } catch (e) {}
+      }
+      return { action: 'PASS', nickname, returnToIndex: true, msg: '管理员地域放行' };
+    }
 
     // 🔴 关键修复：如果是截屏/录屏封禁，但 isBanned = false，可能是数据库还没更新完成
     // 检查 updateTime，如果是在最近3秒内更新的，可能是刚封禁，需要等待
@@ -348,7 +389,8 @@ exports.main = async (event, context) => {
             console.error('[checkUnlockStatus] 免死金牌解除封禁失败:', e)
           }
         }
-        return { action: 'PASS', nickname }
+        await syncLocationBypass(db, OPENID, buttonRecord);
+        return { action: 'PASS', nickname, returnToIndex: true }
       }
       // 否则：真的被封了
       return { action: 'WAIT', msg: `封禁中：${buttonRecord.banReason || '未知'}` }
@@ -378,6 +420,9 @@ exports.main = async (event, context) => {
         // 🔴 关键修复：如果是地址拦截被解封，直接 PASS，返回 index 页面
         if (banReason === 'location_blocked') {
             console.log('[checkUnlockStatus] 🛠️ 地址拦截解封，直接放行到 index 页面');
+            if (bypassLocationCheck) {
+              await syncLocationBypass(db, OPENID, buttonRecord);
+            }
             // 重置失败次数（如果有）
             if (recordId) {
                 try {
@@ -430,24 +475,34 @@ exports.main = async (event, context) => {
 
     // ==========================================================
     // 🏳️ 4. 检查白名单 (valid_users)
-    //    🔴 但是：截屏/录屏封禁不能被白名单自动放行
-    //    🔴 但是：qiangli 强制封禁不能被白名单自动放行（最高优先级）
+    //    🔴 昵称白名单 ≠ 地域放行：仅过了昵称不能绕过地址拦截
+    //    🔴 截屏/录屏、地址拦截、qiangli 均不能靠白名单自动 PASS
     // ==========================================================
     if (nickname) {
         try {
          const validCheck = await getValidUserByOpenid()
          if (validCheck.data.length > 0) {
-            // 🔴 最高优先级：如果 qiangli 强制封禁开启，白名单不能自动放行
             if (qiangli) {
                 console.log('[checkUnlockStatus] 🚫 qiangli 强制封禁开启，白名单不能自动放行');
                 return { action: 'WAIT', msg: '强制封禁中：qiangli按钮已开启，需要管理员手动解封' };
             }
             
-            // 🔴 关键修复：如果是因为截屏/录屏被封禁，白名单不能自动放行
             if (isScreenshotBan && isBanned) {
                 console.log('[checkUnlockStatus] 🚫 白名单不能自动放行截屏/录屏封禁');
                 return { action: 'WAIT', msg: '封禁中：截屏/录屏封禁需要管理员手动解封' };
       }
+
+            const isLocationBlocked = isLocationBan ||
+              (buttonRecord && buttonRecord.banReason === 'location_blocked');
+            if (isLocationBlocked && !bypassLocationCheck) {
+                console.log('[checkUnlockStatus] 🚫 白名单不能自动放行地址拦截（需管理员在后台解封/开地域放行）');
+                return { action: 'WAIT', msg: '封禁中：地址拦截需管理员手动解封' };
+            }
+            if (isLocationBlocked && bypassLocationCheck) {
+                console.log('[checkUnlockStatus] ✅ 白名单分支：管理员已开地域放行');
+                await syncLocationBypass(db, OPENID, buttonRecord);
+                return { action: 'PASS', nickname, returnToIndex: true, msg: '管理员地域放行' };
+            }
             
             if (!buttonRecord && (record ? record.failCount : 0) === 0) {
                return { action: 'WAIT', msg: '核实身份中...' }

@@ -1,0 +1,9 @@
+{
+  "name": "setProductFeatureFlags",
+  "version": "1.0.0",
+  "description": "管理员保存产品页功能开关",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -21,6 +21,7 @@
         "pages/paihang/paihang",
         "pages/shouhou/shouhou",
         "pages/call/call",
+        "pages/faq/faq",
         "pages/home/home",
         "pages/invest/invest"
       ]

@@ -114,6 +114,7 @@ exports.main = async (event, context) => {
     'pending_warranty',  // 待生效延保（绑定/案例相关）
     'system_config',
     // 可疑人员/风控相关
+    'faq_items',         // 常见问题：问题/视频/说明
     'fenxishuju',
     'suspicious_user_sessions',
     'screenshot_risk_queue',

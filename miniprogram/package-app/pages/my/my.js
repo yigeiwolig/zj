@@ -392,17 +392,36 @@ Page({
       });
     }
 
-    // 截屏监听
-    wx.onUserCaptureScreen(() => {
-      this.handleIntercept('screenshot');
-    });
+    try {
+      this._onCaptureScreenHandler = () => this.handleIntercept('screenshot');
+      wx.onUserCaptureScreen(this._onCaptureScreenHandler);
+    } catch (e) {}
 
-    // 录屏监听
     if (wx.onUserScreenRecord) {
-      wx.onUserScreenRecord(() => {
-        this.handleIntercept('record');
-      });
+      try {
+        this._onScreenRecordHandler = () => this.handleIntercept('record');
+        wx.onUserScreenRecord(this._onScreenRecordHandler);
+      } catch (e) {}
     }
+  },
+
+  _teardownScreenshotProtection() {
+    if (this._onCaptureScreenHandler && wx.offUserCaptureScreen) {
+      try { wx.offUserCaptureScreen(this._onCaptureScreenHandler); } catch (e) {}
+      this._onCaptureScreenHandler = null;
+    }
+    if (this._onScreenRecordHandler && wx.offUserScreenRecord) {
+      try { wx.offUserScreenRecord(this._onScreenRecordHandler); } catch (e) {}
+      this._onScreenRecordHandler = null;
+    }
+  },
+
+  _cancelPaymentVerification() {
+    this._payVerifyToken = (this._payVerifyToken || 0) + 1;
+    if (this._payVerifyDelayTimers && this._payVerifyDelayTimers.length) {
+      this._payVerifyDelayTimers.forEach((tid) => clearTimeout(tid));
+    }
+    this._payVerifyDelayTimers = [];
   },
 
   // 🔴 检查定位权限状态
@@ -755,29 +774,7 @@ Page({
         return false;
       }
 
-      // 地址校验：命中拦截城市且没有放行权限时，直接拦截
-      let blockingRules = null;
-      try {
-        const cfgRes = await db.collection('app_config').doc('blocking_rules').get();
-        blockingRules = (cfgRes && cfgRes.data) || null;
-      } catch (e) {
-        blockingRules = null;
-      }
-      const blockingEnabled = !!(blockingRules && blockingRules.is_active === true);
-      if (blockingEnabled) {
-        const blockedCities = Array.isArray(blockingRules.blocked_cities) ? blockingRules.blocked_cities : [];
-        const validUser = (validRes.data && validRes.data[0]) || {};
-        const hasBypass = !!(validUser.bypassLocationCheck === true || (button && button.bypassLocationCheck === true));
-        if (!hasBypass && blockedCities.length > 0) {
-          const locData = await this._resolveLocationForAccessGuard();
-          const matched = this._isLocationInBlockedCities(blockedCities, locData);
-          if (matched) {
-            wx.setStorageSync('is_user_banned', true);
-            this._jumpToBlocked('location');
-            return false;
-          }
-        }
-      }
+      // 地域拦截：仅在 index 页用户点击中间按钮后触发，子页面守卫不主动定位封禁
       return true;
     } catch (err) {
       console.warn('[my] access guard check failed:', err);
@@ -808,6 +805,9 @@ Page({
   },
 
   onUnload() {
+    this._pageDestroyed = true;
+    this._cancelPaymentVerification();
+    this._teardownScreenshotProtection();
     this._stopAccessGuardTimer();
     if (this._locationCheckInterval) {
       clearInterval(this._locationCheckInterval);
@@ -817,12 +817,18 @@ Page({
       clearTimeout(this._deferQiangliTid);
       this._deferQiangliTid = null;
     }
-    // 页面销毁时断开蓝牙，释放资源
+    if (this._calcHeightTimer) {
+      clearTimeout(this._calcHeightTimer);
+      this._calcHeightTimer = null;
+    }
+    if (this._afterSalesToastTimer) {
+      clearTimeout(this._afterSalesToastTimer);
+      this._afterSalesToastTimer = null;
+    }
     if (this.ble) {
       this.ble.stopScan();
       this.ble.disconnect();
     }
-    // 🔴 清除倒计时定时器
     if (this.countdownTimer) {
       clearInterval(this.countdownTimer);
       this.countdownTimer = null;
@@ -842,10 +848,14 @@ Page({
     }
     this._startAccessGuardTimer();
 
-    // 🔴 防抖：如果正在加载，不重复加载
     if (this._isLoading) {
-      console.log('[onShow] 正在加载中，跳过重复加载');
-      return;
+      const stuckMs = this._isLoadingSince ? (Date.now() - this._isLoadingSince) : 0;
+      if (stuckMs < 30000) {
+        console.log('[onShow] 正在加载中，跳过重复加载');
+        return;
+      }
+      console.warn('[onShow] 加载超时，强制重新拉取');
+      this._isLoading = false;
     }
 
     // 🔴 检查录屏状态
@@ -870,8 +880,8 @@ Page({
     // 🔴 修复：页面显示时重置滚动锁定状态，防止页面卡住
     this.updateModalState();
 
-    // 静默刷新：不显示“同步中”遮罩，后台拉取最新数据
     this._isLoading = true;
+    this._isLoadingSince = Date.now();
     
     // 每次显示时重新读取昵称（可能在其他页面修改了）
     const savedNickname = wx.getStorageSync('user_nickname');
@@ -937,12 +947,15 @@ Page({
         // 🔴 每次进入页面时检测购买配件状态
         this.checkPurchasePartsStatusOnPageLoad().then(() => {
         this._isLoading = false;
+        this._isLoadingSince = 0;
         }).catch(() => {
           this._isLoading = false;
+          this._isLoadingSince = 0;
         });
       }).catch((err) => {
         console.error('[onShow] 加载数据失败:', err);
         this._isLoading = false;
+        this._isLoadingSince = 0;
       });
     }).catch((err) => {
       console.warn('[onShow] 权限检查失败，尝试作为普通用户加载:', err);
@@ -960,20 +973,23 @@ Page({
           ]);
         }).then(() => {
           this._isLoading = false;
+          this._isLoadingSince = 0;
         }).catch((loadErr) => {
           console.error('[onShow] 获取 openid 后加载数据失败:', loadErr);
           this._isLoading = false;
+          this._isLoadingSince = 0;
         });
       } else {
-        // 如果已经有 openid，直接加载数据
         Promise.all([
           this.loadMyOrdersPromise(),
           this.loadMyActivitiesPromise()
         ]).then(() => {
           this._isLoading = false;
+          this._isLoadingSince = 0;
         }).catch((loadErr) => {
           console.error('[onShow] 加载数据失败:', loadErr);
           this._isLoading = false;
+          this._isLoadingSince = 0;
         });
       }
     });
@@ -1464,6 +1480,7 @@ Page({
 
   // 2. [真实] 重新发起支付
   repayOrder(e) {
+    if (this._paying) return;
     const item = e.currentTarget.dataset.item;
     
     if (!item || !item.id) {
@@ -1496,9 +1513,9 @@ Page({
       goodsCount: goods.length
     });
 
+    this._paying = true;
     this.showMyLoading('唤起收银台...');
 
-    // 调用云函数获取支付参数（使用原订单信息）
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
@@ -1518,8 +1535,8 @@ Page({
         const payment = res.result;
         console.log('[repayOrder] 支付参数:', payment);
 
-        // 检查云函数返回的错误
         if (payment && payment.error) {
+          this._paying = false;
           console.error('[repayOrder] 云函数返回错误:', payment);
           this.showMyDialog({ 
             title: '支付失败', 
@@ -1530,13 +1547,13 @@ Page({
         }
 
         if (!payment || !payment.paySign) {
+          this._paying = false;
           console.error('[repayOrder] 支付参数缺失:', payment);
           this.showAutoToast('提示', '支付系统对接中，请稍后再试');
           return;
         }
 
         console.log('[repayOrder] 准备调用 wx.requestPayment');
-        // 唤起微信原生支付界面
         wx.requestPayment({
           ...payment,
           success: (payRes) => {
@@ -1566,10 +1583,14 @@ Page({
               }
             }
             this.showAutoToast('支付提示', errorMsg);
+          },
+          complete: () => {
+            this._paying = false;
           }
         });
       },
       fail: err => {
+        this._paying = false;
         console.error('[repayOrder] 云函数调用失败:', err);
         this.hideMyLoading();
         this.showAutoToast('创建订单失败', err.errMsg || '网络错误，请重试');
@@ -1578,35 +1599,43 @@ Page({
   },
 
   startPaymentVerification(orderId, options = {}) {
-    if (!orderId) return;
-    // 第一段：即时轮询，尽快把支付状态从 UNPAID 切到 PAID
+    if (!orderId || this._pageDestroyed) return;
+    this._cancelPaymentVerification();
+    const token = this._payVerifyToken;
     this.callCheckPayResult(orderId, 1, {
       maxAttempts: 6,
       intervalMs: 2500,
       showLoading: true,
-      silent: !!options.silent
+      silent: !!options.silent,
+      verifyToken: token
     });
-    // 第二段：延迟复查，覆盖微信回调/网络偶发延迟场景
-    setTimeout(() => {
-      this.callCheckPayResult(orderId, 1, {
-        maxAttempts: 4,
-        intervalMs: 3000,
-        showLoading: false,
-        silent: true
-      });
-    }, 12000);
-    setTimeout(() => {
-      this.callCheckPayResult(orderId, 1, {
-        maxAttempts: 3,
-        intervalMs: 3500,
-        showLoading: false,
-        silent: true
-      });
-    }, 28000);
+    this._payVerifyDelayTimers = [
+      setTimeout(() => {
+        if (this._pageDestroyed || token !== this._payVerifyToken) return;
+        this.callCheckPayResult(orderId, 1, {
+          maxAttempts: 4,
+          intervalMs: 3000,
+          showLoading: false,
+          silent: true,
+          verifyToken: token
+        });
+      }, 12000),
+      setTimeout(() => {
+        if (this._pageDestroyed || token !== this._payVerifyToken) return;
+        this.callCheckPayResult(orderId, 1, {
+          maxAttempts: 3,
+          intervalMs: 3500,
+          showLoading: false,
+          silent: true,
+          verifyToken: token
+        });
+      }, 28000)
+    ];
   },
 
   callCheckPayResult(orderId, attempt = 1, options = {}) {
-    if (!orderId) return;
+    if (!orderId || this._pageDestroyed) return;
+    if (options.verifyToken != null && options.verifyToken !== this._payVerifyToken) return;
     const maxAttempts = options.maxAttempts || 6;
     const intervalMs = options.intervalMs || 2500;
     const silent = !!options.silent;
@@ -1626,7 +1655,11 @@ Page({
             this.showAutoToast('成功', '订单已确认');
           }
         } else if (attempt < maxAttempts) {
-          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1, options), intervalMs);
+          setTimeout(() => {
+            if (this._pageDestroyed) return;
+            if (options.verifyToken != null && options.verifyToken !== this._payVerifyToken) return;
+            this.callCheckPayResult(orderId, attempt + 1, options);
+          }, intervalMs);
         } else if (!silent) {
           this.showAutoToast('提示', result.msg || '支付状态待确认，请稍候刷新订单');
         }
@@ -1634,7 +1667,11 @@ Page({
       fail: (err) => {
         console.error('[my] checkPayResult 调用失败:', err);
         if (attempt < maxAttempts) {
-          setTimeout(() => this.callCheckPayResult(orderId, attempt + 1, options), intervalMs);
+          setTimeout(() => {
+            if (this._pageDestroyed) return;
+            if (options.verifyToken != null && options.verifyToken !== this._payVerifyToken) return;
+            this.callCheckPayResult(orderId, attempt + 1, options);
+          }, intervalMs);
         } else if (!silent) {
           this.showAutoToast('提示', '网络异常，请稍后再试');
         }
@@ -3737,14 +3774,15 @@ Page({
   
   // 🔴 新增：执行维修支付
   doRepairPayment(repairId, repairItems, totalPrice) {
+    if (this._paying) return;
     const app = getApp();
     const isAdmin =
       this.data.isAdmin ||
       (app && app.globalData && app.globalData.isAdmin);
     
-    // 管理员支付 0.01 元；其他用户按真实 totalPrice 支付
     const payAmount = isAdmin ? 0.01 : totalPrice;
     
+    this._paying = true;
     this.showMyLoading('唤起收银台...');
     
     // 🔴 获取用户昵称
@@ -3791,6 +3829,7 @@ Page({
         const payment = res.result;
         
         if (payment && payment.error) {
+          this._paying = false;
           this.showAfterSalesDialog({
             title: '支付失败',
             content: payment.msg || '支付系统异常，请稍后再试',
@@ -3801,6 +3840,7 @@ Page({
         }
         
         if (!payment || !payment.paySign) {
+          this._paying = false;
           this.showAfterSalesDialog({
             title: '支付失败',
             content: '获取支付参数失败，请稍后再试',
@@ -3810,17 +3850,14 @@ Page({
           return;
         }
         
-        // 调用微信支付
         wx.requestPayment({
           ...payment,
           success: () => {
-            this.showAfterSalesToast('支付成功', '维修费用已支付');
             const orderId = payment.outTradeNo;
             if (orderId) {
               this.startPaymentVerification(orderId, { scene: 'repair_fee' });
             }
             
-            // 支付成功后，更新维修单状态
             const db = wx.cloud.database();
             db.collection('shouhou_repair').doc(repairId).update({
               data: {
@@ -3828,13 +3865,20 @@ Page({
                 repairPaidTime: db.serverDate()
               }
             }).then(() => {
-              // 刷新列表
+              this.showAfterSalesToast('支付成功', '维修费用已支付');
               this.loadReturnRequiredList();
               this.loadMyOrders();
-              // 🔴 刷新用户端数据，确保支付后显示运单号输入框
               this.loadMyActivitiesPromise().catch(() => {});
-            }).catch(err => {
+            }).catch((err) => {
               console.error('[doRepairPayment] 更新维修单状态失败:', err);
+              this.showAfterSalesDialog({
+                title: '支付已完成',
+                content: '费用已支付，状态同步中，请稍后刷新；若仍显示待支付请联系客服',
+                showCancel: false,
+                confirmText: '知道了'
+              });
+              this.loadReturnRequiredList();
+              this.loadMyOrders();
             });
           },
           fail: (err) => {
@@ -3849,10 +3893,14 @@ Page({
                 confirmText: '知道了'
               });
             }
+          },
+          complete: () => {
+            this._paying = false;
           }
         });
       },
       fail: err => {
+        this._paying = false;
         this.hideMyLoading();
         console.error('[doRepairPayment] 调用云函数失败:', err);
         this.showAfterSalesDialog({
@@ -3871,7 +3919,11 @@ Page({
     const repairId = e.currentTarget.dataset.id;
     const repair = this.data.myReturnRequiredRepair;
     
-    if (!repair || !repair.repairItems || repair.repairItems.length === 0) {
+    if (!repairId || !repair || repair._id !== repairId) {
+      this.showAfterSalesToast('提示', '维修信息异常');
+      return;
+    }
+    if (!repair.repairItems || repair.repairItems.length === 0) {
       this.showAfterSalesToast('提示', '维修信息异常');
       return;
     }
