@@ -418,6 +418,14 @@ input, textarea { text-align: left; }
 }
 
 /* 输入框容器 */
+.auth-invite-wrap {
+  margin-top: 20rpx;
+}
+
+.auth-input-invite {
+  font-size: 28rpx;
+}
+
 .auth-input-wrapper {
   width: 100%;
   margin-bottom: 40rpx;

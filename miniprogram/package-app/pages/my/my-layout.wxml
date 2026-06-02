@@ -896,6 +896,37 @@
       </view>
     </view>
 
+    <view class="referral-hub-card" wx:if="{{referralPanelLoaded}}">
+      <view class="section-label section-label--cn">邀请有礼</view>
+      <view class="referral-hub-inner">
+        <block wx:if="{{referralCanBindInvite}}">
+          <text class="referral-hub-desc">新用户可填写好友邀请码；好友首单实付满 300 元后，对方将获得 15 元商城券。</text>
+          <view class="referral-input-row">
+            <input
+              class="referral-code-input"
+              placeholder="输入邀请码 INVXXXXXX"
+              maxlength="12"
+              value="{{referralInviteInput}}"
+              bindinput="onReferralInviteInput"
+            />
+            <view class="referral-bind-btn" bindtap="submitReferralBind">绑定</view>
+          </view>
+        </block>
+        <block wx:elif="{{referralShowMyBlock}}">
+          <view class="referral-my-code-row">
+            <text class="referral-label">我的邀请码</text>
+            <text class="referral-code-text">{{referralMyCode}}</text>
+            <view class="referral-copy-btn" bindtap="copyReferralCode">复制</view>
+          </view>
+          <view class="referral-coupon-summary">
+            <text class="referral-coupon-num">{{referralCouponCount}}</text>
+            <text class="referral-coupon-label">张可用券 · 共 ¥{{referralCouponTotalYuan}}</text>
+          </view>
+          <text class="referral-hub-hint">邀请新用户首单满 300 元，您得 15 元商城券（每用户仅一次）。</text>
+        </block>
+      </view>
+    </view>
+
     <!-- 👇👇👇【核心补全】在这里插入申请记录列表 👇👇👇 -->
     <!-- 引入 WXS 模块用于在视图层处理数组转字符串 -->
     <wxs module="tools">

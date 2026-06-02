@@ -725,6 +725,103 @@
   box-sizing: border-box;
 }
 
+.referral-hub-card {
+  padding: 0 32rpx 24rpx;
+  box-sizing: border-box;
+}
+
+.referral-hub-inner {
+  background: #fff;
+  border-radius: 24rpx;
+  border: 1rpx solid #e8e8ed;
+  padding: 28rpx 32rpx;
+  box-shadow: 0 6rpx 20rpx rgba(0, 0, 0, 0.03);
+}
+
+.referral-hub-desc,
+.referral-hub-hint {
+  font-size: 24rpx;
+  color: #86868b;
+  line-height: 1.5;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.referral-hub-hint {
+  margin-bottom: 0;
+  margin-top: 16rpx;
+}
+
+.referral-input-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.referral-code-input {
+  flex: 1;
+  height: 72rpx;
+  padding: 0 24rpx;
+  background: #f5f5f7;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  color: #1d1d1f;
+}
+
+.referral-bind-btn,
+.referral-copy-btn {
+  flex-shrink: 0;
+  padding: 0 28rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 600;
+  border-radius: 16rpx;
+  text-align: center;
+}
+
+.referral-my-code-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12rpx 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.referral-label {
+  font-size: 26rpx;
+  color: #86868b;
+}
+
+.referral-code-text {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  letter-spacing: 2rpx;
+  font-family: monospace;
+}
+
+.referral-coupon-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+}
+
+.referral-coupon-num {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  line-height: 1;
+}
+
+.referral-coupon-label {
+  font-size: 26rpx;
+  color: #6e6e73;
+}
+
 .profile-member-card {
   background: #fff;
   border-radius: 32rpx;

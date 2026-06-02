@@ -37,6 +37,16 @@
     <view class="auth-input-wrapper">
       <input type="nickname" class="auth-input-new" placeholder="点击下方微信昵称填入" bindinput="onNickNameInput" bindchange="onNickNameChange" value="{{inputNickName}}"/>
     </view>
+
+    <view class="auth-input-wrapper auth-invite-wrap">
+      <input
+        class="auth-input-new auth-input-invite"
+        placeholder="好友邀请码（选填，如 INVXXXXXX）"
+        maxlength="12"
+        bindinput="onInviteCodeInput"
+        value="{{inputInviteCode}}"
+      />
+    </view>
     
     <view
       class="auth-btn-new {{isLoading ? 'auth-btn-loading' : ''}}"

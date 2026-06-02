@@ -1,0 +1,9 @@
+{
+  "name": "referral",
+  "version": "1.0.0",
+  "description": "邀请码绑定、推荐奖励券发放与追回",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -16,7 +16,8 @@ Page({
     isShowNicknameUI: false,
     nicknameUiClosing: false,
     isAuthorized: false,
-    inputNickName: '', 
+    inputNickName: '',
+    inputInviteCode: '',
     step: 0, 
     locationResult: null,
     // 🔴 动画完成后的跳转目标（等待动画完成后再跳转）
@@ -402,6 +403,30 @@ Page({
     this.setData({ inputNickName: name });
   },
 
+  onInviteCodeInput(e) {
+    this.setData({ inputInviteCode: (e.detail && e.detail.value) || '' });
+  },
+
+  _bindReferralInviteAfterAuth() {
+    const raw = (this.data.inputInviteCode || '').trim();
+    if (!raw) return Promise.resolve();
+    return wx.cloud.callFunction({
+      name: 'referral',
+      data: { action: 'bindInviteCode', code: raw }
+    }).then((res) => {
+      const r = (res && res.result) || {};
+      if (r.success) {
+        try { wx.setStorageSync('referral_invite_bound', true); } catch (e) {}
+        return;
+      }
+      if (r.error) {
+        this.showAutoToast('邀请码', r.error);
+      }
+    }).catch((err) => {
+      console.warn('[index] bindInviteCode failed:', err);
+    });
+  },
+
   // === 核心验证逻辑 ===
   async handleLogin() {
     if (this.data.isLoading) return;
@@ -553,12 +578,15 @@ Page({
           wx.setStorageSync('user_nickname', name);
           wx.setStorageSync('has_seen_first_time_modal', true);
           wx.removeStorageSync('is_user_banned');
-          this._hideNicknameUIWithAnimation({
-            isAuthorized: true,
-            showFirstTimeModal: false,
-            firstTimeModalEnterReady: false,
-            firstTimeModalClosing: false,
-            showCustomSuccessModal: false
+          this._bindReferralInviteAfterAuth().finally(() => {
+            this._hideNicknameUIWithAnimation({
+              isAuthorized: true,
+              showFirstTimeModal: false,
+              firstTimeModalEnterReady: false,
+              firstTimeModalClosing: false,
+              showCustomSuccessModal: false,
+              inputInviteCode: ''
+            });
           });
         } else {
           if (result.isBlocked === true || result.type === 'banned') {

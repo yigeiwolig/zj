@@ -233,8 +233,30 @@ exports.main = async (event, context) => {
     // 场景 2: 删除订单
     // ===========================================
     if (action === 'delete') {
-      // 只有未支付或已关闭的订单建议物理删除，已支付的建议软删除
-      return await db.collection('shop_orders').doc(id).remove()
+      let orderBeforeDelete = null
+      try {
+        const snap = await db.collection('shop_orders').doc(id).get()
+        orderBeforeDelete = snap.data
+      } catch (e) {}
+
+      const removeRes = await db.collection('shop_orders').doc(id).remove()
+
+      if (orderBeforeDelete && orderBeforeDelete.status === 'PAID') {
+        try {
+          await cloud.callFunction({
+            name: 'referral',
+            data: {
+              action: 'revokeOnOrderInvalid',
+              orderId: orderBeforeDelete.orderId,
+              orderDocId: id
+            }
+          })
+        } catch (referralErr) {
+          console.error('[adminUpdateOrder] 推荐券追回失败:', referralErr)
+        }
+      }
+
+      return removeRes
     }
 
     // ===========================================
@@ -284,9 +306,22 @@ exports.main = async (event, context) => {
     // 场景 5: 模拟支付 (测试用)
     // ===========================================
     if (action === 'simulate_pay') {
-        return await db.collection('shop_orders').doc(id).update({
+        const snap = await db.collection('shop_orders').doc(id).get()
+        const order = snap.data
+        await db.collection('shop_orders').doc(id).update({
             data: { status: 'PAID', payTime: db.serverDate() }
         })
+        if (order && order.orderId) {
+          try {
+            await cloud.callFunction({
+              name: 'referral',
+              data: { action: 'grantOnOrderPaid', orderId: order.orderId }
+            })
+          } catch (referralErr) {
+            console.error('[adminUpdateOrder] simulate_pay 推荐奖励:', referralErr)
+          }
+        }
+        return { success: true }
     }
 
     return { success: true }

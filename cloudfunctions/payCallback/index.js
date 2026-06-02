@@ -355,6 +355,15 @@ exports.main = async (event, context) => {
             }
             
             console.log('[payCallback] 订单', outTradeNo, '状态已更新为 PAID')
+
+            try {
+              await cloud.callFunction({
+                name: 'referral',
+                data: { action: 'grantOnOrderPaid', orderId: outTradeNo }
+              })
+            } catch (referralErr) {
+              console.error('[payCallback] 推荐奖励发放失败:', referralErr)
+            }
           } else {
             console.warn('[payCallback] 未找到订单:', outTradeNo)
             return { code: 'FAIL', message: 'order not found' }

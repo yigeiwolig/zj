@@ -122,6 +122,14 @@ module.exports = function createMyPageConfig(hubView) {
 
     myOpenid: '', // 【新增】用来存当前用户的 OpenID
 
+    referralPanelLoaded: false,
+    referralCanBindInvite: false,
+    referralShowMyBlock: false,
+    referralMyCode: '',
+    referralInviteInput: '',
+    referralCouponCount: 0,
+    referralCouponTotalYuan: '0',
+
     isAuthorized: false, // 是否是授权管理员
     isAdmin: false,      // 是否开启了管理模式
     
@@ -1064,6 +1072,7 @@ module.exports = function createMyPageConfig(hubView) {
       
       if (this.data.hubView === 'profile') {
         this.loadMyDevices();
+        this.loadReferralPanel();
       }
       
       return Promise.resolve(); // 🔴 返回 Promise，让调用者知道已完成
@@ -1072,6 +1081,75 @@ module.exports = function createMyPageConfig(hubView) {
       console.error('[my.js] 权限检查失败', err);
       return Promise.reject(err); // 🔴 返回 rejected Promise
     }
+  },
+
+  loadReferralPanel() {
+    return wx.cloud.callFunction({
+      name: 'referral',
+      data: { action: 'getPanel' }
+    }).then((res) => {
+      const r = (res && res.result) || {};
+      if (!r.success) return;
+      this.setData({
+        referralPanelLoaded: true,
+        referralCanBindInvite: !!r.canBindInvite,
+        referralShowMyBlock: !!r.showMyReferralBlock,
+        referralMyCode: r.myReferralCode || '',
+        referralCouponCount: r.availableCouponCount || 0,
+        referralCouponTotalYuan: r.availableCouponTotalYuan || '0'
+      });
+    }).catch((err) => {
+      console.warn('[my] loadReferralPanel failed:', err);
+    });
+  },
+
+  onReferralInviteInput(e) {
+    this.setData({ referralInviteInput: (e.detail && e.detail.value) || '' });
+  },
+
+  submitReferralBind() {
+    const code = (this.data.referralInviteInput || '').trim();
+    if (!code) {
+      this.showAutoToast('提示', '请输入邀请码');
+      return;
+    }
+    this.showMyLoading('绑定中...');
+    wx.cloud.callFunction({
+      name: 'referral',
+      data: { action: 'bindInviteCode', code }
+    }).then((res) => {
+      this.hideMyLoading();
+      const r = (res && res.result) || {};
+      if (!r.success) {
+        this.showAutoToast('提示', r.error || '绑定失败');
+        return;
+      }
+      this.setData({
+        referralPanelLoaded: true,
+        referralCanBindInvite: !!r.canBindInvite,
+        referralShowMyBlock: !!r.showMyReferralBlock,
+        referralMyCode: r.myReferralCode || '',
+        referralInviteInput: '',
+        referralCouponCount: r.availableCouponCount || 0,
+        referralCouponTotalYuan: r.availableCouponTotalYuan || '0'
+      });
+      this.showAutoToast('成功', '邀请码已绑定');
+    }).catch((err) => {
+      this.hideMyLoading();
+      console.error('[my] submitReferralBind', err);
+      this.showAutoToast('错误', '网络错误，请重试');
+    });
+  },
+
+  copyReferralCode() {
+    const code = this.data.referralMyCode;
+    if (!code) return;
+    wx.setClipboardData({
+      data: code,
+      success: () => {
+        this.showAutoToast('已复制', '邀请码已复制到剪贴板');
+      }
+    });
   },
 
   toggleAdminMode() {
