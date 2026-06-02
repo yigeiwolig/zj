@@ -2113,7 +2113,7 @@ Page({
   // 跳转到绑定设备页面
   goToBindDevice() {
     this._closeWithAnimation('showBindDeviceTip', 'bindDeviceTipClosing', () => {
-      wx.navigateTo({ url: '/package-app/pages/my/my', animationType: 'none' });
+      wx.navigateTo({ url: '/package-app/pages/profile/profile', animationType: 'none' });
     });
   },
 

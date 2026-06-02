@@ -1,0 +1,20 @@
+<view class="hub-segment-wrap" style="padding-top: {{statusBarHeight}}px;">
+  <view class="hub-segment-row">
+    <view
+      class="hub-segment-tab {{active === 'home' ? 'is-active' : ''}}"
+      data-segment="home"
+      bindtap="onTap"
+    >
+      <text class="hub-segment-label">主页</text>
+      <view class="hub-segment-indicator" wx:if="{{active === 'home'}}"></view>
+    </view>
+    <view
+      class="hub-segment-tab {{active === 'shop' ? 'is-active' : ''}}"
+      data-segment="shop"
+      bindtap="onTap"
+    >
+      <text class="hub-segment-label">商城</text>
+      <view class="hub-segment-indicator" wx:if="{{active === 'shop'}}"></view>
+    </view>
+  </view>
+</view>

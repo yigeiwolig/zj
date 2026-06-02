@@ -10,6 +10,8 @@
       "pages": [
         "pages/shop/shop",
         "pages/my/my",
+        "pages/orders/orders",
+        "pages/profile/profile",
         "pages/azjc/azjc",
         "pages/ota/ota",
         "pages/products/products",
@@ -29,6 +31,10 @@
   ],
   "preloadRule": {
     "pages/index/index": {
+      "network": "all",
+      "packages": ["package-app"]
+    },
+    "package-app/pages/products/products": {
       "network": "all",
       "packages": ["package-app"]
     }

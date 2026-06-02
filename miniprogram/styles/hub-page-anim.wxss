@@ -1,0 +1,15 @@
+/* 枢纽页：点击 Tab / 商城 进入时的右滑入场（与系统 navigateTo 叠加，更明显） */
+@keyframes hub-slide-in-right {
+  from {
+    transform: translate3d(32%, 0, 0);
+    opacity: 0.92;
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+    opacity: 1;
+  }
+}
+
+.hub-page-enter {
+  animation: hub-slide-in-right 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}

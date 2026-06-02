@@ -1,4 +1,8 @@
-var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js'); 
+const cosUpload = require('../../../utils/cosUpload.js');
+const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
+const hubNav = require('../../../utils/hubNav.js');
+
+var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js');
 var qqmapsdk = new QQMapWX({
     key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
 });
@@ -30,6 +34,7 @@ const iconArrowUp = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iM
 
 /** 功能入口开关（shop_config 文档），管理员控制各页面是否对用户开放 */
 const PRODUCT_FEATURE_FLAGS_DOC = 'productFeatureFlags';
+const HUB_HOME_CONFIG_DOC = 'hubHomeConfig';
 const FEATURE_FLAGS_LOCAL_KEY = '__products_feature_flags__';
 /** 功能列表里「产品上新」卡片 id：仅控制进入 pagenew，不控制 MT 新品推荐弹窗 */
 const FEATURE_ID_PAGENEW = 3;
@@ -77,7 +82,37 @@ Page({
     hubMidNew: null,
     hubMidControl: null,
     hubMinis: [],
+    hubMiniGroups: [],
+    hubFeatureNew: null,
+    hubFeatureCase: null,
+    hubFeatureControl: null,
+    hubServiceCards: [],
+    hubBentoServices: [],
+    hubBentoRepair: null,
+    hubBentoTutorial: null,
+    hubBentoOta: null,
+    hubListItems: [],
+    hubTabIndex: 0,
+    /** 横向轨道偏移：商城为全屏层，0/1 均不偏移轨道 */
+    hubTrackTranslatePct: 0,
+    /** 商城全屏层 top（px，紧贴分段栏下沿） */
+    hubShopLayerTop: 88,
+    hubShopEmbedScrollHeight: 0,
+    /** 底栏高亮：0=首页区(主页/商城)，1=订单，2=我的 */
+    hubBottomBarIndex: 0,
+    hubSwiperDuration: 0,
+    hubPanelsAnim: false,
+    hubShopMounted: false,
+    hubOrdersMounted: true,
+    hubProfileMounted: true,
+    hubShellIsAdmin: false,
+    hubCartBadge: 0,
+    showHubTabBar: true,
+    hubPageEnterAnim: false,
     hubBanners: [],
+    /** 首页「产品上新」独立封面（与 pagenew 列表无关，建议 4:3） */
+    hubHomeCoverFileId: '',
+    hubHomeCoverDisplay: '',
 
     // 功能卡顺序：买→装→用→修；排行榜单为其他产品线，默认靠后且默认关闭
     iconArrowUp,
@@ -272,47 +307,75 @@ Page({
     });
   },
 
-  /** Bento 布局：核心磁贴 + 8 个快捷服务 */
+  /** 首页：选购 + 独立大卡（新品/案例）+ 服务组件卡 */
   _rebuildHubLayout() {
     const list = this.data.list || [];
     const byId = (id) => list.find((i) => Number(i.id) === Number(id)) || null;
-    const miniShort = {
-      10: '案例',
-      7: '教程',
-      6: '维修',
-      13: '问答',
-      12: '门店',
-      9: 'OTA',
-      8: '联系',
-      2: '我的'
+    const cardHints = {
+      3: 'New Product Arrival',
+      10: '改装案例与灵感库',
+      1: '连接设备并调节参数',
+      7: '分步视频安装教程',
+      6: '专业售后预约',
+      13: '专业快速解答及自助支持',
+      12: '寻找距离最近的服务网点',
+      9: '固件在线升级',
+      8: '官方客服在线实时技术支持'
     };
-    const miniIds = [10, 7, 6, 13, 12, 9, 8, 2];
-    const hubMinis = miniIds
-      .map((id) => {
-        const item = byId(id);
-        if (!item) return null;
-        return { ...item, hubShortLabel: miniShort[id] || item.title };
-      })
-      .filter(Boolean);
+    const cardTags = {
+      3: 'NEW',
+      10: 'FEATURED',
+      1: 'DEVICE'
+    };
 
     const arrivals = (this.data.newArrivalList || []).filter(
-      (x) => x && x._id && x._id !== 'fallback-loading'
+      (x) => x && x._id && !String(x._id).startsWith('fallback')
     );
-    let hubBanners = arrivals.slice(0, 5).map((a) => ({
-      _id: a._id,
-      title: a.title || '新品发布',
-      cover: a.coverThumb || a.coverFull || a.cover || ''
-    }));
-    if (!hubBanners.length) {
-      hubBanners = [{ _id: 'default', title: '旗舰新品 / 现已发布', cover: '' }];
-    }
+    const firstArrival = arrivals[0];
+    const fallbackCover = firstArrival
+      ? (firstArrival.coverFull || firstArrival.coverThumb || firstArrival.cover || '')
+      : '';
+    const dedicatedHubCover = String(this.data.hubHomeCoverDisplay || '').trim();
+    const newCover = dedicatedHubCover || fallbackCover;
+
+    const enrich = (id) => {
+      const item = byId(id);
+      if (!item) return null;
+      return {
+        ...item,
+        hubDesc: cardHints[id] || item.hint || '',
+        hubTag: cardTags[id] || ''
+      };
+    };
+
+    const hubFeatureNewRaw = enrich(3);
+    const hubFeatureNew = hubFeatureNewRaw
+      ? { ...hubFeatureNewRaw, hubCover: newCover, hubSubTitle: firstArrival ? firstArrival.title : '探索最新发布' }
+      : null;
+    const hubFeatureCase = enrich(10);
+    const hubFeatureControl = enrich(1);
+    const hubBentoRepair = enrich(6);
+    const hubBentoTutorial = enrich(7);
+    const hubBentoOta = enrich(9);
+    const hubListItems = [13, 12, 8].map((id) => enrich(id)).filter(Boolean);
+    const hubBentoServices = hubListItems;
 
     this.setData({
       hubHero: byId(4),
+      hubFeatureNew,
+      hubFeatureCase,
+      hubFeatureControl,
+      hubBentoRepair,
+      hubBentoTutorial,
+      hubBentoOta,
+      hubListItems,
+      hubBentoServices,
+      hubServiceCards: hubListItems,
       hubMidNew: byId(3),
       hubMidControl: byId(1),
-      hubMinis,
-      hubBanners
+      hubMinis: hubListItems,
+      hubMiniGroups: [],
+      hubBanners: []
     });
   },
 
@@ -321,6 +384,98 @@ Page({
       this._rebuildHubLayout();
       if (typeof callback === 'function') callback();
     });
+  },
+
+  /** 首页新品大卡封面：不依赖弹窗打开才拉数据 */
+  async loadHubHomeConfig() {
+    let fileId = '';
+    try {
+      const viaFn = await this._fetchProductFeatureFlagsFromCloudFn();
+      if (viaFn && viaFn.hubNewCover) {
+        fileId = String(viaFn.hubNewCover).trim();
+      }
+      if (!fileId && wx.cloud) {
+        if (!this.db) this.db = wx.cloud.database();
+        const res = await this.db.collection('shop_config').doc(HUB_HOME_CONFIG_DOC).get();
+        fileId = String((res.data && res.data.hubNewCover) || '').trim();
+      }
+    } catch (e) {
+      console.warn('[products] loadHubHomeConfig', e);
+    }
+    if (!fileId) {
+      if (this.data.hubHomeCoverFileId || this.data.hubHomeCoverDisplay) {
+        this.setData({ hubHomeCoverFileId: '', hubHomeCoverDisplay: '' }, () => this._rebuildHubLayout());
+      }
+      return;
+    }
+    if (fileId === this.data.hubHomeCoverFileId && this.data.hubHomeCoverDisplay) {
+      return;
+    }
+    const display = await this._resolveHubCoverDisplayUrl(fileId);
+    this.setData({ hubHomeCoverFileId: fileId, hubHomeCoverDisplay: display }, () => this._rebuildHubLayout());
+  },
+
+  async _persistHubHomeCover(fileID) {
+    if (!wx.cloud || !this.data.isAuthorized) return false;
+    const hubNewCover = String(fileID || '').trim();
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'setHubHomeConfig',
+        data: { hubNewCover }
+      });
+      const result = res && res.result;
+      if (result && result.success) return true;
+      console.warn('[products] setHubHomeConfig:', result && result.error);
+    } catch (cfErr) {
+      console.warn('[products] setHubHomeConfig 不可用，尝试客户端写入:', cfErr);
+    }
+    if (!this.db) this.db = wx.cloud.database();
+    const docRef = this.db.collection('shop_config').doc(HUB_HOME_CONFIG_DOC);
+    const payload = { hubNewCover, updateTime: this.db.serverDate() };
+    try {
+      await docRef.set({ data: payload });
+      return true;
+    } catch (setErr) {
+      try {
+        await docRef.update({ data: payload });
+        return true;
+      } catch (updateErr) {
+        console.error('[products] 保存首页封面失败:', setErr, updateErr);
+        return false;
+      }
+    }
+  },
+
+  async loadHubNewArrivalsForHome() {
+    const app = getApp();
+    const cache = app && app.globalData && app.globalData.newArrivalCache;
+    const applyList = (rawList) => {
+      const list = this.enhanceNewArrivalList(rawList || []);
+      if (!list.length) return;
+      this.setData({ newArrivalList: list }, () => this._rebuildHubLayout());
+    };
+    if (cache && cache.list && cache.list.length) {
+      applyList(cache.list);
+      return;
+    }
+    try {
+      if (!this.db) {
+        try { wx.cloud.init({ traceUser: true }); } catch (e) {}
+        this.db = wx.cloud.database();
+      }
+      const res = await this.db.collection('products').limit(8).get();
+      const products = res.data || [];
+      if (!products.length) return;
+      const resolved = await this.resolveProductCoverUrls(products);
+      const enhanced = this.enhanceNewArrivalList(resolved);
+      if (!enhanced.length) return;
+      if (app && app.globalData) {
+        app.globalData.newArrivalCache = { list: enhanced, cacheTime: Date.now() };
+      }
+      applyList(enhanced);
+    } catch (e) {
+      console.warn('[products] loadHubNewArrivalsForHome', e);
+    }
   },
 
   _saveFeatureFlagsLocalCache(list, syncedToCloud = true) {
@@ -469,6 +624,7 @@ Page({
     const cached = this._readAdminPrivilegeCache();
     if (cached === true) {
       if (!this.data.isAuthorized) this.setData({ isAuthorized: true });
+      this._syncHubPanelsAuth();
       return;
     }
 
@@ -483,7 +639,10 @@ Page({
         adminCheck = await this.db.collection('guanliyuan').where({ _openid: myOpenid }).get();
       }
       const isAuthorized = !!(adminCheck.data && adminCheck.data.length);
-      this.setData({ isAuthorized });
+      this.setData({ isAuthorized }, () => {
+        this._syncHubPanelsAuth();
+        this._updateHubShopEmbedScrollHeight();
+      });
       try {
         wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized, ts: Date.now() });
       } catch (e) {}
@@ -501,7 +660,8 @@ Page({
       if (result && result.success) {
         return {
           flags: result.flags || {},
-          updateTime: result.updateTime || null
+          updateTime: result.updateTime || null,
+          hubNewCover: result.hubNewCover || ''
         };
       }
     } catch (e) {
@@ -651,11 +811,11 @@ Page({
   },
 
   async resolveProductCoverUrls(list = []) {
-    if (!wx.cloud || !list.length) return list;
+    if (!list.length) return list;
     const ids = [...new Set(
       list.map(i => i && i.cover).filter(c => c && String(c).indexOf('cloud://') === 0)
     )];
-    if (!ids.length) return list;
+    if (!wx.cloud || !ids.length) return list;
     try {
       const res = await wx.cloud.getTempFileURL({ fileList: ids });
       const map = {};
@@ -670,6 +830,54 @@ Page({
     } catch (e) {
       console.warn('[products] resolveProductCoverUrls', e);
       return list;
+    }
+  },
+
+  async _resolveHubCoverDisplayUrl(cover) {
+    const raw = String(cover || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.indexOf('wxfile://') === 0 || /^https?:\/\/tmp/i.test(raw)) return raw;
+    if (raw.indexOf('cloud://') === 0) {
+      if (wx.cloud && wx.cloud.getTempFileURL) {
+        try {
+          const resp = await wx.cloud.getTempFileURL({ fileList: [raw] });
+          const item = resp && resp.fileList && resp.fileList[0];
+          if (item && item.status === 0 && item.tempFileURL) {
+            return item.tempFileURL;
+          }
+          if (item && item.status !== 0) {
+            console.warn('[products] getTempFileURL status', item.status, item.errMsg);
+          }
+        } catch (err) {
+          console.warn('[products] getTempFileURL hub cover', err);
+        }
+      }
+      return raw;
+    }
+    return raw;
+  },
+
+  onHubCoverImageError(e) {
+    console.warn('[products] hub cover image error', e.detail);
+    const stored = String(this.data.hubHomeCoverFileId || this.data.hubHomeCoverDisplay || '').trim();
+    if (!stored) return;
+
+    if (/^https?:\/\//i.test(stored)) {
+      const joiner = stored.indexOf('?') === -1 ? '?' : '&';
+      const bust = `${stored}${joiner}rt=${Date.now()}`;
+      if (bust !== this.data.hubHomeCoverDisplay) {
+        this.setData({ hubHomeCoverDisplay: bust }, () => this._rebuildHubLayout());
+      }
+      return;
+    }
+
+    if (stored.indexOf('cloud://') === 0) {
+      this._resolveHubCoverDisplayUrl(stored).then((url) => {
+        if (url && url !== this.data.hubHomeCoverDisplay) {
+          this.setData({ hubHomeCoverDisplay: url }, () => this._rebuildHubLayout());
+        }
+      });
     }
   },
 
@@ -835,8 +1043,34 @@ Page({
     this.setData({ currentIndex: i, ...extra });
   },
 
-  async onLoad() {
+  async onLoad(options) {
     this._deckCurrentIndex = 0;
+    if (options && String(options.hubTab) === 'shop') {
+      this.setData({
+        hubTabIndex: 1,
+        hubTrackTranslatePct: 0,
+        hubBottomBarIndex: 0,
+        hubShopMounted: true,
+        hubTrackTranslatePct: 25,
+        showHubTabBar: false,
+        hubSwiperDuration: 0
+      });
+    } else {
+      const hubTab = options && options.hubTab != null ? Number(options.hubTab) : NaN;
+      if (!Number.isNaN(hubTab) && hubTab >= 0 && hubTab <= 2) {
+        const panelIndex = hubTab === 0 ? 0 : hubTab + 1;
+        const patch = {
+          hubTabIndex: panelIndex,
+          hubTrackTranslatePct: panelIndex * 25,
+          hubBottomBarIndex: hubTab,
+          hubSwiperDuration: 0,
+          showHubTabBar: panelIndex !== 1
+        };
+        if (hubTab === 1) patch.hubOrdersMounted = true;
+        if (hubTab === 2) patch.hubProfileMounted = true;
+        this.setData(patch);
+      }
+    }
     // 离页递增：作废仍在飞行的异步，防止晚到的云回调再写 __products_return_focus__ / navigateTo
     this._productsLifeSeq = 0;
     // onHide 时记录的页面栈深度；仅 >=2（曾叠子页）时才在 onShow 消费 __products_return_focus__，避免纯 onShow/前后台误消费把叠层拽回
@@ -856,7 +1090,6 @@ Page({
 
     // 🔴 计算导航栏高度（适配所有机型）
     this.calcNavBarInfo();
-    
     // 🔴 更新页面访问统计
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('products');
@@ -867,7 +1100,7 @@ Page({
 
     const adminCached = this._readAdminPrivilegeCache();
     if (adminCached === true) {
-      this.setData({ isAuthorized: true });
+      this.setData({ isAuthorized: true }, () => this._syncHubPanelsAuth());
     }
 
     // 🔴 极速优化：尽早触发新品弹窗（不等待权限和开关接口），消除 1~2 秒的瀑布流延迟
@@ -877,8 +1110,10 @@ Page({
 
     // 顺序执行耗时操作，确保权限判定准确，但不再阻塞弹窗
     this.checkAdminPrivilege().then(() => {
+      this._syncHubPanelsAuth();
       return this.loadProductFeatureFlags();
     }).catch(() => {});
+    this.loadHubHomeConfig().catch(() => {});
 
     this.checkBanStatus();
 
@@ -891,6 +1126,7 @@ Page({
     } catch (e) {}
     
     this._rebuildHubLayout();
+    this.loadHubNewArrivalsForHome().catch(() => {});
 
     setTimeout(() => {
       this.setData({ hasEntered: true });
@@ -1244,6 +1480,9 @@ Page({
     if (!this.data.hasEntered) {
       this.setData({ hasEntered: true });
     }
+    this.loadHubNewArrivalsForHome().catch(() => {});
+    this.loadHubHomeConfig().catch(() => {});
+    this._refreshHubCartBadge();
 
     // 从子页返回时清空跟手状态（页面缓存常见）：残留 isDragging / dragOffset 会导致滑不动、松手弹回
     this.touchStartY = 0;
@@ -1751,6 +1990,91 @@ Page({
     this.toggleDrawer();
   },
 
+  /** 管理员：首页「产品上新」独立封面（换封面 / 清除） */
+  onHubAdminCoverTap(e) {
+    if (!this.data.isAuthorized) {
+      wx.showToast({ title: '需要管理员权限', icon: 'none' });
+      return;
+    }
+    const action = (e.currentTarget.dataset && e.currentTarget.dataset.action) || 'choose';
+    if (action === 'clear') {
+      this._adminClearHubNewCover();
+      return;
+    }
+    this._adminChooseHubNewCover();
+  },
+
+  _adminChooseHubNewCover() {
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['image'],
+      sourceType: ['album', 'camera'],
+      success: (res) => {
+        const file = res.tempFiles && res.tempFiles[0];
+        if (!file || !file.tempFilePath) return;
+        this._uploadHubNewCover(file.tempFilePath);
+      },
+      fail: (err) => {
+        const msg = String((err && err.errMsg) || '');
+        if (msg.indexOf('cancel') !== -1) return;
+        wx.showToast({ title: '无法打开相册', icon: 'none' });
+      }
+    });
+  },
+
+  async _uploadHubNewCover(tempFilePath) {
+    const localPreview = String(tempFilePath || '').trim();
+    if (localPreview) {
+      this.setData({ hubHomeCoverDisplay: localPreview }, () => this._rebuildHubLayout());
+    }
+    wx.showLoading({ title: '上传中', mask: true });
+    try {
+      const prepared = await shopImagePrepare.prepareImageFile(localPreview, 'cover');
+      const publicUrl = await cosUpload.uploadImageToCos(prepared, 'hub/home');
+      if (!publicUrl || !/^https?:\/\//i.test(publicUrl)) {
+        throw new Error('invalid cos url');
+      }
+      const ok = await this._persistHubHomeCover(publicUrl);
+      if (!ok) throw new Error('save failed');
+      this.setData({
+        hubHomeCoverFileId: publicUrl,
+        hubHomeCoverDisplay: publicUrl
+      }, () => {
+        this._rebuildHubLayout();
+        wx.showToast({ title: '封面已更新', icon: 'success' });
+      });
+    } catch (e) {
+      console.warn('[products] _uploadHubNewCover', e);
+      const msg = String((e && e.message) || (e && e.errMsg) || '');
+      wx.showToast({
+        title: msg.indexOf('getCosUploadUrl') !== -1 ? '请部署 getCosUploadUrl' : '上传失败',
+        icon: 'none',
+        duration: 2600
+      });
+    } finally {
+      wx.hideLoading();
+    }
+  },
+
+  _adminClearHubNewCover() {
+    wx.showModal({
+      title: '清除首页封面',
+      content: '清除后将使用「产品上新」列表首图作为占位',
+      success: async (r) => {
+        if (!r.confirm) return;
+        const ok = await this._persistHubHomeCover('');
+        if (!ok) {
+          wx.showToast({ title: '清除失败', icon: 'none' });
+          return;
+        }
+        this.setData({ hubHomeCoverFileId: '', hubHomeCoverDisplay: '' }, () => {
+          this._rebuildHubLayout();
+          wx.showToast({ title: '已清除', icon: 'none' });
+        });
+      }
+    });
+  },
+
   onHubBannerTap() {
     wx.vibrateShort({ type: 'light' });
     if (!this._isFeatureEnabledForUser(3)) {
@@ -1818,7 +2142,10 @@ Page({
     // 根据 ID 匹配跳转路径
     switch (numId) {
       case 3: target = '/package-app/pages/pagenew/pagenew'; break; // 产品上新
-      case 4: target = '/package-app/pages/shop/shop'; break;        // 产品选购
+      case 4: // 产品选购 → 商城（顶栏「商城」同路径，滑动进入）
+        this.rememberReturnFocus(numId);
+        hubNav.openShop();
+        return;
       case 10: target = '/package-app/pages/case/case'; break;      // 案例展示
       case 5: target = '/package-app/pages/paihang/paihang'; break; // 排行榜单
       case 1: target = '/package-app/pages/scan/scan'; break;       // 控制中心
@@ -1826,7 +2153,7 @@ Page({
       case 6: target = '/package-app/pages/shouhou/shouhou'; break; // 维修中心
       case 12: target = '/package-app/pages/home/home'; break;       // 附近门店
       case 13: target = '/package-app/pages/faq/faq'; break;         // 常见问题
-      case 2: target = '/package-app/pages/my/my'; break;           // 我的信息 -> my 页面
+      case 2: target = '/package-app/pages/profile/profile'; break;
       // 其他待开发...
       default: target = ''; break;
     }
@@ -2035,15 +2362,195 @@ Page({
       const statusBarHeight = windowInfo.statusBarHeight || 44;
       const gap = menuButton.top - statusBarHeight;
       const navBarHeight = (gap * 2) + menuButton.height;
-      this.setData({ statusBarHeight, navBarHeight });
+      const rpx = (windowInfo.windowWidth || 375) / 750;
+      const segmentBodyPx = Math.round((44 + 28 + 16) * rpx);
+      const hubShopLayerTop = statusBarHeight + segmentBodyPx;
+      const adminBarPx = this.data.isAuthorized ? Math.round(72 * rpx) : 0;
+      const hubShopEmbedScrollHeight = Math.max(
+        320,
+        Math.floor((windowInfo.windowHeight || 667) - hubShopLayerTop - adminBarPx)
+      );
+      this.setData({
+        statusBarHeight,
+        navBarHeight,
+        hubShopLayerTop,
+        hubShopEmbedScrollHeight
+      });
     } catch (e) {
-      // 降级方案：使用默认值
-      this.setData({ statusBarHeight: 44, navBarHeight: 44 });
+      this.setData({
+        statusBarHeight: 44,
+        navBarHeight: 44,
+        hubShopLayerTop: 88,
+        hubShopEmbedScrollHeight: 560
+      });
     }
   },
+
+  _updateHubShopEmbedScrollHeight() {
+    try {
+      const win = wx.getWindowInfo();
+      const rpx = (win.windowWidth || 375) / 750;
+      const top = this.data.hubShopLayerTop || 88;
+      const adminBarPx = this.data.isAuthorized ? Math.round(72 * rpx) : 0;
+      const h = Math.max(320, Math.floor((win.windowHeight || 667) - top - adminBarPx));
+      if (h !== this.data.hubShopEmbedScrollHeight) {
+        this.setData({ hubShopEmbedScrollHeight: h });
+      }
+    } catch (e) {}
+  },
   
-  goBack() { 
-    wx.reLaunch({ url: '/pages/index/index' }); 
+  goBack() {
+    wx.reLaunch({ url: '/pages/index/index' });
+  },
+
+  onHubSegmentSwitch(e) {
+    const segment = e.detail && e.detail.segment;
+    if (!segment) return;
+    if (segment === 'home') {
+      this._setHubTabIndex(0);
+      return;
+    }
+    if (segment === 'shop') {
+      this._setHubTabIndex(1);
+    }
+  },
+
+  _syncHubPanelsAuth() {
+    const authorized = !!this.data.isAuthorized;
+    ['#hubShopPanel', '#hubOrdersPanel', '#hubProfilePanel'].forEach((sel) => {
+      const panel = this.selectComponent(sel);
+      if (panel && typeof panel.setData === 'function') {
+        panel.setData({ isAuthorized: authorized, shellAuthorized: authorized });
+      }
+    });
+    this._updateHubShopEmbedScrollHeight();
+  },
+
+  _syncHubPanelsAdmin(isAdmin) {
+    const admin = !!isAdmin;
+    ['#hubShopPanel', '#hubOrdersPanel', '#hubProfilePanel'].forEach((sel) => {
+      const panel = this.selectComponent(sel);
+      if (panel && typeof panel.setData === 'function') {
+        panel.setData({ isAdmin: admin, shellAdmin: admin });
+      }
+    });
+  },
+
+  onHubAdminChange(e) {
+    const isAdmin = !!(e.detail && e.detail.isAdmin);
+    this.setData({ hubShellIsAdmin: isAdmin });
+    this._syncHubPanelsAdmin(isAdmin);
+  },
+
+  _refreshHubPanel(tabIndex) {
+    if (tabIndex === 1) {
+      this._updateHubShopEmbedScrollHeight();
+      return;
+    }
+    const sel = tabIndex === 2 ? '#hubOrdersPanel' : tabIndex === 3 ? '#hubProfilePanel' : '';
+    if (!sel) return;
+    const panel = this.selectComponent(sel);
+    if (!panel) return;
+    if (tabIndex === 2 && typeof panel.loadMyOrdersPromise === 'function') {
+      panel.loadMyOrdersPromise().catch(() => {});
+      if (typeof panel.loadHubCartFromCache === 'function') {
+        panel.loadHubCartFromCache();
+      }
+      return;
+    }
+    if (tabIndex === 3 && typeof panel.loadMyActivitiesPromise === 'function') {
+      panel.loadMyActivitiesPromise().catch(() => {});
+      return;
+    }
+    if (typeof panel.onShow === 'function') {
+      panel.onShow();
+    }
+  },
+
+  _refreshHubCartBadge() {
+    let count = 0;
+    try {
+      const cart = wx.getStorageSync('my_cart') || [];
+      count = Array.isArray(cart) ? cart.length : 0;
+    } catch (e) {}
+    if (count !== this.data.hubCartBadge) {
+      this.setData({ hubCartBadge: count });
+    }
+  },
+
+  onHubHomeCartTap() {
+    this._setHubTabIndex(2);
+  },
+
+  _setHubTabIndex(idx) {
+    if (idx == null || idx === this.data.hubTabIndex) return;
+    const hubBottomBarIndex = idx <= 1 ? 0 : idx - 1;
+    const prevTrackPct = this.data.hubTrackTranslatePct || 0;
+    const hubTrackTranslatePct = idx * 25;
+    const trackMoves = prevTrackPct !== hubTrackTranslatePct;
+    const patch = {
+      hubTabIndex: idx,
+      hubTrackTranslatePct,
+      hubBottomBarIndex,
+      hubPanelsAnim: trackMoves,
+      showHubTabBar: idx !== 1
+    };
+    if (idx === 0) {
+      this._refreshHubCartBadge();
+    }
+    if (idx === 2 || idx === 3) {
+      patch.hubShellIsAdmin = false;
+    }
+    if (idx === 1) patch.hubShopMounted = true;
+    if (idx === 2) patch.hubOrdersMounted = true;
+    if (idx === 3) patch.hubProfileMounted = true;
+    this.setData(patch, () => {
+      if (idx === 2 || idx === 3) {
+        this._syncHubPanelsAdmin(false);
+      }
+      const delay = trackMoves ? 340 : 0;
+      setTimeout(() => {
+        if (idx >= 1 && idx <= 3) this._refreshHubPanel(idx);
+      }, delay);
+    });
+    if (this._hubPanelsAnimTimer) clearTimeout(this._hubPanelsAnimTimer);
+    this._hubPanelsAnimTimer = setTimeout(() => {
+      this.setData({ hubPanelsAnim: false });
+      this._hubPanelsAnimTimer = null;
+    }, 360);
+  },
+
+  onHubTabSwitch(e) {
+    const tab = e.detail && e.detail.tab;
+    if (!tab) return;
+    const map = { home: 0, orders: 2, profile: 3 };
+    const idx = map[tab];
+    if (idx == null) return;
+    this._setHubTabIndex(idx);
+  },
+
+  onHubPanelsTouchStart(e) {
+    if (this.data.hubTabIndex === 1) return;
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    this._hubTouchStartX = t.clientX;
+    this._hubTouchStartY = t.clientY;
+  },
+
+  onHubPanelsTouchEnd(e) {
+    const cur = this.data.hubTabIndex;
+    // 商城内有分类横滑轮播，整屏手势会误切到订单/主页
+    if (cur === 1) return;
+    const t = e.changedTouches && e.changedTouches[0];
+    if (!t || this._hubTouchStartX == null) return;
+    const dx = t.clientX - this._hubTouchStartX;
+    const dy = t.clientY - (this._hubTouchStartY || 0);
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+    if (dx < 0 && cur < 3) {
+      this._setHubTabIndex(cur + 1);
+    } else if (dx > 0 && cur > 0) {
+      this._setHubTabIndex(cur - 1);
+    }
   },
   
   // 【新增】自动消失提示（无按钮，3秒后自动消失）
@@ -2084,7 +2591,7 @@ Page({
               if (res.confirm) {
                 // 跳转到个人中心
                 wx.navigateTo({ 
-                  url: '/package-app/pages/my/my',
+                  url: '/package-app/pages/profile/profile',
                   animationType: 'none',
                   fail: (err) => {
                     console.error('[checkUnfinishedReturn] 跳转失败:', err);

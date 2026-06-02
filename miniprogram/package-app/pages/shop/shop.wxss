@@ -1,4 +1,8 @@
 /* pages/shop/shop.wxss */
+@import "../../../styles/hub-page-anim.wxss";
+@import "../../../styles/hub-embed-portal.wxss";
+@import "../../../styles/checkout-sheet.wxss";
+
 page {
   background-color: #F5F5F7;
   color: #1D1D1F;
@@ -281,6 +285,92 @@ page {
 
 /* ============ 2. 主页面 ============ */
 .main-scroll { height: 100vh; padding-top: 180rpx; box-sizing: border-box; }
+
+/* products 全屏商城层：列表区高度由 layoutHubEmbedScroll 写入行内 px */
+.container--hub-embed .main-scroll--hub-embed {
+  padding-top: 8rpx !important;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+/* 轨道横滑时详情/结算仍按整屏铺开（相对视口） */
+.container--hub-embed .full-modal,
+.container--hub-embed .overlay.full-screen-overlay {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 600;
+}
+
+/* 嵌入枢纽：全屏弹窗顶栏避开刘海（固定 height:180rpx 会把关闭键顶进刘海） */
+.container--hub-embed .modal-nav--safe-top,
+.container--hub-embed .acc-detail-nav.modal-nav--safe-top,
+.container--hub-embed .checkout-header.modal-nav--safe-top {
+  height: auto !important;
+  min-height: 88rpx;
+  padding-bottom: 16rpx;
+  padding-left: 30rpx;
+  padding-right: 30rpx;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.container--hub-embed .acc-detail-nav.modal-nav--safe-top {
+  min-height: calc(88rpx + env(safe-area-inset-top));
+}
+
+.container--hub-embed .shop-hub-admin-bar {
+  flex-shrink: 0;
+  padding: 8rpx 28rpx 12rpx;
+  box-sizing: border-box;
+  background: #f2f2f7;
+}
+
+.container--hub-embed .shop-hub-admin-actions {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.container--hub-embed .hub-admin-enter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14rpx 48rpx;
+  border-radius: 999rpx;
+  background: #fff;
+  color: #1d1d1f;
+  font-size: 28rpx;
+  font-weight: 600;
+  border: 2rpx solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.container--hub-embed .hub-admin-enter-btn:active {
+  opacity: 0.88;
+  transform: scale(0.98);
+}
+
+.container--hub-embed .hub-admin-exit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14rpx 48rpx;
+  border-radius: 999rpx;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.12);
+}
+
+.container--hub-embed .hub-admin-exit-btn:active {
+  opacity: 0.88;
+  transform: scale(0.98);
+}
 
 /* Hero 轮播：视频占满 16:9 高度的 slide；图片 slide 高度由 heroSwiperHeightPx + widthFix 决定 */
 .hero-swiper-box {
@@ -724,6 +814,251 @@ page {
   justify-content: center;
 }
 
+/* 配件封面顶栏：两行排布，避免删除/版本/编号重叠 */
+.shop-acc-cover-chrome {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12rpx;
+  padding: 16rpx;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.shop-acc-cover-chrome-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  width: 100%;
+  pointer-events: none;
+}
+
+.shop-acc-cover-chrome-row > view {
+  pointer-events: auto;
+}
+
+.shop-acc-cover-chrome-row--chips {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.shop-acc-cover-chrome-row--chips > view {
+  pointer-events: auto;
+}
+
+/* 配件格号（仅管理员，与产品 sort-order-badge 同位置） */
+.acc-slot-num-badge--cover {
+  position: absolute;
+  top: 20rpx;
+  left: 20rpx;
+  z-index: 22;
+  min-width: 52rpx;
+  height: 52rpx;
+  padding: 0 12rpx;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.72);
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+  border-radius: 26rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.admin-cat-badge--acc,
+.admin-acc-slots-badge--acc {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  max-width: none;
+  flex-shrink: 0;
+}
+
+.admin-acc-slots-badge--acc {
+  background: rgba(52, 199, 89, 0.92);
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 600;
+  padding: 8rpx 14rpx;
+  border-radius: 12rpx;
+  line-height: 1.3;
+}
+
+.admin-cat-badge--acc {
+  background: rgba(0, 122, 255, 0.9);
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: bold;
+  padding: 8rpx 16rpx;
+  border-radius: 12rpx;
+  max-width: 200rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-del-card-btn--acc {
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.shop-acc-cover-chrome-row:only-child {
+  justify-content: flex-end;
+}
+
+.admin-cat-badge--static {
+  background: rgba(0, 122, 255, 0.75);
+  pointer-events: none;
+}
+
+.admin-float--acc-cover {
+  z-index: 26;
+}
+
+.shop-acc-slot-empty {
+  width: 100%;
+  min-height: 480rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f2;
+  border-radius: 24rpx;
+  box-sizing: border-box;
+}
+
+.shop-acc-slot-empty-num {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #8e8e93;
+}
+
+.shop-acc-slot-empty-hint {
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #aeaeb2;
+}
+
+/* 配件编号多选弹层 */
+.acc-slot-picker-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 12000;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.acc-slot-picker-sheet {
+  width: 100%;
+  padding: 36rpx 32rpx calc(36rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  border-radius: 28rpx 28rpx 0 0;
+  box-sizing: border-box;
+}
+
+.acc-slot-picker-title {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+}
+
+.acc-slot-picker-sub {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #86868b;
+  line-height: 1.5;
+}
+
+.acc-slot-picker-scroll {
+  max-height: 52vh;
+  margin-top: 24rpx;
+}
+
+.acc-slot-picker-version {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  margin: 20rpx 0 12rpx;
+}
+
+.acc-slot-picker-version:first-child {
+  margin-top: 0;
+}
+
+.acc-slot-picker-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+  margin-bottom: 8rpx;
+}
+
+.acc-slot-chip {
+  min-width: 120rpx;
+  padding: 18rpx 28rpx;
+  text-align: center;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+  background: #f5f5f7;
+  border-radius: 16rpx;
+  border: 2rpx solid transparent;
+  box-sizing: border-box;
+}
+
+.acc-slot-chip.is-on {
+  color: #fff;
+  background: #007aff;
+  border-color: #007aff;
+}
+
+.acc-slot-picker-actions {
+  display: flex;
+  gap: 24rpx;
+  margin-top: 40rpx;
+}
+
+.acc-slot-picker-btn {
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+  text-align: center;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: 16rpx;
+}
+
+.acc-slot-picker-btn--cancel {
+  background: #f5f5f7;
+  color: #1d1d1f;
+}
+
+.acc-slot-picker-btn--ok {
+  background: #007aff;
+  color: #fff;
+}
+
 /* 管理员修改大类徽章 */
 .admin-cat-badge {
   position: absolute;
@@ -737,6 +1072,10 @@ page {
   border-radius: 12rpx;
   z-index: 20;
   pointer-events: auto;
+  max-width: 200rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ================= 分类区块 (Apple Store 级) ================= */
@@ -862,6 +1201,23 @@ page {
   height: 600rpx;
   overflow: visible;
 }
+
+/* 配件与产品共用轮播高度，卡片比例一致 */
+.shop-series-swiper--acc {
+  height: 600rpx;
+}
+
+.shop-series-swiper--acc .shop-series-swiper-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.shop-series-swiper--acc .shop-hero-card {
+  height: auto;
+  flex: 1 0 auto;
+  align-self: stretch;
+}
 .shop-series-swiper-item {
   box-sizing: border-box;
   height: 100%;
@@ -943,8 +1299,23 @@ page {
 .shop-hero-cover .admin-upload-hint {
   background: #f5f5f7;
 }
+/* 配件列表：与产品相同 4:3 封面 + 下方文案 */
+.shop-hero-card-inner--acc {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
 .shop-hero-cover--acc {
-  background: #f5f5f7;
+  background: #ffffff;
+}
+
+.shop-hero-meta--acc {
+  flex-shrink: 0;
+  padding: 24rpx 32rpx 28rpx;
+  background: #ffffff;
+  box-sizing: border-box;
 }
 .shop-hero-cover-img {
   position: absolute;
@@ -1446,6 +1817,13 @@ page {
 .opt-card.add-btn { height: 160rpx; justify-content: center; font-size: 50rpx; color: #ccc; border: 2rpx dashed #ccc; }
 
 /* 配件列表 (垂直列表) */
+.acc-pair-hint {
+  padding: 16rpx 8rpx 8rpx;
+  font-size: 24rpx;
+  color: #86868b;
+  line-height: 1.45;
+}
+
 .acc-list-v { display: flex; flex-direction: column; gap: 20rpx; }
 .acc-row-card {
   position: relative; /* 确保删除按钮相对于卡片定位 */

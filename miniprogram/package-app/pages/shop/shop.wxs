@@ -10,6 +10,36 @@ function formatPrice(price) {
   return num;
 }
 
+function formatSlotNums(nums) {
+  if (!nums || !nums.length) {
+    return '—';
+  }
+  var out = [];
+  for (var i = 0; i < nums.length; i++) {
+    var n = parseInt(nums[i], 10);
+    if (!isNaN(n) && n > 0) {
+      out.push(n);
+    }
+  }
+  if (!out.length) {
+    return '—';
+  }
+  out.sort(function (a, b) {
+    return a - b;
+  });
+  return out.join('、');
+}
+
+function formatVersionSlots(versionSlots, versionName) {
+  if (!versionSlots || !versionName) {
+    return '—';
+  }
+  var nums = versionSlots[versionName];
+  return formatSlotNums(nums);
+}
+
 module.exports = {
-  formatPrice: formatPrice
+  formatPrice: formatPrice,
+  formatSlotNums: formatSlotNums,
+  formatVersionSlots: formatVersionSlots
 };

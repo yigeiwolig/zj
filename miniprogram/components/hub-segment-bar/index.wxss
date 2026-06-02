@@ -1,0 +1,45 @@
+.hub-segment-wrap {
+  position: relative;
+  z-index: 120;
+  padding-left: 28rpx;
+  padding-right: 28rpx;
+  padding-bottom: 8rpx;
+  background: #f2f2f7;
+  box-sizing: border-box;
+}
+
+.hub-segment-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 40rpx;
+}
+
+.hub-segment-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-bottom: 8rpx;
+}
+
+.hub-segment-label {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: rgba(60, 60, 67, 0.55);
+  line-height: 1.2;
+  transition: font-size 0.22s ease, color 0.22s ease, font-weight 0.22s ease;
+}
+
+.hub-segment-tab.is-active .hub-segment-label {
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+}
+
+.hub-segment-indicator {
+  width: 40rpx;
+  height: 6rpx;
+  border-radius: 6rpx;
+  background: #1d1d1f;
+  margin-top: 10rpx;
+}

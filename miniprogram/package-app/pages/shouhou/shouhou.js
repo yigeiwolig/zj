@@ -1789,7 +1789,7 @@ Page({
             confirmText: '知道了',
             success: (res) => {
               if (res && res.confirm) {
-                wx.navigateTo({ url: '/package-app/pages/my/my', animationType: 'none' });
+                wx.navigateTo({ url: '/package-app/pages/profile/profile', animationType: 'none' });
               }
             }
           });
@@ -1824,7 +1824,7 @@ Page({
             if (res && res.confirm) {
               // 跳转到「我的」页面进行设备绑定（非 tabBar，直接 navigateTo）
               wx.navigateTo({
-                url: '/package-app/pages/my/my',
+                url: '/package-app/pages/profile/profile',
                 animationType: 'none',
                 success: () => {
                   console.log('[checkDeviceBeforeRepair] navigateTo 跳转成功');
@@ -1894,7 +1894,7 @@ Page({
           // 立即跳转，避免点击后体感卡顿
           console.log('[checkUnfinishedReturn] 准备跳转到 my 页面');
           wx.navigateTo({ 
-            url: '/package-app/pages/my/my',
+            url: '/package-app/pages/profile/profile',
             animationType: 'none',
             success: () => {
               console.log('[checkUnfinishedReturn] 跳转成功');
@@ -4808,7 +4808,7 @@ Page({
                 confirmText: '去个人中心',
                 cancelText: '继续选购',
                 callback: () => {
-                  wx.navigateTo({ url: '/package-app/pages/my/my', animationType: 'none' });
+                  wx.navigateTo({ url: '/package-app/pages/profile/profile', animationType: 'none' });
                 }
               });
             },
@@ -4976,7 +4976,7 @@ Page({
                         // 通知上一页刷新数据（如果是 my 页面）
                         setTimeout(() => {
                           const prevPage = pages[pages.length - 2];
-                          if (prevPage && prevPage.route && prevPage.route.endsWith('/my/my')) {
+                          if (prevPage && prevPage.route && (prevPage.route.endsWith('/profile/profile') || prevPage.route.endsWith('/my/my'))) {
                             if (typeof prevPage.loadMyActivitiesPromise === 'function') {
                               prevPage.loadMyActivitiesPromise().then(() => {
                                 console.log('[shouhou doPayment] my页面数据已刷新');
@@ -4988,7 +4988,7 @@ Page({
                     });
                   } else {
                     // 如果没有上一页，跳转到 my 页面
-                    wx.navigateTo({ url: '/package-app/pages/my/my', animationType: 'none' });
+                    wx.navigateTo({ url: '/package-app/pages/profile/profile', animationType: 'none' });
                     setTimeout(() => {
                       const pages = getCurrentPages();
                       const myPage = pages[pages.length - 1];

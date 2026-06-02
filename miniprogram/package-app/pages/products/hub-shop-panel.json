@@ -1,0 +1,12 @@
+{
+  "component": true,
+  "options": {
+    "virtualHost": true
+  },
+  "usingComponents": {
+    "hub-segment-bar": "/components/hub-segment-bar/index",
+    "shop-checkout-modal": "/package-app/components/shop-checkout-modal/index",
+    "custom-toast": "/components/custom-toast/index"
+  },
+  "styleIsolation": "isolated"
+}

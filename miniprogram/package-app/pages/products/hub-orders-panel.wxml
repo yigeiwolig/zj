@@ -1,0 +1,17 @@
+<wxs module="tools">
+  module.exports.firstChar = function(str) {
+    if (!str || str.length === 0) return '快';
+    return str.substring(0, 1);
+  }
+</wxs>
+<view class="hub-my-panel-root">
+  <include src="../my/my-layout.wxml" />
+  <shop-checkout-modal
+    show="{{showOrderModal}}"
+    is-admin="{{isAdmin}}"
+    portal-to-page="{{true}}"
+    bind:close="onCheckoutClose"
+    bind:paid="onCheckoutPaid"
+    bind:unpaid="onCheckoutUnpaid"
+  />
+</view>

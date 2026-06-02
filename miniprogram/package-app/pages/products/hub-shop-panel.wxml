@@ -1,0 +1,3 @@
+<view class="hub-shop-panel-root">
+  <include src="../shop/shop.wxml" />
+</view>

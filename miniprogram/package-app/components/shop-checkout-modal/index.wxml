@@ -1,0 +1,180 @@
+<root-portal enable="{{portalToPage}}">
+<view class="hub-embed-portal-layer">
+<view
+  class="checkout-modal-host checkout-sheet-host {{sheetClosing ? 'checkout-sheet-host--closing' : ''}}"
+  wx:if="{{show || sheetClosing}}"
+>
+  <view class="dark-mask {{sheetAnimIn && !sheetClosing ? 'checkout-mask--in' : ''}}" bindtap="closeCheckout"></view>
+
+  <view class="overlay full-screen-overlay checkout-sheet {{sheetAnimIn ? 'checkout-sheet--in' : ''}}">
+    <view class="checkout-header checkout-sheet-header">
+      <view class="nav-close" bindtap="closeCheckout">✕</view>
+      <view class="co-title">确认订单</view>
+      <view style="width:40rpx"></view>
+    </view>
+
+    <scroll-view scroll-y class="checkout-scroll">
+      <view class="checkout-body">
+        <view class="group-card">
+          <view class="cart-header-row">
+            <view class="cart-title">商品清单</view>
+            <view class="clear-btn-stylish" bindtap="clearCart">
+              <text>🗑 清空</text>
+            </view>
+          </view>
+          <block wx:for="{{cart}}" wx:key="id">
+            <view class="cart-row">
+              <view class="cr-info">
+                <view class="cr-name">{{item.name}}</view>
+                <view class="cr-spec">{{item.spec}}</view>
+              </view>
+              <view class="cr-action">
+                <view class="cr-price">¥{{item.total}}</view>
+                <view class="mini-stepper">
+                  <view class="ms-btn" catchtap="handleCartQty" data-index="{{index}}" data-type="minus">-</view>
+                  <view class="ms-num">{{item.quantity}}</view>
+                  <view class="ms-btn" catchtap="handleCartQty" data-index="{{index}}" data-type="plus">+</view>
+                </view>
+              </view>
+            </view>
+          </block>
+          <view wx:if="{{cart.length === 0}}" class="empty-cart">购物车暂无商品</view>
+        </view>
+
+        <view class="group-header-row">
+          <view class="group-title-text">配送方式</view>
+        </view>
+        <view class="shipping-box">
+          <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
+            <view class="ship-name">中通快递</view>
+            <view class="ship-price">
+              <block wx:if="{{checkoutAccessoryOnly}}">
+                {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
+                <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+              </block>
+              <block wx:else>包邮</block>
+            </view>
+          </view>
+          <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
+            <view class="ship-name">顺丰速运</view>
+            <view class="ship-price">
+              {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
+              <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="final-total-row">
+          <text class="ft-label">共 {{cart.length}} 件，总计</text>
+          <text class="ft-price">¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+        </view>
+
+        <view class="group-header-row">
+          <view class="group-title-text">收货信息</view>
+          <view class="paste-btn-header" bindtap="openSmartPasteModal">智能粘贴</view>
+        </view>
+
+        <view class="group-card form-group">
+          <view class="form-item">
+            <view class="form-label">收货人</view>
+            <input class="form-input" placeholder="请填写姓名" placeholder-class="ph-style" bindinput="onInput" data-key="name" value="{{orderInfo.name}}"/>
+          </view>
+          <view class="form-item">
+            <view class="form-label">手机号</view>
+            <input class="form-input" type="number" maxlength="11" placeholder="请填写11位手机号" placeholder-class="ph-style" bindinput="onInput" data-key="phone" value="{{orderInfo.phone}}"/>
+          </view>
+          <view class="form-item">
+            <view class="form-label">省市区</view>
+            <view class="address-picker-row">
+              <picker mode="selector" range="{{provinceList}}" range-key="name" value="{{provinceIndex}}" bindchange="onProvinceChange" class="address-picker-btn">
+                <view class="address-picker-btn-inner {{!selectedProvince ? 'placeholder' : ''}}">
+                  <text class="address-picker-text">{{selectedProvince || '请选择省份'}}</text>
+                </view>
+              </picker>
+              <picker mode="selector" range="{{cityList}}" range-key="name" value="{{cityIndex}}" bindchange="onCityChange" class="address-picker-btn" disabled="{{!selectedProvince}}">
+                <view class="address-picker-btn-inner {{!selectedCity ? 'placeholder' : ''}} {{!selectedProvince ? 'disabled' : ''}}">
+                  <text class="address-picker-text">{{selectedCity || '请选择城市'}}</text>
+                </view>
+              </picker>
+              <picker mode="selector" range="{{districtList}}" range-key="name" value="{{districtIndex}}" bindchange="onDistrictChange" class="address-picker-btn" disabled="{{!selectedCity}}">
+                <view class="address-picker-btn-inner {{!selectedDistrict ? 'placeholder' : ''}} {{!selectedCity ? 'disabled' : ''}}">
+                  <text class="address-picker-text">{{selectedDistrict || '请选择区县'}}</text>
+                </view>
+              </picker>
+            </view>
+          </view>
+          <view class="form-item">
+            <view class="form-label">详细地址</view>
+            <input class="form-input" placeholder="如：某某街道101号" placeholder-class="ph-style" bindinput="onInput" data-key="detailAddress" value="{{detailAddress}}"/>
+          </view>
+        </view>
+
+        <view class="disclaimer-section">
+          <view class="disclaimer-checkbox">
+            <checkbox-group bindchange="onDisclaimerChange">
+              <label class="disclaimer-label">
+                <checkbox value="agree" checked="{{agreedToDisclaimer}}"/>
+                <view class="disclaimer-text-wrapper">
+                  <text class="disclaimer-text">我已阅读并同意</text>
+                  <text class="disclaimer-link" catchtap="showDisclaimerModal">《免责协议》</text>
+                </view>
+              </label>
+            </checkbox-group>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+
+    <view class="checkout-footer-single">
+      <view class="btn-black full {{!agreedToDisclaimer ? 'grayed' : ''}}" catchtap="submitOrder">
+        <text class="btn-main">立即支付 ¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop">
+    <view class="custom-dialog-box" catchtouchmove="noop" catchtap="noop">
+      <view class="cd-title">{{dialog.title}}</view>
+      <rich-text class="cd-content" nodes="{{dialog.content}}"></rich-text>
+      <view class="cd-btn-row">
+        <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText}}</view>
+        <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText}}</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
+    <view class="auto-toast-box" catchtouchmove="noop">
+      <view class="at-title">{{autoToast.title}}</view>
+      <view class="at-content">{{autoToast.content}}</view>
+    </view>
+  </view>
+
+  <view class="smart-paste-mask {{smartPasteClosing ? 'closing' : ''}}" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;" catchtouchmove="noop" catchtap="noop">
+    <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
+      <view class="sp-title">智能粘贴</view>
+      <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
+      <textarea
+        class="sp-textarea"
+        placeholder="例如：张三 13800138000 广东省深圳市南山区..."
+        value="{{smartPasteVal}}"
+        bindinput="onSmartPasteInput"
+        adjust-position="{{true}}"
+        fixed="{{true}}"
+      ></textarea>
+      <view class="sp-btn-row">
+        <view class="sp-btn cancel" bindtap="closeSmartPasteModal">取消</view>
+        <view class="sp-btn confirm" bindtap="confirmSmartPaste">智能分析</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
+    <view class="loader" catchtouchmove="noop" catchtap="noop">
+      <text class="loader-label">{{loadingText}}</text>
+      <view class="loading-bar"></view>
+    </view>
+  </view>
+</view>
+</view>
+</root-portal>

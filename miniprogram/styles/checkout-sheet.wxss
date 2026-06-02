@@ -1,0 +1,86 @@
+/* 底部结算抽屉（商城页 + shop-checkout-modal 共用） */
+.checkout-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: auto !important;
+  width: 100%;
+  height: 90vh !important;
+  max-height: 90vh;
+  transform: translateY(100%);
+  transition: transform 0.34s cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 32rpx 32rpx 0 0;
+  background: #f5f5f7 !important;
+  box-sizing: border-box;
+  box-shadow: 0 -12rpx 48rpx rgba(0, 0, 0, 0.12);
+  z-index: 600;
+}
+
+.checkout-sheet.checkout-sheet--in {
+  transform: translateY(0);
+}
+
+.checkout-sheet-host--closing .checkout-sheet {
+  transform: translateY(100%);
+}
+
+.checkout-sheet-host .dark-mask {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.checkout-sheet-host .dark-mask.checkout-mask--in {
+  opacity: 1;
+}
+
+.checkout-sheet-host--closing .dark-mask {
+  opacity: 0;
+}
+
+.checkout-sheet-header {
+  flex-shrink: 0;
+  padding: 20rpx 32rpx 12rpx !important;
+  min-height: 0 !important;
+  height: auto !important;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  border-bottom: 1rpx solid #f0f0f2;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.checkout-sheet-header .co-title {
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.checkout-sheet .checkout-scroll {
+  flex: 1;
+  min-height: 0;
+  height: 0;
+  width: 100%;
+}
+
+.checkout-sheet .checkout-footer-single {
+  position: relative !important;
+  left: auto !important;
+  bottom: auto !important;
+  flex-shrink: 0;
+  width: 100%;
+  padding: 16rpx 30rpx calc(20rpx + env(safe-area-inset-bottom)) !important;
+  background: #fff;
+  border-top: 1rpx solid #eee;
+  box-sizing: border-box;
+}
+
+.checkout-sheet-host .dark-mask {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+}

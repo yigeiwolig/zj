@@ -24,14 +24,14 @@ const PRESETS = {
     desc: '配置方案图'
   },
   accThumb: {
-    cropScale: '1:1',
-    maxWidth: 600,
-    maxHeight: 600,
-    quality: 80,
-    maxBytes: 220 * 1024,
-    ratioLabel: '1:1',
-    sizeHint: '600×600',
-    desc: '配件缩略图'
+    cropScale: '4:3',
+    maxWidth: 1200,
+    maxHeight: 900,
+    quality: 82,
+    maxBytes: 420 * 1024,
+    ratioLabel: '4:3',
+    sizeHint: '1200×900',
+    desc: '配件列表封面'
   },
   accDetail: {
     cropScale: '4:3',

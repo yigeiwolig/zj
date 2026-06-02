@@ -1,15 +1,23 @@
 <!-- pages/shop/shop.wxml -->
 <wxs module="utils" src="./shop.wxs"></wxs>
-<view class="container">
+<view class="container {{hubEmbedInProducts ? 'container--hub-embed' : ''}} {{hubPageEnterAnim ? 'hub-page-enter' : ''}}">
+
+<!-- 枢纽顶栏：主页 / 商城（从 products 进入时显示，滑动切换） -->
+<hub-segment-bar
+  wx:if="{{showHubShell && !hubEmbedInProducts}}"
+  active="shop"
+  statusBarHeight="{{statusBarHeight}}"
+  bind:switch="onHubSegmentSwitch"
+/>
 
 <!-- ================= 1. 顶部导航 ================= -->
 <!-- 顶部返回，只在主列表显示，深色背景用白色箭头 -->
-<view class="header" wx:if="{{!showOrderModal && !showDetail && !showAccDetail}}" style="padding-top: {{statusBarHeight}}px;">
+<view class="header" wx:if="{{!showHubShell && !hubEmbedInProducts && !showOrderModal && !showDetail && !showAccDetail}}" style="padding-top: {{statusBarHeight}}px;">
   <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 4}}px;">
     <text class="back-arrow">‹</text>
   </view>
 </view>
-<view class="nav-header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
+<view class="nav-header" wx:if="{{!showHubShell && !hubEmbedInProducts}}" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
   <!-- 左侧：返回按钮 -->
   <view class="nav-left">
   </view>
@@ -29,9 +37,27 @@
   <view class="nav-right"></view>
 </view>
 
+<!-- 嵌入 products 枢纽：顶部分段栏在壳层，此处补管理模式入口 -->
+<view
+  class="shop-hub-admin-bar"
+  wx:if="{{hubEmbedInProducts && isAuthorized && !showOrderModal && !showDetail && !showAccDetail}}"
+>
+  <view class="shop-hub-admin-actions">
+    <view wx:if="{{!isAdmin}}" class="hub-admin-enter-btn" catchtap="toggleAdminMode">管理模式</view>
+    <view wx:else class="hub-admin-exit-btn" catchtap="toggleAdminMode">切回普通模式</view>
+  </view>
+</view>
+
 <!-- ================= 2. 主页面 ================= -->
-<scroll-view scroll-y class="main-scroll">
-  
+<scroll-view
+  scroll-y
+  class="main-scroll {{hubEmbedInProducts ? 'main-scroll--hub-embed' : ''}}"
+  style="{{hubEmbedInProducts && embedScrollHeight > 0 ? 'height:' + embedScrollHeight + 'px' : ''}}"
+>
+  <view class="shop-hub-loading" wx:if="{{hubEmbedInProducts && !isAdmin && (!categorySections || categorySections.length === 0) && (!seriesList || seriesList.length === 0)}}">
+    <text class="shop-hub-loading-text">正在加载商品…</text>
+  </view>
+
   <!-- 顶部轮播 (Hero)：视频固定 16:9；图片按真实比例（含 1:1），高度由 bindload + heroSwiperHeightPx 驱动 -->
   <view class="hero-swiper-box" wx:if="{{isAdmin || topMediaList.length > 0}}">
     <swiper wx:if="{{topMediaList.length > 0}}" class="hero-swiper" style="height: {{heroSwiperHeightPx}}px" indicator-dots="{{topMediaList.length > 1}}" circular="{{topMediaList.length > 1}}" current="{{heroCurrent}}" autoplay="{{(!isAdmin) && (!heroAutoCarouselEnabled)}}" bindchange="onSwiperChange">
@@ -163,7 +189,7 @@
   <!-- ================= 分类区块 (Apple Store 级) ================= -->
   <view class="shop-sections">
     <block wx:for="{{categorySections}}" wx:key="name" wx:for-item="section" wx:for-index="catIndex">
-      <view class="shop-section" wx:if="{{(section.rowMode === 'accessory' ? section.accItems.length : section.items.length) > 0 || isAdmin}}">
+      <view class="shop-section" wx:if="{{(section.rowMode === 'accessory' ? (section.accSlots.length > 0 || section.seriesSlotCount > 0 || isAdmin) : section.items.length > 0) || isAdmin}}">
         <view class="shop-section-head {{isAdmin ? 'shop-section-head--admin' : ''}}">
           <text class="shop-section-title {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditCategory' : ''}}" data-index="{{catIndex}}">{{section.name}}</text>
           <view wx:if="{{isAdmin}}" class="shop-section-mode-toggle" catchtap="toggleSectionRowMode" data-cat-index="{{catIndex}}">
@@ -191,7 +217,7 @@
               <view class="shop-hero-card" bindtap="handleProductClick" data-index="{{entry.index}}">
                 <view class="shop-hero-card-inner {{section.liveCurrent === slideIndex ? 'is-active' : 'is-inactive'}}">
                   <view class="shop-hero-cover">
-                    <image wx:if="{{entry.series.coverDisplay || entry.series.cover}}" class="shop-hero-cover-img" src="{{entry.series.coverDisplay || entry.series.cover}}" mode="aspectFit" lazy-load="true" binderror="onCoverImageError" data-index="{{entry.index}}" data-kind="high" />
+                    <image wx:if="{{entry.series.coverDisplay || entry.series.cover}}" class="shop-hero-cover-img" src="{{entry.series.coverDisplay || entry.series.cover}}" mode="aspectFill" lazy-load="true" binderror="onCoverImageError" data-index="{{entry.index}}" data-kind="high" />
                     <view wx:elif="{{isAdmin}}" class="admin-upload-hint">
                       <text class="admin-upload-hint-ratio">4:3</text>
                       <text class="admin-upload-hint-desc">列表封面</text>
@@ -230,7 +256,7 @@
         <!-- 配件横滑（同版式卡片，点击进入配件详情+购买） -->
         <block wx:else>
           <swiper
-            class="shop-series-swiper"
+            class="shop-series-swiper shop-series-swiper--acc"
             current="{{section.current}}"
             previous-margin="36rpx"
             next-margin="108rpx"
@@ -242,35 +268,50 @@
             bindanimationfinish="onSectionSwiperAnimationFinish"
             data-cat-index="{{catIndex}}"
           >
-            <swiper-item wx:for="{{section.accItems}}" wx:for-item="entry" wx:for-index="slideIndex" wx:key="slideKey" class="shop-series-swiper-item">
-              <view class="shop-hero-card" bindtap="openAccessoryDetailFromRow" data-index="{{entry.index}}">
-                <view class="shop-hero-card-inner {{section.liveCurrent === slideIndex ? 'is-active' : 'is-inactive'}}">
+            <swiper-item wx:for="{{section.accSlots}}" wx:for-item="slot" wx:for-index="slideIndex" wx:key="slideKey" class="shop-series-swiper-item">
+              <view class="shop-hero-card" bindtap="{{slot.acc ? 'openAccessoryDetailFromRow' : ''}}" data-index="{{slot.index}}">
+                <view class="shop-hero-card-inner shop-hero-card-inner--acc {{section.liveCurrent === slideIndex ? 'is-active' : 'is-inactive'}}">
+                  <block wx:if="{{slot.acc}}">
                   <view class="shop-hero-cover shop-hero-cover--acc">
-                    <image wx:if="{{entry.acc.imgDisplay || entry.acc.img}}" class="shop-hero-cover-img" src="{{entry.acc.imgDisplay || entry.acc.img}}" mode="aspectFit" lazy-load="true" />
+                    <view wx:if="{{isAdmin}}" class="acc-slot-num-badge acc-slot-num-badge--cover">{{slot.slotNum}}</view>
+                    <view class="shop-acc-cover-chrome" wx:if="{{isAdmin}}">
+                      <view class="shop-acc-cover-chrome-row">
+                        <view wx:if="{{isAdmin}}" class="admin-del-card-btn admin-del-card-btn--acc" catchtap="adminDelAcc" data-index="{{slot.index}}">删除</view>
+                      </view>
+                      <view wx:if="{{isAdmin}}" class="shop-acc-cover-chrome-row shop-acc-cover-chrome-row--chips">
+                        <view
+                          class="admin-acc-slots-badge admin-acc-slots-badge--acc"
+                          catchtap="adminChangeAccSlotNumbers"
+                          data-index="{{slot.index}}"
+                        >显示位置 {{utils.formatVersionSlots(slot.acc.versionSlots, section.name)}} ▾</view>
+                      </view>
+                    </view>
+                    <image wx:if="{{slot.acc.imgDisplay || slot.acc.img}}" class="shop-hero-cover-img" src="{{slot.acc.imgDisplay || slot.acc.img}}" mode="aspectFill" lazy-load="true" />
                     <view wx:elif="{{isAdmin}}" class="admin-upload-hint">
-                      <text class="admin-upload-hint-ratio">1:1</text>
-                      <text class="admin-upload-hint-desc">配件缩略图</text>
-                      <text class="admin-upload-hint-sub">建议 600×600</text>
+                      <text class="admin-upload-hint-ratio">4:3</text>
+                      <text class="admin-upload-hint-desc">配件列表封面</text>
+                      <text class="admin-upload-hint-sub">建议 1200×900</text>
                       <text class="admin-upload-hint-sub muted">点击 📷 · 自动压缩</text>
                     </view>
-                    <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadAccThumb" data-index="{{entry.index}}">📷</view>
-                    <view class="admin-del-card-btn" wx:if="{{isAdmin}}" catchtap="adminDelAcc" data-index="{{entry.index}}">删除</view>
-                    <view class="admin-cat-badge" wx:if="{{isAdmin}}" catchtap="adminChangeAccMainCategory" data-index="{{entry.index}}">
-                      {{entry.acc.mainCategory || section.name}} ▾
+                    <view class="admin-float admin-float--acc-cover" wx:if="{{isAdmin}}" catchtap="adminUploadAccThumb" data-index="{{slot.index}}">📷</view>
+                  </view>
+                  <view class="shop-hero-meta shop-hero-meta--acc">
+                    <text class="shop-hero-name {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditAccNameFromRow' : ''}}" data-index="{{slot.index}}">{{slot.acc.name || '新配件'}}</text>
+                    <view class="shop-hero-price-row">
+                      <text class="shop-hero-price {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditAccPriceFromRow' : ''}}" data-index="{{slot.index}}">¥{{utils.formatPrice(slot.acc.price)}}</text>
                     </view>
                   </view>
-                  <view class="shop-hero-meta">
-                    <text class="shop-hero-name">{{entry.acc.name}}</text>
-                    <view class="shop-hero-price-row">
-                      <text class="shop-hero-price">¥{{entry.acc.price}}</text>
-                    </view>
+                  </block>
+                  <view wx:elif="{{isAdmin}}" class="shop-acc-slot-empty" bindtap="adminAddAcc" data-category="{{section.name}}" data-slot-num="{{slot.slotNum}}">
+                    <text class="shop-acc-slot-empty-num">{{slot.slotNum}} 号位</text>
+                    <text class="shop-acc-slot-empty-hint">点击添加配件</text>
                   </view>
                 </view>
               </view>
             </swiper-item>
             <swiper-item wx:if="{{isAdmin}}" class="shop-series-swiper-item">
               <view class="shop-hero-card">
-                <view class="shop-hero-add-inner {{section.liveCurrent === section.accItems.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddAcc" data-category="{{section.name}}">
+                <view class="shop-hero-add-inner {{section.liveCurrent === section.accSlots.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddAcc" data-category="{{section.name}}">
                   <text class="shop-hero-add-icon">+</text>
                   <text class="shop-hero-add-label">添加配件</text>
                 </view>
@@ -298,7 +339,7 @@
 </scroll-view>
 
 <!-- 主列表悬浮购物车：纯路径 SVG + 篮内 MT 文字叠层（小程序对 SVG 内 text 常不渲染，故用叠层） -->
-<view class="shop-float-cart" wx:if="{{!showOrderModal && !showDetail && !showAccDetail}}" catchtap="onFloatingCartTap">
+<view class="shop-float-cart" wx:if="{{!hubEmbedInProducts && !showOrderModal && !showDetail && !showAccDetail}}" catchtap="onFloatingCartTap">
   <view class="shop-float-cart-inner">
     <image class="shop-float-cart-svg" src="/images/shop-float-cart.svg" mode="aspectFit" />
     <text class="shop-float-mt-overlay">MT</text>
@@ -306,10 +347,13 @@
   <view class="shop-float-cart-badge" wx:if="{{cart.length > 0}}">{{cart.length > 99 ? '99+' : cart.length}}</view>
 </view>
 
+<!-- 枢纽横滑 track 带 transform，内层 fixed 会相对轨道定位到主页列；嵌入时用 root-portal 挂到页面根 -->
+<root-portal enable="{{hubEmbedInProducts}}">
+<view class="hub-embed-portal-layer">
 <!-- ================= 3. 产品详情弹窗 (Detail) ================= -->
 <view class="full-modal {{showDetail ? 'active' : ''}}">
   <!-- 弹窗头 -->
-  <view class="modal-nav">
+  <view class="modal-nav modal-nav--safe-top" style="padding-top: {{statusBarHeight}}px;">
     <view class="nav-close" catchtap="closeDetail">✕</view>
     <!-- 管理员模式下：标题可点击编辑 -->
     <view 
@@ -498,15 +542,18 @@
           </view>
         </view>
 
-        <!-- C. 配件加购 -->
-        <view class="cfg-group" wx:if="{{accessoryList.length > 0 || isAdmin}}">
+        <!-- C. 配件加购：仅显示已在「显示位置」勾选了本版本+本格号的配件 -->
+        <view class="cfg-group" wx:if="{{seriesAccessoryList.length > 0 || isAdmin}}">
           <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="accTitle">
             {{currentSeries.labels.accTitle || '配件加购'}}
           </view>
+          <view class="acc-pair-hint" wx:if="{{seriesAccessoryList.length === 0 && isAdmin}}">
+            <text>请先在商城对应版本的「配件」行配置显示位置（版本+格号），才会出现在此处</text>
+          </view>
           <view class="acc-list-v">
-            <block wx:for="{{accessoryList}}" wx:key="id">
+            <block wx:for="{{seriesAccessoryList}}" wx:key="rowKey">
                <view class="acc-row-card {{item.selected ? 'selected' : ''}} {{item.isRequired ? 'required-highlight' : ''}} {{item.isRequired && item.selected ? 'required-selected' : ''}}" 
-                     bindtap="openAccessoryDetail" data-index="{{index}}">
+                     bindtap="openAccessoryDetail" data-index="{{item.listIndex}}">
             
             <view class="acc-thumb-box">
               <image wx:if="{{item.imgDisplay || item.img}}" class="acc-thumb" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
@@ -515,7 +562,7 @@
                 <text class="admin-upload-hint-sub">600×600</text>
               </view>
             </view>
-            <view wx:if="{{isAdmin}}" class="admin-float-thumb" catchtap="adminUploadAccThumb" data-index="{{index}}">📷</view>
+            <view wx:if="{{isAdmin}}" class="admin-float-thumb" catchtap="adminUploadAccThumb" data-index="{{item.listIndex}}">📷</view>
 
             <view class="acc-info">
                 <text class="acc-n">{{item.name}}</text>
@@ -526,14 +573,14 @@
 
             <view class="acc-add-btn {{item.selected ? 'checked' : ''}} {{item.isRequired ? 'required-btn' : ''}}" 
                   catchtap="toggleAccessorySelection" 
-                  data-index="{{index}}">
+                  data-index="{{item.listIndex}}">
                {{item.selected ? '已选' : '添加'}}
             </view>
             
-            <view wx:if="{{isAdmin}}" class="admin-del-corner-top" catchtap="adminDelAcc" data-index="{{index}}">✕</view>
+            <view wx:if="{{isAdmin}}" class="admin-del-corner-top" catchtap="adminDelAcc" data-index="{{item.listIndex}}">✕</view>
           </view>
             </block>
-      <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddAcc">+ 添加配件</view>
+      <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddAccForSeries">+ 添加配件（绑定当前产品格号）</view>
     </view>
   </view>
 
@@ -617,7 +664,7 @@
 
 <!-- ================= 5. 配件详情弹窗 ================= -->
 <view class="full-modal acc-detail-modal {{showAccDetail ? 'active' : ''}} {{accCheckoutActive && showOrderModal ? 'acc-detail-parked' : ''}}" hidden="{{accCheckoutActive && showOrderModal}}" style="z-index: 300;">
-  <view class="modal-nav acc-detail-nav" style="padding-top: {{statusBarHeight}}px;">
+  <view class="modal-nav acc-detail-nav modal-nav--safe-top" style="padding-top: {{statusBarHeight}}px;">
      <view class="nav-close" catchtap="onAccDetailNavClose">✕</view>
      <view class="modal-title">配件详情</view>
      <view class="acc-detail-nav-spacer"></view>
@@ -734,11 +781,11 @@
 </view>
 
 <!-- ================= 7. 订单确认/结算弹窗 ================= -->
-<view class="dark-mask" wx:if="{{showOrderModal}}" bindtap="closeOrderModal"></view>
+<view class="checkout-sheet-host {{orderSheetClosing ? 'checkout-sheet-host--closing' : ''}}" wx:if="{{showOrderModal || orderSheetClosing}}">
+<view class="dark-mask {{orderSheetAnimIn && !orderSheetClosing ? 'checkout-mask--in' : ''}}" bindtap="closeOrderModal"></view>
 
-<view class="overlay full-screen-overlay {{showOrderModal ? 'active' : ''}}" style="z-index: 600;">
-  <!-- 顶部 -->
-  <view class="checkout-header">
+<view class="overlay full-screen-overlay checkout-sheet {{orderSheetAnimIn ? 'checkout-sheet--in' : ''}}">
+  <view class="checkout-header checkout-sheet-header">
     <view class="nav-close" bindtap="closeOrderModal">✕</view>
     <view class="co-title">确认订单</view>
     <view style="width:40rpx"></view>
@@ -885,6 +932,7 @@
     </view>
   </view>
 </view>
+</view>
 
 <!-- ================= 8. 自定义编辑弹窗 ================= -->
 <view class="custom-modal-mask {{customModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" catchtouchmove="noop" bindtap="closeCustomEditModal">
@@ -987,6 +1035,34 @@
   </view>
 </view>
 
+<!-- 配件编号多选（挂 portal，避免枢纽横滑 transform 错位） -->
+<view class="acc-slot-picker-mask" wx:if="{{accSlotPickerVisible}}" catchtouchmove="noop" bindtap="closeAccSlotPicker">
+  <view class="acc-slot-picker-sheet" catchtap="noop">
+    <text class="acc-slot-picker-title">配置显示位置（可多选）</text>
+    <text class="acc-slot-picker-sub">勾选某版本+格号后：该版本「配件」行与对应序号的产品详情中才会出现</text>
+    <scroll-view scroll-y class="acc-slot-picker-scroll" enhanced show-scrollbar="{{false}}">
+      <block wx:for="{{accSlotPickerGroups}}" wx:for-item="group" wx:key="version">
+        <text class="acc-slot-picker-version">{{group.version}}</text>
+        <view class="acc-slot-picker-chips">
+          <view
+            wx:for="{{group.options}}"
+            wx:for-item="opt"
+            wx:key="num"
+            class="acc-slot-chip {{opt.on ? 'is-on' : ''}}"
+            catchtap="toggleAccSlotPickerOption"
+            data-version="{{group.version}}"
+            data-num="{{opt.num}}"
+          >{{opt.num}} 号</view>
+        </view>
+      </block>
+    </scroll-view>
+    <view class="acc-slot-picker-actions">
+      <view class="acc-slot-picker-btn acc-slot-picker-btn--cancel" catchtap="closeAccSlotPicker">取消</view>
+      <view class="acc-slot-picker-btn acc-slot-picker-btn--ok" catchtap="confirmAccSlotPicker">确定</view>
+    </view>
+  </view>
+</view>
+
 <!-- ================= 自定义加载动画（白色背景进度条） ================= -->
 <view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
   <view class="loader" catchtouchmove="noop" catchtap="noop">
@@ -994,6 +1070,9 @@
     <view class="loading-bar"></view>
   </view>
 </view>
+
+</view>
+</root-portal>
 
 </view>
 <!-- 全局自定义弹窗组件 -->

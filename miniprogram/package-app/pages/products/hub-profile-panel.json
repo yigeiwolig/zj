@@ -1,0 +1,8 @@
+{
+  "component": true,
+  "usingComponents": {
+    "custom-toast": "/components/custom-toast/index",
+    "hub-tab-bar": "/components/hub-tab-bar/index"
+  },
+  "styleIsolation": "apply-shared"
+}

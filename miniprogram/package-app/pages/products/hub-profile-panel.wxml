@@ -1,0 +1,9 @@
+<wxs module="tools">
+  module.exports.firstChar = function(str) {
+    if (!str || str.length === 0) return '快';
+    return str.substring(0, 1);
+  }
+</wxs>
+<view class="hub-my-panel-root">
+  <include src="../my/my-layout.wxml" />
+</view>

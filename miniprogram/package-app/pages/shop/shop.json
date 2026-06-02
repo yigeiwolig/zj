@@ -3,5 +3,7 @@
   "navigationBarTextStyle": "black",
   "navigationBarTitleText": "选购",
   "backgroundColor": "#F5F5F7",
-  "usingComponents": {}
+  "usingComponents": {
+    "hub-segment-bar": "/components/hub-segment-bar/index"
+  }
 }

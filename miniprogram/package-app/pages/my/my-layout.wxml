@@ -1,0 +1,1971 @@
+<!-- pages/my/my.wxml -->
+<import src="./return-required-items.wxml" />
+<wxs module="tools">
+  module.exports.firstChar = function(str) {
+    if (!str || str.length === 0) return '快';
+    return str.substring(0, 1);
+  }
+</wxs>
+<wxs module="memberTier">
+  function countOf(n) {
+    var c = parseInt(n, 10);
+    return isNaN(c) || c < 0 ? 0 : c;
+  }
+  function levelName(deviceCount) {
+    var n = countOf(deviceCount);
+    if (n >= 5) return '王者';
+    if (n >= 4) return '星耀';
+    if (n >= 3) return '钻石';
+    if (n >= 2) return '铂金';
+    return '普通黄金';
+  }
+  function badge(deviceCount) {
+    var lv = levelName(deviceCount);
+    if (lv === '普通黄金') return '普通黄金会员';
+    return lv + '尊享会员';
+  }
+  function theme(deviceCount) {
+    var n = countOf(deviceCount);
+    if (n >= 5) return 'king';
+    if (n >= 4) return 'star';
+    if (n >= 3) return 'diamond';
+    if (n >= 2) return 'platinum';
+    return 'gold';
+  }
+  module.exports.levelName = levelName;
+  module.exports.badge = badge;
+  module.exports.theme = theme;
+</wxs>
+
+<view class="container {{hasModalOpen ? 'modal-open' : ''}} {{showHubTabBar || hubInShell ? 'has-hub-tab' : ''}} {{hubInShell ? 'hub-in-shell' : ''}} {{hubPageEnterAnim ? 'hub-page-enter' : ''}}">
+
+  <!-- Tab 页顶栏（无返回键）；嵌入枢纽时仅当前 Tab 显示，避免 fixed 叠到首页 -->
+  <view
+    wx:if="{{(showHubTabBar || hubInShell) && (!hubInShell || active)}}"
+    class="header hub-tab-header {{hubInShell ? 'hub-tab-header--shell' : ''}} {{isAdmin && isAuthorized && !hubInShell ? 'hub-tab-header--admin' : ''}}"
+    style="padding-top: {{statusBarHeight}}px; {{hubInShell ? '' : 'height: ' + (statusBarHeight + navBarHeight) + 'px;'}}"
+  >
+    <block wx:if="{{hubInShell}}">
+      <view wx:if="{{hubView === 'orders' && (!isAdmin || !isAuthorized)}}" class="hub-tab-orders-head">
+        <view class="hub-tab-orders-title-wrap">
+          <view class="hub-tab-mt-chip" aria-hidden="true">MT</view>
+          <text class="hub-tab-page-title hub-tab-page-title--orders">订单</text>
+        </view>
+        <view wx:if="{{isAuthorized && !isAdmin}}" class="hub-tab-inline-admin" catchtap="toggleAdminMode">管理</view>
+      </view>
+      <text class="hub-tab-page-title" wx:elif="{{!isAdmin || !isAuthorized}}">我的</text>
+      <view class="hub-tab-header-actions" wx:if="{{isAuthorized && (isAdmin || hubView === 'profile')}}">
+        <view wx:if="{{!isAdmin}}" class="hub-admin-enter-btn" catchtap="toggleAdminMode">管理模式</view>
+        <view wx:else class="hub-admin-exit-btn" catchtap="toggleAdminMode">切回普通模式</view>
+      </view>
+    </block>
+    <block wx:else>
+      <text class="hub-tab-page-title" wx:if="{{!isAdmin || !isAuthorized}}">{{hubView === 'orders' ? '订单' : '我的'}}</text>
+      <view class="hub-tab-header-right" wx:if="{{isAuthorized && !isAdmin}}">
+        <view class="admin-toggle-btn" catchtap="toggleAdminMode">管理模式</view>
+      </view>
+      <view class="hub-admin-mode-bar" wx:if="{{isAuthorized && isAdmin}}">
+        <view class="hub-admin-exit-btn" catchtap="toggleAdminMode">切回普通模式</view>
+      </view>
+    </block>
+  </view>
+
+  <!-- 子页顶栏（带返回）；枢纽内嵌时不渲染，避免 EDIT 叠到订单/我的 -->
+  <view
+    wx:elif="{{!showHubTabBar && !hubInShell}}"
+    class="header"
+    style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;"
+  >
+    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
+      <text class="back-arrow">‹</text>
+    </view>
+    <view class="admin-toggle-wrapper" wx:if="{{isAuthorized}}">
+      <view class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
+        {{isAdmin ? 'ADMIN' : 'EDIT'}}
+      </view>
+    </view>
+  </view>
+
+  <!-- === 管理员：订单发货（订单 Tab） === -->
+  <block wx:if="{{isAdmin && hubView === 'orders' && (!hubInShell || active)}}">
+    <scroll-view
+      scroll-y
+      class="hub-admin-scroll {{hubInShell ? 'hub-admin-scroll--shell' : ''}}"
+      enhanced
+      show-scrollbar="{{false}}"
+    >
+    <view
+      class="hub-admin-orders-body {{hubInShell ? 'hub-admin-orders-body--shell' : ''}}"
+      style="padding-top: {{hubInShell ? 8 : (showHubTabBar ? (statusBarHeight + navBarHeight + 8) : 0)}}px;"
+    >
+    <view class="admin-header-row admin-header-row--hub admin-header-row--compact" style="padding-top: {{hubInShell ? 0 : (showHubTabBar ? 12 : (statusBarHeight + navBarHeight + 20))}}px;">
+      <view class="admin-page-title" wx:if="{{!showHubTabBar && !hubInShell}}">待处理订单</view>
+      <view class="admin-dev-actions admin-dev-actions--row">
+        <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试</view>
+        <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
+      </view>
+    </view>
+
+    <!-- 2. 待物料发出 (横向 Swiper) -->
+    <swiper 
+      class="order-swiper" 
+      bindchange="onOrderChange" 
+      circular 
+      previous-margin="60rpx" 
+      next-margin="60rpx"
+      catchtouchstart="noop"
+      catchtouchend="noop"
+      style="height: {{swiperHeight}}px; transition: height 0.3s ease;"
+    >
+      <!-- 如果没有待物料发出订单 -->
+      <swiper-item wx:if="{{pendingList.length === 0}}">
+        <view class="empty-card">🎉 太棒了，所有订单都已物料发出！</view>
+      </swiper-item>
+
+      <!-- 循环 pendingList -->
+      <swiper-item wx:for="{{pendingList}}" wx:key="id" wx:for-index="idx">
+        <view class="order-card detail-mode {{item.guidedPartsPurchase ? 'order-card-guided-parts' : ''}}" id="card-{{idx}}">
+          
+          <!-- 1. 头部：修复位置不对的问题 -->
+          <view class="card-header {{item.guidedPartsPurchase ? 'card-header--guided-ship' : ''}}">
+            <view class="card-header-left">
+              <view class="order-id-group">
+                <text class="order-label">{{item.guidedPartsPurchase ? '订单编号' : '订单号'}}</text>
+                <text class="order-val">{{item.orderId}}</text>
+              </view>
+            </view>
+            <view class="card-header-right">
+              <view class="status-tag {{item.realStatus}} {{item.guidedPartsPurchase ? 'status-tag-guided' : ''}}">
+                <text>{{item.guidedPartsPurchase ? '引导购配件·待发出' : item.statusText}}</text>
+                <block wx:if="{{item.shippingMethod}}">
+                  <view class="status-divider"></view>
+                  <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
+                </block>
+              </view>
+            </view>
+          </view>
+
+          <!-- 引导购配件：发货卡（参考设计稿：浅灰收件块 + 首行合并称呼/电话/复制 + | 配件清单） -->
+          <block wx:if="{{item.guidedPartsPurchase}}">
+            <view class="guided-ship-recipient">
+              <view class="guided-ship-line1">
+                <view class="guided-ship-line1-main">
+                  <text class="guided-ship-who">{{item.userNickname ? (item.userNickname + (item.userName ? (' (' + item.userName + ')') : '')) : (item.userName || '匿名用户')}}</text>
+                  <text class="guided-ship-phone-inline">{{item.userPhone}}</text>
+                </view>
+                <view class="guided-ship-copy-btn" catchtap="copyOrderAddress" data-index="{{idx}}" data-address="{{item.userAddr}}" data-name="{{item.userName}}" data-phone="{{item.userPhone}}">
+                  <text class="guided-ship-copy-btn-text">复制</text>
+                </view>
+              </view>
+              <text class="guided-ship-addr">{{item.userAddr}}</text>
+              <view class="guided-ship-remark" wx:if="{{item.orderRemark}}">
+                <text class="guided-ship-remark-full">备注：{{item.orderRemark}}</text>
+              </view>
+            </view>
+            <view class="goods-detail-list goods-detail-list--guided-ship">
+              <view class="guided-parts-list-head">
+                <view class="guided-parts-list-bar"></view>
+                <text class="guided-parts-list-title">配件清单</text>
+              </view>
+              <block wx:for="{{item.goodsList}}" wx:for-item="g" wx:key="index">
+                <view class="g-item g-item--guided-ship">
+                  <view class="g-info">
+                    <text class="g-n">{{g.name}}</text>
+                    <text class="g-s">{{g.spec}}</text>
+                  </view>
+                  <view class="g-count">x{{g.quantity}}</view>
+                  <view class="g-p">¥{{g.total}}</view>
+                </view>
+              </block>
+            </view>
+            <view class="card-footer-new card-footer-new--guided-ship">
+              <view class="total-row total-row--guided-ship">
+                <text class="time-text guided-ship-order-time">下单：{{item.createTimeShort}}</text>
+                <view class="price-box">
+                  <text>实付</text>
+                  <text
+                    class="price-num guided-ship-pay-num {{isAdmin && item.realStatus === 'PAID' ? 'editable-price' : ''}}"
+                    catchtap="adminModifyPrice"
+                    data-id="{{item.id}}"
+                    data-price="{{item.amount}}"
+                    data-status="{{item.realStatus}}">
+                    ¥{{isAdmin ? 0.01 : item.amount}}
+                  </text>
+                </view>
+              </view>
+              <view
+                class="admin-ship-btn admin-ship-btn-guided"
+                catchtap="adminShipOrder"
+                data-id="{{item.id}}"
+                data-orderid="{{item.orderId}}"
+                data-express="{{item.shippingMethod}}">
+                录入运单号并发货（引导购配件）
+              </view>
+            </view>
+          </block>
+          <block wx:else>
+            <view class="buyer-info-box">
+              <view class="b-row">
+                <text class="b-name" style="font-size: {{item.userNameFontSize || 30}}rpx;">{{item.userName || '匿名用户'}}</text>
+                <text class="b-phone">{{item.userPhone}}</text>
+              </view>
+              <view class="b-nickname-row" wx:if="{{isAdmin && item.userNickname}}">
+                <text class="b-nickname-label">用户昵称：</text>
+                <text class="b-nickname">{{item.userNickname}}</text>
+              </view>
+              <view class="b-addr-row">
+                <text class="b-addr">{{item.userAddr}}</text>
+                <view class="b-copy-btn" wx:if="{{isAdmin}}" bindtap="copyOrderAddress" data-index="{{idx}}" data-address="{{item.userAddr}}" data-name="{{item.userName}}" data-phone="{{item.userPhone}}">
+                  <text class="b-copy-text">复制</text>
+                </view>
+              </view>
+            </view>
+            <view class="goods-detail-list">
+              <view class="mini-tag">购物清单</view>
+              <block wx:for="{{item.goodsList}}" wx:for-item="g" wx:key="index">
+                <view class="g-item">
+                  <view class="g-info">
+                    <text class="g-n">{{g.name}}</text>
+                    <text class="g-s">{{g.spec}}</text>
+                  </view>
+                  <view class="g-count">x{{g.quantity}}</view>
+                  <view class="g-p">¥{{g.total}}</view>
+                </view>
+              </block>
+            </view>
+            <view class="card-footer-new">
+              <view class="total-row">
+                <text class="time-text">{{item.createTime}}</text>
+                <view class="price-box">
+                  <text>实付</text>
+                  <text
+                    class="price-num {{isAdmin && item.realStatus === 'PAID' ? 'editable-price' : ''}}"
+                    catchtap="adminModifyPrice"
+                    data-id="{{item.id}}"
+                    data-price="{{item.amount}}"
+                    data-status="{{item.realStatus}}">
+                    ¥{{isAdmin ? 0.01 : item.amount}}
+                  </text>
+                </view>
+              </view>
+              <view
+                class="admin-ship-btn"
+                catchtap="adminShipOrder"
+                data-id="{{item.id}}"
+                data-orderid="{{item.orderId}}"
+                data-express="{{item.shippingMethod}}">
+                录入运单号并物料发出
+              </view>
+            </view>
+          </block>
+        </view>
+      </swiper-item>
+    </swiper>
+    </view>
+    </scroll-view>
+
+  </block>
+
+  <!-- === 管理员：设备审核与维修（我的 Tab） === -->
+  <block wx:if="{{isAdmin && hubView === 'profile' && (!hubInShell || active)}}">
+    <scroll-view
+      scroll-y
+      class="hub-admin-scroll {{hubInShell ? 'hub-admin-scroll--shell' : ''}}"
+      enhanced
+      show-scrollbar="{{false}}"
+    >
+    <view
+      class="hub-admin-profile-body"
+      style="padding-top: {{hubInShell ? 8 : (showHubTabBar ? (statusBarHeight + navBarHeight + 8) : 0)}}px;"
+    >
+    <view class="admin-profile-toolbar">
+      <view class="admin-after-sales-segment">
+        <view
+          class="admin-after-sales-seg-item {{adminAfterSalesTab === 'repairs' ? 'is-active' : ''}}"
+          bindtap="switchAdminAfterSalesTab"
+          data-tab="repairs"
+        >待处理报修</view>
+        <view
+          class="admin-after-sales-seg-item {{adminAfterSalesTab === 'returns' ? 'is-active' : ''}}"
+          bindtap="switchAdminAfterSalesTab"
+          data-tab="returns"
+        >
+          <text>需寄回确认</text>
+          <text class="admin-seg-badge" wx:if="{{returnRequiredCount > 0}}">{{returnRequiredCount > 99 ? '99+' : returnRequiredCount}}</text>
+        </view>
+      </view>
+      <view class="admin-dev-actions">
+        <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试</view>
+        <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
+      </view>
+    </view>
+
+    <block wx:if="{{adminAfterSalesTab === 'repairs'}}">
+    <view class="section-label repair-section-label" wx:if="{{repairList.length > 0}}">PENDING REPAIRS / 待处理报修</view>
+    <view class="admin-panel-empty" wx:if="{{repairList.length === 0}}">暂无待处理报修</view>
+    <view class="repair-list-admin">
+      <block wx:for="{{repairList}}" wx:key="_id">
+        <view class="repair-admin-card">
+          <!-- 故障素材预览：视频/图片都支持 -->
+          <block wx:if="{{item.mediaPreviewUrl}}">
+            <block wx:if="{{item.isImageMedia}}">
+            <image
+              src="{{item.mediaPreviewUrl}}"
+              mode="aspectFill"
+              class="repair-image"
+              bindtap="previewImage"
+              data-url="{{item.mediaPreviewUrl}}"
+              lazy-load="true"
+            />
+            </block>
+            <video wx:else src="{{item.mediaPreviewUrl}}" class="repair-video" controls preload="metadata"></video>
+          </block>
+          <view wx:else class="repair-media-empty">素材加载失败</view>
+          
+          <!-- 信息 -->
+          <view class="repair-info">
+            <view class="r-title-row">
+              <view class="r-title">{{item.displayModel || item.model}} - {{item.contact.name}}</view>
+              <view class="status-tag {{item.realStatus}}" style="margin-left: 16rpx;" wx:if="{{item.shippingMethod}}">
+                <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
+              </view>
+            </view>
+            <view class="r-desc">"{{item.description}}"</view>
+            <view class="r-addr-row">
+              <text class="r-addr">{{item.contact.address}}</text>
+              <view 
+                class="r-copy-btn" 
+                bindtap="copyRepairAddress"
+                data-name="{{item.contact.name}}"
+                data-phone="{{item.contact.phone}}"
+                data-address="{{item.contact.address}}"
+              >
+                <text class="r-copy-text">复制商家地址</text>
+              </view>
+            </view>
+            <!-- 🔴 新增：质保状态显示，无质保时显示「用户质保已过期」 -->
+            <view class="r-warranty-status expired" wx:if="{{item.warrantyExpired === true || (item.expiryDate && item.remainingDays === 0)}}">
+              <text class="warranty-expired-tag">用户质保已过期</text>
+              <text class="warranty-expired-info" wx:if="{{item.expiryDate}}">到期日：{{item.expiryDate}}</text>
+            </view>
+            <view class="r-warranty-status normal" wx:elif="{{item.remainingDays !== undefined && item.remainingDays > 0}}">
+              <text class="warranty-normal-tag">剩余质保：{{item.remainingDays}}天</text>
+            </view>
+          </view>
+          
+          <!-- 需要寄回开关 -->
+          <view class="repair-return-switch">
+            <text class="switch-label">需要寄回</text>
+            <switch 
+              checked="{{item.needReturn}}" 
+              bindchange="toggleReturnRequired" 
+              data-id="{{item._id}}"
+              color="#007AFF"
+            />
+          </view>
+          
+          <!-- 状态显示 -->
+          <view class="repair-status-info" wx:if="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT'}}">
+            <text class="repair-status-text">用户已寄出快递</text>
+            <text class="repair-tracking-id" wx:if="{{item.returnTrackingId}}">运单号：{{item.returnTrackingId}}</text>
+          </view>
+          
+          <!-- 操作按钮 -->
+          <view class="repair-actions">
+            <!-- 如果用户已寄出，显示维修完成按钮 -->
+            <view class="r-btn complete" wx:if="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT'}}" bindtap="adminCompleteRepair" data-id="{{item._id}}">维修完成</view>
+            <!-- 如果维修完成已寄出，显示状态 -->
+            <view class="repair-status-info" wx:if="{{item.status === 'REPAIR_COMPLETED_SENT'}}">
+              <text class="repair-status-text">维修完成已寄出</text>
+              <text class="repair-tracking-id" wx:if="{{item.trackingId}}">运单号：{{item.trackingId}}</text>
+            </view>
+            <!-- 其他状态：主按钮 + 次要操作（竖向排列，便于点击） -->
+            <block wx:if="{{item.returnStatus !== 'USER_SENT' && item.status !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+              <view class="repair-actions-primary">
+                <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单备件寄出</view>
+              </view>
+              <view class="repair-actions-secondary repair-actions-grid">
+                <view class="r-btn purchase grid-half" bindtap="openPurchasePartsModal" data-item="{{item}}">请购买配件</view>
+                <view class="r-btn tutorial grid-half" bindtap="resolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
+                <view class="r-btn return grid-full" bindtap="requestUserReturn" data-id="{{item._id}}">需要寄回产品维修</view>
+              </view>
+            </block>
+          </view>
+        </view>
+      </block>
+    </view>
+    </block>
+
+    <view class="admin-returns-inline" wx:if="{{adminAfterSalesTab === 'returns'}}">
+      <view class="section-label repair-section-label">RETURN ORDERS / 需寄回确认</view>
+      <template is="returnRequiredItems" />
+    </view>
+    </view>
+
+    <block wx:if="{{auditList.length > 0}}">
+    <view class="section-label">PENDING AUDITS / 待审核申请</view>
+    <swiper
+      class="audit-swiper"
+      circular
+      previous-margin="60rpx"
+      next-margin="60rpx"
+    >
+      <swiper-item wx:for="{{auditList}}" wx:key="_id">
+        <view class="audit-card">
+          <view class="audit-row">
+            <text class="audit-model">{{item.productModel}}</text>
+            <text class="audit-sn">SN: {{item.sn}}</text>
+          </view>
+          <view class="audit-row">
+            <text class="audit-date">用户填: {{item.buyDate}}</text>
+            <text class="audit-type">{{item.bindType == 'new' ? '全新' : '二手'}}</text>
+          </view>
+          <view class="audit-imgs">
+            <image src="{{item.imgReceipt}}" mode="aspectFill" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgReceipt}}" lazy-load="true" binderror="onMyAuditImageError" data-index="{{index}}" data-field="imgReceipt"></image>
+            <image wx:if="{{item.imgChat}}" src="{{item.imgChat}}" mode="aspectFill" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgChat}}" lazy-load="true" binderror="onMyAuditImageError" data-index="{{index}}" data-field="imgChat"></image>
+          </view>
+          <view class="audit-actions">
+            <view class="audit-btn reject" catchtap="handleReject" data-id="{{item._id}}">拒绝</view>
+            <view class="audit-btn approve" catchtap="openAuditModal" data-item="{{item}}">审核设置</view>
+          </view>
+        </view>
+      </swiper-item>
+    </swiper>
+    </block>
+    </scroll-view>
+
+  </block>
+
+  <!-- 普通用户：商城订单（订单 Tab） -->
+  <block wx:if="{{!isAdmin && hubView === 'orders' && (!hubInShell || active)}}">
+    <scroll-view
+      scroll-y
+      class="hub-orders-scroll {{hubInShell ? 'hub-orders-scroll--shell' : ''}}"
+      enhanced
+      show-scrollbar="{{false}}"
+    >
+    <view
+      class="hub-orders-body {{hubInShell ? 'hub-orders-body--shell' : ''}}"
+      style="padding-top: {{hubInShell ? 0 : (showHubTabBar ? (statusBarHeight + navBarHeight + 12) : 0)}}px;"
+    >
+    <!-- 情况 A: 有订单，显示滑动列表 -->
+    <swiper 
+      wx:if="{{orders.length > 0}}"
+      class="order-swiper order-swiper--hub" 
+      bindchange="onOrderChange" 
+      circular 
+      previous-margin="60rpx" 
+      next-margin="60rpx"
+      catchtouchstart="noop"
+      catchtouchend="noop"
+      style="height: {{swiperHeight}}px; transition: height 0.3s ease;"
+    >
+      <swiper-item wx:for="{{orders}}" wx:key="id" wx:for-index="idx">
+        <view class="order-card detail-mode" id="card-{{idx}}">
+          
+          <!-- 1. 头部 -->
+          <view class="card-header">
+            <view class="card-header-left">
+              <view class="order-id-group">
+                <view class="order-label-row">
+                  <text class="hub-order-mt-chip hub-order-mt-chip--sm">MT</text>
+                  <text class="order-label">订单号</text>
+                </view>
+                <text class="order-val">{{item.orderId}}</text>
+              </view>
+            </view>
+            <view class="card-header-right">
+              <view class="status-tag {{item.realStatus}}">
+                <text>{{item.statusText}}</text>
+                <block wx:if="{{item.shippingMethod}}">
+                  <view class="status-divider"></view>
+                  <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
+                </block>
+              </view>
+            </view>
+          </view>
+
+          <!-- 收货信息（用户订单 Tab 内折叠为单行摘要） -->
+          <view class="order-ship-summary" wx:if="{{item.userAddr}}">
+            <text class="order-ship-label">收货</text>
+            <text class="order-ship-text">{{item.userName}} {{item.userPhone}} · {{item.userAddr}}</text>
+          </view>
+
+          <!-- 商品列表 -->
+          <view class="goods-detail-list">
+            <view class="mini-tag mini-tag--mt">MT · 购物清单</view>
+            <block wx:for="{{item.goodsList}}" wx:for-item="g" wx:key="index">
+              <view class="g-item">
+                <view class="g-info">
+                  <text class="g-n">{{g.name}}</text>
+                  <text class="g-s">{{g.spec}}</text>
+                </view>
+                <view class="g-count">x{{g.quantity}}</view>
+                <view class="g-p">¥{{g.total}}</view>
+              </view>
+            </block>
+          </view>
+
+          <!-- 底部 -->
+          <view class="card-footer-new">
+            <view class="total-row">
+              <text class="time-text">{{item.createTime}}</text>
+              <view class="price-box">
+                <text>实付</text> 
+                <!-- 【修改】给金额加上点击事件 -->
+                <!-- 增加一个 editable-price 类名，如果是管理员且未支付，显示虚线提示可点 -->
+                <text 
+                  class="price-num {{isAdmin && item.realStatus === 'UNPAID' ? 'editable-price' : ''}}" 
+                  catchtap="adminModifyPrice" 
+                  data-id="{{item.id}}" 
+                  data-price="{{item.amount}}"
+                  data-status="{{item.realStatus}}">
+                  ¥{{isAdmin ? 0.01 : item.amount}}
+                </text>
+              </view>
+            </view>
+
+            <!-- 1. 待付款：显示操作按钮 -->
+            <view wx:if="{{item.realStatus === 'UNPAID'}}" class="action-row-right">
+              
+              <!-- 【新增】左侧的取消订单按钮 -->
+              <view class="btn-mini outline-red" catchtap="userCancelOrder" data-id="{{item.id}}">
+                取消订单
+              </view>
+
+              <!-- 右侧的支付按钮 -->
+              <view class="btn-mini black" catchtap="repayOrder" data-item="{{item}}">
+                立即支付
+              </view>
+              
+            </view>
+
+            <!-- 3. 运输中：查看物流 + 按订单来源查看对应教程（先确认收货再跳转） -->
+            <view wx:if="{{item.realStatus === 'SHIPPED'}}" class="action-row-right">
+              <!-- 左侧：查看物流 -->
+              <view 
+                class="btn-mini outline" 
+                catchtap="viewLogisticsDetail" 
+                data-sn="{{item.trackingId}}"
+                data-tail-required="2427"
+                data-phone="{{item.userPhone || ''}}">
+                查看物流
+              </view>
+              <!-- 右侧：shouhou 下单显示售后教程，shop 普通下单显示安装教程 -->
+              <view 
+                class="btn-mini black" 
+                catchtap="viewTutorialAndSign" 
+                data-id="{{item.id}}" 
+                data-model="{{item.goodsList && item.goodsList[0] ? (item.goodsList[0].spec || item.goodsList[0].name) : ''}}"
+                data-dest="{{item.tutorialDest || 'azjc'}}">
+                {{item.guidedPartsPurchase ? '查看售后教程' : '查看安装教程'}}
+              </view>
+            </view>
+
+            <!-- 4. 已完成：安装教程查看码 + 回顾教程 -->
+            <view wx:if="{{item.realStatus === 'SIGNED'}}" class="action-row-right">
+              <!-- 安装教程查看码按钮（左侧，边框样式） -->
+              <view 
+                class="btn-mini outline" 
+                catchtap="generateShareCode" 
+                data-id="{{item.id}}"
+                data-orderid="{{item.orderId}}">
+                安装教程查看码
+              </view>
+              <!-- 回顾教程按钮（右侧，黑底白字） -->
+              <view 
+                class="btn-mini black" 
+                catchtap="viewTutorialOnly">
+                回顾教程
+              </view>
+            </view>
+
+          </view>
+        </view>
+      </swiper-item>
+    </swiper>
+
+    <!-- 情况 B: 没订单，显示"去选购商品"诱导卡片 -->
+    <view 
+      wx:if="{{orders.length === 0}}"
+      class="empty-order-card" 
+      bindtap="goToShop"
+    >
+      <view class="empty-content">
+        <view class="empty-title">暂无订单</view>
+        <view class="empty-desc">在 MT 商城下单后，可在此查看物流进度</view>
+        
+        <view class="go-shop-btn">去商城选购 ➔</view>
+      </view>
+    </view>
+
+    <!-- 购物车（与商城 my_cart 同步） -->
+    <view class="hub-cart-section">
+      <view class="hub-cart-head">
+        <view class="hub-cart-head-left">
+          <text class="hub-cart-mt-chip">MT</text>
+          <text class="hub-cart-title">购物车</text>
+        </view>
+        <text class="hub-cart-count" wx:if="{{hubCart.length > 0}}">{{hubCart.length}} 件</text>
+      </view>
+
+      <block wx:if="{{hubCart.length > 0}}">
+        <view
+          class="hub-cart-item"
+          wx:for="{{hubCart}}"
+          wx:key="index"
+        >
+          <view class="hub-cart-item-main">
+            <text class="hub-cart-name">{{item.name}}</text>
+            <text class="hub-cart-spec" wx:if="{{item.spec}}">{{item.spec}}</text>
+          </view>
+          <view class="hub-cart-item-side">
+            <text class="hub-cart-price">¥{{item.total}}</text>
+            <view class="hub-cart-stepper">
+              <view class="hub-cart-step-btn" catchtap="onHubCartQty" data-index="{{index}}" data-type="minus">−</view>
+              <text class="hub-cart-step-num">{{item.quantity}}</text>
+              <view class="hub-cart-step-btn" catchtap="onHubCartQty" data-index="{{index}}" data-type="plus">+</view>
+            </view>
+          </view>
+        </view>
+        <view class="hub-cart-footer">
+          <text class="hub-cart-total-label">合计</text>
+          <text class="hub-cart-total-price">¥{{hubCartTotal}}</text>
+        </view>
+        <view class="hub-cart-checkout-btn" bindtap="goToShopCheckout">去结算</view>
+      </block>
+
+      <view wx:else class="hub-cart-empty" bindtap="goToShop">
+        <text class="hub-cart-empty-text">购物车还是空的</text>
+        <text class="hub-cart-empty-link">去商城逛逛 →</text>
+      </view>
+    </view>
+    </view>
+    </scroll-view>
+  </block>
+
+  <!-- 普通用户：我的 Tab -->
+  <block wx:if="{{!isAdmin && hubView === 'profile' && (!hubInShell || active)}}">
+    <scroll-view
+      scroll-y
+      class="hub-profile-scroll {{hubInShell ? 'hub-profile-scroll--shell' : ''}}"
+      enhanced
+      show-scrollbar="{{false}}"
+    >
+    <view
+      class="hub-profile-body"
+      style="padding-top: {{hubInShell ? 0 : (showHubTabBar ? (statusBarHeight + navBarHeight + 12) : 40)}}px;"
+    >
+    <view class="profile-hub-wrap">
+      <view class="profile-member-card">
+        <view class="profile-member-top">
+          <view class="profile-avatar">{{tools.firstChar(userName)}}</view>
+          <view class="profile-member-info">
+            <text class="profile-member-name" style="font-size: {{userNameFontSize}}rpx;">{{userName}}</text>
+            <text class="profile-member-badge profile-member-badge--{{memberTier.theme(deviceList.length)}}">{{memberTier.badge(deviceList.length)}}</text>
+          </view>
+        </view>
+        <view class="profile-stats-row">
+          <view class="profile-stat-cell">
+            <text class="profile-stat-num">{{deviceList.length}}</text>
+            <text class="profile-stat-label">已绑定设备</text>
+          </view>
+          <view class="profile-stat-divider"></view>
+          <view class="profile-stat-cell">
+            <text class="profile-stat-num profile-stat-num--text profile-tier-num--{{memberTier.theme(deviceList.length)}}">{{memberTier.levelName(deviceList.length)}}</text>
+            <text class="profile-stat-label">会员等级</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 需寄回：票据式提醒卡 -->
+    <view
+      id="return-required-ticket"
+      wx:if="{{myReturnRequiredRepair && myReturnRequiredRepair.rrTicketVisible}}"
+      class="return-required-card new-style rr-reminder-card rr-ticket-card rr-stamp-card {{afterSalesState.returnTicket.cardModeClass || ''}}"
+    >
+      <view class="rr-stamp-perf-edge rr-stamp-perf-edge--left">
+        <view class="rr-stamp-perf-dot-v" wx:for="{{[0,1,2,3,4,5,6,7,8,9,10,11]}}" wx:key="*this"></view>
+      </view>
+      <view class="rr-stamp-perf-edge rr-stamp-perf-edge--right">
+        <view class="rr-stamp-perf-dot-v" wx:for="{{[0,1,2,3,4,5,6,7,8,9,10,11]}}" wx:key="*this"></view>
+      </view>
+      <view class="rr-reminder-inner">
+        <view class="rr-stamp-perf-row rr-stamp-perf-row--top">
+          <view class="rr-stamp-perf-dot" wx:for="{{[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]}}" wx:key="*this"></view>
+        </view>
+        <view class="rr-card-header rr-ticket-header">
+          <view class="rr-ticket-header-main">
+            <view class="rr-card-title">{{afterSalesState.returnTicket.titleText}}</view>
+            <view class="rr-ticket-status {{afterSalesState.returnTicket.statusClass}}">
+              <text class="rr-ticket-status-text">{{afterSalesState.returnTicket.statusText}}</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="rr-card-body rr-ticket-body">
+          <view class="rr-card-block rr-card-block--primary" wx:if="{{afterSalesState.returnTicket.showCountdownAlert}}">
+            <view class="rr-warranty-alert {{myReturnRequiredRepair.isOverdue ? 'overdue' : ''}}">
+              <view class="alert-bar"></view>
+              <view class="alert-main-col">
+                <text class="alert-kicker">{{myReturnRequiredRepair.isOverdue ? '已超时' : '重要提醒'}}</text>
+                <view class="alert-lead" wx:if="{{!myReturnRequiredRepair.isOverdue && myReturnRequiredRepair.countdownDays !== null}}">
+                  请在<text class="highlight-days">{{myReturnRequiredRepair.countdownDays}}天</text>内寄回故障配件
+                </view>
+                <view class="alert-lead" wx:elif="{{myReturnRequiredRepair.isOverdue}}">请尽快寄回故障配件</view>
+                <view class="alert-lead" wx:else>请尽快寄回故障配件</view>
+                <view class="alert-desc">
+                  <block wx:if="{{!myReturnRequiredRepair.isOverdue && myReturnRequiredRepair.countdownDays !== null}}">
+                    逾期未寄回将强制扣除半年（<text class="highlight-penalty">180天</text>）质保。
+                  </block>
+                  <block wx:else>
+                    您已逾期未寄回，系统将强制扣除半年（<text class="highlight-penalty">180天</text>）质保。
+                  </block>
+                </view>
+              </view>
+            </view>
+          </view>
+
+          <view class="rr-ticket-kv">
+            <view class="rr-ticket-kv-row">
+              <text class="rr-label">产品型号</text>
+              <text class="rr-value rr-value--mono">{{myReturnRequiredRepair.model}}</text>
+            </view>
+            <view class="rr-ticket-kv-row">
+              <text class="rr-label">报修时间</text>
+              <text class="rr-value rr-value--mono">{{myReturnRequiredRepair.createTime}}</text>
+            </view>
+            <view class="rr-ticket-kv-row" wx:if="{{myReturnRequiredRepair.shipRemark}}">
+              <text class="rr-label">备件寄出备注</text>
+              <text class="rr-value">{{myReturnRequiredRepair.shipRemark}}</text>
+            </view>
+            <view class="rr-ticket-kv-row" wx:if="{{myReturnRequiredRepair.returnNote}}">
+              <text class="rr-label">备注</text>
+              <text class="rr-value">{{myReturnRequiredRepair.returnNote}}</text>
+            </view>
+          </view>
+          <view class="rr-repair-details" wx:if="{{afterSalesState.returnTicket.showRepairDetails}}">
+            <view class="rr-repair-details-title">维修费用明细</view>
+            <view class="rr-repair-table">
+              <view class="rr-table-header">
+                <view class="rr-table-col-name">项目</view>
+                <view class="rr-table-col-price">价格</view>
+              </view>
+              <block wx:for="{{myReturnRequiredRepair.repairItems}}" wx:key="index">
+                <view class="rr-table-row">
+                  <view class="rr-table-col-name">{{item.name}}</view>
+                  <view class="rr-table-col-price">¥{{item.price}}</view>
+                </view>
+              </block>
+              <view class="rr-table-footer">
+                <view class="rr-table-col-name">总计</view>
+                <view class="rr-table-col-price total">¥{{isAdmin ? 0.01 : (myReturnRequiredRepair.repairTotalPrice || 0)}}</view>
+              </view>
+            </view>
+          </view>
+
+          <view class="rr-payment-section rr-payment-section-stamp" wx:if="{{afterSalesState.returnTicket.showPaymentSection}}">
+            <view class="rr-payment-status-text rr-payment-status-text-paid" wx:if="{{myReturnRequiredRepair.repairPaid === true}}">
+              <text class="rr-payment-paid">✓ 已支付</text>
+            </view>
+            <view class="rr-payment-status-text" wx:else>
+              <view class="rr-payment-unpaid-wrap">
+              </view>
+              <view class="rr-payment-btn" bindtap="payRepairFee" data-id="{{myReturnRequiredRepair._id}}">立即支付</view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <block wx:if="{{myReturnRequiredRepair.needReturn && afterSalesState.returnTicket.footerMode === 'fill_and_copy'}}">
+        <view class="rr-ticket-divider-wrap">
+          <view class="rr-ticket-notch rr-ticket-notch-l"></view>
+          <view class="rr-ticket-notch rr-ticket-notch-r"></view>
+          <view class="rr-ticket-dash"></view>
+        </view>
+        <view class="rr-ticket-footer">
+          <view class="rr-ticket-ship-line" wx:if="{{afterSalesState.returnTicket.showShippingTip}}">
+            <text class="rr-ticket-ship-text">寄件提醒：请勿寄到付件，到付件仓库可能拒收。</text>
+          </view>
+          <view class="rr-user-actions-simple rr-user-actions-row">
+            <view class="rr-simple-btn secondary" bindtap="copyReturnAddress">复制商家地址</view>
+            <view class="rr-simple-btn primary" bindtap="openReturnAddressModal">填写寄回信息</view>
+          </view>
+        </view>
+      </block>
+      <view class="rr-stamp-perf-row rr-stamp-perf-row--bottom">
+        <view class="rr-stamp-perf-dot" wx:for="{{[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18]}}" wx:key="*this"></view>
+      </view>
+    </view>
+
+    <!-- 仅需购买配件卡片：置于产品设备之上，与需寄回卡同系黄色光影 -->
+    <view class="pp-card-container pp-card-highlight" wx:if="{{myPurchasePartsRepair && myPurchasePartsRepair.purchasePartsStatus !== 'completed'}}">
+      <view class="pp-card">
+        <view class="pp-header">
+          <view class="pp-title-group">
+            <view class="pp-icon-box">!</view>
+            <text class="pp-title-text">待购配件</text>
+          </view>
+          <view class="pp-status-tag {{myPurchasePartsRepair.purchasePartsStatus === 'completed' ? 'status-green' : ''}}">
+            {{myPurchasePartsRepair.purchasePartsStatus === 'completed' ? '已完成' : '待购买'}}
+          </view>
+        </view>
+        <view class="pp-content">
+          <block wx:for="{{myPurchasePartsRepair.purchasePartsList}}" wx:key="model">
+            <view class="pp-item-group">
+              <view class="pp-main-info">{{item.model}}</view>
+              <view class="pp-parts-tags" wx:if="{{item.parts && item.parts.length}}">
+                <view class="pp-part-tag" wx:for="{{item.parts}}" wx:for-item="part" wx:key="*this">{{part}}</view>
+              </view>
+            </view>
+          </block>
+          <view class="pp-note-info" wx:if="{{myPurchasePartsRepair.purchasePartsNote}}">
+            <text class="pp-note-label">备注：</text>
+            <text class="pp-note-text">{{myPurchasePartsRepair.purchasePartsNote}}</text>
+          </view>
+        </view>
+        <view class="pp-meta-grid">
+          <view class="pp-meta-item">
+            <text class="pp-label">产品型号</text>
+            <text class="pp-meta-val">{{myPurchasePartsRepair.model}}</text>
+          </view>
+          <view class="pp-meta-item pp-align-right">
+            <text class="pp-label">报修时间</text>
+            <text class="pp-meta-val time-font">{{myPurchasePartsRepair.createTime}}</text>
+          </view>
+        </view>
+        <view class="pp-btn-buy" 
+              wx:if="{{myPurchasePartsRepair.purchasePartsStatus !== 'completed'}}" 
+              bindtap="goToShouhouForParts" 
+              hover-class="pp-btn-hover">
+          去购买配件
+        </view>
+        <view class="pp-done-tip" wx:if="{{myPurchasePartsRepair.purchasePartsStatus === 'completed'}}">
+          <text class="success-icon">✓</text> 订单已完成，配件到货后请查看维修教程
+        </view>
+      </view>
+    </view>
+
+    <view class="section-label section-label--cn">我的设备</view>
+    <view class="device-card" wx:for="{{deviceList}}" wx:key="sn">
+      <view class="remove-icon" bindtap="removeDevice" data-index="{{index}}">✕</view>
+      <view class="device-name">{{item.name}}</view>
+      <view class="spec-list">
+        <view class="spec-row">
+          <text class="label">S/N 序列号</text>
+          <text class="value mono">{{item.sn}}</text>
+        </view>
+        <view class="spec-row">
+          <text class="label">总剩余质保</text>
+          <view class="warranty-val">
+            <!-- 剩余天数或已过期 -->
+            <text class="days-num {{item.days < 30 ? 'warning' : ''}} {{item.isExpired ? 'expired' : ''}}" wx:if="{{!item.isExpired}}">{{item.days}}天</text>
+            <text class="days-num expired" wx:if="{{item.isExpired}}">已过质保</text>
+            
+            <!-- 👇👇👇 [新增] 赠送质保标记 👇👇👇 -->
+            <view class="reward-tag" wx:if="{{item.hasReward}}">
+               <text>🎁 已获赠30天</text>
+            </view>
+            <!-- 👆👆👆 只有 hasReward 为 true 时才显示 👆👆👆 -->
+            
+            <!-- 原有的延保标记 (如果有) -->
+            <text class="ext-tag" wx:if="{{item.hasExtra && !item.hasReward}}">含延保</text>
+          </view>
+        </view>
+        <view class="spec-row">
+          <text class="label">质保到期日期</text>
+          <text class="value">{{item.expiryDate}}</text>
+        </view>
+        <view class="spec-row">
+          <text class="label">激活次数</text>
+          <text class="value">{{item.activations}} 次</text>
+        </view>
+        <view class="spec-row">
+          <text class="label">固件版本</text>
+          <text class="value">{{item.firmware}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="device-card add-mode" bindtap="openBindModal">
+      <view class="add-content">
+        <view class="add-icon-circle">+</view>
+        <text class="add-tips">绑定新产品</text>
+        <text class="add-subtips">扫码或蓝牙连接后提交审核</text>
+      </view>
+    </view>
+
+    <!-- 👇👇👇【核心补全】在这里插入申请记录列表 👇👇👇 -->
+    <!-- 引入 WXS 模块用于在视图层处理数组转字符串 -->
+    <wxs module="tools">
+      var joinArr = function(arr) {
+        if (arr && arr.length > 0) {
+          return arr.join('、');
+        }
+        return '';
+      }
+      module.exports = {
+        joinArr: joinArr
+      };
+    </wxs>
+
+    <!-- 🔴 已移除：维修单卡片已移到"去选购商品"位置 -->
+
+    <view class="section-label section-label--cn" wx:if="{{myActivityList.length > 0}}">申请进度</view>
+    
+    <view class="activity-list" wx:if="{{myActivityList.length > 0}}">
+      <block wx:for="{{myActivityList}}" wx:key="_id">
+        <!-- 点击驳回的卡片可以重新上传 -->
+        <view class="act-card" bindtap="{{item.status == -1 ? 'reUpload' : ''}}" data-item="{{item}}">
+          
+          <!-- 🔴 主要内容区域：保持横向布局 -->
+          <view class="act-main-row">
+            <view class="act-left">
+              <!-- 标题：维修单改为两行（故障报修 + 型号）；其他类型保持原样 -->
+              <view class="act-title" wx:if="{{item.type !== 'repair'}}">
+                <text class="act-tag {{item.type}}">{{item.type === 'video' ? '视频' : '设备'}}</text>
+                <text class="act-name">{{item.title}}</text>
+              </view>
+              <view class="act-title act-title-repair" wx:else>
+                <text class="act-tag repair">故障</text>
+                <view class="act-repair-title-lines">
+                  <text class="act-name act-name-repair-main">故障报修</text>
+                  <text class="act-name act-name-repair-model">{{item.model || item.displayModel || '未知型号'}}</text>
+                </view>
+              </view>
+              <view class="act-time">{{item.createTime}}</view>
+            </view>
+            
+            <!-- 右侧状态 -->
+            <view class="act-right">
+              <!-- 审核中 (0 或 PENDING) -->
+              <view class="status-pill processing" wx:if="{{(item.type !== 'repair') && (item.status === 0 || item.status === 'PENDING')}}">
+                <view class="dot-p"></view>审核中
+              </view>
+              
+              <!-- 已通过 (1 或 APPROVED) -->
+              <view class="status-pill success" wx:if="{{(item.type !== 'repair') && (item.status === 1 || item.status === 'APPROVED')}}">
+                <view class="dot-s"></view>已通过
+              </view>
+              
+              <!-- 已驳回 (-1 或 REJECTED) -->
+              <view class="status-pill fail" wx:if="{{item.status === -1 || item.status === 'REJECTED'}}">
+                <view class="dot-f"></view>已驳回
+              </view>
+              
+              <!-- [新增] 维修单特殊状态 -->
+              
+              <!-- 已维修完成（需要用户寄回的流程，管理员寄出快递后，绿色） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && item.status === 'REPAIR_COMPLETED_SENT' && item.needReturn}}">
+                <view class="dot-s"></view>已维修完成
+              </view>
+              
+              <!-- 🔴 场景A：故障需寄回（红色） -->
+              <view class="status-pill fail" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'SHIPPED') && item.needReturn && item.returnStatus !== 'PENDING_RETURN' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+                <view class="dot-f"></view>故障需寄回
+              </view>
+              
+              <!-- 已备件寄出（不显示运单号，运单号在查看物流按钮中） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'SHIPPED') && item.trackingId && item.status !== 'REPAIR_COMPLETED_SENT' && !(item.needReturn && item.returnStatus !== 'PENDING_RETURN')}}">
+                <view class="dot-s"></view>已寄出
+              </view>
+              
+              <!-- 看教程 (蓝色) -->
+              <view class="status-pill info" wx:if="{{item.type === 'repair' && (item.status === 1 || item.status === 'TUTORIAL') && !item.trackingId && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+                查看教程可修复
+              </view>
+              
+              <!-- 🔴 场景B：已支付·待维修 - 绿色（不区分是否过保） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && item.needReturn && !item.returnCompleted && item.status !== 'REPAIR_COMPLETED_SENT' && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.returnStatus === 'PENDING_RETURN' && item.status !== 'SHIPPED' && item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0 && item.repairPaid === true}}">
+                <view class="dot-s"></view>已支付·待维修
+              </view>
+              
+              <!-- 🔴 场景B：待支付·需寄回 - 红色 -->
+              <!-- 🔴 确保只有维修类型才显示，使用括号明确优先级 -->
+              <view class="status-pill fail" wx:if="{{(item.type === 'repair') && (item.needReturn === true) && (item.returnCompleted !== true) && (item.status !== 'REPAIR_COMPLETED_SENT') && (item.status !== 'USER_SENT') && (item.returnStatus !== 'USER_SENT') && (item.returnStatus === 'PENDING_RETURN') && (item.status !== 'SHIPPED') && ((item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0 && item.repairPaid === false) || !(item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0))}}">
+                <view class="dot-f"></view>
+                <text wx:if="{{item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0}}">待支付·需寄回</text>
+                <text wx:else>需寄回维修</text>
+              </view>
+              
+              <!-- 🔴 待寄回维修（其他情况，黄色）- 排除场景A和场景B -->
+              <!-- 🔴 确保只有维修类型才显示，使用括号明确优先级 -->
+              <!-- 注意：此状态仅用于提示，不再在用户端点击弹出管理员的“需寄回订单确认”弹窗 -->
+              <view class="status-pill processing" wx:if="{{(item.type === 'repair') && (item.needReturn === true) && (item.returnCompleted !== true) && (item.status !== 'REPAIR_COMPLETED_SENT') && (item.status !== 'USER_SENT') && (item.returnStatus !== 'USER_SENT') && (item.returnStatus !== 'PENDING_RETURN') && (item.status !== 'SHIPPED')}}">
+                <view class="dot-p"></view>待寄回维修
+              </view>
+              
+              <!-- 🔴 待购配件（优先显示） -->
+              <view class="status-pill fail" wx:if="{{item.type === 'repair' && (item.needPurchaseParts === true || item.needPurchaseParts === 'true' || (item.purchasePartsList && item.purchasePartsList.length > 0)) && item.purchasePartsStatus !== 'completed'}}">
+                <view class="dot-f"></view>待购配件
+              </view>
+              
+              <!-- 已购配件 -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && item.purchasePartsStatus === 'completed'}}">
+                <view class="dot-s"></view>已购配件
+              </view>
+              
+              <!-- 审核中（非需寄回状态，且不需要购买配件） -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 0 || item.status === 'PENDING') && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT' && !item.needReturn && !item.needPurchaseParts && (!item.purchasePartsList || item.purchasePartsList.length === 0)}}">
+                <view class="dot-p"></view>审核中
+              </view>
+              
+              <!-- 待确认收货（场景A：用户已寄出快递后） -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN' && item.status !== 'REPAIR_COMPLETED_SENT' && !item.warrantyDeducted && !item.isWarrantyDeducted && item.status !== 'RETURN_RECEIVED' && item.status !== 'COMPLETED'}}">
+                <view class="dot-p"></view>待确认收货
+              </view>
+              
+              <!-- 已支付·待维修 - 场景B：用户已寄出快递后且已支付（绿色，不区分是否过保） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus === 'PENDING_RETURN' && item.status !== 'REPAIR_COMPLETED_SENT' && item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0 && item.repairPaid === true}}">
+                <view class="dot-s"></view>已支付·待维修
+              </view>
+              
+              <!-- 正在维修中（场景B：用户已寄出快递后，未支付或其他情况） -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus === 'PENDING_RETURN' && item.status !== 'REPAIR_COMPLETED_SENT' && !(item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0 && item.repairPaid === true)}}">
+                <view class="dot-p"></view>正在维修中
+              </view>
+              
+              <!-- 售后完结（场景A：管理员确认收货后） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 'RETURN_RECEIVED' || item.status === 'COMPLETED') && item.returnStatus !== 'PENDING_RETURN'}}">
+                <view class="dot-s"></view>售后完结
+              </view>
+              
+              <!-- 已维修完成（场景B：管理员确认收货后） -->
+              <view class="status-pill success" wx:if="{{item.type === 'repair' && (item.status === 'RETURN_RECEIVED' || item.status === 'COMPLETED') && item.returnStatus === 'PENDING_RETURN'}}">
+                <view class="dot-s"></view>已维修完成
+              </view>
+              
+              <!-- 扣除质保状态（样式优化） -->
+              <view class="status-pill multi-line fail" wx:if="{{item.type === 'repair' && (item.warrantyDeducted || item.isWarrantyDeducted)}}">
+                <view class="status-line">
+                  <text class="status-text-main" wx:if="{{item.deductionReason === '配件错误' || item.deductionReason === 'wrong_part'}}">配件错误</text>
+                  <text class="status-text-main" wx:elif="{{item.deductionReason === '超时' || item.deductionReason === 'timeout'}}">超时未寄</text>
+                  <text class="status-text-main" wx:else>已扣质保</text>
+                  <text class="status-text-sub">已扣除半年质保（180天）</text>
+                </view>
+              </view>
+            </view>
+          </view>
+          
+          <!-- 维修进度按钮区：备件已发出可查物流、维修完成可查维修单；填写寄回请使用页顶需寄回卡片 -->
+          <view class="logistics-btn-wrapper {{item.repairActTwoCol ? 'two-btn' : ''}}" wx:if="{{item.type === 'repair' && item.showRepairActRow}}">
+            <view class="btn-logistics-action" wx:if="{{item.showLogisticsRepairBtn}}" catchtap="viewLogisticsDetail" data-sn="{{item.trackingId}}" data-tail-required="2427" data-phone="{{item.contact && item.contact.phone ? item.contact.phone : ''}}">
+              查看物流
+            </view>
+            <view class="btn-logistics-action btn-repair-order" wx:if="{{item.showRepairOrderBtn}}" catchtap="viewRepairOrderDetail" data-item="{{item}}">
+              查看维修单
+            </view>
+          </view>
+          <view class="logistics-btn-wrapper" wx:if="{{item.type === 'repair' && item.showTutorialJumpBtn}}">
+            <view class="btn-logistics-action btn-tutorial-jump" catchtap="goToShouhouTutorialFromActivity" data-item="{{item}}">
+              跳转教程
+            </view>
+          </view>
+          
+          <!-- 🔴 拒绝理由独立显示在下方，完全不影响上面的布局 -->
+          <view class="reject-reason-wrapper" wx:if="{{(item.status === -1 || item.status === 'REJECTED') && item.rejectReason}}">
+            <view class="reject-reason">
+              <text class="reason-label">拒绝理由：</text>
+              <text class="reason-text">{{item.rejectReason}}</text>
+            </view>
+          </view>
+
+        </view>
+      </block>
+    </view>
+    <!-- 👆👆👆【核心补全】结束 👆👆👆 -->
+
+    <view class="profile-action-list">
+      <view class="profile-action-btn" bindtap="goToRepairService">预约维修服务</view>
+      <view class="profile-action-btn profile-action-btn--primary" bindtap="goToCustomerService">联系在线客服</view>
+    </view>
+    </view>
+    </scroll-view>
+  </block>
+
+  <root-portal enable="{{hubInShell}}">
+  <view class="hub-embed-portal-layer">
+  <!-- 5. 绑定模态框 -->
+  <view class="modal {{showModal ? 'show' : ''}}" catchtouchmove="noop">
+    <!-- 当蓝牙连接成功时，加上 connected 类，触发整张卡片的二次上滑动画 -->
+    <view class="modal-content {{bluetoothReady ? 'connected' : ''}}" catchtouchmove="noop">
+      
+      <!-- 1. 文案修改：绑定设备 -->
+      <view class="modal-header">
+        <text>绑定设备</text>
+        <view class="close-modal" bindtap="closeBindModal">✕</view>
+      </view>
+
+      <scroll-view scroll-y="true" class="modal-scroll-area">
+        
+        <!-- === 2. 蓝牙扫描按钮 (雷达) === -->
+        <!-- 只有未连接时显示 -->
+        <view class="bt-scan-container" wx:if="{{!bluetoothReady}}">
+          <view class="radar-circle" bindtap="startConnect">
+            <view class="radar-core">
+              <!-- 👇👇👇【核心修改】换成图片 👇👇👇 -->
+              <image class="bt-icon-img" src="data:image/svg+xml;base64,PHN2ZyB0PSIxNzEwNDg4ODg4ODg4IiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjQ3NTciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHBhdGggZD0iTTIyMy41NTIgNzI0LjQ4TDQ2NS45MiA1MTIgMjIzLjU1MiAyOTkuNTJsNTguOTA4LTY3LjI4TDQ5OC41MiA0MjEuNjg4VjM1Ljg0aDg5LjY4bDIzMC40IDIyNC42NC0yNDIuNTI4IDIxMi40OCAyNDIuNTI4IDIxMi40OC0yMzAuNCAyMjQuNjRINDk4LjUyVjYwMi4zMTJsLTIxNi4wNjQgMTg5LjQ0LTU4LjkwOC02Ny4yN3pNNTgyLjM1MiA1MTJMNjg4IDE5NC43NTIgNTg4LjE2IDk3LjQ0VjUxMnpNNTg4LjE2IDkyNi41Nkw2ODggODI5LjI0OCA1ODIuMzUyIDUxMnY0MTQuNTZ6IiBmaWxsPSIjRkZGRkZGIiBwLWlkPSI0NzU4Ij48L3BhdGg+PC9zdmc+" mode="aspectFit" lazy-load="true"></image>
+            </view>
+            
+            <!-- 波纹动画 (保持结构，样式下面重写) -->
+            <view class="radar-ring r1 {{isScanning?'anim':''}}"></view>
+            <view class="radar-ring r2 {{isScanning?'anim':''}}"></view>
+            <view class="radar-ring r3 {{isScanning?'anim':''}}"></view>
+          </view>
+          <text class="radar-tip">{{connectStatusText}}</text>
+        </view>
+
+        <!-- === 3. 连接成功后的状态条 === -->
+        <view class="bt-connected-bar" wx:if="{{bluetoothReady}}">
+          <view class="bt-c-icon">✅</view>
+          <view class="bt-c-info">
+            <text class="bt-c-name">已连接设备</text>
+            <text class="bt-c-sn">{{connectedDeviceName}}</text>
+          </view>
+          <view class="bt-disconnect-btn" bindtap="resetBluetoothState">断开</view>
+        </view>
+
+        <!-- === 4. Tab 切换 (逻辑修改：连上蓝牙后才显示！) === -->
+        <!-- 🔴 强制显示：只要 bluetoothReady 为 true 就显示 -->
+        <view class="bind-verifying-tip" wx:if="{{bluetoothReady && !showBindAuditForm && !lockedReason}}">
+          <text>正在验证设备…</text>
+          <text class="bind-verifying-sub">预登记设备将自动激活绑定，无需上传审核资料</text>
+        </view>
+
+        <view class="type-tabs" wx:if="{{bluetoothReady && showBindAuditForm}}">
+          <view class="tab-item {{bindType == 'new' ? 'active' : ''}}" bindtap="changeBindType" data-type="new">全新设备</view>
+          <view class="tab-item {{bindType == 'used' ? 'active' : ''}}" bindtap="changeBindType" data-type="used">二手/旧设备</view>
+        </view>
+
+        <!-- === 5. 被锁状态 === -->
+        <!-- 🔴 修复：只有在有锁定原因时才显示"无法绑定"，验证中不显示 -->
+        <view class="locked-view" wx:if="{{bluetoothReady && isDeviceLocked && lockedReason}}">
+          <view class="locked-icon">🚫</view>
+          <text class="locked-title">无法绑定</text>
+          <text class="locked-desc">{{lockedReason}}</text>
+        </view>
+
+        <!-- === 6. 正常填表区域 (强制显示：只要 bluetoothReady 为 true 就显示) === -->
+        <!-- 🔴 强制显示表格，只要蓝牙连接成功就显示，不允许消失 -->
+        <view class="bind-form-area" wx:if="{{bluetoothReady && showBindAuditForm}}">
+          
+          <view class="form-item">
+            <text class="form-label">选择产品型号</text>
+            <picker bindchange="onModelChange" range="{{modelOptions}}" value="{{modelIndex}}">
+              <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
+            </picker>
+          </view>
+
+          <view class="form-item">
+            <text class="form-label">{{bindType == 'new' ? '订单截图' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
+            <view class="upload-group">
+              <view class="upload-box" bindtap="chooseProofImage" data-type="receipt">
+                <!-- 背景占位：始终显示 + 和文案，图片会覆盖在上面 -->
+                <view class="upload-placeholder-center">
+                  <text class="plus-icon">+</text>
+                  <text>购买截图</text>
+                </view>
+                <!-- 🔴 使用本地预览路径，让用户上传后立马看到缩略图 -->
+                <image wx:if="{{previewImgReceipt}}" src="{{previewImgReceipt}}" mode="aspectFill" class="uploaded-img" lazy-load="true" />
+              </view>
+              <view class="upload-box" wx:if="{{bindType == 'used'}}" bindtap="chooseProofImage" data-type="chat">
+                <view class="upload-placeholder-center">
+                  <text class="plus-icon">+</text>
+                  <text>聊天记录</text>
+                </view>
+                <image wx:if="{{previewImgChat}}" src="{{previewImgChat}}" mode="aspectFill" class="uploaded-img" lazy-load="true" />
+              </view>
+            </view>
+          </view>
+
+          <view class="form-item">
+            <text class="form-label">购买日期</text>
+            <picker mode="date" bindchange="onDateChange">
+              <view class="picker-val">{{buyDate || '请选择日期'}}</view>
+            </picker>
+          </view>
+        </view>
+        
+        <view style="height: 40rpx;"></view>
+      </scroll-view>
+
+      <!-- 底部提交按钮 -->
+      <!-- 🔴 强制显示：只要 bluetoothReady 为 true 就显示提交按钮 -->
+      <view class="modal-footer" wx:if="{{bluetoothReady && showBindAuditForm}}">
+        <button class="submit-btn" bindtap="submitAudit">提交上传审核</button>
+      </view>
+
+    </view>
+  </view>
+
+  <!-- === 改动2：管理员审核弹窗 (放在最底部) === -->
+  <view class="modal {{showAuditModal ? 'show' : ''}}" style="z-index: 2000;" catchtouchmove="noop">
+    <view class="modal-content" catchtouchmove="noop">
+      <view class="modal-header">
+        <text>审批设置</text>
+        <view class="close-modal" bindtap="closeAuditModal">✕</view>
+      </view>
+
+      <view class="modal-scroll-area">
+        <view class="form-item">
+          <text class="form-label">修改购买日期 (影响固件版本)</text>
+          <picker mode="date" value="{{adminSetDate}}" bindchange="onAdminDateChange">
+            <view class="picker-val">{{adminSetDate || '请选择日期'}}</view>
+          </picker>
+        </view>
+
+        <view class="form-item">
+          <text class="form-label">设置总质保时间</text>
+          <picker range="{{warrantyOptions}}" value="{{adminSetDaysIndex}}" bindchange="onAdminDaysChange">
+            <view class="picker-val">{{warrantyOptions[adminSetDaysIndex]}}</view>
+          </picker>
+        </view>
+      </view>
+
+      <view class="modal-footer">
+        <button class="submit-btn" bindtap="confirmApprove">确认通过并同步</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- ================= 全局自定义弹窗 (替代原生，带收缩退出动画) ================= -->
+  <view class="custom-dialog-mask z-over-fill-repair {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+    <view class="custom-dialog-box" catchtouchmove="noop" bindtap="dismissTransientModals">
+      <view class="cd-title">{{dialog.title}}</view>
+      <view class="cd-content">{{dialog.content}}</view>
+      
+      <view class="cd-btn-row">
+        <!-- 取消按钮 (可选) -->
+        <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText || '取消'}}</view>
+        <!-- 确认按钮 -->
+        <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText || '确定'}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ================= 自动消失提示（无按钮，2秒后自动消失，带收缩退出动画） ================= -->
+  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+    <view class="auto-toast-box" catchtouchmove="noop" bindtap="dismissTransientModals">
+      <view class="at-title">{{autoToast.title}}</view>
+      <view class="at-content">{{autoToast.content}}</view>
+    </view>
+  </view>
+
+  <!-- ================= 售后专用提示层（独立于全局提示） ================= -->
+  <view class="after-sales-toast-mask" wx:if="{{afterSalesToast.show}}" catchtouchmove="noop">
+    <view class="after-sales-toast-box" catchtouchmove="noop">
+      <view class="at-title">{{afterSalesToast.title}}</view>
+      <view class="at-content">{{afterSalesToast.content}}</view>
+    </view>
+  </view>
+
+  <!-- ================= 售后专用确认弹窗（独立于全局 dialog） ================= -->
+  <view class="after-sales-dialog-mask" wx:if="{{afterSalesDialog.show}}" catchtouchmove="noop" bindtap="closeAfterSalesDialog">
+    <view class="after-sales-dialog-box" catchtouchmove="noop" catchtap="noop">
+      <view class="cd-title">{{afterSalesDialog.title}}</view>
+      <view class="cd-content">{{afterSalesDialog.content}}</view>
+      <view class="cd-btn-row">
+        <view class="cd-btn cancel" wx:if="{{afterSalesDialog.showCancel}}" bindtap="closeAfterSalesDialog">{{afterSalesDialog.cancelText || '取消'}}</view>
+        <view class="cd-btn confirm" bindtap="onAfterSalesDialogConfirm">{{afterSalesDialog.confirmText || '确定'}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ================= 全局自定义 Loading (白色背景进度条) ================= -->
+  <view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop">
+    <view class="loader" catchtouchmove="noop">
+      <text class="loader-label">{{loadingText}}</text>
+      <view class="loading-bar"></view>
+    </view>
+  </view>
+
+  <!-- ================= 输入弹窗 (替代 editable modal，带收缩退出动画) ================= -->
+  <view class="custom-dialog-mask {{inputDialogClosing ? 'closing' : ''}}" wx:if="{{inputDialog.show}}" catchtouchmove="noop" bindtap="closeInputDialog">
+    <view class="custom-dialog-box" catchtouchmove="noop" catchtap="noop">
+      <view class="cd-title">{{inputDialog.title}}</view>
+      <input 
+        class="cd-input" 
+        type="text" 
+        placeholder="{{inputDialog.placeholder}}"
+        value="{{inputDialog.value}}"
+        focus="{{inputDialog.show}}"
+        bindinput="onInputDialogInput"
+        confirm-type="done"
+        bindconfirm="onInputDialogConfirm"
+      />
+      <input
+        wx:if="{{inputDialog.showRemark}}"
+        class="cd-input"
+        type="text"
+        placeholder="{{inputDialog.remarkPlaceholder}}"
+        value="{{inputDialog.remarkValue}}"
+        bindinput="onInputDialogRemarkInput"
+      />
+      <view class="cd-btn-row">
+        <view class="cd-btn cancel" bindtap="closeInputDialog">取消</view>
+        <view class="cd-btn confirm" bindtap="onInputDialogConfirm">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 分享码生成弹窗（白底黑字，清晰排版） -->
+  <view class="custom-modal-mask {{showShareCodeGenerateModal ? 'active' : ''}}" wx:if="{{showShareCodeGenerateModal}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+    <view class="custom-modal-box share-code-generate-modal" catchtouchmove="noop" bindtap="dismissTransientModals">
+      <view class="mt-icon-card">MT</view>
+      <view class="modal-title-new">分享码已生成</view>
+      
+      <view class="share-code-content">
+        <view class="share-code-item">
+          <text class="label">分享码</text>
+          <text class="value code-value">{{shareCodeValue}}</text>
+        </view>
+        <view class="share-code-item">
+          <text class="label">有效期</text>
+          <text class="value">10 天</text>
+        </view>
+        <view class="share-code-item">
+          <text class="label">查看次数</text>
+          <text class="value">3 次</text>
+        </view>
+      </view>
+
+      <view class="modal-btn-new btn-black" bindtap="copyShareCodeFromModal">
+        复制分享码
+      </view>
+    </view>
+  </view>
+
+  <!-- ================= 需寄回订单确认弹窗 ================= -->
+  <view class="return-required-mask {{returnRequiredModalClosing ? 'closing' : ''}}" wx:if="{{showReturnRequiredModal || returnRequiredModalClosing}}" bindtap="closeReturnRequiredModal" catchtouchmove="noop" catchtap="noop">
+    <view class="return-required-modal" catchtap="noop" catchtouchmove="noop">
+      <view class="rr-header">
+        <text class="rr-title">MT维修单</text>
+        <text class="rr-close" bindtap="closeReturnRequiredModal">✕</text>
+      </view>
+      
+      <scroll-view scroll-y class="rr-content" catchtouchmove="noop">
+        <template is="returnRequiredItems" />
+      </scroll-view>
+    </view>
+  </view>
+
+  <!-- ================= 地址信息填写弹窗（管理员填写用户地址，带收缩退出动画） ================= -->
+  <view class="custom-dialog-mask {{returnAddressDialogClosing ? 'closing' : ''}}" wx:if="{{showReturnAddressDialog}}" bindtap="closeReturnAddressDialog" catchtouchmove="noop">
+    <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop" style="max-width: 680rpx; padding: 50rpx 40rpx;">
+      <view class="cd-title">填写用户地址信息</view>
+      <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
+        修好后将按此地址寄回给用户
+      </view>
+      
+      <view class="return-address-form">
+        <view class="ra-form-item">
+          <text class="ra-label">收件人姓名</text>
+          <input 
+            class="ra-input" 
+            type="text" 
+            placeholder="请输入收件人姓名"
+            value="{{tempReturnAddress.name}}"
+            data-key="name"
+            bindinput="onReturnAddressInput"
+          />
+        </view>
+        
+        <view class="ra-form-item">
+          <text class="ra-label">收件人手机号</text>
+          <input 
+            class="ra-input" 
+            type="number" 
+            placeholder="请输入11位手机号"
+            value="{{tempReturnAddress.phone}}"
+            data-key="phone"
+            bindinput="onReturnAddressInput"
+            maxlength="11"
+          />
+        </view>
+        
+        <view class="ra-form-item">
+          <text class="ra-label">详细地址</text>
+          <textarea 
+            class="ra-textarea" 
+            placeholder="请输入详细地址，包含省市区信息，如：广东省 佛山市 南海区 某某街道101号"
+            value="{{tempReturnAddress.address}}"
+            data-key="address"
+            bindinput="onReturnAddressInput"
+            auto-height
+            maxlength="200"
+          />
+        </view>
+      </view>
+      
+      <view class="cd-btn-row">
+        <view class="cd-btn cancel" bindtap="closeReturnAddressDialog">取消</view>
+        <view class="cd-btn confirm" bindtap="confirmReturnAddress">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ================= 底部半屏弹窗：录入单号和填写地址 ================= -->
+  <view class="bottom-modal-mask {{returnAddressModalClosing ? 'closing' : (showReturnAddressModal ? 'show' : '')}}" wx:if="{{showReturnAddressModal || returnAddressModalClosing}}" bindtap="closeReturnAddressModal" catchtouchmove="noop">
+    <view class="bottom-modal-content after-sales-return-modal {{afterSalesState.returnAddressModal.modeKey || ''}} {{!afterSalesState.returnAddressModal.showAddressSection ? 'tracking-only' : ''}}" catchtap="noop" catchtouchmove="noop">
+      <!-- 弹窗头部 -->
+      <view class="bottom-modal-header">
+        <!-- 🔴 场景A：管理员录单备件寄出，显示"录入寄回运单号"；场景B：管理员手动标记，显示"填写修好后寄回地址" -->
+        <view class="bottom-modal-title">{{afterSalesState.returnAddressModal.titleText || '录入寄回运单号'}}</view>
+        <view class="bottom-modal-close" bindtap="closeReturnAddressModal">✕</view>
+      </view>
+      
+      <!-- 弹窗内容区 -->
+      <scroll-view class="bottom-modal-body {{!afterSalesState.returnAddressModal.showAddressSection ? 'tracking-only' : ''}}" scroll-y catchtouchmove="noop">
+        <view class="bottom-modal-form {{!afterSalesState.returnAddressModal.showAddressSection ? 'tracking-only' : ''}}">
+          <!-- 🔴 场景B：管理员手动标记，显示地址输入 -->
+          <block wx:if="{{afterSalesState.returnAddressModal.showAddressSection}}">
+            <!-- 如果未填写地址，显示地址填写表单 -->
+            <view wx:if="{{afterSalesState.returnAddressModal.needAddressInput}}">
+              <view class="ra-form-smart-paste-wrapper">
+                <view class="paste-btn-header" bindtap="openSmartAnalyzeModal">
+                  <text class="paste-btn-icon">📋</text>
+                  <text>智能粘贴</text>
+                </view>
+              </view>
+              
+              <view class="ra-form-item">
+                <view class="ra-label">收件人姓名</view>
+                <input 
+                  class="ra-input" 
+                  type="text" 
+                  placeholder="请输入收件人姓名"
+                  placeholder-class="ph-style"
+                  value="{{userReturnAddress.name}}"
+                  data-key="name"
+                  bindinput="onUserReturnAddressInput"
+                />
+              </view>
+              
+              <view class="ra-form-item">
+                <view class="ra-label">收件人手机号</view>
+                <input 
+                  class="ra-input" 
+                  type="number" 
+                  placeholder="请输入11位手机号"
+                  placeholder-class="ph-style"
+                  value="{{userReturnAddress.phone}}"
+                  data-key="phone"
+                  bindinput="onUserReturnAddressInput"
+                  maxlength="11"
+                />
+              </view>
+              
+              <!-- 🔴 新增：省市区选择（复制自 shouhou 页面） -->
+              <view class="ra-form-item">
+                <view class="ra-label">省市区</view>
+                <view class="address-picker-row">
+                  <picker mode="selector" range="{{provinceList}}" range-key="name" value="{{provinceIndex}}" bindchange="onProvinceChange" class="address-picker-btn">
+                    <view class="address-picker-btn-inner {{!selectedProvince ? 'placeholder' : ''}}">
+                      <text class="address-picker-text">{{selectedProvince || '请选择省份'}}</text>
+                    </view>
+                  </picker>
+                  <picker mode="selector" range="{{cityList}}" range-key="name" value="{{cityIndex}}" bindchange="onCityChange" class="address-picker-btn" disabled="{{!selectedProvince}}">
+                    <view class="address-picker-btn-inner {{!selectedCity ? 'placeholder' : ''}} {{!selectedProvince ? 'disabled' : ''}}">
+                      <text class="address-picker-text">{{selectedCity || '请选择城市'}}</text>
+                    </view>
+                  </picker>
+                  <picker mode="selector" range="{{districtList}}" range-key="name" value="{{districtIndex}}" bindchange="onDistrictChange" class="address-picker-btn" disabled="{{!selectedCity}}">
+                    <view class="address-picker-btn-inner {{!selectedDistrict ? 'placeholder' : ''}} {{!selectedCity ? 'disabled' : ''}}">
+                      <text class="address-picker-text">{{selectedDistrict || '请选择区县'}}</text>
+                    </view>
+                  </picker>
+                </view>
+              </view>
+              
+              <view class="ra-form-item">
+                <view class="ra-label">详细地址</view>
+                <input 
+                  class="ra-input" 
+                  placeholder="如：某某街道101号"
+                  placeholder-class="ph-style"
+                  value="{{userReturnAddress.address}}"
+                  data-key="address"
+                  bindinput="onUserReturnAddressInput"
+                  maxlength="200"
+                />
+              </view>
+            </view>
+            
+            <!-- 如果已填写地址，显示地址信息 -->
+            <view wx:if="{{afterSalesState.returnAddressModal.showAddressInfo}}">
+              <view class="ra-info-section">
+                <view class="ra-info-title">已填写地址信息：</view>
+                <view class="ra-info-content">
+                  <text class="ra-info-text">{{myReturnRequiredRepair.returnAddress.name}} {{myReturnRequiredRepair.returnAddress.phone}}</text>
+                  <text class="ra-info-text">{{myReturnRequiredRepair.returnAddress.address}}</text>
+                </view>
+              </view>
+            </view>
+          </block>
+          
+          <!-- 运单号输入（始终显示，无论是否填写地址） -->
+          <view class="ra-form-item ra-tracking-item">
+            <block wx:if="{{afterSalesState.returnAddressModal.modeKey === 'as-mode-return-required'}}">
+              <view class="ra-tracking-label-row">
+                <text class="ra-label ra-tracking-label">{{afterSalesState.returnAddressModal.trackingLabel || '录入寄回运单号'}}</text>
+              </view>
+              <input 
+                class="ra-input ra-tracking-input-box" 
+                type="text" 
+                placeholder="请输入寄回运单号"
+                value="{{returnTrackingIdInput}}"
+                bindinput="onReturnTrackingIdInput"
+              />
+            </block>
+            <block wx:else>
+              <view class="ra-tracking-label-row">
+                <text class="ra-label ra-tracking-label">{{afterSalesState.returnAddressModal.trackingLabel || '录入寄回运单号'}}</text>
+                <text class="ra-tracking-required">必填</text>
+              </view>
+              <input 
+                class="ra-input" 
+                type="text" 
+                placeholder="请输入寄回运单号"
+                value="{{returnTrackingIdInput}}"
+                bindinput="onReturnTrackingIdInput"
+              />
+            </block>
+          </view>
+          
+          <!-- 如果已录入运单号，显示运单号信息 -->
+          <view class="ra-info-section" style="margin-top: 40rpx;" wx:if="{{myReturnRequiredRepair.returnTrackingId}}">
+            <view class="ra-info-title">已录入运单号：</view>
+            <view class="ra-info-content">
+              <text class="ra-info-text">{{myReturnRequiredRepair.returnTrackingId}}</text>
+            </view>
+          </view>
+          
+          <!-- 统一的提交按钮（提交地址和运单号） -->
+          <view class="ra-form-btn" bindtap="submitAddressAndTrackingId">
+            {{afterSalesState.returnAddressModal.submitText || '提交单号'}}
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+
+  </view>
+  </root-portal>
+
+  <hub-tab-bar wx:if="{{showHubTabBar && !hubInShell}}" active="{{hubTabIndex}}" bind:switch="onHubTabSwitch" />
+
+</view>
+
+<!-- 全局自定义弹窗组件 -->
+<custom-toast id="custom-toast" />
+
+<root-portal enable="{{hubInShell}}">
+<view class="hub-embed-portal-layer">
+  <!-- ================= 填写售后单弹窗 ================= -->
+  <view class="custom-dialog-mask fill-repair-mask {{fillRepairModalClosing ? 'closing' : ''}} {{showFillRepairModal ? 'show' : ''}}" wx:if="{{showFillRepairModal || fillRepairModalClosing}}" bindtap="closeFillRepairModal" catchtouchmove="noop">
+    <view class="custom-dialog-box fill-repair-dialog" catchtap="noop" catchtouchmove="noop">
+      <view class="cd-header">
+        <view class="cd-title">填写售后单</view>
+      </view>
+      
+      <view class="fill-repair-content">
+        <!-- 型号显示 -->
+        <view class="fr-model-section">
+          <view class="fr-label">型号</view>
+          <view class="fr-model-value">{{currentFillRepairItem ? currentFillRepairItem.model : ''}}</view>
+        </view>
+        
+        <!-- 维修项目列表 -->
+        <view class="fr-items-section">
+          <view class="fr-section-header">
+            <view class="fr-label">维修项目</view>
+            <view class="fr-add-btn" bindtap="addRepairItem">+ 添加项目</view>
+          </view>
+          
+          <!-- 🔴 维修项目列表可滚动区域 -->
+          <scroll-view scroll-y class="fr-items-list" style="max-height: 400rpx;">
+            <block wx:for="{{fillRepairItems}}" wx:key="index">
+              <view class="fr-item-row">
+                <view class="fr-item-input-wrapper">
+                  <input 
+                    class="fr-item-name" 
+                    placeholder="维修项名称" 
+                    value="{{item.name}}"
+                    data-index="{{index}}"
+                    data-field="name"
+                    bindinput="onRepairItemInput"
+                  />
+                  <input 
+                    class="fr-item-price" 
+                    type="digit" 
+                    placeholder="¥0" 
+                    value="{{item.price === 0 ? '' : item.price}}"
+                    data-index="{{index}}"
+                    data-field="price"
+                    bindinput="onRepairItemInput"
+                  />
+                </view>
+                <view class="fr-item-delete" bindtap="deleteRepairItem" data-index="{{index}}">删除</view>
+              </view>
+            </block>
+            
+            <view class="fr-empty-items" wx:if="{{fillRepairItems.length === 0}}">
+              <text>暂无维修项目</text>
+              <text style="display: block; margin-top: 8rpx; font-size: 24rpx; color: #C7C7CC;">点击右上角"添加项目"开始</text>
+            </view>
+          </scroll-view>
+        </view>
+        
+        <!-- 总价显示 -->
+        <view class="fr-total-section">
+          <view class="fr-total-row">
+            <text class="fr-total-label">总价：</text>
+            <text class="fr-total-price">¥{{fillRepairTotalPriceFormatted}}</text>
+          </view>
+        </view>
+
+        <!-- 统一逻辑：不区分是否过保，均可配置是否向用户收取维修费 -->
+        <view class="fr-switch-section" wx:if="{{afterSalesState.fillRepairModal && afterSalesState.fillRepairModal.hasItem}}">
+          <view class="fr-switch-row">
+            <text class="fr-label">需要用户支付维修费</text>
+            <switch checked="{{fillRepairRequireUserPay}}" bindchange="onFillRepairRequireUserPayChange" color="#000000" />
+          </view>
+          <text class="fr-switch-hint" wx:if="{{afterSalesState.fillRepairModal.showPayHint}}">开启后仅保存报价，用户需在「我的」需寄回卡片中完成支付；支付完成前请勿填写寄回运单号。</text>
+        </view>
+        
+        <!-- 🔴 运单号输入：统一逻辑，不区分是否过保；仅在不需要用户付款时可填 -->
+        <view class="fr-tracking-section" wx:if="{{afterSalesState.fillRepairModal && afterSalesState.fillRepairModal.showTrackingSection}}">
+          <view class="fr-label">寄回运单号</view>
+          <input 
+            class="fr-tracking-input" 
+            placeholder="请输入寄回给用户的运单号"
+            value="{{fillRepairTrackingId}}"
+            bindinput="onFillRepairTrackingIdInput"
+          />
+        </view>
+        
+      </view>
+      
+      <!-- 底部按钮 -->
+      <view class="cd-btn-row fill-repair-btns">
+        <view class="cd-btn cancel" bindtap="closeFillRepairModal">取消</view>
+        <view class="cd-btn confirm" bindtap="submitFillRepair">提交</view>
+      </view>
+    </view>
+  </view>
+
+<!-- ================= 购买配件弹窗 ================= -->
+<view class="custom-dialog-mask purchase-parts-mask {{purchasePartsModalClosing ? 'closing' : ''}}" wx:if="{{showPurchasePartsModal || purchasePartsModalClosing}}" bindtap="closePurchasePartsModal" catchtouchmove="noop">
+  <view class="custom-dialog-box purchase-parts-dialog" catchtap="noop" catchtouchmove="noop">
+    <view class="cd-content purchase-parts-content">
+      <scroll-view class="parts-scroll" scroll-y>
+        <block wx:for="{{purchasePartsList}}" wx:key="model">
+          <view class="parts-group">
+            <view class="parts-group-title">{{item.model}}</view>
+            <view class="parts-list">
+              <view 
+                class="parts-item {{part.selected ? 'selected' : ''}}" 
+                wx:for="{{item.parts}}" 
+                wx:key="name"
+                wx:for-item="part"
+                data-model="{{item.model}}"
+                data-part-name="{{part.name}}"
+                bindtap="togglePartSelection"
+              >
+                <text class="parts-checkbox">{{part.selected ? '✓' : ''}}</text>
+                <text class="parts-name">{{part.name}}</text>
+              </view>
+            </view>
+          </view>
+        </block>
+      </scroll-view>
+      
+      <view class="parts-note-section">
+        <text class="parts-note-label">备注说明：</text>
+        <textarea 
+          class="parts-note-input" 
+          placeholder="请输入备注信息（选填）"
+          value="{{purchasePartsNote}}"
+          bindinput="onPurchasePartsNoteInput"
+          maxlength="200"
+        />
+      </view>
+    </view>
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel" bindtap="closePurchasePartsModal">取消</view>
+      <view class="cd-btn confirm" bindtap="submitPurchaseParts">确定</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 付费维修确认弹窗 ================= -->
+<view class="custom-dialog-mask {{paidRepairConfirmModalClosing ? 'closing' : ''}}" wx:if="{{showPaidRepairConfirmModal || paidRepairConfirmModalClosing}}" bindtap="rejectPaidRepair" catchtouchmove="noop">
+  <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop">
+    <view class="cd-title">维修费用确认</view>
+    <view class="cd-content">
+      <text>维修完成后需要支付维修费用30元+配件费用，是否同意？</text>
+    </view>
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel" bindtap="rejectPaidRepair">取消</view>
+      <view class="cd-btn confirm" bindtap="confirmPaidRepair">同意</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 测试密码输入弹窗（带收缩退出动画） ================= -->
+<view class="custom-dialog-mask {{testPasswordModalClosing ? 'closing' : ''}}" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal" catchtouchmove="noop">
+  <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop" style="max-width: 600rpx;">
+    <view class="cd-title">请输入测试密码</view>
+    <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
+      此操作将清空除 app_config、guanliyuan 以外的所有集合数据（含 sn、guanliyuanSN、chakan、config、suspicious_user_sessions 等）
+    </view>
+    
+    <input 
+      class="cd-input" 
+      type="text" 
+      password
+      placeholder="请输入密码"
+      value="{{testPasswordInput}}"
+      bindinput="onTestPasswordInput"
+      confirm-type="done"
+      bindconfirm="confirmTestPassword"
+      maxlength="20"
+    />
+    
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel" bindtap="closeTestPasswordModal">取消</view>
+      <view class="cd-btn confirm" bindtap="confirmTestPassword">确定</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 清空数据进度提示 ================= -->
+<view class="loading-mask" wx:if="{{isClearingData}}" catchtouchmove="noop">
+  <view class="loader" catchtouchmove="noop">
+    <text class="loader-label">正在清空数据...</text>
+    <view class="loading-bar"></view>
+    <view style="margin-top: 20rpx; font-size: 24rpx; color: #666;">
+      <text wx:if="{{clearProgress.currentCollection}}">
+        正在处理：{{clearProgress.currentCollection}} 
+        ({{clearProgress.current}}/{{clearProgress.total}})
+      </text>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 定位权限提示遮罩 ================= -->
+<view class="location-permission-mask {{locationPermissionModalClosing ? 'closing' : ''}}" wx:if="{{showLocationPermissionModal || locationPermissionModalClosing}}" catchtouchmove="noop">
+  <view class="location-permission-content" catchtouchmove="noop">
+    <view class="location-permission-icon">📍</view>
+    <text class="location-permission-title">需要获取您的位置信息</text>
+    <text class="location-permission-desc">用于展示附近维修门店和计算配送距离</text>
+    <view class="location-permission-buttons">
+      <view class="location-permission-btn cancel" bindtap="closeLocationPermissionModal">拒绝</view>
+      <view class="location-permission-btn confirm" bindtap="_openLocationSetting">去设置</view>
+    </view>
+    <text class="location-permission-tip" wx:if="{{locationPermissionChecking}}">等待授权中...</text>
+  </view>
+</view>
+
+<!-- ================= 智能分析弹窗 ================= -->
+<view class="smart-paste-mask {{smartAnalyzeModalClosing ? 'closing' : ''}}" wx:if="{{showSmartAnalyzeModal || smartAnalyzeModalClosing}}" style="z-index: 99999;" catchtouchmove="noop" catchtap="noop">
+  <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
+    <view class="sp-title">智能粘贴</view>
+    <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
+    <textarea 
+      class="sp-textarea" 
+      placeholder="例如：张三 13800138000 广东省深圳市南山区..." 
+      value="{{smartAnalyzeVal}}" 
+      bindinput="onSmartAnalyzeInput"
+      adjust-position="{{true}}"
+      fixed="{{true}}"
+    ></textarea>
+    <view class="sp-btn-row">
+      <view class="sp-btn cancel" bindtap="closeSmartAnalyzeModal">取消</view>
+      <view class="sp-btn confirm" bindtap="confirmSmartAnalyze">智能分析</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 物流查询弹窗 ================= -->
+<view class="logistics-modal-mask {{logisticsModalClosing ? 'closing' : ''}}" wx:if="{{showLogisticsModal || logisticsModalClosing}}" bindtap="closeLogisticsModal" catchtouchmove="noop">
+  <!-- 🔴 移除了 catchtouchmove="noop"，允许内部 scroll-view 滚动 -->
+  <view class="logistics-modal-box" catchtap="noop">
+    
+    <!-- 1. 品牌头部 -->
+    <view class="logistics-header">
+      <view class="brand-tag">MT-摩改社保障你的物流</view>
+      <view class="close-btn" bindtap="closeLogisticsModal">✕</view>
+    </view>
+
+    <view class="logistics-modal-content">
+      
+      <!-- 2. 核心信息区 (新版卡片样式) -->
+      <view class="logistics-card-container">
+      <view class="logistics-info-card">
+          <view class="card-header-row">
+            <view class="company-info">
+              <view class="company-icon-placeholder">MT</view>
+              <text class="company-name">{{logisticsData.express_company_name || '查询中...'}}</text>
+            </view>
+            <view class="logistics-status-right">
+              <view class="logistics-exception-btn" catchtap="onLogisticsException">物流校准</view>
+              <view class="status-badge {{logisticsData.status === '3' ? 'success' : ''}}" wx:if="{{logisticsData.status_text}}">
+                {{logisticsData.status_text}}
+              </view>
+            </view>
+          </view>
+          <view class="card-body-row">
+          <text class="tracking-number">{{currentTrackingId}}</text>
+          <view class="copy-btn" bindtap="copyTrackingId" data-sn="{{currentTrackingId}}">复制</view>
+        </view>
+        </view>
+      </view>
+      <!-- 3. 加载状态 -->
+      <view class="logistics-loading" wx:if="{{logisticsLoading}}">
+        <view class="mt-loader"></view>
+      </view>
+      
+      <!-- 4. 错误提示 -->
+      <view class="logistics-error" wx:if="{{logisticsError && !logisticsLoading}}">
+        <text class="error-icon">⚠️</text>
+        <text class="error-text">{{logisticsError}}</text>
+      </view>
+      
+      <!-- 5. 物流轨迹 (优化版：轴线左置，内容全宽) -->
+      <!-- 🔴 关键修复：确保 scroll-view 可以滚动，添加 enhanced 属性 -->
+      <scroll-view 
+        scroll-y 
+        class="logistics-scroll" 
+        enable-back-to-top="{{true}}" 
+        enhanced="{{true}}"
+        show-scrollbar="{{false}}"
+        wx:if="{{logisticsData && !logisticsLoading && !logisticsBlockDisplay}}">
+        <view class="timeline-container">
+          <view class="timeline-item" wx:for="{{logisticsData.path_list}}" wx:key="index">
+            
+            <!-- 左侧：轴线 -->
+            <view class="timeline-axis">
+              <view class="dot {{index === 0 ? 'active' : ''}}"></view>
+              <view class="line" wx:if="{{index < logisticsData.path_list.length - 1}}"></view>
+            </view>
+            
+            <!-- 右侧：时间 + 内容 -->
+            <view class="timeline-content-wrapper {{index === 0 ? 'active' : ''}}">
+              <!-- 时间行 -->
+              <view class="timeline-header">
+                <text class="time-full" wx:if="{{item._dateStr}}">{{item._dateStr}} {{item.time}}</text>
+                <text class="time-full" wx:else>{{item.time}}</text>
+              </view>
+              <!-- 内容行 -->
+              <view class="timeline-body">
+                <text class="desc-text" selectable="true">{{item.desc}}</text>
+              </view>
+            </view>
+
+          </view>
+        </view>
+        
+        <!-- 无轨迹信息 -->
+        <view class="logistics-empty" wx:if="{{!logisticsData.path_list || logisticsData.path_list.length === 0}}">
+          <text>暂无物流轨迹信息</text>
+        </view>
+      </scroll-view>
+      <view class="logistics-error" wx:if="{{logisticsBlockDisplay && !logisticsLoading}}">
+        <text class="error-icon">⚠️</text>
+        <text class="error-text">尾号校验不通过，已隐藏物流轨迹。请点击“物流异常”输入尾号后查询。</text>
+      </view>
+      
+    </view>
+  </view>
+</view>
+
+<!-- 【全局通用】自定义"内容已复制"弹窗（统一使用 copy-success-modal 样式） -->
+<view class="custom-modal-mask {{copySuccessModalClosing ? 'closing' : ''}}" wx:if="{{showCopySuccessModal || copySuccessModalClosing}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="custom-modal-box copy-success-modal" catchtouchmove="noop" bindtap="dismissTransientModals">
+    <!-- 图标：使用 Unicode 字符 -->
+    <view class="modal-icon-new success-icon">✓</view>
+    <!-- 标题 -->
+    <view class="modal-title-new">内容已复制</view>
+  </view>
+</view>
+
+<!-- ======================= -->
+<!-- 🔴 权限拒绝提示弹窗 (复用 scan 页样式) -->
+<!-- ======================= -->
+<view class="password-modal-mask {{permissionModalClosing ? 'closing' : ''}}" wx:if="{{showPermissionModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="password-box" catchtouchmove="noop" catchtap="noop">
+    <view class="pass-title">蓝牙权限未开启</view>
+    
+    <view class="permission-guide">
+       <view class="guide-title">开启蓝牙权限</view>
+       
+       <view class="guide-flow">
+          <view class="flow-item">
+             <view class="flow-number">1</view>
+             <view class="flow-content">
+                <view class="flow-icon-box">
+                   <image class="flow-icon" src="{{icons.moreDark}}" mode="aspectFit" lazy-load="true"></image>
+                </view>
+                <text class="flow-text">点击右上角</text>
+             </view>
+          </view>
+          
+          <view class="flow-connector"></view>
+          
+          <view class="flow-item">
+             <view class="flow-number">2</view>
+             <view class="flow-content">
+                <view class="flow-icon-box">
+                   <image class="flow-icon" src="{{icons.gearSmall}}" mode="aspectFit" lazy-load="true"></image>
+                </view>
+                <text class="flow-text">选择设置</text>
+             </view>
+          </view>
+          
+          <view class="flow-connector"></view>
+          
+          <view class="flow-item">
+             <view class="flow-number">3</view>
+             <view class="flow-content">
+                <view class="flow-icon-box">
+                   <image class="flow-icon" src="{{icons.btDark}}" mode="aspectFit" lazy-load="true"></image>
+                </view>
+                <text class="flow-text">开启蓝牙</text>
+             </view>
+          </view>
+       </view>
+    </view>
+
+    <view class="pass-btns">
+       <view class="p-btn confirm full-width" bindtap="closePermissionModal">知道了</view>
+    </view>
+  </view>
+</view>
+
+<!-- 🔴 新增：上传选项弹窗（选择相册/拍照） -->
+<view class="upload-modal-overlay" wx:if="{{showUploadOptions}}" bindtap="closeUploadOptions">
+  <view class="upload-modal-content" catchtap="preventBubble">
+    <view class="upload-options-container">
+      <view class="upload-modal-title">选择上传方式</view>
+      <view class="upload-options-list">
+        <view class="upload-option-card" bindtap="chooseImageFromAlbum" data-action="album">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon album-icon"></view>
+          </view>
+          <view class="upload-option-label">从相册选择</view>
+        </view>
+        <view class="upload-option-card" bindtap="chooseImageFromCamera" data-action="camera">
+          <view class="upload-option-icon-wrapper">
+            <view class="upload-option-icon video-icon"></view>
+          </view>
+          <view class="upload-option-label">拍照</view>
+        </view>
+      </view>
+    </view>
+    <view class="upload-modal-cancel" bindtap="closeUploadOptions">取消</view>
+  </view>
+</view>
+</view>
+</root-portal>

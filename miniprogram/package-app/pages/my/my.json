@@ -1,5 +1,8 @@
 {
-  "usingComponents": {},
+  "usingComponents": {
+    "hub-tab-bar": "/components/hub-tab-bar/index",
+    "custom-toast": "/components/custom-toast/index"
+  },
   "enablePullDownRefresh": true,
   "backgroundTextStyle": "dark"
 }

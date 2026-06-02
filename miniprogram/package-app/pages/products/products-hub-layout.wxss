@@ -1,0 +1,741 @@
+@import "../../../styles/hub-page-anim.wxss";
+
+/* pages/products — 首页入口布局（参考稿 + hover-class 缩放） */
+
+.hub-page {
+  min-height: 100vh;
+  height: 100vh;
+  background: linear-gradient(165deg, #e4eaf4 0%, #d8e0ec 42%, #cfd9e8 100%);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.hub-shell .hub-panels-viewport {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.hub-shell .hub-panels-track {
+  display: flex;
+  flex-direction: row;
+  width: 400%;
+  height: 100%;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.hub-shell .hub-panels-track--anim {
+  transition: transform 0.32s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.hub-shell .hub-panel-slot {
+  width: 25%;
+  height: 100%;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.hub-panel-slot--shop {
+  overflow: hidden;
+}
+
+/* 底栏：淡入淡出即可，不做上滑（避免像黑条叠上来） */
+.hub-tab-bar-wrap {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 900;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.28s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.hub-tab-bar-wrap--show {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.hub-shell .hub-home-scroll {
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.hub-admin-fab--in-slot {
+  position: absolute;
+  left: 32rpx;
+  bottom: calc(120rpx + env(safe-area-inset-bottom));
+  z-index: 120;
+}
+
+.hub-back {
+  position: fixed;
+  left: 24rpx;
+  z-index: 110;
+  width: 64rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.hub-back-arrow {
+  font-size: 44rpx;
+  font-weight: 300;
+  color: #1d1d1f;
+  line-height: 1;
+}
+
+/* 左下角管理入口（避开右上角胶囊，可点击） */
+.hub-admin-fab {
+  position: fixed;
+  left: 32rpx;
+  bottom: calc(168rpx + env(safe-area-inset-bottom));
+  z-index: 120;
+  padding: 18rpx 36rpx;
+  background: #fff;
+  border-radius: 999rpx;
+  box-shadow: 0 8rpx 28rpx rgba(0, 0, 0, 0.12);
+  border: 1rpx solid rgba(0, 0, 0, 0.06);
+}
+
+.hub-admin-fab--pressed {
+  transform: scale(0.96);
+  opacity: 0.88;
+}
+
+.hub-admin-fab-text {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #007aff;
+}
+
+/* 首页悬浮购物车：点击跳转订单 Tab（挂在 hub-page 根，避免轨道 transform 错位） */
+.hub-home-float-cart {
+  position: fixed;
+  right: 24rpx;
+  bottom: calc(148rpx + env(safe-area-inset-bottom));
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 50%;
+  background: linear-gradient(165deg, #ffffff 0%, #f2f2f7 100%);
+  box-shadow: 0 8rpx 32rpx rgba(0, 0, 0, 0.12);
+  border: 1rpx solid rgba(0, 0, 0, 0.07);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 880;
+}
+
+.hub-home-float-cart-inner {
+  position: relative;
+  width: 68rpx;
+  height: 68rpx;
+}
+
+.hub-home-float-cart-svg {
+  width: 68rpx;
+  height: 68rpx;
+}
+
+.hub-home-float-mt {
+  position: absolute;
+  left: 60%;
+  top: 53%;
+  transform: translate(-50%, -50%);
+  margin-top: -3rpx;
+  font-size: 16rpx;
+  font-weight: 900;
+  color: #1c1c1e;
+  pointer-events: none;
+}
+
+.hub-home-float-cart-badge {
+  position: absolute;
+  top: 8rpx;
+  right: 8rpx;
+  min-width: 28rpx;
+  height: 28rpx;
+  padding: 0 8rpx;
+  border-radius: 14rpx;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 28rpx;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.hub-shell .main-content {
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+}
+
+.content-inner {
+  padding: 12rpx 28rpx calc(240rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+/* 通用卡片：毛玻璃 */
+.hub-page .card {
+  background: rgba(255, 255, 255, 0.52);
+  border-radius: 40rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 10rpx 40rpx rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+  position: relative;
+  left: auto;
+  right: auto;
+  top: auto;
+  margin-left: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1), background 0.2s ease;
+  box-sizing: border-box;
+  backdrop-filter: blur(28px) saturate(1.25);
+  -webkit-backdrop-filter: blur(28px) saturate(1.25);
+  border: 1rpx solid rgba(255, 255, 255, 0.72);
+}
+
+.card-hover {
+  transform: scale(0.97);
+}
+
+.bento-item-main.card-hover,
+.bento-item-sub.card-hover,
+.bento-item-half.card-hover {
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.shop-card.card-hover {
+  background: #111111;
+}
+
+.card-hover--media {
+  transform: scale(0.97);
+  background-color: transparent;
+}
+
+.card--disabled {
+  opacity: 0.45;
+}
+
+.opacity-hover {
+  opacity: 0.6;
+}
+
+/* 顶部 Hero：产品选购 + 产品上新 */
+.hub-page .hero-card {
+  border-radius: 40rpx;
+  margin-bottom: 24rpx;
+}
+
+/* 产品选购 — 纯黑底（与其它毛玻璃卡片区分） */
+.hub-page .shop-card {
+  background: #000000;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 12rpx 40rpx rgba(0, 0, 0, 0.18);
+}
+
+.hub-page .shop-card.card-hover {
+  background: #111111;
+  transform: scale(0.97);
+}
+
+.hub-page .shop-card-body {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 220rpx;
+  padding: 44rpx 40rpx;
+  box-sizing: border-box;
+}
+
+.hub-page .shop-card-info {
+  flex: 1;
+  min-width: 0;
+  padding-right: 24rpx;
+}
+
+.hub-page .tag-label--shop {
+  color: #8e8e93;
+  font-size: 22rpx;
+  font-weight: 700;
+  letter-spacing: 3rpx;
+  margin-bottom: 12rpx;
+}
+
+.hub-page .shop-card-title {
+  display: block;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -1rpx;
+  line-height: 1.15;
+}
+
+.hub-page .shop-card-desc {
+  display: block;
+  font-size: 26rpx;
+  color: #8e8e93;
+  margin-top: 10rpx;
+  line-height: 1.4;
+}
+
+.hub-page .shop-card-icon {
+  width: 112rpx;
+  height: 112rpx;
+  flex-shrink: 0;
+}
+
+.hub-page .card-info {
+  position: static;
+  top: auto;
+  left: auto;
+  right: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 0;
+  z-index: auto;
+}
+
+.tag-label {
+  font-size: 20rpx;
+  font-weight: 800;
+  letter-spacing: 2rpx;
+  margin-bottom: 8rpx;
+  color: #86868b;
+}
+
+.tag-label--featured {
+  font-size: 22rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+  color: #007aff;
+  margin-bottom: 16rpx;
+}
+
+.tag-label--shop {
+  color: #666;
+}
+
+.card-title {
+  font-size: 40rpx;
+  font-weight: bold;
+  letter-spacing: -1rpx;
+  color: #1d1d1f;
+}
+
+.card-title--light {
+  color: #fff;
+}
+
+.card-desc {
+  font-size: 24rpx;
+  color: #8e8e93;
+  margin-top: 6rpx;
+  line-height: 1.4;
+}
+
+.card-desc--light {
+  color: #999;
+}
+
+/* 产品上新 — 4:3 全图 + 左下角文案（比例盒在 media 内，避免 image 高度为 0） */
+.hub-page .new-card {
+  width: 100%;
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+  background: #e8e8ed;
+}
+
+.hub-page .new-card-media {
+  width: 100%;
+  position: relative;
+  height: 0;
+  padding-bottom: 75%;
+  overflow: hidden;
+}
+
+.hub-page .new-card-media .new-card-bg {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  display: block;
+}
+
+.hub-page .new-card-media .new-card-bg--placeholder {
+  background: #e8e8ed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.hub-page .new-card-placeholder-icon {
+  width: 88rpx;
+  height: 88rpx;
+  opacity: 0.35;
+  position: relative;
+  z-index: 1;
+}
+
+.hub-page .new-card-overlay {
+  position: absolute;
+  z-index: 2;
+  left: 28rpx;
+  right: auto;
+  bottom: 24rpx;
+  top: auto !important;
+  width: auto;
+  max-width: 78%;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.hub-page .new-card-edit {
+  position: absolute;
+  z-index: 3;
+  top: 24rpx;
+  right: 24rpx;
+  padding: 10rpx 22rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 999rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.08);
+}
+
+.hub-page .new-card-badge {
+  display: inline-block;
+  padding: 8rpx 20rpx;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 14rpx;
+  line-height: 1.2;
+}
+
+.hub-page .new-card-title {
+  display: block;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  letter-spacing: -1rpx;
+  line-height: 1.15;
+}
+
+.hub-page .new-card-desc {
+  display: block;
+  font-size: 26rpx;
+  color: #3a3a3c;
+  margin-top: 10rpx;
+  line-height: 1.35;
+}
+
+/* Bento */
+.hub-page .bento-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 案例大卡：右上图标 + 左下文案 */
+.hub-page .bento-item-main {
+  position: relative;
+  flex: 1.2;
+  flex-shrink: 1;
+  min-width: 0;
+  width: 0;
+  height: 360rpx;
+  padding: 28rpx 32rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  margin-bottom: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.hub-page .bento-item-main .bento-card-icon {
+  position: absolute;
+  top: 28rpx;
+  right: 28rpx;
+  width: 68rpx;
+  height: 68rpx;
+  flex-shrink: 0;
+  z-index: 2;
+  opacity: 0.92;
+}
+
+.bento-info--main {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-right: 76rpx;
+  box-sizing: border-box;
+}
+
+.bento-main-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6rpx 14rpx;
+  margin-bottom: 14rpx;
+  border-radius: 8rpx;
+  background: rgba(0, 122, 255, 0.1);
+  font-size: 20rpx;
+  font-weight: 700;
+  letter-spacing: 1rpx;
+  color: #007aff;
+  line-height: 1.2;
+}
+
+.bento-main-title.card-title-sm {
+  margin-top: 0;
+}
+
+.bento-main-desc.card-desc-sm {
+  margin-top: 10rpx;
+}
+
+.card-title-sm {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  letter-spacing: -0.5rpx;
+  line-height: 1.2;
+  margin-top: 4rpx;
+}
+
+.card-desc-sm {
+  display: block;
+  font-size: 26rpx;
+  color: #86868b;
+  margin-top: 12rpx;
+  line-height: 1.45;
+  font-weight: 400;
+}
+
+.hub-page .bento-col {
+  flex: 1;
+  flex-shrink: 1;
+  min-width: 0;
+  width: 0;
+  height: 380rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  box-sizing: border-box;
+}
+
+.hub-page .bento-item-sub {
+  flex: 1;
+  height: 0;
+  min-height: 0;
+  padding: 28rpx 28rpx;
+  margin-bottom: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: stretch;
+}
+
+.bento-sub-inner {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.hub-page .bento-sub-icon {
+  width: 56rpx;
+  height: 56rpx;
+  flex-shrink: 0;
+}
+
+.sub-info {
+  flex: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6rpx;
+  width: 100%;
+}
+
+.card-title-xs {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  line-height: 1.25;
+}
+
+.card-desc-xs {
+  font-size: 24rpx;
+  color: #86868b;
+  margin-top: 4rpx;
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+.sub-icon-img {
+  width: 48rpx;
+  height: 48rpx;
+  flex-shrink: 0;
+}
+
+.hub-page .bento-item-half {
+  flex: 1;
+  flex-shrink: 1;
+  min-width: 0;
+  width: 0;
+  min-height: 160rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28rpx 20rpx;
+  margin-bottom: 0;
+  box-sizing: border-box;
+}
+
+.hub-page .bento-half-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  width: 100%;
+}
+
+.hub-page .bento-half-icon {
+  width: 56rpx;
+  height: 56rpx;
+  flex-shrink: 0;
+}
+
+.bento-half-title {
+  text-align: center;
+}
+
+/* 列表组：左文案 + 右图标（毛玻璃） */
+.hub-page .list-group {
+  margin-bottom: 48rpx;
+  background: rgba(255, 255, 255, 0.52);
+  border-radius: 40rpx;
+  overflow: hidden;
+  box-shadow: 0 10rpx 40rpx rgba(15, 23, 42, 0.06);
+  backdrop-filter: blur(28px) saturate(1.25);
+  -webkit-backdrop-filter: blur(28px) saturate(1.25);
+  border: 1rpx solid rgba(255, 255, 255, 0.72);
+}
+
+.list-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 36rpx 32rpx;
+  box-sizing: border-box;
+}
+
+.list-item--line {
+  border-bottom: 1rpx solid #ebebf0;
+}
+
+.list-hover {
+  background-color: rgba(255, 255, 255, 0.35);
+}
+
+.list-content {
+  flex: 1;
+  min-width: 0;
+  padding-right: 24rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.list-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  line-height: 1.25;
+}
+
+.list-desc {
+  font-size: 24rpx;
+  color: #86868b;
+  line-height: 1.45;
+  font-weight: 400;
+}
+
+.hub-page .list-icon-box {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 6rpx 20rpx rgba(0, 0, 0, 0.08);
+  border: 1rpx solid rgba(255, 255, 255, 0.85);
+}
+
+.hub-page .list-icon-img {
+  width: 48rpx;
+  height: 48rpx;
+}

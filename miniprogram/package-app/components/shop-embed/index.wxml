@@ -1,0 +1,1078 @@
+<wxs module="utils" src="../../pages/shop/shop.wxs"></wxs>
+<view class="shop-embed-root">
+<view class="container {{hubEmbedInProducts ? 'container--hub-embed' : ''}} {{hubPageEnterAnim ? 'hub-page-enter' : ''}}">
+
+<!-- 枢纽顶栏：主页 / 商城（从 products 进入时显示，滑动切换） -->
+<hub-segment-bar
+  wx:if="{{showHubShell && !hubEmbedInProducts}}"
+  active="shop"
+  statusBarHeight="{{statusBarHeight}}"
+  bind:switch="onHubSegmentSwitch"
+/>
+
+<!-- ================= 1. 顶部导航 ================= -->
+<!-- 顶部返回，只在主列表显示，深色背景用白色箭头 -->
+<view class="header" wx:if="{{!showHubShell && !hubEmbedInProducts && !showOrderModal && !showDetail && !showAccDetail}}" style="padding-top: {{statusBarHeight}}px;">
+  <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 4}}px;">
+    <text class="back-arrow">‹</text>
+  </view>
+</view>
+<view class="nav-header" wx:if="{{!showHubShell && !hubEmbedInProducts}}" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
+  <!-- 左侧：返回按钮 -->
+  <view class="nav-left">
+  </view>
+  
+  <!-- 中间区域：标题和管理员切换按钮 -->
+  <view class="brand-title" bindtap="handleTitleClick" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
+    <text class="brand-title-text">{{shopTitle || '选购'}}</text>
+    <!-- 只有白名单用户能看到的切换开关 -->
+    <view 
+      wx:if="{{isAuthorized}}" 
+      class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" 
+      catchtap="toggleAdminMode">
+      {{isAdmin ? 'EXIT' : 'EDIT'}}
+    </view>
+  </view>
+  
+  <view class="nav-right"></view>
+</view>
+
+<!-- 嵌入 products 枢纽：顶部分段栏在壳层，此处补管理模式入口 -->
+<view
+  class="shop-hub-admin-bar"
+  wx:if="{{hubEmbedInProducts && isAuthorized && !showOrderModal && !showDetail && !showAccDetail}}"
+>
+  <view class="shop-hub-admin-actions">
+    <view wx:if="{{!isAdmin}}" class="hub-admin-enter-btn" catchtap="toggleAdminMode">管理模式</view>
+    <view wx:else class="hub-admin-exit-btn" catchtap="toggleAdminMode">切回普通模式</view>
+  </view>
+</view>
+
+<!-- ================= 2. 主页面 ================= -->
+<scroll-view
+  scroll-y
+  class="main-scroll {{hubEmbedInProducts ? 'main-scroll--hub-embed' : ''}}"
+  style="{{hubEmbedInProducts && embedScrollHeight > 0 ? 'height:' + embedScrollHeight + 'px' : ''}}"
+>
+  <view class="shop-hub-loading" wx:if="{{hubEmbedInProducts && !isAdmin && (!categorySections || categorySections.length === 0) && (!seriesList || seriesList.length === 0)}}">
+    <text class="shop-hub-loading-text">正在加载商品…</text>
+  </view>
+
+  <!-- 顶部轮播 (Hero)：视频固定 16:9；图片按真实比例（含 1:1），高度由 bindload + heroSwiperHeightPx 驱动 -->
+  <view class="hero-swiper-box" wx:if="{{isAdmin || topMediaList.length > 0}}">
+    <swiper wx:if="{{topMediaList.length > 0}}" class="hero-swiper" style="height: {{heroSwiperHeightPx}}px" indicator-dots="{{topMediaList.length > 1}}" circular="{{topMediaList.length > 1}}" current="{{heroCurrent}}" autoplay="{{(!isAdmin) && (!heroAutoCarouselEnabled)}}" bindchange="onSwiperChange">
+      <block wx:for="{{topMediaList}}" wx:key="url">
+        <swiper-item class="hero-swiper-item">
+          <view wx:if="{{item.type === 'video'}}" class="hero-video-outer">
+            <view class="hero-video-wrapper">
+              <video 
+                src="{{item.renderUrl || item.url}}" 
+                poster="{{item.poster || ''}}"
+                class="hero-media hero-video-el" 
+                id="hero-video-{{index}}"
+                object-fit="contain"
+                autoplay="{{item.autoplay === true}}"
+                preload="{{index === heroCurrent ? 'auto' : 'metadata'}}"
+                muted 
+                loop="{{!heroAutoCarouselEnabled}}"
+                show-play-btn="{{false}}" 
+                show-center-play-btn="{{false}}"
+                controls="{{false}}"
+                bindplay="onVideoPlay"
+                bindpause="onVideoPause"
+                bindended="onHeroVideoEnded"
+                binderror="onVideoError"
+                data-index="{{index}}"
+                data-location="hero"
+              ></video>
+              <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.renderUrl || item.url}}" data-location="hero">
+                <view class="play-icon" wx:if="{{!heroVideoPlaying[index]}}">
+                  <view class="play-triangle"></view>
+                </view>
+              </view>
+            </view>
+          </view>
+          <block wx:else>
+            <view wx:if="{{item.dualRender}}" class="hero-image-stack">
+              <image
+                src="{{item.renderThumb}}"
+                class="hero-img-base {{heroHdLoaded[index] ? 'is-hidden' : ''}}"
+                mode="widthFix"
+                lazy-load="{{index !== 0}}"
+                bindload="onHeroSlideImageLoad"
+                binderror="onHeroImageError"
+                data-index="{{index}}"
+                data-src="{{item.renderThumb}}"
+              />
+              <image
+                src="{{item.renderFull}}"
+                class="hero-img-overlay hero-img-overlay-full {{heroHdLoaded[index] ? 'is-visible' : ''}}"
+                mode="aspectFit"
+                lazy-load="{{index !== 0}}"
+                bindload="onHeroDualFullLoad"
+                binderror="onHeroImageError"
+                data-index="{{index}}"
+                data-src="{{item.renderFull}}"
+              />
+            </view>
+            <image
+              wx:else
+              src="{{item.renderFull || item.renderUrl || item.url}}"
+              class="hero-img-single"
+              mode="widthFix"
+              lazy-load="{{index !== 0}}"
+              bindload="onHeroSlideImageLoad"
+              binderror="onHeroImageError"
+              data-index="{{index}}"
+              data-src="{{item.renderFull || item.renderUrl || item.url}}"
+            />
+          </block>
+          
+          <view wx:if="{{isAdmin && item.type === 'video'}}" class="admin-autoplay-media {{item.autoplay ? 'on' : ''}}" catchtap="adminToggleTopVideoAutoplay" data-index="{{index}}">
+            {{item.autoplay ? '自动播放开' : '自动播放关'}}
+          </view>
+          <view wx:if="{{isAdmin}}" class="admin-del-media" catchtap="adminDelTopMedia" data-index="{{index}}">✕</view>
+        </swiper-item>
+      </block>
+    </swiper>
+    <view wx:elif="{{isAdmin}}" class="hero-empty">
+      <view class="admin-upload-hint admin-upload-hint--block">
+        <text class="admin-upload-hint-ratio">原比例</text>
+        <text class="admin-upload-hint-desc">顶部轮播图</text>
+        <text class="admin-upload-hint-sub">宽≤1600 · 用上方按钮上传</text>
+        <text class="admin-upload-hint-sub muted">选图后自动压缩体积</text>
+      </view>
+    </view>
+    
+    <!-- Admin: 拖拽排序模式 -->
+    <view class="media-drag-list" wx:if="{{isAdmin && isEditingMedia}}">
+      <view class="drag-tip">长按拖动调整顺序，置顶项会显示在最前</view>
+      <block wx:for="{{sortedTopMediaList}}" wx:key="url" wx:for-index="dragIndex">
+        <view class="drag-item" 
+              data-index="{{item.originalIndex}}"
+              bindtouchstart="onDragStart"
+              bindtouchmove="onDragMove"
+              bindtouchend="onDragEnd">
+          <view class="drag-item-preview">
+            <image wx:if="{{item.type === 'image'}}" src="{{item.renderUrl || item.url}}" mode="aspectFit" class="drag-preview-img" lazy-load="true"></image>
+            <view wx:else class="drag-preview-video">
+              <text>🎥 视频</text>
+            </view>
+          </view>
+          <view class="drag-item-info">
+            <text class="drag-item-type">{{item.type === 'image' ? '图片' : '视频'}}</text>
+            <view class="drag-item-badges">
+              <text wx:if="{{item.isPinned}}" class="badge pin-badge">置顶</text>
+              <text wx:if="{{item.autoplay && item.type === 'video'}}" class="badge autoplay-badge">自动播放</text>
+            </view>
+          </view>
+          <view class="drag-handle">☰</view>
+        </view>
+      </block>
+      <view class="drag-actions">
+        <view class="drag-btn cancel" bindtap="adminCancelDrag">取消</view>
+        <view class="drag-btn confirm" bindtap="adminConfirmDrag">完成</view>
+      </view>
+    </view>
+    
+    <!-- Admin: 左右分开的上传按钮 -->
+    <view class="admin-upload-row" wx:if="{{isAdmin && !isEditingMedia}}">
+       <view class="up-btn" bindtap="adminAddImage">📷 上传图片</view>
+       <view class="up-btn" bindtap="adminAddVideo">🎥 上传视频</view>
+       <view class="up-btn toggle {{heroAutoCarouselEnabled ? 'on' : ''}}" bindtap="adminToggleHeroAutoCarousel">
+         {{heroAutoCarouselEnabled ? '🔁 自动轮播开' : '🔁 自动轮播关'}}
+       </view>
+    </view>
+    <text class="admin-upload-row-hint" wx:if="{{isAdmin && !isEditingMedia}}">顶部图：原比例，宽≤1600，自动压缩</text>
+  </view>
+
+  <!-- ================= 分类区块 (Apple Store 级) ================= -->
+  <view class="shop-sections">
+    <block wx:for="{{categorySections}}" wx:key="name" wx:for-item="section" wx:for-index="catIndex">
+      <view class="shop-section" wx:if="{{(section.rowMode === 'accessory' ? (section.accSlots.length > 0 || section.seriesSlotCount > 0 || isAdmin) : section.items.length > 0) || isAdmin}}">
+        <view class="shop-section-head {{isAdmin ? 'shop-section-head--admin' : ''}}">
+          <text class="shop-section-title {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditCategory' : ''}}" data-index="{{catIndex}}">{{section.name}}</text>
+          <view wx:if="{{isAdmin}}" class="shop-section-mode-toggle" catchtap="toggleSectionRowMode" data-cat-index="{{catIndex}}">
+            <view class="shop-section-mode-opt {{section.rowMode !== 'accessory' ? 'is-on' : ''}}">产品</view>
+            <view class="shop-section-mode-opt {{section.rowMode === 'accessory' ? 'is-on' : ''}}">配件</view>
+          </view>
+          <view wx:if="{{isAdmin}}" class="shop-section-del" catchtap="adminDeleteCategory" data-index="{{catIndex}}">删除</view>
+        </view>
+        <!-- 产品系列横滑 -->
+        <block wx:if="{{section.rowMode !== 'accessory'}}">
+          <swiper
+            class="shop-series-swiper"
+            current="{{section.current}}"
+            previous-margin="36rpx"
+            next-margin="108rpx"
+            duration="{{400}}"
+            easing-function="easeOutCubic"
+            skip-hidden-item-layout="{{true}}"
+            indicator-dots="{{false}}"
+            bindchange="onSectionSwiperChange"
+            bindanimationfinish="onSectionSwiperAnimationFinish"
+            data-cat-index="{{catIndex}}"
+          >
+            <swiper-item wx:for="{{section.items}}" wx:for-item="entry" wx:for-index="slideIndex" wx:key="slideKey" class="shop-series-swiper-item">
+              <view class="shop-hero-card" bindtap="handleProductClick" data-index="{{entry.index}}">
+                <view class="shop-hero-card-inner {{section.liveCurrent === slideIndex ? 'is-active' : 'is-inactive'}}">
+                  <view class="shop-hero-cover">
+                    <image wx:if="{{entry.series.coverDisplay || entry.series.cover}}" class="shop-hero-cover-img" src="{{entry.series.coverDisplay || entry.series.cover}}" mode="aspectFill" lazy-load="true" binderror="onCoverImageError" data-index="{{entry.index}}" data-kind="high" />
+                    <view wx:elif="{{isAdmin}}" class="admin-upload-hint">
+                      <text class="admin-upload-hint-ratio">4:3</text>
+                      <text class="admin-upload-hint-desc">列表封面</text>
+                      <text class="admin-upload-hint-sub">建议 1200×900</text>
+                      <text class="admin-upload-hint-sub muted">点击 📷 · 自动压缩</text>
+                    </view>
+                    <view wx:if="{{isAdmin}}" class="sort-order-badge" catchtap="adminEditSortOrder" data-index="{{entry.index}}">
+                      <text>{{entry.series.sortOrder}}</text>
+                    </view>
+                    <view class="admin-float" wx:if="{{isAdmin}}" catchtap="adminUploadCover" data-index="{{entry.index}}">📷</view>
+                    <view class="admin-del-card-btn" wx:if="{{isAdmin}}" catchtap="adminDeleteSeries" data-index="{{entry.index}}">删除</view>
+                    <view class="admin-cat-badge" wx:if="{{isAdmin}}" catchtap="adminChangeMainCategory" data-index="{{entry.index}}">
+                      {{entry.series.mainCategory || '电动版本'}} ▾
+                    </view>
+                  </view>
+                  <view class="shop-hero-meta">
+                    <text class="shop-hero-name {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditSeriesName' : ''}}" data-index="{{entry.index}}">{{entry.series.name}}</text>
+                    <view class="shop-hero-price-row">
+                      <text class="shop-hero-price {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditSeriesPrice' : ''}}" data-index="{{entry.index}}">{{entry.series.priceDisplay || '¥' + entry.series.models[0].price}}</text>
+                      <text class="shop-hero-price-suffix" wx:if="{{!entry.series.priceDisplay}}">起</text>
+                    </view>
+                  </view>
+                </view>
+              </view>
+            </swiper-item>
+            <swiper-item wx:if="{{isAdmin}}" class="shop-series-swiper-item">
+              <view class="shop-hero-card">
+                <view class="shop-hero-add-inner {{section.liveCurrent === section.items.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddSeries" data-category="{{section.name}}">
+                  <text class="shop-hero-add-icon">+</text>
+                  <text class="shop-hero-add-label">添加产品系列</text>
+                </view>
+              </view>
+            </swiper-item>
+          </swiper>
+        </block>
+        <!-- 配件横滑（同版式卡片，点击进入配件详情+购买） -->
+        <block wx:else>
+          <swiper
+            class="shop-series-swiper shop-series-swiper--acc"
+            current="{{section.current}}"
+            previous-margin="36rpx"
+            next-margin="108rpx"
+            duration="{{400}}"
+            easing-function="easeOutCubic"
+            skip-hidden-item-layout="{{true}}"
+            indicator-dots="{{false}}"
+            bindchange="onSectionSwiperChange"
+            bindanimationfinish="onSectionSwiperAnimationFinish"
+            data-cat-index="{{catIndex}}"
+          >
+            <swiper-item wx:for="{{section.accSlots}}" wx:for-item="slot" wx:for-index="slideIndex" wx:key="slideKey" class="shop-series-swiper-item">
+              <view class="shop-hero-card" bindtap="{{slot.acc ? 'openAccessoryDetailFromRow' : ''}}" data-index="{{slot.index}}">
+                <view class="shop-hero-card-inner shop-hero-card-inner--acc {{section.liveCurrent === slideIndex ? 'is-active' : 'is-inactive'}}">
+                  <block wx:if="{{slot.acc}}">
+                  <view class="shop-hero-cover shop-hero-cover--acc">
+                    <view wx:if="{{isAdmin}}" class="acc-slot-num-badge acc-slot-num-badge--cover">{{slot.slotNum}}</view>
+                    <view class="shop-acc-cover-chrome" wx:if="{{isAdmin}}">
+                      <view class="shop-acc-cover-chrome-row">
+                        <view wx:if="{{isAdmin}}" class="admin-del-card-btn admin-del-card-btn--acc" catchtap="adminDelAcc" data-index="{{slot.index}}">删除</view>
+                      </view>
+                      <view wx:if="{{isAdmin}}" class="shop-acc-cover-chrome-row shop-acc-cover-chrome-row--chips">
+                        <view
+                          class="admin-acc-slots-badge admin-acc-slots-badge--acc"
+                          catchtap="adminChangeAccSlotNumbers"
+                          data-index="{{slot.index}}"
+                        >显示位置 {{utils.formatVersionSlots(slot.acc.versionSlots, section.name)}} ▾</view>
+                      </view>
+                    </view>
+                    <image wx:if="{{slot.acc.imgDisplay || slot.acc.img}}" class="shop-hero-cover-img" src="{{slot.acc.imgDisplay || slot.acc.img}}" mode="aspectFill" lazy-load="true" />
+                    <view wx:elif="{{isAdmin}}" class="admin-upload-hint">
+                      <text class="admin-upload-hint-ratio">4:3</text>
+                      <text class="admin-upload-hint-desc">配件列表封面</text>
+                      <text class="admin-upload-hint-sub">建议 1200×900</text>
+                      <text class="admin-upload-hint-sub muted">点击 📷 · 自动压缩</text>
+                    </view>
+                    <view class="admin-float admin-float--acc-cover" wx:if="{{isAdmin}}" catchtap="adminUploadAccThumb" data-index="{{slot.index}}">📷</view>
+                  </view>
+                  <view class="shop-hero-meta shop-hero-meta--acc">
+                    <text class="shop-hero-name {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditAccNameFromRow' : ''}}" data-index="{{slot.index}}">{{slot.acc.name || '新配件'}}</text>
+                    <view class="shop-hero-price-row">
+                      <text class="shop-hero-price {{isAdmin ? 'editable' : ''}}" catchtap="{{isAdmin ? 'adminEditAccPriceFromRow' : ''}}" data-index="{{slot.index}}">¥{{utils.formatPrice(slot.acc.price)}}</text>
+                    </view>
+                  </view>
+                  </block>
+                  <view wx:elif="{{isAdmin}}" class="shop-acc-slot-empty" bindtap="adminAddAcc" data-category="{{section.name}}" data-slot-num="{{slot.slotNum}}">
+                    <text class="shop-acc-slot-empty-num">{{slot.slotNum}} 号位</text>
+                    <text class="shop-acc-slot-empty-hint">点击添加配件</text>
+                  </view>
+                </view>
+              </view>
+            </swiper-item>
+            <swiper-item wx:if="{{isAdmin}}" class="shop-series-swiper-item">
+              <view class="shop-hero-card">
+                <view class="shop-hero-add-inner {{section.liveCurrent === section.accSlots.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddAcc" data-category="{{section.name}}">
+                  <text class="shop-hero-add-icon">+</text>
+                  <text class="shop-hero-add-label">添加配件</text>
+                </view>
+              </view>
+            </swiper-item>
+          </swiper>
+        </block>
+        <view class="shop-series-dots" wx:if="{{section.slideCount > 1}}">
+          <view
+            wx:for="{{section.dotIndices}}"
+            wx:key="*this"
+            wx:for-item="dotIdx"
+            class="shop-series-dot {{section.liveCurrent === dotIdx ? 'is-on' : ''}}"
+          ></view>
+        </view>
+      </view>
+    </block>
+    <view class="shop-section-add-bar" wx:if="{{isAdmin}}" catchtap="adminAddCategory">
+      <text class="shop-section-add-icon">+</text>
+      <text class="shop-section-add-text">添加版本分类</text>
+    </view>
+  </view>
+
+  <view style="height: 48rpx;"></view>
+</scroll-view>
+
+<!-- 主列表悬浮购物车：纯路径 SVG + 篮内 MT 文字叠层（小程序对 SVG 内 text 常不渲染，故用叠层） -->
+<view class="shop-float-cart" wx:if="{{!hubEmbedInProducts && !showOrderModal && !showDetail && !showAccDetail}}" catchtap="onFloatingCartTap">
+  <view class="shop-float-cart-inner">
+    <image class="shop-float-cart-svg" src="/images/shop-float-cart.svg" mode="aspectFit" />
+    <text class="shop-float-mt-overlay">MT</text>
+  </view>
+  <view class="shop-float-cart-badge" wx:if="{{cart.length > 0}}">{{cart.length > 99 ? '99+' : cart.length}}</view>
+</view>
+
+<!-- 枢纽横滑 track 带 transform，内层 fixed 会相对轨道定位到主页列；嵌入时用 root-portal 挂到页面根 -->
+<root-portal enable="{{hubEmbedInProducts}}">
+<view class="hub-embed-portal-layer">
+<!-- ================= 3. 产品详情弹窗 (Detail) ================= -->
+<view class="full-modal {{showDetail ? 'active' : ''}}">
+  <!-- 弹窗头 -->
+  <view class="modal-nav modal-nav--safe-top" style="padding-top: {{statusBarHeight}}px;">
+    <view class="nav-close" catchtap="closeDetail">✕</view>
+    <!-- 管理员模式下：标题可点击编辑 -->
+    <view 
+      class="modal-title {{isAdmin ? 'editable' : ''}}" 
+      catchtap="{{isAdmin ? 'adminEditSeriesNameInDetail' : ''}}">
+      {{currentSeries.name}}
+    </view>
+    <view style="width:60rpx"></view>
+  </view>
+
+  <!-- 弹窗内容区（port 供底栏显隐测量，scroll-view 本身不宜做 query 锚点） -->
+  <view id="detail-scroll-port" class="detail-scroll-port">
+  <scroll-view id="detail-modal-scroll" scroll-y class="modal-scroll detail-modal-scroll" bindscroll="onDetailScroll" enhanced="{{true}}" show-scrollbar="{{false}}">
+    <view id="detail-scroll-inner" class="scroll-inner {{isModelCompareMode ? 'scroll-inner--compare' : ''}}">
+      
+      <!-- (A) 详情长图/视频：图片 widthFix 按真实比例；视频用 aspectPaddingPercent（上传时 getVideoInfo）占位，1:1 与图片一致 -->
+      <view class="detail-images" id="detail-media-section">
+         <block wx:for="{{currentSeries.detailImages}}" wx:key="url">
+           <view class="dimg-box {{item.type === 'video' ? 'dimg-box-video' : 'dimg-box-image'}} {{isAdmin && isDetailDragging && detailDragIndex === index ? 'dragging' : ''}}"
+                 style="{{(item.type === 'video' ? 'padding-bottom:' + (item.aspectPaddingPercent != null && item.aspectPaddingPercent !== '' ? item.aspectPaddingPercent : 56.25) + '%;' : '') + (isAdmin && isDetailDragging && detailDragIndex === index ? 'transform: translateY(' + detailDragOffsetY + 'px) scale(1.02);' : '')}}"
+                 bindtouchstart="{{isAdmin ? 'onDetailDragStart' : ''}}"
+                 catchtouchmove="{{isAdmin && isDetailDragging ? 'onDetailDragMove' : ''}}"
+                 bindtouchend="{{isAdmin ? 'onDetailDragEnd' : ''}}"
+                 data-index="{{index}}">
+              <view wx:if="{{item.type === 'video'}}" class="detail-video-wrapper">
+                <video 
+                  src="{{item.urlDisplay || item.url}}" 
+                  poster="{{item.poster || ''}}"
+                  class="dimg" 
+                  id="detail-video-{{index}}"
+                  object-fit="contain"
+                  autoplay="{{item.autoplay || false}}"
+                  preload="metadata"
+                  muted 
+                  loop 
+                  show-play-btn="{{false}}" 
+                  show-center-play-btn="{{false}}"
+                  controls="{{false}}"
+                  bindplay="onVideoPlay"
+                  bindpause="onVideoPause"
+                  binderror="onVideoError"
+                  data-index="{{index}}"
+                  data-location="detail"
+                ></video>
+                <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.urlDisplay || item.url}}" data-location="detail" wx:if="{{!isDetailDragging}}">
+                  <view class="play-icon" wx:if="{{!detailVideoPlaying[index]}}">
+                    <view class="play-triangle"></view>
+                  </view>
+                </view>
+                <!-- 🔴 详情页视频的管理员控制开关 -->
+                <view wx:if="{{isAdmin && !isDetailDragging}}" class="admin-detail-video-controls">
+                  <view class="video-control-item">
+                    <text class="control-label">置顶</text>
+                    <view class="switch-toggle {{item.isPinned ? 'on' : ''}}" catchtap="adminToggleDetailVideoPin" data-index="{{index}}">
+                      <view class="switch-thumb"></view>
+                    </view>
+                  </view>
+                  <view class="video-control-item">
+                    <text class="control-label">自动播放</text>
+                    <view class="switch-toggle {{item.autoplay ? 'on' : ''}}" catchtap="adminToggleDetailVideoAutoplay" data-index="{{index}}">
+                      <view class="switch-thumb"></view>
+                    </view>
+                  </view>
+                </view>
+              </view>
+              <!-- 图片：widthFix 按真实宽高比撑开高度，兼容 1:1 / 竖图 / 横图 -->
+              <block wx:else>
+                <!-- 前 2 张不参与懒加载，避免每次进详情都像「整页在加载」 -->
+                <image src="{{item.urlDisplay || item.url}}" mode="widthFix" class="dimg dimg-detail-static" lazy-load="{{index > 1}}" bindload="onDetailMediaImageLoad" />
+              </block>
+              
+              <view wx:if="{{isAdmin && !isDetailDragging}}" class="admin-del-abs" catchtap="adminDelDetailImg" data-index="{{index}}">✕</view>
+           </view>
+         </block>
+         <view class="add-txt-btn" wx:if="{{isAdmin}}" bindtap="adminAddDetailMedia">+ 添加详情图片/视频</view>
+         <text class="admin-upload-row-hint detail-hint" wx:if="{{isAdmin}}">详情长图：原比例，宽≤1600，自动压缩</text>
+      </view>
+
+      <!-- 2. 选购配置区 -->
+      <view class="config-sec" id="detail-config-section">
+        
+        <!-- 标题行：底栏在滚过此行下方后显示 -->
+        <view class="sec-header-row" id="detail-config-header">
+            <view class="sec-title {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="configTitle">
+              {{currentSeries.labels.configTitle || '选购配置'}}
+            </view>
+            <!-- 对比按钮 -->
+            <view class="btn-compare" 
+                  wx:if="{{currentSeries.models.length > 1}}" 
+                  bindtap="toggleModelCompareMode">
+              {{isModelCompareMode ? '取消选择' : '参数对比'}}
+            </view>
+        </view>
+        <!-- 底栏显隐锚点：紧贴「选购配置」标题行底边 -->
+        <view id="detail-footer-sentinel" class="detail-footer-sentinel"></view>
+
+        <!-- 对比引导：已选≥2 个即显示「开始对比」 -->
+        <view wx:if="{{isModelCompareMode}}" class="compare-action-bar">
+          <view wx:if="{{compareSelectedModels.length < 2}}" class="compare-guide-phase1">
+            <view class="compare-guide-phase1-pill">
+              <text class="compare-guide-phase1-txt">请选中需要对比的型号（已选 {{compareSelectedModels.length}}）</text>
+            </view>
+          </view>
+          <view wx:else class="compare-guide-phase2">
+            <text class="compare-guide-phase2-title">点击开始对比查看详细参数</text>
+            <view class="compare-guide-phase2-row">
+              <view class="compare-start-btn-wrap">
+                <text class="compare-guide-arrow">➜</text>
+                <view class="compare-start-btn" bindtap="startCompare">
+                  开始对比 (已选{{compareSelectedModels.length}})
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <!-- A. 选择型号 -->
+        <view class="cfg-group">
+          <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="modelTitle">
+            {{currentSeries.labels.modelTitle || '选择型号'}}
+          </view>
+          
+          <block wx:for="{{currentSeries.models}}" wx:key="index">
+            <view 
+              class="model-card-normal {{ (!isModelCompareMode && selectedModelIdx === index) || (isModelCompareMode && item.isCompareChecked) ? 'selected' : ''}} {{isModelCompareMode && item.isCompareChecked ? 'compare-checked' : ''}} {{isModelCompareMode && compareSelectedModels.length < 2 && !item.isCompareChecked ? 'compare-guide-press-cycle' : ''}}" 
+              bindtap="selectModel" 
+              data-index="{{index}}">
+              
+              <view wx:if="{{isModelCompareMode}}" class="circle {{item.isCompareChecked ? 'checked' : ''}}" style="margin-right:20rpx;"></view>
+
+              <view class="m-main">
+                  <view class="m-title-row">
+                    <text class="m-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelName':''}}" data-midx="{{index}}">{{item.name}}</text>
+                    <text class="m-version {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelDesc':''}}" data-midx="{{index}}">{{item.desc || (isAdmin ? '点击填写版本' : '标准版')}}</text>
+                  </view>
+                  <text class="m-scene {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditModelScene':''}}" data-midx="{{index}}">{{item.sceneDesc || item.cardIntro || item.intro || (isAdmin ? '点击填写使用场景' : '适用于日常通勤、城市骑行场景')}}</text>
+              </view>
+              
+              <!-- 🔴 优化：把价格包装在 view 中，根据管理员模式设置不同的 class -->
+              <!-- 🔴 修复：非管理员模式下使用 bindtap 或不绑定，避免阻止事件冒泡 -->
+              <view class="m-price-wrapper {{isAdmin ? 'm-price-wrapper-admin' : 'm-price-wrapper-normal'}}" catchtap="{{isAdmin ? 'adminEditModelPrice' : ''}}" data-midx="{{index}}">
+                <text class="m-price {{isAdmin?'editable':''}}">¥{{item.price}}</text>
+              </view>
+              
+              <view wx:if="{{isAdmin}}" class="admin-del-mini" catchtap="adminDelModel" data-midx="{{index}}">✕</view>
+            </view>
+          </block>
+          <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddModel">+ 添加型号</view>
+        </view>
+
+        <!-- B. 配置方案 -->
+        <!-- 普通用户：只有当当前系列存在配置项时才显示；
+             管理员：即使没有配置项也显示（方便添加新的配置方案） -->
+        <view class="cfg-group" wx:if="{{(currentSeries.options && currentSeries.options.length > 0) || isAdmin}}">
+          <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="optionTitle">
+            {{currentSeries.labels.optionTitle || '配置方案'}}
+          </view>
+          <view class="opt-grid {{isAdmin ? 'admin-mode' : ''}}">
+             <block wx:for="{{currentSeries.options}}" wx:key="index">
+                <view class="opt-card {{selectedOptionIdx === index ? 'selected' : ''}} {{isAdmin ? 'admin-mode' : ''}}" bindtap="selectOption" data-index="{{index}}">
+                  <!-- 普通模式：按图真实比例（含 1:1）展示 -->
+                  <view wx:if="{{item.img && !isAdmin}}" class="opt-img">
+                    <image class="opt-img-el" src="{{item.imgDisplay || item.img}}" mode="widthFix" lazy-load="true"></image>
+                  </view>
+                   
+                   <!-- 管理员模式：左边文字区域 -->
+                   <view class="opt-info">
+                      <text class="opt-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditOptName':''}}" data-oidx="{{index}}">{{item.name}}</text>
+                      <text class="opt-sub {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditOptPrice':''}}" data-oidx="{{index}}">{{item.price > 0 ? '+¥'+item.price : '标配'}}</text>
+                   </view>
+                   
+                   <!-- 管理员模式：右边上传照片按钮 -->
+                   <view wx:if="{{isAdmin}}" class="admin-add-icon" catchtap="adminUploadOptionImg" data-oidx="{{index}}">
+                     <image wx:if="{{item.img}}" class="admin-opt-thumb-img" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
+                     <view wx:else class="admin-upload-hint admin-upload-hint--inline">
+                       <text class="admin-upload-hint-ratio">1:1</text>
+                       <text class="admin-upload-hint-sub">800×800</text>
+                     </view>
+                   </view>
+                   
+                   <!-- 删除按钮 -->
+                   <view wx:if="{{isAdmin}}" class="admin-del-corner" catchtap="adminDelOption" data-oidx="{{index}}">✕</view>
+                </view>
+             </block>
+             <view class="opt-card add-btn {{isAdmin ? 'admin-mode' : ''}}" wx:if="{{isAdmin}}" bindtap="adminAddOption">+</view>
+          </view>
+        </view>
+
+        <!-- C. 配件加购：仅显示已配对到本版本+本格号的配件 -->
+        <view class="cfg-group" wx:if="{{seriesAccessoryList.length > 0 || isAdmin}}">
+          <view class="cfg-label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditLabel':''}}" data-key="accTitle">
+            {{currentSeries.labels.accTitle || '配件加购'}}
+          </view>
+          <view class="acc-pair-hint" wx:if="{{seriesAccessoryList.length === 0 && isAdmin}}">
+            <text>请先在商城为配件配置「显示位置」（版本+格号），才会出现在本产品详情</text>
+          </view>
+          <view class="acc-list-v">
+            <block wx:for="{{seriesAccessoryList}}" wx:key="rowKey">
+               <view class="acc-row-card {{item.selected ? 'selected' : ''}} {{item.isRequired ? 'required-highlight' : ''}} {{item.isRequired && item.selected ? 'required-selected' : ''}}" 
+                     bindtap="openAccessoryDetail" data-index="{{item.listIndex}}">
+            
+            <view class="acc-thumb-box">
+              <image wx:if="{{item.imgDisplay || item.img}}" class="acc-thumb" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
+              <view wx:elif="{{isAdmin}}" class="admin-upload-hint admin-upload-hint--sm">
+                <text class="admin-upload-hint-ratio">1:1</text>
+                <text class="admin-upload-hint-sub">600×600</text>
+              </view>
+            </view>
+            <view wx:if="{{isAdmin}}" class="admin-float-thumb" catchtap="adminUploadAccThumb" data-index="{{item.listIndex}}">📷</view>
+
+            <view class="acc-info">
+                <text class="acc-n">{{item.name}}</text>
+                <text class="acc-p">¥{{item.price}}</text>
+                <text class="acc-required-tag" wx:if="{{item.isRequired && !item.selected}}">需要购买</text>
+            </view>
+
+            <view class="acc-add-btn {{item.selected ? 'checked' : ''}} {{item.isRequired ? 'required-btn' : ''}}" 
+                  catchtap="toggleAccessorySelection" 
+                  data-index="{{item.listIndex}}">
+               {{item.selected ? '已选' : '添加'}}
+            </view>
+            
+            <view wx:if="{{isAdmin}}" class="admin-del-corner-top" catchtap="adminDelAcc" data-index="{{item.listIndex}}">✕</view>
+          </view>
+            </block>
+      <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddAccForSeries">+ 添加配件（绑定当前产品格号）</view>
+    </view>
+  </view>
+
+      </view>
+      <view style="height:200rpx;"></view> 
+    </view>
+  </scroll-view>
+  </view>
+
+  <!-- 2. 底部结算栏 -->
+  <view class="modal-footer detail-modal-footer {{showFooterBar && !isModelCompareMode ? 'visible is-show' : ''}}">
+    <view class="footer-btn-group">
+      <view class="btn-cart" id="cart-target" bindtap="addToCart">加入购物车</view>
+      <view class="btn-buy" bindtap="openCartOrder">立即购买</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 4. 对比表格弹窗 (最终修正版) ================= -->
+<!-- 遮罩层 -->
+<view class="dark-mask" wx:if="{{showSpecsModal}}" bindtap="closeSpecsModal" catchtouchmove="noop" style="z-index: 998;"></view>
+
+<!-- 弹窗主体 -->
+<view class="overlay {{showSpecsModal ? 'active' : ''}}" catchtap="stopPropagation" catchtouchmove="noop">
+  
+  <!-- 1. 标题栏 (白色背景) -->
+  <view class="overlay-head">
+    <text>对比详情</text>
+    <view catchtap="closeSpecsModal" class="close">✕</view>
+  </view>
+  
+  <!-- 2. 灰色胶囊表头 (固定不动，位于标题栏下方) -->
+  <view class="specs-header-container">
+    <view class="capsule-header">
+      <view class="sp-cell label">参数项</view>
+      <block wx:for="{{compareData.headers}}" wx:key="headerIdx" wx:for-index="headerIdx">
+        <view class="sp-cell">{{item}}</view>
+      </block>
+      <view wx:if="{{isAdmin}}" class="sp-cell admin-w"></view>
+    </view>
+  </view>
+  
+  <!-- 3. 滚动内容区 -->
+  <scroll-view scroll-y class="specs-scroll-body" enable-back-to-top="{{true}}">
+    <view class="specs-table-content">
+       
+       <block wx:for="{{compareData.rows}}" wx:key="label" wx:for-index="rowIdx">
+         <view class="sp-row">
+            <view class="sp-cell label {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSpecCell':''}}" data-row="{{rowIdx}}" data-key="label">{{item.label}}</view>
+            <block wx:for="{{item.vals}}" wx:for-item="val" wx:key="valIdx" wx:for-index="valIdx">
+               <view class="sp-cell {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditSpecCell':''}}" data-row="{{rowIdx}}" data-key="v{{valIdx+1}}">{{val}}</view>
+            </block>
+            <view wx:if="{{isAdmin}}" class="sp-cell admin-w" catchtap="adminDelSpecRow" data-index="{{rowIdx}}">✕</view>
+         </view>
+       </block>
+       
+       <view wx:if="{{isAdmin}}" class="add-txt-btn" bindtap="adminAddSpecRow">+ 添加参数行</view>
+       
+       <!-- 底部视频按钮 -->
+       <view class="compare-btn-area" 
+             wx:if="{{isAdmin || (currentSeries.compareVideo && currentSeries.showCompareVideo)}}">
+         <view class="btn-watch-compare" bindtap="watchCompareVideo">
+           <text class="icon-play" style="margin-right: 10rpx;">▶</text> 查看对比演示视频
+         </view>
+
+         <view class="admin-video-controls" wx:if="{{isAdmin}}">
+           <view class="admin-v-btn upload" bindtap="adminUploadCompareVideo">
+             {{currentSeries.compareVideo ? '更换视频' : '上传视频'}}
+           </view>
+           <view class="admin-v-btn toggle {{currentSeries.showCompareVideo ? 'on' : 'off'}}" 
+                 bindtap="adminToggleVideoVis">
+             {{currentSeries.showCompareVideo ? '显示中' : '已隐藏'}}
+           </view>
+         </view>
+
+       </view>
+
+    </view>
+  </scroll-view>
+</view>
+
+<!-- ================= 5. 配件详情弹窗 ================= -->
+<view class="full-modal acc-detail-modal {{showAccDetail ? 'active' : ''}} {{accCheckoutActive && showOrderModal ? 'acc-detail-parked' : ''}}" hidden="{{accCheckoutActive && showOrderModal}}" style="z-index: 300;">
+  <view class="modal-nav acc-detail-nav modal-nav--safe-top" style="padding-top: {{statusBarHeight}}px;">
+     <view class="nav-close" catchtap="onAccDetailNavClose">✕</view>
+     <view class="modal-title">配件详情</view>
+     <view class="acc-detail-nav-spacer"></view>
+  </view>
+  <scroll-view scroll-y class="modal-scroll acc-detail-scroll">
+     <view class="acc-detail-hero">
+        <swiper
+          wx:if="{{accessoryList[currentAccIdx].detailImages && accessoryList[currentAccIdx].detailImages.length > 0}}"
+          class="acc-detail-swiper"
+          indicator-dots="{{accessoryList[currentAccIdx].detailImages.length > 1}}"
+          indicator-color="rgba(255,255,255,0.45)"
+          indicator-active-color="#ffffff"
+          autoplay="{{accessoryList[currentAccIdx].detailImagesAutoplay && accessoryList[currentAccIdx].detailImages.length > 1}}"
+          interval="2000"
+          duration="250"
+          circular="{{accessoryList[currentAccIdx].detailImages.length > 1}}"
+          current="{{accDetailSwiperIndex}}"
+          bindchange="onAccDetailSwiperChange"
+        >
+          <block wx:for="{{accessoryList[currentAccIdx].detailImages}}" wx:for-index="imgIdx" wx:for-item="imgId" wx:key="*this">
+            <swiper-item class="acc-detail-swiper-item">
+              <image
+                class="acc-detail-hero-img"
+                src="{{(accessoryList[currentAccIdx].detailImagesDisplay && accessoryList[currentAccIdx].detailImagesDisplay[imgIdx]) || imgId}}"
+                mode="aspectFit"
+                lazy-load="{{imgIdx > 0}}"
+              />
+              <view
+                wx:if="{{isAdmin}}"
+                class="acc-slide-del"
+                catchtap="adminDelAccDetailImg"
+                data-imgidx="{{imgIdx}}"
+              >✕</view>
+            </swiper-item>
+          </block>
+        </swiper>
+        <view wx:else class="acc-hero-placeholder">
+          <view class="acc-hero-placeholder-icon">📷</view>
+          <block wx:if="{{isAdmin}}">
+            <text class="admin-upload-hint-ratio acc-hero-ratio-tag">4:3</text>
+            <text class="acc-hero-placeholder-text">配件详情主图</text>
+            <text class="acc-hero-placeholder-sub">建议 1200×900 · 点击下方「添加图片」</text>
+            <text class="acc-hero-placeholder-sub muted">选图后自动压缩体积</text>
+          </block>
+          <text wx:else class="acc-hero-placeholder-text">暂无图片</text>
+        </view>
+
+        <view wx:if="{{isAdmin}}" class="acc-hero-admin-bar">
+          <view class="acc-hero-upload-btn" bindtap="adminAddAccDetailImg">
+            <text class="acc-hero-upload-icon">📷</text>
+            <text class="acc-hero-upload-text">添加图片</text>
+          </view>
+          <view
+            wx:if="{{accessoryList[currentAccIdx].detailImages && accessoryList[currentAccIdx].detailImages.length > 1}}"
+            class="acc-autoplay-toggle"
+            catchtap="noop"
+          >
+            <text class="acc-autoplay-label">自动轮播</text>
+            <switch
+              class="acc-autoplay-switch"
+              checked="{{accessoryList[currentAccIdx].detailImagesAutoplay}}"
+              bindchange="onAccDetailAutoplayChange"
+              color="#34C759"
+            />
+          </view>
+        </view>
+     </view>
+     
+     <view class="acc-detail-info">
+        <!-- 名称 -->
+        <view class="acc-d-row">
+          <text class="acc-d-label">配件名称</text>
+          <view class="acc-d-name {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccName':''}}">{{accessoryList[currentAccIdx] ? accessoryList[currentAccIdx].name : ''}}</view>
+        </view>
+        
+        <!-- 价格 -->
+        <view class="acc-d-row">
+          <text class="acc-d-label">价格</text>
+          <view class="acc-d-price {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccPrice':''}}">¥{{accessoryList[currentAccIdx] ? utils.formatPrice(accessoryList[currentAccIdx].price) : '0'}}</view>
+        </view>
+
+        <!-- 描述 -->
+        <view class="acc-d-row">
+          <text class="acc-d-label">详细描述</text>
+          <view class="acc-d-desc {{isAdmin?'editable':''}}" catchtap="{{isAdmin?'adminEditAccDesc':''}}">{{accessoryList[currentAccIdx] ? (accessoryList[currentAccIdx].desc || '暂无描述') : ''}}</view>
+        </view>
+     </view>
+  </scroll-view>
+  
+  <view class="modal-footer detail-modal-footer acc-detail-footer visible is-show" wx:if="{{showAccDetail && accDetailShowPurchaseFooter}}">
+    <view class="footer-btn-group">
+      <view class="btn-cart" bindtap="addAccToCartFromDetailPurchase">加入购物车</view>
+      <view class="btn-buy" bindtap="buyAccFromDetailPurchase">立即购买</view>
+    </view>
+  </view>
+  <view class="modal-footer acc-detail-footer visible is-show" wx:elif="{{showAccDetail}}">
+     <view></view>
+     <view class="btn-black full" bindtap="addAccToCartFromDetail">加入购物袋</view>
+  </view>
+</view>
+
+<!-- ================= 6. 加入购物车成功弹窗（弹出+收缩退出动画） ================= -->
+<view class="success-mask {{cartSuccessClosing ? 'closing' : ''}}" wx:if="{{showCartSuccess}}" catchtouchmove="noop" catchtap="noop">
+  <view class="success-box" catchtouchmove="noop" catchtap="noop">
+    <view class="s-icon">✔</view>
+    <view class="s-title">已加入购物车</view>
+    <view class="s-desc">商品已保存，您可以继续选购或去结算</view>
+    
+    <view class="s-btn-row">
+      <view class="s-btn outline" bindtap="onContinueShopping">继续选购</view>
+      <view class="s-btn fill" bindtap="onGoToCheckout">立即结算</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 7. 订单确认/结算弹窗 ================= -->
+<view class="checkout-sheet-host {{orderSheetClosing ? 'checkout-sheet-host--closing' : ''}}" wx:if="{{showOrderModal || orderSheetClosing}}">
+<view class="dark-mask {{orderSheetAnimIn && !orderSheetClosing ? 'checkout-mask--in' : ''}}" bindtap="closeOrderModal"></view>
+
+<view class="overlay full-screen-overlay checkout-sheet {{orderSheetAnimIn ? 'checkout-sheet--in' : ''}}">
+  <view class="checkout-header checkout-sheet-header">
+    <view class="nav-close" bindtap="closeOrderModal">✕</view>
+    <view class="co-title">确认订单</view>
+    <view style="width:40rpx"></view>
+  </view>
+
+  <scroll-view scroll-y class="checkout-scroll">
+    <view class="checkout-body">
+      
+      <!-- 商品清单 -->
+      <view class="group-card">
+        <view class="cart-header-row">
+          <view class="cart-title">商品清单</view>
+          <view class="clear-btn-stylish" bindtap="clearCart">
+            <text>🗑 清空</text>
+          </view>
+        </view>
+
+        <block wx:for="{{cart}}" wx:key="id">
+          <view class="cart-row">
+            <view class="cr-info">
+              <view class="cr-name">{{item.name}}</view>
+              <view class="cr-spec">{{item.spec}}</view>
+            </view>
+            
+            <view class="cr-action">
+              <view class="cr-price">¥{{item.total}}</view>
+              <view class="mini-stepper">
+                <view class="ms-btn" catchtap="handleCartQty" data-index="{{index}}" data-type="minus">-</view>
+                <view class="ms-num">{{item.quantity}}</view>
+                <view class="ms-btn" catchtap="handleCartQty" data-index="{{index}}" data-type="plus">+</view>
+              </view>
+            </view>
+          </view>
+        </block>
+        
+        <view wx:if="{{cart.length === 0}}" class="empty-cart">购物车暂无商品</view>
+        
+      </view>
+
+      <!-- 配送方式 -->
+      <view class="group-header-row">
+        <view class="group-title-text">配送方式</view>
+      </view>
+      <view class="shipping-box">
+        <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
+          <view class="ship-name">中通快递</view>
+          <view class="ship-price">
+            <block wx:if="{{checkoutAccessoryOnly}}">
+              {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
+              <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+            </block>
+            <block wx:else>包邮</block>
+          </view>
+        </view>
+        <!-- 顺丰选项 -->
+        <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
+          <view class="ship-name">顺丰速运</view>
+          <view class="ship-price">
+             <!-- 如果没填地址或解析不到省份，显示待计算；否则显示金额 -->
+             {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
+             <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 总价显示区 -->
+      <view class="final-total-row">
+        <text class="ft-label">共 {{cart.length}} 件，总计</text>
+        <text class="ft-price">¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+      </view>
+
+      <!-- 收货信息 -->
+      <view class="group-header-row">
+        <view class="group-title-text">收货信息</view>
+        <view class="paste-btn-header" bindtap="openSmartPasteModal">智能粘贴</view>
+      </view>
+
+      <view class="group-card form-group">
+
+        <!-- 姓名 -->
+        <view class="form-item">
+          <view class="form-label">收货人</view>
+          <input class="form-input" placeholder="请填写姓名" placeholder-class="ph-style" bindinput="onInput" data-key="name" value="{{orderInfo.name}}"/>
+        </view>
+
+        <!-- 手机号 -->
+        <view class="form-item">
+          <view class="form-label">手机号</view>
+          <input class="form-input" type="number" maxlength="11" placeholder="请填写11位手机号" placeholder-class="ph-style" bindinput="onInput" data-key="phone" value="{{orderInfo.phone}}"/>
+        </view>
+
+        <!-- 🔴 新增：省市区选择（复制自 shouhou 页面） -->
+        <view class="form-item">
+          <view class="form-label">省市区</view>
+          <view class="address-picker-row">
+            <picker mode="selector" range="{{provinceList}}" range-key="name" value="{{provinceIndex}}" bindchange="onProvinceChange" class="address-picker-btn">
+              <view class="address-picker-btn-inner {{!selectedProvince ? 'placeholder' : ''}}">
+                <text class="address-picker-text">{{selectedProvince || '请选择省份'}}</text>
+              </view>
+            </picker>
+            <picker mode="selector" range="{{cityList}}" range-key="name" value="{{cityIndex}}" bindchange="onCityChange" class="address-picker-btn" disabled="{{!selectedProvince}}">
+              <view class="address-picker-btn-inner {{!selectedCity ? 'placeholder' : ''}} {{!selectedProvince ? 'disabled' : ''}}">
+                <text class="address-picker-text">{{selectedCity || '请选择城市'}}</text>
+              </view>
+            </picker>
+            <picker mode="selector" range="{{districtList}}" range-key="name" value="{{districtIndex}}" bindchange="onDistrictChange" class="address-picker-btn" disabled="{{!selectedCity}}">
+              <view class="address-picker-btn-inner {{!selectedDistrict ? 'placeholder' : ''}} {{!selectedCity ? 'disabled' : ''}}">
+                <text class="address-picker-text">{{selectedDistrict || '请选择区县'}}</text>
+              </view>
+            </picker>
+          </view>
+        </view>
+
+        <!-- [修改] 详细地址 -->
+        <view class="form-item">
+          <view class="form-label">详细地址</view>
+          <input class="form-input" placeholder="如：某某街道101号" placeholder-class="ph-style" bindinput="onInput" data-key="detailAddress" value="{{detailAddress}}"/>
+        </view>
+
+      </view>
+
+      <!-- 免责协议（保持在最下面，位置稍微高一点） -->
+      <view class="disclaimer-section">
+        <view class="disclaimer-checkbox">
+          <checkbox-group bindchange="onDisclaimerChange">
+            <label class="disclaimer-label">
+              <checkbox value="agree" checked="{{agreedToDisclaimer}}"/>
+              <view class="disclaimer-text-wrapper">
+                <text class="disclaimer-text">我已阅读并同意</text>
+                <text class="disclaimer-link" catchtap="showDisclaimerModal">《免责协议》</text>
+              </view>
+            </label>
+          </checkbox-group>
+        </view>
+      </view>
+
+    </view>
+  </scroll-view>
+
+  <!-- 底部单按钮 (立即支付) -->
+  <view class="checkout-footer-single">
+    <view class="btn-black full {{!agreedToDisclaimer ? 'grayed' : ''}}" catchtap="submitOrder" data-agreed="{{agreedToDisclaimer}}">
+      <text class="btn-main">立即支付 ¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+    </view>
+  </view>
+</view>
+</view>
+
+<!-- ================= 8. 自定义编辑弹窗 ================= -->
+<view class="custom-modal-mask {{customModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" catchtouchmove="noop" bindtap="closeCustomEditModal">
+  <view class="custom-modal-box" catchtouchmove="noop" catchtap="noop">
+    <view class="custom-modal-title">{{customEditTitle}}</view>
+    <input class="custom-modal-input" value="{{customEditVal}}" bindinput="onCustomEditInput" focus="{{showCustomEditModal}}" cursor-spacing="100"/>
+    <view class="custom-modal-btn-row">
+      <view class="custom-btn c-btn-cancel" bindtap="closeCustomEditModal">取消</view>
+      <view class="custom-btn c-btn-confirm" bindtap="confirmCustomEdit">确定</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 自定义弹窗（替换 wx.showModal，带收缩退出动画） ================= -->
+<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="custom-dialog-box" catchtouchmove="noop" bindtap="dismissTransientModals">
+    <view class="cd-title">{{dialog.title}}</view>
+    <rich-text class="cd-content" nodes="{{dialog.content}}"></rich-text>
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText}}</view>
+      <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText}}</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 自动消失提示（无按钮，2秒后自动消失，带收缩退出动画） ================= -->
+<view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="auto-toast-box" catchtouchmove="noop" bindtap="dismissTransientModals">
+    <view class="at-title">{{autoToast.title}}</view>
+    <view class="at-content">{{autoToast.content}}</view>
+  </view>
+</view>
+
+<!-- ================= 9. 屏幕中间提示气泡 ================= -->
+<view class="center-toast-mask {{centerToastClosing ? 'closing' : ''}}" wx:if="{{centerToast.show}}" catchtouchmove="noop" catchtap="noop">
+  <view class="center-toast-box" catchtouchmove="noop" catchtap="noop">
+    <view class="ct-icon">!</view> 
+    <view class="ct-text">{{centerToast.text}}</view>
+  </view>
+</view>
+
+<!-- ================= 10. 智能粘贴输入弹窗 ================= -->
+<view class="smart-paste-mask {{smartPasteClosing ? 'closing' : ''}}" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;" catchtouchmove="noop" catchtap="noop">
+  <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
+    <view class="sp-title">智能粘贴</view>
+    <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
+    <textarea 
+      class="sp-textarea" 
+      placeholder="例如：张三 13800138000 广东省深圳市南山区..." 
+      value="{{smartPasteVal}}" 
+      bindinput="onSmartPasteInput"
+      adjust-position="{{true}}"
+      fixed="{{true}}"
+    ></textarea>
+    <view class="sp-btn-row">
+      <view class="sp-btn cancel" bindtap="closeSmartPasteModal">取消</view>
+      <view class="sp-btn confirm" bindtap="confirmSmartPaste">智能分析</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 自定义操作菜单（替代 wx.showActionSheet） ================= -->
+<view class="action-sheet-mask {{actionSheetClosing ? 'closing' : ''}}" wx:if="{{actionSheet.show}}" bindtap="closeActionSheet" catchtouchmove="noop" catchtap="noop">
+  <view class="action-sheet-box" catchtap="noop" catchtouchmove="noop">
+    <view 
+      class="action-sheet-item" 
+      wx:for="{{actionSheet.itemList}}" 
+      wx:key="index"
+      data-index="{{index}}"
+      bindtap="onActionSheetItemTap"
+    >
+      {{item}}
+    </view>
+    <view class="action-sheet-cancel" bindtap="closeActionSheet">取消</view>
+  </view>
+</view>
+
+<!-- ================= 11. 自定义全屏视频播放器 ================= -->
+<view class="video-modal-mask" wx:if="{{showVideoPlayer}}" style="z-index: 99999;" bindtap="toggleVideoPlayPause" catchtouchmove="noop">
+  <view class="video-close-btn" catchtap="closeVideoPlayer">✕</view>
+  <video 
+    src="{{currentVideoUrl}}" 
+    id="fullscreen-video"
+    autoplay="{{true}}" 
+    preload="auto"
+    class="fullscreen-video" 
+    show-fullscreen-btn="{{false}}" 
+    show-center-play-btn="{{false}}"
+    object-fit="contain"
+    bindplay="onVideoPlay"
+    bindpause="onVideoPause"
+    bindcanplay="onVideoCanPlay"
+    bindtimeupdate="onVideoTimeUpdate"
+    bindtap="toggleVideoPlayPause"
+  ></video>
+  <view class="video-pause-overlay {{!isVideoPlaying ? 'show' : ''}}" catchtap="toggleVideoPlayPause">
+    <view class="play-icon">
+      <view class="play-triangle"></view>
+    </view>
+  </view>
+</view>
+
+<!-- 配件编号多选（挂 portal，避免枢纽横滑 transform 错位） -->
+<view class="acc-slot-picker-mask" wx:if="{{accSlotPickerVisible}}" catchtouchmove="noop" bindtap="closeAccSlotPicker">
+  <view class="acc-slot-picker-sheet" catchtap="noop">
+    <text class="acc-slot-picker-title">配置显示位置（可多选）</text>
+    <text class="acc-slot-picker-sub">勾选某版本+格号后：该版本「配件」行与对应序号的产品详情中才会出现</text>
+    <scroll-view scroll-y class="acc-slot-picker-scroll" enhanced show-scrollbar="{{false}}">
+      <block wx:for="{{accSlotPickerGroups}}" wx:for-item="group" wx:key="version">
+        <text class="acc-slot-picker-version">{{group.version}}</text>
+        <view class="acc-slot-picker-chips">
+          <view
+            wx:for="{{group.options}}"
+            wx:for-item="opt"
+            wx:key="num"
+            class="acc-slot-chip {{opt.on ? 'is-on' : ''}}"
+            catchtap="toggleAccSlotPickerOption"
+            data-version="{{group.version}}"
+            data-num="{{opt.num}}"
+          >{{opt.num}} 号</view>
+        </view>
+      </block>
+    </scroll-view>
+    <view class="acc-slot-picker-actions">
+      <view class="acc-slot-picker-btn acc-slot-picker-btn--cancel" catchtap="closeAccSlotPicker">取消</view>
+      <view class="acc-slot-picker-btn acc-slot-picker-btn--ok" catchtap="confirmAccSlotPicker">确定</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 自定义加载动画（白色背景进度条） ================= -->
+<view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
+  <view class="loader" catchtouchmove="noop" catchtap="noop">
+    <text class="loader-label">{{loadingText}}</text>
+    <view class="loading-bar"></view>
+  </view>
+</view>
+
+</view>
+</root-portal>
+
+</view>
+<custom-toast id="custom-toast" />
+</view>

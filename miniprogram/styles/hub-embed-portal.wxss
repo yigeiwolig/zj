@@ -1,0 +1,110 @@
+/**
+ * 枢纽横滑 track 使用 transform 时，子树内 position:fixed 会相对轨道定位。
+ * 嵌入面板弹层经 root-portal 挂到页面根后，用本文件保证全屏与比例正确。
+ */
+.hub-embed-portal-layer {
+  position: relative;
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
+.hub-embed-portal-layer .modal,
+.hub-embed-portal-layer .custom-dialog-mask,
+.hub-embed-portal-layer .auto-toast-mask,
+.hub-embed-portal-layer .after-sales-toast-mask,
+.hub-embed-portal-layer .after-sales-dialog-mask,
+.hub-embed-portal-layer .loading-mask,
+.hub-embed-portal-layer .custom-modal-mask,
+.hub-embed-portal-layer .return-required-mask,
+.hub-embed-portal-layer .bottom-modal-mask,
+.hub-embed-portal-layer .fill-repair-mask,
+.hub-embed-portal-layer .purchase-parts-mask,
+.hub-embed-portal-layer .location-permission-mask,
+.hub-embed-portal-layer .smart-paste-mask,
+.hub-embed-portal-layer .logistics-modal-mask,
+.hub-embed-portal-layer .password-modal-mask,
+.hub-embed-portal-layer .upload-modal-overlay,
+.hub-embed-portal-layer .full-modal,
+.hub-embed-portal-layer .video-modal-mask,
+.hub-embed-portal-layer .success-mask,
+.hub-embed-portal-layer .action-sheet-mask,
+.hub-embed-portal-layer .center-toast-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+.hub-embed-portal-layer .full-modal {
+  z-index: 600;
+}
+
+/* 商城内嵌结算（shop-embed 内，非 checkout-modal 组件） */
+.hub-embed-portal-layer .overlay.full-screen-overlay:not(.checkout-sheet) {
+  z-index: 600;
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  top: auto;
+  width: 100vw;
+  height: 92vh;
+  max-height: 92vh;
+  transform: translateY(110%);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.hub-embed-portal-layer .overlay.full-screen-overlay:not(.checkout-sheet).active {
+  transform: translateY(0);
+  pointer-events: auto;
+  visibility: visible;
+}
+
+/* 订单页 shop-checkout-modal：遮罩在下、白底弹窗在上（勿用公共 z-index:600 压到遮罩下面） */
+.hub-embed-portal-layer .checkout-modal-host {
+  z-index: 2500;
+}
+
+.hub-embed-portal-layer .checkout-modal-host .dark-mask {
+  z-index: 2500;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.hub-embed-portal-layer .checkout-modal-host .checkout-sheet,
+.hub-embed-portal-layer .checkout-sheet-host .checkout-sheet.checkout-sheet--in {
+  z-index: 2502;
+  top: auto;
+  bottom: 0;
+}
+
+/* 底部上滑规格弹层：仅固定到底部，不要拉满整屏 */
+.hub-embed-portal-layer .overlay:not(.full-screen-overlay) {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  top: auto;
+  width: 100vw;
+  max-height: calc(100vh - 60px);
+  height: auto;
+}
+
+.hub-embed-portal-layer .modal-nav--safe-top,
+.hub-embed-portal-layer .acc-detail-nav.modal-nav--safe-top,
+.hub-embed-portal-layer .checkout-header.modal-nav--safe-top {
+  height: auto !important;
+  min-height: 88rpx;
+  padding-bottom: 16rpx;
+  padding-left: 30rpx;
+  padding-right: 30rpx;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+.hub-embed-portal-layer .acc-detail-nav.modal-nav--safe-top {
+  min-height: calc(88rpx + env(safe-area-inset-top));
+}

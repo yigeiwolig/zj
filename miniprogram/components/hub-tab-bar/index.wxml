@@ -1,0 +1,26 @@
+<view class="tabbar-glass">
+  <view
+    class="tab-item {{active === 0 ? 'is-active' : ''}}"
+    data-tab="home"
+    bindtap="onTap"
+  >
+    <text class="tab-item-label">首页</text>
+    <view class="tab-item-line" wx:if="{{active === 0}}"></view>
+  </view>
+  <view
+    class="tab-item {{active === 1 ? 'is-active' : ''}}"
+    data-tab="orders"
+    bindtap="onTap"
+  >
+    <text class="tab-item-label">订单</text>
+    <view class="tab-item-line" wx:if="{{active === 1}}"></view>
+  </view>
+  <view
+    class="tab-item {{active === 2 ? 'is-active' : ''}}"
+    data-tab="profile"
+    bindtap="onTap"
+  >
+    <text class="tab-item-label">我的</text>
+    <view class="tab-item-line" wx:if="{{active === 2}}"></view>
+  </view>
+</view>

@@ -1,0 +1,9 @@
+{
+  "component": true,
+  "usingComponents": {
+    "custom-toast": "/components/custom-toast/index",
+    "hub-tab-bar": "/components/hub-tab-bar/index",
+    "shop-checkout-modal": "/package-app/components/shop-checkout-modal/index"
+  },
+  "styleIsolation": "apply-shared"
+}

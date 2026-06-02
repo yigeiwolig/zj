@@ -1,0 +1,35 @@
+@import "../../pages/shop/shop.wxss";
+@import "../../../styles/hub-embed-portal.wxss";
+@import "../../../styles/checkout-sheet.wxss";
+
+.checkout-modal-host {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 2500;
+  pointer-events: none;
+}
+
+.checkout-modal-host.checkout-sheet-host .dark-mask,
+.checkout-modal-host .checkout-sheet {
+  pointer-events: auto;
+}
+
+.checkout-modal-host .dark-mask {
+  z-index: 2500;
+}
+
+.checkout-modal-host .checkout-body {
+  padding-bottom: 32rpx;
+}
+
+.checkout-modal-host .btn-black.full {
+  width: 100%;
+  min-height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 48rpx;
+}
