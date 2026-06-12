@@ -1,0 +1,10 @@
+{
+  "name": "getCaseBgmResolve",
+  "version": "1.0.0",
+  "description": "案例 BGM：云存储同步到 COS 公开链并返回可播放 URL",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3",
+    "cos-nodejs-sdk-v5": "^2.12.4"
+  }
+}

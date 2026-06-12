@@ -151,8 +151,10 @@ function fixTopMediaListFromDoc(docData) {
     const isVideo =
       url.endsWith('.mp4') ||
       url.endsWith('.mov') ||
+      url.endsWith('.m4v') ||
       url.indexOf('.mp4?') !== -1 ||
-      url.indexOf('.mov?') !== -1;
+      url.indexOf('.mov?') !== -1 ||
+      url.indexOf('.m4v?') !== -1;
     return {
       type: isVideo ? 'video' : 'image',
       ...item
@@ -187,13 +189,13 @@ function buildTopMediaRenderList(safeList, tempUrlMap, buildLowQualityUrl) {
     };
     const raw = resolveRaw();
     if (item.type === 'image') {
-      const thumb = toLow(raw);
+      // 顶部轮播：单图 widthFix 原比例，避免缩略图+aspectFit 双层留白
       return {
         ...item,
-        renderUrl: thumb,
-        renderThumb: thumb,
+        renderUrl: raw,
+        renderThumb: raw,
         renderFull: raw,
-        dualRender: thumb !== raw
+        dualRender: false
       };
     }
     return { ...item, renderUrl: raw, renderThumb: '', renderFull: '', dualRender: false };

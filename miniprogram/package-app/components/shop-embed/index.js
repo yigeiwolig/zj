@@ -42,7 +42,7 @@ Component(pageConfigToComponent(createShopPageConfig({ hubEmbed: true }), {
         const winH = win.windowHeight || 667;
         const status = this.data.statusBarHeight || win.statusBarHeight || 44;
         const rpx = (win.windowWidth || 375) / 750;
-        const segmentH = status + Math.round((44 + 28 + 16) * rpx);
+        const segmentH = status + Math.round((128 + 28) * rpx);
         const showAdminBar =
           this.data.isAuthorized &&
           !this.data.showOrderModal &&
@@ -61,6 +61,17 @@ Component(pageConfigToComponent(createShopPageConfig({ hubEmbed: true }), {
       this._layoutScrollTimer = setTimeout(() => {
         this._layoutScrollTimer = null;
         this._applyEmbedScrollHeight();
+        if (typeof this._syncHeroDefaultHeight === 'function') {
+          this._syncHeroDefaultHeight();
+        }
+        const list = this.data.topMediaList || [];
+        if (list.length && typeof this._primeHeroSlideHeightsForList === 'function') {
+          this._primeHeroSlideHeightsForList(
+            typeof this._getTopMediaListForSave === 'function'
+              ? this._getTopMediaListForSave()
+              : list
+          ).catch(() => {});
+        }
       }, 32);
     }
   },

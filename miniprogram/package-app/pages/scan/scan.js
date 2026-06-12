@@ -33,12 +33,16 @@ const iconSide = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0
 // ==========================================
 // 2. 设备模型资源 (F1/F2 Pro/Max)
 // ==========================================
-const iconF1Pro = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMjUiIHk9IjMwIiB3aWR0aD0iMTUwIiBoZWlnaHQ9IjkwIiByeD0iMTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSI0Ii8+PHJlY3QgeD0iNDUiIHk9IjQ1IiB3aWR0aD0iMzUiIGhlaWdodD0iOCIgcng9IjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iMTIwIiB5PSI0NSIgd2lkdGg9IjM1IiBoZWlnaHQ9IjgiIHJ4PSI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMyIvPjx0ZXh0IHg9IjEwMCIgeT0iOTAiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9IjkwMCIgZm9udC1zaXplPSIyNCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iIzFDMUMxRSIgbGV0dGVyLXNwYWNpbmc9IjMiPk1UPC90ZXh0Pjwvc3ZnPg==';
-const iconF1Max = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMjUiIHk9IjMwIiB3aWR0aD0iMTUwIiBoZWlnaHQ9IjkwIiByeD0iMTIiIGZpbGw9IiMxQzFDMUUiLz48cmVjdCB4PSI0NSIgeT0iNDUiIHdpZHRoPSIzNSIgaGVpZ2h0PSI4IiByeD0iNCIgZmlsbD0iI0ZGRkZGRiIvPjxyZWN0IHg9IjEyMCIgeT0iNDUiIHdpZHRoPSIzNSIgaGVpZ2h0PSI4IiByeD0iNCIgZmlsbD0iI0ZGRkZGRiIvPjx0ZXh0IHg9IjEwMCIgeT0iOTAiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9IjkwMCIgZm9udC1zaXplPSIyNCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI0ZGRkZGRiIgbGV0dGVyLXNwYWNpbmc9IjMiPk1UPC90ZXh0Pjwvc3ZnPg==';
+const iconF1Pro = '/images/mt-f1-pro.svg';
+const iconF1Max = '/images/mt-f1-max.svg';
+const iconF1ProMax = '/images/mt-f1-pro-max.svg';
 const iconF2Pro = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDMwIEgxOTAgQzE5NSAzMCAxOTUgMzUgMTk1IDM1IFY0OCBDMTk1IDUzIDE5MCA1MyAxOTAgNTMgSDEyMSBWNjkgSDEyMi41IEMxMjcuNSA2OSAxMjcuNSA3NCAxMjcuNSA3NCBWOTQgQzEyNy41IDk5IDEyMi41IDk5IDEyMi41IDk5IEg4Mi41IEM3Ny41IDk5IDc3LjUgOTQgNzcuNSA5NCBWNzQgQzc3LjUgNjkgODIuNSA2OSA4Mi41IDY5IEg4NCBWNTMgSDE1IEMxMCA1MyAxMCA0OCAxMCA0OCBWMzUgQzEwIDMwIDE1IDMwIDE1IDMwIFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHJlY3QgeD0iMzYiIHk9IjM3IiB3aWR0aD0iMjYiIGhlaWdodD0iOCIgcng9IjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iMTQ1IiB5PSIzOCIgd2lkdGg9IjI1IiBoZWlnaHQ9IjgiIHJ4PSI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMyIvPjx0ZXh0IHg9IjEwMi41IiB5PSI3MiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjMUMxQzFFIj48dHNwYW4geD0iMTAyLjUiIGR5PSIwIj5NPC90c3Bhbj48dHNwYW4geD0iMTAyLjUiIGR5PSIxNiI+VDwvdHNwYW4+PC90ZXh0Pjwvc3ZnPg==';
 const iconF2Max = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDMwIEgxOTAgQzE5NSAzMCAxOTUgMzUgMTk1IDM1IFY0OCBDMTk1IDUzIDE5MCA1MyAxOTAgNTMgSDEyMSBWNjkgSDEyMi41IEMxMjcuNSA2OSAxMjcuNSA3NCAxMjcuNSA3NCBWOTQgQzEyNy41IDk5IDEyMi41IDk5IDEyMi41IDk5IEg4Mi41IEM3Ny41IDk5IDc3LjUgOTQgNzcuNSA5NCBWNzQgQzc3LjUgNjkgODIuNSA2OSA4Mi41IDY5IEg4NCBWNTMgSDE1IEMxMCA1MyAxMCA0OCAxMCA0OCBWMzUgQzEwIDMwIDE1IDMwIDE1IDMwIFoiIGZpbGw9IiMxQzFDMUUiLz48cmVjdCB4PSIzNiIgeT0iMzciIHdpZHRoPSIyNiIgaGVpZ2h0PSI4IiByeD0iNSIgZmlsbD0iI0ZGRkZGRiIvPjxyZWN0IHg9IjE0NSIgeT0iMzgiIHdpZHRoPSIyNSIgaGVpZ2h0PSI4IiByeD0iNCIgZmlsbD0iI0ZGRkZGRiIvPjx0ZXh0IHg9IjEwMi41IiB5PSI3MiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjRkZGRkZGIj48dHNwYW4geD0iMTAyLjUiIGR5PSIwIj5NPC90c3Bhbj48dHNwYW4geD0iMTAyLjUiIGR5PSIxNiI+VDwvdHNwYW4+PC90ZXh0Pjwvc3ZnPg==';
 // F2 MAX Long 图标（独立）
 const iconF2MaxLong = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDI5SDE5MEMxOTUgMjkgMTk1IDM0LjE0NjQgMTk1IDM0LjE0NjRWNDcuNTI2OUMxOTUgNTIuNjczMiAxOTAgNTIuNjczMiAxOTAgNTIuNjczMkgxMjFWMTEwLjVIMTIyLjVDMTMwLjg0NSAxMTAuNSAxMzAuODQ1IDExNy40NiAxMzAuODQ1IDExNy40NlYxMzcuNzI5QzEzMC44NDUgMTQ0LjUgMTIyLjUgMTQ0LjUgMTIyLjUgMTQ0LjVIODIuNUM3NC4xNTQ1IDE0NC41IDc0LjE1NDUgMTM3LjcyOSA3NC4xNTQ1IDEzNy43MjlWMTE3LjQ2Qzc0LjE1NDUgMTEwLjUgODIuNSAxMTAuNSA4Mi41IDExMC41VjUyLjY3MzJIMTVDMTAgNTIuNjczMiAxMCA0Ny41MjY5IDEwIDQ3LjUyNjlWMzQuMTQ2NEMxMCAyOSAxNSAyOSAxNSAyOVoiIGZpbGw9IiMxQzFDMUUiLz48cGF0aCBkPSJNNTYgMzdINDBDMzcuMjM4NiAzNyAzNSAzOC43OTA5IDM1IDQxQzM1IDQzLjIwOTEgMzcuMjM4NiA0NSA0MCA0NUg1NkM1OC43NjE0IDQ1IDYxIDQzLjIwOTEgNjEgNDFDNjEgMzguNzkwOSA1OC43NjE0IDM3IDU2IDM3WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTY1IDM3SDE0OUMxNDYuMjM5IDM3IDE0NCAzOC43OTA5IDE0NCA0MUMxNDQgNDMuMjA5MSAxNDYuMjM5IDQ1IDE0OSA0NUgxNjVDMTY3Ljc2MSA0NSAxNzAgNDMuMjA5MSAxNzAgNDFDMTcwIDM4Ljc5MDkgMTY3Ljc2MSAzNyAxNjUgMzdaIiBmaWxsPSJ3aGl0ZSIvPjxwYXRoIGQ9Ik04NCA4N0gxMjEiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMTAyLjUgNjRDMTA0LjQzMyA2NCAxMDYgNjIuNDMzIDEwNiA2MC41QzEwNiA1OC41NjcgMTA0LjQzMyA1NyAxMDIuNSA1N0MxMDAuNTY3IDU3IDk5IDU4LjU2NyA5OSA2MC41Qzk5IDYyLjQzMyAxMDAuNTY3IDY0IDEwMi41IDY0WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgODJDMTA0LjQzMyA4MiAxMDYgODAuNDMzIDEwNiA3OC41QzEwNiA3Ni41NjcgMTA0LjQzMyA3NSAxMDIuNSA3NUMxMDAuNTY3IDc1IDk5IDc2LjU2NyA5OSA3OC41Qzk5IDgwLjQzMyAxMDAuNTY3IDgyIDEwMi41IDgyWiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgMTAxQzEwNC40MzMgMTAxIDEwNiA5OS40MzMgMTA2IDk3LjVDMTA2IDk1LjU2NyAxMDQuNDMzIDk0IDEwMi41IDk0QzEwMC41NjcgOTQgOTkgOTUuNTY3IDk5IDk3LjVDOTkgOTkuNDMzIDEwMC41NjcgMTAxIDEwMi41IDEwMVoiIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTkwLjMzOTggMTE5LjA5MUg5My4xODQyTDk2LjE4ODUgMTI2LjQySDk2LjMxNjNMOTkuMzIwNiAxMTkuMDkxSDEwMi4xNjVWMTMwSDk5LjkyNzhWMTIyLjlIOTkuODM3M0w5Ny4wMTQxIDEyOS45NDdIOTUuNDkwN0w5Mi42Njc1IDEyMi44NzNIOTIuNTc3VjEzMEg5MC4zMzk4VjExOS4wOTFaTTEwNy4xMjIgMTIwLjk5M1YxMTkuMDkxSDExNi4wODFWMTIwLjk5M0gxMTIuNzQxVjEzMEgxMTAuNDYxVjEyMC45OTNIMTA3LjEyMloiIGZpbGw9IndoaXRlIi8+PC9zdmc+';
+// F3 横版 MT 整机标：Max 实心 / Pro 线条（源文件 images/mt-f3-machine-*.svg，可直接替换为你的原 SVG）
+const iconF3Pro = '/images/mt-f3-machine-pro.svg';
+const iconF3Max = '/images/mt-f3-machine-max.svg';
 
 // 小幽灵图标（睁眼 - 开启隐蔽模式）
 const iconGhostOpen = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMjAgMTFWMTlDMjAgMjAuNiAxOCAyMS41IDE3IDIwLjVMMTYgMTkuNUwxNCAyMS41QzEzLjIgMjIuMyAxMiAyMS44IDEyIDIwLjhWMjAuOEMxMiAyMS44IDEwLjggMjIuMyAxMCAyMS41TDggMTkuNUw3IDIwLjVDNiAyMS41IDQgMjAuNiA0IDE5VjExQzQgNi41OCA3LjU4IDMgMTIgM0MxNi40MiAzIDIwIDYuNTggMjAgMTFaIiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48Y2lyY2xlIGN4PSI5IiBjeT0iMTEiIHI9IjEuNSIgZmlsbD0iYmxhY2siLz48Y2lyY2xlIGN4PSIxNSIgY3k9IjExIiByPSIxLjUiIGZpbGw9ImJsYWNrIi8+PC9zdmc+';
@@ -322,15 +326,30 @@ class BLEHelper {
   }
 }
 
+function isMaxControlLayoutType(type) {
+  return type === 'Max' || type === 'Max Long' || type === 'Pro Max';
+}
+
+function isF2MaxLikeControl(model) {
+  if (!model) return false;
+  const name = model.name || '';
+  const type = model.type || '';
+  return (name.includes('F2') && (type === 'Max' || type === 'Max Long'))
+    || (name.includes('F1') && type === 'Pro Max');
+}
+
 
 Page({
   data: {
     models: [
       { id: 1, name: 'F1', type: 'Pro', tag: 'SERIES 1', icon: iconF1Pro, status: 'active' },
       { id: 2, name: 'F1', type: 'Max', tag: 'SERIES 1', icon: iconF1Max, status: 'next' },
+      { id: 8, name: 'F1', type: 'Pro Max', tag: 'SERIES 1', icon: iconF1ProMax, status: 'hidden' },
       { id: 3, name: 'F2', type: 'Pro', tag: 'SERIES 2', icon: iconF2Pro, status: 'hidden' },
       { id: 4, name: 'F2', type: 'Max', tag: 'SERIES 2', icon: iconF2Max, status: 'hidden' },
       { id: 5, name: 'F2', type: 'Max Long', tag: 'SERIES 2', icon: iconF2MaxLong, status: 'hidden' },
+      { id: 6, name: 'F3', type: 'Pro', tag: 'SERIES 3', icon: iconF3Pro, status: 'hidden' },
+      { id: 7, name: 'F3', type: 'Max', tag: 'SERIES 3', icon: iconF3Max, status: 'hidden' },
     ],
     currentIndex: 0,
     
@@ -348,6 +367,7 @@ Page({
     prevCardOpacity: 0.9,        // 左侧卡片透明度
 
     showDetail: false,
+    detailEnterAnim: false,
     detailMode: 'main',
     currentModel: null,
     sideIcon: iconSide,
@@ -1454,9 +1474,12 @@ Page({
     const type = model.type || '';
     if (name === 'F1' && type === 'Pro') return 'F1 PRO';
     if (name === 'F1' && type === 'Max') return 'F1 MAX';
+    if (name === 'F1' && type === 'Pro Max') return 'F1 Pro Max';
     if (name === 'F2' && type === 'Pro') return 'F2 PRO';
     if (name === 'F2' && type === 'Max') return 'F2 MAX';
     if (name === 'F2' && type === 'Max Long') return 'F2 MAX Long';
+    if (name === 'F3' && type === 'Pro') return 'F3 PRO';
+    if (name === 'F3' && type === 'Max') return 'F3 MAX';
     return `${name} ${type}`.trim();
   },
 
@@ -1727,7 +1750,7 @@ Page({
     setTimeout(() => {
       this.setData({ showOtaTip: false });
       wx.navigateTo({ 
-        url: '/package-app/pages/ota/ota',
+        url: '/package-biz/pages/ota/ota',
         success: () => {
           // 跳转成功后，重置标记（在页面返回时会重新设置）
           console.log('✅ 已跳转到OTA页面');
@@ -1963,8 +1986,7 @@ Page({
     const threshold = isEdgeSwipe ? 40 : 70;
     // 详情层支持左右横滑返回图二（你习惯左滑也可触发）
     if (Math.abs(dx) > threshold && Math.abs(dy) < 50) {
-      this._controlTapLockUntil = Date.now() + 260;
-      this.setData({ showDetail: false, detailMode: 'main' });
+      this._closeDetailAnimated();
     }
   },
 
@@ -2029,27 +2051,60 @@ Page({
     }
   },
 
-  openDetail(e) {
-    const index = parseInt(e.currentTarget.dataset.index);
-    const guardMs = 420;
+  _openDetailAnimated(patch = {}) {
+    const guardMs = 480;
     this._controlTapLockUntil = Date.now() + guardMs;
-    this.updateCardStatus(index);
-    const currentModel = this.data.models[index];
-    const isF1 = currentModel && currentModel.name.includes('F1');
+    if (this._detailEnterTimer) clearTimeout(this._detailEnterTimer);
+    if (this._detailCloseTimer) clearTimeout(this._detailCloseTimer);
+    if (this._detailBlockTimer) clearTimeout(this._detailBlockTimer);
     this.setData({
+      detailEnterAnim: false,
       showDetail: true,
-      currentModel: currentModel,
       detailMode: 'main',
       showStealthTutorial: false,
       detailOpenGuardUntil: Date.now() + guardMs,
       blockDetailTouch: true,
-      angleBtnText: isF1 ? '180°' : '160°' // 根据机型设置按钮文本
+      ...patch
     });
-    if (this._detailBlockTimer) clearTimeout(this._detailBlockTimer);
+    wx.nextTick(() => {
+      this._detailEnterTimer = setTimeout(() => {
+        this._detailEnterTimer = null;
+        if (this.data.showDetail) {
+          this.setData({ detailEnterAnim: true });
+        }
+      }, 24);
+    });
     this._detailBlockTimer = setTimeout(() => {
       this.setData({ blockDetailTouch: false });
       this._detailBlockTimer = null;
     }, guardMs);
+  },
+
+  _closeDetailAnimated(extraPatch = {}) {
+    const guardMs = 400;
+    this._controlTapLockUntil = Date.now() + guardMs;
+    if (this._detailEnterTimer) clearTimeout(this._detailEnterTimer);
+    if (this._detailCloseTimer) clearTimeout(this._detailCloseTimer);
+    this.setData({ detailEnterAnim: false, blockDetailTouch: false });
+    this._detailCloseTimer = setTimeout(() => {
+      this._detailCloseTimer = null;
+      this.setData({
+        showDetail: false,
+        detailMode: 'main',
+        ...extraPatch
+      });
+    }, guardMs);
+  },
+
+  openDetail(e) {
+    const index = parseInt(e.currentTarget.dataset.index);
+    this.updateCardStatus(index);
+    const currentModel = this.data.models[index];
+    const isF1 = currentModel && currentModel.name.includes('F1');
+    this._openDetailAnimated({
+      currentModel,
+      angleBtnText: isF1 ? '180°' : '160°'
+    });
   },
 
   // 🔴 计算导航栏高度（标准方法，适配所有机型）
@@ -2072,14 +2127,19 @@ Page({
       if (this.data.detailMode === 'edit') {
         this.setData({ detailMode: 'main' });
       } else {
-        this._controlTapLockUntil = Date.now() + 260;
-        this.setData({ showDetail: false, blockDetailTouch: false });
+        this._closeDetailAnimated();
         // 断开连接可选
         // if (this.data.isConnected) this.ble.disconnect(); 
       }
     } else {
-      wx.navigateBack();
+      const pageBack = require('../../../utils/pageBack.js');
+      pageBack.popOrHub();
     }
+  },
+
+  onBackPress() {
+    this.goBack();
+    return true;
   },
 
   // ===============================================
@@ -2953,9 +3013,11 @@ Page({
     
     const currentModel = this.data.currentModel;
     const isF2 = currentModel && currentModel.name && currentModel.name.includes('F2');
-    
-    // 只有 F2 PRO/MAX 可以点击
-    if (!isF2) return;
+    const isF1ProMax = currentModel && currentModel.name && currentModel.name.includes('F1')
+      && currentModel.type === 'Pro Max';
+
+    // F2 MAX 系列 & F1 Pro Max 可点击
+    if (!isF2 && !isF1ProMax) return;
     
     console.log('📤 [蓝牙] 发送"自动调平"（5次，间隔0.5秒）');
     // 发送5次数据，间隔0.5秒（500ms）
@@ -3019,7 +3081,7 @@ Page({
     // F2 Max: 可以打开，全功能
     // F2 Max Long: 可以打开，全功能
     const model = this.data.currentModel;
-    if (!model || (model.type !== 'Max' && model.type !== 'Max Long')) {
+    if (!model || !isMaxControlLayoutType(model.type)) {
       return; // Pro 机型点击无效
     }
 
@@ -3046,9 +3108,7 @@ Page({
 
     const { type, sendText } = this.data.pendingSendData;
     const currentModel = this.data.currentModel;
-    const isF2Max = currentModel && 
-                    currentModel.name && currentModel.name.includes('F2') && 
-                    (currentModel.type === 'Max' || currentModel.type === 'Max Long');
+    const isF2Max = isF2MaxLikeControl(currentModel);
     
     // 关闭弹窗
     this.setData({ 
@@ -3071,7 +3131,9 @@ Page({
       } else if (type === 'settings') {
         // 高级设置：发送3次，间隔0.5秒
         const modelName = isF2Max 
-          ? (currentModel.type === 'Max Long' ? 'F2 MAX Long' : 'F2 MAX')
+          ? (currentModel.type === 'Pro Max'
+            ? 'F1 Pro Max'
+            : (currentModel.type === 'Max Long' ? 'F2 MAX Long' : 'F2 MAX'))
           : 'F1 MAX';
         console.log(`📤 [蓝牙] ${modelName} 发送"${sendText}"（连续3次，间隔0.5秒）`);
         this.sendDataMultiple(sendText, 3, 500);
@@ -3113,9 +3175,7 @@ Page({
     
     // 🔴 F2 MAX：高级配置发送对应数据
     const currentModel = this.data.currentModel;
-    const isF2Max = currentModel && 
-                    currentModel.name && currentModel.name.includes('F2') && 
-                    (currentModel.type === 'Max' || currentModel.type === 'Max Long');
+    const isF2Max = isF2MaxLikeControl(currentModel);
     const isF1Max = currentModel && 
                     currentModel.name && currentModel.name.includes('F1') && 
                     currentModel.type === 'Max';

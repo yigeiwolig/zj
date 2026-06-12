@@ -1,5 +1,42 @@
 // app.js
 const GLOBAL_ACCESS_GUARD_INTERVAL_MS = 5 * 60 * 1000;
+const { redirectToPcBlockedIfNeeded, isPcBannedClient } = require('./utils/runtimeEnv.js');
+
+/** 必须在首个 Page() 注册前执行，否则 index 等页面 onShow 套不上守卫 */
+function _installGlobalPageLifecycleGuard() {
+  if (wx.__mt_page_guard_installed) return;
+  const rawPage = Page;
+  Page = function(definition) {
+    const pageDef = definition || {};
+    const originalOnLoad = pageDef.onLoad;
+    const originalOnShow = pageDef.onShow;
+
+    pageDef.onLoad = function(...args) {
+      if (redirectToPcBlockedIfNeeded()) return;
+      if (typeof originalOnLoad === 'function') {
+        return originalOnLoad.apply(this, args);
+      }
+    };
+
+    pageDef.onShow = async function(...args) {
+      try {
+        if (redirectToPcBlockedIfNeeded()) return;
+        const app = getApp();
+        if (app && typeof app.enforceGlobalAccessGuard === 'function') {
+          const pass = await app.enforceGlobalAccessGuard({ silent: true });
+          if (!pass) return;
+        }
+      } catch (e) {}
+      if (typeof originalOnShow === 'function') {
+        return originalOnShow.apply(this, args);
+      }
+    };
+    return rawPage(pageDef);
+  };
+  wx.__mt_page_guard_installed = true;
+}
+
+_installGlobalPageLifecycleGuard();
 
 App({
   globalData: {
@@ -62,7 +99,6 @@ App({
           name: 'updatePageVisit',
           data: { pageRoute: finalRoute },
           success: (res) => {
-            console.log('[app] page visit updated:', finalRoute, res);
           },
           fail: (err) => {
             if (retryLeft > 0) {
@@ -253,6 +289,10 @@ App({
   },
 
   async enforceGlobalAccessGuard(options = {}) {
+    if (isPcBannedClient()) {
+      redirectToPcBlockedIfNeeded();
+      return false;
+    }
     if (this._accessGuardInFlight) return true;
     this._accessGuardInFlight = true;
     try {
@@ -297,6 +337,10 @@ App({
         wx.removeStorageSync('has_permanent_auth');
         wx.removeStorageSync('user_nickname');
         wx.removeStorageSync('is_user_banned');
+        if (isPcBannedClient()) {
+          redirectToPcBlockedIfNeeded();
+          return false;
+        }
         // 已在首页：由 index 自行展示昵称/引导，勿 reLaunch（否则会闪屏且 onShow 被短路）
         if (currentRoute === 'pages/index/index') {
           return true;
@@ -310,7 +354,6 @@ App({
 
       return true;
     } catch (e) {
-      console.warn('[app] global access guard failed:', e);
       return true;
     } finally {
       this._accessGuardInFlight = false;
@@ -320,6 +363,10 @@ App({
   _startGlobalAccessGuardTimer() {
     this._stopGlobalAccessGuardTimer();
     this._globalAccessGuardTimer = setInterval(() => {
+      if (isPcBannedClient()) {
+        redirectToPcBlockedIfNeeded();
+        return;
+      }
       this.enforceGlobalAccessGuard({ silent: true });
     }, GLOBAL_ACCESS_GUARD_INTERVAL_MS);
   },
@@ -331,53 +378,27 @@ App({
     }
   },
 
-  _installGlobalPageShowGuard() {
-    if (wx.__mt_page_guard_installed) return;
-    const rawPage = Page;
-    Page = function(definition) {
-      const pageDef = definition || {};
-      const originalOnShow = pageDef.onShow;
-      pageDef.onShow = async function(...args) {
-        try {
-          const app = getApp();
-          if (app && typeof app.enforceGlobalAccessGuard === 'function') {
-            const pass = await app.enforceGlobalAccessGuard({ silent: true });
-            if (!pass) return;
-          }
-        } catch (e) {}
-        if (typeof originalOnShow === 'function') {
-          return originalOnShow.apply(this, args);
-        }
-      };
-      return rawPage(pageDef);
-    };
-    wx.__mt_page_guard_installed = true;
-  },
-
   // ======================== ???? ========================
   onLaunch: function (options) {
-    this._installGlobalPageShowGuard();
-    // ?? 1. ???????PC??    this.checkIsPC();
+    this.checkIsPC();
 
-    // ?? 2. ???????
+    // 2. 记录分享码入口（供后续页面消费）
     if (options && options.query && options.query.shareCode) {
-      const shareCode = options.query.shareCode
-      console.log('[app] ?????????', shareCode)
-      this.verifyShareCode(shareCode)
+      const shareCode = String(options.query.shareCode || '').trim();
+      if (shareCode) {
+        this.globalData.shareCodeInfo = this.globalData.shareCodeInfo || {};
+        this.globalData.shareCodeInfo.code = shareCode;
+      }
     }
 
-    // ======================== ??A??????????? ========================
-    // ??wx.showModal / wx.showToast / wx.showLoading / wx.hideLoading ???????????? UI
     try {
-      // ???? API (??????)
-      if (!wx.__mt_oldShowModal) wx.__mt_oldShowModal = wx.showModal;
-      if (!wx.__mt_oldShowToast) wx.__mt_oldShowToast = wx.showToast;
-      if (!wx.__mt_oldHideToast) wx.__mt_oldHideToast = wx.hideToast;
-      if (!wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = wx.showLoading;
-      if (!wx.__mt_oldHideLoading) wx.__mt_oldHideLoading = wx.hideLoading;
-      if (!wx.__mt_oldSetClipboardData) wx.__mt_oldSetClipboardData = wx.setClipboardData;
+      if (!wx.__mt_oldShowModal) wx.__mt_oldShowModal = wx.showModal.bind(wx);
+      if (!wx.__mt_oldShowToast) wx.__mt_oldShowToast = wx.showToast.bind(wx);
+      if (!wx.__mt_oldHideToast) wx.__mt_oldHideToast = wx.hideToast.bind(wx);
+      if (!wx.__mt_oldShowLoading) wx.__mt_oldShowLoading = wx.showLoading.bind(wx);
+      if (!wx.__mt_oldHideLoading) wx.__mt_oldHideLoading = wx.hideLoading.bind(wx);
+      if (!wx.__mt_oldSetClipboardData) wx.__mt_oldSetClipboardData = wx.setClipboardData.bind(wx);
 
-      // ??????????????
       const getToast = () => {
         try {
           const pages = getCurrentPages();
@@ -385,9 +406,7 @@ App({
           if (curPage) {
             return curPage.selectComponent('#custom-toast');
           }
-        } catch (e) {
-          console.error('[app] ??custom-toast????', e);
-        }
+        } catch (e) {}
         return null;
       };
 
@@ -442,11 +461,9 @@ App({
         
         const toast = getToast();
         if (toast) {
-          console.log('[app] ??????????Toast:', opt);
           hideKnownPagePopups();
           toast.showToast(opt);
         } else {
-          console.warn('[app] ????????#custom-toast ??????????showToast', opt);
           return wx.__mt_oldShowToast(opt);
         }
       };
@@ -463,7 +480,6 @@ App({
           hideKnownPagePopups();
           toast.showLoading(opt);
         } else {
-          console.warn('[app] ????????#custom-toast ??????????showLoading');
           return wx.__mt_oldShowLoading(opt);
         }
       };
@@ -531,8 +547,6 @@ App({
         env: 'cloudbase-4gn1heip7c38ec6c',
         traceUser: true,
       });
-      console.log('????????app.js ??????ID: cloudbase-4gn1heip7c38ec6c');
-      
       this.preloadProductFeatureFlags();
       this.preloadShopData();
       this.preloadNewArrivalData();
@@ -544,18 +558,17 @@ App({
         if (!isDevTools) {
           this.checkBanStatusOnLaunch();
         } else {
-          console.log('[app] ???????????????');
         }
       } catch (e) {
-        console.warn('[app] ?????????????', e);
       }
     }
   },
 
   onShow: function () {
-    // ???????????
     this.checkIsPC();
-    this.enforceGlobalAccessGuard({ silent: true });
+    if (!isPcBannedClient()) {
+      this.enforceGlobalAccessGuard({ silent: true });
+    }
     this._startGlobalAccessGuardTimer();
     this._suspiciousSessionStartAt = Date.now();
     this._startSuspiciousSessionHeartbeat();
@@ -667,60 +680,12 @@ App({
         this._suspiciousSessionFlushInFlight = false;
       });
     } catch (e) {
-      console.warn('[app] flush suspicious session failed', e);
     }
   },
 
   // --- ?? ???????---
   checkIsPC() {
-    try {
-      const deviceInfo = wx.getDeviceInfo();
-      const platform = deviceInfo.platform.toLowerCase();
-
-      // ???????? PC ??
-      if (platform === 'devtools') {
-        console.log('[app] ????????? PC ???');
-        return;
-      }
-
-      // ????????
-      // windows: PC??
-      // mac: Mac??
-      const bannedPlatforms = ['windows', 'mac']; 
-
-      if (bannedPlatforms.includes(platform)) {
-        console.warn('[app] ?????????:', platform);
-        
-        // ?? blocked ???????
-        const pages = getCurrentPages();
-        const currentPage = pages[pages.length - 1];
-        if (currentPage && currentPage.route && currentPage.route.includes('pages/blocked/blocked')) {
-          console.log('[app] ?????????????');
-          return; 
-        }
-
-        // ??????????(?? reLaunch ???????????????)
-        wx.reLaunch({
-          url: '/pages/blocked/blocked?type=pc',
-          fail: (err) => {
-            // ????????????            console.error('[app] PC??????????:', err);
-            setTimeout(() => {
-              wx.reLaunch({
-                url: '/pages/blocked/blocked?type=pc'
-              });
-            }, 300);
-          }
-        });
-        
-        // ???? home ??????reLaunch ?????????????
-        if (wx.hideHomeButton) {
-          wx.hideHomeButton();
-        }
-      }
-    } catch (e) {
-      // ?????????????
-      console.error('[app] ??????', e);
-    }
+    redirectToPcBlockedIfNeeded();
   },
 
   async _isReviewPassMode() {
@@ -745,7 +710,6 @@ App({
     try {
       const reviewPassMode = await this._isReviewPassMode();
       if (reviewPassMode) {
-        console.log('[app] 审核放行模式：跳过启动封禁检查');
         return;
       }
 
@@ -753,7 +717,6 @@ App({
       const deviceInfo = wx.getDeviceInfo();
       const isDevTools = deviceInfo.platform === 'devtools';
       if (isDevTools) {
-        console.log('[app] ?????????????');
         return;
       }
 
@@ -780,7 +743,6 @@ App({
         const btn = buttonRes.data[0];
         const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
         if (qiangli) {
-          console.log('[app] ?? ????????? qiangli ????login_logbutton?????????????');
           setTimeout(() => {
             wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           }, 500);
@@ -793,7 +755,6 @@ App({
         const log = logRes.data[0];
         const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
         if (qiangli) {
-          console.log('[app] ?? ????????? qiangli ????login_logs?????????????');
           setTimeout(() => {
             wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           }, 500);
@@ -816,7 +777,6 @@ App({
       }
       
       if (adminCheck.data && adminCheck.data.length > 0) {
-        console.log('[app] ?????????');
         return; // ???????
       }
       
@@ -826,7 +786,6 @@ App({
         const isBanned = rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
         
         if (isBanned) {
-          console.log('[app] ???????????????????');
           const banType = btn.banReason === 'screenshot' || btn.banReason === 'screen_record' || btn.banReason === 'screenshot_risk_review'
             ? 'screenshot' 
             : (btn.banReason === 'location_blocked' ? 'location' : 'banned');
@@ -841,7 +800,6 @@ App({
     } catch (err) {
       const msg = (err.errMsg || err.message || '') + '';
       if (msg.indexOf('access_token') !== -1) {
-        console.warn('[app] ??????????????????????/??????');
         return;
       }
       console.error('[app] ????????????', err);
@@ -933,7 +891,6 @@ App({
         const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
         
         if (qiangli) {
-          console.log('[app] ?? ???????? qiangli ?????login_logbutton??????');
           this.stopQiangliCheck();
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           return;
@@ -946,7 +903,6 @@ App({
         const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
         
         if (qiangli) {
-          console.log('[app] ?? ???????? qiangli ?????login_logs??????');
           this.stopQiangliCheck();
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           return;
@@ -976,30 +932,22 @@ App({
       ])
 
       if (!codeRes.data || codeRes.data.length === 0) {
-        console.log('[app] ??????:', shareCode)
-        return { success: false, error: '?????' }
+        return { success: false, error: '分享码不存在' }
       }
 
       const codeInfo = codeRes.data[0]
-
       const now = new Date()
       const expiresAt = new Date(codeInfo.expiresAt)
       if (now > expiresAt) {
-        console.log('[app] ??????')
-        return { success: false, error: '??????' }
+        return { success: false, error: '分享码已过期' }
       }
-
       if (codeInfo.usedViews >= codeInfo.totalViews) {
-        console.log('[app] ??????????')
-        return { success: false, error: '??????????' }
+        return { success: false, error: '分享码查看次数已用完' }
       }
-
       if (codeInfo.status !== 'active') {
-        console.log('[app] ??????')
-        return { success: false, error: '??????' }
+        return { success: false, error: '分享码无效' }
       }
 
-      // ???????????
       this.globalData.isShareCodeUser = true
       this.globalData.shareCodeInfo = {
         code: shareCode,
@@ -1008,47 +956,30 @@ App({
         expiresAt: codeInfo.expiresAt,
         _id: codeInfo._id
       }
-
-      console.log('[app] ???????:', this.globalData.shareCodeInfo)
       return { success: true }
     } catch (err) {
-      console.error('[app] ???????', err)
-      return { success: false, error: err.message || '???????' }
+      console.error('[app] 分享码验证失败', err)
+      return { success: false, error: err.message || '分享码验证失败' }
     }
   },
 
-  // ?????????
+  // 分享码查看次数 +1
   async updateShareCodeViews() {
     if (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo) {
-      return { success: false, error: '???????????????' }
+      return { success: false, error: '当前不是分享码用户' }
     }
-
     try {
       const codeInfo = this.globalData.shareCodeInfo
       const shareCodeId = codeInfo._id
-
-      console.log('[app] ???????????????shareCodeId:', shareCodeId)
-
-      // ?? ?????????????????????????
       const res = await wx.cloud.callFunction({
         name: 'updateShareCodeViews',
-        data: {
-          shareCodeId: shareCodeId
-        }
+        data: { shareCodeId }
       })
-
       if (!res.result || !res.result.success) {
-        console.error('[app] ????????', res.result)
-        return { success: false, error: res.result?.error || '????' }
+        return { success: false, error: res.result?.error || '更新失败' }
       }
-
-      // ?? ???????????????????
       this.globalData.shareCodeInfo.usedViews = res.result.usedViews
       this.globalData.shareCodeInfo.totalViews = res.result.total
-
-      console.log('[app] ??????????????', res.result.remaining, '/', res.result.total)
-
-      // ?????????? UI
       return {
         success: true,
         remaining: res.result.remaining,
@@ -1057,57 +988,44 @@ App({
         isExhausted: res.result.isExhausted
       }
     } catch (err) {
-      console.error('[app] ??????????????????:', err)
-      return { success: false, error: err.message || '????' }
+      console.error('[app] 分享码次数更新失败:', err)
+      return { success: false, error: err.message || '更新失败' }
     }
   },
 
-  // ?? azjc ?????
+  // 记录分享码会话统计（azjc 页面调用）
   async recordShareCodeSession(sessionStats, isUpdate = false, poolId = null) {
-    console.log('[app] recordShareCodeSession ???', { poolId: !!poolId });
-    console.log('[app] isShareCodeUser:', this.globalData.isShareCodeUser);
-    console.log('[app] shareCodeInfo:', this.globalData.shareCodeInfo);
-
     if (!poolId && (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo)) {
-      console.log('[app] ?????????? shareCodeInfo???');
       return;
     }
 
     try {
-      // ?????? openid??? viewers ???
       let openid = ''
       try {
         const loginRes = await wx.cloud.callFunction({ name: 'login' })
         openid = loginRes.result.openid || ''
-        console.log('[app] ????openid:', openid);
       } catch (e) {
-        console.error('[app] ?? openid ??:', e);
+        console.error('[app] 获取 openid 失败:', e);
       }
 
       const baseInfo = poolId ? { _id: poolId, code: 'POOL' } : this.globalData.shareCodeInfo;
-
       if (!baseInfo || !baseInfo._id) {
-        console.error('[app] ???? chakan ?? _id:', baseInfo);
+        console.error('[app] 缺少分享码 _id:', baseInfo);
         return;
       }
 
-      console.log('[app] ?? chakan ?? _id:', baseInfo._id, poolId ? '(???????)' : ', code:', baseInfo.code);
       const durationMs = sessionStats && typeof sessionStats.durationMs === 'number'
         ? sessionStats.durationMs
         : 0
       const sectionClicks = sessionStats && sessionStats.sectionClicks ? sessionStats.sectionClicks : {}
       const sectionDurations = sessionStats && sessionStats.sectionDurations ? sessionStats.sectionDurations : {}
 
-      // ?? ??????????
       let viewerNickname = '';
       try {
         const userInfo = wx.getStorageSync('userInfo');
         viewerNickname = userInfo?.nickName || wx.getStorageSync('user_nickname') || '';
-      } catch (e) {
-        console.log('[app] ????????:', e);
-      }
+      } catch (e) {}
 
-      // ?? ????????????????stats ????????????????
       let locationInfo = sessionStats.locationInfo || {
         province: '',
         city: '',
@@ -1116,8 +1034,6 @@ App({
         latitude: null,
         longitude: null
       };
-      
-      // ? stats ???????????
       if (!sessionStats.locationInfo) {
         try {
           const cachedLocation = wx.getStorageSync('last_location') || {};
@@ -1129,49 +1045,14 @@ App({
             latitude: cachedLocation.latitude || null,
             longitude: cachedLocation.longitude || null
           };
-          console.log('[app] ????????????');
-        } catch (e) {
-          console.log('[app] ????????:', e);
-        }
-      } else {
-        console.log('[app] ???????????????????');
+        } catch (e) {}
       }
 
-      console.log('[app] recordShareCodeSession - ??????:');
-      console.log('[app] - shareCodeId:', baseInfo._id);
-      console.log('[app] - openid:', openid);
-      console.log('[app] - viewerNickname:', viewerNickname);
-      console.log('[app] - locationInfo:', locationInfo);
-      console.log('[app] - durationMs:', durationMs);
-      console.log('[app] - sectionClicks:', JSON.stringify(sectionClicks));
-      console.log('[app] - sectionDurations:', JSON.stringify(sectionDurations));
-
-      // ???? viewer ???viewTime ????????
-      const newViewer = {
-        openid: openid,
-        nickname: viewerNickname, // ????
-        viewTime: new Date(), // ??????
-        durationMs: durationMs, // ?????ms?
-        sectionClicks: sectionClicks, // ??????
-        sectionDurations: sectionDurations, // ?? ????????{ 'video-0': 12000, 'graphic-1': 5000, ... }
-        // ?? ????
-        province: locationInfo.province,
-        city: locationInfo.city,
-        district: locationInfo.district,
-        address: locationInfo.address,
-        latitude: locationInfo.latitude,
-        longitude: locationInfo.longitude
-      };
-
-      console.log('[app] ?????? viewer ??:', JSON.stringify(newViewer, null, 2));
-
-      // ?? ????????????????????
-      console.log('[app] ??????recordShareCodeViewer ?????isUpdate:', isUpdate);
       const cloudRes = await wx.cloud.callFunction({
         name: 'recordShareCodeViewer',
         data: {
           shareCodeId: poolId || baseInfo._id,
-          isUpdate: isUpdate, // ?? ????????
+          isUpdate: isUpdate,
           viewerData: {
             nickname: viewerNickname,
             durationMs: durationMs,
@@ -1186,19 +1067,12 @@ App({
           }
         }
       });
-
-      console.log('[app] ????????', cloudRes);
-      console.log('[app] ??????????', JSON.stringify(cloudRes, null, 2));
-
-      if (cloudRes.result && cloudRes.result.success) {
-        console.log('[app] ??recordShareCodeSession - ??????');
-        console.log('[app] ?? viewers ????:', cloudRes.result.viewersCount || 0);
-      } else {
-        console.error('[app] ??????????', cloudRes.result?.error || '????');
+      if (!(cloudRes.result && cloudRes.result.success)) {
+        console.error('[app] 记录分享会话失败', cloudRes.result?.error || '未知错误');
       }
     } catch (err) {
-      console.error('[app] ????????????', err)
-      console.error('[app] ????:', JSON.stringify(err, null, 2))
+      console.error('[app] 记录分享会话异常', err)
+      console.error('[app] 错误详情:', JSON.stringify(err, null, 2))
     }
   },
 
@@ -1222,15 +1096,9 @@ App({
 
     if (this.globalData.mockLocation) {
       const mockLoc = this.getMockLocation(this.globalData.mockLocation);
-      console.log('=== ?????? ===');
-      console.log('??????:', this.globalData.mockLocation);
-      console.log('??????:', mockLoc);
       this.callCloudCheck(mockLoc.latitude, mockLoc.longitude);
       return;
     }
-
-    console.log('=== ?????? ===');
-
     wx.getLocation({
       type: 'gcj02',
       isHighAccuracy: true,
@@ -1238,7 +1106,6 @@ App({
       success(res) {
         const latitude = res.latitude;
         const longitude = res.longitude;
-        console.log('????????:', latitude, longitude);
         that.callCloudCheck(latitude, longitude);
       },
       fail(err) {
@@ -1358,11 +1225,9 @@ App({
         const result = res && res.result;
         if (result && result.success && result.flags) {
           this.globalData.productFeatureFlags = result.flags;
-          console.log('[app] productFeatureFlags preloaded', Object.keys(result.flags || {}).length);
         }
       })
       .catch((err) => {
-        console.warn('[app] preloadProductFeatureFlags failed:', err);
       })
       .finally(() => {
         this._productFlagsPreloadInflight = null;
@@ -1405,7 +1270,6 @@ App({
             return item;
           });
         } catch (e) {
-          console.warn('[app] 预拉取产品上新数据解析图片失败:', e);
         }
       }
 
@@ -1413,7 +1277,6 @@ App({
         list: products,
         cacheTime: Date.now()
       };
-      console.log('[app] 预拉取产品上新数据完成，条数:', products.length);
     }).catch(err => {
       console.error('[app] 预拉取产品上新数据失败:', err);
     });
@@ -1442,12 +1305,9 @@ App({
     }
 
     if (!wx.cloud) {
-      console.warn('[app] ?????????? shop ???');
       this.globalData.shopDataCache.isLoading = false;
       return Promise.resolve();
     }
-
-    console.log('[app] ?????shop?????? hydrate ??????...');
     this.globalData.shopDataCache.isLoading = true;
 
     const db = wx.cloud.database();
@@ -1460,18 +1320,14 @@ App({
     this._shopPreloadInflight = Promise.all([
       db.collection('shop_config').doc('shopMain').get().catch(err => {
         if (isDocNotFoundError(err)) {
-          console.log('[app] shopMain 文档不存在，将尝试旧结构');
         } else {
-          console.warn('[app] 读取 shopMain 失败:', err);
         }
         return { data: null };
       }),
       db.collection('shop_series').get().catch(err => {
-        console.warn('[app] ???shop_series??:', err);
         return { data: [] };
       }),
       db.collection('shop_accessories').get().catch(err => {
-        console.warn('[app] ???shop_accessories??:', err);
         return { data: [] };
       })
     ])
@@ -1529,13 +1385,12 @@ App({
             topRender = await shopPreload.resolveTopMediaRenderUrls(fixedTop);
           }
         } catch (e) {
-          console.warn('[app] 商城首屏 hydrate 失败，使用未解析列表', e);
           topRender = fixedTop.map(item => (item ? { ...item, renderUrl: item.url } : item));
           seriesOut = decorated;
           accOut = cleanList;
         }
 
-        cache.topMediaList = topRender;
+        cache.topMediaList = fixedTop;
         cache.seriesList = seriesOut;
         cache.accessoryList = accOut;
 
@@ -1544,19 +1399,12 @@ App({
         if (!this.globalData.__shopWarmImageSet) {
           this.globalData.__shopWarmImageSet = new Set();
         }
-        const warmUrls = shopPreload.collectShopWarmImageUrls(cache.topMediaList, seriesOut, accOut, {
+        const warmUrls = shopPreload.collectShopWarmImageUrls(topRender, seriesOut, accOut, {
           top: 16,
           seriesCovers: 40,
           accThumbs: 40
         });
         shopPreload.runShopImageWarm(warmUrls, this.globalData.__shopWarmImageSet);
-
-        console.log('[app] ??shop????????????????????');
-        console.log('[app] - shopTitle:', cache.shopTitle ? '???' : '???');
-        console.log('[app] - topMediaList:', cache.topMediaList ? `${cache.topMediaList.length}?` : '???');
-        console.log('[app] - seriesList:', cache.seriesList ? `${cache.seriesList.length}?` : '???');
-        console.log('[app] - accessoryList:', cache.accessoryList ? `${cache.accessoryList.length}?` : '???');
-        console.log('[app] - ??????', warmUrls.length);
       })
       .catch(err => {
         console.error('[app] shop????????', err);
@@ -1571,7 +1419,6 @@ App({
 
   // ?? ??shop??????????????????
   refreshShopDataCache() {
-    console.log('[app] ????shop????...');
     this.globalData.shopDataCache.cacheTime = null; // ????????????    this.preloadShopData();
   }
 })

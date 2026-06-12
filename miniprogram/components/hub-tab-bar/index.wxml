@@ -5,7 +5,7 @@
     bindtap="onTap"
   >
     <text class="tab-item-label">首页</text>
-    <view class="tab-item-line" wx:if="{{active === 0}}"></view>
+    <view class="tab-item-dot"></view>
   </view>
   <view
     class="tab-item {{active === 1 ? 'is-active' : ''}}"
@@ -13,7 +13,7 @@
     bindtap="onTap"
   >
     <text class="tab-item-label">订单</text>
-    <view class="tab-item-line" wx:if="{{active === 1}}"></view>
+    <view class="tab-item-dot"></view>
   </view>
   <view
     class="tab-item {{active === 2 ? 'is-active' : ''}}"
@@ -21,6 +21,6 @@
     bindtap="onTap"
   >
     <text class="tab-item-label">我的</text>
-    <view class="tab-item-line" wx:if="{{active === 2}}"></view>
+    <view class="tab-item-dot"></view>
   </view>
 </view>

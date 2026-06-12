@@ -1,5 +1,5 @@
+<import src="../../../templates/checkout-coupon-sheet.wxml"/>
 <!-- pages/my/my.wxml -->
-<import src="./return-required-items.wxml" />
 <wxs module="tools">
   module.exports.firstChar = function(str) {
     if (!str || str.length === 0) return '快';
@@ -13,16 +13,14 @@
   }
   function levelName(deviceCount) {
     var n = countOf(deviceCount);
-    if (n >= 5) return '王者';
-    if (n >= 4) return '星耀';
-    if (n >= 3) return '钻石';
-    if (n >= 2) return '铂金';
-    return '普通黄金';
+    if (n >= 5) return '王者会员';
+    if (n >= 4) return '星耀会员';
+    if (n >= 3) return '钻石会员';
+    if (n >= 2) return '铂金会员';
+    return '黄金会员';
   }
   function badge(deviceCount) {
-    var lv = levelName(deviceCount);
-    if (lv === '普通黄金') return '普通黄金会员';
-    return lv + '尊享会员';
+    return 'MT会员用户';
   }
   function theme(deviceCount) {
     var n = countOf(deviceCount);
@@ -47,14 +45,19 @@
   >
     <block wx:if="{{hubInShell}}">
       <view wx:if="{{hubView === 'orders' && (!isAdmin || !isAuthorized)}}" class="hub-tab-orders-head">
-        <view class="hub-tab-orders-title-wrap">
+        <view class="hub-tab-orders-brand">
           <view class="hub-tab-mt-chip" aria-hidden="true">MT</view>
-          <text class="hub-tab-page-title hub-tab-page-title--orders">订单</text>
+          <view class="hub-tab-orders-title-block">
+            <text class="hub-tab-orders-title">订单</text>
+            <text class="hub-tab-orders-sub">我的购买与物流</text>
+          </view>
         </view>
-        <view wx:if="{{isAuthorized && !isAdmin}}" class="hub-tab-inline-admin" catchtap="toggleAdminMode">管理</view>
       </view>
-      <text class="hub-tab-page-title" wx:elif="{{!isAdmin || !isAuthorized}}">我的</text>
-      <view class="hub-tab-header-actions" wx:if="{{isAuthorized && (isAdmin || hubView === 'profile')}}">
+      <text class="hub-tab-page-title" wx:elif="{{hubView === 'profile' && (!isAdmin || !isAuthorized)}}">我的</text>
+      <view
+        class="hub-tab-header-actions"
+        wx:if="{{isAuthorized && (hubView === 'orders' || hubView === 'profile')}}"
+      >
         <view wx:if="{{!isAdmin}}" class="hub-admin-enter-btn" catchtap="toggleAdminMode">管理模式</view>
         <view wx:else class="hub-admin-exit-btn" catchtap="toggleAdminMode">切回普通模式</view>
       </view>
@@ -100,8 +103,8 @@
     >
     <view class="admin-header-row admin-header-row--hub admin-header-row--compact" style="padding-top: {{hubInShell ? 0 : (showHubTabBar ? 12 : (statusBarHeight + navBarHeight + 20))}}px;">
       <view class="admin-page-title" wx:if="{{!showHubTabBar && !hubInShell}}">待处理订单</view>
-      <view class="admin-dev-actions admin-dev-actions--row">
-        <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试</view>
+      <view class="admin-dev-actions admin-dev-actions--row" wx:if="{{showAdminDevTools}}">
+        <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试清空</view>
         <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
       </view>
     </view>
@@ -111,10 +114,11 @@
       class="order-swiper" 
       bindchange="onOrderChange" 
       circular 
+      touch-angle="18"
       previous-margin="60rpx" 
       next-margin="60rpx"
-      catchtouchstart="noop"
-      catchtouchend="noop"
+      bindtouchstart="noop"
+      bindtouchend="noop"
       style="height: {{swiperHeight}}px; transition: height 0.3s ease;"
     >
       <!-- 如果没有待物料发出订单 -->
@@ -291,11 +295,11 @@
           data-tab="returns"
         >
           <text>需寄回确认</text>
-          <text class="admin-seg-badge" wx:if="{{returnRequiredCount > 0}}">{{returnRequiredCount > 99 ? '99+' : returnRequiredCount}}</text>
+          <text class="admin-seg-badge" wx:if="{{returnRequiredList.length > 0}}">{{returnRequiredList.length > 99 ? '99+' : returnRequiredList.length}}</text>
         </view>
       </view>
-      <view class="admin-dev-actions">
-        <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试</view>
+      <view class="admin-dev-actions" wx:if="{{showAdminDevTools}}">
+        <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试清空</view>
         <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
       </view>
     </view>
@@ -398,7 +402,12 @@
 
     <view class="admin-returns-inline" wx:if="{{adminAfterSalesTab === 'returns'}}">
       <view class="section-label repair-section-label">RETURN ORDERS / 需寄回确认</view>
-      <template is="returnRequiredItems" />
+      <return-required-list
+        list="{{returnRequiredList}}"
+        is-admin="{{isAdmin}}"
+        simple="{{isUserRepairOrderSimple}}"
+        bind:action="onReturnRequiredListAction"
+      />
     </view>
     </view>
 
@@ -454,10 +463,11 @@
       class="order-swiper order-swiper--hub" 
       bindchange="onOrderChange" 
       circular 
+      touch-angle="18"
       previous-margin="60rpx" 
       next-margin="60rpx"
-      catchtouchstart="noop"
-      catchtouchend="noop"
+      bindtouchstart="noop"
+      bindtouchend="noop"
       style="height: {{swiperHeight}}px; transition: height 0.3s ease;"
     >
       <swiper-item wx:for="{{orders}}" wx:key="id" wx:for-index="idx">
@@ -524,6 +534,12 @@
                 </text>
               </view>
             </view>
+            <view wx:if="{{item.realStatus === 'UNPAID'}}" catchtap="onOrderCouponTap" data-id="{{item.id}}">
+              <template
+                is="checkoutCouponEntry"
+                data="{{checkoutCoupons: checkoutCoupons, couponDiscountYuan: item.couponDiscountYuan, isAdmin: isAdmin}}"
+              />
+            </view>
 
             <!-- 1. 待付款：显示操作按钮 -->
             <view wx:if="{{item.realStatus === 'UNPAID'}}" class="action-row-right">
@@ -534,7 +550,7 @@
               </view>
 
               <!-- 右侧的支付按钮 -->
-              <view class="btn-mini black" catchtap="repayOrder" data-item="{{item}}">
+              <view class="btn-mini black" catchtap="repayOrder" data-id="{{item.id}}">
                 立即支付
               </view>
               
@@ -656,27 +672,85 @@
       class="hub-profile-body"
       style="padding-top: {{hubInShell ? 0 : (showHubTabBar ? (statusBarHeight + navBarHeight + 12) : 40)}}px;"
     >
-    <view class="profile-hub-wrap">
-      <view class="profile-member-card">
-        <view class="profile-member-top">
-          <view class="profile-avatar">{{tools.firstChar(userName)}}</view>
-          <view class="profile-member-info">
-            <text class="profile-member-name" style="font-size: {{userNameFontSize}}rpx;">{{userName}}</text>
-            <text class="profile-member-badge profile-member-badge--{{memberTier.theme(deviceList.length)}}">{{memberTier.badge(deviceList.length)}}</text>
-          </view>
+    <view class="profile-hub-wrap profile-hub-wrap--neo">
+      <view class="profile-neo-card profile-neo-card--user">
+        <view class="profile-avatar">{{tools.firstChar(userName)}}</view>
+        <view class="profile-member-info">
+          <text class="profile-member-name" style="font-size: {{userNameFontSize}}rpx;">{{userName}}</text>
+          <text class="profile-member-badge profile-member-badge--{{memberLevelTheme}}">{{memberLevelBadge}}</text>
         </view>
-        <view class="profile-stats-row">
-          <view class="profile-stat-cell">
-            <text class="profile-stat-num">{{deviceList.length}}</text>
-            <text class="profile-stat-label">已绑定设备</text>
-          </view>
-          <view class="profile-stat-divider"></view>
-          <view class="profile-stat-cell">
-            <text class="profile-stat-num profile-stat-num--text profile-tier-num--{{memberTier.theme(deviceList.length)}}">{{memberTier.levelName(deviceList.length)}}</text>
-            <text class="profile-stat-label">会员等级</text>
-          </view>
+        <view class="profile-member-mt-badge">MT</view>
+      </view>
+
+      <view class="profile-neo-metrics">
+        <view class="profile-neo-metric">
+          <text class="profile-neo-metric-label">设备数量</text>
+          <text class="profile-neo-metric-value">{{deviceList.length}}</text>
+        </view>
+        <view class="profile-neo-metric">
+          <text class="profile-neo-metric-label">会员等级</text>
+          <text class="profile-neo-metric-value profile-neo-metric-value--tier">{{memberLevelName}}</text>
         </view>
       </view>
+
+      <view class="profile-neo-card profile-neo-card--invite" wx:if="{{referralPanelLoaded}}">
+        <view class="pi-head pi-head--neo">
+          <view class="pi-head-left">
+            <text class="pi-title">邀请奖励计划</text>
+            <text class="pi-sub pi-sub--neo">邀请新用户下单得优惠券</text>
+          </view>
+          <text class="pi-head-rule">1 邀 = 1 券</text>
+        </view>
+
+        <view class="pi-code-card pi-code-card--neo">
+          <view class="pi-code-left pi-code-left--neo">
+            <text class="pi-code-label pi-code-label--neo">我的邀请码</text>
+            <text class="pi-code-val pi-code-val--neo" selectable>{{referralMyCode}}</text>
+          </view>
+          <view class="pi-code-copy pi-code-copy--neo" bindtap="copyReferralCode">复制</view>
+        </view>
+
+        <view class="pi-neo-summary">
+          <view class="pi-neo-stat">
+            <text class="pi-neo-stat-value">{{referralInviteSuccessCount}}</text>
+            <text class="pi-neo-stat-label">成功邀请</text>
+          </view>
+          <view class="pi-neo-stat">
+            <text class="pi-neo-stat-value">¥{{referralCouponTotalYuan}}</text>
+            <text class="pi-neo-stat-label">累计权益</text>
+          </view>
+        </view>
+
+        <text class="pi-bind-hint" wx:if="{{referralBoundInviterCode}}">已绑定好友邀请码：{{referralBoundInviterCode}}</text>
+        <view class="pi-bind-row pi-bind-row--neo" wx:elif="{{referralCanBindInvite}}">
+          <input
+            class="pi-bind-input pi-bind-input--neo"
+            placeholder="填写好友邀请码"
+            maxlength="12"
+            value="{{referralInviteInput}}"
+            bindinput="onReferralInviteInput"
+          />
+          <view class="pi-bind-btn pi-bind-btn--neo" bindtap="submitReferralBind" hover-class="pi-bind-btn--pressed">绑定</view>
+        </view>
+      </view>
+
+      <view class="profile-neo-card profile-neo-card--ticket" wx:if="{{referralPanelLoaded}}">
+        <view class="pi-ticket pi-ticket--neo" wx:if="{{referralCouponCount > 0}}">
+          <view class="pi-ticket-amt">
+            <text class="pi-ticket-yen">¥</text>
+            <text class="pi-ticket-num">15</text>
+          </view>
+          <view class="pi-ticket-body">
+            <text class="pi-ticket-title">MT 商城通用券</text>
+            <text class="pi-ticket-desc">满 15.01 可叠加使用</text>
+          </view>
+          <text class="pi-ticket-badge pi-ticket-badge--neo">×{{referralCouponCount}}</text>
+        </view>
+
+        <view class="pi-foot-note" wx:if="{{referralCouponCount === 0}}">邀请新用户下单得优惠券</view>
+      </view>
+
+      <text class="pi-neo-footer-brand" wx:if="{{referralPanelLoaded}}">MT DESIGN STUDIO</text>
     </view>
 
     <!-- 需寄回：票据式提醒卡 -->
@@ -896,37 +970,6 @@
       </view>
     </view>
 
-    <view class="referral-hub-card" wx:if="{{referralPanelLoaded}}">
-      <view class="section-label section-label--cn">邀请有礼</view>
-      <view class="referral-hub-inner">
-        <block wx:if="{{referralCanBindInvite}}">
-          <text class="referral-hub-desc">新用户可填写好友邀请码；好友首单实付满 300 元后，对方将获得 15 元商城券。</text>
-          <view class="referral-input-row">
-            <input
-              class="referral-code-input"
-              placeholder="输入邀请码 INVXXXXXX"
-              maxlength="12"
-              value="{{referralInviteInput}}"
-              bindinput="onReferralInviteInput"
-            />
-            <view class="referral-bind-btn" bindtap="submitReferralBind">绑定</view>
-          </view>
-        </block>
-        <block wx:elif="{{referralShowMyBlock}}">
-          <view class="referral-my-code-row">
-            <text class="referral-label">我的邀请码</text>
-            <text class="referral-code-text">{{referralMyCode}}</text>
-            <view class="referral-copy-btn" bindtap="copyReferralCode">复制</view>
-          </view>
-          <view class="referral-coupon-summary">
-            <text class="referral-coupon-num">{{referralCouponCount}}</text>
-            <text class="referral-coupon-label">张可用券 · 共 ¥{{referralCouponTotalYuan}}</text>
-          </view>
-          <text class="referral-hub-hint">邀请新用户首单满 300 元，您得 15 元商城券（每用户仅一次）。</text>
-        </block>
-      </view>
-    </view>
-
     <!-- 👇👇👇【核心补全】在这里插入申请记录列表 👇👇👇 -->
     <!-- 引入 WXS 模块用于在视图层处理数组转字符串 -->
     <wxs module="tools">
@@ -1113,6 +1156,7 @@
     </view>
     </view>
     </scroll-view>
+
   </block>
 
   <root-portal enable="{{hubInShell}}">
@@ -1376,7 +1420,12 @@
       </view>
       
       <scroll-view scroll-y class="rr-content" catchtouchmove="noop">
-        <template is="returnRequiredItems" />
+        <return-required-list
+          list="{{returnRequiredList}}"
+          is-admin="{{isAdmin}}"
+          simple="{{isUserRepairOrderSimple}}"
+          bind:action="onReturnRequiredListAction"
+        />
       </scroll-view>
     </view>
   </view>
@@ -1443,7 +1492,7 @@
       <view class="bottom-modal-header">
         <!-- 🔴 场景A：管理员录单备件寄出，显示"录入寄回运单号"；场景B：管理员手动标记，显示"填写修好后寄回地址" -->
         <view class="bottom-modal-title">{{afterSalesState.returnAddressModal.titleText || '录入寄回运单号'}}</view>
-        <view class="bottom-modal-close" bindtap="closeReturnAddressModal">✕</view>
+        <view class="bottom-modal-close" catchtap="closeReturnAddressModal">✕</view>
       </view>
       
       <!-- 弹窗内容区 -->
@@ -1453,13 +1502,13 @@
           <block wx:if="{{afterSalesState.returnAddressModal.showAddressSection}}">
             <!-- 如果未填写地址，显示地址填写表单 -->
             <view wx:if="{{afterSalesState.returnAddressModal.needAddressInput}}">
-              <view class="ra-form-smart-paste-wrapper">
-                <view class="paste-btn-header" bindtap="openSmartAnalyzeModal">
+              <view class="ra-address-form-head">
+                <text class="ra-address-form-head-title">寄回地址</text>
+                <view class="paste-btn-header" catchtap="openSmartAnalyzeModal">
                   <text class="paste-btn-icon">📋</text>
                   <text>智能粘贴</text>
                 </view>
               </view>
-              
               <view class="ra-form-item">
                 <view class="ra-label">收件人姓名</view>
                 <input 
@@ -1581,6 +1630,31 @@
     </view>
   </view>
 
+  <!-- 智能粘贴：放在 bottom-modal-mask 外，避免 flex 底栏与 transform 层叠压住 -->
+  <view
+    class="smart-paste-mask smart-paste-mask--above-sheet {{smartAnalyzeModalClosing ? 'closing' : ''}}"
+    wx:if="{{showSmartAnalyzeModal || smartAnalyzeModalClosing}}"
+    catchtouchmove="noop"
+    catchtap="closeSmartAnalyzeModal"
+  >
+    <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
+      <view class="sp-title">智能粘贴</view>
+      <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
+      <textarea
+        class="sp-textarea"
+        placeholder="例如：张三 13800138000 广东省深圳市南山区..."
+        value="{{smartAnalyzeVal}}"
+        bindinput="onSmartAnalyzeInput"
+        adjust-position="{{true}}"
+        fixed="{{true}}"
+      />
+      <view class="sp-btn-row">
+        <view class="sp-btn cancel" catchtap="closeSmartAnalyzeModal">取消</view>
+        <view class="sp-btn confirm" catchtap="confirmSmartAnalyze">智能分析</view>
+      </view>
+    </view>
+  </view>
+
   </view>
   </root-portal>
 
@@ -1630,8 +1704,8 @@
                   <input 
                     class="fr-item-price" 
                     type="digit" 
-                    placeholder="¥0" 
-                    value="{{item.price === 0 ? '' : item.price}}"
+                    placeholder="单价(元)" 
+                    value="{{item.priceText}}"
                     data-index="{{index}}"
                     data-field="price"
                     bindinput="onRepairItemInput"
@@ -1744,13 +1818,30 @@
   </view>
 </view>
 
-<!-- ================= 测试密码输入弹窗（带收缩退出动画） ================= -->
+<!-- ================= 测试清空密码弹窗（带收缩退出动画） ================= -->
 <view class="custom-dialog-mask {{testPasswordModalClosing ? 'closing' : ''}}" wx:if="{{showTestPasswordModal}}" bindtap="closeTestPasswordModal" catchtouchmove="noop">
-  <view class="custom-dialog-box" catchtap="noop" catchtouchmove="noop" style="max-width: 600rpx;">
-    <view class="cd-title">请输入测试密码</view>
-    <view class="cd-content" style="font-size: 26rpx; color: #999; margin-bottom: 30rpx; text-align: left;">
-      此操作将清空除 app_config、guanliyuan 以外的所有集合数据（含 sn、guanliyuanSN、chakan、config、suspicious_user_sessions 等）
-    </view>
+  <view class="custom-dialog-box test-clear-dialog" catchtap="noop" catchtouchmove="noop">
+    <view class="cd-title">测试清空</view>
+    <view class="test-clear-warn">不可恢复。保留：{{testClearPreserved[0]}}、{{testClearPreserved[1]}}（封禁规则与管理员账号）</view>
+    <scroll-view class="test-clear-scope" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="test-clear-section">
+        <view class="test-clear-section-title">云数据库（{{testClearCollectionCount}} 个集合）</view>
+        <block wx:for="{{testClearGroups}}" wx:key="title" wx:for-item="grp">
+          <view class="test-clear-group">
+            <text class="test-clear-group-title">{{grp.title}}</text>
+            <text class="test-clear-group-items">{{grp.itemsText}}</text>
+          </view>
+        </block>
+      </view>
+      <view class="test-clear-section">
+        <view class="test-clear-section-title">对象存储</view>
+        <text class="test-clear-extra">COS 桶内全部图片/视频（与上传接口同一桶）</text>
+      </view>
+      <view class="test-clear-section" wx:if="{{testClearLocalKeys.length}}">
+        <view class="test-clear-section-title">本机缓存</view>
+        <text class="test-clear-extra">{{testClearLocalKeysText}}</text>
+      </view>
+    </scroll-view>
     
     <input 
       class="cd-input" 
@@ -1796,26 +1887,6 @@
       <view class="location-permission-btn confirm" bindtap="_openLocationSetting">去设置</view>
     </view>
     <text class="location-permission-tip" wx:if="{{locationPermissionChecking}}">等待授权中...</text>
-  </view>
-</view>
-
-<!-- ================= 智能分析弹窗 ================= -->
-<view class="smart-paste-mask {{smartAnalyzeModalClosing ? 'closing' : ''}}" wx:if="{{showSmartAnalyzeModal || smartAnalyzeModalClosing}}" style="z-index: 99999;" catchtouchmove="noop" catchtap="noop">
-  <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
-    <view class="sp-title">智能粘贴</view>
-    <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
-    <textarea 
-      class="sp-textarea" 
-      placeholder="例如：张三 13800138000 广东省深圳市南山区..." 
-      value="{{smartAnalyzeVal}}" 
-      bindinput="onSmartAnalyzeInput"
-      adjust-position="{{true}}"
-      fixed="{{true}}"
-    ></textarea>
-    <view class="sp-btn-row">
-      <view class="sp-btn cancel" bindtap="closeSmartAnalyzeModal">取消</view>
-      <view class="sp-btn confirm" bindtap="confirmSmartAnalyze">智能分析</view>
-    </view>
   </view>
 </view>
 
@@ -1998,5 +2069,7 @@
     <view class="upload-modal-cancel" bindtap="closeUploadOptions">取消</view>
   </view>
 </view>
+
+<template is="checkoutCouponSheet" data="{{couponSheetOpen: couponSheetOpen, couponSheetClosing: couponSheetClosing, couponSheetAnimIn: couponSheetAnimIn, checkoutCoupons: checkoutCoupons, selectedCouponIds: selectedCouponIds, couponDiscountYuan: couponDiscountYuan, preCouponTotalYuan: preCouponTotalYuan, checkoutCouponsLoading: checkoutCouponsLoading, isAdmin: isAdmin}}"/>
 </view>
 </root-portal>

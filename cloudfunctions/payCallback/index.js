@@ -5,14 +5,46 @@ const path = require('path')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
-// 🔴 微信支付配置（需要和 createOrder 保持一致）
-const WX_PAY_CONFIG = {
-  // 优先读取环境变量，未配置时回退到当前值（兼容旧部署）
-  mchId: process.env.WX_PAY_MCH_ID || '1103782674',
-  appId: process.env.WX_PAY_APP_ID || 'wxf1a81dd77d810edf',
-  apiV3Key: process.env.WX_PAY_API_V3_KEY || 'MTMoGaiSheWeChatPay2025Key888888',
-  serialNo: process.env.WX_PAY_SERIAL_NO || '73F820E3A9CBFF6FF509EAB7B2449CEBAB33E479',
-  keyPath: path.join(__dirname, 'apiclient_key.pem') // 私钥文件（已复制到当前目录）
+let _wxPayConfigCache = null
+
+function getWxPayConfig() {
+  if (_wxPayConfigCache) return _wxPayConfigCache
+  const mchId = process.env.WX_PAY_MCH_ID
+  const appId = process.env.WX_PAY_APP_ID
+  const apiV3Key = process.env.WX_PAY_API_V3_KEY
+  if (!mchId || !appId || !apiV3Key) {
+    throw new Error('缺少微信支付环境变量 WX_PAY_MCH_ID / WX_PAY_APP_ID / WX_PAY_API_V3_KEY')
+  }
+  _wxPayConfigCache = {
+    mchId,
+    appId,
+    apiV3Key,
+    serialNo: process.env.WX_PAY_SERIAL_NO || '',
+    keyPath: path.join(__dirname, 'apiclient_key.pem')
+  }
+  return _wxPayConfigCache
+}
+
+function internalCallData(data) {
+  const secret = process.env.INTERNAL_CALL_SECRET
+  if (!secret) {
+    console.error('[payCallback] INTERNAL_CALL_SECRET 未配置')
+    return data
+  }
+  return { ...data, _internalSecret: secret }
+}
+
+function verifyWechatPayNotify({ timestamp, nonce, signature, bodyStr }) {
+  const pem = process.env.WECHATPAY_PLATFORM_PUB_PEM
+  if (!pem) {
+    console.error('[payCallback] WECHATPAY_PLATFORM_PUB_PEM 未配置')
+    return false
+  }
+  const pubKey = pem.replace(/\\n/g, '\n')
+  const message = `${timestamp}\n${nonce}\n${bodyStr}\n`
+  const verify = crypto.createVerify('RSA-SHA256')
+  verify.update(message, 'utf8')
+  return verify.verify(pubKey, signature, 'base64')
 }
 
 // 🔴 加载私钥（优先使用单独的私钥文件，如果没有则从p12证书提取）
@@ -22,8 +54,9 @@ function getPrivateKey() {
   
   try {
     // 🔴 方式1：直接读取私钥文件（更可靠）
-    if (fs.existsSync(WX_PAY_CONFIG.keyPath)) {
-      privateKey = fs.readFileSync(WX_PAY_CONFIG.keyPath, 'utf8')
+    const cfg = getWxPayConfig()
+    if (fs.existsSync(cfg.keyPath)) {
+      privateKey = fs.readFileSync(cfg.keyPath, 'utf8')
       console.log('[payCallback] 从私钥文件加载成功')
       return privateKey
     }
@@ -37,7 +70,7 @@ function getPrivateKey() {
       let p12
       try {
         const p12Asn1 = forge.asn1.fromDer(p12Buffer.toString('binary'))
-        p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, '1103782674')
+        p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, getWxPayConfig().mchId)
       } catch (e1) {
         try {
           const p12Asn1 = forge.asn1.fromDer(p12Buffer.toString('binary'))
@@ -108,7 +141,7 @@ function decryptCallbackData(encryptedData, nonce, associatedData) {
     console.log('[payCallback] nonce:', nonce)
     console.log('[payCallback] associatedData:', associatedData)
     
-    const key = Buffer.from(WX_PAY_CONFIG.apiV3Key, 'utf8')
+    const key = Buffer.from(getWxPayConfig().apiV3Key, 'utf8')
     const encrypted = Buffer.from(encryptedData, 'base64')
     const nonceBuf = Buffer.from(nonce, 'utf8') // 🔴 nonce 是 UTF-8 字符串，不是 base64
     const associated = Buffer.from(associatedData || 'transaction', 'utf8')
@@ -241,6 +274,14 @@ exports.main = async (event, context) => {
       console.error('[payCallback] 回调时间戳异常，拒绝处理')
       return { code: 'FAIL', message: 'invalid timestamp' }
     }
+
+    const bodyStrForVerify = typeof rawBody === 'string'
+      ? rawBody
+      : (rawBody != null ? JSON.stringify(rawBody) : '')
+    if (!verifyWechatPayNotify({ timestamp, nonce, signature, bodyStr: bodyStrForVerify })) {
+      console.error('[payCallback] 微信支付回调签名校验失败')
+      return { code: 'FAIL', message: 'invalid signature' }
+    }
     
     // 🔴 如果 body 是字符串，需要解析（HTTP 触发的 body 通常是字符串）
     if (typeof body === 'string') {
@@ -315,7 +356,8 @@ exports.main = async (event, context) => {
             }
 
             // 🔴 核验 appid/mchid/金额，避免串单和伪造回调
-            if (decryptedData.appid !== WX_PAY_CONFIG.appId || decryptedData.mchid !== WX_PAY_CONFIG.mchId) {
+            const wxCfg = getWxPayConfig()
+            if (decryptedData.appid !== wxCfg.appId || decryptedData.mchid !== wxCfg.mchId) {
               console.error('[payCallback] appid/mchid 不匹配，拒绝更新订单', {
                 gotAppId: decryptedData.appid,
                 gotMchId: decryptedData.mchid
@@ -359,10 +401,18 @@ exports.main = async (event, context) => {
             try {
               await cloud.callFunction({
                 name: 'referral',
-                data: { action: 'grantOnOrderPaid', orderId: outTradeNo }
+                data: internalCallData({ action: 'grantOnOrderPaid', orderId: outTradeNo })
               })
             } catch (referralErr) {
               console.error('[payCallback] 推荐奖励发放失败:', referralErr)
+            }
+            try {
+              await cloud.callFunction({
+                name: 'referral',
+                data: internalCallData({ action: 'markCouponsUsed', orderId: outTradeNo })
+              })
+            } catch (couponErr) {
+              console.error('[payCallback] 优惠券核销失败:', couponErr)
             }
           } else {
             console.warn('[payCallback] 未找到订单:', outTradeNo)
@@ -377,25 +427,10 @@ exports.main = async (event, context) => {
         console.error('[payCallback] 解密失败:', decryptErr)
         throw decryptErr
       }
-    } else {
-      console.log('[payCallback] 未找到加密数据，尝试兼容格式...')
     }
-    
-    // 兼容旧格式（如果还有）
-    if (event.outTradeNo && event.resultCode === 'SUCCESS') {
-      await db.collection('shop_orders').where({
-        orderId: event.outTradeNo
-      }).update({
-        data: {
-          status: 'PAID',
-          payTime: db.serverDate()
-        }
-      })
-      return { errcode: 0, errmsg: 'SUCCESS' }
-    }
-    
-    // 必须返回成功，否则微信会重试
-    return { code: 'SUCCESS', message: '成功' }
+
+    console.error('[payCallback] 缺少 resource 加密体，拒绝处理')
+    return { code: 'FAIL', message: 'invalid notify body' }
     
   } catch (err) {
     console.error('支付回调处理失败:', err)

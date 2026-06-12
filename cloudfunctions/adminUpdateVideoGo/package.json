@@ -1,0 +1,9 @@
+{
+  "name": "adminUpdateVideoGo",
+  "version": "1.0.0",
+  "description": "管理员维护 video_go 官方案例",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

@@ -5,8 +5,26 @@ const cloud = require('wx-server-sdk')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+async function assertAdmin(db) {
+  const openid = cloud.getWXContext().OPENID
+  if (!openid) {
+    throw new Error('未登录')
+  }
+  const byOpenid = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+  if (byOpenid.data && byOpenid.data.length) return
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+  if (bySystemOpenid.data && bySystemOpenid.data.length) return
+  throw new Error('需要管理员权限')
+}
+
 exports.main = async (event, context) => {
   const db = cloud.database()
+
+  try {
+    await assertAdmin(db)
+  } catch (authErr) {
+    return { success: false, errMsg: authErr.message || '需要管理员权限' }
+  }
   const _ = db.command
   const OVERDUE_DAYS = 30
   const DEDUCT_DAYS = 180

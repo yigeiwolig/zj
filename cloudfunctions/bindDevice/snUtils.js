@@ -23,11 +23,14 @@ function snCandidates(normalizedSn) {
 }
 
 const WARRANTY_DAYS_BY_MODEL = {
-  'F1 PRO': 180,
+  'F1 PRO': 90,
   'F1 MAX': 365,
+  'F1 Pro Max': 365,
   'F2 PRO': 180,
-  'F2 MAX': 365,
-  'F2 MAX Long': 365
+  'F2 MAX': 180,
+  'F2 MAX Long': 365,
+  'F3 PRO': 180,
+  'F3 MAX': 365
 }
 
 function warrantyDaysForModel(productModel) {

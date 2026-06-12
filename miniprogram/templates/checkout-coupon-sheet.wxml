@@ -1,0 +1,96 @@
+<template name="checkoutCouponEntry">
+  <view class="coupon-pick-card" bindtap="openCouponSheet">
+    <view class="coupon-pick-card__body">
+      <view class="mt-coupon-chip">MT</view>
+      <view class="coupon-pick-card__texts">
+        <text class="coupon-pick-card__title">优惠券</text>
+        <text class="coupon-pick-card__sub" wx:if="{{checkoutCoupons.length}}">{{checkoutCoupons.length}} 张可用 · 可叠加</text>
+        <text class="coupon-pick-card__sub coupon-pick-card__sub--muted" wx:else>暂无可用</text>
+      </view>
+      <view class="coupon-pick-card__right">
+        <text class="coupon-pick-card__off" wx:if="{{couponDiscountYuan > 0 && !isAdmin}}">-¥{{couponDiscountYuan}}</text>
+        <text class="coupon-pick-card__link" wx:elif="{{checkoutCoupons.length}}">去选择</text>
+        <text class="coupon-pick-card__chev">›</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<template name="checkoutCouponSheet">
+  <view
+    class="coupon-sheet-portal coupon-sheet-portal--hub"
+    wx:if="{{couponSheetOpen || couponSheetClosing}}"
+    catchtouchmove="noop"
+  >
+    <view
+      class="coupon-sheet-mask {{couponSheetAnimIn && !couponSheetClosing ? 'coupon-sheet-mask--show' : ''}}"
+      catchtouchmove="noop"
+      bindtap="closeCouponSheet"
+    ></view>
+    <view
+      class="coupon-sheet {{couponSheetAnimIn && !couponSheetClosing ? 'coupon-sheet--show' : ''}}"
+      catchtouchmove="noop"
+      catchtap="noop"
+    >
+      <view class="coupon-sheet-grabber"></view>
+      <view class="coupon-sheet-head">
+        <view class="coupon-sheet-head-center">
+          <text class="coupon-sheet-title">选择优惠券</text>
+          <text class="coupon-sheet-sub">MT 官方商城专权益</text>
+        </view>
+        <view class="coupon-sheet-close" bindtap="closeCouponSheet">✕</view>
+      </view>
+      <scroll-view scroll-y class="coupon-sheet-scroll" enhanced show-scrollbar="{{false}}">
+        <view class="coupon-sheet-list-top-gap"></view>
+        <wxs module="cpn">
+          var isOn = function(ids, id) {
+            if (!ids || !id) return false;
+            for (var i = 0; i < ids.length; i++) {
+              if (ids[i] === id) return true;
+            }
+            return false;
+          };
+          var canUse = function(coupon, subtotal) {
+            if (!coupon) return false;
+            var min = (coupon.minSpendYuan || 0) - 0;
+            var sub = (subtotal || 0) - 0;
+            if (min !== min) min = 0;
+            if (sub !== sub) sub = 0;
+            return sub >= min;
+          };
+          module.exports = { isOn: isOn, canUse: canUse };
+        </wxs>
+        <block wx:for="{{checkoutCoupons}}" wx:key="id">
+          <view
+            class="coupon-voucher {{cpn.isOn(selectedCouponIds, item.id) ? 'coupon-voucher--on' : ''}} {{!cpn.canUse(item, preCouponTotalYuan) ? 'coupon-voucher--disabled' : ''}}"
+            bindtap="toggleCouponSelect"
+            data-id="{{item.id}}"
+            data-disabled="{{!cpn.canUse(item, preCouponTotalYuan)}}"
+          >
+            <view class="coupon-voucher__hole coupon-voucher__hole--l"></view>
+            <view class="coupon-voucher__hole coupon-voucher__hole--r"></view>
+            <view class="coupon-voucher__left">
+              <view class="coupon-voucher__amt">
+                <text class="coupon-voucher__yen">¥</text>
+                <text class="coupon-voucher__num">{{item.amountYuan}}</text>
+              </view>
+            </view>
+            <view class="coupon-voucher__dash"></view>
+            <view class="coupon-voucher__right">
+              <text class="coupon-voucher__title"><text class="mt-coupon-chip coupon-voucher__chip">MT</text> {{item.title}}</text>
+              <text class="coupon-voucher__desc">满{{item.minSpendYuan}}元即可使用</text>
+              <text class="coupon-voucher__desc coupon-voucher__desc--disabled" wx:if="{{!cpn.canUse(item, preCouponTotalYuan)}}">未满门槛，暂不可用</text>
+            </view>
+            <view class="coupon-voucher__check {{cpn.isOn(selectedCouponIds, item.id) ? 'coupon-voucher__check--on' : ''}}">
+              <view class="coupon-voucher__check-dot {{cpn.isOn(selectedCouponIds, item.id) ? 'coupon-voucher__check-dot--on' : ''}}"></view>
+            </view>
+          </view>
+        </block>
+        <view class="coupon-sheet-empty" wx:if="{{!checkoutCoupons.length && !checkoutCouponsLoading}}">暂无可用优惠券</view>
+      </scroll-view>
+      <view class="coupon-sheet-footer">
+        <view class="coupon-sheet-confirm" bindtap="confirmCouponSheet">确认使用</view>
+      </view>
+    </view>
+  </view>
+</template>

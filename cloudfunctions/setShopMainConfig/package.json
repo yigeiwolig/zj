@@ -1,0 +1,9 @@
+{
+  "name": "setShopMainConfig",
+  "version": "1.0.0",
+  "description": "管理员保存商城 shopMain 配置（顶部轮播等）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

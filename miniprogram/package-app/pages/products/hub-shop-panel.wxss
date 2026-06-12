@@ -36,7 +36,6 @@
 
 .hub-shop-panel-root .shop-sections,
 .hub-shop-panel-root .shop-section,
-.hub-shop-panel-root .hero-swiper-box,
 .hub-shop-panel-root .shop-series-swiper {
   width: 100%;
   box-sizing: border-box;

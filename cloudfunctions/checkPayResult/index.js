@@ -11,28 +11,41 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
-const WX_PAY_CONFIG = {
-  mchId: '1103782674',
-  appId: 'wxf1a81dd77d810edf',
-  apiV3Key: 'MTMoGaiSheWeChatPay2025Key888888',
-  serialNo: '73F820E3A9CBFF6FF509EAB7B2449CEBAB33E479',
-  keyPath: path.join(__dirname, 'apiclient_key.pem'),
-  certPath: path.join(__dirname, 'apiclient_cert.p12')
+let _wxPayConfigCache = null
+
+function getWxPayConfig() {
+  if (_wxPayConfigCache) return _wxPayConfigCache
+  const mchId = process.env.WX_PAY_MCH_ID
+  const appId = process.env.WX_PAY_APP_ID
+  const apiV3Key = process.env.WX_PAY_API_V3_KEY
+  if (!mchId || !appId || !apiV3Key) {
+    throw new Error('缺少微信支付环境变量 WX_PAY_MCH_ID / WX_PAY_APP_ID / WX_PAY_API_V3_KEY')
+  }
+  _wxPayConfigCache = {
+    mchId,
+    appId,
+    apiV3Key,
+    serialNo: process.env.WX_PAY_SERIAL_NO || '',
+    keyPath: path.join(__dirname, 'apiclient_key.pem'),
+    certPath: path.join(__dirname, 'apiclient_cert.p12')
+  }
+  return _wxPayConfigCache
 }
 
 let privateKeyCache = null
 function getPrivateKey() {
   if (privateKeyCache) return privateKeyCache
-  if (fs.existsSync(WX_PAY_CONFIG.keyPath)) {
-    privateKeyCache = fs.readFileSync(WX_PAY_CONFIG.keyPath, 'utf8')
+  const cfg = getWxPayConfig()
+  if (fs.existsSync(cfg.keyPath)) {
+    privateKeyCache = fs.readFileSync(cfg.keyPath, 'utf8')
     return privateKeyCache
   }
-  if (!fs.existsSync(WX_PAY_CONFIG.certPath)) {
+  if (!fs.existsSync(cfg.certPath)) {
     throw new Error('私钥文件不存在，且无法从证书中提取')
   }
-  const p12Buffer = fs.readFileSync(WX_PAY_CONFIG.certPath)
+  const p12Buffer = fs.readFileSync(cfg.certPath)
   const p12Asn1 = forge.asn1.fromDer(p12Buffer.toString('binary'))
-  const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, WX_PAY_CONFIG.mchId)
+  const p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, cfg.mchId)
   const keyBags = p12.getBags({ bagType: forge.pki.oids.pkcs8ShroudedKeyBag })
   const privateKeyObj = keyBags[forge.pki.oids.pkcs8ShroudedKeyBag][0]
   if (!privateKeyObj) {
@@ -52,7 +65,7 @@ function generateWxPaySignature(method, url, timestamp, nonce, body) {
 
 function queryOrderByOutTradeNo(outTradeNo) {
   return new Promise((resolve, reject) => {
-    const { mchId, serialNo } = WX_PAY_CONFIG
+    const { mchId, serialNo } = getWxPayConfig()
     const urlPath = `/v3/pay/transactions/out-trade-no/${outTradeNo}?mchid=${mchId}`
     const method = 'GET'
     const timestamp = Math.floor(Date.now() / 1000).toString()
@@ -91,8 +104,11 @@ function queryOrderByOutTradeNo(outTradeNo) {
 }
 
 async function getAccessToken() {
-  const { appId } = WX_PAY_CONFIG
-  const appSecret = 'bc6cf6a358e84c3f88c105cf19b70fbd'
+  const { appId } = getWxPayConfig()
+  const appSecret = process.env.WX_APP_SECRET || process.env.WX_PAY_APP_SECRET || ''
+  if (!appSecret) {
+    throw new Error('未配置 WX_APP_SECRET 环境变量')
+  }
   return new Promise((resolve, reject) => {
     https.get(`https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`, res => {
       let data = ''
@@ -122,7 +138,7 @@ async function syncOrderInfoToMiniProgram(outTradeNo, transactionId, orderData, 
     order_key: {
       order_number_type: 1,
       order_number: outTradeNo,
-      mchid: WX_PAY_CONFIG.mchId
+      mchid: getWxPayConfig().mchId
     },
     payer: {
       openid: openId
@@ -336,9 +352,21 @@ function isTimerEvent(event) {
   return false
 }
 
+function verifyInternalTimerSecret(event) {
+  const secret = process.env.INTERNAL_CALL_SECRET
+  if (!secret) {
+    console.error('[checkPayResult] INTERNAL_CALL_SECRET 未配置，拒绝定时查单')
+    return false
+  }
+  return !!(event && event._internalSecret === secret)
+}
+
 exports.main = async (event = {}) => {
   try {
     if (isTimerEvent(event)) {
+      if (!verifyInternalTimerSecret(event)) {
+        return { success: false, msg: '无权执行定时查单' }
+      }
       const batchSize = event.batchSize || 20
       const batchResult = await batchCheckUnpaidOrders(batchSize)
       return { success: true, msg: '定时查单完成', data: batchResult }
@@ -349,12 +377,27 @@ exports.main = async (event = {}) => {
       return { success: false, msg: '缺少 orderId 参数' }
     }
 
+    const callerOpenid = cloud.getWXContext().OPENID
+    if (!callerOpenid) {
+      return { success: false, msg: '未登录' }
+    }
+
     const orderRes = await db.collection('shop_orders').where({ orderId }).get()
     if (!orderRes.data.length) {
       return { success: false, msg: '订单不存在' }
     }
 
-    return await handleOrderPayment(orderRes.data[0])
+    const orderDoc = orderRes.data[0]
+    if (orderDoc._openid && orderDoc._openid !== callerOpenid) {
+      const byOpenid = await db.collection('guanliyuan').where({ openid: callerOpenid }).limit(1).get()
+      const bySystem = await db.collection('guanliyuan').where({ _openid: callerOpenid }).limit(1).get()
+      const isAdmin = (byOpenid.data && byOpenid.data.length) || (bySystem.data && bySystem.data.length)
+      if (!isAdmin) {
+        return { success: false, msg: '无权查询该订单' }
+      }
+    }
+
+    return await handleOrderPayment(orderDoc)
   } catch (err) {
     console.error('[checkPayResult] 全局异常:', err)
     return { success: false, msg: err.message }

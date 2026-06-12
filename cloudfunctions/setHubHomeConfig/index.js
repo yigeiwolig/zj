@@ -18,8 +18,18 @@ exports.main = async (event) => {
   try {
     await assertAdmin(OPENID);
     const hubNewCover = String((event && event.hubNewCover) || '').trim();
+    const hubNewMediaList = Array.isArray(event && event.hubNewMediaList)
+      ? event.hubNewMediaList.map((item) => ({
+          type: item && item.type === 'video' ? 'video' : 'image',
+          url: String((item && item.url) || '').trim(),
+          autoplay: item && item.type === 'video' ? item.autoplay === true : false
+        })).filter(item => item.url)
+      : [];
+    const hubNewMediaAutoplay = !!(event && event.hubNewMediaAutoplay);
     const payload = {
       hubNewCover,
+      hubNewMediaList,
+      hubNewMediaAutoplay,
       updateTime: db.serverDate(),
       _openid: OPENID
     };
@@ -28,7 +38,7 @@ exports.main = async (event) => {
     } catch (setErr) {
       await db.collection('shop_config').doc(DOC_ID).update({ data: payload });
     }
-    return { success: true, hubNewCover };
+    return { success: true, hubNewCover, hubNewMediaList, hubNewMediaAutoplay };
   } catch (err) {
     const msg = String((err && err.message) || err || '');
     if (msg.includes('FORBIDDEN') || msg.includes('UNAUTHORIZED')) {

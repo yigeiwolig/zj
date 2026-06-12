@@ -2,7 +2,8 @@
   "component": true,
   "usingComponents": {
     "custom-toast": "/components/custom-toast/index",
-    "hub-tab-bar": "/components/hub-tab-bar/index"
+    "hub-tab-bar": "/components/hub-tab-bar/index",
+    "return-required-list": "/package-app/components/return-required-list/index"
   },
   "styleIsolation": "apply-shared"
 }

@@ -1,6 +1,8 @@
 @import "../../pages/shop/shop.wxss";
 @import "../../../styles/hub-embed-portal.wxss";
+@import "../../../styles/overlay-z-index.wxss";
 @import "../../../styles/checkout-sheet.wxss";
+@import "../../../styles/checkout-coupon.wxss";
 
 .checkout-modal-host {
   position: fixed;

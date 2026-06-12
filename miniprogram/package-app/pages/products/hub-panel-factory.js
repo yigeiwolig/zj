@@ -33,7 +33,8 @@ function buildHubMyPanel(hubView) {
         if (!!authorized !== !!this.data.isAuthorized) {
           this.setData({ isAuthorized: !!authorized });
         }
-        if (authorized && typeof this.checkAdminPrivilege === 'function') {
+        // 仅拉取 openid；勿在已授权后重复 checkAdminPrivilege，以免异步结果把 isAdmin 打回 false
+        if (authorized && !this.data.myOpenid && typeof this.checkAdminPrivilege === 'function') {
           this.checkAdminPrivilege().catch(() => {});
         }
       },
@@ -42,6 +43,18 @@ function buildHubMyPanel(hubView) {
         if (!!isAdmin !== !!this.data.isAdmin) {
           this.setData({ isAdmin: !!isAdmin });
         }
+      }
+    },
+    onAttached() {
+      const authPatch = {};
+      if (this.properties.shellAuthorized) {
+        authPatch.isAuthorized = true;
+      }
+      if (this.properties.shellAdmin) {
+        authPatch.isAdmin = true;
+      }
+      if (Object.keys(authPatch).length) {
+        this.setData(authPatch);
       }
     },
     methodPatch: {

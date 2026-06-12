@@ -1,7 +1,12 @@
 const cloud = require('wx-server-sdk');
 const COS = require('cos-nodejs-sdk-v5');
+const fs = require('fs');
+const path = require('path');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
+const db = cloud.database();
+
+const DELETE_KEY_RE = /^(video_go|video\/user|case)(\/|$)/;
 
 function getEnv(name) {
   return (process.env[name] || '').trim();
@@ -44,8 +49,245 @@ function resolvePublicBase(bucket, region) {
   return { publicBase: base, note: note || '使用 COS_PUBLIC_DOMAIN' };
 }
 
+const ALLOWED_FOLDERS = new Set([
+  'shop/topMedia',
+  'shop/accessories',
+  'shop/series',
+  'hub/home',
+  'uploads',
+  'mt_products',
+  'products',
+  'proofs',
+  'repair',
+  'repair_image',
+  'tutorial',
+  'case',
+  'avatar',
+  'home',
+  'azjc',
+  'shouhou',
+  'paihang',
+  'video_go'
+])
+
+/** 云函数直传上限（避免 callFunction 体过大） */
+const MAX_CLOUD_PUT_BYTES = 4 * 1024 * 1024
+
+function normalizeFolder(raw) {
+  const folder = String(raw || 'uploads').replace(/^\/+|\/+$/g, '') || 'uploads'
+  const base = folder.split('/')[0] === 'shop' ? folder.replace(/^shop\/+/, 'shop/') : folder
+  for (const allowed of ALLOWED_FOLDERS) {
+    if (base === allowed || base.startsWith(allowed + '/')) return base
+  }
+  return 'uploads'
+}
+
+function makeCosClient(secretId, secretKey) {
+  return new COS({ SecretId: secretId, SecretKey: secretKey })
+}
+
+function buildObjectKey(event) {
+  const extRaw = String(event.ext || '.jpg').toLowerCase()
+  const ext = extRaw.startsWith('.') ? extRaw : `.${extRaw}`
+  const folder = normalizeFolder(event.folder || 'uploads')
+  const key = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 10)}${ext}`
+  const contentType = String(event.contentType || 'image/jpeg')
+  return { ext, folder, key, contentType }
+}
+
+function putObjectViaCloud(cos, bucket, region, key, body, contentType) {
+  return new Promise((resolve, reject) => {
+    cos.putObject(
+      {
+        Bucket: bucket,
+        Region: region,
+        Key: key,
+        Body: body,
+        ContentType: contentType,
+        ACL: OBJECT_ACL
+      },
+      (err) => {
+        if (err) reject(err)
+        else resolve()
+      }
+    )
+  })
+}
+
+async function assertAdmin() {
+  const { OPENID } = cloud.getWXContext()
+  if (!OPENID) throw new Error('UNAUTHORIZED')
+  const byOpenid = await db.collection('guanliyuan').where({ openid: OPENID }).limit(1).get()
+  if (byOpenid.data.length > 0) return OPENID
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: OPENID }).limit(1).get()
+  if (bySystemOpenid.data.length > 0) return OPENID
+  throw new Error('FORBIDDEN')
+}
+
+async function isAdminOpenid(openid) {
+  if (!openid) return false
+  const byOpenid = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+  if (byOpenid.data.length > 0) return true
+  const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+  return bySystemOpenid.data.length > 0
+}
+
+/** 云函数互调时 OPENID 可能丢失，支持内部密钥或父函数已校验的管理员 openid */
+async function verifyDeletePermission(event) {
+  const internalSecret = getEnv('INTERNAL_CALL_SECRET')
+  if (internalSecret && event && event._internalSecret === internalSecret) {
+    return true
+  }
+  if (event && event._trustedAdminOpenid && await isAdminOpenid(event._trustedAdminOpenid)) {
+    return true
+  }
+  await assertAdmin()
+  return true
+}
+
+function isCosNotFoundError(err) {
+  const code = String((err && err.code) || '')
+  const status = Number(err && err.statusCode)
+  const msg = String((err && err.message) || err || '')
+  return status === 404 || code === 'NoSuchKey' || msg.indexOf('NoSuchKey') >= 0
+}
+
+function sanitizeDeleteKeys(rawKeys) {
+  const keys = [...new Set((Array.isArray(rawKeys) ? rawKeys : []).map((k) => String(k || '').replace(/^\/+/, '').trim()).filter(Boolean))]
+  return keys.filter((key) => DELETE_KEY_RE.test(key))
+}
+
+async function handleDeleteObjects(event) {
+  try {
+    await verifyDeletePermission(event)
+  } catch (e) {
+    const msg = String((e && e.message) || e || '')
+    if (msg.includes('UNAUTHORIZED') || msg.includes('FORBIDDEN')) {
+      return { success: false, message: '无管理员权限' }
+    }
+    return { success: false, message: msg }
+  }
+
+  const secretId = getEnv('COS_SECRET_ID')
+  const secretKey = getEnv('COS_SECRET_KEY')
+  const bucket = normalizeBucket(getEnv('COS_BUCKET'))
+  const region = getEnv('COS_REGION')
+  if (!secretId || !secretKey || !bucket || !region) {
+    return {
+      success: false,
+      message: '缺少 COS 环境变量，请配置 COS_SECRET_ID/COS_SECRET_KEY/COS_BUCKET/COS_REGION'
+    }
+  }
+
+  const keys = sanitizeDeleteKeys(event.keys)
+  if (!keys.length) {
+    return { success: true, deleted: 0, failed: [] }
+  }
+
+  const cos = makeCosClient(secretId, secretKey)
+  let deleted = 0
+  const failed = []
+
+  for (const key of keys) {
+    try {
+      await new Promise((resolve, reject) => {
+        cos.deleteObject({ Bucket: bucket, Region: region, Key: key }, (err, data) =>
+          err ? reject(err) : resolve(data)
+        )
+      })
+      deleted += 1
+    } catch (err) {
+      if (isCosNotFoundError(err)) {
+        deleted += 1
+        continue
+      }
+      console.warn('[getCosUploadUrl] deleteObject failed:', key, err)
+      failed.push(key)
+    }
+  }
+
+  if (failed.length) {
+    return {
+      success: false,
+      message: `COS 删除失败（${failed.length} 个）`,
+      deleted,
+      failed
+    }
+  }
+
+  return { success: true, deleted, failed: [] }
+}
+
+const CASE_BGM_KEY = 'case/bgm/case-bgm.mp3';
+
+async function handlePublishCaseBgm() {
+  const secretId = getEnv('COS_SECRET_ID');
+  const secretKey = getEnv('COS_SECRET_KEY');
+  const bucket = normalizeBucket(getEnv('COS_BUCKET'));
+  const region = getEnv('COS_REGION');
+  if (!secretId || !secretKey || !bucket || !region) {
+    return {
+      ok: false,
+      success: false,
+      errMsg: '缺少 COS 环境变量，请在云开发环境变量配置 COS_SECRET_ID/COS_SECRET_KEY/COS_BUCKET/COS_REGION'
+    };
+  }
+
+  const localPath = path.join(__dirname, 'case-bgm.mp3');
+  if (!fs.existsSync(localPath)) {
+    return { ok: false, success: false, errMsg: '云函数目录缺少 case-bgm.mp3' };
+  }
+
+  const body = fs.readFileSync(localPath);
+  if (!body.length) {
+    return { ok: false, success: false, errMsg: 'case-bgm.mp3 为空' };
+  }
+
+  const cos = makeCosClient(secretId, secretKey);
+  await putObjectViaCloud(cos, bucket, region, CASE_BGM_KEY, body, 'audio/mpeg');
+  const { publicBase } = resolvePublicBase(bucket, region);
+  const audioUrl = `${publicBase.replace(/\/+$/g, '')}/${CASE_BGM_KEY}`;
+
+  try {
+    await db.collection('config').doc('case_bgm').set({
+      data: { audioUrl, updatedAt: db.serverDate() }
+    });
+  } catch (e) {
+    try {
+      await db.collection('config').doc('case_bgm').update({
+        data: { audioUrl, updatedAt: db.serverDate() }
+      });
+    } catch (e2) {
+      return {
+        ok: true,
+        success: true,
+        via: 'publishCaseBgm',
+        audioUrl,
+        publicUrl: audioUrl,
+        size: body.length,
+        warn: 'COS 已上传，写入 config/case_bgm 失败，请手动填 audioUrl'
+      };
+    }
+  }
+
+  return { ok: true, success: true, via: 'publishCaseBgm', audioUrl, publicUrl: audioUrl, size: body.length, key: CASE_BGM_KEY };
+}
+
 exports.main = async (event = {}) => {
   try {
+    if (String(event.action || '') === 'deleteObjects') {
+      return await handleDeleteObjects(event)
+    }
+
+    if (String(event.action || '') === 'publishCaseBgm') {
+      return await handlePublishCaseBgm()
+    }
+
+    const { OPENID } = cloud.getWXContext()
+    if (!OPENID) {
+      return { success: false, message: '未登录，无法获取上传凭证' }
+    }
+
     const secretId = getEnv('COS_SECRET_ID');
     const secretKey = getEnv('COS_SECRET_KEY');
     const bucket = normalizeBucket(getEnv('COS_BUCKET'));
@@ -66,17 +308,37 @@ exports.main = async (event = {}) => {
       };
     }
 
-    const extRaw = String(event.ext || '.jpg').toLowerCase();
-    const ext = extRaw.startsWith('.') ? extRaw : `.${extRaw}`;
-    const folderRaw = String(event.folder || 'shop/topMedia').replace(/^\/+|\/+$/g, '');
-    const folder = folderRaw || 'shop/topMedia';
-    const contentType = String(event.contentType || 'image/jpeg');
-    const key = `${folder}/${Date.now()}_${Math.random().toString(36).slice(2, 10)}${ext}`;
+    const cos = makeCosClient(secretId, secretKey)
+    const { key, contentType } = buildObjectKey(event)
 
-    const cos = new COS({
-      SecretId: secretId,
-      SecretKey: secretKey
-    });
+    // 小程序未配置 COS request 合法域名时，小文件可走云函数直传（免客户端 PUT）
+    if (String(event.action || '') === 'putObject') {
+      const rawB64 = String(event.base64 || '').replace(/^data:[^;]+;base64,/, '').trim()
+      if (!rawB64) {
+        return { success: false, message: '缺少文件数据' }
+      }
+      const body = Buffer.from(rawB64, 'base64')
+      if (!body.length) {
+        return { success: false, message: '文件数据为空' }
+      }
+      if (body.length > MAX_CLOUD_PUT_BYTES) {
+        return {
+          success: false,
+          message: `文件超过 ${Math.round(MAX_CLOUD_PUT_BYTES / 1024 / 1024)}MB，请在小程序后台配置 COS 为 request 合法域名后使用直传`
+        }
+      }
+      await putObjectViaCloud(cos, bucket, region, key, body, contentType)
+      const { publicBase, note } = resolvePublicBase(bucket, region)
+      const publicUrl = `${publicBase.replace(/\/+$/g, '')}/${key}`
+      return {
+        success: true,
+        publicUrl,
+        key,
+        contentType,
+        via: 'cloudPutObject',
+        debug: { publicBase, publicUrlNote: note }
+      }
+    }
 
     const uploadUrl = cos.getObjectUrl({
       Bucket: bucket,

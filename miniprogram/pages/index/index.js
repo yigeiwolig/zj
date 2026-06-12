@@ -1,6 +1,8 @@
 // miniprogram/pages/index/index.js
 const app = getApp();
-var QQMapWX = require('../../utils/qqmap-wx-jssdk.js'); 
+var QQMapWX = require('../../utils/qqmap-wx-jssdk.js');
+const referralPendingBind = require('../../utils/referralPendingBind.js');
+const { redirectToPcBlockedIfNeeded } = require('../../utils/runtimeEnv.js');
 var qqmapsdk = new QQMapWX({
     key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
 });
@@ -18,6 +20,7 @@ Page({
     isAuthorized: false,
     inputNickName: '',
     inputInviteCode: '',
+    inviteCodeInputInvalid: false,
     step: 0, 
     locationResult: null,
     // 🔴 动画完成后的跳转目标（等待动画完成后再跳转）
@@ -61,6 +64,8 @@ Page({
     adminWechat: 'MT-摩改社', // 管理员微信号（可以修改）
     copyWechatBusy: false, // 复制微信号进行中（用于即时反馈）
     qrPressing: false, // 二维码按压态（触摸即下沉）
+    firstTimeActionReady: false, // 弹窗打开 2 秒后才可操作主按钮
+    firstTimeActionCountdown: 2,
 
     // Loading 状态（合并重复定义）
     isLoading: false,
@@ -76,7 +81,7 @@ Page({
     // 【新增】管理员相关状态
     isAdmin: false,        // 是否是管理员
     isAdminMode: false,    // 是否开启了管理员模式
-    adminViewMode: 'banned', // banned | suspicious | suspiciousBanned | nickname
+    adminViewMode: 'banned', // banned | suspicious | suspiciousBanned | suspiciousIgnored | nickname
     manualBannedMode: false, // true: 仅手动封禁名单
     suspiciousManualBannedMode: false, // true: 仅可疑人员处理中手动封禁留存名单
     bannedUsers: [],       // 被封禁的用户列表
@@ -86,10 +91,17 @@ Page({
     suspiciousSearchMatchCount: 0, // 当前关键词命中人数
     adminSuspiciousSearch: '', // 可疑人员搜索关键词
     adminSuspiciousSearchTrim: '', // 去空格后的关键词（供 WXML 判断）
+    ignoredUsers: [], // 已无视人员留档
+    ignoredDisplayList: [],
+    ignoredSearchMatchCount: 0,
+    adminIgnoredSearch: '',
+    adminIgnoredSearchTrim: '',
+    isLoadingIgnoredUsers: false,
     isLoadingBannedUsers: false,  // 是否正在加载封禁用户列表
     isLoadingScreenshotRiskUsers: false,
     isLoadingSuspiciousUsers: false,
     adminListRefreshing: false,
+    adminExpandedCardKeys: {}, // 管理员卡片展开状态 rowKey -> true
     // 🔴 昵称录入相关状态
     nicknameInput: '',    // 昵称输入
     isSubmittingNickname: false, // 是否正在提交昵称
@@ -175,6 +187,8 @@ Page({
 
 
   onLoad(options) {
+    if (redirectToPcBlockedIfNeeded()) return;
+
     // 🔴 更新页面访问统计
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('index');
@@ -193,6 +207,8 @@ Page({
     // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
     this.calcNavBarInfo();
 
+    this._allowScreenCaptureOnIndex();
+
     // 1. 先校验身份（管理员优先，无需填昵称/口令）
     this._initIndexAuthFlow();
 
@@ -207,15 +223,7 @@ Page({
       return;
     }
 
-    const hasAuth = wx.getStorageSync('has_permanent_auth');
-    const savedNickname = wx.getStorageSync('user_nickname');
-
-    if (hasAuth && savedNickname) {
-      this.setData({ isAuthorized: true, isShowNicknameUI: false });
-      wx.setStorageSync('has_seen_first_time_modal', true);
-      return;
-    }
-
+    // 必须以 valid_users 云端记录为准，避免本地残留昵称跳过「抖音/闲鱼」引导
     await this.checkValidUserFromDatabase();
   },
 
@@ -233,12 +241,26 @@ Page({
   },
 
   onShow() {
+    if (redirectToPcBlockedIfNeeded()) return;
     this._pageAlive = true;
+    this._allowScreenCaptureOnIndex();
     // 🔴 启动定时检查 qiangli 强制封禁
     if (app && app.startQiangliCheck) {
       app.startQiangliCheck();
     }
     this._startSuspiciousAutoRefresh();
+    this._retryPendingReferralBindIfAuthed();
+    this._refreshNewUserGuideOnShow();
+  },
+
+  /** 全局守卫清掉本地昵称后，补拉「抖音/闲鱼」引导或昵称层 */
+  _refreshNewUserGuideOnShow() {
+    if (this.data.isAdmin || this.data.isAuthorized) return;
+    const hasAuth = wx.getStorageSync('has_permanent_auth');
+    const nick = wx.getStorageSync('user_nickname');
+    if (hasAuth && nick) return;
+    if (this.data.showFirstTimeModal || this.data.isShowNicknameUI) return;
+    this._showUnauthorizedEntryUI();
   },
 
   onHide() {
@@ -268,7 +290,37 @@ Page({
       clearTimeout(this._firstTimeModalEnterFallbackTimer);
       this._firstTimeModalEnterFallbackTimer = null;
     }
+    this._clearFirstTimeActionCooldown();
     this._clearNoLoadingTimer();
+  },
+
+  _clearFirstTimeActionCooldown() {
+    if (this._firstTimeActionCooldownTimer) {
+      clearInterval(this._firstTimeActionCooldownTimer);
+      this._firstTimeActionCooldownTimer = null;
+    }
+  },
+
+  /** 引导弹窗区域允许系统截图（关闭其它页可能残留的防截屏黑屏） */
+  _allowScreenCaptureOnIndex() {
+    if (!wx.setVisualEffectOnCapture) return;
+    try {
+      wx.setVisualEffectOnCapture({ visualEffect: 'none' });
+    } catch (e) {}
+  },
+
+  _startFirstTimeActionCooldown() {
+    this._clearFirstTimeActionCooldown();
+    this.setData({ firstTimeActionReady: false, firstTimeActionCountdown: 2 });
+    this._firstTimeActionCooldownTimer = setInterval(() => {
+      const next = (this.data.firstTimeActionCountdown || 0) - 1;
+      if (next <= 0) {
+        this._clearFirstTimeActionCooldown();
+        this.setData({ firstTimeActionReady: true, firstTimeActionCountdown: 0 });
+        return;
+      }
+      this.setData({ firstTimeActionCountdown: next });
+    }, 1000);
   },
 
   // 🔴 从 valid_users 集合检查用户是否有记录
@@ -298,7 +350,8 @@ Page({
       const openid = loginRes.result?.openid;
       
       if (!openid) {
-        console.warn('[index] 无法获取 openid，显示昵称输入界面');
+        console.warn('[index] 无法获取 openid，显示抖音/闲鱼引导');
+        this._resetDouyinXianyuGuideState();
         this._showUnauthorizedEntryUI();
         return;
       }
@@ -330,20 +383,37 @@ Page({
             firstTimeModalEnterReady: false,
             firstTimeModalClosing: false
           });
-          
+          this._retryPendingReferralBindIfAuthed();
           console.log('[index] 从 valid_users 自动恢复用户昵称:', nickname);
           return;
         }
       }
       
-      // 没有找到记录，显示昵称输入界面
-      console.log('[index] valid_users 中未找到用户记录，显示昵称输入界面');
+      // 没有找到记录：清掉可能残留的本地授权，先展示抖音/闲鱼加微信引导
+      console.log('[index] valid_users 中未找到用户记录，先展示抖音/闲鱼引导');
+      wx.removeStorageSync('has_permanent_auth');
+      wx.removeStorageSync('user_nickname');
+      this.setData({ isAuthorized: false, inputNickName: '' });
+      this._resetDouyinXianyuGuideState();
       this._showUnauthorizedEntryUI();
       
     } catch (err) {
       console.error('[index] 检查 valid_users 失败:', err);
+      this._resetDouyinXianyuGuideState();
       this._showUnauthorizedEntryUI();
     }
+  },
+
+  /** 未录入用户：每次进入先走抖音/闲鱼加微信引导（同一会话内点「我知道了」后再进昵称层） */
+  _resetDouyinXianyuGuideState() {
+    this._firstTimeGuideDismissedThisSession = false;
+    this._firstTimeModalShownOnce = false;
+    wx.removeStorageSync('has_seen_first_time_modal');
+  },
+
+  _markDouyinXianyuGuideDismissed() {
+    this._firstTimeGuideDismissedThisSession = true;
+    wx.setStorageSync('has_seen_first_time_modal', true);
   },
 
   /** 未授权入口：新用户先抖音/闲鱼引导，否则直接昵称验证（互斥，不叠两层） */
@@ -356,7 +426,7 @@ Page({
   /** @returns {boolean} 是否已拉起首次引导 */
   _openFirstTimeModalIfNeeded() {
     if (this.data.isAdmin || this.data.isAuthorized) return false;
-    if (wx.getStorageSync('has_seen_first_time_modal')) return false;
+    if (this._firstTimeGuideDismissedThisSession) return false;
     if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
     return this._openFirstTimeModalAnimated();
   },
@@ -404,27 +474,27 @@ Page({
   },
 
   onInviteCodeInput(e) {
-    this.setData({ inputInviteCode: (e.detail && e.detail.value) || '' });
+    const val = (e.detail && e.detail.value) || '';
+    const inviteCodeInputInvalid = referralPendingBind.isInviteCodeInputInvalid(val);
+    this.setData({ inputInviteCode: val, inviteCodeInputInvalid });
+    if (!inviteCodeInputInvalid) {
+      referralPendingBind.setPendingInviteCode(val);
+    }
   },
 
   _bindReferralInviteAfterAuth() {
-    const raw = (this.data.inputInviteCode || '').trim();
+    const raw = (this.data.inputInviteCode || referralPendingBind.getPendingInviteCode() || '').trim();
     if (!raw) return Promise.resolve();
-    return wx.cloud.callFunction({
-      name: 'referral',
-      data: { action: 'bindInviteCode', code: raw }
-    }).then((res) => {
-      const r = (res && res.result) || {};
-      if (r.success) {
-        try { wx.setStorageSync('referral_invite_bound', true); } catch (e) {}
-        return;
-      }
-      if (r.error) {
-        this.showAutoToast('邀请码', r.error);
-      }
-    }).catch((err) => {
-      console.warn('[index] bindInviteCode failed:', err);
+    referralPendingBind.setPendingInviteCode(raw);
+    return referralPendingBind.flushPendingReferralBind({
+      onToast: (title, content) => this.showAutoToast(title, content)
     });
+  },
+
+  _retryPendingReferralBindIfAuthed() {
+    const hasAuth = wx.getStorageSync('has_permanent_auth');
+    if (!hasAuth) return;
+    referralPendingBind.flushPendingReferralBind({ silent: true });
   },
 
   // === 核心验证逻辑 ===
@@ -471,11 +541,16 @@ Page({
         firstTimeModalClosing: false
       });
       setTimeout(() => {
-        wx.reLaunch({ url: '/package-app/pages/azjc/azjc' });
+        wx.reLaunch({ url: '/package-biz/pages/azjc/azjc' });
       }, 320);
       return;
     }
     const name = raw;
+    if (this.data.inviteCodeInputInvalid) {
+      referralPendingBind.clearPendingInviteCode();
+    } else {
+      referralPendingBind.setPendingInviteCode(this.data.inputInviteCode);
+    }
     // 先让按钮进入加载态，避免首点「一大段同步逻辑」期间界面毫无反馈
     this.setData({ isLoading: true });
     setTimeout(() => {
@@ -579,17 +654,20 @@ Page({
           wx.setStorageSync('has_seen_first_time_modal', true);
           wx.removeStorageSync('is_user_banned');
           this._bindReferralInviteAfterAuth().finally(() => {
+            const keepInvite = !!referralPendingBind.getPendingInviteCode();
             this._hideNicknameUIWithAnimation({
               isAuthorized: true,
               showFirstTimeModal: false,
               firstTimeModalEnterReady: false,
               firstTimeModalClosing: false,
               showCustomSuccessModal: false,
-              inputInviteCode: ''
+              inputInviteCode: keepInvite ? this.data.inputInviteCode : ''
             });
           });
         } else {
           if (result.isBlocked === true || result.type === 'banned') {
+            referralPendingBind.setPendingInviteCode(this.data.inputInviteCode);
+            referralPendingBind.clearBoundFlagIfNeeded();
             wx.setStorageSync('is_user_banned', true);
             wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           } else {
@@ -674,7 +752,8 @@ Page({
     this._closeWithAnimation('showAuthForceModal', 'authForceModalClosing');
     this._closeWithAnimation('showLocationPermissionModal', 'locationPermissionModalClosing');
     if (this.data.showFirstTimeModal) {
-      wx.setStorageSync('has_seen_first_time_modal', true);
+      this._clearFirstTimeActionCooldown();
+      this._markDouyinXianyuGuideDismissed();
       this.setData({
         firstTimeModalEnterReady: false,
         firstTimeModalClosing: false,
@@ -722,7 +801,7 @@ Page({
     });
     if (isShareCodeUser) {
       console.log('[handleAccess] 分享码用户直达教程，跳过定位与地址校验');
-      wx.reLaunch({ url: '/package-app/pages/azjc/azjc' });
+      wx.reLaunch({ url: '/package-biz/pages/azjc/azjc' });
       return;
     }
 
@@ -1417,6 +1496,18 @@ Page({
   // 空函数，用于阻止事件冒泡
   noop() {},
 
+  toggleAdminCardExpand(e) {
+    const rowKey = e.currentTarget.dataset.rowKey;
+    if (!rowKey) return;
+    const expanded = { ...(this.data.adminExpandedCardKeys || {}) };
+    if (expanded[rowKey]) {
+      delete expanded[rowKey];
+    } else {
+      expanded[rowKey] = true;
+    }
+    this.setData({ adminExpandedCardKeys: expanded });
+  },
+
   showAutoToast(title = '提示', content = '') {
     const full = content ? `${title}：${content}` : String(title || '提示');
     try {
@@ -1639,7 +1730,13 @@ Page({
       suspiciousDisplayList: [],
       suspiciousSearchMatchCount: 0,
       adminSuspiciousSearch: '',
-      adminSuspiciousSearchTrim: ''
+      adminSuspiciousSearchTrim: '',
+      ignoredUsers: [],
+      ignoredDisplayList: [],
+      ignoredSearchMatchCount: 0,
+      adminIgnoredSearch: '',
+      adminIgnoredSearchTrim: '',
+      adminExpandedCardKeys: {}
     });
     console.log('[index] 已退出管理员模式');
   },
@@ -1651,6 +1748,105 @@ Page({
       .split(/[\s,，;；、]+/)
       .map((t) => t.trim())
       .filter(Boolean);
+  },
+
+  _formatStayDuration(minutesInput) {
+    const minutes = Number(minutesInput);
+    if (!Number.isFinite(minutes) || minutes <= 0) return '不足 1 分钟';
+    const totalMin = Math.round(minutes * 100) / 100;
+    if (totalMin < 1) return '不足 1 分钟';
+    if (totalMin < 60) {
+      const m = totalMin >= 10 ? Math.round(totalMin) : Math.round(totalMin * 10) / 10;
+      return `${m} 分钟`;
+    }
+    const hours = Math.floor(totalMin / 60);
+    const mins = Math.round(totalMin % 60);
+    if (hours < 24) {
+      if (mins > 0) return `${hours} 小时 ${mins} 分钟`;
+      return `${hours} 小时`;
+    }
+    const days = Math.floor(hours / 24);
+    const remainHours = hours % 24;
+    let text = `${days} 天`;
+    if (remainHours > 0) text += ` ${remainHours} 小时`;
+    if (mins > 0) text += ` ${mins} 分钟`;
+    return text;
+  },
+
+  _calcAdminSuspicionScore(item) {
+    if (!item) return 0;
+    const enterCount = Number(item.enterCount || 0);
+    const pageVisits = Number(
+      item.sectionClicksTotal != null ? item.sectionClicksTotal : (item.pageVisitsCount || 0)
+    );
+    const stayMinutes = Number(item.totalStayMinutesText || item.totalStayMinutes || 0);
+    const dailyCount = Number(item.dailyCount || 0);
+    const hourlyCount = Number(item.hourlyCount || 0);
+    if (dailyCount || hourlyCount) {
+      return hourlyCount * 10000 + dailyCount * 1000 + pageVisits;
+    }
+    return enterCount * 1000 + pageVisits * 100 + stayMinutes;
+  },
+
+  _compareAdminSuspicion(a, b) {
+    const scoreDiff = this._calcAdminSuspicionScore(b) - this._calcAdminSuspicionScore(a);
+    if (scoreDiff !== 0) return scoreDiff;
+    return (b.lastViewTs || b.ignoredAtTs || 0) - (a.lastViewTs || a.ignoredAtTs || 0);
+  },
+
+  _sortAdminUsersBySuspicion(list) {
+    return (Array.isArray(list) ? list : []).slice().sort((a, b) => this._compareAdminSuspicion(a, b));
+  },
+
+  _decorateAdminUserCard(item) {
+    if (!item) return item;
+    const enterCount = Number(item.enterCount || 0);
+    const pageVisits = Number(
+      item.sectionClicksTotal != null ? item.sectionClicksTotal : (item.pageVisitsCount || 0)
+    );
+    const stayMinutes = Number(item.totalStayMinutesText || item.totalStayMinutes || 0);
+    const stayDurationText = this._formatStayDuration(stayMinutes);
+    return {
+      ...item,
+      enterCount,
+      sectionClicksTotal: pageVisits,
+      stayDurationText,
+      enterSummaryText: `进入 ${enterCount} 次（会话）`,
+      pageVisitSummaryText: `页面访问 ${pageVisits} 次`,
+      staySummaryText: `停留 ${stayDurationText}`
+    };
+  },
+
+  _mapAdminDisplayList(list) {
+    return (Array.isArray(list) ? list : []).map((item) => this._decorateAdminUserCard(item));
+  },
+
+  copyAdminNickname(e) {
+    const text = String((e.currentTarget.dataset.text || '')).trim();
+    if (!text) return;
+    const hideOfficialToast = () => {
+      try {
+        if (wx.__mt_oldHideToast) wx.__mt_oldHideToast();
+        if (wx.__mt_oldHideLoading) wx.__mt_oldHideLoading();
+      } catch (err) {}
+    };
+    hideOfficialToast();
+    wx.setClipboardData({
+      data: text,
+      success: () => {
+        hideOfficialToast();
+        this.setData({
+          showCopySuccessModal: true,
+          copySuccessModalClosing: false
+        });
+        setTimeout(() => {
+          this._closeWithAnimation('showCopySuccessModal', 'copySuccessModalClosing');
+        }, 2000);
+      },
+      fail: () => {
+        this.showAutoToast('提示', '复制失败，请重试');
+      }
+    });
   },
 
   _suspiciousUserHaystack(item) {
@@ -1676,6 +1872,10 @@ Page({
       item.enterCount != null ? `${item.enterCount}次` : '',
       item.sectionClicksTotal != null ? `${item.sectionClicksTotal}次` : '',
       item.totalStayMinutesText != null ? `${item.totalStayMinutesText}分` : '',
+      item.stayDurationText,
+      item.enterSummaryText,
+      item.pageVisitSummaryText,
+      item.staySummaryText,
       pageDetail
     ]
       .filter(Boolean)
@@ -1697,20 +1897,23 @@ Page({
   },
 
   _syncSuspiciousDisplayList() {
-    const users = Array.isArray(this.data.suspiciousUsers) ? this.data.suspiciousUsers : [];
+    const users = this._mapAdminDisplayList(this.data.suspiciousUsers);
     const kw = String(this.data.adminSuspiciousSearch || '').trim();
     const tokens = this._parseSuspiciousSearchTokens(kw);
     let displayList;
     let matchCount;
     if (!tokens.length) {
-      displayList = users;
+      displayList = this._sortAdminUsersBySuspicion(users);
       matchCount = users.length;
     } else {
       const matched = this._filterSuspiciousUsers(users, kw);
       const matchKeys = new Set(matched.map((u) => u.rowKey).filter(Boolean));
       displayList = users
         .map((u) => ({ ...u, _searchMatch: matchKeys.has(u.rowKey) }))
-        .sort((a, b) => Number(b._searchMatch) - Number(a._searchMatch));
+        .sort((a, b) => {
+          const matchDiff = Number(b._searchMatch) - Number(a._searchMatch);
+          return matchDiff !== 0 ? matchDiff : this._compareAdminSuspicion(a, b);
+        });
       matchCount = matched.length;
     }
     this.setData({
@@ -1721,8 +1924,183 @@ Page({
   },
 
   _applySuspiciousUsersList(users) {
-    const list = Array.isArray(users) ? users : [];
+    const list = this._sortAdminUsersBySuspicion(Array.isArray(users) ? users : []);
     this.setData({ suspiciousUsers: list }, () => this._syncSuspiciousDisplayList());
+  },
+
+  _ignoredUserHaystack(item) {
+    if (!item) return '';
+    const base = this._suspiciousUserHaystack(item);
+    return [
+      base,
+      item.sourceTypeLabel,
+      item.fromSourceType,
+      item.ignoredAt,
+      item.viewerOpenid
+    ].filter(Boolean).join(' ').toLowerCase();
+  },
+
+  _itemMatchesIgnoredSearchTokens(item, tokens) {
+    if (!tokens || !tokens.length) return true;
+    const haystack = this._ignoredUserHaystack(item);
+    return tokens.every((token) => haystack.indexOf(token) !== -1);
+  },
+
+  _syncIgnoredDisplayList() {
+    const users = this._mapAdminDisplayList(this.data.ignoredUsers);
+    const kw = String(this.data.adminIgnoredSearch || '').trim();
+    const tokens = this._parseSuspiciousSearchTokens(kw);
+    let displayList;
+    let matchCount;
+    if (!tokens.length) {
+      displayList = this._sortAdminUsersBySuspicion(users);
+      matchCount = users.length;
+    } else {
+      const matched = users.filter((item) => this._itemMatchesIgnoredSearchTokens(item, tokens));
+      const matchKeys = new Set(matched.map((u) => u.rowKey).filter(Boolean));
+      displayList = users
+        .map((u) => ({ ...u, _searchMatch: matchKeys.has(u.rowKey) }))
+        .sort((a, b) => {
+          const matchDiff = Number(b._searchMatch) - Number(a._searchMatch);
+          return matchDiff !== 0 ? matchDiff : this._compareAdminSuspicion(a, b);
+        });
+      matchCount = matched.length;
+    }
+    this.setData({
+      ignoredDisplayList: displayList,
+      ignoredSearchMatchCount: matchCount,
+      adminIgnoredSearchTrim: kw
+    });
+  },
+
+  _applyIgnoredUsersList(users, options = {}) {
+    const list = Array.isArray(users) ? users : [];
+    const silent = !!(options && options.silent);
+    const localList = this.data.ignoredUsers || [];
+    if (!list.length && silent && localList.length) {
+      return;
+    }
+    this.setData({ ignoredUsers: this._sortAdminUsersBySuspicion(list) }, () => this._syncIgnoredDisplayList());
+  },
+
+  _mergeIgnoredUsersFromServer(serverUsers, options = {}) {
+    const serverList = Array.isArray(serverUsers) ? serverUsers : [];
+    const localList = this.data.ignoredUsers || [];
+    if (!serverList.length) {
+      if (localList.length) return;
+      this._applyIgnoredUsersList([]);
+      return;
+    }
+    const serverKeys = new Set(
+      serverList.map((u) => u && (u.rowKey || u.viewerOpenid)).filter(Boolean)
+    );
+    const localOnly = localList.filter((u) => {
+      if (!u) return false;
+      const key = u.rowKey || u.viewerOpenid;
+      return key && !serverKeys.has(key) && !serverKeys.has(u.viewerOpenid);
+    });
+    const merged = serverList.concat(localOnly);
+    this._applyIgnoredUsersList(merged);
+  },
+
+  onAdminIgnoredSearchInput(e) {
+    const keyword = (e.detail && e.detail.value) || '';
+    this.setData({ adminIgnoredSearch: keyword }, () => this._syncIgnoredDisplayList());
+  },
+
+  onAdminIgnoredSearchClear() {
+    this.setData({ adminIgnoredSearch: '' }, () => this._syncIgnoredDisplayList());
+  },
+
+  async loadIgnoredUsers(options = {}) {
+    const silent = !!options.silent;
+    if (!silent) {
+      this.setData({ isLoadingIgnoredUsers: true });
+    }
+    try {
+      let res = null;
+      try {
+        res = await wx.cloud.callFunction({
+          name: 'getSuspiciousUsers',
+          data: { scope: 'ignored_only' }
+        });
+      } catch (primaryErr) {
+        console.warn('[index] getSuspiciousUsers ignored_only 失败，尝试 getIgnoredUsers:', primaryErr);
+      }
+      if (!res || !res.result || !res.result.success) {
+        res = await wx.cloud.callFunction({ name: 'getIgnoredUsers' });
+      }
+      if (res.result && res.result.success) {
+        this._mergeIgnoredUsersFromServer(res.result.users || [], { silent });
+      } else {
+        console.error('[index] 加载无视人员列表失败:', res.result?.error);
+        if (!silent) {
+          this.showAutoToast('提示', res.result?.error || '加载无视人员失败');
+          this._applyIgnoredUsersList([]);
+        }
+      }
+    } catch (err) {
+      console.error('[index] 加载无视人员列表异常:', err);
+      if (!silent) {
+        this.showAutoToast('提示', '加载无视人员失败，请重新部署 getSuspiciousUsers');
+        this._applyIgnoredUsersList([]);
+      }
+    } finally {
+      if (!silent) {
+        this.setData({ isLoadingIgnoredUsers: false });
+      }
+    }
+  },
+
+  _formatIgnoredAtNow() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  },
+
+  _prependIgnoredUserFromCard(card) {
+    if (!card) return;
+    const record = this._decorateAdminUserCard({
+      ...card,
+      rowKey: card.archiveId ? `ign_${card.archiveId}` : `ign_${card.rowKey || card.viewerOpenid || Date.now()}`,
+      ignoredAt: this._formatIgnoredAtNow(),
+      ignoredAtTs: Date.now(),
+      sourceTypeLabel: card.sourceTypeLabel || (card.sourceType === 'screenshot' ? '截图风险' : '会话可疑'),
+      fromSourceType: card.sourceType || card.fromSourceType || 'session',
+      shareCode: card.shareCode || '小程序访问'
+    });
+    const list = (this.data.ignoredUsers || []).filter(
+      (item) => item && item.rowKey !== record.rowKey && item.viewerOpenid !== record.viewerOpenid
+    );
+    this._applyIgnoredUsersList([record].concat(list));
+  },
+
+  _removeIgnoredUserCard({ rowKey, viewerOpenid, riskId } = {}) {
+    const list = (this.data.ignoredUsers || []).filter((item) => {
+      if (!item) return false;
+      if (rowKey && item.rowKey === rowKey) return false;
+      if (riskId && item.riskId === riskId) return false;
+      if (viewerOpenid && item.viewerOpenid === viewerOpenid) return false;
+      return true;
+    });
+    this._applyIgnoredUsersList(list);
+  },
+
+  _removeSuspiciousCard({ rowKey, viewerOpenid, riskId, sourceType } = {}) {
+    const list = (this.data.suspiciousUsers || []).filter((item) => {
+      if (!item) return false;
+      if (rowKey && item.rowKey === rowKey) return false;
+      if (riskId && item.riskId === riskId) return false;
+      if (
+        viewerOpenid &&
+        item.viewerOpenid === viewerOpenid &&
+        (!sourceType || !item.sourceType || item.sourceType === sourceType || item.sourceType === 'session')
+      ) {
+        return false;
+      }
+      return true;
+    });
+    this._applySuspiciousUsersList(list);
   },
 
   onAdminSuspiciousSearchInput(e) {
@@ -1746,15 +2124,52 @@ Page({
       patch.adminSuspiciousSearch = '';
       patch.adminSuspiciousSearchTrim = '';
     }
+    if (mode !== 'suspiciousIgnored') {
+      patch.adminIgnoredSearch = '';
+      patch.adminIgnoredSearchTrim = '';
+    }
+    if (mode === 'suspicious') {
+      patch.adminViewMode = 'suspicious';
+      patch.suspiciousManualBannedMode = false;
+    }
     this.setData(patch, () => {
       if (mode === 'suspicious') {
         this._syncSuspiciousDisplayList();
+      }
+      if (mode === 'suspiciousIgnored') {
+        this._syncIgnoredDisplayList();
       }
     });
     if (mode === 'banned' && this.data.bannedUsers.length === 0) {
       this.loadBannedUsers();
       this.loadScreenshotRiskUsers();
     } else if (mode === 'suspicious' && this.data.suspiciousUsers.length === 0) {
+      this.loadSuspiciousUsers();
+    } else if (mode === 'suspiciousIgnored' && this.data.ignoredUsers.length === 0) {
+      this.loadIgnoredUsers();
+    }
+    this._startSuspiciousAutoRefresh();
+  },
+
+  goToIgnoredUsersFromHeader() {
+    if (this.data.adminViewMode === 'suspiciousIgnored') return;
+    this.setData({
+      adminViewMode: 'suspiciousIgnored',
+      manualBannedMode: false,
+      suspiciousManualBannedMode: false
+    });
+    this.loadIgnoredUsers();
+    this._stopSuspiciousAutoRefresh();
+  },
+
+  goBackToSuspiciousFromHeader() {
+    if (this.data.adminViewMode === 'suspicious') return;
+    this.setData({
+      adminViewMode: 'suspicious',
+      manualBannedMode: false,
+      suspiciousManualBannedMode: false
+    });
+    if (!this.data.suspiciousUsers.length) {
       this.loadSuspiciousUsers();
     }
     this._startSuspiciousAutoRefresh();
@@ -1768,7 +2183,7 @@ Page({
       suspiciousManualBannedMode: true
     });
     this.loadBannedUsers({ suspiciousManualOnly: true });
-    this._startSuspiciousAutoRefresh();
+    this._stopSuspiciousAutoRefresh();
   },
 
   _suspiciousAutoRefreshTimer: null,
@@ -1802,6 +2217,8 @@ Page({
         }
       } else if (this.data.adminViewMode === 'suspicious') {
         await this.loadSuspiciousUsers();
+      } else if (this.data.adminViewMode === 'suspiciousIgnored') {
+        await this.loadIgnoredUsers();
       }
     } catch (err) {
       console.warn('[index] 管理列表刷新失败:', err);
@@ -1884,7 +2301,8 @@ Page({
         }
         console.log('[index] getSuspiciousUsers version/stats:', version, res.result.stats || {});
         const nextUsers = res.result.users || [];
-        if (!this._isSameSuspiciousUsers(this.data.suspiciousUsers || [], nextUsers)) {
+        const force = !!options.force;
+        if (force || !this._isSameSuspiciousUsers(this.data.suspiciousUsers || [], nextUsers)) {
           this._applySuspiciousUsersList(nextUsers);
         } else if (String(this.data.adminSuspiciousSearch || '').trim()) {
           this._syncSuspiciousDisplayList();
@@ -1950,11 +2368,44 @@ Page({
     });
   },
 
+  handleIgnoredUserBan(e) {
+    const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const itemRowKey = dataset.itemRowKey || '';
+    const card = itemRowKey
+      ? (this.data.ignoredUsers || []).find((item) => item && item.rowKey === itemRowKey)
+      : null;
+    if (!card) return;
+    this.handleSuspiciousDecision({
+      currentTarget: {
+        dataset: {
+          action: 'ban',
+          sourceType: card.fromSourceType || 'session',
+          viewerNickname: card.viewerNickname || '该用户',
+          riskId: card.riskId || '',
+          viewerOpenid: card.viewerOpenid || '',
+          rowKey: card.sessionRowKey || card.archiveId || '',
+          province: card.province || '',
+          city: card.city || '',
+          district: card.district || '',
+          address: card.address || '',
+          latitude: card.latitude,
+          longitude: card.longitude,
+          fromIgnored: '1',
+          ignoredRowKey: card.rowKey || itemRowKey
+        }
+      }
+    });
+  },
+
   // 可疑人员页：截图记录的手动处理（无视/封禁）
   async handleSuspiciousScreenshotDecision(e) {
-    const riskId = e.currentTarget.dataset.riskId;
-    const action = e.currentTarget.dataset.action; // ban | ignore
-    const viewerNickname = e.currentTarget.dataset.viewerNickname || '该用户';
+    const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const riskId = dataset.riskId;
+    const action = dataset.action; // ban | ignore
+    const viewerNickname = dataset.viewerNickname || '该用户';
+    const fromIgnored = dataset.fromIgnored === '1' || dataset.fromIgnored === 1;
+    const ignoredRowKey = dataset.ignoredRowKey || '';
+    const viewerOpenid = dataset.viewerOpenid || '';
     if (!riskId || !action) return;
     const actionText = action === 'ban' ? '封禁' : '无视';
     this.showMyDialog({
@@ -1974,9 +2425,22 @@ Page({
           this.hideMyLoading();
           if (result.result && result.result.success) {
             this.showAutoToast('成功', `已${actionText}`);
-            this.loadSuspiciousUsers();
+            this._removeSuspiciousCard({
+              riskId,
+              viewerOpenid,
+              sourceType: 'screenshot'
+            });
+            this.loadSuspiciousUsers({ silent: true, force: true });
             this.loadScreenshotRiskUsers();
-            if (action === 'ban') this.loadBannedUsers();
+            if (action === 'ignore') {
+              this.loadIgnoredUsers({ silent: true });
+            }
+            if (action === 'ban') {
+              this.loadBannedUsers({ suspiciousManualOnly: true });
+              if (fromIgnored) {
+                this._removeIgnoredUserCard({ rowKey: ignoredRowKey, viewerOpenid, riskId });
+              }
+            }
           } else {
             this.showAutoToast('失败', result.result?.error || '处理失败');
           }
@@ -1997,13 +2461,22 @@ Page({
     const riskId = dataset.riskId || '';
     const viewerOpenid = dataset.viewerOpenid || '';
     const rowKey = dataset.rowKey || '';
+    const fromIgnored = dataset.fromIgnored === '1' || dataset.fromIgnored === 1;
+    const ignoredRowKey = dataset.ignoredRowKey || '';
     if (!action) return;
 
     // 截图待审核仍走原有云函数，保持兼容
     if (sourceType === 'screenshot' && riskId) {
       this.handleSuspiciousScreenshotDecision({
         currentTarget: {
-          dataset: { riskId, action, viewerNickname }
+          dataset: {
+            riskId,
+            action,
+            viewerNickname,
+            viewerOpenid,
+            fromIgnored: dataset.fromIgnored,
+            ignoredRowKey: dataset.ignoredRowKey
+          }
         }
       });
       return;
@@ -2018,6 +2491,23 @@ Page({
       cancelText: '取消',
       success: async (res) => {
         if (!res.confirm) return;
+        const suspiciousList = this.data.suspiciousUsers || [];
+        let sourceCard = null;
+        if (fromIgnored) {
+          sourceCard = ignoredRowKey
+            ? (this.data.ignoredUsers || []).find((item) => item && item.rowKey === ignoredRowKey)
+            : null;
+          if (!sourceCard && viewerOpenid) {
+            sourceCard = (this.data.ignoredUsers || []).find((item) => item && item.viewerOpenid === viewerOpenid);
+          }
+        } else {
+          sourceCard = rowKey
+            ? suspiciousList.find((item) => item && item.rowKey === rowKey)
+            : null;
+          if (!sourceCard && viewerOpenid) {
+            sourceCard = suspiciousList.find((item) => item && item.viewerOpenid === viewerOpenid);
+          }
+        }
         try {
           this.showMyLoading('处理中...');
           const result = await wx.cloud.callFunction({
@@ -2036,14 +2526,43 @@ Page({
                 address: dataset.address || '',
                 latitude: dataset.latitude,
                 longitude: dataset.longitude
-              }
+              },
+              snapshot: sourceCard ? {
+                enterCount: sourceCard.enterCount,
+                sectionClicksTotal: sourceCard.sectionClicksTotal,
+                totalStayMinutes: sourceCard.totalStayMinutesText,
+                triggerReasonText: sourceCard.triggerReasonText,
+                lastViewTime: sourceCard.lastViewTime
+              } : {}
             }
           });
           this.hideMyLoading();
           if (result.result && result.result.success) {
-            this.showAutoToast('成功', `已${actionText}`);
-            this.loadSuspiciousUsers();
+            if (action === 'ignore' && result.result.archiveOk === false) {
+              const detail = result.result.archiveError || '留档写入失败';
+              this.showAutoToast('提示', `已无视，但留档失败：${detail}`);
+            } else {
+              this.showAutoToast('成功', `已${actionText}`);
+            }
+            if (action === 'ignore' && sourceCard && !fromIgnored) {
+              this._prependIgnoredUserFromCard(sourceCard);
+            }
+            if (!fromIgnored) {
+              this._removeSuspiciousCard({
+                rowKey,
+                viewerOpenid,
+                riskId,
+                sourceType: sourceType || 'session'
+              });
+            }
+            if (fromIgnored && action === 'ban') {
+              this._removeIgnoredUserCard({ rowKey: ignoredRowKey, viewerOpenid, riskId });
+            }
+            this.loadSuspiciousUsers({ silent: true, force: true });
             this.loadScreenshotRiskUsers();
+            if (action === 'ignore') {
+              this.loadIgnoredUsers({ silent: true });
+            }
             if (action === 'ban') this.loadBannedUsers({ suspiciousManualOnly: true });
           } else {
             this.showAutoToast('失败', result.result?.error || '处理失败');
@@ -2140,7 +2659,7 @@ Page({
     // 防抖：本次进入 index 只允许弹一次，避免异步流程里重复触发
     if (this._firstTimeModalShownOnce) return false;
     if (this.data.isAuthorized) return false;
-    if (wx.getStorageSync('has_seen_first_time_modal')) return false;
+    if (this._firstTimeGuideDismissedThisSession) return false;
     if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
     if (this._firstTimeModalEnterTimer) {
       clearTimeout(this._firstTimeModalEnterTimer);
@@ -2154,7 +2673,11 @@ Page({
       firstTimeModalClosing: false,
       isShowNicknameUI: false,
       nicknameUiClosing: false,
+      showWechatQRCode: true,
+      copyWechatBusy: false,
     });
+    this._allowScreenCaptureOnIndex();
+    this._startFirstTimeActionCooldown();
     this._preloadFirstTimeQrcode();
     return true;
   },
@@ -2221,7 +2744,9 @@ Page({
   // 🔴 关闭首次进入提示弹窗
   closeFirstTimeModal() {
     if (this.data.firstTimeModalClosing) return;
-    wx.setStorageSync('has_seen_first_time_modal', true);
+    if (!this.data.firstTimeActionReady) return;
+    this._clearFirstTimeActionCooldown();
+    this._markDouyinXianyuGuideDismissed();
     this.setData({ firstTimeModalClosing: true });
     setTimeout(() => {
       this.setData({
@@ -2237,6 +2762,7 @@ Page({
 
   // 🔴 复制管理员微信号
   copyAdminWechat() {
+    if (!this.data.firstTimeActionReady) return;
     if (this.data.copyWechatBusy) return;
     const wechat = this.data.adminWechat;
     this.setData({ copyWechatBusy: true });
@@ -2252,13 +2778,11 @@ Page({
     wx.setClipboardData({
       data: wechat,
       success: () => {
-        wx.setStorageSync('has_seen_first_time_modal', true);
         // 轻量隐藏一次系统默认 toast，避免覆盖自定义提示
         hideOfficialToast();
         this._preloadFirstTimeQrcode();
         // 二维码 + 复制态 + 成功提示一次 setData，减少重排
         this.setData({
-          showWechatQRCode: true,
           copyWechatBusy: false,
           showCopySuccessModal: true,
           copySuccessModalClosing: false,
@@ -2278,7 +2802,8 @@ Page({
   // 🔴 收起二维码并跳转到昵称输入页面
   toggleQRCode() {
     if (this.data.firstTimeModalClosing) return;
-    wx.setStorageSync('has_seen_first_time_modal', true);
+    this._clearFirstTimeActionCooldown();
+    this._markDouyinXianyuGuideDismissed();
     this.setData({ firstTimeModalClosing: true });
     setTimeout(() => {
       this.setData({

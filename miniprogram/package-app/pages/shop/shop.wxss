@@ -1,7 +1,9 @@
 /* pages/shop/shop.wxss */
 @import "../../../styles/hub-page-anim.wxss";
 @import "../../../styles/hub-embed-portal.wxss";
+@import "../../../styles/overlay-z-index.wxss";
 @import "../../../styles/checkout-sheet.wxss";
+@import "../../../styles/checkout-coupon.wxss";
 
 page {
   background-color: #F5F5F7;
@@ -284,13 +286,99 @@ page {
 .admin-badge { background: #000; color: #fff; font-size: 18rpx; padding: 6rpx 10rpx; border-radius: 8rpx; }
 
 /* ============ 2. 主页面 ============ */
-.main-scroll { height: 100vh; padding-top: 180rpx; box-sizing: border-box; }
+.main-scroll {
+  height: 100vh;
+  padding-top: 180rpx;
+  box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
+}
 
 /* products 全屏商城层：列表区高度由 layoutHubEmbedScroll 写入行内 px */
 .container--hub-embed .main-scroll--hub-embed {
   padding-top: 8rpx !important;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom)) !important;
   box-sizing: border-box;
   width: 100%;
+  overflow-x: hidden;
+}
+
+.container--hub-embed .shop-hero-wrap--embed {
+  width: 100%;
+  padding: 0 32rpx;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.container--hub-embed .hero-swiper-box {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 0 24rpx;
+  border-radius: 32rpx;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 4rpx 24rpx rgba(0, 0, 0, 0.04);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  box-sizing: border-box;
+}
+
+.container--hub-embed .hero-swiper {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 32rpx;
+  overflow: hidden;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.container--hub-embed .hero-swiper-item,
+.container--hub-embed .hero-video-outer,
+.container--hub-embed .hero-video-wrapper,
+.container--hub-embed .hero-image-stack,
+.container--hub-embed .hero-image-frame {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.container--hub-embed .hero-video-wrapper .hero-media,
+.container--hub-embed .hero-video-wrapper .hero-video-el {
+  object-fit: cover !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.container--hub-embed .hero-img-single,
+.container--hub-embed .hero-img-base,
+.container--hub-embed .hero-img-overlay {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.container--hub-embed .shop-sections {
+  padding-bottom: calc(72rpx + env(safe-area-inset-bottom));
+}
+
+.container--hub-embed .hero-swiper-box .wx-swiper-dots,
+.container--hub-embed .hero-swiper-box .wx-swiper-dot-wrapper {
+  bottom: 16rpx;
+}
+
+.container--hub-embed .shop-section {
+  margin-bottom: 28rpx;
+}
+
+.container--hub-embed .shop-section-head {
+  padding-left: 32rpx;
+  padding-right: 32rpx;
+}
+
+.container--hub-embed .shop-hero-card-inner,
+.container--hub-embed .shop-hero-add-inner {
+  border-radius: 48rpx;
 }
 
 /* 轨道横滑时详情/结算仍按整屏铺开（相对视口） */
@@ -373,11 +461,20 @@ page {
 }
 
 /* Hero 轮播：视频占满 16:9 高度的 slide；图片 slide 高度由 heroSwiperHeightPx + widthFix 决定 */
+.shop-hero-wrap {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  overflow: hidden;
+  isolation: isolate;
+}
 .hero-swiper-box {
   width: 100%;
   background: #000;
   position: relative;
   margin-bottom: 20rpx;
+  overflow: hidden;
+  isolation: isolate;
 }
 /* 无顶部素材时不撑空白 swiper，用占位块保持 16:9 视觉高度（管理员仍有上传条） */
 .hero-empty {
@@ -397,20 +494,40 @@ page {
 .hero-swiper {
   width: 100%;
   display: block;
+  overflow: hidden;
 }
 .hero-swiper-item {
   height: 100%;
   position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
 }
 .hero-video-outer {
   width: 100%;
   height: 100%;
   position: relative;
+  overflow: hidden;
+}
+.hero-image-frame {
+  width: 100%;
+  overflow: hidden;
+  line-height: 0;
+  font-size: 0;
+}
+.container--hub-embed .hero-image-frame {
+  border-radius: 32rpx;
 }
 .hero-image-stack {
   position: relative;
   width: 100%;
-  background: #000;
+  background: #ffffff;
+  line-height: 0;
+}
+.container--hub-embed .hero-image-stack {
+  background: #ffffff;
 }
 .hero-img-base {
   width: 100%;
@@ -425,10 +542,14 @@ page {
   left: 0;
   top: 0;
   width: 100%;
-  height: 100%;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.22s ease;
+}
+.hero-img-overlay-full {
+  position: relative;
+  width: 100%;
+  display: block;
 }
 .hero-img-overlay.is-visible {
   opacity: 1;
@@ -436,13 +557,13 @@ page {
 .hero-img-single {
   width: 100%;
   display: block;
+  vertical-align: top;
+  line-height: 0;
 }
 /* 顶部轮播视频：contain 完整画面不裁切（黑边可接受）；slide 高度仍为 16:9 */
 .hero-video-wrapper .hero-media,
 .hero-video-wrapper .hero-video-el {
-  position: absolute;
-  top: 0;
-  left: 0;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -645,6 +766,31 @@ page {
   background: #4CAF50;
 }
 
+.drag-sort-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-left: 12rpx;
+}
+
+.drag-sort-btn {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 12rpx;
+  background: #fff;
+  border: 1rpx solid #e5e5ea;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  color: #1d1d1f;
+  font-weight: 700;
+}
+
+.drag-sort-btn:active {
+  background: #f2f2f7;
+}
+
 .drag-handle {
   font-size: 32rpx;
   color: #999;
@@ -684,10 +830,15 @@ page {
   transform: scale(0.98);
 }
 
-/* Admin: 左右分开的上传按钮 */
+/* Admin: 上传按钮放在轮播下方，避免绝对定位叠层干扰下方卡片 */
 .admin-upload-row {
-  position: absolute; bottom: 30rpx; right: 30rpx;
-  display: flex; gap: 20rpx; z-index: 20;
+  position: relative;
+  margin: 20rpx 30rpx 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  justify-content: flex-end;
+  z-index: 20;
 }
 .up-btn {
   background: rgba(255,255,255,0.95); color: #000;
@@ -713,7 +864,7 @@ page {
 
 /* 产品列表 (单列大卡片) */
 .prod-card {
-  background: #fff; border-radius: 30rpx; overflow: hidden;
+  background: #fff; border-radius: 48rpx; overflow: hidden;
   box-shadow: 0 10rpx 40rpx rgba(0,0,0,0.05); position: relative;
   transition: 0.2s;
 }
@@ -1080,11 +1231,15 @@ page {
 
 /* ================= 分类区块 (Apple Store 级) ================= */
 .shop-sections {
+  position: relative;
+  z-index: 4;
   padding: 8rpx 0 16rpx;
   background: #f5f5f7;
+  transform: translateZ(0);
 }
 .shop-section {
   margin-bottom: 40rpx;
+  contain: layout style;
 }
 .shop-section:last-child {
   margin-bottom: 12rpx;
@@ -1177,7 +1332,7 @@ page {
   padding: 28rpx 32rpx;
   position: relative;
   z-index: 10;
-  border-radius: 20rpx;
+  border-radius: 36rpx;
   border: 2rpx dashed #c7c7cc;
   background: rgba(255, 255, 255, 0.65);
   display: flex;
@@ -1196,15 +1351,17 @@ page {
   font-weight: 500;
   color: #6e6e73;
 }
+
 .shop-series-swiper {
   width: 100%;
-  height: 600rpx;
+  height: 556rpx;
   overflow: visible;
+  transform: translateZ(0);
 }
 
 /* 配件与产品共用轮播高度，卡片比例一致 */
 .shop-series-swiper--acc {
-  height: 600rpx;
+  height: 556rpx;
 }
 
 .shop-series-swiper--acc .shop-series-swiper-item {
@@ -1215,28 +1372,28 @@ page {
 
 .shop-series-swiper--acc .shop-hero-card {
   height: auto;
-  flex: 1 0 auto;
-  align-self: stretch;
+  flex: none;
+  align-self: auto;
 }
 .shop-series-swiper-item {
   box-sizing: border-box;
   height: 100%;
   overflow: visible;
-  padding: 20rpx 12rpx 24rpx;
+  padding: 8rpx 14rpx 20rpx;
 }
 .shop-series-dots {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 14rpx;
-  padding: 6rpx 0 4rpx;
+  padding: 10rpx 0 6rpx;
 }
 .shop-series-dot {
   width: 12rpx;
   height: 12rpx;
   border-radius: 50%;
   background: rgba(29, 29, 31, 0.16);
-  transition: transform 0.3s ease, background 0.3s ease, opacity 0.3s ease;
+  transition: transform 0.12s ease, background 0.12s ease;
 }
 .shop-series-dot.is-on {
   background: #1d1d1f;
@@ -1244,48 +1401,45 @@ page {
 }
 .shop-hero-card {
   width: 100%;
-  height: 100%;
+  height: auto;
   padding: 0;
   box-sizing: border-box;
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  justify-content: center;
   overflow: visible;
 }
 .shop-hero-card-inner {
   width: 100%;
+  max-width: 540rpx;
+  margin: 0 auto;
   background: #ffffff;
-  border-radius: 32rpx;
+  border-radius: 48rpx;
   padding: 0;
   box-sizing: border-box;
   overflow: hidden;
-  /* 环绕式轻阴影：避免大偏移向下投影连成「横条」 */
-  box-shadow:
-    0 0 0 1rpx rgba(0, 0, 0, 0.05),
-    0 0 20rpx rgba(0, 0, 0, 0.04),
-    0 6rpx 16rpx rgba(0, 0, 0, 0.05);
+  contain: layout style paint;
+  box-shadow: 0 8rpx 20rpx rgba(0, 0, 0, 0.06);
   transform: scale(0.97) translateZ(0);
-  opacity: 0.82;
-  transition:
-    transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-    opacity 0.4s ease,
-    box-shadow 0.45s ease;
-  will-change: transform, opacity;
+  opacity: 0.88;
+  transition: transform 0.15s ease-out, opacity 0.15s ease-out;
 }
 .shop-hero-card-inner.is-active {
   transform: scale(1) translateZ(0);
   opacity: 1;
-  box-shadow:
-    0 0 0 1rpx rgba(0, 0, 0, 0.07),
-    0 0 28rpx rgba(0, 0, 0, 0.06),
-    0 10rpx 24rpx rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10rpx 24rpx rgba(0, 0, 0, 0.08);
 }
 .shop-hero-card-inner.is-inactive {
   transform: scale(0.97) translateZ(0);
-  opacity: 0.82;
-  box-shadow:
-    0 0 0 1rpx rgba(0, 0, 0, 0.04),
-    0 0 12rpx rgba(0, 0, 0, 0.03),
-    0 4rpx 10rpx rgba(0, 0, 0, 0.04);
+  opacity: 0.88;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.04);
+}
+
+.hero-video-poster {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #f2f2f7;
 }
 /* 封面 4:3，与下方文案同白底，避免像「操作栏」分割线 */
 .shop-hero-cover {
@@ -1313,7 +1467,7 @@ page {
 
 .shop-hero-meta--acc {
   flex-shrink: 0;
-  padding: 24rpx 32rpx 28rpx;
+  padding: 16rpx 24rpx 20rpx;
   background: #ffffff;
   box-sizing: border-box;
 }
@@ -1326,7 +1480,7 @@ page {
   display: block;
 }
 .shop-hero-meta {
-  padding: 24rpx 32rpx 28rpx;
+  padding: 16rpx 24rpx 20rpx;
   background: #ffffff;
 }
 .shop-hero-name {
@@ -1335,7 +1489,7 @@ page {
   -webkit-line-clamp: 2;
   overflow: hidden;
   max-width: 100%;
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 600;
   color: #1d1d1f;
   letter-spacing: -0.03em;
@@ -1349,10 +1503,10 @@ page {
   align-items: baseline;
   flex-wrap: wrap;
   gap: 6rpx;
-  margin-top: 10rpx;
+  margin-top: 8rpx;
 }
 .shop-hero-price {
-  font-size: 26rpx;
+  font-size: 24rpx;
   font-weight: 400;
   color: #6e6e73;
   letter-spacing: -0.01em;
@@ -1369,10 +1523,21 @@ page {
   border: 2rpx dashed rgba(0, 113, 227, 0.28);
   color: #0071e3;
 }
+.shop-scroll-spacer {
+  height: 48rpx;
+}
+
+.shop-scroll-spacer--hub,
+.container--hub-embed .shop-scroll-spacer {
+  height: calc(96rpx + env(safe-area-inset-bottom));
+}
+
 .shop-hero-add-inner {
   width: 100%;
-  min-height: 100%;
-  border-radius: 32rpx;
+  max-width: 540rpx;
+  margin: 0 auto;
+  min-height: 404rpx;
+  border-radius: 48rpx;
   border: 2rpx dashed #d2d2d7;
   background: #ffffff;
   box-shadow:
@@ -2705,7 +2870,7 @@ page {
   color: #333; 
   margin-bottom: 50rpx; 
   line-height: 2; 
-  text-align: left; /* 🔴 左对齐，更易读 */
+  text-align: center;
   /* 🔴 使用动态计算高度 */
   max-height: calc(100vh - 200px); /* 限制最大高度 */
   overflow-y: auto; /* 内容过多时可滚动 */
@@ -2797,6 +2962,19 @@ page {
 .acc-detail-modal.acc-detail-parked {
   transform: translateY(0) !important;
   transition: none !important;
+}
+
+/* 结算层打开/关闭期间隐藏底层 ✕，避免与结算顶栏 ✕ 叠闪 */
+.acc-detail-modal.acc-detail-nav-suppressed .acc-detail-nav {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* 配件详情退出：顶栏 ✕ 先淡出，避免随整页下滑时与分段栏叠在一起 */
+.acc-detail-modal:not(.active) .acc-detail-nav {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
 }
 
 /* 配件详情顶栏：避开状态栏，与主列表返回键不叠层 */
@@ -3748,17 +3926,14 @@ page {
   height: 100%;
 }
 .hero-video-wrapper {
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 .hero-video-wrapper video,
 .detail-video-wrapper video {
-  position: absolute;
-  top: 0;
-  left: 0;
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: contain;
@@ -4451,4 +4626,21 @@ page {
 
 .action-sheet-cancel:active {
   background-color: #F5F5F7;
+}
+
+/* 优惠券抵扣行：出现时做轻微上浮淡入，避免突兀 */
+.checkout-body .pb-row--discount {
+  animation: coupon-discount-pop-in 220ms ease-out;
+  transform-origin: center top;
+}
+
+@keyframes coupon-discount-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10rpx) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }

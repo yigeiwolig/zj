@@ -1,0 +1,10 @@
+{
+  "name": "publishCaseBgm",
+  "version": "1.0.0",
+  "description": "一次性发布案例 BGM 到 COS 并写入 config/case_bgm",
+  "main": "index.js",
+  "dependencies": {
+    "cos-nodejs-sdk-v5": "latest",
+    "wx-server-sdk": "~2.6.3"
+  }
+}

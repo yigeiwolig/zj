@@ -111,6 +111,62 @@ exports.main = async (event) => {
       }
     }
 
+    if (action === 'ignore') {
+      const archivePayload = {
+        riskId,
+        _openid: openid,
+        page: risk.page || 'scan',
+        dateKey: risk.dateKey || '',
+        hourlyCount: Number(risk.hourlyCount || 0),
+        dailyCount: Number(risk.dailyCount || 0),
+        reason: risk.reason || '',
+        province: risk.province || '',
+        city: risk.city || '',
+        district: risk.district || '',
+        address: risk.address || '',
+        latitude: risk.latitude != null ? risk.latitude : null,
+        longitude: risk.longitude != null ? risk.longitude : null,
+        decision: 'ignore',
+        sourceType: 'suspicious_manual',
+        fromSourceType: 'screenshot',
+        status: 'archived',
+        archivedAt: db.serverDate(),
+        updateTime: db.serverDate()
+      };
+      let archiveExisting = null;
+      try {
+        const archiveRes = await db.collection('suspicious_review_archive')
+          .where({ riskId })
+          .limit(1)
+          .get();
+        archiveExisting = archiveRes.data && archiveRes.data.length > 0 ? archiveRes.data[0] : null;
+      } catch (archiveQueryErr) {
+        const archiveMsg = String((archiveQueryErr && archiveQueryErr.message) || archiveQueryErr || '');
+        if (!archiveMsg.includes('collection not exists') && !archiveMsg.includes('Db or Table not exist')) {
+          throw archiveQueryErr;
+        }
+      }
+      try {
+        if (archiveExisting && archiveExisting._id) {
+          await db.collection('suspicious_review_archive')
+            .doc(archiveExisting._id)
+            .update({ data: archivePayload });
+        } else {
+          await db.collection('suspicious_review_archive').add({
+            data: {
+              ...archivePayload,
+              createTime: db.serverDate()
+            }
+          });
+        }
+      } catch (archiveWriteErr) {
+        const archiveWriteMsg = String((archiveWriteErr && archiveWriteErr.message) || archiveWriteErr || '');
+        if (!archiveWriteMsg.includes('collection not exists') && !archiveWriteMsg.includes('Db or Table not exist')) {
+          throw archiveWriteErr;
+        }
+      }
+    }
+
     await db.collection('screenshot_risk_queue').doc(riskId).update({
       data: {
         status: 'resolved',

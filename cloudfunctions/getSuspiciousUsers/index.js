@@ -7,6 +7,30 @@ const API_VERSION = 'v2_sessions_fenxi_20260430';
 
 const ENTER_THRESHOLD = 3;
 const STAY_MINUTES_THRESHOLD = 10;
+
+function calcSuspicionScore(item) {
+  if (!item) return 0;
+  const enterCount = Number(item.enterCount || 0);
+  const pageVisits = Number(
+    item.sectionClicksTotal != null ? item.sectionClicksTotal : (item.pageVisitsCount || 0)
+  );
+  const stayMinutes = Number(
+    item.totalStayMinutesText != null ? item.totalStayMinutesText : (item.totalStayMinutes || 0)
+  );
+  const dailyCount = Number(item.dailyCount || 0);
+  const hourlyCount = Number(item.hourlyCount || 0);
+  if (dailyCount || hourlyCount) {
+    return hourlyCount * 10000 + dailyCount * 1000 + pageVisits;
+  }
+  return enterCount * 1000 + pageVisits * 100 + stayMinutes;
+}
+
+function compareBySuspicionLevel(a, b) {
+  const scoreDiff = calcSuspicionScore(b) - calcSuspicionScore(a);
+  if (scoreDiff !== 0) return scoreDiff;
+  return (b.lastViewTs || b.ignoredAtTs || 0) - (a.lastViewTs || a.ignoredAtTs || 0);
+}
+
 const PAGE_LABEL_MAP = {
   dengluye: '\u767b\u5f55\u9875',
   chanpinye: '\u4ea7\u54c1\u9875',
@@ -172,6 +196,8 @@ function buildScreenshotSuspiciousRows(queueRows = []) {
       totalStayMinutesText: '0.00',
       totalVideoMinutesText: '0.00',
       sectionClicksTotal: 0,
+      dailyCount,
+      hourlyCount,
       pageVisitsDetailList: [],
       lastViewTime: formatDate(row.lastScreenshotAt || row.updateTime || row.createTime) || '-',
       lastViewTs: toMillis(row.lastScreenshotAt || row.updateTime || row.createTime),
@@ -328,9 +354,255 @@ async function fetchBannedOpenidSet(candidates = []) {
   return banned;
 }
 
-exports.main = async () => {
+function buildIgnoredRowFromArchive(doc) {
+  const openid = doc._openid || '';
+  const province = doc.province || '';
+  const city = doc.city || '';
+  const district = doc.district || '';
+  const address = String(doc.address || '').trim();
+  const fromSourceType = doc.fromSourceType || 'session';
+  const regionText = [province, city, district].filter(Boolean).join(' ') || '-';
+  const addressDisplay = address ? (address.length > 56 ? `${address.slice(0, 56)}...` : address) : '-';
+  const hasGeo = doc.latitude != null && doc.longitude != null && doc.latitude !== '' && doc.longitude !== '';
+  const geoText = hasGeo ? `${doc.latitude}, ${doc.longitude}` : '-';
+  const enterCount = Number(doc.enterCount || 0);
+  const sectionClicksTotal = Number(doc.sectionClicksTotal || 0);
+  const totalStayMinutes = Number(doc.totalStayMinutes || 0);
+  return {
+    rowKey: `ign_${doc._id || openid}`,
+    archiveId: doc._id || '',
+    riskId: doc.riskId || '',
+    sessionRowKey: doc.rowKey || '',
+    viewerOpenid: openid,
+    viewerNickname: doc.viewerNickname || getPlaceholderNickname(openid),
+    fromSourceType,
+    sourceTypeLabel: fromSourceType === 'screenshot' ? '截图风险' : '会话可疑',
+    shareCode: fromSourceType === 'screenshot' ? '截图风险' : '小程序访问',
+    triggerReasonText: doc.triggerReasonText || (fromSourceType === 'screenshot' ? '截图行为（已无视）' : '可疑行为（已无视）'),
+    ignoredAt: formatDate(doc.archivedAt || doc.updateTime || doc.createTime) || '-',
+    ignoredAtTs: toMillis(doc.archivedAt || doc.updateTime || doc.createTime),
+    regionText,
+    address,
+    addressDisplay,
+    province,
+    city,
+    district,
+    latitude: doc.latitude != null ? doc.latitude : null,
+    longitude: doc.longitude != null ? doc.longitude : null,
+    geoText,
+    enterCount,
+    sectionClicksTotal,
+    pageVisitsCount: sectionClicksTotal,
+    totalStayMinutesText: totalStayMinutes.toFixed(2),
+    totalVideoMinutesText: '0.00',
+    pageVisitsDetailList: [],
+    lastViewTime: doc.lastViewTime || formatDate(doc.archivedAt || doc.updateTime) || '-'
+  };
+}
+
+function buildIgnoredRowFromSession(row, fenxiStat = { total: 0, detail: {} }) {
+  const openid = row && (row._openid || row.openid) || '';
+  const province = row.province || '';
+  const city = row.city || '';
+  const district = row.district || '';
+  const address = String(row.address || '').trim();
+  const regionText = [province, city, district].filter(Boolean).join(' ') || '-';
+  const addressDisplay = address ? (address.length > 56 ? `${address.slice(0, 56)}...` : address) : '-';
+  const hasGeo = row.latitude != null && row.longitude != null && row.latitude !== '' && row.longitude !== '';
+  const geoText = hasGeo ? `${row.latitude}, ${row.longitude}` : '-';
+  const enterCount = Number(row.snapshotEnterCount != null ? row.snapshotEnterCount : (row.sessionCount || 0));
+  const pageVisits = Number(
+    row.snapshotSectionClicksTotal != null ? row.snapshotSectionClicksTotal : (fenxiStat.total || 0)
+  );
+  const totalStayMinutes = Number(
+    row.snapshotTotalStayMinutes != null ? row.snapshotTotalStayMinutes : (row.totalStayMinutes || 0)
+  );
+  const pageVisitsDetailList = Object.keys(fenxiStat.detail || {})
+    .map((k) => ({
+      pageKey: k,
+      pageName: toChinesePageName(k),
+      count: Number(fenxiStat.detail[k] || 0)
+    }))
+    .sort((a, b) => b.count - a.count);
+  let triggerReasonText = row.triggerReasonText || '';
+  if (!triggerReasonText) {
+    const triggers = [];
+    if (enterCount >= ENTER_THRESHOLD || pageVisits >= ENTER_THRESHOLD) {
+      triggers.push(`多次进入(会话${enterCount}次/页面访问${pageVisits}次)`);
+    }
+    if (totalStayMinutes >= STAY_MINUTES_THRESHOLD) {
+      triggers.push(`长时间停留(${totalStayMinutes.toFixed(2)}分钟)`);
+    }
+    triggerReasonText = triggers.length ? triggers.join('；') : '可疑行为（已无视）';
+  }
+  return {
+    rowKey: `ign_${row._id || openid}`,
+    archiveId: row._id || '',
+    riskId: '',
+    sessionRowKey: row._id || '',
+    viewerOpenid: openid,
+    viewerNickname: row.viewerNickname || getPlaceholderNickname(openid),
+    fromSourceType: 'session',
+    sourceTypeLabel: '会话可疑',
+    shareCode: '小程序访问',
+    triggerReasonText,
+    ignoredAt: formatDate(row.archivedAt || row.updateTime || row.createTime) || '-',
+    ignoredAtTs: toMillis(row.archivedAt || row.updateTime || row.createTime),
+    regionText,
+    address,
+    addressDisplay,
+    province,
+    city,
+    district,
+    latitude: row.latitude != null ? row.latitude : null,
+    longitude: row.longitude != null ? row.longitude : null,
+    geoText,
+    enterCount,
+    sectionClicksTotal: pageVisits,
+    pageVisitsCount: pageVisits,
+    totalStayMinutesText: totalStayMinutes.toFixed(2),
+    totalVideoMinutesText: '0.00',
+    pageVisitsDetailList,
+    lastViewTime: row.lastViewTime || formatDate(row.lastActiveAt || row.updateTime) || '-'
+  };
+}
+
+async function fetchIgnoredUsersOnly() {
+  const users = [];
+  const seenKeys = new Set();
+
+  const pushUser = (user) => {
+    if (!user) return;
+    const key = user.viewerOpenid || user.rowKey;
+    if (!key || seenKeys.has(key)) return;
+    seenKeys.add(key);
+    users.push(user);
+  };
+
+  let fenxiMap = {};
+  try {
+    const fenxiRes = await db.collection('fenxishuju').limit(1000).get();
+    (fenxiRes.data || []).forEach((row) => {
+      const openid = row && (row._openid || row.openid);
+      if (!openid) return;
+      const current = fenxiMap[openid] || { total: 0, detail: {} };
+      const detail = extractFenxiPageVisits(row);
+      current.total += sumFenxiPageVisits(row);
+      Object.keys(detail).forEach((k) => {
+        current.detail[k] = (current.detail[k] || 0) + detail[k];
+      });
+      fenxiMap[openid] = current;
+    });
+  } catch (fenxiErr) {
+    const fenxiMsg = String((fenxiErr && fenxiErr.message) || fenxiErr || '');
+    if (!fenxiMsg.includes('collection not exists') && !fenxiMsg.includes('Db or Table not exist')) {
+      throw fenxiErr;
+    }
+  }
+
+  try {
+    let sessionRows = [];
+    try {
+      const sessionRes = await db.collection('suspicious_user_sessions')
+        .where({ reviewDecision: 'ignore' })
+        .limit(1000)
+        .get();
+      sessionRows = Array.isArray(sessionRes.data) ? sessionRes.data : [];
+    } catch (queryErr) {
+      const sessionRes = await db.collection('suspicious_user_sessions').limit(1000).get();
+      sessionRows = (Array.isArray(sessionRes.data) ? sessionRes.data : [])
+        .filter((row) => row && row.reviewDecision === 'ignore');
+    }
+    sessionRows
+      .sort((a, b) => toMillis(b.archivedAt || b.updateTime) - toMillis(a.archivedAt || a.updateTime))
+      .forEach((row) => {
+        const openid = row && (row._openid || row.openid);
+        pushUser(buildIgnoredRowFromSession(row, fenxiMap[openid] || { total: 0, detail: {} }));
+      });
+  } catch (sessionErr) {
+    const sessionMsg = String((sessionErr && sessionErr.message) || sessionErr || '');
+    if (!sessionMsg.includes('collection not exists') && !sessionMsg.includes('Db or Table not exist')) {
+      throw sessionErr;
+    }
+  }
+
+  try {
+    const archiveRes = await db.collection('suspicious_review_archive').limit(1000).get();
+    (Array.isArray(archiveRes.data) ? archiveRes.data : [])
+      .filter((row) => row && row.decision === 'ignore')
+      .sort((a, b) => toMillis(b.archivedAt || b.updateTime) - toMillis(a.archivedAt || a.updateTime))
+      .forEach((row) => pushUser(buildIgnoredRowFromArchive(row)));
+  } catch (archiveErr) {
+    const archiveMsg = String((archiveErr && archiveErr.message) || archiveErr || '');
+    if (!archiveMsg.includes('collection not exists') && !archiveMsg.includes('Db or Table not exist')) {
+      throw archiveErr;
+    }
+  }
+
+  try {
+    const shotRes = await db.collection('screenshot_risk_queue')
+      .where({ status: 'resolved', decision: 'ignore' })
+      .limit(800)
+      .get();
+    (shotRes.data || [])
+      .sort((a, b) => toMillis(b.updateTime || b.createTime) - toMillis(a.updateTime || a.createTime))
+      .forEach((row) => {
+        const openid = row && row._openid ? row._openid : '';
+        pushUser({
+          rowKey: `ign_ss_${row._id || openid}`,
+          archiveId: '',
+          riskId: row._id || '',
+          sessionRowKey: '',
+          viewerOpenid: openid,
+          viewerNickname: getPlaceholderNickname(openid),
+          fromSourceType: 'screenshot',
+          sourceTypeLabel: '截图风险',
+          shareCode: '截图风险',
+          triggerReasonText: `截图行为（24小时${Number(row.dailyCount || 0)}次 / 1小时${Number(row.hourlyCount || 0)}次）`,
+          ignoredAt: formatDate(row.updateTime || row.createTime) || '-',
+          ignoredAtTs: toMillis(row.updateTime || row.createTime),
+          regionText: [row.province, row.city, row.district].filter(Boolean).join(' ') || '-',
+          address: String(row.address || '').trim(),
+          addressDisplay: String(row.address || '').trim() || '-',
+          province: row.province || '',
+          city: row.city || '',
+          district: row.district || '',
+          latitude: row.latitude != null ? row.latitude : null,
+          longitude: row.longitude != null ? row.longitude : null,
+          geoText: row.latitude != null && row.longitude != null ? `${row.latitude}, ${row.longitude}` : '-',
+          enterCount: 0,
+          sectionClicksTotal: 0,
+          pageVisitsCount: 0,
+          dailyCount: Number(row.dailyCount || 0),
+          hourlyCount: Number(row.hourlyCount || 0),
+          totalStayMinutesText: '0.00',
+          totalVideoMinutesText: '0.00',
+          pageVisitsDetailList: [],
+          lastViewTime: formatDate(row.updateTime || row.createTime) || '-'
+        });
+      });
+  } catch (shotErr) {
+    const shotMsg = String((shotErr && shotErr.message) || shotErr || '');
+    if (!shotMsg.includes('collection not exists') && !shotMsg.includes('Db or Table not exist')) {
+      throw shotErr;
+    }
+  }
+
+  users.sort(compareBySuspicionLevel);
+  const filled = await fillViewerNicknames(users);
+  return {
+    success: true,
+    version: `${API_VERSION}_ignored`,
+    users: filled
+  };
+}
+
+exports.main = async (event = {}) => {
   try {
     await assertAdmin();
+    if (event && event.scope === 'ignored_only') {
+      return await fetchIgnoredUsersOnly();
+    }
 
     const [sessionRes, fenxiRes, screenshotRiskRes] = await Promise.all([
       db.collection('suspicious_user_sessions').orderBy('lastActiveAt', 'desc').limit(500).get(),
@@ -339,23 +611,18 @@ exports.main = async () => {
     ]);
     let screenshotArchiveRowsData = [];
     const manualHandledOpenids = new Set();
+    const manualHandledRowKeys = new Set();
     try {
-      const screenshotArchiveRes = await db.collection('suspicious_review_archive')
-        .orderBy('updateTime', 'desc')
-        .limit(500)
-        .get();
-      screenshotArchiveRowsData = Array.isArray(screenshotArchiveRes.data) ? screenshotArchiveRes.data : [];
-      screenshotArchiveRowsData.forEach((row) => {
-        if (
-          row &&
-          row.sourceType === 'suspicious_manual' &&
-          row._openid &&
-          (row.decision === 'ban' || row.decision === 'ignore')
-        ) {
-          manualHandledOpenids.add(row._openid);
+      const screenshotArchiveRes = await db.collection('suspicious_review_archive').limit(1000).get();
+      const allArchiveRows = Array.isArray(screenshotArchiveRes.data) ? screenshotArchiveRes.data : [];
+      allArchiveRows.forEach((row) => {
+        if (!row || (row.decision !== 'ban' && row.decision !== 'ignore')) return;
+        if (row.sourceType === 'suspicious_manual') {
+          if (row._openid) manualHandledOpenids.add(row._openid);
+          if (row.rowKey) manualHandledRowKeys.add(row.rowKey);
         }
       });
-      screenshotArchiveRowsData = screenshotArchiveRowsData.filter((row) => row && row.sourceType === 'screenshot_archive');
+      screenshotArchiveRowsData = allArchiveRows.filter((row) => row && row.sourceType === 'screenshot_archive');
     } catch (archiveErr) {
       const archiveMsg = String((archiveErr && archiveErr.message) || archiveErr || '');
       if (!archiveMsg.includes('collection not exists') && !archiveMsg.includes('Db or Table not exist')) {
@@ -381,6 +648,11 @@ exports.main = async () => {
 
     let users = sessionRows.map((row) => {
       const openid = row && (row._openid || row.openid) || '';
+      if (row && (row.reviewStatus === 'archived' || row.reviewDecision === 'ignore' || row.reviewDecision === 'ban')) {
+        return null;
+      }
+      if (openid && manualHandledOpenids.has(openid)) return null;
+      if (row && row._id && manualHandledRowKeys.has(row._id)) return null;
       const totalStayMinutes = Number(row.totalStayMinutes || 0);
       const enterCount = Number(row.sessionCount || 0);
       const fenxiStat = fenxiMap[openid] || { total: 0, detail: {} };
@@ -411,6 +683,7 @@ exports.main = async () => {
         .sort((a, b) => b.count - a.count);
       return {
         rowKey: row._id || openid,
+        sourceType: 'session',
         viewerOpenid: openid,
         viewerNickname: getPlaceholderNickname(openid),
         creatorNickname: '-',
@@ -436,7 +709,6 @@ exports.main = async () => {
       };
     }).filter(Boolean);
 
-    users = users.filter((u) => !manualHandledOpenids.has(u.viewerOpenid));
     users = await fillViewerNicknames(users);
     const screenshotUsersRaw = buildScreenshotSuspiciousRows(
       Array.isArray(screenshotRiskRes.data) ? screenshotRiskRes.data : []
@@ -450,7 +722,7 @@ exports.main = async () => {
     users = users.concat(screenshotArchiveRows);
     const bannedOpenidSet = await fetchBannedOpenidSet(users);
     users = users.filter((u) => !bannedOpenidSet.has(u.viewerOpenid));
-    users.sort((a, b) => (b.lastViewTs || 0) - (a.lastViewTs || 0));
+    users.sort(compareBySuspicionLevel);
     return {
       success: true,
       version: API_VERSION,

@@ -96,12 +96,12 @@
       <view class="rr-actions" wx:if="{{!isUserRepairOrderSimple}}">
         <block wx:if="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus === 'PENDING_RETURN'}}">
           <block wx:if="{{item.repairItems && item.repairItems.length > 0 && item.repairPaid === true}}">
-            <view class="rr-btn-enter-tracking" bindtap="openEnterTrackingModal" data-item="{{item}}" data-index="{{index}}">录入单号</view>
+            <view class="rr-btn-enter-tracking" bindtap="openEnterTrackingModal" data-index="{{index}}">录入单号</view>
           </block>
           <block wx:else>
             <view class="rr-btn logistics" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查看物流</view>
             <view class="rr-btn ship-out" wx:if="{{item.repairItems && item.repairItems.length > 0 && ((item.warrantyExpired && item.repairPaid) || (!item.warrantyExpired && item.trackingId))}}" bindtap="adminShipOutAfterRepair" data-id="{{item._id}}">寄出快递</view>
-            <view class="rr-btn fill-repair" wx:else bindtap="openFillRepairModal" data-item="{{item}}" data-index="{{index}}">填写售后单</view>
+            <view class="rr-btn fill-repair" wx:else bindtap="openFillRepairModal" data-index="{{index}}">填写售后单</view>
           </block>
         </block>
         <block wx:elif="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN'}}">
@@ -110,6 +110,7 @@
           <view class="rr-btn confirm" bindtap="confirmReturnReceived" data-id="{{item._id}}">确认收货</view>
         </block>
         <block wx:else>
+          <view class="rr-btn fill-repair" bindtap="openFillRepairModal" data-index="{{index}}">填写售后单</view>
           <view class="rr-btn cancel" bindtap="cancelReturnRequired" data-id="{{item._id}}">取消</view>
           <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查看物流</view>
           <view class="rr-btn complete" bindtap="completeReturnRequired" data-id="{{item._id}}">已完成</view>
@@ -117,7 +118,7 @@
       </view>
     </view>
   </block>
-  <view class="rr-empty" wx:if="{{returnRequiredList.length === 0}}">
+  <view class="rr-empty" wx:if="{{!returnRequiredList || returnRequiredList.length === 0}}">
     <text>暂无需寄回的订单</text>
   </view>
 </template>

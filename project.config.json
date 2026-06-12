@@ -3,7 +3,8 @@
   "packOptions": {
     "ignore": [
       { "type": "suffix", "value": ".backup" },
-      { "type": "suffix", "value": ".map" }
+      { "type": "suffix", "value": ".map" },
+      { "type": "suffix", "value": ".mp3" }
     ],
     "include": []
   },

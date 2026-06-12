@@ -108,11 +108,19 @@ Page({
     hubShellIsAdmin: false,
     hubCartBadge: 0,
     showHubTabBar: true,
+    /** 嵌入订单/我的面板内有全屏弹窗时隐藏底栏 */
+    hubShellModalOpen: false,
     hubPageEnterAnim: false,
     hubBanners: [],
     /** 首页「产品上新」独立封面（与 pagenew 列表无关，建议 4:3） */
     hubHomeCoverFileId: '',
     hubHomeCoverDisplay: '',
+    hubHomeMediaList: [],
+    hubHomeMediaCurrent: 0,
+    hubHomeMediaAutoplay: false,
+    hubHomeSwiperAutoplay: false,
+    /** 管理员：本地开关与云端 shop_config 不一致（用户仍读云端） */
+    featureFlagsUnsynced: false,
 
     // 功能卡顺序：买→装→用→修；排行榜单为其他产品线，默认靠后且默认关闭
     iconArrowUp,
@@ -336,7 +344,10 @@ Page({
       ? (firstArrival.coverFull || firstArrival.coverThumb || firstArrival.cover || '')
       : '';
     const dedicatedHubCover = String(this.data.hubHomeCoverDisplay || '').trim();
+    const mediaList = this.data.hubHomeMediaList || [];
+    const firstMediaCover = mediaList.length ? String(mediaList[0].url || '').trim() : '';
     const newCover = dedicatedHubCover || fallbackCover;
+    const currentMediaIdx = Math.max(0, Math.min(Number(this.data.hubHomeMediaCurrent) || 0, Math.max(0, mediaList.length - 1)));
 
     const enrich = (id) => {
       const item = byId(id);
@@ -352,6 +363,9 @@ Page({
     const hubFeatureNew = hubFeatureNewRaw
       ? { ...hubFeatureNewRaw, hubCover: newCover, hubSubTitle: firstArrival ? firstArrival.title : '探索最新发布' }
       : null;
+    if (hubFeatureNew && firstMediaCover) {
+      hubFeatureNew.hubCover = firstMediaCover;
+    }
     const hubFeatureCase = enrich(10);
     const hubFeatureControl = enrich(1);
     const hubBentoRepair = enrich(6);
@@ -371,6 +385,7 @@ Page({
       hubListItems,
       hubBentoServices,
       hubServiceCards: hubListItems,
+      hubHomeMediaCurrent: currentMediaIdx,
       hubMidNew: byId(3),
       hubMidControl: byId(1),
       hubMinis: hubListItems,
@@ -389,61 +404,113 @@ Page({
   /** 首页新品大卡封面：不依赖弹窗打开才拉数据 */
   async loadHubHomeConfig() {
     let fileId = '';
+    let mediaList = [];
+    let mediaAutoplay = false;
+    let hasAutoplayFromFn = false;
     try {
       const viaFn = await this._fetchProductFeatureFlagsFromCloudFn();
       if (viaFn && viaFn.hubNewCover) {
         fileId = String(viaFn.hubNewCover).trim();
       }
-      if (!fileId && wx.cloud) {
+      if (viaFn && Array.isArray(viaFn.hubNewMediaList)) {
+        mediaList = viaFn.hubNewMediaList;
+      }
+      if (viaFn && viaFn.hubNewMediaAutoplay != null) {
+        mediaAutoplay = !!viaFn.hubNewMediaAutoplay;
+        hasAutoplayFromFn = true;
+      }
+      if (wx.cloud && (!fileId || !Array.isArray(mediaList) || !mediaList.length)) {
         if (!this.db) this.db = wx.cloud.database();
         const res = await this.db.collection('shop_config').doc(HUB_HOME_CONFIG_DOC).get();
-        fileId = String((res.data && res.data.hubNewCover) || '').trim();
+        const dbCover = String((res.data && res.data.hubNewCover) || '').trim();
+        if (!fileId && dbCover) {
+          fileId = dbCover;
+        }
+        if ((!Array.isArray(mediaList) || !mediaList.length) && res && res.data && Array.isArray(res.data.hubNewMediaList)) {
+          mediaList = res.data.hubNewMediaList;
+        }
+        if (!hasAutoplayFromFn && res && res.data && res.data.hubNewMediaAutoplay != null) {
+          mediaAutoplay = !!res.data.hubNewMediaAutoplay;
+        }
       }
     } catch (e) {
-      console.warn('[products] loadHubHomeConfig', e);
     }
-    if (!fileId) {
-      if (this.data.hubHomeCoverFileId || this.data.hubHomeCoverDisplay) {
-        this.setData({ hubHomeCoverFileId: '', hubHomeCoverDisplay: '' }, () => this._rebuildHubLayout());
+    const cleanedMedia = (mediaList || [])
+      .map((item) => {
+        const type = item && item.type === 'video' ? 'video' : 'image';
+        const url = String((item && item.url) || '').trim();
+        if (!url) return null;
+        return {
+          type,
+          url,
+          autoplay: type === 'video' ? item.autoplay === true : false
+        };
+      })
+      .filter(Boolean);
+
+    const resolvedMedia = [];
+    for (let i = 0; i < cleanedMedia.length; i++) {
+      const one = cleanedMedia[i];
+      const resolvedUrl = await this._resolveHubCoverDisplayUrl(one.url);
+      resolvedMedia.push({ ...one, url: resolvedUrl || one.url });
+    }
+
+    if (!fileId && !resolvedMedia.length) {
+      if (this.data.hubHomeCoverFileId || this.data.hubHomeCoverDisplay || this.data.hubHomeMediaList.length) {
+        this.setData({
+          hubHomeCoverFileId: '',
+          hubHomeCoverDisplay: '',
+          hubHomeMediaList: [],
+          hubHomeMediaCurrent: 0,
+          hubHomeMediaAutoplay: false
+        }, () => {
+          this._syncHubHomeSwiperAutoplay();
+          this._rebuildHubLayout();
+        });
       }
       return;
     }
-    if (fileId === this.data.hubHomeCoverFileId && this.data.hubHomeCoverDisplay) {
+    if (
+      fileId === this.data.hubHomeCoverFileId &&
+      this.data.hubHomeCoverDisplay &&
+      JSON.stringify(resolvedMedia) === JSON.stringify(this.data.hubHomeMediaList) &&
+      mediaAutoplay === this.data.hubHomeMediaAutoplay
+    ) {
       return;
     }
     const display = await this._resolveHubCoverDisplayUrl(fileId);
-    this.setData({ hubHomeCoverFileId: fileId, hubHomeCoverDisplay: display }, () => this._rebuildHubLayout());
+    this.setData({
+      hubHomeCoverFileId: fileId,
+      hubHomeCoverDisplay: display,
+      hubHomeMediaList: resolvedMedia,
+      hubHomeMediaCurrent: 0,
+      hubHomeMediaAutoplay: !!mediaAutoplay
+    }, () => {
+      this._syncHubHomeSwiperAutoplay();
+      this._rebuildHubLayout();
+    });
   },
 
-  async _persistHubHomeCover(fileID) {
+  async _persistHubHomeCover(fileID, mediaList = this.data.hubHomeMediaList, mediaAutoplay = this.data.hubHomeMediaAutoplay) {
     if (!wx.cloud || !this.data.isAuthorized) return false;
     const hubNewCover = String(fileID || '').trim();
+    const hubNewMediaList = (mediaList || []).map((item) => ({
+      type: item && item.type === 'video' ? 'video' : 'image',
+      url: String((item && item.url) || '').trim(),
+      autoplay: item && item.type === 'video' ? item.autoplay === true : false
+    })).filter(item => item.url);
+    const hubNewMediaAutoplay = !!mediaAutoplay;
     try {
       const res = await wx.cloud.callFunction({
         name: 'setHubHomeConfig',
-        data: { hubNewCover }
+        data: { hubNewCover, hubNewMediaList, hubNewMediaAutoplay }
       });
       const result = res && res.result;
       if (result && result.success) return true;
-      console.warn('[products] setHubHomeConfig:', result && result.error);
     } catch (cfErr) {
-      console.warn('[products] setHubHomeConfig 不可用，尝试客户端写入:', cfErr);
+      console.error('[products] setHubHomeConfig 失败:', cfErr);
     }
-    if (!this.db) this.db = wx.cloud.database();
-    const docRef = this.db.collection('shop_config').doc(HUB_HOME_CONFIG_DOC);
-    const payload = { hubNewCover, updateTime: this.db.serverDate() };
-    try {
-      await docRef.set({ data: payload });
-      return true;
-    } catch (setErr) {
-      try {
-        await docRef.update({ data: payload });
-        return true;
-      } catch (updateErr) {
-        console.error('[products] 保存首页封面失败:', setErr, updateErr);
-        return false;
-      }
-    }
+    return false;
   },
 
   async loadHubNewArrivalsForHome() {
@@ -474,7 +541,6 @@ Page({
       }
       applyList(enhanced);
     } catch (e) {
-      console.warn('[products] loadHubNewArrivalsForHome', e);
     }
   },
 
@@ -527,6 +593,20 @@ Page({
     return flags;
   },
 
+  _featureFlagsMatchExpected(cloudFlags, expectedFlags) {
+    const cloud = this._normalizeFlagMap(cloudFlags || {});
+    const expected = this._normalizeFlagMap(expectedFlags || {});
+    const keys = new Set([...Object.keys(cloud), ...Object.keys(expected)]);
+    for (const key of keys) {
+      const inCloud = Object.prototype.hasOwnProperty.call(cloud, key);
+      const inExpected = Object.prototype.hasOwnProperty.call(expected, key);
+      if (!inExpected) continue;
+      const cloudVal = inCloud ? cloud[key] : true;
+      if (cloudVal !== expected[key]) return false;
+    }
+    return true;
+  },
+
   _syncGlobalFlagsFromList(list) {
     const flags = this._normalizeFlagMap(this._buildFeatureFlagsFromList(list));
     try {
@@ -570,6 +650,7 @@ Page({
   },
 
   _isFeatureEnabledForUser(id) {
+    if (this.data.isAuthorized) return true;
     return this._resolveFeatureOpenState(id);
   },
 
@@ -642,11 +723,11 @@ Page({
       this.setData({ isAuthorized }, () => {
         this._syncHubPanelsAuth();
         this._updateHubShopEmbedScrollHeight();
+        this._rebuildHubLayout();
       });
       try {
         wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized, ts: Date.now() });
       } catch (e) {}
-      console.log('[products] checkAdminPrivilege isAuthorized:', isAuthorized);
     } catch (err) {
       console.error('[products] checkAdminPrivilege 失败:', err);
     }
@@ -661,11 +742,12 @@ Page({
         return {
           flags: result.flags || {},
           updateTime: result.updateTime || null,
-          hubNewCover: result.hubNewCover || ''
+          hubNewCover: result.hubNewCover || '',
+          hubNewMediaList: Array.isArray(result.hubNewMediaList) ? result.hubNewMediaList : [],
+          hubNewMediaAutoplay: result.hubNewMediaAutoplay === true
         };
       }
     } catch (e) {
-      console.warn('[products] getProductFeatureFlags 云函数失败:', e);
     }
     return null;
   },
@@ -692,7 +774,6 @@ Page({
             cloudFlags = extracted;
           }
         } catch (e) {
-          console.warn('[products] loadProductFeatureFlags 直连库失败:', e);
         }
       }
     }
@@ -706,21 +787,15 @@ Page({
     } else if (localFlags) {
       flagsToApply = localFlags;
     }
-
-    console.log('[products] feature flags applied', {
-      isAdmin,
-      pendingLocalOnly: !!pendingLocalOnly,
-      sample: { 3: flagsToApply['3'], 4: flagsToApply['4'], 5: flagsToApply['5'], 10: flagsToApply['10'] }
-    });
-
     if (!Object.keys(flagsToApply).length) {
+      this.setData({ featureFlagsUnsynced: !!pendingLocalOnly });
       this._featureFlagsLoaded = true;
       return;
     }
 
     const list = this._applyFeatureFlagsToList(this.data.list, flagsToApply);
-    this._syncGlobalFlagsFromList(list);
-    this._setListAndHub(list, {}, () => this._syncNewArrivalModalWithPagenewFlag());
+    this._syncGlobalFlagsFromList(pendingLocalOnly ? this._applyFeatureFlagsToList(list, cloudFlags || {}) : list);
+    this._setListAndHub(list, { featureFlagsUnsynced: !!pendingLocalOnly }, () => this._syncNewArrivalModalWithPagenewFlag());
     if (!pendingLocalOnly) {
       this._saveFeatureFlagsLocalCache(list, true);
     }
@@ -737,37 +812,24 @@ Page({
       });
       const result = res && res.result;
       if (result && result.success) {
+        const verify = await this._fetchProductFeatureFlagsFromCloudFn();
+        const cloudFlags = verify && verify.flags ? verify.flags : (result.flags || {});
+        if (!this._featureFlagsMatchExpected(cloudFlags, flags)) {
+          console.error('[products] 云端回读与开关不一致', { cloudFlags, flags });
+          return false;
+        }
         this._saveFeatureFlagsLocalCache(list, true);
         this._syncGlobalFlagsFromList(list);
-        console.log('[products] 功能开关云函数保存成功:', result.flags || flags);
+        this.setData({ featureFlagsUnsynced: false });
         return true;
       }
-      console.warn('[products] setProductFeatureFlags 失败，尝试客户端写入:', result && result.error);
+      if (result && result.error) {
+        console.error('[products] setProductFeatureFlags:', result.error);
+      }
     } catch (cfErr) {
-      console.warn('[products] setProductFeatureFlags 不可用，尝试客户端写入:', cfErr);
+      console.error('[products] setProductFeatureFlags 失败:', cfErr);
     }
-
-    if (!this.db) this.db = wx.cloud.database();
-    const docRef = this.db.collection('shop_config').doc(PRODUCT_FEATURE_FLAGS_DOC);
-    const payload = { flags, updateTime: this.db.serverDate() };
-    try {
-      await docRef.set({ data: payload });
-      this._saveFeatureFlagsLocalCache(list, true);
-      this._syncGlobalFlagsFromList(list);
-      console.log('[products] 功能开关客户端 set 保存成功:', flags);
-      return true;
-    } catch (setErr) {
-      try {
-        await docRef.update({ data: payload });
-        this._saveFeatureFlagsLocalCache(list, true);
-        this._syncGlobalFlagsFromList(list);
-        console.log('[products] 功能开关客户端 update 保存成功:', flags);
-        return true;
-      } catch (updateErr) {
-        console.error('[products] 保存功能开关失败:', setErr, updateErr);
-        return false;
-      }
-    }
+    return false;
   },
 
   async onFeatureFlagChange(e) {
@@ -791,7 +853,7 @@ Page({
       await this.loadProductFeatureFlags(true);
       const toastTitle = id === FEATURE_ID_PAGENEW && !enabled
         ? '已关闭（入口与新品弹窗均隐藏）'
-        : (enabled ? '已对用户开放' : '已关闭');
+        : (enabled ? '已同步云端，用户重进首页后生效' : '已关闭');
       wx.showToast({
         title: toastTitle,
         icon: 'none',
@@ -801,11 +863,14 @@ Page({
       const reverted = (this.data.list || []).map((item) =>
         (Number(item.id) === id ? { ...item, pageEnabled: !enabled } : item)
       );
-      this._setListAndHub(reverted, {}, () => this._syncGlobalFlagsFromList(reverted));
+      this._setListAndHub(reverted, { featureFlagsUnsynced: true }, () => this._syncGlobalFlagsFromList(reverted));
+      try {
+        wx.removeStorageSync(FEATURE_FLAGS_LOCAL_KEY);
+      } catch (e) {}
       wx.showToast({
-        title: '云端保存失败，开关已回滚；请部署 setProductFeatureFlags',
+        title: '未写入云端，用户仍为旧状态；请部署 setProductFeatureFlags 后重试',
         icon: 'none',
-        duration: 2600
+        duration: 3200
       });
     }
   },
@@ -828,7 +893,6 @@ Page({
         return item;
       });
     } catch (e) {
-      console.warn('[products] resolveProductCoverUrls', e);
       return list;
     }
   },
@@ -847,10 +911,8 @@ Page({
             return item.tempFileURL;
           }
           if (item && item.status !== 0) {
-            console.warn('[products] getTempFileURL status', item.status, item.errMsg);
           }
         } catch (err) {
-          console.warn('[products] getTempFileURL hub cover', err);
         }
       }
       return raw;
@@ -859,7 +921,6 @@ Page({
   },
 
   onHubCoverImageError(e) {
-    console.warn('[products] hub cover image error', e.detail);
     const stored = String(this.data.hubHomeCoverFileId || this.data.hubHomeCoverDisplay || '').trim();
     if (!stored) return;
 
@@ -954,7 +1015,6 @@ Page({
         nextCover = `${cover}${joiner}rt=${Date.now()}`;
       }
     } catch (err) {
-      console.warn('[products] onNewArrivalImageError retry failed:', err);
     }
 
     const nextThumb = this.buildLowQualityUrl(nextCover);
@@ -1044,6 +1104,7 @@ Page({
   },
 
   async onLoad(options) {
+    this.calcNavBarInfo();
     this._deckCurrentIndex = 0;
     if (options && String(options.hubTab) === 'shop') {
       this.setData({
@@ -1078,11 +1139,10 @@ Page({
     // 🔴 分享码用户访问拦截：如果不是安装教程页面，跳转回去
     const app = getApp();
     if (app.globalData.isShareCodeUser) {
-      console.log('[products] 分享码用户尝试访问其他页面，跳转回安装教程');
       wx.redirectTo({
-        url: '/package-app/pages/azjc/azjc',
+        url: '/package-biz/pages/azjc/azjc',
         fail: () => {
-          wx.reLaunch({ url: '/package-app/pages/azjc/azjc' });
+          wx.reLaunch({ url: '/package-biz/pages/azjc/azjc' });
         }
       });
       return;
@@ -1256,7 +1316,6 @@ Page({
       const resolvedProducts = await this.resolveProductCoverUrls(products);
       const enhancedProducts = this.enhanceNewArrivalList(resolvedProducts);
       if (!enhancedProducts.length) {
-        console.log('[products] 新品弹窗：products 集合为空，展示占位卡片');
         const wasOpenE = this.data.showNewArrivalModal;
         const animDoneE = this.data.newArrivalAnimIn;
         this.setData({
@@ -1282,9 +1341,6 @@ Page({
         list: enhancedProducts,
         cacheTime: now
       };
-
-      console.log('[products] 新品弹窗数据条数:', enhancedProducts.length);
-
       const wasOpenFinal = this.data.showNewArrivalModal;
       const animDoneFinal = this.data.newArrivalAnimIn;
       this.setData({
@@ -1372,11 +1428,11 @@ Page({
   handleNewArrivalJump() {
     wx.vibrateShort({ type: 'medium' }); // 增强震动反馈
     const go = () => {
-      this.setData({ skipCardTransition: true });
-      wx.navigateTo({
-        url: '/package-app/pages/shop/shop',
-        animationType: 'none'
-      });
+      if (!this._isFeatureEnabledForUser(4)) {
+        this._notifyFeatureClosed(4);
+        return;
+      }
+      this._openHubShopPanel();
     };
     if (this.data.showNewArrivalModal && !this.data.newArrivalClosing) {
       this.closeNewArrivalModal(go);
@@ -1416,7 +1472,6 @@ Page({
         const btn = buttonRes.data[0];
         const qiangli = btn.qiangli === true || btn.qiangli === 1 || btn.qiangli === 'true' || btn.qiangli === '1';
         if (qiangli) {
-          console.log('[products] ⚠️ 检测到强制封禁按钮 qiangli 已开启（login_logbutton），无视一切放行，直接封禁');
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           return;
         }
@@ -1427,7 +1482,6 @@ Page({
         const log = logRes.data[0];
         const qiangli = log.qiangli === true || log.qiangli === 1 || log.qiangli === 'true' || log.qiangli === '1';
         if (qiangli) {
-          console.log('[products] ⚠️ 检测到强制封禁按钮 qiangli 已开启（login_logs），无视一切放行，直接封禁');
           wx.reLaunch({ url: '/pages/blocked/blocked?type=banned' });
           return;
         }
@@ -1446,7 +1500,6 @@ Page({
       }
       
       if (adminCheck.data && adminCheck.data.length > 0) {
-        console.log('[products] ✅ 检测到管理员身份，豁免封禁检查');
         if (!this.data.isAuthorized) this.setData({ isAuthorized: true });
         return;
       }
@@ -1457,7 +1510,6 @@ Page({
         const isBanned = rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
         
         if (isBanned) {
-          console.log('[products] 检测到封禁状态，跳转到封禁页');
           const banType = btn.banReason === 'screenshot' || btn.banReason === 'screen_record' 
             ? 'screenshot' 
             : (btn.banReason === 'location_blocked' ? 'location' : 'banned');
@@ -1468,7 +1520,6 @@ Page({
     } catch (err) {
       const msg = (err.errMsg || err.message || '') + '';
       if (msg.indexOf('access_token') !== -1) {
-        console.warn('[products] 云会话未就绪，跳过封禁检查（请确保已登录/选择云环境）');
         return;
       }
       console.error('[products] 检查封禁状态失败:', err);
@@ -1698,7 +1749,7 @@ Page({
     if (wx.setVisualEffectOnCapture) {
       wx.setVisualEffectOnCapture({
         visualEffect: 'hidden',
-        success: () => console.log('[products] 🛡️ 硬件级防偷拍锁定')
+        success: () => {}
       });
     }
 
@@ -1804,16 +1855,12 @@ Page({
     if (type === 'screenshot') {
       wx.setStorageSync('is_screenshot_banned', true);
     }
-
-    console.log('[products] 🔴 截屏/录屏检测，立即跳转');
-    
     // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
 
     // 🔴 异步调用云函数（不阻塞跳转，带超时保护）
     const sysInfo = wx.getSystemInfoSync();
     const cloudCallTimeout = setTimeout(() => {
-      console.warn('[products] ⚠️ 云函数调用超时（5秒），已跳过');
     }, 5000);
     
     wx.cloud.callFunction({
@@ -1826,7 +1873,6 @@ Page({
       },
       success: (res) => {
         clearTimeout(cloudCallTimeout);
-        console.log('[products] ✅ 设置封禁状态成功:', res);
       },
       fail: (err) => {
         clearTimeout(cloudCallTimeout);
@@ -1836,7 +1882,6 @@ Page({
 
     // 🔴 异步补充位置信息（不阻塞，可选，带超时保护）
     const locationTimeout = setTimeout(() => {
-      console.warn('[products] ⚠️ 位置信息获取超时（8秒），已跳过');
     }, 8000);
     
     Promise.race([
@@ -1846,7 +1891,6 @@ Page({
       clearTimeout(locationTimeout);
       // 再次调用云函数补充位置信息（也带超时）
       const updateTimeout = setTimeout(() => {
-        console.warn('[products] ⚠️ 更新位置信息超时（5秒），已跳过');
       }, 5000);
       
       wx.cloud.callFunction({
@@ -1858,7 +1902,6 @@ Page({
         },
         success: (res) => {
           clearTimeout(updateTimeout);
-          console.log('[products] 补充位置信息成功，类型:', type, '结果:', res);
         },
         fail: (err) => {
           clearTimeout(updateTimeout);
@@ -1868,7 +1911,6 @@ Page({
     }).catch((err) => {
       clearTimeout(locationTimeout);
       // 位置信息获取失败，不影响，已经设置了封禁状态
-      console.log('[products] 位置信息获取失败或超时，但封禁状态已设置:', err.message || err);
     });
   },
 
@@ -1876,7 +1918,6 @@ Page({
     // 🔴 防止重复跳转
     const app = getApp();
     if (app.globalData._isJumpingToBlocked) {
-      console.log('[products] 正在跳转中，忽略重复跳转请求');
       return;
     }
 
@@ -1884,7 +1925,6 @@ Page({
     const pages = getCurrentPages();
     const currentPage = pages[pages.length - 1];
     if (currentPage && currentPage.route === 'pages/blocked/blocked') {
-      console.log('[products] 已在 blocked 页面，无需重复跳转');
       return;
     }
 
@@ -1893,7 +1933,6 @@ Page({
     wx.reLaunch({
       url: `/pages/blocked/blocked?type=${type}`,
       success: () => {
-        console.log('[products] 跳转到 blocked 页面成功');
         setTimeout(() => {
           app.globalData._isJumpingToBlocked = false;
         }, 2000);
@@ -1983,7 +2022,17 @@ Page({
       this._notifyFeatureClosed(numId);
       return;
     }
+    if (numId === 4) {
+      this._openHubShopPanel();
+      return;
+    }
     this.executeNavigation(numId);
+  },
+
+  /** 产品选购 / 顶栏「MT商城」：切到枢纽内商城屏 */
+  _openHubShopPanel() {
+    this.rememberReturnFocus(4);
+    this._setHubTabIndex(1);
   },
 
   onHubSearchTap() {
@@ -2001,18 +2050,18 @@ Page({
       this._adminClearHubNewCover();
       return;
     }
-    this._adminChooseHubNewCover();
+    this._adminChooseHubNewMedia();
   },
 
-  _adminChooseHubNewCover() {
+  _adminChooseHubNewMedia() {
     wx.chooseMedia({
-      count: 1,
-      mediaType: ['image'],
+      count: 9,
+      mediaType: ['image', 'video'],
       sourceType: ['album', 'camera'],
       success: (res) => {
-        const file = res.tempFiles && res.tempFiles[0];
-        if (!file || !file.tempFilePath) return;
-        this._uploadHubNewCover(file.tempFilePath);
+        const files = (res.tempFiles || []).filter(f => f && f.tempFilePath);
+        if (!files.length) return;
+        this._uploadHubNewMedia(files);
       },
       fail: (err) => {
         const msg = String((err && err.errMsg) || '');
@@ -2022,29 +2071,46 @@ Page({
     });
   },
 
-  async _uploadHubNewCover(tempFilePath) {
-    const localPreview = String(tempFilePath || '').trim();
-    if (localPreview) {
-      this.setData({ hubHomeCoverDisplay: localPreview }, () => this._rebuildHubLayout());
-    }
+  async _uploadHubNewMedia(files) {
     wx.showLoading({ title: '上传中', mask: true });
     try {
-      const prepared = await shopImagePrepare.prepareImageFile(localPreview, 'cover');
-      const publicUrl = await cosUpload.uploadImageToCos(prepared, 'hub/home');
-      if (!publicUrl || !/^https?:\/\//i.test(publicUrl)) {
-        throw new Error('invalid cos url');
+      const uploaded = [];
+      const prevLen = (this.data.hubHomeMediaList || []).length;
+      for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const localPath = String(f.tempFilePath || '').trim();
+        const type = String(f.fileType || '').toLowerCase() === 'video' ? 'video' : 'image';
+        if (!localPath) continue;
+        let publicUrl = '';
+        if (type === 'video') {
+          publicUrl = await cosUpload.uploadVideoToCos(localPath, 'hub/home');
+        } else {
+          const prepared = await shopImagePrepare.prepareImageFile(localPath, 'hubHome');
+          publicUrl = await cosUpload.uploadImageToCos(prepared, 'hub/home');
+        }
+        if (!publicUrl || !/^https?:\/\//i.test(publicUrl)) continue;
+        uploaded.push({
+          type,
+          url: publicUrl,
+          autoplay: type === 'video'
+        });
       }
-      const ok = await this._persistHubHomeCover(publicUrl);
+      if (!uploaded.length) throw new Error('upload failed');
+      const merged = [...(this.data.hubHomeMediaList || []), ...uploaded].slice(0, 12);
+      const cover = merged.length ? merged[0].url : '';
+      const ok = await this._persistHubHomeCover(cover, merged, this.data.hubHomeMediaAutoplay);
       if (!ok) throw new Error('save failed');
       this.setData({
-        hubHomeCoverFileId: publicUrl,
-        hubHomeCoverDisplay: publicUrl
+        hubHomeCoverFileId: cover,
+        hubHomeCoverDisplay: cover,
+        hubHomeMediaList: merged,
+        hubHomeMediaCurrent: Math.min(prevLen, Math.max(0, merged.length - 1))
       }, () => {
+        this._syncHubHomeSwiperAutoplay();
         this._rebuildHubLayout();
-        wx.showToast({ title: '封面已更新', icon: 'success' });
+        wx.showToast({ title: '媒体已更新', icon: 'success' });
       });
     } catch (e) {
-      console.warn('[products] _uploadHubNewCover', e);
       const msg = String((e && e.message) || (e && e.errMsg) || '');
       wx.showToast({
         title: msg.indexOf('getCosUploadUrl') !== -1 ? '请部署 getCosUploadUrl' : '上传失败',
@@ -2058,21 +2124,219 @@ Page({
 
   _adminClearHubNewCover() {
     wx.showModal({
-      title: '清除首页封面',
+      title: '清除首页媒体',
       content: '清除后将使用「产品上新」列表首图作为占位',
       success: async (r) => {
         if (!r.confirm) return;
-        const ok = await this._persistHubHomeCover('');
+        const ok = await this._persistHubHomeCover('', [], false);
         if (!ok) {
           wx.showToast({ title: '清除失败', icon: 'none' });
           return;
         }
-        this.setData({ hubHomeCoverFileId: '', hubHomeCoverDisplay: '' }, () => {
+        this.setData({
+          hubHomeCoverFileId: '',
+          hubHomeCoverDisplay: '',
+          hubHomeMediaList: [],
+          hubHomeMediaCurrent: 0,
+          hubHomeMediaAutoplay: false
+        }, () => {
+          this._syncHubHomeSwiperAutoplay();
           this._rebuildHubLayout();
           wx.showToast({ title: '已清除', icon: 'none' });
         });
       }
     });
+  },
+
+  onHubHomeMediaSwiperChange(e) {
+    const current = Number(e.detail && e.detail.current);
+    if (Number.isNaN(current)) return;
+    this.setData({ hubHomeMediaCurrent: current }, () => {
+      this._syncHubHomeSwiperAutoplay();
+    });
+  },
+
+  onHubNewCardTouchStart(e) {
+    const t = e && e.touches && e.touches[0];
+    if (!t) return;
+    this._hubNewCardTouch = {
+      x: t.clientX,
+      y: t.clientY,
+      at: Date.now()
+    };
+  },
+
+  onHubNewCardTouchEnd(e) {
+    const start = this._hubNewCardTouch;
+    this._hubNewCardTouch = null;
+    const t = e && e.changedTouches && e.changedTouches[0];
+    if (!start || !t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    const dt = Date.now() - start.at;
+    // 小位移短按 => 视为点击；否则按滑动处理（不跳转）
+    if (Math.abs(dx) <= 12 && Math.abs(dy) <= 12 && dt <= 320) {
+      this.onHubFeatureTap({ currentTarget: { dataset: { id: 3 } } });
+    }
+  },
+
+  onHubHomeMediaVideoEnded() {
+    if (!this.data.hubHomeMediaAutoplay) return;
+    const list = this.data.hubHomeMediaList || [];
+    if (list.length <= 1) return;
+    const current = Number(this.data.hubHomeMediaCurrent) || 0;
+    const next = (current + 1) % list.length;
+    this.setData({ hubHomeMediaCurrent: next }, () => {
+      this._syncHubHomeSwiperAutoplay();
+    });
+  },
+
+  _syncHubHomeSwiperAutoplay() {
+    const list = this.data.hubHomeMediaList || [];
+    const current = Number(this.data.hubHomeMediaCurrent) || 0;
+    const item = list[current];
+    const isVideo = !!(item && item.type === 'video');
+    const autoplay = !!(this.data.hubHomeMediaAutoplay && list.length > 1 && !isVideo);
+    if (autoplay !== this.data.hubHomeSwiperAutoplay) {
+      this.setData({ hubHomeSwiperAutoplay: autoplay });
+    }
+  },
+
+  onHubAdminMediaAddTap() {
+    if (!this.data.isAuthorized || !this.data.hubShellIsAdmin) return;
+    this._adminChooseHubNewMedia();
+  },
+
+  async onHubAdminMediaSortTap() {
+    if (!this.data.isAuthorized || !this.data.hubShellIsAdmin) return;
+    const list = Array.isArray(this.data.hubHomeMediaList) ? [...this.data.hubHomeMediaList] : [];
+    if (list.length < 2) {
+      this.showAutoToast('提示', '至少两张媒体才能调整顺序');
+      return;
+    }
+    const current = Number(this.data.hubHomeMediaCurrent) || 0;
+    const from = Math.max(0, Math.min(current, list.length - 1));
+    const options = ['上移一位', '下移一位', '移到最前', '移到最后'];
+    let tapIndex = -1;
+    try {
+      const res = await new Promise((resolve, reject) => {
+        wx.showActionSheet({
+          itemList: options,
+          success: resolve,
+          fail: reject
+        });
+      });
+      tapIndex = Number(res && res.tapIndex);
+    } catch (e) {
+      return;
+    }
+    if (Number.isNaN(tapIndex) || tapIndex < 0) return;
+
+    const item = list.splice(from, 1)[0];
+    if (!item) return;
+    let to = from;
+    if (tapIndex === 0) {
+      to = Math.max(0, from - 1);
+    } else if (tapIndex === 1) {
+      to = Math.min(list.length, from + 1);
+    } else if (tapIndex === 2) {
+      to = 0;
+    } else if (tapIndex === 3) {
+      to = list.length;
+    }
+    list.splice(to, 0, item);
+
+    const cover = list[0] && list[0].url ? list[0].url : '';
+    const ok = await this._persistHubHomeCover(cover, list, this.data.hubHomeMediaAutoplay);
+    if (!ok) {
+      this.showAutoToast('提示', '保存顺序失败');
+      return;
+    }
+    this.setData({
+      hubHomeMediaList: list,
+      hubHomeMediaCurrent: Math.max(0, Math.min(to, list.length - 1)),
+      hubHomeCoverFileId: cover,
+      hubHomeCoverDisplay: cover
+    }, () => {
+      this._syncHubHomeSwiperAutoplay();
+      this._rebuildHubLayout();
+    });
+    this.showAutoToast('成功', '已调整顺序');
+  },
+
+  async onHubAdminMediaAutoplayTap() {
+    if (!this.data.isAuthorized || !this.data.hubShellIsAdmin) return;
+    const on = !this.data.hubHomeMediaAutoplay;
+    this.setData({ hubHomeMediaAutoplay: on }, () => {
+      this._syncHubHomeSwiperAutoplay();
+    });
+    const ok = await this._persistHubHomeCover(
+      this.data.hubHomeCoverFileId || (this.data.hubHomeMediaList[0] && this.data.hubHomeMediaList[0].url) || '',
+      this.data.hubHomeMediaList,
+      on
+    );
+    if (!ok) {
+      this.setData({ hubHomeMediaAutoplay: !on }, () => {
+        this._syncHubHomeSwiperAutoplay();
+      });
+      this.showAutoToast('提示', '自动切卡保存失败');
+      return;
+    }
+    this.showAutoToast('成功', on ? '自动切卡已开启' : '自动切卡已关闭');
+  },
+
+  async onHubAdminMediaDeleteCurrent() {
+    if (!this.data.isAuthorized || !this.data.hubShellIsAdmin) return;
+    const list = Array.isArray(this.data.hubHomeMediaList) ? [...this.data.hubHomeMediaList] : [];
+    if (!list.length) return;
+    const current = Number(this.data.hubHomeMediaCurrent) || 0;
+    const idx = Math.max(0, Math.min(current, list.length - 1));
+    list.splice(idx, 1);
+    const cover = list[0] && list[0].url ? list[0].url : '';
+    const ok = await this._persistHubHomeCover(cover, list, this.data.hubHomeMediaAutoplay);
+    if (!ok) {
+      this.showAutoToast('提示', '删除失败');
+      return;
+    }
+    this.setData({
+      hubHomeMediaList: list,
+      hubHomeMediaCurrent: Math.max(0, Math.min(idx, list.length - 1)),
+      hubHomeCoverFileId: cover,
+      hubHomeCoverDisplay: cover
+    }, () => {
+      this._syncHubHomeSwiperAutoplay();
+      this._rebuildHubLayout();
+    });
+    this.showAutoToast('成功', '已删除当前媒体');
+  },
+
+  onHubAdminModeToggle() {
+    if (!this.data.isAuthorized) return;
+    const next = !this.data.hubShellIsAdmin;
+    this.setData({ hubShellIsAdmin: next }, () => {
+      this._syncHubPanelsAdmin(next);
+      this._rebuildHubLayout();
+      this.showAutoToast('提示', next ? '已进入管理员模式' : '已退出管理员模式');
+    });
+  },
+
+  async onHubHomeMediaAutoplayChange(e) {
+    if (!this.data.isAuthorized) return;
+    const on = !!(e.detail && e.detail.value);
+    this.setData({ hubHomeMediaAutoplay: on }, () => {
+      this._syncHubHomeSwiperAutoplay();
+    });
+    const ok = await this._persistHubHomeCover(
+      this.data.hubHomeCoverFileId || (this.data.hubHomeMediaList[0] && this.data.hubHomeMediaList[0].url) || '',
+      this.data.hubHomeMediaList,
+      on
+    );
+    if (!ok) {
+      this.setData({ hubHomeMediaAutoplay: !on }, () => {
+        this._syncHubHomeSwiperAutoplay();
+      });
+      wx.showToast({ title: '保存失败', icon: 'none' });
+    }
   },
 
   onHubBannerTap() {
@@ -2088,8 +2352,6 @@ Page({
   executeNavigation(id) {
     const numId = this._normalizeFeatureId(id);
     const open = this._resolveFeatureOpenState(numId);
-    console.log('[products] executeNavigation', { numId, open, pageEnabled: (this.data.list || []).find((i) => Number(i.id) === numId)?.pageEnabled });
-
     if (numId == null) return;
 
     if (!open) {
@@ -2103,10 +2365,9 @@ Page({
     // 🔴 分享码用户：主页按钮点击直接进入安装教程
     if (isShareCodeUser) {
       wx.navigateTo({
-        url: '/package-app/pages/azjc/azjc',
+        url: '/package-biz/pages/azjc/azjc',
         animationType: 'none',
         success: () => {
-          console.log('[products] 分享码用户跳转到安装教程');
         },
         fail: (err) => {
           console.error('[products] 跳转失败:', err);
@@ -2119,13 +2380,11 @@ Page({
     if (numId === 8) {
       this.rememberReturnFocus(numId);
       wx.navigateTo({ 
-        url: '/package-app/pages/call/call',
+        url: '/package-biz/pages/call/call',
         animationType: 'none',
         success: function() {
-          console.log('联系方式跳转成功');
         },
         fail: (err) => {
-          console.log('联系方式跳转失败:', err);
           this.showAutoToast('提示', '跳转失败: ' + JSON.stringify(err));
         }
       });
@@ -2141,17 +2400,16 @@ Page({
     let target = '';
     // 根据 ID 匹配跳转路径
     switch (numId) {
-      case 3: target = '/package-app/pages/pagenew/pagenew'; break; // 产品上新
-      case 4: // 产品选购 → 商城（顶栏「商城」同路径，滑动进入）
-        this.rememberReturnFocus(numId);
-        hubNav.openShop();
+      case 3: target = '/package-biz/pages/pagenew/pagenew'; break; // 产品上新
+      case 4: // 产品选购 → 商城（顶栏「MT商城」同路径，横向切屏）
+        this._openHubShopPanel();
         return;
       case 10: target = '/package-app/pages/case/case'; break;      // 案例展示
-      case 5: target = '/package-app/pages/paihang/paihang'; break; // 排行榜单
+      case 5: target = '/package-biz/pages/paihang/paihang'; break; // 排行榜单
       case 1: target = '/package-app/pages/scan/scan'; break;       // 控制中心
-      case 9: target = '/package-app/pages/ota/ota'; break;         // OTA升级
-      case 6: target = '/package-app/pages/shouhou/shouhou'; break; // 维修中心
-      case 12: target = '/package-app/pages/home/home'; break;       // 附近门店
+      case 9: target = '/package-biz/pages/ota/ota'; break;         // OTA升级
+      case 6: target = '/package-biz/pages/shouhou/shouhou'; break; // 维修中心
+      case 12: target = '/package-biz/pages/home/home'; break;       // 附近门店
       case 13: target = '/package-app/pages/faq/faq'; break;         // 常见问题
       case 2: target = '/package-app/pages/profile/profile'; break;
       // 其他待开发...
@@ -2213,7 +2471,7 @@ Page({
         this.hideMyLoading();
         if (!stillOk()) return;
         this.rememberReturnFocus(7);
-        wx.navigateTo({ url: '/package-app/pages/azjc/azjc', animationType: 'none' });
+        wx.navigateTo({ url: '/package-biz/pages/azjc/azjc', animationType: 'none' });
         return;
       }
 
@@ -2245,14 +2503,6 @@ Page({
       }
 
       const hasDevice = deviceCheck1.total > 0 || deviceCheck2.total > 0;
-
-      console.log('[checkTutorialAccess] 设备检查结果:', {
-        openid: openid.substring(0, 10) + '...',
-        deviceCheck1: deviceCheck1.total,
-        deviceCheck2: deviceCheck2.total,
-        hasDevice
-      });
-
       // 🔴 修改逻辑：检查订单状态
       // 过滤出真正未确认收货的订单（status 是 1 或 'SHIPPED'，且不是 'SIGNED' 或 'COMPLETED'）
       const realPendingOrders = allOrdersRes.data.filter(order => {
@@ -2272,38 +2522,27 @@ Page({
         return status === 'SIGNED' || status === 'COMPLETED'
             || realStatus === 'SIGNED' || realStatus === 'COMPLETED';
       });
-
-      console.log('[checkTutorialAccess] 订单检查结果:', {
-        totalOrders: allOrdersRes.data.length,
-        pendingOrders: realPendingOrders.length,
-        confirmedOrders: confirmedOrders.length,
-        orders: allOrdersRes.data.map(o => ({ id: o.orderId, status: o.status, realStatus: o.realStatus }))
-      });
-
       // 🔴 新逻辑（修复）：
       // 1. 如果绑定了设备（不管有没有订单或订单状态）-> 直接放行
       if (hasDevice) {
-        console.log('[checkTutorialAccess] ✅ 用户已绑定设备，直接放行');
         this.hideMyLoading();
         if (!stillOk()) return;
         this.rememberReturnFocus(7);
-        wx.navigateTo({ url: '/package-app/pages/azjc/azjc', animationType: 'none' });
+        wx.navigateTo({ url: '/package-biz/pages/azjc/azjc', animationType: 'none' });
         return;
       }
 
       // 2. 🔴 关键修复：如果有已确认收货的订单 -> 直接放行（不需要绑定设备）
       if (confirmedOrders.length > 0) {
-        console.log('[checkTutorialAccess] ✅ 用户有已确认收货的订单，直接放行');
         this.hideMyLoading();
         if (!stillOk()) return;
         this.rememberReturnFocus(7);
-        wx.navigateTo({ url: '/package-app/pages/azjc/azjc', animationType: 'none' });
+        wx.navigateTo({ url: '/package-biz/pages/azjc/azjc', animationType: 'none' });
         return;
       }
 
       // 3. 如果有未确认收货的订单 -> 提示先确认收货
       if (realPendingOrders.length > 0) {
-        console.log('[checkTutorialAccess] ⚠️ 有未确认收货的订单:', realPendingOrders.length);
         this.hideMyLoading();
         if (!stillOk()) return;
         this._showCustomModal({
@@ -2318,7 +2557,6 @@ Page({
       // 4. 既没订单也没绑定设备 -> 显示提示（只给这种情况）
       // 🔴 这个提示只显示给：没下过单，并且没绑定设备的用户
       if (allOrdersRes.data.length === 0 && !hasDevice) {
-        console.log('[checkTutorialAccess] ⚠️ 既没订单也没绑定设备');
         this.hideMyLoading();
         if (!stillOk()) return;
         this._showCustomModal({
@@ -2331,7 +2569,6 @@ Page({
       }
 
       // 5. 其他情况（理论上不应该到这里，但保留兜底逻辑）
-      console.log('[checkTutorialAccess] ⚠️ 未知情况，拒绝访问');
       this.hideMyLoading();
       if (!stillOk()) return;
       this._showCustomModal({
@@ -2363,7 +2600,7 @@ Page({
       const gap = menuButton.top - statusBarHeight;
       const navBarHeight = (gap * 2) + menuButton.height;
       const rpx = (windowInfo.windowWidth || 375) / 750;
-      const segmentBodyPx = Math.round((44 + 28 + 16) * rpx);
+      const segmentBodyPx = Math.round((128 + 28) * rpx);
       const hubShopLayerTop = statusBarHeight + segmentBodyPx;
       const adminBarPx = this.data.isAuthorized ? Math.round(72 * rpx) : 0;
       const hubShopEmbedScrollHeight = Math.max(
@@ -2400,18 +2637,24 @@ Page({
   },
   
   goBack() {
-    wx.reLaunch({ url: '/pages/index/index' });
+    const hubNav = require('../../../utils/hubNav.js');
+    hubNav.goHome();
   },
 
   onHubSegmentSwitch(e) {
     const segment = e.detail && e.detail.segment;
     if (!segment) return;
+    wx.vibrateShort({ type: 'light' });
     if (segment === 'home') {
       this._setHubTabIndex(0);
       return;
     }
     if (segment === 'shop') {
-      this._setHubTabIndex(1);
+      if (!this._isFeatureEnabledForUser(4)) {
+        this._notifyFeatureClosed(4);
+        return;
+      }
+      this._openHubShopPanel();
     }
   },
 
@@ -2438,8 +2681,10 @@ Page({
 
   onHubAdminChange(e) {
     const isAdmin = !!(e.detail && e.detail.isAdmin);
-    this.setData({ hubShellIsAdmin: isAdmin });
-    this._syncHubPanelsAdmin(isAdmin);
+    this.setData({ hubShellIsAdmin: isAdmin }, () => {
+      this._syncHubPanelsAdmin(isAdmin);
+      this._rebuildHubLayout();
+    });
   },
 
   _refreshHubPanel(tabIndex) {
@@ -2482,42 +2727,73 @@ Page({
     this._setHubTabIndex(2);
   },
 
+  _dismissHubShopOverlays() {
+    try {
+      const shop = this.selectComponent('#hubShopPanel');
+      if (!shop || typeof shop._dismissShopOverlaysAfterPay !== 'function') return;
+      shop._dismissShopOverlaysAfterPay();
+    } catch (e) {}
+  },
+
   _setHubTabIndex(idx) {
-    if (idx == null || idx === this.data.hubTabIndex) return;
+    if (idx == null) return;
+    const expectedPct = idx * 25;
+    const curPct = this.data.hubTrackTranslatePct || 0;
+    if (idx === this.data.hubTabIndex && expectedPct === curPct) return;
+    if (idx >= 2) {
+      this._dismissHubShopOverlays();
+    }
     const hubBottomBarIndex = idx <= 1 ? 0 : idx - 1;
     const prevTrackPct = this.data.hubTrackTranslatePct || 0;
     const hubTrackTranslatePct = idx * 25;
     const trackMoves = prevTrackPct !== hubTrackTranslatePct;
-    const patch = {
+    const contentPatch = {
       hubTabIndex: idx,
       hubTrackTranslatePct,
       hubBottomBarIndex,
-      hubPanelsAnim: trackMoves,
       showHubTabBar: idx !== 1
     };
     if (idx === 0) {
       this._refreshHubCartBadge();
     }
-    if (idx === 2 || idx === 3) {
-      patch.hubShellIsAdmin = false;
+    /* 仅离开订单/我的时关闭管理模式；进入订单 Tab 不再强制关掉，避免「管理」点了又被重置 */
+    if (idx === 0 || idx === 1) {
+      contentPatch.hubShellIsAdmin = false;
     }
-    if (idx === 1) patch.hubShopMounted = true;
-    if (idx === 2) patch.hubOrdersMounted = true;
-    if (idx === 3) patch.hubProfileMounted = true;
-    this.setData(patch, () => {
-      if (idx === 2 || idx === 3) {
+    if (idx === 1) contentPatch.hubShopMounted = true;
+    if (idx === 2) contentPatch.hubOrdersMounted = true;
+    if (idx === 3) contentPatch.hubProfileMounted = true;
+
+    const afterContent = () => {
+      if (idx === 0 || idx === 1) {
         this._syncHubPanelsAdmin(false);
       }
       const delay = trackMoves ? 340 : 0;
       setTimeout(() => {
         if (idx >= 1 && idx <= 3) this._refreshHubPanel(idx);
       }, delay);
-    });
-    if (this._hubPanelsAnimTimer) clearTimeout(this._hubPanelsAnimTimer);
-    this._hubPanelsAnimTimer = setTimeout(() => {
-      this.setData({ hubPanelsAnim: false });
-      this._hubPanelsAnimTimer = null;
-    }, 360);
+    };
+
+    const clearAnimTimer = () => {
+      if (this._hubPanelsAnimTimer) clearTimeout(this._hubPanelsAnimTimer);
+      this._hubPanelsAnimTimer = setTimeout(() => {
+        this.setData({ hubPanelsAnim: false });
+        this._hubPanelsAnimTimer = null;
+      }, 360);
+    };
+
+    /* 先挂上 transition 类，下一帧再改 translate，横滑动画才能生效 */
+    if (trackMoves) {
+      this.setData({ hubPanelsAnim: true }, () => {
+        wx.nextTick(() => {
+          this.setData(contentPatch, afterContent);
+        });
+      });
+      clearAnimTimer();
+      return;
+    }
+
+    this.setData({ ...contentPatch, hubPanelsAnim: false }, afterContent);
   },
 
   onHubTabSwitch(e) {
@@ -2529,8 +2805,15 @@ Page({
     this._setHubTabIndex(idx);
   },
 
+  onHubShellModal(e) {
+    const open = !!(e.detail && e.detail.open);
+    if (this.data.hubShellModalOpen !== open) {
+      this.setData({ hubShellModalOpen: open });
+    }
+  },
+
   onHubPanelsTouchStart(e) {
-    if (this.data.hubTabIndex === 1) return;
+    if (this.data.hubTabIndex !== 0) return;
     const t = e.touches && e.touches[0];
     if (!t) return;
     this._hubTouchStartX = t.clientX;
@@ -2539,8 +2822,8 @@ Page({
 
   onHubPanelsTouchEnd(e) {
     const cur = this.data.hubTabIndex;
-    // 商城内有分类横滑轮播，整屏手势会误切到订单/主页
-    if (cur === 1) return;
+    // 仅首页支持横滑切面板，订单/我的一律禁用，避免误触
+    if (cur !== 0) return;
     const t = e.changedTouches && e.changedTouches[0];
     if (!t || this._hubTouchStartX == null) return;
     const dx = t.clientX - this._hubTouchStartX;
@@ -2606,7 +2889,6 @@ Page({
       .catch(err => {
         const msg = (err.errMsg || err.message || '') + '';
         if (msg.indexOf('access_token') !== -1) {
-          console.warn('[products] 云会话未就绪，跳过寄回订单检查');
           return;
         }
         console.error('检查寄回订单失败:', err);
@@ -2697,7 +2979,6 @@ Page({
         setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
       } else {
         // 最终降级
-        console.warn('[products] custom-toast 组件未找到，使用降级方案');
         wx.showToast({ title, icon, duration });
       }
     };
@@ -2728,7 +3009,6 @@ Page({
         setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
       } else {
         // 最终降级
-        console.warn('[products] custom-toast 组件未找到，使用降级方案');
         wx.showModal(options);
       }
     };
@@ -2851,5 +3131,19 @@ Page({
         this._focusCardTimer = null;
       }
     }, 70);
+  },
+
+  onBackPress() {
+    if (this.data.showNewArrivalModal && !this.data.newArrivalClosing) {
+      this.closeNewArrivalModal();
+      return true;
+    }
+    if (this.data.hubTabIndex && this.data.hubTabIndex !== 0) {
+      this._setHubTabIndex(0);
+      return true;
+    }
+    const pageBack = require('../../../utils/pageBack.js');
+    pageBack.popOrHub();
+    return true;
   }
 });

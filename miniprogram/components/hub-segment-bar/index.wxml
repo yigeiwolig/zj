@@ -3,18 +3,18 @@
     <view
       class="hub-segment-tab {{active === 'home' ? 'is-active' : ''}}"
       data-segment="home"
-      bindtap="onTap"
+      catchtap="onTap"
     >
       <text class="hub-segment-label">主页</text>
-      <view class="hub-segment-indicator" wx:if="{{active === 'home'}}"></view>
+      <view class="hub-segment-indicator"></view>
     </view>
     <view
       class="hub-segment-tab {{active === 'shop' ? 'is-active' : ''}}"
       data-segment="shop"
-      bindtap="onTap"
+      catchtap="onTap"
     >
-      <text class="hub-segment-label">商城</text>
-      <view class="hub-segment-indicator" wx:if="{{active === 'shop'}}"></view>
+      <text class="hub-segment-label">MT商城</text>
+      <view class="hub-segment-indicator"></view>
     </view>
   </view>
 </view>

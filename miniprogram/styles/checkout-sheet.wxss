@@ -41,6 +41,12 @@
   opacity: 0;
 }
 
+.checkout-sheet-host--closing .checkout-sheet-header .nav-close {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
 .checkout-sheet-header {
   flex-shrink: 0;
   padding: 20rpx 32rpx 12rpx !important;

@@ -9,6 +9,7 @@
  */
 
 const MULTIPART_THRESHOLD = 8 * 1024 * 1024;
+const CLOUD_PUT_MAX_BYTES = 4 * 1024 * 1024;
 const PART_SIZE = 8 * 1024 * 1024;
 const MAX_OBJECT_BYTES = 1024 * 1024 * 1024;
 const PART_CONCURRENCY = 3;
@@ -32,6 +33,16 @@ function isRetryableRequestError(err) {
     msg.indexOf('reset') !== -1 ||
     msg.indexOf('econn') !== -1
   );
+}
+
+function isDomainListError(err) {
+  const msg = String((err && err.errMsg) || (err && err.message) || err || '').toLowerCase();
+  return msg.indexOf('domain list') !== -1 || msg.indexOf('合法域名') !== -1;
+}
+
+function formatDomainListHint(host) {
+  const h = host ? `（${host}）` : '';
+  return `COS 上传域名未加入小程序 request 合法域名${h}。请在微信公众平台 → 开发 → 开发管理 → 服务器域名 添加，或重新部署 getCosUploadUrl 后自动走云函数上传。`;
 }
 
 function sleep(ms) {
@@ -62,7 +73,10 @@ function isPseudoLocalHttpPath(p) {
 
 function isDevtoolsEnv() {
   try {
-    return (wx.getSystemInfoSync() || {}).platform === 'devtools';
+    if (typeof wx.getAppBaseInfo === 'function') {
+      return (wx.getAppBaseInfo() || {}).platform === 'devtools';
+    }
+    return false;
   } catch (e) {
     return false;
   }
@@ -173,9 +187,40 @@ function readBinaryForCos(readablePath) {
     }).then((res) => {
       if (res.statusCode >= 200 && res.statusCode < 300 && res.data) return res.data;
       throw new Error(`读取远程文件失败: ${res.statusCode || ''}`);
+    }).catch((err) => {
+      if (isDomainListError(err)) {
+        return readFileBinaryFromPath(p);
+      }
+      throw err;
     });
   }
   return readFileBinaryFromPath(p);
+}
+
+function uploadSingleViaCloudFunction(filePath, folder, ext, contentType) {
+  return readFileBinaryFromPath(filePath).then((bin) => {
+    const size = bin && (bin.byteLength || bin.length) ? (bin.byteLength || bin.length) : 0;
+    if (size > CLOUD_PUT_MAX_BYTES) {
+      throw new Error(`文件超过 ${Math.round(CLOUD_PUT_MAX_BYTES / 1024 / 1024)}MB，请配置 COS request 合法域名后重试`);
+    }
+    const base64 = wx.arrayBufferToBase64(bin);
+    return wx.cloud.callFunction({
+      name: 'getCosUploadUrl',
+      data: {
+        action: 'putObject',
+        folder,
+        ext,
+        contentType,
+        base64
+      }
+    }).then((res) => {
+      const payload = (res && res.result) || {};
+      if (!payload.success || !payload.publicUrl) {
+        throw new Error(payload.message || '云函数上传 COS 失败，请部署 getCosUploadUrl');
+      }
+      return payload.publicUrl;
+    });
+  });
 }
 
 function inferContentType(ext) {
@@ -228,7 +273,6 @@ function normalizeLocalUploadPath(filePath) {
     }
 
     if (isDevtoolsEnv() && isPseudoLocalHttpPath(p)) {
-      console.log('[cosUpload] 开发者工具：跳过 copy/saveFile，直接 readFile 原临时路径');
       resolve(p);
       return;
     }
@@ -276,7 +320,6 @@ function copyPseudoPathToUserData(fsm, srcPath) {
           return;
         }
         if (isPseudoLocalHttpPath(srcPath)) {
-          console.warn('[cosUpload] copyFile 失败，回退原临时路径:', msg);
           resolve(srcPath);
           return;
         }
@@ -468,13 +511,6 @@ function uploadSinglePutToCos(filePath, folder, ext, contentType, retriesLeft = 
       .then((signRes) => {
         const payload = (signRes && signRes.result) || {};
         const uploadUrl = payload.uploadUrl || '';
-        console.log('[cosUpload] getCosUploadUrl result:', {
-          success: !!payload.success,
-          publicUrl: payload.publicUrl,
-          uploadHost: uploadUrl ? String(uploadUrl).split('?')[0] : '',
-          debug: payload.debug || null,
-          message: payload.message || ''
-        });
         if (!payload.success || !uploadUrl || !payload.publicUrl) {
           reject(new Error(payload.message || '获取 COS 上传地址失败，请检查 getCosUploadUrl 云函数与环境变量'));
           return;
@@ -513,16 +549,31 @@ function uploadSinglePutToCos(filePath, folder, ext, contentType, retriesLeft = 
                 }
               })
               .catch((err) => {
+                if (isDomainListError(err)) {
+                  const host = String(uploadUrl).replace(/^https?:\/\//i, '').split('/')[0];
+                  uploadSingleViaCloudFunction(filePath, folder, ext, contentType)
+                    .then(resolve)
+                    .catch((cloudErr) => {
+                      reject(new Error(formatDomainListHint(host) + (cloudErr && cloudErr.message ? ` ${cloudErr.message}` : '')));
+                    });
+                  return;
+                }
                 reject(err || new Error('COS 上传网络失败，请检查网络与合法域名'));
               });
           })
           .catch((err) => {
-            console.warn('[cosUpload] 读取本地文件失败 filePath=', filePath, err);
+            if (isDomainListError(err)) {
+              uploadSingleViaCloudFunction(filePath, folder, ext, contentType)
+                .then(resolve)
+                .catch((cloudErr) => {
+                  reject(new Error(formatDomainListHint() + (cloudErr && cloudErr.message ? ` ${cloudErr.message}` : '')));
+                });
+              return;
+            }
             reject(err || new Error('读取本地文件失败，请重试'));
           });
       })
       .catch((err) => {
-        console.warn('[cosUpload] 调用 getCosUploadUrl 失败', err);
         reject(err || new Error('调用 getCosUploadUrl 失败，请检查云开发与云函数是否已部署'));
       });
   });
@@ -543,7 +594,6 @@ function uploadLocalFileToCos(filePath, options = {}) {
 
   return normalizeLocalUploadPath(filePath).then((normalizedPath) => {
     if (isPseudoLocalHttpPath(filePath)) {
-      console.log('[cosUpload] 临时媒体路径(伪http)，使用本地 readFile/copyFile，禁止 request:', String(filePath).slice(0, 96));
     }
     const finishCleanup = () => cleanupCopiedUploadPath(normalizedPath, filePath);
 

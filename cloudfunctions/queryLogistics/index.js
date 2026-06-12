@@ -7,11 +7,56 @@ const https = require('https')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
 const db = cloud.database()
+const _ = db.command
 
-// 🔹 探数API配置
+async function isAdmin(openid) {
+  if (!openid) return false
+  const byOpenid = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+  if (byOpenid.data && byOpenid.data.length) return true
+  const bySystem = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+  return !!(bySystem.data && bySystem.data.length)
+}
+
+/** 仅允许管理员或运单所属用户查询，防止刷探数 API */
+async function assertLogisticsAccess(trackingId, callerOpenid) {
+  if (!callerOpenid) {
+    throw new Error('请先登录后再查询物流')
+  }
+  if (await isAdmin(callerOpenid)) return
+
+  const tn = String(trackingId || '').trim().toUpperCase()
+  if (!tn) {
+    throw new Error('运单号不能为空')
+  }
+
+  const orders = await db.collection('shop_orders')
+    .where({ _openid: callerOpenid, trackingId: _.exists(true) })
+    .limit(100)
+    .get()
+  for (const o of orders.data || []) {
+    if (String(o.trackingId || '').trim().toUpperCase() === tn) return
+  }
+
+  const repairs = await db.collection('shouhou_repair')
+    .where({ _openid: callerOpenid })
+    .limit(100)
+    .get()
+  for (const r of repairs.data || []) {
+    const ids = [r.returnTrackingId, r.trackingId].filter(Boolean)
+    if (ids.some((id) => String(id).trim().toUpperCase() === tn)) return
+  }
+
+  throw new Error('无权查询该运单物流')
+}
+
+// 探数 API（与历史部署一致；云开发环境变量 TANSHU_API_KEY 可覆盖下方默认值）
 const TANSU_API_CONFIG = {
   apiKey: 'f3cb439c7700cbc370f469d07b557609',
   apiUrl: 'https://api.tanshuapi.com/api/exp/v1/index'
+}
+
+function getTanshuApiKey() {
+  return String(process.env.TANSHU_API_KEY || TANSU_API_CONFIG.apiKey).trim()
 }
 
 // 🔹 缓存配置（避免频繁查询相同运单号）
@@ -214,8 +259,9 @@ async function saveCache(cacheKey, result) {
 // 🔹 调用探数API查询物流
 async function queryTansuLogistics(trackingId, expressCode, phone) {
   return new Promise((resolve, reject) => {
+    const apiKey = getTanshuApiKey()
     // 构建请求URL（使用GET方式）
-    let url = `${TANSU_API_CONFIG.apiUrl}?key=${encodeURIComponent(TANSU_API_CONFIG.apiKey)}&no=${encodeURIComponent(trackingId)}`
+    let url = `${TANSU_API_CONFIG.apiUrl}?key=${encodeURIComponent(apiKey)}&no=${encodeURIComponent(trackingId)}`
     
     // 如果提供了快递公司编码，添加到URL
     if (expressCode) {
@@ -228,7 +274,7 @@ async function queryTansuLogistics(trackingId, expressCode, phone) {
       url += `&phone=${encodeURIComponent(phoneLast4)}`
     }
     
-    console.log(`[物流查询] 调用探数API - URL: ${url}`)
+    console.log(`[物流查询] 调用探数API - 运单: ${trackingId}, 快递: ${expressCode || '自动'}`)
     
     const options = {
       method: 'GET',
@@ -281,6 +327,26 @@ function convertStatus(statusDetail) {
   return converted
 }
 
+function sortPathList(trackingList) {
+  return trackingList
+    .filter(item => item.desc && item.time)
+    .sort((a, b) => {
+      try {
+        const normalizeTime = (timeStr) => timeStr.replace(/-/g, '/').replace(/\s+/g, ' ')
+        return new Date(normalizeTime(b.time)).getTime() - new Date(normalizeTime(a.time)).getTime()
+      } catch (e) {
+        return b.time.localeCompare(a.time)
+      }
+    })
+    .reduce((acc, current) => {
+      const exists = acc.find(item =>
+        item.time.trim() === current.time.trim() && item.desc.trim() === current.desc.trim()
+      )
+      if (!exists) acc.push(current)
+      return acc
+    }, [])
+}
+
 // 🔹 查询物流信息（使用探数API）
 async function queryLogistics(trackingId, expressCompany, phone) {
   // 标准化运单号
@@ -312,37 +378,13 @@ async function queryLogistics(trackingId, expressCompany, phone) {
   
   if (tansuData && tansuData.list && tansuData.list.length > 0) {
     // 转换格式为统一格式
-    const trackingList = tansuData.list
-      .map(item => ({
+    const trackingList = sortPathList(
+      tansuData.list.map(item => ({
         desc: (item.remark || '').trim(),
         time: (item.datetime || '').trim(),
-        location: '' // 探数API的remark中可能包含地址信息，但格式不统一，这里留空
+        location: ''
       }))
-      .filter(item => item.desc && item.time) // 过滤空数据
-      .sort((a, b) => {
-        // 按时间倒序排列（最新的在前）
-        try {
-          const normalizeTime = (timeStr) => timeStr.replace(/-/g, '/').replace(/\s+/g, ' ')
-          const timeA = normalizeTime(a.time)
-          const timeB = normalizeTime(b.time)
-          const dateA = new Date(timeA).getTime()
-          const dateB = new Date(timeB).getTime()
-          if (dateA === dateB) return a.desc.localeCompare(b.desc)
-          return dateB - dateA
-        } catch (e) {
-          return b.time.localeCompare(a.time)
-        }
-      })
-      .reduce((acc, current) => {
-        // 去重
-        const exists = acc.find(item => {
-          const timeMatch = item.time.trim() === current.time.trim()
-          const descMatch = item.desc.trim() === current.desc.trim()
-          return timeMatch && descMatch
-        })
-        if (!exists) acc.push(current)
-        return acc
-      }, [])
+    )
     
     // 转换状态
     const statusInfo = convertStatus(tansuData.status_detail || 0)
@@ -408,6 +450,9 @@ exports.main = async (event, context) => {
         errMsg: '运单号不能为空'
       }
     }
+
+    const callerOpenid = cloud.getWXContext().OPENID
+    await assertLogisticsAccess(normalizedTrackingId, callerOpenid)
     
     console.log(`[物流查询] 开始查询 - 运单号: ${normalizedTrackingId}, 快递公司: ${normalizedCompany || '未指定'}, 手机号: ${normalizedPhone || '未提供'}`)
     

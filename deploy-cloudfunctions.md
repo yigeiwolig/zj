@@ -12,6 +12,7 @@
 - adminGetOrders
 - adminUpdateMotoRank
 - adminUpdateOrder
+- adminUpdateVideoGo
 - banUserByLocation
 - banUserByScreenshot
 - bindDevice
@@ -23,6 +24,7 @@
 - deleteShouhouPart
 - generateShareCode
 - getBannedUsers
+- getIgnoredUsers
 - getClientIP
 - getMotoRank
 - login
@@ -34,6 +36,9 @@
 - updatePageVisit
 - updateShouhouPart
 - verifyNickname
+
+### 新增（商城顶部轮播保存，必部署）
+- **setShopMainConfig** — 管理员保存 `shop_config/shopMain` 顶部轮播（`shop_config` 客户端写权限为 false 时必须走此云函数）
 
 ### 需要检查的云函数
 - addQiangliField（可能缺少 package.json）
@@ -116,6 +121,43 @@ done
 - 分批部署，不要一次性部署所有云函数
 - 检查网络连接是否稳定
 - 减少云函数的依赖包大小
+
+### 4. 封面上传 / 图片报 `127.0.0.1` 或 `url not in domain list`
+
+#### 4.1 `http://127.0.0.1:xxxxx/__tmp__/...`（开发者工具常见）
+**不是缺域名。** 这是微信开发者工具把本地临时图映射到本机地址，**不能**也**无需**配进公众平台域名列表。
+
+**处理：**
+- 开发者工具 → 详情 → 本地设置 → 勾选 **不校验合法域名**（仅本地调试）
+- 封面已改为：上传成功后再用 **COS https 链接** 显示，不再用本地临时路径当 `<image src>`
+
+#### 4.2 正式环境需配置的域名（你当前列表已基本齐全）
+
+| 类型 | 需添加的域名 | 用途 |
+|------|----------------|------|
+| **request 合法域名** | `https://mt-1392958388.cos.ap-guangzhou.myqcloud.com` | COS 预签名 PUT 上传 |
+| **request 合法域名** | `https://mt-1392958388.cos.accelerate.myqcloud.com` | COS 全球加速上传（若开启） |
+| **downloadFile 合法域名** | 同上两条 + 你用于展示的 CDN 域名 | `<image>` / 下载 COS 图片 |
+| **request 合法域名** | `https://apis.map.qq.com` | 腾讯地图（省市区） |
+| **request 合法域名** | `https://tcb-api.tencentcloudapi.com` | 云开发 API |
+| **request 合法域名** | `https://*.tcb.qcloud.la`（云开发静态，按控制台提示） | 云开发资源 |
+
+修改后台域名后：开发者工具 → **详情 → 域名信息 → 刷新**，并重新编译。
+
+#### 4.3 仅 PUT 上传仍报 domain list
+重新部署 **`getCosUploadUrl`**（小图可走云函数 `putObject` 直传，不依赖客户端 PUT 域名）。
+
+#### 4.4 商城顶部轮播上传成功但其他用户看不到
+**原因：** `shop_config` 集合写权限为 `false`，小程序端 `db.update` 无法写入；仅本机缓存里暂时能看到。
+
+**解决：** 部署云函数 **`setShopMainConfig`**，并重新编译小程序（保存逻辑已改为优先调该云函数）。同时确保 **`getCosUploadUrl`** 已部署（图片/视频上传到 COS）。
+
+### 5. 物流弹窗报「缺少环境变量 TANSHU_API_KEY」
+**原因：** 仅部署了改为只读环境变量的 `queryLogistics`，但云开发未配置 `TANSHU_API_KEY`。
+
+**解决方法（二选一）：**
+- **推荐：** 重新上传并部署当前仓库里的 `queryLogistics`（已恢复探数默认 Key，与历史一致）。
+- **或：** 云开发 → 云函数 → **环境变量** → 添加 `TANSHU_API_KEY`（探数后台 Key）→ 再部署 `queryLogistics`。
 
 ## 项目配置信息
 

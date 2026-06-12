@@ -3,6 +3,7 @@
  * Methods are merged into Component({ methods }) and use `this` as the instance.
  */
 const { MUNICIPALITY_DISTRICTS } = require('../../../utils/smartAddressParser.js');
+const couponMixin = require('../../../utils/checkoutCouponMixin.js');
 
 let qqmapsdk = null;
 let qqmapsdkDistrict = null;
@@ -32,7 +33,9 @@ const checkoutDataInitial = {
 
   shippingMethod: 'zto',
   shippingFee: 0,
-  checkoutAccessoryOnly: false,
+  checkoutFreeShipping: false,
+
+  ...couponMixin.data,
 
   agreedToDisclaimer: false,
 
@@ -59,6 +62,8 @@ const checkoutDataInitial = {
 };
 
 const methods = {
+  ...couponMixin.methods,
+
   bootstrapCheckout() {
     let cachedCart = [];
     try {
@@ -91,34 +96,67 @@ const methods = {
       }
     } catch (e) {}
     this.reCalcFinalPrice(total);
+    this.loadCheckoutCoupons();
+  },
+
+  _roundMoney(n) {
+    return Math.round(Number(n) * 100) / 100;
+  },
+
+  _calcCouponDiscount(subtotalYuan) {
+    const ids = this.data.selectedCouponIds || [];
+    const list = this.data.checkoutCoupons || [];
+    if (!ids.length || this.properties.isAdmin) {
+      return { discount: 0, hint: '' };
+    }
+    let discountFen = 0;
+    ids.forEach((cid) => {
+      const c = list.find((x) => x.id === cid);
+      if (c) discountFen += Number(c.amountFen) || 0;
+    });
+    const discount = this._roundMoney(discountFen / 100);
+    const minRequired = this._roundMoney(discount + 0.01);
+    let hint = '';
+    if (subtotalYuan > 0 && subtotalYuan < minRequired) {
+      hint = `还差 ¥${this._roundMoney(minRequired - subtotalYuan).toFixed(2)} 满足用券门槛`;
+    }
+    return { discount, hint };
   },
 
   closeCheckout() {
     if (typeof this._runSheetClose === 'function') {
       this._runSheetClose(() => {
-        this.setData({ agreedToDisclaimer: false });
+        this.setData({
+          agreedToDisclaimer: false,
+          selectedCouponIds: [],
+          couponDiscountYuan: 0,
+          couponSheetOpen: false,
+          couponSheetClosing: false,
+          couponSheetAnimIn: false,
+          couponHint: ''
+        });
         this.triggerEvent('close');
       });
       return;
     }
-    this.setData({ agreedToDisclaimer: false, sheetAnimIn: false });
+    this.setData({
+      agreedToDisclaimer: false,
+      sheetAnimIn: false,
+      selectedCouponIds: [],
+      couponDiscountYuan: 0,
+      couponSheetOpen: false,
+      couponSheetClosing: false,
+      couponSheetAnimIn: false,
+      couponHint: ''
+    });
     this.triggerEvent('close');
   },
 
-  /** 已创建待付款订单但用户取消/失败支付：清空购物车并刷新订单列表 */
+  /** 已创建待付款订单但用户取消/失败支付：保留购物车，仅关闭弹窗 */
   _finalizeUnpaidOrder(payment) {
     const orderId = payment && payment.outTradeNo;
     const finish = () => {
-      try {
-        wx.removeStorageSync('my_cart');
-      } catch (e) {}
-      this.setData({
-        cart: [],
-        cartTotalPrice: 0,
-        finalTotalPrice: 0,
-        shippingFee: 0,
-        agreedToDisclaimer: false
-      });
+      this.setData({ agreedToDisclaimer: false });
       this.triggerEvent('unpaid', { orderId: orderId || '' });
       this.triggerEvent('close');
     };
@@ -127,6 +165,26 @@ const methods = {
       return;
     }
     finish();
+  },
+
+  _clearCartAfterPaid() {
+    if (this._cartClearedAfterPay) return;
+    this._cartClearedAfterPay = true;
+    try {
+      wx.removeStorageSync('my_cart');
+    } catch (e) {}
+    this.setData({
+      cart: [],
+      cartTotalPrice: 0,
+      finalTotalPrice: 0,
+      shippingFee: 0,
+      selectedCouponIds: [],
+      couponDiscountYuan: 0,
+      couponSheetOpen: false
+    });
+    if (typeof this.loadCheckoutCoupons === 'function') {
+      this.loadCheckoutCoupons();
+    }
   },
 
   onInput(e) {
@@ -679,7 +737,13 @@ const methods = {
   _cartIsAccessoryOnly(cart) {
     const list = cart || this.data.cart || [];
     if (!list.length) return false;
+    if (list.some((item) => item && item.type === 'main')) return false;
     return list.every((item) => item && item.type === 'accessory');
+  },
+
+  _shopQualifiesFreeShipping(cart, goodsSubtotal) {
+    if (this._cartIsAccessoryOnly(cart)) return true;
+    return (Number(goodsSubtotal) || 0) > 50;
   },
 
   _provinceShippingFee(province) {
@@ -687,6 +751,13 @@ const methods = {
     if (!p) return 0;
     if (p.indexOf('广东') > -1) return 13;
     return 22;
+  },
+
+  _ztoAccessoryShippingFee(province) {
+    const p = (province || '').trim();
+    if (!p) return 0;
+    if (p.indexOf('广东') > -1) return 12;
+    return 15;
   },
 
   _resolveProvinceForShipping() {
@@ -697,21 +768,32 @@ const methods = {
 
   reCalcFinalPrice(goodsPrice = this.data.cartTotalPrice) {
     const { shippingMethod } = this.data;
-    const accessoryOnly = this._cartIsAccessoryOnly();
+    const cart = this.data.cart || [];
+    const freeShipping = this._shopQualifiesFreeShipping(cart, goodsPrice);
     const province = this._resolveProvinceForShipping();
     let fee = 0;
 
-    if (shippingMethod === 'zto') {
-      fee = accessoryOnly ? this._provinceShippingFee(province) : 0;
-    } else if (shippingMethod === 'sf') {
-      fee = this._provinceShippingFee(province);
+    if (!freeShipping) {
+      if (shippingMethod === 'zto') {
+        fee = this._ztoAccessoryShippingFee(province);
+      } else if (shippingMethod === 'sf') {
+        fee = this._provinceShippingFee(province);
+      }
     }
+
+    const subtotal = this._roundMoney(goodsPrice + fee);
+    const { discount, hint } = this._calcCouponDiscount(subtotal);
+    let finalTotal = this._roundMoney(subtotal - discount);
+    if (finalTotal < 0.01 && subtotal > 0) finalTotal = 0.01;
 
     this.setData({
       shippingFee: fee,
       cartTotalPrice: goodsPrice,
-      finalTotalPrice: goodsPrice + fee,
-      checkoutAccessoryOnly: accessoryOnly
+      preCouponTotalYuan: subtotal,
+      couponDiscountYuan: discount,
+      couponHint: hint,
+      finalTotalPrice: this.properties.isAdmin ? subtotal : finalTotal,
+      checkoutFreeShipping: freeShipping
     });
   },
 
@@ -1267,7 +1349,7 @@ const methods = {
       address: fullAddressString
     };
 
-    const needShipFee = shippingMethod === 'sf' || (shippingMethod === 'zto' && this._cartIsAccessoryOnly(cart));
+    const needShipFee = !this.data.checkoutFreeShipping;
     if (needShipFee && shippingFee === 0) {
       return this.showError('请完善地址信息以计算运费');
     }
@@ -1275,6 +1357,10 @@ const methods = {
     this.reCalcFinalPrice();
     const currentFinalTotalPrice = this.data.finalTotalPrice;
     const currentShippingFee = this.data.shippingFee;
+
+    if (this.data.couponHint && (this.data.selectedCouponIds || []).length) {
+      return this.showError(this.data.couponHint);
+    }
 
     this.setData({ 'autoToast.show': false });
 
@@ -1348,6 +1434,8 @@ const methods = {
       return r;
     })();
 
+    const couponIds = isAdminPay ? [] : (this.data.selectedCouponIds || []);
+
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
@@ -1358,7 +1446,8 @@ const methods = {
         shippingMethod: shippingMethod,
         orderSource: 'shop',
         userNickname: userNickname,
-        repairId: repairId
+        repairId: repairId,
+        couponIds
       },
       success: (res) => {
         this.hideMyLoading();
@@ -1378,10 +1467,11 @@ const methods = {
           ...payment,
           success: () => {
             this.showAutoToast('成功', '支付成功');
+            this._cartClearedAfterPay = false;
 
             const orderId = payment.outTradeNo;
             if (orderId) {
-              this.startPaymentVerification(orderId);
+              this.startPaymentVerification(orderId, { clearCartOnConfirm: true });
             }
 
             const addrForSave = this.resolveAddressForOrder();
@@ -1390,14 +1480,6 @@ const methods = {
               address: addrForSave.fullAddress || orderInfo.address
             };
             wx.setStorageSync('last_address', saveOrderInfo);
-
-            this.setData({
-              cart: [],
-              cartTotalPrice: 0,
-              finalTotalPrice: 0,
-              shippingFee: 0
-            });
-            wx.removeStorageSync('my_cart');
 
             this.triggerEvent('paid', { orderId });
             this.closeCheckout();
@@ -1425,20 +1507,23 @@ const methods = {
     });
   },
 
-  startPaymentVerification(orderId) {
+  startPaymentVerification(orderId, opts = {}) {
     if (!orderId) return;
+    const clearCartOnConfirm = !!opts.clearCartOnConfirm;
     this.callCheckPayResult(orderId, 1, {
       maxAttempts: 6,
       intervalMs: 2500,
       showLoading: true,
-      silent: false
+      silent: false,
+      clearCartOnConfirm
     });
     setTimeout(() => {
       this.callCheckPayResult(orderId, 1, {
         maxAttempts: 4,
         intervalMs: 3000,
         showLoading: false,
-        silent: true
+        silent: true,
+        clearCartOnConfirm
       });
     }, 12000);
     setTimeout(() => {
@@ -1446,7 +1531,8 @@ const methods = {
         maxAttempts: 3,
         intervalMs: 3500,
         showLoading: false,
-        silent: true
+        silent: true,
+        clearCartOnConfirm
       });
     }, 28000);
   },
@@ -1467,6 +1553,9 @@ const methods = {
       success: (res) => {
         const result = res.result || {};
         if (result.success) {
+          if (options.clearCartOnConfirm) {
+            this._clearCartAfterPaid();
+          }
           if (!silent) {
             this.showAutoToast('成功', '订单已确认');
           }

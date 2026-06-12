@@ -75,8 +75,23 @@ function presignPartUrlSync(cos, bucket, region, key, uploadId, partNumber, expi
   }
 }
 
+const ALLOWED_FOLDERS = new Set(['shop/topMedia', 'shop/accessories', 'uploads', 'repair', 'tutorial', 'case', 'hub/home'])
+
+function normalizeFolder(raw) {
+  const folder = String(raw || 'uploads').replace(/^\/+|\/+$/g, '') || 'uploads'
+  for (const allowed of ALLOWED_FOLDERS) {
+    if (folder === allowed || folder.startsWith(allowed + '/')) return folder
+  }
+  return 'uploads'
+}
+
 exports.main = async (event = {}) => {
   try {
+    const { OPENID } = cloud.getWXContext()
+    if (!OPENID) {
+      return { success: false, message: '未登录，无法上传' }
+    }
+
     const action = String(event.action || 'init');
     const secretId = getEnv('COS_SECRET_ID');
     const secretKey = getEnv('COS_SECRET_KEY');
@@ -95,8 +110,7 @@ exports.main = async (event = {}) => {
     if (action === 'init') {
       const extRaw = String(event.ext || '.bin').toLowerCase();
       const ext = extRaw.startsWith('.') ? extRaw : `.${extRaw}`;
-      const folderRaw = String(event.folder || 'uploads').replace(/^\/+|\/+$/g, '');
-      const folder = folderRaw || 'uploads';
+      const folder = normalizeFolder(event.folder || 'uploads');
       const contentType = String(event.contentType || 'application/octet-stream');
       const fileSize = Number(event.fileSize);
       let partSize = Number(event.partSize) || 8 * 1024 * 1024;

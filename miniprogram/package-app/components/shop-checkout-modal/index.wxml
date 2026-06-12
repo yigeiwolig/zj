@@ -1,3 +1,4 @@
+<import src="../../../templates/checkout-coupon-sheet.wxml"/>
 <root-portal enable="{{portalToPage}}">
 <view class="hub-embed-portal-layer">
 <view
@@ -48,25 +49,50 @@
           <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
             <view class="ship-name">中通快递</view>
             <view class="ship-price">
-              <block wx:if="{{checkoutAccessoryOnly}}">
+              <block wx:if="{{checkoutFreeShipping}}">包邮</block>
+              <block wx:else>
                 {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
-                <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+                <text style="font-size:20rpx; color:#999; display:block;">(省内12/省外15)</text>
               </block>
-              <block wx:else>包邮</block>
             </view>
           </view>
           <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
             <view class="ship-name">顺丰速运</view>
             <view class="ship-price">
-              {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
-              <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+              <block wx:if="{{checkoutFreeShipping}}">包邮</block>
+              <block wx:else>
+                {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
+                <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+              </block>
             </view>
           </view>
         </view>
 
-        <view class="final-total-row">
-          <text class="ft-label">共 {{cart.length}} 件，总计</text>
-          <text class="ft-price">¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+        <text class="coupon-admin-banner" wx:if="{{isAdmin}}">管理员测付 ¥0.01，下单不抵扣；可预览优惠券</text>
+        <template is="checkoutCouponEntry" data="{{checkoutCoupons: checkoutCoupons, couponDiscountYuan: couponDiscountYuan, isAdmin: isAdmin}}"/>
+        <text class="coupon-inline-hint" wx:if="{{couponHint}}">{{couponHint}}</text>
+
+        <view class="price-breakdown-card">
+          <view class="pb-row">
+            <text class="pb-label">商品小计</text>
+            <text class="pb-val">¥{{cartTotalPrice}}</text>
+          </view>
+          <view class="pb-row" wx:if="{{shippingFee > 0}}">
+            <text class="pb-label">运费</text>
+            <text class="pb-val">¥{{shippingFee}}</text>
+          </view>
+          <view class="pb-row pb-row--discount" wx:if="{{couponDiscountYuan > 0 && !isAdmin}}">
+            <text class="pb-label">优惠券抵扣</text>
+            <text class="pb-val pb-val--minus">-¥{{couponDiscountYuan}}</text>
+          </view>
+          <view class="pb-divider"></view>
+          <view class="pb-row pb-row--total">
+            <text class="pb-label">共 {{cart.length}} 件，应付</text>
+            <view class="pb-total-wrap">
+              <text class="pb-origin" wx:if="{{couponDiscountYuan > 0 && !isAdmin}}">¥{{preCouponTotalYuan}}</text>
+              <text class="pb-price">¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+            </view>
+          </view>
         </view>
 
         <view class="group-header-row">
@@ -125,9 +151,15 @@
       </view>
     </scroll-view>
 
-    <view class="checkout-footer-single">
+    <view class="checkout-footer-single checkout-footer-pay">
+      <view class="pay-footer-hint" wx:if="{{couponDiscountYuan > 0 && !isAdmin}}">
+        <text class="pay-footer-save">已优惠 ¥{{couponDiscountYuan}}</text>
+      </view>
       <view class="btn-black full {{!agreedToDisclaimer ? 'grayed' : ''}}" catchtap="submitOrder">
-        <text class="btn-main">立即支付 ¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+        <view class="btn-pay-inner">
+          <text class="btn-main">立即支付</text>
+          <text class="btn-pay-amount">¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+        </view>
       </view>
     </view>
   </view>
@@ -143,36 +175,43 @@
     </view>
   </view>
 
-  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
+  <view class="auto-toast-mask auto-toast-mask--portal-top {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop">
     <view class="auto-toast-box" catchtouchmove="noop">
       <view class="at-title">{{autoToast.title}}</view>
       <view class="at-content">{{autoToast.content}}</view>
     </view>
   </view>
 
-  <view class="smart-paste-mask {{smartPasteClosing ? 'closing' : ''}}" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;" catchtouchmove="noop" catchtap="noop">
-    <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
-      <view class="sp-title">智能粘贴</view>
-      <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
-      <textarea
-        class="sp-textarea"
-        placeholder="例如：张三 13800138000 广东省深圳市南山区..."
-        value="{{smartPasteVal}}"
-        bindinput="onSmartPasteInput"
-        adjust-position="{{true}}"
-        fixed="{{true}}"
-      ></textarea>
-      <view class="sp-btn-row">
-        <view class="sp-btn cancel" bindtap="closeSmartPasteModal">取消</view>
-        <view class="sp-btn confirm" bindtap="confirmSmartPaste">智能分析</view>
-      </view>
-    </view>
-  </view>
-
-  <view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
+  <view class="loading-mask loading-mask--portal-top" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
     <view class="loader" catchtouchmove="noop" catchtap="noop">
       <text class="loader-label">{{loadingText}}</text>
       <view class="loading-bar"></view>
+    </view>
+  </view>
+</view>
+
+<template is="checkoutCouponSheet" data="{{couponSheetOpen: couponSheetOpen, couponSheetClosing: couponSheetClosing, couponSheetAnimIn: couponSheetAnimIn, checkoutCoupons: checkoutCoupons, selectedCouponIds: selectedCouponIds, couponDiscountYuan: couponDiscountYuan, preCouponTotalYuan: preCouponTotalYuan, checkoutCouponsLoading: checkoutCouponsLoading, isAdmin: isAdmin}}"/>
+
+<view
+  class="smart-paste-mask smart-paste-mask--above-sheet {{smartPasteClosing ? 'closing' : ''}}"
+  wx:if="{{showSmartPasteModal || smartPasteClosing}}"
+  catchtouchmove="noop"
+  catchtap="noop"
+>
+  <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
+    <view class="sp-title">智能粘贴</view>
+    <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
+    <textarea
+      class="sp-textarea"
+      placeholder="例如：张三 13800138000 广东省深圳市南山区..."
+      value="{{smartPasteVal}}"
+      bindinput="onSmartPasteInput"
+      adjust-position="{{true}}"
+      fixed="{{true}}"
+    ></textarea>
+    <view class="sp-btn-row">
+      <view class="sp-btn cancel" bindtap="closeSmartPasteModal">取消</view>
+      <view class="sp-btn confirm" bindtap="confirmSmartPaste">智能分析</view>
     </view>
   </view>
 </view>

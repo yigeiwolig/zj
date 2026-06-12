@@ -1,0 +1,9 @@
+{
+  "name": "userUpdateRepair",
+  "version": "1.0.0",
+  "description": "用户更新本人维修单（寄回地址、运单号等）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -50,6 +50,9 @@ function pageConfigToComponent(pageConfig, options = {}) {
         this._hubPanelAttached = true;
         this._isLoading = false;
         this._isLoadingSince = 0;
+        if (typeof options.onAttached === 'function') {
+          options.onAttached.call(this);
+        }
         if (lifecycles.onLoad) {
           lifecycles.onLoad.call(this, loadOptions);
         }

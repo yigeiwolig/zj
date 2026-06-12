@@ -2,13 +2,13 @@
 <view class="brand-bg-watermark">MT-摩改社</view>
 
 <!-- 自定义导航栏 -->
-<view class="header" wx:if="{{!showVideoPlayer}}" style="padding-top: {{statusBarHeight}}px;">
+<view class="header" hidden="{{showVideoPlayer}}" style="padding-top: {{statusBarHeight}}px;">
   <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
     <text class="back-arrow">‹</text>
   </view>
 </view>
 <!-- 顶部固定区：标题 + 管理员子模式 + Tab + 搜索（单层，避免管理员模式顶栏「双重垫高」） -->
-<view class="case-top-chrome" wx:if="{{!showVideoPlayer}}">
+<view class="case-top-chrome" hidden="{{showVideoPlayer}}">
   <view class="case-top-inner" style="padding-top: {{statusBarHeight}}px;">
     <view class="case-title-row" style="min-height: {{navBarHeight}}px;">
       <text class="case-title-text">MT 案例库</text>
@@ -88,6 +88,7 @@
             show-fullscreen-btn="{{true}}"
             controls="{{true}}"
             object-fit="contain"
+            muted
           ></video>
           
           <!-- 2. 信息区 -->
@@ -258,10 +259,11 @@
     <view class="dialog-close-x" bindtap="closeForm">×</view>
 
     <view class="dialog-title center">完善案例信息</view>
+    <form bindsubmit="submitForm">
     <scroll-view class="case-form-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
     <view class="form-group">
       <text class="form-label">车型信息<text class="required-star">*</text></text>
-      <input class="ios-input" placeholder="例如：雅马哈 XMAX 300" placeholder-class="ios-input-placeholder" bindinput="onInputVehicle" value="{{vehicleName}}" />
+      <input class="ios-input" name="vehicleName" placeholder="例如：雅马哈 XMAX 300" placeholder-class="ios-input-placeholder" bindinput="onInputVehicle" bindblur="onInputVehicle" value="{{vehicleName}}" />
     </view>
     <view class="form-group">
       <text class="form-label">车型分类<text class="required-star">*</text></text>
@@ -355,7 +357,8 @@
       </view>
     </view>
     </scroll-view>
-    <button class="dialog-btn dialog-btn-submit {{isSubmitting ? 'is-submitting' : ''}}" bindtap="submitForm" disabled="{{isSubmitting}}">{{isSubmitting ? '提交中...' : '提交'}}</button>
+    <button class="dialog-btn dialog-btn-submit {{isSubmitting ? 'is-submitting' : ''}}" form-type="submit" disabled="{{isSubmitting}}">{{isSubmitting ? '提交中...' : '提交'}}</button>
+    </form>
   </view>
 </view>
 
@@ -412,7 +415,7 @@
             <text class="upload-text">选视频</text>
           </view>
         </block>
-        <video wx:else src="{{adminVideoPath}}" class="preview-media" show-play-btn="{{false}}" preload="metadata"></video>
+        <video wx:else src="{{adminVideoPath}}" class="preview-media" show-play-btn="{{false}}" preload="metadata" muted></video>
       </view>
       <view class="upload-box" bindtap="chooseAdminCover">
         <block wx:if="{{!adminThumbPath}}">
@@ -428,7 +431,8 @@
        <text bindtap="chooseAdminVideo" style="margin-right:30rpx">重选视频</text><text bindtap="chooseAdminCover">重选封面</text>
     </view>
 
-    <view class="form-group"><text class="form-label">车型名称</text><input class="ios-input" placeholder="例如：杜卡迪 V4" bindinput="onInputVehicle" value="{{vehicleName}}" /></view>
+    <form bindsubmit="submitAdminForm">
+    <view class="form-group"><text class="form-label">车型名称</text><input class="ios-input" name="vehicleName" placeholder="例如：杜卡迪 V4" bindinput="onInputVehicle" bindblur="onInputVehicle" value="{{vehicleName}}" /></view>
     <view class="form-group">
       <text class="form-label">车型分类</text>
       <!-- 真机：使用原生 picker -->
@@ -485,9 +489,10 @@
     </view>
     
     <view style="display: flex; gap: 20rpx;">
-      <button class="dialog-btn" style="background:#eee; color:#000" bindtap="closeAdminForm">取消</button>
-      <button class="dialog-btn" bindtap="submitAdminForm" disabled="{{isSubmitting}}">{{isSubmitting ? '保存中...' : (isEditing ? '保存修改' : '发布')}}</button>
+      <button class="dialog-btn" style="background:#eee; color:#000" form-type="default" bindtap="closeAdminForm">取消</button>
+      <button class="dialog-btn" form-type="submit" disabled="{{isSubmitting}}">{{isSubmitting ? '保存中...' : (isEditing ? '保存修改' : '发布')}}</button>
     </view>
+    </form>
   </view>
 </view>
 
@@ -530,6 +535,7 @@
             controls="{{false}}"
             autoplay="{{true}}"
             loop="{{true}}"
+            muted
             show-center-play-btn="{{false}}"
             show-fullscreen-btn="{{false}}"
             show-play-btn="{{false}}"
@@ -613,7 +619,7 @@
 
 <!-- 11. 全屏播放器：下拉跟手位移 + 退场动画；手势层负责任意处点击暂停 / 横向拖拽进度 / 任意区域下滑退出 -->
 <view 
-  class="fullscreen-player-container {{caseFullscreenNoTrans ? 'fs-ty-instant' : 'fs-ty-smooth'}}" 
+  class="fullscreen-player-container {{caseFullscreenNoTrans ? 'fs-ty-instant' : 'fs-ty-smooth'}} {{caseFullscreenCoverHidden ? 'fs-cover-hidden' : ''}}" 
   wx:if="{{showVideoPlayer}}"
   style="transform: translateY({{caseFullscreenTy}}px);"
 >
@@ -623,6 +629,7 @@
     class="fullscreen-video" 
     preload="metadata"
     autoplay="{{true}}" 
+    muted
     controls="{{false}}"
     show-fullscreen-btn="{{false}}"
     enable-play-gesture="{{false}}"
@@ -637,6 +644,7 @@
     binderror="onCaseFullscreenVideoError"
   >
     <cover-view
+      wx:if="{{!caseFullscreenCoverHidden}}"
       class="case-fs-overlay"
       catchtouchstart="onCaseFullscreenOverlayTouchStart"
       catchtouchmove="onCaseFullscreenOverlayTouchMove"
@@ -644,20 +652,20 @@
       catchtouchcancel="onCaseFullscreenOverlayTouchEnd"
     ></cover-view>
     <!-- 🔴 视频加密：使用多层 cover-view 覆盖，防止直接访问 -->
-    <cover-view class="auto-watermark"><cover-view class="wm-text">MT-摩改社</cover-view></cover-view>
-    <cover-view class="auto-watermark auto-watermark-nick" wx:if="{{videoWatermarkNickname}}">
+    <cover-view wx:if="{{!caseFullscreenCoverHidden}}" class="auto-watermark"><cover-view class="wm-text">MT-摩改社</cover-view></cover-view>
+    <cover-view wx:if="{{!caseFullscreenCoverHidden && videoWatermarkNickname}}" class="auto-watermark auto-watermark-nick">
       <cover-view class="wm-text wm-text-nick">@{{videoWatermarkNickname}}</cover-view>
     </cover-view>
-    <cover-view class="video-protection-layer"></cover-view>
-    <cover-view class="close-video-btn" catchtap="closeVideoPlayer">×</cover-view>
-    <cover-view class="video-bottom-info">
+    <cover-view wx:if="{{!caseFullscreenCoverHidden}}" class="video-protection-layer"></cover-view>
+    <cover-view wx:if="{{!caseFullscreenExiting && !caseFullscreenCoverHidden}}" class="close-video-btn" catchtap="closeVideoPlayer">×</cover-view>
+    <cover-view wx:if="{{!caseFullscreenCoverHidden}}" class="video-bottom-info">
       <cover-view class="v-title">{{currentVideo.title}}</cover-view>
       <cover-view class="v-tags">
         <cover-view class="v-tag blue">{{currentVideo.categoryName}}</cover-view>
         <cover-view class="v-tag gray">型号：{{currentVideo.model}}</cover-view>
       </cover-view>
     </cover-view>
-    <cover-view class="case-fs-controls">
+    <cover-view wx:if="{{!caseFullscreenCoverHidden}}" class="case-fs-controls">
       <cover-view class="case-fs-play" bindtap="toggleCaseFullscreenPlay">{{caseFullscreenPaused ? '▶' : '‖'}}</cover-view>
       <cover-view class="case-fs-time-l">{{caseFullscreenCurrentStr}}</cover-view>
       <cover-view
@@ -679,7 +687,7 @@
   </video>
 
   <!-- 居中播放图标（视频暂停时显示，移出 video 标签以支持高级 CSS） -->
-  <view class="case-fs-center-play-wrap" wx:if="{{caseFullscreenPaused}}" catchtap="toggleCaseFullscreenPlay">
+  <view class="case-fs-center-play-wrap" wx:if="{{caseFullscreenPaused && !caseFullscreenCoverHidden}}" catchtap="toggleCaseFullscreenPlay">
     <view class="center-play-triangle">
       <text class="mt-logo-text">MT</text>
     </view>
@@ -734,6 +742,7 @@
         preload="metadata"
         controls="{{false}}"
         autoplay="{{true}}" 
+        muted
         object-fit="contain" 
         class="video-preview-player"
         bindplay="onVideoPreviewPlay"

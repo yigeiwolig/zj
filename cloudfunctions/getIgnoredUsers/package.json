@@ -1,0 +1,9 @@
+{
+  "name": "getIgnoredUsers",
+  "version": "1.0.0",
+  "description": "获取已无视的可疑人员留档列表",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

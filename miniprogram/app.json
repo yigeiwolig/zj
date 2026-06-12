@@ -12,18 +12,24 @@
         "pages/my/my",
         "pages/orders/orders",
         "pages/profile/profile",
-        "pages/azjc/azjc",
-        "pages/ota/ota",
         "pages/products/products",
         "pages/case/case",
-        "pages/pagenew/pagenew",
         "pages/scan/scan",
+        "pages/faq/faq"
+      ]
+    },
+    {
+      "root": "package-biz",
+      "name": "package-biz",
+      "pages": [
+        "pages/azjc/azjc",
+        "pages/ota/ota",
+        "pages/pagenew/pagenew",
         "pages/adminLite/adminLite",
         "pages/admin/admin",
         "pages/paihang/paihang",
         "pages/shouhou/shouhou",
         "pages/call/call",
-        "pages/faq/faq",
         "pages/home/home",
         "pages/invest/invest"
       ]

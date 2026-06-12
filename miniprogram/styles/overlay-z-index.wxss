@@ -1,0 +1,36 @@
+/**
+ * 全项目弹层 z-index 规范（数值越大越靠上）
+ * 枢纽内嵌页须配合 root-portal + hub-embed-portal.wxss
+ *
+ * 13201  售后页确认工单半屏（shouhou order-checkout-panel）
+ * 2500   商城/枢纽内嵌结算半屏（checkout-modal-host）
+ * 100000010  半屏业务弹窗（寄回地址、需寄回确认、填写售后单等）
+ * 100000045  结算选券浮层
+ * 100000050  智能粘贴
+ * 100000060  全屏视频
+ * 100000070  页面 loading 遮罩
+ * 100000080  页面 auto-toast / 操作菜单
+ * 100000090+ 全局 custom-toast（app.wxss）
+ */
+
+.smart-paste-mask--above-sheet {
+  z-index: 100000050 !important;
+}
+
+.coupon-sheet-portal--hub {
+  z-index: 100000045 !important;
+}
+
+.video-modal-mask--top {
+  z-index: 100000060 !important;
+}
+
+.hub-embed-portal-layer .loading-mask--portal-top {
+  z-index: 100000070 !important;
+}
+
+.hub-embed-portal-layer .auto-toast-mask--portal-top,
+.hub-embed-portal-layer .center-toast-mask--portal-top,
+.hub-embed-portal-layer .action-sheet-mask--portal-top {
+  z-index: 100000080 !important;
+}

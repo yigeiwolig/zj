@@ -12,7 +12,8 @@ Component({
   methods: {
     onTap(e) {
       const segment = e.currentTarget.dataset.segment;
-      if (!segment || segment === this.data.active) return;
+      const active = this.properties.active;
+      if (!segment || segment === active) return;
       this.triggerEvent('switch', { segment });
     }
   }

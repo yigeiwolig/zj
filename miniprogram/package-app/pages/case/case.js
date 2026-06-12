@@ -1,6 +1,9 @@
 const app = getApp();
 const db = wx.cloud.database();
 const cosUpload = require('../../../utils/cosUpload.js');
+const dbPermissionHint = require('../../../utils/dbPermissionHint.js');
+const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
+const { CASE_MODEL_OPTIONS } = require('../../../utils/productModels.js');
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js'); 
 var qqmapsdk = new QQMapWX({
     key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
@@ -11,6 +14,15 @@ var qqmapsdk = new QQMapWX({
 function silentAgentLog(data) {
   // 直接返回，不再发起网络请求（保留函数占位，防止调用报错）
   return;
+}
+
+// 案例库 BGM：COS 公开链（与案例视频同桶，不上传进代码包）
+const CASE_BGM_COS_URL = 'https://mt-1392958388.cos.ap-guangzhou.myqcloud.com/case/bgm/case-bgm.mp3';
+
+function isCaseBgmMp3Url(url) {
+  const u = String(url || '').trim().toLowerCase();
+  if (!/^https?:\/\//.test(u) || /\.tcb\.qcloud\.la/.test(u)) return false;
+  return /\.mp3(\?|$)/.test(u) || u.indexOf('/case/bgm/') >= 0;
 }
 
 Page({
@@ -68,6 +80,10 @@ Page({
     /** 全屏退场：translateY(px)，下拉跟手与动画共用 */
     caseFullscreenTy: 0,
     caseFullscreenNoTrans: true,
+    /** 全屏退场动画中：顶栏保持挂载并提前露出，避免关闭后整页重绘卡顿 */
+    caseFullscreenExiting: false,
+    /** 先隐藏 video 内 cover-view（原生层卸载慢于外层 view） */
+    caseFullscreenCoverHidden: false,
 
     // --- 🆕 搜索栏状态 ---
     showSearchBar: true, // 默认显示
@@ -108,7 +124,7 @@ Page({
     categoryArray: ['街车', '仿赛', '踏板', '巡航', '拉力', '旅行车', '电摩', '电动自行车'],
     categoryValueArray: ['street', 'sport', 'scooter', 'cruise', 'rally', 'touring', 'ebike', 'bicycle'],
     categoryIndex: null, // 🔴 修复：按照 zj4 的写法，使用 null
-    modelArray: ['F1', 'F2', 'F2 Long', '不知道'],
+    modelArray: CASE_MODEL_OPTIONS,
     modelIndex: null, // 🔴 修复：按照 zj4 的写法，使用 null
     isSubmitting: false,
     
@@ -341,6 +357,7 @@ Page({
     
     // 加载拍摄指南视频
     this.loadShootingGuideVideo();
+    this.loadCaseBgmAudio();
 
     // 🔴 物理防线：确保录屏、截屏出来的全是黑屏 (这是最稳的)
     if (wx.setVisualEffectOnCapture) {
@@ -463,6 +480,11 @@ Page({
 
     // 刷新视频昵称水印，避免用户改昵称后仍显示旧值
     this.refreshVideoWatermarkNickname();
+    if (!this.data.showVideoPlayer) {
+      this._forceStopCaseBgm();
+    } else {
+      this._beginCaseBgmSession();
+    }
     this._syncCaseMainScrollLayout();
   },
 
@@ -483,6 +505,7 @@ Page({
   },
 
   onHide() {
+    this._forceStopCaseBgm();
     if (this.data.showVideoPlayer) {
       this._stopCaseFullscreenVideoPlayback();
     }
@@ -520,6 +543,7 @@ Page({
 
   /** 只量可见底边：有搜索框量搜索框，否则量顶栏，避免 chrome 含多余 padding 导致留白过大 */
   _syncCaseMainScrollLayout() {
+    if (this.data.showVideoPlayer && !this.data.caseFullscreenExiting) return;
     wx.nextTick(() => {
       const q = this.createSelectorQuery();
       if (this.data.showSearchBar) {
@@ -603,6 +627,8 @@ Page({
 
   onUnload() {
     this._pageDestroyed = true;
+    this._clearCaseBgmStartTimers();
+    this._destroyCaseBgmAudio();
     this._clearCaseLayoutTimers();
     this._teardownScreenshotProtection();
     if (this.data.timer) clearInterval(this.data.timer);
@@ -647,28 +673,48 @@ Page({
   // 原来的 onPageScroll 已失效（因为 disableScroll: true），保留为空函数
   onPageScroll(e) {},
 
+  /** 小程序端单次 get 最多 20 条，分页拉全量（skip 上限 1000） */
+  async _fetchCollectionAll(buildQuery, pageSize = 20) {
+    const MAX_SKIP = 1000;
+    const all = [];
+    let skip = 0;
+    while (skip <= MAX_SKIP) {
+      const res = await buildQuery().skip(skip).limit(pageSize).get();
+      const batch = res.data || [];
+      all.push(...batch);
+      if (batch.length < pageSize) break;
+      skip += pageSize;
+    }
+    if (skip > MAX_SKIP) {
+      console.warn('[case] 分页 skip 已达上限，可能仍有未加载记录');
+    }
+    return all;
+  },
+
   // ==========================================
   // 1. 拉取数据
   // ==========================================
-  fetchCloudData() {
+  async fetchCloudData() {
     // 稍微延迟一下loading，防止动画冲突
-    if(this.data.list.length === 0) getApp().showLoading({ title: '加载中...' });
-    
-    db.collection('video_go')
-      .orderBy('createTime', 'desc') // 先按时间倒序拿回来，后面再按 sortOrder 调整
-      .get()
-      .then(async (res) => {
-        getApp().hideLoading();
-        const cloudListWithIndex = res.data.map((item, idx) => {
+    if (this.data.list.length === 0) getApp().showLoading({ title: '加载中...' });
+
+    try {
+      const rawList = await this._fetchCollectionAll(() =>
+        db.collection('video_go').orderBy('createTime', 'desc')
+      );
+      getApp().hideLoading();
+      const cloudListWithIndex = rawList.map((item, idx) => {
           const rawVideo = item.videoFileID || item.videoUrl || item.videoURL || '';
           const rawCover = item.coverFileID || item.coverUrl || item.thumbFileID || item.thumbUrl || '';
           const videoUrl = this._swapCosHost(rawVideo || '') || rawVideo || '';
           const coverFull = this._swapCosHost(rawCover || '') || rawCover || null;
           const coverThumb = coverFull ? this.buildLowQualityUrl(coverFull) : null;
+          const vehicleName = item.vehicleName || item.title || '';
           return ({
             _id: item._id,
             type: item.category || 'street',
-            title: item.vehicleName || '无标题',
+            vehicleName: vehicleName || '无标题',
+            title: vehicleName || '无标题',
             model: item.model || '未知',
             categoryName: item.categoryName || null,
             color: this.getRandomColor(),
@@ -698,14 +744,13 @@ Page({
           this._syncCaseMainScrollLayout();
         });
         
-        // 数据回来后再次校准滑块
-        setTimeout(() => this.initTabPosition(), 200);
-      })
-      .catch(err => {
-        getApp().hideLoading();
-        console.error(err);
-      });
-    
+      // 数据回来后再次校准滑块
+      setTimeout(() => this.initTabPosition(), 200);
+    } catch (err) {
+      getApp().hideLoading();
+      console.error(err);
+    }
+
     // 🆕 如果是管理员，同时加载待审核列表
     if (this.data.isAdmin) {
       this.fetchPendingVideos();
@@ -972,15 +1017,77 @@ Page({
       });
     });
 
-    Promise.all(tasks)
+    this._callAdminVideoGo({
+      action: 'sort',
+      sortList: displayList.map((item) => ({ _id: item._id }))
+    })
       .then(() => {
         console.log('[case.js] ✅ 官方案例排序已保存到云端');
         this._showCustomToast('排序已保存', 'none');
       })
       .catch((err) => {
-        console.error('[case.js] ❌ 保存排序失败:', err);
-        this._showCustomToast('排序保存失败', 'error');
+        const msg = String((err && err.message) || (err && err.errMsg) || '');
+        const notDeployed = msg.indexOf('FUNCTION_NOT_FOUND') >= 0
+          || msg.indexOf('FunctionName') >= 0
+          || msg.indexOf('-501000') >= 0;
+        if (!notDeployed) {
+          console.error('[case.js] ❌ 保存排序失败:', err);
+          if (dbPermissionHint.isPermissionDenied(err)) {
+            dbPermissionHint.toastPermissionDenied('video_go');
+            return;
+          }
+          this._showCustomToast(msg || '排序保存失败', 'error');
+          return;
+        }
+        // 云函数未部署时，尝试客户端直写（需集合写权限）
+        Promise.all(tasks)
+          .then(() => {
+            console.log('[case.js] ✅ 官方案例排序已保存到云端');
+            this._showCustomToast('排序已保存', 'none');
+          })
+          .catch((dbErr) => {
+            console.error('[case.js] ❌ 保存排序失败:', dbErr);
+            if (dbPermissionHint.isPermissionDenied(dbErr)) {
+              dbPermissionHint.toastPermissionDenied('video_go');
+              return;
+            }
+            this._showCustomToast('排序保存失败', 'error');
+          });
       });
+  },
+
+  _callAdminVideoGo(payload) {
+    return wx.cloud.callFunction({
+      name: 'adminUpdateVideoGo',
+      data: payload
+    }).then((res) => {
+      const result = (res && res.result) || {};
+      if (!result.success) {
+        const err = new Error(result.errMsg || '保存失败');
+        throw err;
+      }
+      return result;
+    });
+  },
+
+  _handleAdminVideoGoError(err, logPrefix) {
+    if (logPrefix) console.error(logPrefix, err);
+    getApp().hideLoading();
+    this.setData({ isSubmitting: false });
+    const msg = String((err && err.errMsg) || (err && err.message) || err || '');
+    if (msg.indexOf('FUNCTION_NOT_FOUND') >= 0 || msg.indexOf('FunctionName') >= 0 || msg.indexOf('-501000') >= 0) {
+      wx.showModal({
+        title: '需要部署云函数',
+        content: '请在微信开发者工具中右键 cloudfunctions/adminUpdateVideoGo → 上传并部署：云端安装依赖，然后再保存案例。',
+        showCancel: false
+      });
+      return;
+    }
+    if (dbPermissionHint.isPermissionDenied(err)) {
+      dbPermissionHint.toastPermissionDenied('video_go');
+      return;
+    }
+    this._showCustomToast(msg || '保存失败', 'none');
   },
 
   // ==========================================
@@ -1029,27 +1136,20 @@ Page({
   },
 
   // [修改] 获取待审核视频 (修复时间显示问题)
-  fetchPendingVideos() {
-    db.collection('video')
-      .where({ status: 0 }) 
-      .orderBy('createTime', 'desc')
-      .get()
-      .then(res => {
-        // 数据清洗
-        const formattedList = res.data.map(item => {
-          return {
-            ...item,
-            // 【核心修复】把时间对象转成字符串
-            displayTime: this.formatTime(item.createTime) 
-          };
-        });
-        
-        // 🆕 先把统计信息（通过/拒绝次数等）合并进每条记录，再转换视频 URL
-        this.enrichPendingStats(formattedList).then((listWithStats) => {
-          // 🔴 新增：转换云存储路径为临时 URL（用于预览）
-          this.convertVideoUrls(listWithStats);
-        });
-      });
+  async fetchPendingVideos() {
+    try {
+      const rawList = await this._fetchCollectionAll(() =>
+        db.collection('video').where({ status: 0 }).orderBy('createTime', 'desc')
+      );
+      const formattedList = rawList.map(item => ({
+        ...item,
+        displayTime: this.formatTime(item.createTime)
+      }));
+      const listWithStats = await this.enrichPendingStats(formattedList);
+      this.convertVideoUrls(listWithStats);
+    } catch (err) {
+      console.error('[case] fetchPendingVideos failed:', err);
+    }
   },
   
   // 🆕 为待审核列表补充统计信息：同 SN 的通过次数/拒绝次数/总投稿次数
@@ -1517,18 +1617,23 @@ Page({
       if (this.data.guideTimer) clearInterval(this.data.guideTimer); // 清除倒计时
       this._closeWithAnimation('showShootingGuide', 'shootingGuideClosing');
       setTimeout(() => {
-        this.setData({
-          isEditing: false,
-          editingId: null,
-          vehicleName: '',
-          categoryIndex: null,
-          modelIndex: null,
-          adminVideoPath: null,
-          adminThumbPath: null,
-          adminVideoKnownSize: null,
+        const patch = {
           showAdminForm: true,
-          adminFormClosing: false
-        });
+          adminFormClosing: false,
+          shootingGuideMode: 'publish'
+        };
+        // 编辑已有案例时切到「发布」，不能清空 isEditing / 表单内容
+        if (!this.data.isEditing) {
+          patch.isEditing = false;
+          patch.editingId = null;
+          patch.vehicleName = '';
+          patch.categoryIndex = null;
+          patch.modelIndex = null;
+          patch.adminVideoPath = null;
+          patch.adminThumbPath = null;
+          patch.adminVideoKnownSize = null;
+        }
+        this.setData(patch);
       }, 420);
     } else if (mode === 'guide') {
       // 切换到教学模式：关闭管理员表单，打开拍摄指南弹窗
@@ -1959,6 +2064,202 @@ Page({
     });
   },
 
+  loadCaseBgmAudio() {
+    this._caseBgmSrc = '';
+    this._caseBgmPublishTried = false;
+    this._caseBgmSessionActive = false;
+    this._caseBgmPlaying = false;
+    this._caseBgmStartTimers = [];
+    const fallback = CASE_BGM_COS_URL;
+    db.collection('config').doc('case_bgm').get().then((res) => {
+      const data = (res && res.data) || {};
+      const fromDb = String(data.audioUrl || '').trim();
+      const url = isCaseBgmMp3Url(fromDb) ? fromDb : fallback;
+      this._prepareCaseBgmUrl(url);
+    }).catch(() => {
+      this._prepareCaseBgmUrl(fallback);
+    });
+  },
+
+  /** 确认 COS 上已有文件；404 时自动调用 publishCaseBgm 上传 */
+  _prepareCaseBgmUrl(url) {
+    const src = String(url || '').trim();
+    if (!src) return;
+    wx.request({
+      url: src,
+      method: 'HEAD',
+      success: (res) => {
+        if (res.statusCode === 200) {
+          this._applyCaseBgmSrc(src);
+          return;
+        }
+        this._autoPublishCaseBgm(src);
+      },
+      fail: () => {
+        this._autoPublishCaseBgm(src);
+      }
+    });
+  },
+
+  _autoPublishCaseBgm(expectedUrl) {
+    if (this._caseBgmPublishTried) {
+      console.warn('[case] BGM COS 文件不存在，请部署并运行云函数 publishCaseBgm', expectedUrl);
+      return;
+    }
+    this._caseBgmPublishTried = true;
+    if (!wx.cloud || typeof wx.cloud.callFunction !== 'function') return;
+    wx.cloud.callFunction({
+      name: 'getCosUploadUrl',
+      data: { action: 'publishCaseBgm' },
+      success: (cf) => {
+        const r = cf && cf.result;
+        const url = r && (r.audioUrl || r.publicUrl);
+        const published = r && (r.via === 'publishCaseBgm' || r.ok === true);
+        if (published && isCaseBgmMp3Url(url)) {
+          this._applyCaseBgmSrc(url);
+          return;
+        }
+        console.warn('[case] 发布 BGM 失败：请重新部署 getCosUploadUrl（含 case-bgm.mp3）后再进案例页', r);
+      },
+      fail: (e) => {
+        console.warn('[case] getCosUploadUrl publishCaseBgm 调用失败', e);
+      }
+    });
+  },
+
+  _destroyCaseBgmAudio() {
+    if (!this._caseBgmAudio) return;
+    try {
+      this._caseBgmAudio.stop();
+      this._caseBgmAudio.destroy();
+    } catch (e) {}
+    this._caseBgmAudio = null;
+    this._caseBgmPlaying = false;
+  },
+
+  _applyCaseBgmSrc(src) {
+    if (!src || !isCaseBgmMp3Url(src)) return;
+    const changed = this._caseBgmSrc !== src;
+    this._caseBgmSrc = src;
+    if (changed) {
+      this._destroyCaseBgmAudio();
+    } else if (this._caseBgmAudio) {
+      this._caseBgmAudio.src = src;
+    }
+    if (this._caseBgmSessionActive && this._isCaseBgmPlaybackAllowed()) {
+      this._scheduleCaseBgmStart();
+    }
+  },
+
+  _clearCaseBgmStartTimers() {
+    if (!this._caseBgmStartTimers || !this._caseBgmStartTimers.length) return;
+    this._caseBgmStartTimers.forEach((tid) => clearTimeout(tid));
+    this._caseBgmStartTimers = [];
+  },
+
+  _isCaseBgmPlaybackAllowed() {
+    return !!(
+      this._caseBgmSessionActive &&
+      this.data.showVideoPlayer &&
+      !this.data.caseFullscreenExiting &&
+      !this.data.caseFullscreenCoverHidden &&
+      !this.data.caseFullscreenPaused
+    );
+  },
+
+  _ensureCaseBgmAudio() {
+    const src = this._caseBgmSrc || '';
+    if (!src) return null;
+    if (this._caseBgmAudio) return this._caseBgmAudio;
+    const audio = wx.createInnerAudioContext();
+    audio.loop = true;
+    audio.volume = 0.7;
+    audio.obeyMuteSwitch = true;
+    audio.src = src;
+    audio.onPlay(() => {
+      this._caseBgmPlaying = true;
+    });
+    audio.onPause(() => {
+      this._caseBgmPlaying = false;
+    });
+    audio.onStop(() => {
+      this._caseBgmPlaying = false;
+    });
+    audio.onEnded(() => {
+      this._caseBgmPlaying = false;
+    });
+    audio.onError((err) => {
+      this._caseBgmPlaying = false;
+      console.warn('[case] BGM 播放失败', err);
+    });
+    this._caseBgmAudio = audio;
+    return audio;
+  },
+
+  _beginCaseBgmSession() {
+    this._caseBgmSessionActive = true;
+    this._clearCaseBgmStartTimers();
+    this._scheduleCaseBgmStart();
+  },
+
+  _scheduleCaseBgmStart() {
+    this._clearCaseBgmStartTimers();
+    if (!this._caseBgmSessionActive) return;
+    const delays = [0, 120, 360, 720];
+    this._caseBgmStartTimers = delays.map((ms) => setTimeout(() => {
+      if (!this._caseBgmSessionActive) return;
+      this._syncCaseBgmPlayback();
+    }, ms));
+  },
+
+  _syncCaseBgmPlayback() {
+    if (!this._isCaseBgmPlaybackAllowed()) {
+      this._forceStopCaseBgm();
+      return;
+    }
+    const src = this._caseBgmSrc || '';
+    if (!src) return;
+    const audio = this._ensureCaseBgmAudio();
+    if (!audio) return;
+    if (audio.src !== src) {
+      audio.src = src;
+    }
+    if (this._caseBgmPlaying) return;
+    try {
+      audio.play();
+    } catch (e) {
+      console.warn('[case] 统一背景音乐播放失败', e);
+    }
+  },
+
+  _pauseCaseBgm() {
+    if (!this._caseBgmAudio) return;
+    try {
+      this._caseBgmAudio.pause();
+    } catch (e) {}
+    this._caseBgmPlaying = false;
+  },
+
+  _forceStopCaseBgm() {
+    this._caseBgmSessionActive = false;
+    this._clearCaseBgmStartTimers();
+    if (!this._caseBgmAudio) {
+      this._caseBgmPlaying = false;
+      return;
+    }
+    try {
+      this._caseBgmAudio.stop();
+    } catch (e) {}
+    try {
+      this._caseBgmAudio.pause();
+    } catch (e) {}
+    this._caseBgmPlaying = false;
+  },
+
+  _stopCaseBgm() {
+    this._forceStopCaseBgm();
+  },
+
   // 从数据库加载拍摄指南视频（页面加载时调用）
   loadShootingGuideVideo() {
     db.collection('config').doc('shooting_guide').get().then(res => {
@@ -2143,9 +2444,12 @@ Page({
       // ▶️ 普通模式或管理现有视频模式：播放视频
       if (targetItem && targetItem.videoUrl) {
         this.refreshVideoWatermarkNickname();
+        this._forceStopCaseBgm();
         this.setData({
           currentVideo: targetItem,
           showVideoPlayer: true,
+          caseFullscreenExiting: false,
+          caseFullscreenCoverHidden: false,
           caseFullscreenDuration: 0,
           caseFullscreenProgressPercent: 0,
           caseFullscreenCurrentStr: '00:00',
@@ -2153,6 +2457,17 @@ Page({
           caseFullscreenPaused: false,
           caseFullscreenTy: 0,
           caseFullscreenNoTrans: true
+        }, () => {
+          this._beginCaseBgmSession();
+          wx.nextTick(() => {
+            try {
+              const videoCtx = wx.createVideoContext('caseFullscreenVideo', this);
+              if (videoCtx && typeof videoCtx.play === 'function') {
+                videoCtx.play();
+              }
+            } catch (e) {}
+            this._syncCaseBgmPlayback();
+          });
         });
         this._caseFullscreenTrackRectCached = null;
         wx.nextTick(() => this._refreshCaseFullscreenTrackRect());
@@ -2183,7 +2498,8 @@ Page({
       isEditing: true,
       editingId: item._id,
       showAdminForm: true,
-      vehicleName: item.title,
+      shootingGuideMode: 'publish',
+      vehicleName: item.vehicleName || item.title || '',
       categoryIndex: catIdx >= 0 ? catIdx : null, // 🔴 修复：按照 zj4 的写法，找不到时使用 null
       modelIndex: modIdx >= 0 ? modIdx : null, // 🔴 修复：按照 zj4 的写法，找不到时使用 null
       adminVideoPath: item.videoUrl, // 回显现有视频
@@ -2349,14 +2665,18 @@ Page({
   // ==========================================
   // 5. 提交表单 (兼容 新增 & 修改)
   // ==========================================
-  submitAdminForm() {
+  submitAdminForm(e) {
     if (this.data.isSubmitting) return;
-    const { vehicleName, categoryIndex, modelIndex, adminVideoPath, adminThumbPath, categoryValueArray, categoryArray, modelArray, isEditing, editingId } = this.data;
+    const vehicleName = this._resolveVehicleName(e);
+    const { categoryIndex, modelIndex, adminVideoPath, adminThumbPath, categoryValueArray, categoryArray, modelArray, isEditing, editingId } = this.data;
 
     if (!adminVideoPath) return this._showCustomToast('请选择视频', 'none');
     // 编辑模式下可以不改封面，新增模式必须有封面
     if (!isEditing && !adminThumbPath) return this._showCustomToast('请选择封面图', 'none');
     if (!vehicleName) return this._showCustomToast('请填写车型', 'none');
+    if (vehicleName !== this.data.vehicleName) {
+      this.setData({ vehicleName });
+    }
     // 🔴 修复：按照 zj4 的写法，只检查是否为 null
     if (categoryIndex === null) return this._showCustomToast('请选分类', 'none');
     if (modelIndex === null) return this._showCustomToast('请选型号', 'none');
@@ -2394,60 +2714,28 @@ Page({
         categoryName: categoryArray[categoryIndex],
         model: modelArray[modelIndex],
         videoFileID: videoID,
-        coverFileID: coverID,
-        type: 'admin_upload',
-        // 🆕 管理员后台发布/编辑也打上次数标记：用于后台区分“第几次发布/编辑记录”
-        // 这里的次数是按管理员(openid)维度统计 video_go 的 admin_upload 记录数
-        // （如果你想统计“某个用户投稿被采纳后管理员发布”的次数，需要另加 userOpenid/userId 维度字段）
-        // 如果是新增，加时间；如果是修改，更新时间可选
-        ...(isEditing ? { updateTime: db.serverDate() } : { createTime: db.serverDate() })
+        type: 'admin_upload'
       };
+      if (coverID) docData.coverFileID = coverID;
 
       if (isEditing) {
-        // --- 修改逻辑 ---
-        db.collection('video_go').doc(editingId).update({ data: docData })
+        // --- 修改逻辑（走云函数，绕过 video_go 客户端写权限限制）---
+        this._callAdminVideoGo({ action: 'update', docId: editingId, data: docData })
           .then(() => {
-             this.finishSubmit('修改成功');
+            this.finishSubmit('修改成功');
           })
-          .catch(err => {
-            console.error('❌ [admin] 更新失败:', err);
-            getApp().hideLoading();
-            this.setData({ isSubmitting: false });
-            this._showCustomToast('保存失败', 'none');
+          .catch((err) => {
+            this._handleAdminVideoGoError(err, '❌ [admin] 更新失败');
           });
       } else {
         // --- 新增逻辑 ---
-        // 🆕 记录管理员在 video_go 发布次数（后台可见）
-        // 注意：这里统计的是“管理员发布官方案例”的次数，不等同于“用户投稿次数”
-        wx.cloud.callFunction({ name: 'login' }).then(async (loginRes) => {
-          const openid = loginRes.result.openid;
-          const countRes = await db.collection('video_go').where({ _openid: openid, type: 'admin_upload' }).count();
-          const applyCount = (countRes.total || 0) + 1;
-
-          db.collection('video_go').add({ data: { ...docData, applyCount } })
-            .then(() => {
-               this.finishSubmit('发布成功');
-            })
-            .catch(err2 => {
-              console.error('❌ [admin] 写入 video_go 失败:', err2);
-              getApp().hideLoading();
-              this.setData({ isSubmitting: false });
-              this._showCustomToast('发布失败', 'none');
-            });
-        }).catch(err => {
-          console.error('❌ [admin] 获取 openid / 统计次数失败:', err);
-          // 兜底：即使统计失败也允许发布
-          db.collection('video_go').add({ data: docData })
-            .then(() => {
-              this.finishSubmit('发布成功');
-            })
-            .catch(err3 => {
-              console.error('❌ [admin] 兜底发布失败:', err3);
-              getApp().hideLoading();
-              this.setData({ isSubmitting: false });
-              this._showCustomToast('发布失败', 'none');
-            });
-        });
+        this._callAdminVideoGo({ action: 'add', data: docData })
+          .then(() => {
+            this.finishSubmit('发布成功');
+          })
+          .catch((err) => {
+            this._handleAdminVideoGoError(err, '❌ [admin] 发布失败');
+          });
       }
     }).catch(err => {
       console.error(err);
@@ -2692,9 +2980,13 @@ Page({
     }, 300); // 抖动动画时长
   },
   
-  async submitForm() {
+  async submitForm(e) {
     console.log('🔵 [提交] submitForm 被调用');
-    const { vehicleName, categoryIndex, modelIndex, videoPath, categoryValueArray, categoryArray, modelArray, myDevices, selectedSnIndex } = this.data;
+    const vehicleName = this._resolveVehicleName(e);
+    const { categoryIndex, modelIndex, videoPath, categoryValueArray, categoryArray, modelArray, myDevices, selectedSnIndex } = this.data;
+    if (vehicleName !== this.data.vehicleName) {
+      this.setData({ vehicleName });
+    }
     
     console.log('🔵 [提交] 当前数据:', {
       vehicleName,
@@ -2848,10 +3140,71 @@ Page({
     }, duration);
   },
 
+  _showDeleteCaseResult(result) {
+    const cosDeleted = result && typeof result.cosDeleted === 'number' ? result.cosDeleted : 0;
+    const cosSkipped = !!(result && result.cosSkipped);
+    const cosKeysFound = (result && result.cosKeysFound) || [];
+    const mediaHints = (result && result.mediaHints) || [];
+    let detail = '• 案例库记录：已删除\n';
+    if (cosDeleted > 0) {
+      detail += `• COS 存储桶：已删除 ${cosDeleted} 个文件\n`;
+      if (cosKeysFound.length) {
+        detail += `• 路径：${cosKeysFound.join('、')}`;
+      }
+    } else if (cosSkipped) {
+      detail += '• COS 存储桶：未配置环境变量，未删文件';
+    } else if (mediaHints.length > 0) {
+      detail += '• COS 存储桶：未识别到可删路径\n';
+      detail += `• 库内链接：${mediaHints.map((h) => h.field).join('、')}\n`;
+      detail += '请重新部署 adminUpdateVideoGo，或在控制台核对 videoFileID 格式';
+    } else {
+      detail += '• COS 存储桶：该记录无视频/封面链接';
+    }
+    wx.showModal({
+      title: '删除完成',
+      content: detail,
+      showCancel: false,
+      confirmText: '知道了'
+    });
+  },
+
   deleteCase(e) {
      const id = e.currentTarget.dataset.id;
      this._showCustomModal({ title:'确认删除', content:'不可恢复', confirmColor:'#FF3B30', success:(res)=>{
-       if(res.confirm) { db.collection('video_go').doc(id).remove().then(()=>{ this.fetchCloudData(); this._showCustomToast({title:'已删除'}); }); }
+       if (!res.confirm) return;
+       this._callAdminVideoGo({ action: 'remove', docId: id })
+         .then((result) => {
+           this.fetchCloudData();
+           this._showDeleteCaseResult(result);
+         })
+         .catch((err) => {
+           const msg = String((err && err.message) || (err && err.errMsg) || '');
+           const notDeployed = msg.indexOf('FUNCTION_NOT_FOUND') >= 0
+             || msg.indexOf('FunctionName') >= 0
+             || msg.indexOf('-501000') >= 0;
+           if (!notDeployed) {
+             console.error('[case.js] 删除失败:', err);
+             if (dbPermissionHint.isPermissionDenied(err)) {
+               dbPermissionHint.toastPermissionDenied('video_go');
+               return;
+             }
+             this._showCustomToast(msg || '删除失败', 'none');
+             return;
+           }
+           db.collection('video_go').doc(id).remove()
+             .then(() => {
+               this.fetchCloudData();
+               this._showCustomToast('已删除');
+             })
+             .catch((dbErr) => {
+               console.error('[case.js] 删除失败:', dbErr);
+               if (dbPermissionHint.isPermissionDenied(dbErr)) {
+                 dbPermissionHint.toastPermissionDenied('video_go');
+                 return;
+               }
+               this._showCustomToast('删除失败', 'none');
+             });
+         });
      }});
   },
   
@@ -2867,15 +3220,30 @@ Page({
     }});
   },
   chooseAdminCover() {
-    wx.chooseMedia({ count:1, mediaType:['image'], sourceType:['album'], success:(res)=>{ this.setData({ adminThumbPath: res.tempFiles[0].tempFilePath }); }});
+    shopImagePrepare.chooseAndPrepare('caseThumb', { sourceType: ['album'] }).then((path) => {
+      this.setData({ adminThumbPath: path });
+    }).catch((err) => {
+      if (!shopImagePrepare.isCropCancelled(err)) console.error('[case] chooseAdminCover', err);
+    });
   },
 
   // 基础交互
   handleTitleTap() {
     // 废弃旧逻辑，不再使用
   },
+  /** 点左上角 ×：先摘 cover-view 再卸播放器，避免水印/关闭钮「慢一步」 */
   closeVideoPlayer() {
-    this.closeVideoPlayerAnimated();
+    if (this._caseFullscreenExitPending) return;
+    this._caseFullscreenExitPending = true;
+    this._forceStopCaseBgm();
+    this._stopCaseFullscreenVideoPlayback();
+    this.setData({ caseFullscreenCoverHidden: true }, () => {
+      wx.nextTick(() => {
+        this._resetCaseFullscreenPlayerState();
+        this._caseFullscreenExitPending = false;
+        wx.nextTick(() => this._syncCaseMainScrollLayout());
+      });
+    });
   },
 
   _stopCaseFullscreenVideoPlayback() {
@@ -2888,6 +3256,7 @@ Page({
   },
 
   _resetCaseFullscreenPlayerState() {
+    this._forceStopCaseBgm();
     this._stopCaseFullscreenVideoPlayback();
     this._caseFullscreenSeeking = false;
     this._caseFullscreenBarTouchActive = false;
@@ -2900,6 +3269,8 @@ Page({
     this._fsGestureMode = null;
     this.setData({
       showVideoPlayer: false,
+      caseFullscreenExiting: false,
+      caseFullscreenCoverHidden: false,
       currentVideo: null,
       caseFullscreenDuration: 0,
       caseFullscreenProgressPercent: 0,
@@ -2914,19 +3285,30 @@ Page({
   closeVideoPlayerAnimated() {
     if (this._caseFullscreenExitPending) return;
     this._caseFullscreenExitPending = true;
+    this._forceStopCaseBgm();
     this._stopCaseFullscreenVideoPlayback();
     wx.nextTick(() => this._stopCaseFullscreenVideoPlayback());
     const win = wx.getWindowInfo();
     const h = win.windowHeight || 667;
     const from = Number(this.data.caseFullscreenTy) || 0;
-    this.setData({ caseFullscreenNoTrans: false, caseFullscreenTy: from });
+    // 顶栏/Tab 保持挂载，退场开始即在底层渲染，避免动画结束后整页「重新长出来」
+    this.setData({
+      caseFullscreenExiting: true,
+      caseFullscreenNoTrans: false,
+      caseFullscreenTy: from
+    });
     wx.nextTick(() => {
       this.setData({ caseFullscreenTy: h });
       if (this._caseFullscreenExitTimer) clearTimeout(this._caseFullscreenExitTimer);
       this._caseFullscreenExitTimer = setTimeout(() => {
         this._caseFullscreenExitTimer = null;
-        this._caseFullscreenExitPending = false;
-        this._resetCaseFullscreenPlayerState();
+        this.setData({ caseFullscreenCoverHidden: true }, () => {
+          wx.nextTick(() => {
+            this._resetCaseFullscreenPlayerState();
+            this._caseFullscreenExitPending = false;
+            wx.nextTick(() => this._syncCaseMainScrollLayout());
+          });
+        });
       }, 420);
     });
   },
@@ -2945,7 +3327,10 @@ Page({
       caseFullscreenDuration: dur,
       caseFullscreenDurationStr: this._formatCaseFullscreenClock(dur)
     });
-    wx.nextTick(() => this._refreshCaseFullscreenTrackRect());
+    wx.nextTick(() => {
+      this._refreshCaseFullscreenTrackRect();
+      this._syncCaseBgmPlayback();
+    });
   },
 
   /** 缓存进度条轨道矩形；避免首次触摸时 query 尚未返回只能用整屏宽度估算导致拖拽乱跳 */
@@ -2986,19 +3371,19 @@ Page({
     const paused = !!this.data.caseFullscreenPaused;
     if (paused) {
       ctx.play();
-      this.setData({ caseFullscreenPaused: false });
+      this.setData({ caseFullscreenPaused: false }, () => this._syncCaseBgmPlayback());
     } else {
       ctx.pause();
-      this.setData({ caseFullscreenPaused: true });
+      this.setData({ caseFullscreenPaused: true }, () => this._pauseCaseBgm());
     }
   },
 
   onCaseFullscreenPlayEvt() {
-    this.setData({ caseFullscreenPaused: false });
+    this.setData({ caseFullscreenPaused: false }, () => this._syncCaseBgmPlayback());
   },
 
   onCaseFullscreenPauseEvt() {
-    this.setData({ caseFullscreenPaused: true });
+    this.setData({ caseFullscreenPaused: true }, () => this._pauseCaseBgm());
   },
 
   onCaseFullscreenProgressTouchStart(e) {
@@ -3245,7 +3630,24 @@ Page({
     this.setData({ isVideoPlaying: false });
   },
   
-  goBack() { wx.navigateBack(); },
+  goBack() {
+    if (this.data.showVideoPlayer) {
+      this.closeVideoPlayerAnimated();
+      return;
+    }
+    const pageBack = require('../../../utils/pageBack.js');
+    pageBack.popOrHub();
+  },
+
+  onBackPress() {
+    if (this.data.showVideoPlayer) {
+      this.closeVideoPlayerAnimated();
+      return true;
+    }
+    this.goBack();
+    return true;
+  },
+
   closeAdminForm() { 
     this._closeWithAnimation('showAdminForm', 'adminFormClosing', (patch) => {
       patch.adminVideoPath = null;
@@ -3295,6 +3697,13 @@ Page({
     if (this.data.showSuccess) this.closeSuccess();
     if (this.data.showUploadOptions) this.closeUploadOptions();
   },
+  _resolveVehicleName(e) {
+    if (e && e.detail && e.detail.value && Object.prototype.hasOwnProperty.call(e.detail.value, 'vehicleName')) {
+      return String(e.detail.value.vehicleName || '').trim();
+    }
+    return String(this.data.vehicleName || '').trim();
+  },
+
   onInputVehicle(e) { this.setData({ vehicleName: e.detail.value }); },
   
   // 🔴 调试：测试 picker 点击

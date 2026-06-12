@@ -1,4 +1,5 @@
 <!-- pages/shop/shop.wxml -->
+<import src="../../../templates/checkout-coupon-sheet.wxml"/>
 <wxs module="utils" src="./shop.wxs"></wxs>
 <view class="container {{hubEmbedInProducts ? 'container--hub-embed' : ''}} {{hubPageEnterAnim ? 'hub-page-enter' : ''}}">
 
@@ -51,32 +52,40 @@
 <!-- ================= 2. 主页面 ================= -->
 <scroll-view
   scroll-y
+  enhanced="{{true}}"
+  show-scrollbar="{{false}}"
+  enable-passive="{{true}}"
   class="main-scroll {{hubEmbedInProducts ? 'main-scroll--hub-embed' : ''}}"
   style="{{hubEmbedInProducts && embedScrollHeight > 0 ? 'height:' + embedScrollHeight + 'px' : ''}}"
+  bindscroll="onMainScroll"
 >
   <view class="shop-hub-loading" wx:if="{{hubEmbedInProducts && !isAdmin && (!categorySections || categorySections.length === 0) && (!seriesList || seriesList.length === 0)}}">
     <text class="shop-hub-loading-text">正在加载商品…</text>
   </view>
 
   <!-- 顶部轮播 (Hero)：视频固定 16:9；图片按真实比例（含 1:1），高度由 bindload + heroSwiperHeightPx 驱动 -->
-  <view class="hero-swiper-box" wx:if="{{isAdmin || topMediaList.length > 0}}">
-    <swiper wx:if="{{topMediaList.length > 0}}" class="hero-swiper" style="height: {{heroSwiperHeightPx}}px" indicator-dots="{{topMediaList.length > 1}}" circular="{{topMediaList.length > 1}}" current="{{heroCurrent}}" autoplay="{{(!isAdmin) && (!heroAutoCarouselEnabled)}}" bindchange="onSwiperChange">
+  <view class="shop-hero-wrap {{hubEmbedInProducts ? 'shop-hero-wrap--embed' : ''}}" wx:if="{{isAdmin || topMediaList.length > 0}}">
+  <view class="hero-swiper-box">
+    <swiper wx:if="{{topMediaList.length > 0}}" class="hero-swiper" style="height: {{heroSwiperHeightPx}}px" indicator-dots="{{topMediaList.length > 1}}" circular="{{topMediaList.length > 1}}" current="{{heroCurrent}}" autoplay="{{false}}" bindchange="onSwiperChange">
       <block wx:for="{{topMediaList}}" wx:key="url">
         <swiper-item class="hero-swiper-item">
           <view wx:if="{{item.type === 'video'}}" class="hero-video-outer">
             <view class="hero-video-wrapper">
-              <video 
-                src="{{item.renderUrl || item.url}}" 
+              <video
+                wx:if="{{index === heroCurrent && heroVideoMountEnabled && (item.autoplay === true || heroAutoCarouselEnabled)}}"
+                src="{{item.renderUrl || item.url}}"
                 poster="{{item.poster || ''}}"
-                class="hero-media hero-video-el" 
+                class="hero-media hero-video-el"
                 id="hero-video-{{index}}"
-                object-fit="contain"
+                style="width: 100%; height: {{heroSwiperHeightPx}}px;"
+                object-fit="{{hubEmbedInProducts ? 'cover' : 'contain'}}"
                 autoplay="{{item.autoplay === true}}"
-                preload="{{index === heroCurrent ? 'auto' : 'metadata'}}"
-                muted 
+                preload="auto"
+                muted
                 loop="{{!heroAutoCarouselEnabled}}"
-                show-play-btn="{{false}}" 
+                show-play-btn="{{false}}"
                 show-center-play-btn="{{false}}"
+                show-fullscreen-btn="{{false}}"
                 controls="{{false}}"
                 bindplay="onVideoPlay"
                 bindpause="onVideoPause"
@@ -85,47 +94,56 @@
                 data-index="{{index}}"
                 data-location="hero"
               ></video>
+              <image
+                wx:else
+                class="hero-media hero-video-poster"
+                src="{{item.poster || item.renderThumb || item.renderUrl || item.url}}"
+                mode="aspectFill"
+                lazy-load="{{true}}"
+              />
               <view class="video-play-overlay" bindtap="playVideo" data-index="{{index}}" data-url="{{item.renderUrl || item.url}}" data-location="hero">
-                <view class="play-icon" wx:if="{{!heroVideoPlaying[index]}}">
+                <view class="play-icon" wx:if="{{index !== heroCurrent || !heroVideoPlaying[index]}}">
                   <view class="play-triangle"></view>
                 </view>
               </view>
             </view>
           </view>
           <block wx:else>
-            <view wx:if="{{item.dualRender}}" class="hero-image-stack">
+            <view class="hero-image-frame">
+              <view wx:if="{{item.dualRender}}" class="hero-image-stack">
+                <image
+                  src="{{item.renderThumb}}"
+                  class="hero-img-base {{heroHdLoaded[index] ? 'is-hidden' : ''}}"
+                  mode="widthFix"
+                  lazy-load="{{index !== 0}}"
+                  bindload="onHeroSlideImageLoad"
+                  binderror="onHeroImageError"
+                  data-index="{{index}}"
+                  data-src="{{item.renderThumb}}"
+                />
+                <image
+                  src="{{item.renderFull}}"
+                  class="hero-img-overlay hero-img-overlay-full {{heroHdLoaded[index] ? 'is-visible' : ''}}"
+                  mode="widthFix"
+                  lazy-load="{{index !== 0}}"
+                  bindload="onHeroDualFullLoad"
+                  binderror="onHeroImageError"
+                  data-index="{{index}}"
+                  data-src="{{item.renderFull}}"
+                />
+              </view>
               <image
-                src="{{item.renderThumb}}"
-                class="hero-img-base {{heroHdLoaded[index] ? 'is-hidden' : ''}}"
+                wx:else
+                src="{{item.renderFull || item.renderUrl || item.url}}"
+                class="hero-img-single"
                 mode="widthFix"
                 lazy-load="{{index !== 0}}"
                 bindload="onHeroSlideImageLoad"
                 binderror="onHeroImageError"
                 data-index="{{index}}"
-                data-src="{{item.renderThumb}}"
-              />
-              <image
-                src="{{item.renderFull}}"
-                class="hero-img-overlay hero-img-overlay-full {{heroHdLoaded[index] ? 'is-visible' : ''}}"
-                mode="aspectFit"
-                lazy-load="{{index !== 0}}"
-                bindload="onHeroDualFullLoad"
-                binderror="onHeroImageError"
-                data-index="{{index}}"
-                data-src="{{item.renderFull}}"
+                data-src="{{item.renderFull || item.renderUrl || item.url}}"
               />
             </view>
-            <image
-              wx:else
-              src="{{item.renderFull || item.renderUrl || item.url}}"
-              class="hero-img-single"
-              mode="widthFix"
-              lazy-load="{{index !== 0}}"
-              bindload="onHeroSlideImageLoad"
-              binderror="onHeroImageError"
-              data-index="{{index}}"
-              data-src="{{item.renderFull || item.renderUrl || item.url}}"
-            />
           </block>
           
           <view wx:if="{{isAdmin && item.type === 'video'}}" class="admin-autoplay-media {{item.autoplay ? 'on' : ''}}" catchtap="adminToggleTopVideoAutoplay" data-index="{{index}}">
@@ -148,11 +166,7 @@
     <view class="media-drag-list" wx:if="{{isAdmin && isEditingMedia}}">
       <view class="drag-tip">长按拖动调整顺序，置顶项会显示在最前</view>
       <block wx:for="{{sortedTopMediaList}}" wx:key="url" wx:for-index="dragIndex">
-        <view class="drag-item" 
-              data-index="{{item.originalIndex}}"
-              bindtouchstart="onDragStart"
-              bindtouchmove="onDragMove"
-              bindtouchend="onDragEnd">
+        <view class="drag-item" data-index="{{dragIndex}}">
           <view class="drag-item-preview">
             <image wx:if="{{item.type === 'image'}}" src="{{item.renderUrl || item.url}}" mode="aspectFit" class="drag-preview-img" lazy-load="true"></image>
             <view wx:else class="drag-preview-video">
@@ -162,11 +176,13 @@
           <view class="drag-item-info">
             <text class="drag-item-type">{{item.type === 'image' ? '图片' : '视频'}}</text>
             <view class="drag-item-badges">
-              <text wx:if="{{item.isPinned}}" class="badge pin-badge">置顶</text>
               <text wx:if="{{item.autoplay && item.type === 'video'}}" class="badge autoplay-badge">自动播放</text>
             </view>
           </view>
-          <view class="drag-handle">☰</view>
+          <view class="drag-sort-btns">
+            <view class="drag-sort-btn" catchtap="adminMoveTopMediaInSort" data-index="{{dragIndex}}" data-dir="up">↑</view>
+            <view class="drag-sort-btn" catchtap="adminMoveTopMediaInSort" data-index="{{dragIndex}}" data-dir="down">↓</view>
+          </view>
         </view>
       </block>
       <view class="drag-actions">
@@ -177,13 +193,14 @@
     
     <!-- Admin: 左右分开的上传按钮 -->
     <view class="admin-upload-row" wx:if="{{isAdmin && !isEditingMedia}}">
-       <view class="up-btn" bindtap="adminAddImage">📷 上传图片</view>
-       <view class="up-btn" bindtap="adminAddVideo">🎥 上传视频</view>
+       <view class="up-btn" bindtap="adminAddTopMedia">📷 添加图片/视频</view>
+       <view class="up-btn" bindtap="adminEnterMediaSort">↕ 调整顺序</view>
        <view class="up-btn toggle {{heroAutoCarouselEnabled ? 'on' : ''}}" bindtap="adminToggleHeroAutoCarousel">
-         {{heroAutoCarouselEnabled ? '🔁 自动轮播开' : '🔁 自动轮播关'}}
+         {{heroAutoCarouselEnabled ? '🔁 自动切卡开' : '🔁 自动切卡关'}}
        </view>
     </view>
-    <text class="admin-upload-row-hint" wx:if="{{isAdmin && !isEditingMedia}}">顶部图：原比例，宽≤1600，自动压缩</text>
+    <text class="admin-upload-row-hint" wx:if="{{isAdmin && !isEditingMedia}}">可多选上传（最多9张）· 视频点「自动播放」· 自动切卡控制轮播</text>
+  </view>
   </view>
 
   <!-- ================= 分类区块 (Apple Store 级) ================= -->
@@ -203,26 +220,25 @@
           <swiper
             class="shop-series-swiper"
             current="{{section.current}}"
-            previous-margin="36rpx"
-            next-margin="108rpx"
-            duration="{{400}}"
-            easing-function="easeOutCubic"
+            previous-margin="48rpx"
+            next-margin="148rpx"
+            duration="{{200}}"
+            easing-function="easeOut"
             skip-hidden-item-layout="{{true}}"
             indicator-dots="{{false}}"
-            bindchange="onSectionSwiperChange"
-            bindanimationfinish="onSectionSwiperAnimationFinish"
+            bindchange="onSectionSwiperAnimationFinish"
             data-cat-index="{{catIndex}}"
           >
             <swiper-item wx:for="{{section.items}}" wx:for-item="entry" wx:for-index="slideIndex" wx:key="slideKey" class="shop-series-swiper-item">
               <view class="shop-hero-card" bindtap="handleProductClick" data-index="{{entry.index}}">
-                <view class="shop-hero-card-inner {{section.liveCurrent === slideIndex ? 'is-active' : 'is-inactive'}}">
+                <view class="shop-hero-card-inner {{section.current === slideIndex ? 'is-active' : 'is-inactive'}}">
                   <view class="shop-hero-cover">
                     <image wx:if="{{entry.series.coverDisplay || entry.series.cover}}" class="shop-hero-cover-img" src="{{entry.series.coverDisplay || entry.series.cover}}" mode="aspectFill" lazy-load="true" binderror="onCoverImageError" data-index="{{entry.index}}" data-kind="high" />
                     <view wx:elif="{{isAdmin}}" class="admin-upload-hint">
                       <text class="admin-upload-hint-ratio">4:3</text>
                       <text class="admin-upload-hint-desc">列表封面</text>
-                      <text class="admin-upload-hint-sub">建议 1200×900</text>
-                      <text class="admin-upload-hint-sub muted">点击 📷 · 自动压缩</text>
+                      <text class="admin-upload-hint-sub">原图上传 · 仅裁 4:3</text>
+                      <text class="admin-upload-hint-sub muted">点击 📷 换封面</text>
                     </view>
                     <view wx:if="{{isAdmin}}" class="sort-order-badge" catchtap="adminEditSortOrder" data-index="{{entry.index}}">
                       <text>{{entry.series.sortOrder}}</text>
@@ -245,7 +261,7 @@
             </swiper-item>
             <swiper-item wx:if="{{isAdmin}}" class="shop-series-swiper-item">
               <view class="shop-hero-card">
-                <view class="shop-hero-add-inner {{section.liveCurrent === section.items.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddSeries" data-category="{{section.name}}">
+                <view class="shop-hero-add-inner {{section.current === section.items.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddSeries" data-category="{{section.name}}">
                   <text class="shop-hero-add-icon">+</text>
                   <text class="shop-hero-add-label">添加产品系列</text>
                 </view>
@@ -258,19 +274,18 @@
           <swiper
             class="shop-series-swiper shop-series-swiper--acc"
             current="{{section.current}}"
-            previous-margin="36rpx"
-            next-margin="108rpx"
-            duration="{{400}}"
-            easing-function="easeOutCubic"
+            previous-margin="48rpx"
+            next-margin="148rpx"
+            duration="{{200}}"
+            easing-function="easeOut"
             skip-hidden-item-layout="{{true}}"
             indicator-dots="{{false}}"
-            bindchange="onSectionSwiperChange"
-            bindanimationfinish="onSectionSwiperAnimationFinish"
+            bindchange="onSectionSwiperAnimationFinish"
             data-cat-index="{{catIndex}}"
           >
             <swiper-item wx:for="{{section.accSlots}}" wx:for-item="slot" wx:for-index="slideIndex" wx:key="slideKey" class="shop-series-swiper-item">
               <view class="shop-hero-card" bindtap="{{slot.acc ? 'openAccessoryDetailFromRow' : ''}}" data-index="{{slot.index}}">
-                <view class="shop-hero-card-inner shop-hero-card-inner--acc {{section.liveCurrent === slideIndex ? 'is-active' : 'is-inactive'}}">
+                <view class="shop-hero-card-inner shop-hero-card-inner--acc {{section.current === slideIndex ? 'is-active' : 'is-inactive'}}">
                   <block wx:if="{{slot.acc}}">
                   <view class="shop-hero-cover shop-hero-cover--acc">
                     <view wx:if="{{isAdmin}}" class="acc-slot-num-badge acc-slot-num-badge--cover">{{slot.slotNum}}</view>
@@ -311,7 +326,7 @@
             </swiper-item>
             <swiper-item wx:if="{{isAdmin}}" class="shop-series-swiper-item">
               <view class="shop-hero-card">
-                <view class="shop-hero-add-inner {{section.liveCurrent === section.accSlots.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddAcc" data-category="{{section.name}}">
+                <view class="shop-hero-add-inner {{section.current === section.accSlots.length ? 'is-active' : 'is-inactive'}}" bindtap="adminAddAcc" data-category="{{section.name}}">
                   <text class="shop-hero-add-icon">+</text>
                   <text class="shop-hero-add-label">添加配件</text>
                 </view>
@@ -324,7 +339,7 @@
             wx:for="{{section.dotIndices}}"
             wx:key="*this"
             wx:for-item="dotIdx"
-            class="shop-series-dot {{section.liveCurrent === dotIdx ? 'is-on' : ''}}"
+            class="shop-series-dot {{section.current === dotIdx ? 'is-on' : ''}}"
           ></view>
         </view>
       </view>
@@ -335,7 +350,7 @@
     </view>
   </view>
 
-  <view style="height: 48rpx;"></view>
+  <view class="shop-scroll-spacer {{hubEmbedInProducts ? 'shop-scroll-spacer--hub' : ''}}"></view>
 </scroll-view>
 
 <!-- 主列表悬浮购物车：纯路径 SVG + 篮内 MT 文字叠层（小程序对 SVG 内 text 常不渲染，故用叠层） -->
@@ -529,8 +544,8 @@
                    <view wx:if="{{isAdmin}}" class="admin-add-icon" catchtap="adminUploadOptionImg" data-oidx="{{index}}">
                      <image wx:if="{{item.img}}" class="admin-opt-thumb-img" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
                      <view wx:else class="admin-upload-hint admin-upload-hint--inline">
-                       <text class="admin-upload-hint-ratio">1:1</text>
-                       <text class="admin-upload-hint-sub">800×800</text>
+                       <text class="admin-upload-hint-ratio">原比例</text>
+                       <text class="admin-upload-hint-sub">宽≤800</text>
                      </view>
                    </view>
                    
@@ -558,8 +573,8 @@
             <view class="acc-thumb-box">
               <image wx:if="{{item.imgDisplay || item.img}}" class="acc-thumb" src="{{item.imgDisplay || item.img}}" mode="aspectFit" lazy-load="true" />
               <view wx:elif="{{isAdmin}}" class="admin-upload-hint admin-upload-hint--sm">
-                <text class="admin-upload-hint-ratio">1:1</text>
-                <text class="admin-upload-hint-sub">600×600</text>
+                <text class="admin-upload-hint-ratio">原比例</text>
+                <text class="admin-upload-hint-sub">方框内完整显示</text>
               </view>
             </view>
             <view wx:if="{{isAdmin}}" class="admin-float-thumb" catchtap="adminUploadAccThumb" data-index="{{item.listIndex}}">📷</view>
@@ -663,7 +678,11 @@
 </view>
 
 <!-- ================= 5. 配件详情弹窗 ================= -->
-<view class="full-modal acc-detail-modal {{showAccDetail ? 'active' : ''}} {{accCheckoutActive && showOrderModal ? 'acc-detail-parked' : ''}}" hidden="{{accCheckoutActive && showOrderModal}}" style="z-index: 300;">
+<view
+  class="full-modal acc-detail-modal {{showAccDetail && !accDetailClosing ? 'active' : ''}} {{accCheckoutActive && (showOrderModal || orderSheetClosing) ? 'acc-detail-parked acc-detail-nav-suppressed' : ''}}"
+  wx:if="{{showAccDetail || accDetailClosing}}"
+  style="z-index: 300;"
+>
   <view class="modal-nav acc-detail-nav modal-nav--safe-top" style="padding-top: {{statusBarHeight}}px;">
      <view class="nav-close" catchtap="onAccDetailNavClose">✕</view>
      <view class="modal-title">配件详情</view>
@@ -704,9 +723,9 @@
         <view wx:else class="acc-hero-placeholder">
           <view class="acc-hero-placeholder-icon">📷</view>
           <block wx:if="{{isAdmin}}">
-            <text class="admin-upload-hint-ratio acc-hero-ratio-tag">4:3</text>
+            <text class="admin-upload-hint-ratio acc-hero-ratio-tag">原比例</text>
             <text class="acc-hero-placeholder-text">配件详情主图</text>
-            <text class="acc-hero-placeholder-sub">建议 1200×900 · 点击下方「添加图片」</text>
+            <text class="acc-hero-placeholder-sub">轮播内完整显示 · 点击下方「添加图片」</text>
             <text class="acc-hero-placeholder-sub muted">选图后自动压缩体积</text>
           </block>
           <text wx:else class="acc-hero-placeholder-text">暂无图片</text>
@@ -754,13 +773,13 @@
      </view>
   </scroll-view>
   
-  <view class="modal-footer detail-modal-footer acc-detail-footer visible is-show" wx:if="{{showAccDetail && accDetailShowPurchaseFooter}}">
+  <view class="modal-footer detail-modal-footer acc-detail-footer visible is-show" wx:if="{{showAccDetail && !accDetailClosing && accDetailShowPurchaseFooter}}">
     <view class="footer-btn-group">
-      <view class="btn-cart" bindtap="addAccToCartFromDetailPurchase">加入购物车</view>
-      <view class="btn-buy" bindtap="buyAccFromDetailPurchase">立即购买</view>
+      <view class="btn-cart" catchtap="addAccToCartFromDetailPurchase">加入购物车</view>
+      <view class="btn-buy" catchtap="buyAccFromDetailPurchase">立即购买</view>
     </view>
   </view>
-  <view class="modal-footer acc-detail-footer visible is-show" wx:elif="{{showAccDetail}}">
+  <view class="modal-footer acc-detail-footer visible is-show" wx:elif="{{showAccDetail && !accDetailClosing}}">
      <view></view>
      <view class="btn-black full" bindtap="addAccToCartFromDetail">加入购物袋</view>
   </view>
@@ -833,28 +852,51 @@
         <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
           <view class="ship-name">中通快递</view>
           <view class="ship-price">
-            <block wx:if="{{checkoutAccessoryOnly}}">
+            <block wx:if="{{checkoutFreeShipping}}">包邮</block>
+            <block wx:else>
               {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
-              <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+              <text style="font-size:20rpx; color:#999; display:block;">(省内12/省外15)</text>
             </block>
-            <block wx:else>包邮</block>
           </view>
         </view>
         <!-- 顺丰选项 -->
         <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
           <view class="ship-name">顺丰速运</view>
           <view class="ship-price">
-             <!-- 如果没填地址或解析不到省份，显示待计算；否则显示金额 -->
-             {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
-             <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+            <block wx:if="{{checkoutFreeShipping}}">包邮</block>
+            <block wx:else>
+              {{!detailAddress || shippingFee == 0 ? '待计算' : '¥'+shippingFee}}
+              <text style="font-size:20rpx; color:#999; display:block;">(省内13/省外22)</text>
+            </block>
           </view>
         </view>
       </view>
 
-      <!-- 总价显示区 -->
-      <view class="final-total-row">
-        <text class="ft-label">共 {{cart.length}} 件，总计</text>
-        <text class="ft-price">¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+      <text class="coupon-admin-banner" wx:if="{{isAdmin}}">管理员测付 ¥0.01，下单不抵扣；可预览优惠券</text>
+      <template is="checkoutCouponEntry" data="{{checkoutCoupons: checkoutCoupons, couponDiscountYuan: couponDiscountYuan, isAdmin: isAdmin}}"/>
+      <text class="coupon-inline-hint" wx:if="{{couponHint}}">{{couponHint}}</text>
+
+      <view class="price-breakdown-card">
+        <view class="pb-row">
+          <text class="pb-label">商品小计</text>
+          <text class="pb-val">¥{{cartTotalPrice}}</text>
+        </view>
+        <view class="pb-row" wx:if="{{shippingFee > 0}}">
+          <text class="pb-label">运费</text>
+          <text class="pb-val">¥{{shippingFee}}</text>
+        </view>
+        <view class="pb-row pb-row--discount" wx:if="{{couponDiscountYuan > 0 && !isAdmin}}">
+          <text class="pb-label">优惠券抵扣</text>
+          <text class="pb-val pb-val--minus">-¥{{couponDiscountYuan}}</text>
+        </view>
+        <view class="pb-divider"></view>
+        <view class="pb-row pb-row--total">
+          <text class="pb-label">共 {{cart.length}} 件，应付</text>
+          <view class="pb-total-wrap">
+            <text class="pb-origin" wx:if="{{couponDiscountYuan > 0 && !isAdmin}}">¥{{preCouponTotalYuan}}</text>
+            <text class="pb-price">¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+          </view>
+        </view>
       </view>
 
       <!-- 收货信息 -->
@@ -926,13 +968,22 @@
   </scroll-view>
 
   <!-- 底部单按钮 (立即支付) -->
-  <view class="checkout-footer-single">
+  <view class="checkout-footer-single checkout-footer-pay">
+    <view class="pay-footer-hint" wx:if="{{couponDiscountYuan > 0 && !isAdmin}}">
+      <text class="pay-footer-save">已优惠 ¥{{couponDiscountYuan}}</text>
+    </view>
     <view class="btn-black full {{!agreedToDisclaimer ? 'grayed' : ''}}" catchtap="submitOrder" data-agreed="{{agreedToDisclaimer}}">
-      <text class="btn-main">立即支付 ¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+      <view class="btn-pay-inner">
+        <text class="btn-main">立即支付</text>
+        <text class="btn-pay-amount">¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+      </view>
     </view>
   </view>
+
 </view>
 </view>
+
+<template is="checkoutCouponSheet" data="{{couponSheetOpen: couponSheetOpen, couponSheetClosing: couponSheetClosing, couponSheetAnimIn: couponSheetAnimIn, checkoutCoupons: checkoutCoupons, selectedCouponIds: selectedCouponIds, couponDiscountYuan: couponDiscountYuan, preCouponTotalYuan: preCouponTotalYuan, checkoutCouponsLoading: checkoutCouponsLoading, isAdmin: isAdmin}}"/>
 
 <!-- ================= 8. 自定义编辑弹窗 ================= -->
 <view class="custom-modal-mask {{customModalClosing ? 'closing' : ''}}" wx:if="{{showCustomEditModal}}" catchtouchmove="noop" bindtap="closeCustomEditModal">
@@ -975,7 +1026,7 @@
 </view>
 
 <!-- ================= 10. 智能粘贴输入弹窗 ================= -->
-<view class="smart-paste-mask {{smartPasteClosing ? 'closing' : ''}}" wx:if="{{showSmartPasteModal}}" style="z-index: 99999;" catchtouchmove="noop" catchtap="noop">
+<view class="smart-paste-mask smart-paste-mask--above-sheet {{smartPasteClosing ? 'closing' : ''}}" wx:if="{{showSmartPasteModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="smart-paste-box" catchtouchmove="noop" catchtap="noop">
     <view class="sp-title">智能粘贴</view>
     <view class="sp-desc">请将姓名、电话、地址粘贴到下方框中</view>
@@ -1011,7 +1062,7 @@
 </view>
 
 <!-- ================= 11. 自定义全屏视频播放器 ================= -->
-<view class="video-modal-mask" wx:if="{{showVideoPlayer}}" style="z-index: 99999;" bindtap="toggleVideoPlayPause" catchtouchmove="noop">
+<view class="video-modal-mask video-modal-mask--top" wx:if="{{showVideoPlayer}}" bindtap="toggleVideoPlayPause" catchtouchmove="noop">
   <view class="video-close-btn" catchtap="closeVideoPlayer">✕</view>
   <video 
     src="{{currentVideoUrl}}" 

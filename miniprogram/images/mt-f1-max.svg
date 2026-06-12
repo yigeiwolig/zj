@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" width="200" height="140">
+  <g transform="translate(100, 70) scale(1.1) translate(-100, -75)">
+    <rect x="28" y="33" width="150" height="90" rx="12" fill="#e5e5ea" />
+    <rect x="25" y="30" width="150" height="90" rx="12" fill="#1C1C1E" />
+    <rect x="45" y="45" width="35" height="8" rx="4" fill="#FFFFFF" />
+    <rect x="120" y="45" width="35" height="8" rx="4" fill="#FFFFFF" />
+    <text x="100" y="90" font-family="Arial, sans-serif" font-weight="900" font-size="24" text-anchor="middle" dominant-baseline="middle" fill="#FFFFFF" letter-spacing="3">MT</text>
+  </g>
+</svg>

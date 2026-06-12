@@ -4,6 +4,12 @@ const https = require('https')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+function internalCallData(data) {
+  const secret = process.env.INTERNAL_CALL_SECRET
+  if (!secret) return data
+  return { ...data, _internalSecret: secret }
+}
+
 async function assertAdmin(db) {
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
@@ -15,13 +21,14 @@ async function assertAdmin(db) {
   throw new Error('FORBIDDEN')
 }
 
-// 🔹 配置信息
-const CONFIG = {
-  // 必须与你 createOrder 里的保持一致
-  mchId: '1103782674', 
-  appId: 'wxf1a81dd77d810edf',
-  // ⚠️ 注意：这里硬编码了 Secret，正式上线建议放在环境变量中
-  appSecret: 'bc6cf6a358e84c3f88c105cf19b70fbd' 
+function getAdminPayConfig() {
+  const mchId = process.env.WX_PAY_MCH_ID
+  const appId = process.env.WX_PAY_APP_ID
+  const appSecret = process.env.WX_APP_SECRET || process.env.WX_PAY_APP_SECRET || ''
+  if (!mchId || !appId) {
+    throw new Error('缺少 WX_PAY_MCH_ID / WX_PAY_APP_ID')
+  }
+  return { mchId, appId, appSecret }
 }
 
 // 📦 微信官方物流编码映射表 (常用快递)
@@ -41,6 +48,10 @@ const EXPRESS_MAP = {
 
 // 🔹 获取 AccessToken
 async function getAccessToken() {
+  const CONFIG = getAdminPayConfig()
+  if (!CONFIG.appSecret) {
+    throw new Error('未配置 WX_APP_SECRET 环境变量')
+  }
   return new Promise((resolve, reject) => {
     const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${CONFIG.appId}&secret=${CONFIG.appSecret}`
     https.get(url, res => {
@@ -87,6 +98,7 @@ function buildItemDesc(order) {
 
 // 🔹 同步发货信息到微信订单中心
 async function syncShippingToOrderCenter(outTradeNo, trackingId, shippingCompany, userOpenId, orderDetail) {
+  const CONFIG = getAdminPayConfig()
   const accessToken = await getAccessToken()
   
   // 1. 自动转换快递公司名称为代码
@@ -245,11 +257,11 @@ exports.main = async (event, context) => {
         try {
           await cloud.callFunction({
             name: 'referral',
-            data: {
+            data: internalCallData({
               action: 'revokeOnOrderInvalid',
               orderId: orderBeforeDelete.orderId,
               orderDocId: id
-            }
+            })
           })
         } catch (referralErr) {
           console.error('[adminUpdateOrder] 推荐券追回失败:', referralErr)
@@ -315,10 +327,18 @@ exports.main = async (event, context) => {
           try {
             await cloud.callFunction({
               name: 'referral',
-              data: { action: 'grantOnOrderPaid', orderId: order.orderId }
+              data: internalCallData({ action: 'grantOnOrderPaid', orderId: order.orderId })
             })
           } catch (referralErr) {
             console.error('[adminUpdateOrder] simulate_pay 推荐奖励:', referralErr)
+          }
+          try {
+            await cloud.callFunction({
+              name: 'referral',
+              data: internalCallData({ action: 'markCouponsUsed', orderId: order.orderId })
+            })
+          } catch (couponErr) {
+            console.error('[adminUpdateOrder] simulate_pay 优惠券核销:', couponErr)
           }
         }
         return { success: true }

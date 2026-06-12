@@ -3,127 +3,100 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+const PAID_STATUSES = ['PAID', 'SHIPPED', 'SIGNED', 'COMPLETED']
+
 /**
- * 写入 shouhouguoqi 集合的云函数
- * 在用户支付配件费用成功后调用
- * 
- * @param {string} repairId - 维修单ID
- * @param {Array} goodsList - 用户购买的配件列表
- * @param {Object} addressData - 用户地址信息 {name, phone, address}
- * @param {string} userNickname - 用户昵称
- * @param {string} _openid - 用户openid（从云函数上下文获取）
+ * 写入 shouhouguoqi：必须在订单已支付且与维修单关联后执行（防未付款刷「已购配件」）
  */
-exports.main = async (event, context) => {
+exports.main = async (event) => {
   const { repairId, goodsList, addressData, userNickname, orderId } = event
-  const _openid = cloud.getWXContext().OPENID
+  const callerOpenid = cloud.getWXContext().OPENID
 
-  console.log('[writeShouhouguoqi] 开始执行', {
-    repairId,
-    _openid,
-    goodsListLength: goodsList?.length,
-    hasAddressData: !!addressData
-  })
-
-  // 参数验证
   if (!repairId) {
-    return {
-      success: false,
-      errMsg: '缺少 repairId 参数'
-    }
+    return { success: false, errMsg: '缺少 repairId 参数' }
   }
 
-  if (!_openid) {
-    return {
-      success: false,
-      errMsg: '无法获取用户 openid'
-    }
+  const outNo = orderId ? String(orderId).trim() : ''
+  if (!outNo) {
+    return { success: false, errMsg: '缺少 orderId，无法校验支付状态' }
   }
 
   try {
-    // 1. 查询维修单信息
-    const repairRes = await db.collection('shouhou_repair').doc(repairId).get()
-    
-    if (!repairRes.data) {
-      return {
-        success: false,
-        errMsg: '未找到对应的维修单'
+    const orderRes = await db.collection('shop_orders').where({ orderId: outNo }).limit(1).get()
+    const order = orderRes.data && orderRes.data[0]
+    if (!order) {
+      return { success: false, errMsg: '订单不存在' }
+    }
+
+    const orderStatus = order.status || order.realStatus || ''
+    if (!PAID_STATUSES.includes(orderStatus)) {
+      return { success: false, errMsg: '订单尚未支付成功，请稍后在订单中心查看' }
+    }
+
+    if (callerOpenid) {
+      if (order._openid && order._openid !== callerOpenid) {
+        return { success: false, errMsg: '无权操作该订单' }
       }
+    }
+
+    const rid = String(repairId).trim()
+    const orderRepairId = order.repairId ? String(order.repairId).trim() : ''
+    if (!orderRepairId || orderRepairId !== rid) {
+      return { success: false, errMsg: '订单与维修单不匹配，请从维修引导重新下单' }
+    }
+
+    const repairRes = await db.collection('shouhou_repair').doc(rid).get()
+    if (!repairRes.data) {
+      return { success: false, errMsg: '未找到对应的维修单' }
     }
 
     const repairData = repairRes.data
+    const repairOwner = repairData._openid || ''
+    if (callerOpenid && repairOwner && repairOwner !== callerOpenid) {
+      return { success: false, errMsg: '无权操作该维修单' }
+    }
 
-    // 2. 更新维修单的 purchasePartsStatus 为 'completed'
-    await db.collection('shouhou_repair').doc(repairId).update({
-      data: {
-        purchasePartsStatus: 'completed'
+    if (repairData.purchasePartsStatus === 'completed') {
+      return {
+        success: true,
+        data: { repairId: rid, skipped: true },
+        errMsg: ''
       }
+    }
+
+    await db.collection('shouhou_repair').doc(rid).update({
+      data: { purchasePartsStatus: 'completed' }
     })
 
-    console.log('[writeShouhouguoqi] 维修单配件购买状态已更新')
-
-    // 3. 准备写入 shouhouguoqi 的数据
     const guoqiData = {
-      _openid: _openid,
-      userNickname: userNickname || '',
-      // 用户的收货地址
+      _openid: callerOpenid || order._openid || repairOwner,
+      userNickname: userNickname || order.userNickname || '',
       userAddress: {
-        name: addressData?.name || '',
-        phone: addressData?.phone || '',
-        address: addressData?.address || ''
+        name: addressData?.name || order.address?.name || '',
+        phone: addressData?.phone || order.address?.phone || '',
+        address: addressData?.address || order.address?.address || ''
       },
-      // 实际的地址（可能是从订单中获取的）
       actualAddress: {
-        name: addressData?.name || '',
-        phone: addressData?.phone || '',
-        address: addressData?.address || ''
+        name: addressData?.name || order.address?.name || '',
+        phone: addressData?.phone || order.address?.phone || '',
+        address: addressData?.address || order.address?.address || ''
       },
-      // 用户实际购买了些什么
-      purchasedItems: goodsList || [],
-      // 本来应该需要买什么
+      purchasedItems: goodsList || order.goodsList || [],
       requiredParts: repairData.purchasePartsList || [],
-      // 是否已经购买
       hasPurchased: true,
-      // 关联的维修单ID
-      repairId: repairId,
-      // 创建时间
+      repairId: rid,
+      orderId: outNo,
       createTime: db.serverDate()
     }
 
-    // 4. 写入 shouhouguoqi 集合
-    const addRes = await db.collection('shouhouguoqi').add({
-      data: guoqiData
-    })
-
-    console.log('[writeShouhouguoqi] 数据已写入 shouhouguoqi 集合', {
-      _id: addRes._id
-    })
-
-    // 5. 服务端补写 shop_orders.repairId（小程序端 update 常被数据库权限拦截，导致管理员端黄卡不显示）
-    const outNo = orderId ? String(orderId).trim() : ''
-    if (outNo && repairId) {
-      try {
-        const up = await db.collection('shop_orders').where({ orderId: outNo }).update({
-          data: { repairId }
-        })
-        console.log('[writeShouhouguoqi] 已补写 shop_orders.repairId', { orderId: outNo, repairId, updated: up })
-      } catch (patchErr) {
-        console.error('[writeShouhouguoqi] 补写 shop_orders.repairId 失败:', patchErr)
-      }
-    }
+    const addRes = await db.collection('shouhouguoqi').add({ data: guoqiData })
 
     return {
       success: true,
-      data: {
-        _id: addRes._id,
-        repairId: repairId
-      }
+      data: { _id: addRes._id, repairId: rid }
     }
-
   } catch (err) {
     console.error('[writeShouhouguoqi] 执行失败:', err)
-    return {
-      success: false,
-      errMsg: err.message || err.toString()
-    }
+    return { success: false, errMsg: err.message || String(err) }
   }
 }

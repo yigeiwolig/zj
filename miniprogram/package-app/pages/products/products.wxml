@@ -6,6 +6,18 @@
     statusBarHeight="{{statusBarHeight}}"
     bind:switch="onHubSegmentSwitch"
   />
+  <view
+    wx:if="{{isAuthorized && hubTabIndex === 0}}"
+    class="hub-admin-entry-bar"
+  >
+    <view
+      class="hub-admin-entry-btn"
+      catchtap="onHubAdminModeToggle"
+      hover-class="hub-admin-entry-btn--pressed"
+    >
+      {{hubShellIsAdmin ? '退出管理员' : '管理员切换'}}
+    </view>
+  </view>
 
   <view
     class="hub-panels-viewport"
@@ -23,21 +35,64 @@
     enhanced
     show-scrollbar="{{false}}"
   >
-    <view class="content-inner">
+    <view class="content-inner hub-home-layout">
 
-      <!-- 产品上新（置顶） -->
+      <!-- 产品上新（有素材时展示） -->
       <view
-        wx:if="{{hubFeatureNew}}"
-        class="card hero-card new-card {{!isAuthorized && hubFeatureNew.pageEnabled === false ? 'card--disabled' : ''}}"
+        wx:if="{{hubFeatureNew && (hubHomeMediaList.length > 0 || hubHomeCoverDisplay || hubFeatureNew.hubCover || isAuthorized)}}"
+        class="card hero-card new-card hub-home-hero {{!isAuthorized && hubFeatureNew.pageEnabled === false ? 'card--disabled' : ''}}"
         hover-class="card-hover card-hover--media"
         bindtap="onHubFeatureTap"
         data-id="{{hubFeatureNew.id}}"
       >
         <view class="new-card-media">
+          <swiper
+            wx:if="{{hubHomeMediaList.length > 0}}"
+            class="new-card-swiper"
+            indicator-dots="{{hubHomeMediaList.length > 1}}"
+            circular="{{hubHomeMediaList.length > 1}}"
+            autoplay="{{hubHomeSwiperAutoplay}}"
+            disable-touch="{{isAuthorized && hubShellIsAdmin}}"
+            interval="2600"
+            duration="280"
+            current="{{hubHomeMediaCurrent}}"
+            bindchange="onHubHomeMediaSwiperChange"
+            catchtouchstart="onHubNewCardTouchStart"
+            catchtouchend="onHubNewCardTouchEnd"
+          >
+            <block wx:for="{{hubHomeMediaList}}" wx:key="url">
+              <swiper-item>
+                <video
+                  wx:if="{{item.type === 'video'}}"
+                  class="new-card-bg"
+                  src="{{item.url}}"
+                  object-fit="cover"
+                  autoplay="{{item.autoplay === true}}"
+                  muted
+                  loop="{{false}}"
+                  show-center-play-btn="{{false}}"
+                  show-play-btn="{{false}}"
+                  enable-progress-gesture="{{false}}"
+                  controls="{{false}}"
+                  bindended="onHubHomeMediaVideoEnded"
+                />
+                <image
+                  wx:else
+                  class="new-card-bg"
+                  src="{{item.url}}"
+                  mode="aspectFill"
+                  lazy-load="{{false}}"
+                  binderror="onHubCoverImageError"
+                />
+              </swiper-item>
+            </block>
+          </swiper>
           <image
-            wx:if="{{hubHomeCoverDisplay || hubFeatureNew.hubCover}}"
+            wx:elif="{{hubHomeCoverDisplay || hubFeatureNew.hubCover}}"
             class="new-card-bg"
             src="{{hubHomeCoverDisplay || hubFeatureNew.hubCover}}"
+            catchtouchstart="onHubNewCardTouchStart"
+            catchtouchend="onHubNewCardTouchEnd"
             mode="aspectFill"
             lazy-load="{{false}}"
             binderror="onHubCoverImageError"
@@ -45,127 +100,145 @@
           <view wx:else class="new-card-bg new-card-bg--placeholder">
             <image class="new-card-placeholder-icon" src="{{hubFeatureNew.iconSvg}}" mode="aspectFit" />
           </view>
+          <view
+            wx:if="{{isAuthorized && hubShellIsAdmin && hubHomeMediaList.length > 0}}"
+            class="new-card-del-btn"
+            catchtap="onHubAdminMediaDeleteCurrent"
+          >✕</view>
         </view>
         <view class="new-card-overlay">
           <view class="new-card-badge">新品</view>
           <text class="new-card-title">{{hubFeatureNew.title}}</text>
         </view>
-        <view
-          wx:if="{{isAuthorized}}"
-          class="new-card-edit"
-          catchtap="onHubAdminCoverTap"
-          data-action="choose"
-          hover-class="opacity-hover"
-        >换封面</view>
+        <view wx:if="{{isAuthorized && hubShellIsAdmin}}" class="new-card-admin-tools" catchtap="noop">
+          <view class="new-card-tool-btn" catchtap="onHubAdminMediaAddTap">添加图片/视频</view>
+          <view class="new-card-tool-btn" catchtap="onHubAdminMediaSortTap">调整顺序</view>
+          <view class="new-card-tool-btn" catchtap="onHubAdminMediaAutoplayTap">{{hubHomeMediaAutoplay ? '自动切卡开' : '自动切卡关'}}</view>
+        </view>
       </view>
 
       <!-- 产品选购 -->
       <view
         wx:if="{{hubHero}}"
-        class="card hero-card shop-card {{!isAuthorized && hubHero.pageEnabled === false ? 'card--disabled' : ''}}"
-        hover-class="card-hover"
-        bindtap="onHubFeatureTap"
+        class="hub-shop-card {{!isAuthorized && hubHero.pageEnabled === false ? 'card--disabled' : ''}}"
+        hover-class="hub-card-hover"
+        catchtap="onHubFeatureTap"
         data-id="{{hubHero.id}}"
       >
-        <view class="shop-card-body">
-          <view class="card-info shop-card-info">
-            <text class="tag-label tag-label--shop">SHOP</text>
-            <text class="shop-card-title">{{hubHero.title}}</text>
+        <view class="hub-shop-card-info">
+          <text class="hub-shop-title">{{hubHero.title}}</text>
+          <text class="hub-shop-desc">选配高端硬件 · 实时库存同步</text>
+        </view>
+        <view class="hub-shop-cta-row">
+          <view class="hub-shop-cta">
+            <text class="hub-shop-cta-text">GO</text>
           </view>
-          <image class="shop-card-icon" src="{{hubHero.iconSvg}}" mode="aspectFit" />
         </view>
       </view>
 
-      <!-- Bento：案例 + 控制中心 / 维修中心 -->
-      <view class="bento-row" wx:if="{{hubFeatureCase || hubFeatureControl || hubBentoRepair}}">
+      <!-- Bento + 胶囊：共用二列网格，左列对齐安装教程，右列对齐 OTA -->
+      <view
+        class="hub-two-col-layout"
+        wx:if="{{hubFeatureCase || hubFeatureControl || hubBentoRepair || hubBentoTutorial || hubBentoOta}}"
+      >
         <view
           wx:if="{{hubFeatureCase}}"
-          class="card bento-item-main {{!isAuthorized && hubFeatureCase.pageEnabled === false ? 'card--disabled' : ''}}"
-          hover-class="card-hover"
-          bindtap="onHubFeatureTap"
-          data-id="{{hubFeatureCase.id}}"
+          class="hub-col-left"
         >
-          <image class="bento-card-icon" src="{{hubFeatureCase.iconSvg}}" mode="aspectFit" />
-          <view class="bento-info bento-info--main">
-            <text class="bento-main-tag">{{hubFeatureCase.hubTag || 'FEATURED'}}</text>
-            <text class="card-title-sm bento-main-title">{{hubFeatureCase.title}}</text>
-          </view>
-        </view>
-        <view class="bento-col" wx:if="{{hubFeatureControl || hubBentoRepair}}">
           <view
-            wx:if="{{hubFeatureControl}}"
-            class="card bento-item-sub {{!isAuthorized && hubFeatureControl.pageEnabled === false ? 'card--disabled' : ''}}"
-            hover-class="card-hover"
+            class="card hub-bento-main {{!isAuthorized && hubFeatureCase.pageEnabled === false ? 'card--disabled' : ''}}"
+            hover-class="hub-card-hover"
             bindtap="onHubFeatureTap"
-            data-id="{{hubFeatureControl.id}}"
+            data-id="{{hubFeatureCase.id}}"
           >
-            <view class="bento-sub-inner">
-              <image class="bento-sub-icon" src="{{hubFeatureControl.iconSvg}}" mode="aspectFit" />
-              <view class="sub-info">
-                <text class="card-title-xs">{{hubFeatureControl.title}}</text>
-              </view>
-            </view>
-          </view>
-          <view
-            wx:if="{{hubBentoRepair}}"
-            class="card bento-item-sub {{!isAuthorized && hubBentoRepair.pageEnabled === false ? 'card--disabled' : ''}}"
-            hover-class="card-hover"
-            bindtap="onHubFeatureTap"
-            data-id="{{hubBentoRepair.id}}"
-          >
-            <view class="bento-sub-inner">
-              <image class="bento-sub-icon" src="{{hubBentoRepair.iconSvg}}" mode="aspectFit" />
-              <view class="sub-info">
-                <text class="card-title-xs">{{hubBentoRepair.title}}</text>
-              </view>
+            <image class="hub-bento-main-icon" src="{{hubFeatureCase.iconSvg}}" mode="aspectFit" />
+            <view class="hub-bento-main-foot">
+              <text class="hub-bento-tag">GALLERY</text>
+              <text class="hub-bento-main-title">{{hubFeatureCase.title}}</text>
             </view>
           </view>
         </view>
-      </view>
-
-      <!-- 安装教程 + OTA -->
-      <view class="bento-row" wx:if="{{hubBentoTutorial || hubBentoOta}}">
+        <view
+          class="hub-col-right"
+          wx:if="{{hubFeatureControl || hubBentoRepair}}"
+        >
+          <view class="hub-bento-col">
+            <view
+              wx:if="{{hubFeatureControl}}"
+              class="card hub-bento-sub {{!isAuthorized && hubFeatureControl.pageEnabled === false ? 'card--disabled' : ''}}"
+              hover-class="hub-card-hover"
+              bindtap="onHubFeatureTap"
+              data-id="{{hubFeatureControl.id}}"
+            >
+              <image class="hub-bento-sub-icon" src="{{hubFeatureControl.iconSvg}}" mode="aspectFit" />
+              <view class="hub-bento-sub-text">
+                <text class="hub-bento-sub-title">{{hubFeatureControl.title}}</text>
+              </view>
+            </view>
+            <view
+              wx:if="{{hubBentoRepair}}"
+              class="card hub-bento-sub {{!isAuthorized && hubBentoRepair.pageEnabled === false ? 'card--disabled' : ''}}"
+              hover-class="hub-card-hover"
+              bindtap="onHubFeatureTap"
+              data-id="{{hubBentoRepair.id}}"
+            >
+              <image class="hub-bento-sub-icon" src="{{hubBentoRepair.iconSvg}}" mode="aspectFit" />
+              <view class="hub-bento-sub-text">
+                <text class="hub-bento-sub-title">{{hubBentoRepair.title}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
         <view
           wx:if="{{hubBentoTutorial}}"
-          class="card bento-item-half {{!isAuthorized && hubBentoTutorial.pageEnabled === false ? 'card--disabled' : ''}}"
-          hover-class="card-hover"
-          bindtap="onHubFeatureTap"
-          data-id="{{hubBentoTutorial.id}}"
+          class="hub-col-left"
         >
-          <view class="bento-half-inner">
-            <image class="bento-half-icon" src="{{hubBentoTutorial.iconSvg}}" mode="aspectFit" />
-            <text class="card-title-xs bento-half-title">{{hubBentoTutorial.title}}</text>
+          <view
+            class="hub-pill-btn {{!isAuthorized && hubBentoTutorial.pageEnabled === false ? 'card--disabled' : ''}}"
+            hover-class="hub-card-hover"
+            bindtap="onHubFeatureTap"
+            data-id="{{hubBentoTutorial.id}}"
+          >
+            <image class="hub-pill-icon" src="{{hubBentoTutorial.iconSvg}}" mode="aspectFit" />
+            <view class="hub-pill-label">
+              <text class="hub-pill-title">{{hubBentoTutorial.title}}</text>
+            </view>
           </view>
         </view>
         <view
           wx:if="{{hubBentoOta}}"
-          class="card bento-item-half {{!isAuthorized && hubBentoOta.pageEnabled === false ? 'card--disabled' : ''}}"
-          hover-class="card-hover"
-          bindtap="onHubFeatureTap"
-          data-id="{{hubBentoOta.id}}"
+          class="hub-col-right"
         >
-          <view class="bento-half-inner">
-            <image class="bento-half-icon" src="{{hubBentoOta.iconSvg}}" mode="aspectFit" />
-            <text class="card-title-xs bento-half-title">{{hubBentoOta.title}}</text>
+          <view
+            class="hub-pill-btn {{!isAuthorized && hubBentoOta.pageEnabled === false ? 'card--disabled' : ''}}"
+            hover-class="hub-card-hover"
+            bindtap="onHubFeatureTap"
+            data-id="{{hubBentoOta.id}}"
+          >
+            <image class="hub-pill-icon" src="{{hubBentoOta.iconSvg}}" mode="aspectFit" />
+            <view class="hub-pill-label">
+              <text class="hub-pill-title">{{hubBentoOta.title}}</text>
+            </view>
           </view>
         </view>
       </view>
 
-      <!-- 列表组 -->
-      <view class="list-group" wx:if="{{hubListItems.length > 0}}">
+      <!-- 底部菜单列表 -->
+      <view class="hub-menu-card" wx:if="{{hubListItems.length > 0}}">
         <block wx:for="{{hubListItems}}" wx:key="id">
           <view
-            class="list-item {{index < hubListItems.length - 1 ? 'list-item--line' : ''}} {{!isAuthorized && item.pageEnabled === false ? 'card--disabled' : ''}}"
-            hover-class="list-hover"
+            class="hub-menu-item {{index < hubListItems.length - 1 ? 'hub-menu-item--line' : ''}} {{!isAuthorized && item.pageEnabled === false ? 'card--disabled' : ''}}"
+            hover-class="hub-menu-item-hover"
             bindtap="onHubFeatureTap"
             data-id="{{item.id}}"
           >
-            <view class="list-content">
-              <text class="list-title">{{item.title}}</text>
+            <text class="hub-menu-title">{{item.title}}</text>
+            <view wx:if="{{item.id === 8}}" class="hub-menu-live">
+              <text class="hub-menu-live-text">Live Support</text>
+              <view class="hub-menu-live-dot"></view>
             </view>
-            <view class="list-icon-box">
-              <image class="list-icon-img" src="{{item.iconSvg}}" mode="aspectFit" />
-            </view>
+            <text wx:elif="{{item.id === 13}}" class="hub-menu-en">FAQ</text>
+            <text wx:elif="{{item.id === 12}}" class="hub-menu-en">NEARBY</text>
           </view>
         </block>
       </view>
@@ -174,12 +247,12 @@
   </scroll-view>
 
   <view
-    wx:if="{{isAuthorized && hubTabIndex === 0}}"
+    wx:if="{{isAuthorized && hubShellIsAdmin && hubTabIndex === 0}}"
     class="hub-admin-fab hub-admin-fab--in-slot"
     catchtap="toggleDrawer"
     hover-class="hub-admin-fab--pressed"
   >
-    <text class="hub-admin-fab-text">管理</text>
+    <text class="hub-admin-fab-text">页面管理</text>
   </view>
 
     </view>
@@ -204,6 +277,7 @@
         shell-admin="{{hubShellIsAdmin}}"
         bind:switch="onHubTabSwitch"
         bind:adminchange="onHubAdminChange"
+        bind:shellmodal="onHubShellModal"
       />
     </view>
 
@@ -215,6 +289,7 @@
         shell-admin="{{hubShellIsAdmin}}"
         bind:switch="onHubTabSwitch"
         bind:adminchange="onHubAdminChange"
+        bind:shellmodal="onHubShellModal"
       />
     </view>
     </view>
@@ -232,7 +307,7 @@
     <view class="hub-home-float-cart-badge" wx:if="{{hubCartBadge > 0}}">{{hubCartBadge > 99 ? '99+' : hubCartBadge}}</view>
   </view>
 
-  <view class="hub-tab-bar-wrap {{showHubTabBar ? 'hub-tab-bar-wrap--show' : ''}}">
+  <view class="hub-tab-bar-wrap {{showHubTabBar && !hubShellModalOpen ? 'hub-tab-bar-wrap--show' : ''}}">
     <hub-tab-bar active="{{hubBottomBarIndex}}" anim="{{hubPanelsAnim}}" bind:switch="onHubTabSwitch" />
   </view>
 </view>
@@ -253,25 +328,40 @@
     <view class="drawer-admin-bar" wx:if="{{isAuthorized}}">
       <text class="drawer-admin-title">管理员</text>
       <text class="drawer-admin-desc">右侧开关：开=可进入；关=对用户不可进入</text>
+      <text class="drawer-admin-warn" wx:if="{{featureFlagsUnsynced}}">⚠ 未同步到云端：普通用户仍按数据库旧开关显示「开发中」</text>
     </view>
-    <view class="hub-cover-admin" wx:if="{{isAuthorized}}">
+    <view class="hub-cover-admin" wx:if="{{isAuthorized && hubShellIsAdmin}}">
       <view class="hub-cover-admin-head">
-        <text class="hub-cover-admin-title">首页「产品上新」封面</text>
-        <text class="hub-cover-admin-hint">与 pagenew 独立，建议 4:3 横图</text>
+        <text class="hub-cover-admin-title">首页「产品上新」轮播媒体</text>
+        <text class="hub-cover-admin-hint">支持多图/视频；视频可单独自动播放</text>
       </view>
       <view class="hub-cover-admin-preview">
-        <image
-          wx:if="{{hubHomeCoverDisplay}}"
-          class="hub-cover-admin-img"
-          src="{{hubHomeCoverDisplay}}"
-          mode="aspectFill"
-        />
+        <swiper
+          wx:if="{{hubHomeMediaList.length > 0}}"
+          class="hub-cover-admin-swiper"
+          indicator-dots="{{hubHomeMediaList.length > 1}}"
+          circular="{{hubHomeMediaList.length > 1}}"
+          autoplay="{{false}}"
+          interval="2600"
+          duration="280"
+        >
+          <block wx:for="{{hubHomeMediaList}}" wx:key="url">
+            <swiper-item>
+              <video wx:if="{{item.type === 'video'}}" class="hub-cover-admin-img" src="{{item.url}}" object-fit="cover" muted autoplay="{{false}}" controls="{{false}}" />
+              <image wx:else class="hub-cover-admin-img" src="{{item.url}}" mode="aspectFill" />
+            </swiper-item>
+          </block>
+        </swiper>
         <view wx:else class="hub-cover-admin-empty">未设置（将使用列表首图占位）</view>
       </view>
+      <view class="hub-cover-admin-switch">
+        <text class="hub-cover-admin-switch-label">自动轮播</text>
+        <switch checked="{{hubHomeMediaAutoplay}}" color="#34C759" bindchange="onHubHomeMediaAutoplayChange" />
+      </view>
       <view class="hub-cover-admin-actions">
-        <view class="hub-cover-admin-btn hub-cover-admin-btn--primary" catchtap="onHubAdminCoverTap" data-action="choose">上传 / 更换</view>
+        <view class="hub-cover-admin-btn hub-cover-admin-btn--primary" catchtap="onHubAdminCoverTap" data-action="choose">上传图片/视频</view>
         <view
-          wx:if="{{hubHomeCoverFileId}}"
+          wx:if="{{hubHomeMediaList.length > 0}}"
           class="hub-cover-admin-btn"
           catchtap="onHubAdminCoverTap"
           data-action="clear"

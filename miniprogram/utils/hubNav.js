@@ -4,6 +4,7 @@
  * - 商城：products 内横向第 2 屏（与主页平移）
  */
 const hubPageAnim = require('./hubPageAnim.js');
+const pageBack = require('./pageBack.js');
 
 const ROUTES = {
   home: '/package-app/pages/products/products',
@@ -87,11 +88,7 @@ function navigatePush(url) {
 }
 
 function navigatePopToRoute(part) {
-  const pages = getPages();
-  const idx = findRouteIndex(part);
-  if (idx < 0 || idx >= pages.length - 1) return false;
-  wx.navigateBack({ delta: pages.length - 1 - idx });
-  return true;
+  return pageBack.popToRoute(part, { fallback: 'hub' });
 }
 
 /** 回到枢纽首页 Tab（products 内第 0 屏：主页） */
@@ -100,14 +97,12 @@ function goHome() {
     const pages = getPages();
     const productsIdx = findRouteIndex('products/products');
     if (productsIdx >= 0 && productsIdx < pages.length - 1) {
-      wx.navigateBack({ delta: pages.length - 1 - productsIdx });
+      pageBack.safePop(pages.length - 1 - productsIdx);
     }
     return;
   }
   if (navigatePopToRoute('products/products')) return;
-  const pages = getPages();
-  if (pages.length <= 1) return;
-  wx.navigateBack({ delta: pages.length - 1 });
+  pageBack.popOrHub();
 }
 
 /** 打开商城（products 内第 2 屏，横向平移） */
@@ -116,7 +111,7 @@ function openShop() {
     const pages = getPages();
     const productsIdx = findRouteIndex('products/products');
     if (productsIdx >= 0 && productsIdx < pages.length - 1) {
-      wx.navigateBack({ delta: pages.length - 1 - productsIdx });
+      pageBack.safePop(pages.length - 1 - productsIdx);
     }
     return;
   }
@@ -159,7 +154,7 @@ function openShopCheckout() {
       invokeCheckout(page);
     }, 320);
     if (productsIdx < getPages().length - 1) {
-      wx.navigateBack({ delta: getPages().length - 1 - productsIdx });
+      pageBack.safePop(getPages().length - 1 - productsIdx);
     }
     return;
   }
@@ -185,7 +180,7 @@ function switchTab(tab) {
     const pages = getPages();
     const productsIdx = findRouteIndex('products/products');
     if (productsIdx >= 0 && productsIdx < pages.length - 1) {
-      wx.navigateBack({ delta: pages.length - 1 - productsIdx });
+      pageBack.safePop(pages.length - 1 - productsIdx);
     }
     return;
   }

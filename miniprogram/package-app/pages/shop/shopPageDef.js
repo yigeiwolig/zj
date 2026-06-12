@@ -13,23 +13,23 @@ const SHOP_MAIN_DOC_ID = 'shopMain';
 const SHOP_COVER_ASPECT_PADDING_PERCENT = 75;
 // 🔴 使用专门的行政区key（用于省市区选择器 - getCityList）
 const MAP_KEY = 'CFDBZ-B6K6N-B3EFF-SPDJ2-Y2MRZ-7UBH2'; // 与 shouhou 统一
-console.log('[shop] ✅ 初始化腾讯地图SDK（城市列表），使用的key:', MAP_KEY);
 var qqmapsdk = new QQMapWX({
     key: MAP_KEY
 });
 
 // 🔴 使用专门的行政区划子key（用于区县选择器 - getDistrictByCityId）
 const DISTRICT_KEY = 'ICRBZ-VEELI-CQZGO-UE5G6-BHRMS-VQBIK'; // 行政区划子key（专门用于区县选择器）
-console.log('[shop] ✅ 初始化腾讯地图SDK（区县列表），使用的key:', DISTRICT_KEY);
 var qqmapsdkDistrict = new QQMapWX({
     key: DISTRICT_KEY
 });
 
 const { MUNICIPALITY_DISTRICTS } = require('../../../utils/smartAddressParser.js');
+const checkoutCouponMixin = require('../../../utils/checkoutCouponMixin.js');
+const dbPermissionHint = require('../../../utils/dbPermissionHint.js');
 
 module.exports = function createShopPageConfig(opts = {}) {
   const __hubEmbed = !!(opts && opts.hubEmbed);
-  return {
+  const pageConfig = {
   data: {
     mainCategories: ['电动版本', '手动版本', '汽车版本', '配件系列'],
     /** 各版本行展示模式：series=产品系列 accessory=配件横滑 */
@@ -78,7 +78,8 @@ module.exports = function createShopPageConfig(opts = {}) {
     // [修改] 运费相关
     shippingMethod: 'zto', // 默认中通
     shippingFee: 0,
-    checkoutAccessoryOnly: false, // 结算购物车是否仅含单独购买的配件（中通需收运费）
+    checkoutFreeShipping: false, // 商城是否包邮（仅配件或商品合计>50）
+    ...checkoutCouponMixin.data,
 
     // 新增：自定义编辑弹窗状态
     showCustomEditModal: false,
@@ -100,7 +101,11 @@ module.exports = function createShopPageConfig(opts = {}) {
     /** 顶部轮播高度(px)：视频固定 16:9，图片按真实比例（含 1:1）由 bindload 更新 */
     heroSwiperHeightPx: 211,
     heroSlideHeightsPx: {},
+    /** 顶部视频滚出视口后卸载，避免原生 video 层遮挡下方卡片 */
+    heroVideoMountEnabled: true,
     heroAutoCarouselEnabled: false,
+    isEditingMedia: false,
+    sortedTopMediaList: [],
 
     // 商店标题
     shopTitle: '选购',
@@ -198,6 +203,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     // 弹窗控制开关
     showDetail: false,      // 产品选购主弹窗
     showAccDetail: false,   // 配件详情弹窗
+    accDetailClosing: false, // 配件详情下滑退出动画中
     accDetailShowPurchaseFooter: false, // 首页配件行进入：显示加入购物车/立即购买
     accCheckoutActive: false, // 配件详情发起立即购买：结算关闭后恢复配件弹窗
     currentAccIdx: -1,      // 当前查看的配件索引
@@ -421,7 +427,6 @@ module.exports = function createShopPageConfig(opts = {}) {
             if (f && f.fileID && f.tempFileURL) part[f.fileID] = f.tempFileURL;
           });
         } catch (e) {
-          console.warn('[shop.js] getTempFileURL 批量失败:', e);
         }
         return part;
       })
@@ -589,7 +594,7 @@ module.exports = function createShopPageConfig(opts = {}) {
       topRender = this._buildTopMediaRenderListSync(rawTop);
     }
 
-    cache.topMediaList = topRender;
+    cache.topMediaList = this._normalizeTopMediaList(rawTop);
     cache.seriesList = this.stripSeriesListForCache(seriesOut);
     cache.accessoryList = (accOut || []).map(a => this.stripOneAccessoryEphemeral(a));
     cache.cacheTime = Date.now();
@@ -642,16 +647,22 @@ module.exports = function createShopPageConfig(opts = {}) {
     else if (cur >= len) cur = 0;
     const wxw = this._windowWidthPx || (wx.getSystemInfoSync().windowWidth || 375);
     this._windowWidthPx = wxw;
-    const def = Math.round(wxw * 9 / 16);
+    const def = this._defaultHeroHeightPx();
+    const prevHeights = this.data.heroSlideHeightsPx || {};
     const heights = {};
     list.forEach((item, i) => {
-      if (item && item.type === 'video') heights[i] = def;
+      if (item && item.type === 'video') {
+        heights[i] = def;
+      } else if (prevHeights[i] != null) {
+        heights[i] = this._capHeroHeightPx(prevHeights[i]);
+      }
     });
-    const h = heights[cur] != null ? heights[cur] : def;
+    const h = this._resolveHeroSlideHeightPx(cur, list, heights);
     patch.topMediaList = list;
     patch.heroCurrent = cur;
     patch.heroSlideHeightsPx = heights;
     patch.heroSwiperHeightPx = h;
+    patch.heroVideoMountEnabled = true;
   },
 
   stripOneSeriesEphemeral(series) {
@@ -759,7 +770,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         nextCover = `${series.cover}${joiner}rt=${Date.now()}`;
       }
     } catch (err) {
-      console.warn('[shop.js] onCoverImageError 二次检测失败:', err);
     }
 
     this.setData({
@@ -770,7 +780,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   },
 
   onLoad(options) {
-    console.log('[shop.js] onLoad 开始', options);
     this._bindCategorySectionSync();
     
     // 🔴 更新页面访问统计
@@ -782,15 +791,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     // 🔴 截屏/录屏封禁
     this.initScreenshotProtection();
 
-    try {
-      const win = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : null;
-      this._windowWidthPx = (win && win.windowWidth) || 375;
-      this.setData({ heroSwiperHeightPx: Math.round(this._windowWidthPx * 9 / 16) });
-    } catch (e) {
-      this._windowWidthPx = 375;
-      this.setData({ heroSwiperHeightPx: 211 });
-    }
-    
     // 🔴 检查封禁状态（确保重启后也能拦截）
     this.checkBanStatus();
 
@@ -812,7 +812,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     if (wx.cloud) {
       // 直接获取数据库实例（app.js 中已初始化）
       this.db = wx.cloud.database();
-      console.log('[shop.js] 获取数据库实例, db:', this.db);
     } else {
       console.error('[shop.js] wx.cloud 不存在！请检查云开发是否已开通');
     }
@@ -825,7 +824,6 @@ module.exports = function createShopPageConfig(opts = {}) {
       this.jumpNumber = parseInt(options.jumpNumber);
       // 标记是从其他页面跳转过来的（需要特殊处理返回逻辑）
       this.fromOtherPage = true;
-      console.log('[shop.js] 接收到跳转号码:', this.jumpNumber);
     }
     
     // 🔴 检查是否从维修单跳转过来
@@ -848,8 +846,6 @@ module.exports = function createShopPageConfig(opts = {}) {
             requiredParts: partsList,
             requiredPartsMap: partsMap
           });
-          
-          console.log('[shop.js] 从维修单跳转，需要购买的配件:', partsList);
         } catch (e) {
           console.error('[shop.js] 解析配件信息失败:', e);
         }
@@ -865,6 +861,7 @@ module.exports = function createShopPageConfig(opts = {}) {
 
     // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
     this.calcNavBarInfo();
+    this._syncHeroDefaultHeight();
 
     // 图片预热去重缓存（全局复用，避免每次进页重复预热同图）
     const g = getApp();
@@ -1128,12 +1125,10 @@ module.exports = function createShopPageConfig(opts = {}) {
     // 🔴 强制同步：每次进入 shop 页都后台拉最新云端数据，避免多端（电脑/手机）看见不同步
     const cache = this.ensureShopDataCache();
     cache.cacheTime = null; // 先失效本地内存缓存，再拉取
-    console.log('[shop.js] onShow 强制后台刷新，确保多端上传即时同步...');
     this.loadDataFromCloudBackground();
   },
   
   onReady() {
-    console.log('[shop.js] onReady 页面渲染完成');
     if (this.data.hubEmbedInProducts && typeof this.layoutHubEmbedScroll === 'function') {
       wx.nextTick(() => this.layoutHubEmbedScroll());
     }
@@ -1152,8 +1147,12 @@ module.exports = function createShopPageConfig(opts = {}) {
     hubNav.switchSegment(segment);
   },
 
+  onBackPress() {
+    this.goBack();
+    return true;
+  },
+
   goBack() {
-    console.log('[shop.js] goBack 被调用, fromOtherPage:', this.fromOtherPage);
     if (this.data.hubEmbedInProducts && typeof this.triggerEvent === 'function') {
       this.triggerEvent('segment', { segment: 'home' });
       return;
@@ -1167,6 +1166,7 @@ module.exports = function createShopPageConfig(opts = {}) {
       return;
     }
     if (this.data.showAccDetail) {
+      if (this.data.accDetailClosing) return;
       this.onAccDetailNavClose();
       return;
     }
@@ -1193,8 +1193,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     }
     
     const pages = getCurrentPages();
-    console.log('[shop.js] 页面栈长度:', pages.length);
-    
     // 检查页面栈中是否有products页面
     const productsPageIndex = pages.findIndex(page => {
       const route = page.route || '';
@@ -1216,28 +1214,17 @@ module.exports = function createShopPageConfig(opts = {}) {
             productsPage.setData(patch);
           }
         } catch (e) {
-          console.warn('[shop.js] 预设 products 焦点失败:', e);
         }
       }
 
       // 如果页面栈中有products页面，计算需要返回的层数
-      const delta = pages.length - 1 - productsPageIndex;
-      console.log('[shop.js] 找到products页面，在栈中位置:', productsPageIndex, '需要返回层数:', delta);
-      wx.navigateBack({ delta: delta });
+      const pageBack = require('../../../utils/pageBack.js');
+      pageBack.safePop(pages.length - 1 - productsPageIndex);
       return;
     }
-    
-    // 如果页面栈中没有products页面，但有上一页，正常返回
-    if (pages.length > 1) {
-      console.log('[shop.js] 返回上一页');
-      wx.navigateBack();
-    } else {
-      // 如果没有上一页，跳转到products页面（这种情况应该很少见）
-      console.log('[shop.js] 没有上一页，跳转到products页面');
-      wx.redirectTo({
-        url: '/package-app/pages/products/products'
-      });
-    }
+
+    const pageBack = require('../../../utils/pageBack.js');
+    pageBack.popOrHub();
   },
   
   // ========================================================
@@ -1285,7 +1272,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   // 保存商店标题到云端
   // ========================================================
   saveShopTitleToCloud(title) {
-    console.log('[shop.js] saveShopTitleToCloud 开始, title:', title);
     if (!this.db) {
       console.error('[shop.js] saveShopTitleToCloud: this.db 不存在！');
       return;
@@ -1293,14 +1279,12 @@ module.exports = function createShopPageConfig(opts = {}) {
     this.db.collection('shop_config').doc(SHOP_MAIN_DOC_ID).update({
       data: { title: title }
     }).then(() => {
-      console.log('[shop.js] saveShopTitleToCloud 更新成功');
     }).catch(err => {
       console.error('[shop.js] saveShopTitleToCloud 更新失败:', err);
       // 如果文档不存在，创建新文档
       const errMsg = err.errMsg || '';
       if (err.errCode === -502005 || err.errCode === -502002 || err.errCode === -502007 || 
           errMsg.includes('cannot find document') || errMsg.includes('not exist')) {
-        console.log('[shop.js] 文档不存在，尝试创建 shop_config.shopMain');
         this.db.collection('shop_config').doc(SHOP_MAIN_DOC_ID).set({
           data: {
             title: title,
@@ -1308,7 +1292,6 @@ module.exports = function createShopPageConfig(opts = {}) {
             autoCarouselEnabled: this.data.heroAutoCarouselEnabled === true
           }
         }).then(() => {
-          console.log('[shop.js] saveShopTitleToCloud 创建成功');
         }).catch(createErr => {
           console.error('[shop.js] saveShopTitleToCloud 创建失败:', createErr);
         });
@@ -1353,8 +1336,6 @@ module.exports = function createShopPageConfig(opts = {}) {
       // 1. 获取当前用户的 OpenID (利用云函数)
       const res = await wx.cloud.callFunction({ name: 'login' });
       const myOpenid = res.result.openid;
-      console.log('[shop.js] 当前用户 OpenID:', myOpenid);
-
       // 2. 去数据库比对白名单
       const db = wx.cloud.database();
       let adminCheck = await db.collection('guanliyuan').where({
@@ -1365,18 +1346,13 @@ module.exports = function createShopPageConfig(opts = {}) {
       if (adminCheck.data.length === 0) {
         adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
       }
-
-      console.log('[shop.js] 管理员查询结果:', adminCheck.data);
-
       // 3. 如果找到了记录，说明你是受信任的管理员
       if (adminCheck.data.length > 0) {
         this.setData({ isAuthorized: true });
         try { wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized: true, ts: Date.now() }); } catch (e) {}
-        console.log('[shop.js] ✅ 身份验证成功：合法管理员，EDIT 开关已显示');
     } else {
         this.setData({ isAuthorized: false });
         try { wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized: false, ts: Date.now() }); } catch (e) {}
-        console.log('[shop.js] ❌ 未在管理员白名单中，EDIT 开关已隐藏');
       }
     } catch (err) {
       console.error('[shop.js] ❌ 权限检查失败:', err);
@@ -1755,18 +1731,12 @@ module.exports = function createShopPageConfig(opts = {}) {
   },
 
   loadDataFromCloud() {
-    console.log('[shop.js] ========================================');
-    console.log('[shop.js] ========== loadDataFromCloud 开始 ==========');
-    console.log('[shop.js] ========================================');
-    
     // 🔴 确保缓存对象存在
     const cache = this.ensureShopDataCache();
     
     // 🔴 优先使用缓存数据，立即显示，提升用户体验
     const shopMemTtl2 = this._getShopGlobalCacheTtlMs();
     if (cache && cache.cacheTime && Date.now() - cache.cacheTime < shopMemTtl2) {
-      console.log('[shop.js] ✅ 使用预加载的缓存数据，立即显示');
-
       const requiredPartsMap = this.data.requiredPartsMap || {};
       const currentModel = this.data.currentSeries?.name || '';
       const requiredPartsForModel = requiredPartsMap[currentModel] || [];
@@ -1809,7 +1779,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         this.syncHydratedShopListsToGlobalCache(seriesQuick, accQuick);
         if (this.jumpNumber) wx.nextTick(() => this.jumpToProductByNumber(this.jumpNumber));
         runPreloadOnce();
-        console.log('[shop.js] 从缓存合并首屏 setData（标题+轮播+列表）');
         this.loadDataFromCloudBackground();
         if (!cache.seriesList && !cache.accessoryList) {
           this.preloadMediaResources();
@@ -1822,7 +1791,6 @@ module.exports = function createShopPageConfig(opts = {}) {
       const listsNeed = this._shopListsNeedCloudHydrate(seriesQuick || [], accQuick || []);
 
       if (topNeeds || listsNeed) {
-        console.log('[shop.js] 缓存首屏合并 hydrate（轮播+列表一次解析）');
         this.applyShopFirstScreenData({
           rawTopList: rawTop,
           decoratedSeries: seriesQuick || [],
@@ -1830,7 +1798,6 @@ module.exports = function createShopPageConfig(opts = {}) {
           shopTitle: cache.shopTitle,
           heroAutoCarouselEnabled: cache.heroAutoCarouselEnabled
         }).catch(err => {
-          console.warn('[shop.js] 缓存首屏 hydrate 失败:', err);
           runPreloadOnce();
         });
         this.loadDataFromCloudBackground();
@@ -1860,38 +1827,17 @@ module.exports = function createShopPageConfig(opts = {}) {
     }
     
     // 缓存无效或不存在，正常加载
-    console.log('[shop.js] 缓存无效或不存在，从云端加载数据...');
-    
     if (!this.db) {
       console.error('[shop.js] ❌ loadDataFromCloud: this.db 不存在！');
       return;
     }
-    
-    console.log('[shop.js] ✅ 数据库实例存在');
-    console.log('[shop.js] 开始加载云端数据...');
     // 移除加载提示，静默加载
     
-    const normalizeTopMedia = (rawList) => {
-      return (rawList || []).map(item => {
-        if (!item) return item;
-        const type = item.type || (((item.url || '').toLowerCase().endsWith('.mp4') || (item.url || '').toLowerCase().indexOf('.mp4?') !== -1 || (item.url || '').toLowerCase().endsWith('.mov') || (item.url || '').toLowerCase().indexOf('.mov?') !== -1) ? 'video' : 'image');
-        const next = { ...item, type };
-        if (typeof next.poster === 'string') {
-          const p = next.poster.trim();
-          if (p.indexOf('wxfile://') === 0 || p.indexOf('http://tmp/') === 0 || /^file:\/\//i.test(p) || /^[a-zA-Z]:[\\/]/.test(p)) {
-            next.poster = '';
-          }
-        }
-        return next;
-      });
-    };
-
     const loadShopMainDoc = async () => {
       try {
         const res = await this.db.collection('shop_config').doc(SHOP_MAIN_DOC_ID).get();
         if (res && res.data) return res.data;
       } catch (e) {
-        console.warn('[shop.js] shopMain 不可用，尝试旧结构');
       }
       const [titleRes, mediaRes] = await Promise.all([
         this.db.collection('shop_config').doc('shopTitle').get().catch(() => ({ data: null })),
@@ -1905,16 +1851,13 @@ module.exports = function createShopPageConfig(opts = {}) {
       this.db.collection('shop_config').doc(SHOP_MAIN_DOC_ID).set({
         data: {
           title: legacyData.title,
-          topMediaList: normalizeTopMedia(legacyData.topMediaList),
+          topMediaList: this._normalizeTopMediaList(legacyData.topMediaList),
           autoCarouselEnabled: legacyData.autoCarouselEnabled
         }
       }).then(() => {
-        console.log('[shop.js] ✅ 已迁移写入 shop_config.shopMain');
       }).catch(() => {});
       return legacyData;
     };
-
-    console.log('[shop.js] ========== 并行加载 shopMain + shop_series + shop_accessories ==========');
     Promise.all([
       loadShopMainDoc(),
       this.db.collection('shop_series').get().catch(err => {
@@ -1929,7 +1872,7 @@ module.exports = function createShopPageConfig(opts = {}) {
       .then(async ([mainData, seriesRes, accRes]) => {
         const title = this._normalizeShopTitle((mainData && mainData.title) || this.data.shopTitle);
         const autoCarouselEnabled = mainData && mainData.autoCarouselEnabled === true;
-        const rawTop = normalizeTopMedia((mainData && (mainData.topMediaList || mainData.list)) || []);
+        const rawTop = this._normalizeTopMediaList((mainData && (mainData.topMediaList || mainData.list)) || []);
         const mainCategories =
           mainData && Array.isArray(mainData.mainCategories) && mainData.mainCategories.length
             ? mainData.mainCategories
@@ -1941,8 +1884,6 @@ module.exports = function createShopPageConfig(opts = {}) {
 
         const seriesData = (seriesRes && seriesRes.data) ? seriesRes.data : [];
         const accRaw = (accRes && accRes.data) ? accRes.data : [];
-        console.log('[shop.js] shop_series 条数:', seriesData.length, 'shop_accessories 条数:', accRaw.length);
-
         const decorated = this.decorateSeriesImageFields(this.normalizeSeriesListFromDb(seriesData));
         const requiredPartsMap = this.data.requiredPartsMap || {};
         const currentModel = this.data.currentSeries?.name || '';
@@ -1966,9 +1907,6 @@ module.exports = function createShopPageConfig(opts = {}) {
       .catch(err => {
         console.error('[shop.js] 首屏并行加载失败:', err);
       });
-    
-    console.log('[shop.js] ========== loadDataFromCloud 完成 ==========');
-    console.log('[shop.js] ========================================');
   },
 
   // 🔴 后台刷新数据（不阻塞页面显示，静默更新；防抖避免与首屏 hydrate 抢带宽）
@@ -1987,8 +1925,9 @@ module.exports = function createShopPageConfig(opts = {}) {
     if (!this.db) {
       return;
     }
-    
-    console.log('[shop.js] 后台刷新数据开始...');
+    if (this._topMediaSaving) {
+      return;
+    }
     const app = getApp();
     
     // 并行加载所有数据
@@ -2065,9 +2004,7 @@ module.exports = function createShopPageConfig(opts = {}) {
       cache.cacheTime = Date.now();
       
       if (hasUpdate) {
-        console.log('[shop.js] ✅ 后台刷新完成，数据已更新');
       } else {
-        console.log('[shop.js] ✅ 后台刷新完成，数据无变化');
       }
     }).catch(err => {
       console.error('[shop.js] 后台刷新失败:', err);
@@ -2076,7 +2013,6 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   // 🔴 保存数据后刷新缓存（重新加载所有数据）
   refreshShopDataCacheAfterSave() {
-    console.log('[shop.js] 保存数据后刷新缓存...');
     try {
       const app = getApp();
       if (app && app.globalData) app.globalData.shopUiSnapshot = null;
@@ -2089,8 +2025,6 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   // 🔴 静默预加载媒体资源（图片和视频）
   preloadMediaResources() {
-    console.log('[shop.js] 开始静默预加载媒体资源...');
-    
     const imageUrls = [];
     
     // 1. 收集顶部轮播媒体（首屏优先：图片 + 当前第一条视频）
@@ -2177,8 +2111,6 @@ module.exports = function createShopPageConfig(opts = {}) {
       // 立即开始预加载（越早发起，首屏图片越快）
       preloadBatch();
     }
-    
-    console.log('[shop.js] 媒体资源预加载任务已启动（图片:', imageUrls.length, '个）');
   },
 
   // ========================================================
@@ -2195,16 +2127,118 @@ module.exports = function createShopPageConfig(opts = {}) {
     return list.map(item => (item ? { ...item, renderUrl: item.renderUrl || item.url } : item));
   },
 
+  /** 嵌入 products 时 shop-hero-wrap 左右各 32rpx，高度须按实际展示宽度算 */
+  _heroEmbedSidePaddingPx() {
+    if (!this.data.hubEmbedInProducts) return 0;
+    const ww = this._windowWidthPx || (wx.getSystemInfoSync().windowWidth || 375);
+    return Math.ceil((ww / 750) * 64);
+  },
+
+  _heroContentWidthPx() {
+    const ww = this._windowWidthPx || (wx.getSystemInfoSync().windowWidth || 375);
+    return Math.max(160, ww - this._heroEmbedSidePaddingPx());
+  },
+
+  _syncHeroDefaultHeight() {
+    try {
+      const win = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : null;
+      this._windowWidthPx = (win && win.windowWidth) || 375;
+    } catch (e) {
+      this._windowWidthPx = 375;
+    }
+    this.setData({ heroSwiperHeightPx: this._defaultHeroHeightPx() });
+  },
+
   _defaultHeroHeightPx() {
-    const w = this._windowWidthPx || 375;
-    return Math.round(w * 9 / 16);
+    return Math.round(this._heroContentWidthPx() * 9 / 16);
+  },
+
+  _maxHeroHeightPx() {
+    return Math.round(this._heroContentWidthPx() * 2.5);
+  },
+
+  _capHeroHeightPx(h) {
+    const n = Math.max(0, Math.round(Number(h) || 0));
+    const def = this._defaultHeroHeightPx();
+    if (n <= 0) return def;
+    return Math.min(n, this._maxHeroHeightPx());
+  },
+
+  _resolveHeroSlideHeightPx(index, list, heightsMap) {
+    const items = Array.isArray(list) ? list : (this.data.topMediaList || []);
+    const heights = heightsMap || this.data.heroSlideHeightsPx || {};
+    const idx = Number(index) || 0;
+    const item = items[idx];
+    if (item && item.type === 'video') return this._defaultHeroHeightPx();
+    if (heights[idx] != null) return this._capHeroHeightPx(heights[idx]);
+    return this._defaultHeroHeightPx();
   },
 
   /** 顶部轮播列表更新后：同步 swiper 高度与各 slide 已知高度（视频=16:9） */
   _applyTopMediaListToView(renderList) {
     const patch = { heroHdLoaded: {} };
     this._mergeHeroFieldsIntoPatch(patch, renderList);
-    this.setData(patch);
+    return new Promise((resolve) => {
+      this.setData(patch, resolve);
+    });
+  },
+
+  _inferTopMediaType(url) {
+    const u = String(url || '').toLowerCase();
+    if (
+      u.endsWith('.mp4') ||
+      u.endsWith('.mov') ||
+      u.endsWith('.m4v') ||
+      u.indexOf('.mp4?') !== -1 ||
+      u.indexOf('.mov?') !== -1 ||
+      u.indexOf('.m4v?') !== -1
+    ) {
+      return 'video';
+    }
+    return 'image';
+  },
+
+  _normalizeTopMediaItemForStorage(item) {
+    if (!item) return item;
+    const {
+      renderUrl,
+      renderThumb,
+      renderFull,
+      dualRender,
+      ...rest
+    } = item;
+    let url = typeof rest.url === 'string' ? rest.url.trim() : '';
+    if (!url && typeof renderUrl === 'string') {
+      const r = renderUrl.trim();
+      if (
+        r &&
+        r.indexOf('wxfile://') !== 0 &&
+        r.indexOf('http://tmp/') !== 0 &&
+        !/^file:\/\//i.test(r)
+      ) {
+        url = r;
+      }
+    }
+    const type = rest.type || this._inferTopMediaType(url);
+    const next = { type, url };
+    if (type === 'video' && rest.autoplay === true) next.autoplay = true;
+    if (typeof rest.poster === 'string') {
+      const p = rest.poster.trim();
+      if (
+        p &&
+        p.indexOf('wxfile://') !== 0 &&
+        p.indexOf('http://tmp/') !== 0 &&
+        !/^file:\/\//i.test(p) &&
+        !/^[a-zA-Z]:[\\/]/.test(p)
+      ) {
+        next.poster = p;
+      }
+    }
+    return next;
+  },
+
+  _normalizeTopMediaList(rawList) {
+    return (rawList || []).map((item) => this._normalizeTopMediaItemForStorage(item));
   },
 
   /** 预拉当前 hero 视频到本地，减少首屏黑屏等待 */
@@ -2241,7 +2275,46 @@ module.exports = function createShopPageConfig(opts = {}) {
         renderList = safeList.map(item => (item ? { ...item, renderUrl: tempUrlMap[item.url] || item.url } : item));
       }
     }
-    this._applyTopMediaListToView(renderList);
+    await this._applyTopMediaListToView(renderList);
+    await this._primeHeroSlideHeightsForList(safeList);
+  },
+
+  /** 上传/刷新后根据图片 URL 预计算轮播高度，减少底部留白 */
+  _primeHeroSlideHeightsForList(list) {
+    const items = Array.isArray(list) ? list : [];
+    const ww = this._windowWidthPx || (wx.getSystemInfoSync().windowWidth || 375);
+    this._windowWidthPx = ww;
+    const w = this._heroContentWidthPx();
+    const heights = { ...(this.data.heroSlideHeightsPx || {}) };
+    const cur = Number(this.data.heroCurrent) || 0;
+    let curH = null;
+    const tasks = items.map((item, idx) => {
+      if (!item || item.type !== 'image') return Promise.resolve();
+      const src = item.url || item.renderFull || item.renderUrl;
+      if (!src || typeof src !== 'string') return Promise.resolve();
+      return new Promise((resolve) => {
+        wx.getImageInfo({
+          src,
+          success: (info) => {
+            if (info.width > 0 && info.height > 0) {
+              const h = this._capHeroHeightPx(Math.round(w * (info.height / info.width)));
+              heights[idx] = h;
+              if (idx === cur) curH = h;
+            }
+            resolve();
+          },
+          fail: () => resolve()
+        });
+      });
+    });
+    return Promise.all(tasks).then(() => {
+      const patch = { heroSlideHeightsPx: heights };
+      if (curH != null) patch.heroSwiperHeightPx = curH;
+      else if (items[cur] && items[cur].type === 'video') {
+        patch.heroSwiperHeightPx = this._defaultHeroHeightPx();
+      }
+      this.setData(patch);
+    });
   },
 
   /** 顶部轮播图片（含 1:1）加载后，按屏宽换算显示高度并可选更新当前 swiper 高度 */
@@ -2251,20 +2324,19 @@ module.exports = function createShopPageConfig(opts = {}) {
     const list = this.data.topMediaList || [];
     if (!list[idx] || list[idx].type !== 'image') return;
     const d = e.detail || {};
-    const w = this._windowWidthPx || (wx.getSystemInfoSync().windowWidth || 375);
-    this._windowWidthPx = w;
+    const ww = this._windowWidthPx || (wx.getSystemInfoSync().windowWidth || 375);
+    this._windowWidthPx = ww;
+    const cw = this._heroContentWidthPx();
     let h = this._defaultHeroHeightPx();
     if (d.width > 0 && d.height > 0) {
-      h = Math.round(w * (d.height / d.width));
-      const maxH = Math.round(w * 2.5);
-      if (h > maxH) h = maxH;
+      h = this._capHeroHeightPx(Math.round(cw * (d.height / d.width)));
     }
     const heights = { ...(this.data.heroSlideHeightsPx || {}) };
     const prev = heights[idx];
     if (prev == null || h > prev) heights[idx] = h;
     const cur = Number(this.data.heroCurrent) || 0;
     const patch = { heroSlideHeightsPx: heights };
-    if (idx === cur) patch.heroSwiperHeightPx = heights[idx];
+    if (idx === cur) patch.heroSwiperHeightPx = this._capHeroHeightPx(heights[idx]);
     this.setData(patch);
   },
 
@@ -2328,67 +2400,91 @@ module.exports = function createShopPageConfig(opts = {}) {
     }
   },
 
-  _getTopMediaListForSave() {
-    return (this.data.topMediaList || []).map(item => {
-      if (!item) return item;
-      const { renderUrl, ...rest } = item;
-      // 本机临时路径 poster 不能跨端使用，入库前统一清空
-      if (rest && typeof rest.poster === 'string') {
-        const p = rest.poster.trim();
-        if (
-          p.indexOf('wxfile://') === 0 ||
-          p.indexOf('http://tmp/') === 0 ||
-          /^file:\/\//i.test(p) ||
-          /^[a-zA-Z]:[\\/]/.test(p)
-        ) {
-          rest.poster = '';
-        }
-      }
-      return rest;
-    });
+  _getTopMediaListForSave(sourceList) {
+    const list = Array.isArray(sourceList) ? sourceList : (this.data.topMediaList || []);
+    return this._normalizeTopMediaList(list);
   },
 
-  saveTopMediaToCloud() {
-    console.log('[shop.js] saveTopMediaToCloud 开始');
+  saveTopMediaToCloud(explicitList) {
     if (!this.db) {
       console.error('[shop.js] saveTopMediaToCloud: this.db 不存在！');
-      return;
+      return Promise.reject(new Error('数据库未初始化'));
     }
-    const saveList = this._getTopMediaListForSave();
-    console.log('[shop.js] 保存 topMediaList:', saveList);
-    this.db.collection('shop_config').doc(SHOP_MAIN_DOC_ID).update({
-      data: {
-        topMediaList: saveList,
-        autoCarouselEnabled: this.data.heroAutoCarouselEnabled === true
-      }
-    }).then(() => {
-      console.log('[shop.js] saveTopMediaToCloud 更新成功');
-      // 🔴 更新缓存
+    const saveList = this._getTopMediaListForSave(explicitList);
+    const autoCarouselEnabled = this.data.heroAutoCarouselEnabled === true;
+    const payload = {
+      topMediaList: saveList,
+      autoCarouselEnabled,
+      updateTime: this.db.serverDate()
+    };
+    this._topMediaSaving = true;
+    const finishCache = () => {
       const cache = this.ensureShopDataCache();
       cache.topMediaList = saveList;
-      cache.heroAutoCarouselEnabled = this.data.heroAutoCarouselEnabled === true;
+      cache.heroAutoCarouselEnabled = autoCarouselEnabled;
       cache.cacheTime = Date.now();
-    }).catch(err => {
-      console.error('[shop.js] saveTopMediaToCloud 更新失败:', err);
-      console.log('[shop.js] errCode:', err.errCode, 'errMsg:', err.errMsg);
-      // 如果文档不存在，创建新文档
-      const errMsg = err.errMsg || '';
-      if (err.errCode === -502005 || err.errCode === -502002 || err.errCode === -502007 || 
-          errMsg.includes('cannot find document') || errMsg.includes('not exist')) {
-        console.log('[shop.js] 文档不存在，尝试创建');
-        this.db.collection('shop_config').doc(SHOP_MAIN_DOC_ID).set({
+    };
+    const isDocMissing = (err) => {
+      const errMsg = (err && err.errMsg) || '';
+      return (
+        err.errCode === -502005 ||
+        err.errCode === -502002 ||
+        err.errCode === -502007 ||
+        errMsg.includes('cannot find document') ||
+        errMsg.includes('not exist')
+      );
+    };
+    const applySaveResult = () => {
+      finishCache();
+      try {
+        const app = getApp();
+        if (app && app.globalData && app.globalData.shopDataCache) {
+          app.globalData.shopDataCache.topMediaList = saveList;
+          app.globalData.shopDataCache.heroAutoCarouselEnabled = autoCarouselEnabled;
+          app.globalData.shopDataCache.cacheTime = Date.now();
+        }
+      } catch (e) {}
+    };
+
+    return wx.cloud.callFunction({
+      name: 'setShopMainConfig',
+      data: {
+        topMediaList: saveList,
+        autoCarouselEnabled
+      }
+    }).then((res) => {
+      const result = res && res.result;
+      if (!result || !result.success) {
+        const errMsg = (result && result.error) || '云函数保存失败，请部署 setShopMainConfig';
+        throw new Error(errMsg);
+      }
+      applySaveResult();
+    }).catch((err) => {
+      console.error('[shop.js] saveTopMediaToCloud 云函数失败，尝试客户端直写:', err);
+      return this.db.collection('shop_config').doc(SHOP_MAIN_DOC_ID).update({
+        data: payload
+      }).then(() => {
+        applySaveResult();
+      }).catch((dbErr) => {
+        console.error('[shop.js] saveTopMediaToCloud 客户端更新失败:', dbErr);
+        if (!isDocMissing(dbErr)) {
+          if (dbPermissionHint.isPermissionDenied(dbErr)) {
+            dbPermissionHint.toastPermissionDenied('shop_config');
+          }
+          throw dbErr;
+        }
+        return this.db.collection('shop_config').doc(SHOP_MAIN_DOC_ID).set({
           data: {
             title: this.data.shopTitle || '选购',
             topMediaList: saveList,
-            autoCarouselEnabled: this.data.heroAutoCarouselEnabled === true
+            autoCarouselEnabled
           }
         }).then(() => {
-          console.log('[shop.js] saveTopMediaToCloud 创建成功');
-        }).catch(createErr => {
-          console.error('[shop.js] saveTopMediaToCloud 创建失败:', createErr);
-          console.log('[shop.js] 创建失败 errCode:', createErr.errCode, 'errMsg:', createErr.errMsg);
+          applySaveResult();
         });
-      }
+      });
+    }).finally(() => {
+      this._topMediaSaving = false;
     });
   },
 
@@ -2396,13 +2492,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   // 保存产品系列到云端
   // ========================================================
   saveSeriesToCloud(series, isNew = false) {
-    console.log('[shop.js] ========== saveSeriesToCloud 开始 ==========');
-    console.log('[shop.js] isNew:', isNew);
-    console.log('[shop.js] series._id:', series._id);
-    console.log('[shop.js] series.id:', series.id);
-    console.log('[shop.js] series.cover:', series.cover);
-    console.log('[shop.js] series 完整对象:', JSON.stringify(series, null, 2));
-    
     if (!this.db) {
       console.error('[shop.js] saveSeriesToCloud: this.db 不存在！');
       return Promise.reject(new Error('数据库未初始化'));
@@ -2415,18 +2504,8 @@ module.exports = function createShopPageConfig(opts = {}) {
     // 【修复】移除 _id 和 _openid，因为它们是数据库自动管理的字段
     delete data._id;
     delete data._openid;
-    
-    console.log('[shop.js] 准备保存的数据 (移除 _id 和 _openid 后):');
-    console.log('[shop.js] data.cover:', data.cover);
-    console.log('[shop.js] data.id:', data.id);
-    console.log('[shop.js] data 完整对象:', JSON.stringify(data, null, 2));
-    
     if (isNew || !series._id) {
-      console.log('[shop.js] 操作类型: 添加新产品系列到 shop_series');
       return this.db.collection('shop_series').add({ data }).then(res => {
-        console.log('[shop.js] ✅ 添加成功!');
-        console.log('[shop.js] 返回的 _id:', res._id);
-        console.log('[shop.js] 返回的完整结果:', res);
         series._id = res._id;
         if (this.data.currentSeriesIdx >= 0) {
           this.setData({ [`seriesList[${this.data.currentSeriesIdx}]`]: series });
@@ -2435,29 +2514,19 @@ module.exports = function createShopPageConfig(opts = {}) {
         this.refreshShopDataCacheAfterSave();
         return res;
       }).catch(err => {
-        console.error('[shop.js] ❌ 添加产品系列失败!');
-        console.error('[shop.js] errCode:', err.errCode);
-        console.error('[shop.js] errMsg:', err.errMsg);
-        console.error('[shop.js] 完整错误:', err);
+        if (dbPermissionHint.isPermissionDenied(err)) {
+          dbPermissionHint.toastPermissionDenied('shop_series');
+        }
+        console.error('[shop.js] ❌ 添加产品系列失败:', err);
         throw err;
       });
     } else {
-      console.log('[shop.js] 操作类型: 更新产品系列');
-      console.log('[shop.js] 使用的文档ID:', series._id);
-      
       // 【关键修复】对于已存在的文档，直接使用 update 方法
       // update 方法专门用于更新已存在的文档，不会产生重复键错误
-      console.log('[shop.js] 准备更新文档，_id:', series._id);
-      console.log('[shop.js] 要更新的 cover:', data.cover);
-      
       // 先单独更新 cover 字段（最关键）
       return this.db.collection('shop_series').doc(series._id).update({
         data: { cover: data.cover }
       }).then(coverRes => {
-        console.log('[shop.js] ✅ cover 字段更新完成!');
-        console.log('[shop.js] cover 更新结果:', coverRes);
-        console.log('[shop.js] updated:', coverRes.updated);
-        
         // 更新其他字段（除了 cover）
         const otherData = { ...data };
         delete otherData.cover;
@@ -2466,7 +2535,6 @@ module.exports = function createShopPageConfig(opts = {}) {
           ? this.db.collection('shop_series').doc(series._id).update({
               data: otherData
             }).then(otherRes => {
-              console.log('[shop.js] ✅ 其他字段更新完成!');
               return otherRes;
             }).catch(otherErr => {
               console.error('[shop.js] ⚠️ 其他字段更新失败（非关键）:', otherErr);
@@ -2481,19 +2549,12 @@ module.exports = function createShopPageConfig(opts = {}) {
             return new Promise((resolve) => {
               setTimeout(() => {
                 this.db.collection('shop_series').doc(series._id).get().then(verifyRes => {
-                  console.log(`[shop.js] 验证 (尝试 ${retryCount + 1}/${maxRetries + 1}):`);
-                  console.log('[shop.js] 验证结果 - cover:', verifyRes.data?.cover);
-                  console.log('[shop.js] 验证结果 - 期望 cover:', data.cover);
                   const isMatch = verifyRes.data?.cover === data.cover;
-                  console.log('[shop.js] 验证结果 - 是否匹配:', isMatch);
-                  
                   if (isMatch) {
-                    console.log('[shop.js] ✅ 验证成功，cover 已正确更新!');
                     // 🔴 刷新缓存
                     this.refreshShopDataCacheAfterSave();
                     resolve({ success: true, verified: verifyRes.data, retried: retryCount > 0 });
                   } else if (retryCount < maxRetries) {
-                    console.log(`[shop.js] ⚠️ 验证失败，${500 * (retryCount + 1)}ms 后重试更新并验证...`);
                     // 如果验证失败，再次尝试更新
                     return this.db.collection('shop_series').doc(series._id).update({
                       data: { cover: data.cover }
@@ -2525,10 +2586,10 @@ module.exports = function createShopPageConfig(opts = {}) {
           return verifyWithRetry();
         });
       }).catch(updateErr => {
-        console.error('[shop.js] ❌ update 操作失败!');
-        console.error('[shop.js] errCode:', updateErr.errCode);
-        console.error('[shop.js] errMsg:', updateErr.errMsg);
-        console.error('[shop.js] 完整错误:', updateErr);
+        if (dbPermissionHint.isPermissionDenied(updateErr)) {
+          dbPermissionHint.toastPermissionDenied('shop_series');
+        }
+        console.error('[shop.js] ❌ update 操作失败:', updateErr);
         throw updateErr;
       });
     }
@@ -2538,7 +2599,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   // 保存配件到云端
   // ========================================================
   saveAccessoryToCloud(accessory, index, isNew = false) {
-    console.log('[shop.js] saveAccessoryToCloud 开始, isNew:', isNew, 'accessory._id:', accessory._id, 'index:', index);
     if (!this.db) {
       console.error('[shop.js] saveAccessoryToCloud: this.db 不存在！');
       return;
@@ -2551,107 +2611,191 @@ module.exports = function createShopPageConfig(opts = {}) {
     // 【修复】移除 _id 和 _openid，因为它们是数据库自动管理的字段
     delete data._id;
     delete data._openid;
-    console.log('[shop.js] 准备保存的配件数据:', data);
-    
     if (isNew || !accessory._id) {
-      console.log('[shop.js] 添加新配件到 shop_accessories');
       this.db.collection('shop_accessories').add({ data }).then(res => {
-        console.log('[shop.js] 添加配件成功, _id:', res._id);
         accessory._id = res._id;
         this.setData({ [`accessoryList[${index}]`]: accessory });
         // 🔴 刷新缓存
         this.refreshShopDataCacheAfterSave();
       }).catch(err => {
+        if (dbPermissionHint.isPermissionDenied(err)) {
+          dbPermissionHint.toastPermissionDenied('shop_accessories');
+        }
         console.error('[shop.js] 添加配件失败:', err);
-        console.log('[shop.js] errCode:', err.errCode, 'errMsg:', err.errMsg);
       });
     } else {
-      console.log('[shop.js] 更新配件, _id:', accessory._id);
       this.db.collection('shop_accessories').doc(accessory._id).update({ data }).then(() => {
-        console.log('[shop.js] 更新配件成功');
         // 🔴 刷新缓存
         this.refreshShopDataCacheAfterSave();
       }).catch(err => {
+        if (dbPermissionHint.isPermissionDenied(err)) {
+          dbPermissionHint.toastPermissionDenied('shop_accessories');
+        }
         console.error('[shop.js] 更新配件失败:', err);
-        console.log('[shop.js] errCode:', err.errCode, 'errMsg:', err.errMsg);
       });
     }
   },
 
-  // ================== 1. 顶部媒体 (分开上传) ==================
-  adminAddImage() {
-    this.chooseShopImage('topMedia').then(async (path) => {
-      this.showMyLoading('上传中...');
-      try {
-        const fileID = await this.uploadShopImageToCos(path, 'shop/topMedia', { skipPrepare: true });
-        const newItem = {
-          type: 'image',
-          url: fileID
-        };
-        this.data.topMediaList.push(newItem);
-        this.setTopMediaListForRender(this.data.topMediaList);
-        this.saveTopMediaToCloud();
-      } catch (err) {
-        this.showAutoToast('提示', '上传失败');
-      } finally {
-        this.hideMyLoading();
-      }
-    }).catch(() => {});
+  // ================== 1. 顶部轮播媒体 ==================
+  _topMediaSlotsLeft() {
+    return Math.max(0, 9 - (this.data.topMediaList || []).length);
   },
-  adminAddVideo() {
-    wx.chooseVideo({
-      sourceType: ['album'],
-      compressed: false,
+
+  async _uploadOneTopMediaFile(file) {
+    const isVideo = file.fileType === 'video';
+    if (isVideo) {
+      const tempPath = file.tempFilePath || '';
+      const rawSuffix = tempPath.match(/\.[^.]+?$/)?.[0] || '';
+      const safeSuffix = rawSuffix ? rawSuffix.toLowerCase() : '';
+      const supported = ['.mp4', '.mov', '.m4v'];
+      if (safeSuffix && supported.indexOf(safeSuffix) === -1) {
+        throw new Error('UNSUPPORTED_VIDEO');
+      }
+      const videoSuffix = safeSuffix || '.mp4';
+      const knownSize = typeof file.size === 'number' ? file.size : undefined;
+      const fileID = await this.uploadShopVideoToCos(tempPath, 'shop/topMedia', videoSuffix, { knownSize });
+      return { type: 'video', url: fileID, poster: '', autoplay: false };
+    }
+    const tempPath = await shopImagePrepare.prepareImageFile(file.tempFilePath, 'topMedia');
+    const knownSize = typeof file.size === 'number' ? file.size : undefined;
+    const fileID = await this.uploadShopImageToCos(tempPath, 'shop/topMedia', { knownSize, skipPrepare: true });
+    return { type: 'image', url: fileID };
+  },
+
+  adminAddTopMedia() {
+    const remain = this._topMediaSlotsLeft();
+    if (remain <= 0) {
+      this.showAutoToast('提示', '顶部轮播最多 9 张');
+      return;
+    }
+    wx.chooseMedia({
+      count: remain,
+      mediaType: ['image', 'video'],
+      sourceType: ['album', 'camera'],
       maxDuration: 60,
       success: async (res) => {
-      this.showMyLoading('上传中...');
-      try {
-        const tempPath = res.tempFilePath || '';
-        const rawSuffix = tempPath.match(/\.[^.]+?$/)?.[0] || '';
-        const safeSuffix = rawSuffix ? rawSuffix.toLowerCase() : '';
-        const supported = ['.mp4', '.mov', '.m4v'];
-        if (safeSuffix && supported.indexOf(safeSuffix) === -1) {
+        const files = res.tempFiles || [];
+        if (!files.length) return;
+        this.showMyLoading(`上传中 0/${files.length}`);
+        let done = 0;
+        const mergedList = this._getTopMediaListForSave();
+        try {
+          for (let i = 0; i < files.length; i++) {
+            const item = await this._uploadOneTopMediaFile(files[i]);
+            mergedList.push(item);
+            done += 1;
+            this.showMyLoading(`上传中 ${done}/${files.length}`);
+          }
+        } catch (err) {
           this.hideMyLoading();
-          this.showAutoToast('提示', '电脑上传请使用 MP4/MOV 格式视频');
-          return;
+          if (err && err.message === 'UNSUPPORTED_VIDEO') {
+            this.showAutoToast('提示', '请使用 MP4/MOV 格式视频');
+          } else if (done > 0) {
+            this.showAutoToast('提示', `部分上传成功（${done}/${files.length}），正在保存…`);
+          } else {
+            this.showAutoToast('提示', '上传失败');
+            return;
+          }
         }
-
-        // 电脑端有时拿不到后缀，默认用 mp4；若原始格式非 mp4 建议先转码再上传
-        const videoSuffix = safeSuffix || '.mp4';
-        const knownSize = typeof res.size === 'number' ? res.size : undefined;
-        const fileID = await this.uploadShopVideoToCos(tempPath, 'shop/topMedia', videoSuffix, { knownSize });
-        const newItem = {
-          type: 'video',
-          url: fileID,
-          // 不保存本机临时封面，避免手机/电脑跨端读取不到
-          poster: ''
-        };
-        this.data.topMediaList.push(newItem);
-        this.setTopMediaListForRender(this.data.topMediaList);
-        this.saveTopMediaToCloud();
-        this.hideMyLoading();
-      } catch (err) {
-        this.hideMyLoading();
-        this.showAutoToast('提示', '上传失败');
+        if (done <= 0) return;
+        try {
+          await this.setTopMediaListForRender(mergedList);
+          await this.saveTopMediaToCloud(mergedList);
+          this.hideMyLoading();
+          this.setData({ heroVideoMountEnabled: true });
+          this.showAutoToast('成功', done === files.length ? `已添加 ${done} 项` : `已添加 ${done}/${files.length} 项`);
+          wx.nextTick(() => {
+            this._syncHeroAutoForCurrent();
+            if (this.data.hubEmbedInProducts && typeof this.layoutHubEmbedScroll === 'function') {
+              this.layoutHubEmbedScroll();
+            }
+          });
+        } catch (err) {
+          this.hideMyLoading();
+          console.error('[shop.js] adminAddTopMedia 保存失败:', err);
+          const tip = String((err && err.message) || '').indexOf('setShopMainConfig') !== -1
+            ? '已上传但保存失败：请部署云函数 setShopMainConfig 后重试'
+            : '已上传但保存到云端失败，请重试或检查管理员权限';
+          this.showAutoToast('提示', tip);
+        }
       }
-      },
     });
+  },
+
+  adminAddImage() {
+    this.adminAddTopMedia();
+  },
+
+  adminAddVideo() {
+    this.adminAddTopMedia();
+  },
+
+  adminEnterMediaSort() {
+    const list = this.data.topMediaList || [];
+    if (!list.length) {
+      this.showAutoToast('提示', '请先添加轮播内容');
+      return;
+    }
+    const sortedTopMediaList = list.map((item, originalIndex) => ({
+      ...item,
+      originalIndex,
+      renderUrl: item.renderUrl || item.url
+    }));
+    this.setData({ isEditingMedia: true, sortedTopMediaList });
+  },
+
+  adminCancelDrag() {
+    this.setData({ isEditingMedia: false, sortedTopMediaList: [] });
+  },
+
+  adminConfirmDrag() {
+    const sorted = this.data.sortedTopMediaList || [];
+    const source = this.data.topMediaList || [];
+    const reordered = sorted
+      .map((row) => source[row.originalIndex])
+      .filter(Boolean);
+    const saveList = this._getTopMediaListForSave(reordered);
+    this.setData({ isEditingMedia: false, sortedTopMediaList: [], heroCurrent: 0 });
+    this.setTopMediaListForRender(saveList)
+      .then(() => this.saveTopMediaToCloud(saveList))
+      .catch((err) => {
+        console.error('[shop.js] adminConfirmDrag 保存失败:', err);
+        this.showAutoToast('提示', '排序保存失败，请重试');
+      });
+    wx.nextTick(() => this._syncHeroAutoForCurrent());
+  },
+
+  adminMoveTopMediaInSort(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    const dir = e.currentTarget.dataset.dir;
+    const list = [...(this.data.sortedTopMediaList || [])];
+    const target = dir === 'up' ? idx - 1 : idx + 1;
+    if (Number.isNaN(idx) || target < 0 || target >= list.length) return;
+    const next = [...list];
+    const tmp = next[idx];
+    next[idx] = next[target];
+    next[target] = tmp;
+    this.setData({ sortedTopMediaList: next });
   },
   adminDelTopMedia(e) {
     const index = e.currentTarget.dataset.index;
     const deletedItem = this.data.topMediaList[index];
     const oldFileID = deletedItem.url; // 🔴 保存要删除的图片/视频ID
     
-    this.data.topMediaList.splice(index, 1);
-    this.setTopMediaListForRender(this.data.topMediaList);
-    this.saveTopMediaToCloud();
+    const saveList = this._getTopMediaListForSave();
+    saveList.splice(index, 1);
+    this.setTopMediaListForRender(saveList)
+      .then(() => this.saveTopMediaToCloud(saveList))
+      .catch((err) => {
+        console.error('[shop.js] adminDelTopMedia 保存失败:', err);
+        this.showAutoToast('提示', '删除后保存失败，请重试');
+      });
     
     // 🔴 删除云存储中的文件
     if (oldFileID && oldFileID.startsWith('cloud://')) {
       wx.cloud.deleteFile({
         fileList: [oldFileID],
         success: () => {
-          console.log('[shop.js] 删除顶部媒体成功:', oldFileID);
         },
         fail: (err) => {
           console.error('[shop.js] 删除顶部媒体失败:', err);
@@ -2666,14 +2810,17 @@ module.exports = function createShopPageConfig(opts = {}) {
     const item = this.data.topMediaList[index];
     if (item.type !== 'video') return;
 
-    const nextList = [...this.data.topMediaList];
+    const nextList = this._getTopMediaListForSave();
     nextList[index] = {
-      ...item,
-      autoplay: !item.autoplay
+      ...nextList[index],
+      autoplay: !nextList[index].autoplay
     };
-    this.data.topMediaList = nextList;
-    this.setData({ topMediaList: nextList });
-    this.saveTopMediaToCloud();
+    this.setTopMediaListForRender(nextList)
+      .then(() => this.saveTopMediaToCloud(nextList))
+      .catch((err) => {
+        console.error('[shop.js] adminToggleTopVideoAutoplay 保存失败:', err);
+        this.showAutoToast('提示', '设置保存失败，请重试');
+      });
     if (!nextList[index].autoplay) {
       const videoContext = wx.createVideoContext(`hero-video-${index}`);
       if (videoContext) videoContext.pause();
@@ -2686,13 +2833,16 @@ module.exports = function createShopPageConfig(opts = {}) {
   adminToggleHeroAutoCarousel() {
     const next = !this.data.heroAutoCarouselEnabled;
     this.setData({ heroAutoCarouselEnabled: next }, () => {
-      this.saveTopMediaToCloud();
+      this.saveTopMediaToCloud().catch((err) => {
+        console.error('[shop.js] adminToggleHeroAutoCarousel 保存失败:', err);
+        this.showAutoToast('提示', '轮播设置保存失败，请重试');
+      });
       if (next) {
         this._syncHeroAutoForCurrent();
       } else {
         this._clearHeroAutoTimer();
       }
-      this.showAutoToast('提示', next ? '已开启自动轮播' : '已关闭自动轮播');
+      this.showAutoToast('提示', next ? '已开启自动切卡' : '已关闭自动切卡');
     });
   },
 
@@ -2997,8 +3147,7 @@ module.exports = function createShopPageConfig(opts = {}) {
         accSlotMode,
         slideCount,
         dotIndices,
-        current: cur,
-        liveCurrent: cur
+        current: cur
       };
     });
   },
@@ -3039,8 +3188,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     const sec = sections[catIndex];
     if (sec) {
       this.setData({
-        [`categorySections[${catIndex}].current`]: 0,
-        [`categorySections[${catIndex}].liveCurrent`]: 0
+        [`categorySections[${catIndex}].current`]: 0
       });
     }
     if (!this.data.isAdmin) return;
@@ -3050,33 +3198,50 @@ module.exports = function createShopPageConfig(opts = {}) {
     wx.vibrateShort({ type: 'light' });
   },
 
-  onSectionSwiperChange(e) {
-    const catIndex = Number(e.currentTarget.dataset.catIndex);
-    if (Number.isNaN(catIndex)) return;
-    const current = e.detail.current;
-    const section = this.data.categorySections && this.data.categorySections[catIndex];
-    if (!section || section.liveCurrent === current) return;
-    this.setData({
-      [`categorySections[${catIndex}].liveCurrent`]: current
-    });
-  },
-
+  /** 分类横滑：仅在动画结束后更新 current，避免滑动过程中频繁 setData */
   onSectionSwiperAnimationFinish(e) {
     const catIndex = Number(e.currentTarget.dataset.catIndex);
     if (Number.isNaN(catIndex)) return;
     const current = e.detail.current;
     const section = this.data.categorySections && this.data.categorySections[catIndex];
-    if (!section) return;
-    const patch = {};
-    if (section.current !== current) {
-      patch[`categorySections[${catIndex}].current`] = current;
+    if (!section || section.current === current) return;
+    this.setData({
+      [`categorySections[${catIndex}].current`]: current
+    });
+  },
+
+  onMainScroll(e) {
+    const scrollTop = (e && e.detail && e.detail.scrollTop) || 0;
+    const heroH = Number(this.data.heroSwiperHeightPx) || this._defaultHeroHeightPx();
+    const adminExtra = this.data.isAdmin && !this.data.isEditingMedia ? 140 : 0;
+    const inView = scrollTop < heroH + adminExtra;
+    if (inView !== this.data.heroVideoMountEnabled) {
+      if (!inView) {
+        const cur = Number(this.data.heroCurrent) || 0;
+        try {
+          const ctx = wx.createVideoContext(`hero-video-${cur}`, this);
+          if (ctx) ctx.pause();
+        } catch (err) {}
+        const heroVideoPlaying = { ...(this.data.heroVideoPlaying || {}) };
+        heroVideoPlaying[cur] = false;
+        this.setData({ heroVideoMountEnabled: false, heroVideoPlaying });
+      } else {
+        this.setData({ heroVideoMountEnabled: true });
+      }
     }
-    if (section.liveCurrent !== current) {
-      patch[`categorySections[${catIndex}].liveCurrent`] = current;
-    }
-    if (Object.keys(patch).length) {
-      this.setData(patch);
-    }
+    if (this._mainScrollPauseTimer) return;
+    this._mainScrollPauseTimer = setTimeout(() => {
+      this._mainScrollPauseTimer = null;
+    }, 120);
+    const cur = Number(this.data.heroCurrent) || 0;
+    const list = this.data.topMediaList || [];
+    list.forEach((item, i) => {
+      if (i === cur || !item || item.type !== 'video') return;
+      try {
+        const ctx = wx.createVideoContext(`hero-video-${i}`, this);
+        if (ctx) ctx.pause();
+      } catch (err) {}
+    });
   },
 
   _saveMainCategoriesToCloud(mainCategories) {
@@ -3437,7 +3602,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         if (this.db && series._id) {
             this.db.collection('shop_series').doc(series._id).remove()
               .then(() => {
-                console.log('云端删除成功');
               })
               .catch(err => {
                 console.error('云端删除失败', err);
@@ -3475,9 +3639,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   },
   adminUploadCover(e) {
     const idx = e.currentTarget.dataset.index;
-    console.log('[shop.js] ========== adminUploadCover 开始 ==========');
-    console.log('[shop.js] 产品索引:', idx);
-    
     this.chooseShopImage('cover').then(async (path) => {
       this.showMyLoading('上传中...');
       try {
@@ -3508,7 +3669,6 @@ module.exports = function createShopPageConfig(opts = {}) {
           wx.cloud.deleteFile({
             fileList: [oldFileID],
             success: () => {
-              console.log('[shop.js] 删除旧产品封面成功:', oldFileID);
             },
             fail: (err) => {
               console.error('[shop.js] 删除旧产品封面失败:', err);
@@ -3524,7 +3684,7 @@ module.exports = function createShopPageConfig(opts = {}) {
           });
         }
 
-        this.showAutoToast('成功', '封面已上传并已自动压缩');
+        this.showAutoToast('成功', '封面已上传（原图）');
       } catch (err) {
         console.error('[shop.js] adminUploadCover 上传失败:', err);
         this.showAutoToast('提示', '上传失败');
@@ -3552,7 +3712,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   adminEditSeriesPrice(e) {
     // 🔴 检查管理员权限
     if (!this.data.isAdmin) {
-      console.warn('[shop.js] adminEditSeriesPrice: 非管理员模式，忽略操作');
       return;
     }
     
@@ -3589,7 +3748,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         [`seriesList[${idx}].models[0].price`]: series.models[0].price
       });
       this.saveSeriesToCloud(series);
-      console.log('[shop.js] adminEditSeriesPrice: 价格显示已更新为:', newDisplay);
     });
   },
 
@@ -3721,7 +3879,6 @@ module.exports = function createShopPageConfig(opts = {}) {
           }
         });
     } catch (e) {
-      console.warn('[shop] detail footer IO', e);
     }
   },
 
@@ -3952,8 +4109,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   },
 
   closeDetail() { 
-    console.log('[shop] closeDetail called'); 
-    
     if (this.data.detailLongPressTimer) {
       clearTimeout(this.data.detailLongPressTimer);
       this.data.detailLongPressTimer = null;
@@ -4019,73 +4174,73 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   // 修改 2：详情页添加媒体（支持视频+图片）
   adminAddDetailMedia() {
+    const cur = (this.data.currentSeries && this.data.currentSeries.detailImages) || [];
+    const remain = Math.max(1, 9 - cur.length);
     wx.chooseMedia({
-      count: 1,
+      count: remain,
       mediaType: ['image', 'video'], // 允许选视频
       sourceType: ['album', 'camera'],
       success: async (res) => {
-        this.showMyLoading('上传中...');
+        const files = res.tempFiles || [];
+        if (!files.length) return;
+        this.showMyLoading(`上传中 0/${files.length}`);
+        let done = 0;
         try {
-          const file = res.tempFiles[0];
-          const knownSize = file && typeof file.size === 'number' ? file.size : undefined;
-          const tempPath = file.fileType === 'image'
-            ? await shopImagePrepare.prepareImageFile(file.tempFilePath, 'detail')
-            : file.tempFilePath;
-          const videoSuffix = file.fileType === 'video'
-            ? ((file.tempFilePath && file.tempFilePath.match(/\.[^.]+?$/)?.[0]) || '.mp4')
-            : '';
-          let aspectPaddingPercent = 56.25;
-          if (file.fileType === 'video') {
-            aspectPaddingPercent = await this._getDetailVideoAspectPaddingPercent(tempPath);
-          }
-          let fileID;
-          if (file.fileType === 'image') {
-            fileID = await this.uploadShopImageToCos(tempPath, 'shop/detailMedia', { knownSize, skipPrepare: true });
-          } else {
-            fileID = await this.uploadShopVideoToCos(tempPath, 'shop/detailMedia', videoSuffix, { knownSize });
-          }
-          const newItem = {
-            type: file.fileType, // 自动识别 image 或 video
-            url: fileID,
-            previewUrl: file.fileType === 'image' ? this.buildLowQualityUrl(fileID) : '',
-            poster: file.fileType === 'video' ? (file.thumbTempFilePath || '') : '',
-            autoplay: false, // 详情页视频默认不自动播放
-            isPinned: false, // 详情页视频默认不置顶
-            ...(file.fileType === 'video' ? { aspectPaddingPercent } : {})
-          };
-          
           const s = this.data.currentSeries;
-          
-          // 【修复】确保 detailImages 数组存在
-          if (!s.detailImages) {
-            s.detailImages = [];
+          if (!s.detailImages) s.detailImages = [];
+          const added = [];
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const knownSize = file && typeof file.size === 'number' ? file.size : undefined;
+            const tempPath = file.fileType === 'image'
+              ? await shopImagePrepare.prepareImageFile(file.tempFilePath, 'detail')
+              : file.tempFilePath;
+            const videoSuffix = file.fileType === 'video'
+              ? ((file.tempFilePath && file.tempFilePath.match(/\.[^.]+?$/)?.[0]) || '.mp4')
+              : '';
+            let aspectPaddingPercent = 56.25;
+            if (file.fileType === 'video') {
+              aspectPaddingPercent = await this._getDetailVideoAspectPaddingPercent(tempPath);
+            }
+            let fileID;
+            if (file.fileType === 'image') {
+              fileID = await this.uploadShopImageToCos(tempPath, 'shop/detailMedia', { knownSize, skipPrepare: true });
+            } else {
+              fileID = await this.uploadShopVideoToCos(tempPath, 'shop/detailMedia', videoSuffix, { knownSize });
+            }
+            added.push({
+              type: file.fileType,
+              url: fileID,
+              previewUrl: file.fileType === 'image' ? this.buildLowQualityUrl(fileID) : '',
+              poster: file.fileType === 'video' ? (file.thumbTempFilePath || '') : '',
+              autoplay: false,
+              isPinned: false,
+              ...(file.fileType === 'video' ? { aspectPaddingPercent } : {})
+            });
+            done += 1;
+            this.showMyLoading(`上传中 ${done}/${files.length}`);
           }
-          
-          // 【修复】使用深拷贝创建新数组，确保小程序能检测到变化
-          const updatedDetailImages = [...s.detailImages, newItem];
+          const updatedDetailImages = [...s.detailImages, ...added];
           const updatedSeries = { ...s, detailImages: updatedDetailImages };
           const hydratedList = await this.hydrateSeriesCloudDisplayUrls([updatedSeries]);
           const merged = hydratedList[0] || updatedSeries;
-          
-          this.setData({ 
+          this.setData({
             currentSeries: merged,
             [`seriesList[${this.data.currentSeriesIdx}]`]: merged,
             [`seriesList[${this.data.currentSeriesIdx}].detailImages`]: merged.detailImages
           });
-          
           await this.saveSeriesToCloud(merged);
           if (this.data.isAdmin) {
             this.setData({ showFooterBar: true });
           } else {
             wx.nextTick(() => this._scheduleDetailFooterAnchorMeasure());
           }
-          
           this.hideMyLoading();
-          this.showAutoToast('成功', '上传成功');
+          this.showAutoToast('成功', `已添加 ${done} 项`);
         } catch (err) {
           console.error('[shop.js] adminAddDetailMedia 上传失败:', err);
           this.hideMyLoading();
-          this.showAutoToast('提示', '上传失败');
+          this.showAutoToast('提示', done > 0 ? `部分成功，已添加 ${done} 项` : '上传失败');
         } finally {
           if (this.data.detailLongPressTimer) {
             clearTimeout(this.data.detailLongPressTimer);
@@ -4151,7 +4306,6 @@ module.exports = function createShopPageConfig(opts = {}) {
       wx.cloud.deleteFile({
         fileList: [oldFileID],
         success: () => {
-          console.log('[shop.js] 删除详情图片/视频成功:', oldFileID);
         },
         fail: (err) => {
           console.error('[shop.js] 删除详情图片/视频失败:', err);
@@ -4247,7 +4401,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   adminEditModelPrice(e) {
       // 🔴 检查管理员权限
       if (!this.data.isAdmin) {
-        console.warn('[shop.js] adminEditModelPrice: 非管理员模式，忽略操作');
         return;
       }
       
@@ -4258,9 +4411,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         console.error('[shop.js] adminEditModelPrice: 数据不存在');
         return;
       }
-      
-      console.log('[shop.js] adminEditModelPrice: 开始编辑价格, idx:', idx, '当前价格:', s.models[idx].price);
-      
       this._input(s.models[idx].price+'', (v)=>{
           const newPrice = Number(v);
           if (isNaN(newPrice)) {
@@ -4275,7 +4425,6 @@ module.exports = function createShopPageConfig(opts = {}) {
           });
           this.calcTotal();
           this.saveSeriesToCloud(s);
-          console.log('[shop.js] adminEditModelPrice: 价格已更新为:', newPrice);
       });
   },
 
@@ -4368,7 +4517,6 @@ module.exports = function createShopPageConfig(opts = {}) {
           wx.cloud.deleteFile({
             fileList: [oldFileID],
             success: () => {
-              console.log('[shop.js] 删除旧配置方案图片成功:', oldFileID);
             },
             fail: (err) => {
               console.error('[shop.js] 删除旧配置方案图片失败:', err);
@@ -4490,7 +4638,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     });
   },
   closeSpecsModal() { 
-    console.log('[shop] 关闭参数对比弹窗');
     this.setData({ showSpecsModal: false }); 
   },
   
@@ -4548,9 +4695,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     if (!url) {
       return;
     }
-
-    console.log('[playVideo] 打开视频播放器，URL:', url);
-
     // 🔴 修复：初始状态设为 false，等待视频真正开始播放后再设为 true
     this.setData({
       showVideoPlayer: true,
@@ -4562,13 +4706,11 @@ module.exports = function createShopPageConfig(opts = {}) {
     setTimeout(() => {
       const videoContext = wx.createVideoContext('fullscreen-video');
       if (videoContext) {
-        console.log('[playVideo] 调用 videoContext.play()');
         videoContext.play();
         // 🔴 额外保险：延迟设置状态为 true（如果事件没触发）
         // 使用多个延迟点，确保状态能正确更新
         setTimeout(() => {
           if (!this.data.isVideoPlaying) {
-            console.log('[playVideo] 300ms后检查，状态仍为false，强制设为true');
             this.setData({
               isVideoPlaying: true
             });
@@ -4576,7 +4718,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         }, 300);
         setTimeout(() => {
           if (!this.data.isVideoPlaying) {
-            console.log('[playVideo] 800ms后检查，状态仍为false，强制设为true（最终保险）');
             this.setData({
               isVideoPlaying: true
             });
@@ -4588,14 +4729,12 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   // 🔴 新增：视频可以播放时（确保状态同步）
   onVideoCanPlay() {
-    console.log('[onVideoCanPlay] 视频可以播放');
     // 如果视频设置了 autoplay，此时应该已经开始播放了
     // 延迟一下，确保视频已经开始播放
     setTimeout(() => {
       this.setData({
         isVideoPlaying: true
       });
-      console.log('[onVideoCanPlay] 设置 isVideoPlaying 为 true');
     }, 200);
   },
 
@@ -4603,24 +4742,16 @@ module.exports = function createShopPageConfig(opts = {}) {
   onDisclaimerChange(e) {
     // checkbox 的 value 是数组，包含所有被选中的 value
     const checked = Array.isArray(e.detail.value) && e.detail.value.includes('agree');
-    console.log('[onDisclaimerChange] 协议状态变化:', {
-      checked: checked,
-      value: e.detail.value,
-      currentState: this.data.agreedToDisclaimer
-    });
-    
     this.setData({
       agreedToDisclaimer: checked
     }, () => {
       // 设置完成后再次确认状态
-      console.log('[onDisclaimerChange] 设置完成后的状态:', this.data.agreedToDisclaimer);
     });
   },
 
   // 🔴 新增：点击文字区域也可以切换勾选状态
   toggleDisclaimerCheckbox() {
     const newState = !this.data.agreedToDisclaimer;
-    console.log('[toggleDisclaimerCheckbox] 切换协议状态:', newState);
     this.setData({
       agreedToDisclaimer: newState
     });
@@ -4676,15 +4807,12 @@ module.exports = function createShopPageConfig(opts = {}) {
     }
 
     if (this.data.isVideoPlaying) {
-      console.log('[toggleVideoPlayPause] 当前播放中，执行暂停');
       videoContext.pause();
     } else {
-      console.log('[toggleVideoPlayPause] 当前暂停中，执行播放');
       videoContext.play();
       // 🔴 额外保险：如果 onVideoPlay 事件没触发，延迟设置状态
       setTimeout(() => {
         if (!this.data.isVideoPlaying) {
-          console.log('[toggleVideoPlayPause] 延迟设置状态为 true');
           this.setData({
             isVideoPlaying: true
           });
@@ -4696,8 +4824,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   // 5. [新增] 视频播放事件
   onVideoPlay(e) {
     const { index, location } = e.currentTarget.dataset || {};
-    console.log('[onVideoPlay] 视频开始播放，位置:', location, '索引:', index);
-    
     // 更新全屏播放器状态
     this.setData({
       isVideoPlaying: true
@@ -4718,8 +4844,6 @@ module.exports = function createShopPageConfig(opts = {}) {
   // 6. [新增] 视频暂停事件
   onVideoPause(e) {
     const { index, location } = e.currentTarget.dataset || {};
-    console.log('[onVideoPause] 视频暂停，位置:', location, '索引:', index);
-    
     // 更新全屏播放器状态
     this.setData({
       isVideoPlaying: false
@@ -4742,7 +4866,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     const currentIndex = e.detail.current;
     const topMediaList = this.data.topMediaList;
     const heights = this.data.heroSlideHeightsPx || {};
-    const h = heights[currentIndex] != null ? heights[currentIndex] : this._defaultHeroHeightPx();
+    const h = this._resolveHeroSlideHeightPx(currentIndex, topMediaList, heights);
     const prevIndex = Number(this.data.heroCurrent) || 0;
     if (currentIndex === prevIndex && Number(this.data.heroSwiperHeightPx) === Number(h)) {
       this._syncHeroAutoForCurrent();
@@ -4792,7 +4916,6 @@ module.exports = function createShopPageConfig(opts = {}) {
       this.showAutoToast('视频加载失败', `位置: ${location === 'hero' ? '顶部轮播' : '详情页'}\n错误: ${errMsg}\n\n请检查视频文件是否存在或重新上传`);
     } else {
       // 普通用户只显示简单提示
-      console.warn('[onVideoError] 视频加载失败，但不显示错误给用户');
     }
   },
 
@@ -4819,7 +4942,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     // 如果视频时间在更新，说明视频正在播放
     // 这是一个备用机制，确保状态正确
     if (!this.data.isVideoPlaying) {
-      console.log('[onVideoTimeUpdate] 检测到视频正在播放，更新状态');
       this.setData({
         isVideoPlaying: true
       });
@@ -5094,21 +5216,48 @@ module.exports = function createShopPageConfig(opts = {}) {
         this.setData({ [`accessoryList[${idx}].price`]: 0 });
       }
     }
+    if (this._accDetailCloseTimer) {
+      clearTimeout(this._accDetailCloseTimer);
+      this._accDetailCloseTimer = null;
+    }
     this.setData({
       showAccDetail: true,
+      accDetailClosing: false,
       currentAccIdx: idx,
       accDetailSwiperIndex: 0,
       accDetailShowPurchaseFooter: !!showPurchaseFooter
     });
   },
 
-  closeAccessoryDetail() {
-    this.setData({
-      showAccDetail: false,
-      accDetailSwiperIndex: 0,
-      accDetailShowPurchaseFooter: false,
-      accCheckoutActive: false
-    });
+  closeAccessoryDetail(opts = {}) {
+    const immediate = !!(opts && opts.immediate);
+    if (!this.data.showAccDetail && !this.data.accDetailClosing) return;
+    if (this._accDetailCloseTimer) {
+      clearTimeout(this._accDetailCloseTimer);
+      this._accDetailCloseTimer = null;
+    }
+    if (immediate) {
+      this.setData({
+        showAccDetail: false,
+        accDetailClosing: false,
+        accDetailSwiperIndex: 0,
+        accDetailShowPurchaseFooter: false,
+        accCheckoutActive: false
+      });
+      return;
+    }
+    if (this.data.accDetailClosing) return;
+    this.setData({ accDetailClosing: true });
+    this._accDetailCloseTimer = setTimeout(() => {
+      this._accDetailCloseTimer = null;
+      this.setData({
+        showAccDetail: false,
+        accDetailClosing: false,
+        accDetailSwiperIndex: 0,
+        accDetailShowPurchaseFooter: false,
+        accCheckoutActive: false
+      });
+    }, 400);
   },
 
   /** 配件详情左上角 ✕：只关详情层，保留下层（产品详情 / 商城列表） */
@@ -5536,7 +5685,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     
     if (this.db && acc._id) {
       this.db.collection('shop_accessories').doc(acc._id).remove().catch(err => {
-        console.log('删除配件失败:', err);
       });
     }
     
@@ -5545,7 +5693,6 @@ module.exports = function createShopPageConfig(opts = {}) {
       wx.cloud.deleteFile({
         fileList: fileIDsToDelete,
         success: () => {
-          console.log('[shop.js] 删除配件所有图片成功:', fileIDsToDelete);
         },
         fail: (err) => {
           console.error('[shop.js] 删除配件所有图片失败:', err);
@@ -5580,7 +5727,6 @@ module.exports = function createShopPageConfig(opts = {}) {
           wx.cloud.deleteFile({
             fileList: [oldFileID],
             success: () => {
-              console.log('[shop.js] 删除旧配件缩略图成功:', oldFileID);
             },
             fail: (err) => {
               console.error('[shop.js] 删除旧配件缩略图失败:', err);
@@ -5629,6 +5775,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     this.setData({ totalPrice: m.price + o.price + accP });
   },
   _openOrderSheet(extra = {}) {
+    const fromAccDetail = !!(this.data.accCheckoutActive || extra.accCheckoutActive);
     const patch = {
       showOrderModal: true,
       orderSheetAnimIn: false,
@@ -5636,10 +5783,18 @@ module.exports = function createShopPageConfig(opts = {}) {
       hasModalOpen: true,
       ...extra
     };
+    if (fromAccDetail) {
+      // 兜底：从配件详情发起时，必须保留详情层作为底层，不允许回落到商城页
+      patch.showAccDetail = true;
+      patch.accDetailShowPurchaseFooter = true;
+    }
     this.setData(patch, () => {
       wx.nextTick(() => {
         if (this.data.showOrderModal) {
           this.setData({ orderSheetAnimIn: true });
+          if (typeof this.loadCheckoutCoupons === 'function') {
+            this.loadCheckoutCoupons();
+          }
         }
       });
     });
@@ -5662,11 +5817,12 @@ module.exports = function createShopPageConfig(opts = {}) {
     const tip = orderId
       ? '订单已生成，可在「订单」待付款中继续支付'
       : '支付已取消';
+    const restoreAccDetail = !!this.data.accCheckoutActive;
     const afterAnim = () => {
       if (this.data.buyNowCartSnapshot !== null) {
         this.setData({ buyNowCartSnapshot: null });
       }
-      this.setData({
+      const patch = {
         cart: [],
         cartTotalPrice: 0,
         showOrderModal: false,
@@ -5675,11 +5831,12 @@ module.exports = function createShopPageConfig(opts = {}) {
         agreedToDisclaimer: false,
         accCheckoutActive: false,
         hasModalOpen: false
-      });
-      try {
-        wx.removeStorageSync('my_cart');
-        this.saveCartToCache([]);
-      } catch (e) {}
+      };
+      if (restoreAccDetail) {
+        patch.showAccDetail = true;
+        patch.accDetailShowPurchaseFooter = true;
+      }
+      this.setData(patch);
       this._refreshHubOrdersIfEmbedded();
       this.showAutoToast('提示', tip);
     };
@@ -5720,6 +5877,9 @@ module.exports = function createShopPageConfig(opts = {}) {
     });
     this._prefillCheckoutAddressFromCache();
     this.reCalcFinalPrice(total);
+    if (typeof this.loadCheckoutCoupons === 'function') {
+      this.loadCheckoutCoupons();
+    }
     this.openOrderModal();
   },
 
@@ -5814,10 +5974,6 @@ module.exports = function createShopPageConfig(opts = {}) {
       const result = await parseSmartAddress(text);
       
       // 🔴 调试：打印完整的解析结果
-      console.log('[confirmSmartPaste] 完整解析结果:', JSON.stringify(result, null, 2));
-      console.log('[confirmSmartPaste] result.detail:', result.detail);
-      console.log('[confirmSmartPaste] result.address:', result.address);
-
       // 构造更新数据
       let updateData = {};
       const { MUNICIPALITY_PROVINCES } = require('../../../utils/smartAddressParser.js');
@@ -5840,7 +5996,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         updateData['districtIndex'] = -1;
         updateData['selectedCity'] = '';
         updateData['selectedDistrict'] = '';
-        console.log('[confirmSmartPaste] ⚠️ 无法确定省份，已清空省市区选择，请用户手动选择');
       } else if (finalProvince) {
         // 尝试匹配省份
         const provinceName = finalProvince.replace('省', '').replace('市', '').replace('自治区', '').replace('特别行政区', '');
@@ -5866,17 +6021,14 @@ module.exports = function createShopPageConfig(opts = {}) {
           // 🔴 修复：先设置详细地址，然后再执行 setData
           // 详细地址只填充详细部分（优先使用detail字段）
           if (result.detail && result.detail.trim()) {
-            console.log('[confirmSmartPaste] 使用result.detail填充详细地址:', result.detail);
             updateData['detailAddress'] = result.detail.trim();
           } else if (result.address && result.address.trim()) {
             // 如果没有detail，从address中移除省市区
-            console.log('[confirmSmartPaste] 从result.address提取详细地址:', result.address);
             let detail = result.address;
             if (result.province) detail = detail.replace(result.province, '').trim();
             if (cityForFill) detail = detail.replace(cityForFill, '').trim();
             if (districtForFill) detail = detail.replace(districtForFill, '').trim();
             updateData['detailAddress'] = detail.trim() || result.address.trim();
-            console.log('[confirmSmartPaste] 提取后的详细地址:', updateData['detailAddress']);
           }
           
           // 组装完整地址用于orderInfo.address（兼容旧逻辑）
@@ -5892,7 +6044,6 @@ module.exports = function createShopPageConfig(opts = {}) {
           
           // 🔴 修复：先执行 setData，然后立即加载城市列表（异步，但会在加载完成后自动匹配）
           this.setData(updateData, () => {
-            console.log('[confirmSmartPaste] ✅ setData完成，详细地址已更新:', this.data.detailAddress);
             // 在 setData 回调中加载城市列表，确保数据已更新
             if (this.data.provinceList[provinceIndex].id) {
               this.loadCityListForSmartPaste(this.data.provinceList[provinceIndex].id, cityForFill, districtForFill);
@@ -5919,25 +6070,20 @@ module.exports = function createShopPageConfig(opts = {}) {
           updateData['districtIndex'] = -1;
           updateData['selectedCity'] = '';
           updateData['selectedDistrict'] = '';
-          console.log('[confirmSmartPaste] ⚠️ 无法匹配省份:', finalProvince);
         }
       }
       
       // 🔴 修复：详细地址只填充详细部分（优先使用detail字段）
       if (result.detail && result.detail.trim()) {
-        console.log('[confirmSmartPaste] 使用result.detail填充详细地址:', result.detail);
         updateData['detailAddress'] = result.detail.trim();
       } else if (result.address && result.address.trim()) {
         // 如果没有detail，从address中移除省市区
-        console.log('[confirmSmartPaste] 从result.address提取详细地址:', result.address);
         let detail = result.address;
         if (result.province) detail = detail.replace(result.province, '').trim();
         if (cityForFill) detail = detail.replace(cityForFill, '').trim();
         if (districtForFill) detail = detail.replace(districtForFill, '').trim();
         updateData['detailAddress'] = detail.trim() || result.address.trim();
-        console.log('[confirmSmartPaste] 提取后的详细地址:', updateData['detailAddress']);
       } else {
-        console.log('[confirmSmartPaste] ⚠️ 没有找到详细地址，result.detail和result.address都为空');
       }
       
       // 组装完整地址用于orderInfo.address（兼容旧逻辑）
@@ -6697,15 +6843,81 @@ module.exports = function createShopPageConfig(opts = {}) {
   // 关闭自定义弹窗
   closeCustomDialog() {
     this._dialogCallback = null;
+    this._paySuccessDialogShown = false;
     this._closeDialogWithAnimation();
   },
 
   dismissTransientModals() {
     this._dialogCallback = null;
+    this._paySuccessDialogShown = false;
     const patch = {};
     if (this.data.dialog && this.data.dialog.show) patch['dialog.show'] = false;
     if (this.data.autoToast && this.data.autoToast.show) patch['autoToast.show'] = false;
     if (Object.keys(patch).length) this.setData(patch);
+  },
+
+  /** 支付成功或离开商城 Tab：关掉 portal 上的选购配置/结算层，避免盖住订单页 */
+  _dismissShopOverlaysAfterPay() {
+    if (this.data.showCartSuccess) {
+      this.setData({ showCartSuccess: false, cartSuccessClosing: false });
+    }
+    if (this.data.showAccDetail || this.data.accDetailClosing) {
+      this.closeAccessoryDetail({ immediate: true });
+    }
+    if (this.data.showDetail) {
+      this.closeDetail();
+    } else if (this.data.showOrderModal || this.data.orderSheetClosing) {
+      this.closeOrderModal({ skipRevert: true });
+    }
+    this.setData({ hasModalOpen: false });
+    this.dismissTransientModals();
+  },
+
+  /** 支付成功后去枢纽「订单」Tab（个人中心看单） */
+  _goToHubOrdersAfterPay() {
+    this._dismissShopOverlaysAfterPay();
+    const hubNav = require('../../../utils/hubNav.js');
+    const pageBack = require('../../../utils/pageBack.js');
+    const pages = pageBack.getPages();
+    const productsIdx = pageBack.findRouteIndex('products/products');
+    if (productsIdx >= 0) {
+      hubNav.switchTab('orders');
+      if (productsIdx < pages.length - 1) {
+        setTimeout(() => {
+          pageBack.safePop(pages.length - 1 - productsIdx);
+        }, 120);
+      }
+      return;
+    }
+    wx.reLaunch({
+      url: '/package-app/pages/products/products?hubTab=1',
+      fail: () => {
+        wx.reLaunch({
+          url: '/package-app/pages/orders/orders',
+          fail: () => {
+            wx.navigateTo({ url: '/package-app/pages/orders/orders' });
+          }
+        });
+      }
+    });
+  },
+
+  _showPaySuccessNavigateDialog() {
+    if (this._paySuccessDialogShown) return;
+    this._paySuccessDialogShown = true;
+    if (this.data.autoToast && this.data.autoToast.show) {
+      this.setData({ 'autoToast.show': false, autoToastClosing: false });
+    }
+    this.showMyDialog({
+      title: '支付成功',
+      content: '是否前往个人中心查看订单？',
+      showCancel: true,
+      confirmText: '去个人中心',
+      cancelText: '继续选购',
+      success: () => {
+        this._goToHubOrdersAfterPay();
+      }
+    });
   },
 
   // 点击弹窗确定
@@ -6799,6 +7011,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     };
     if (opts.fromAccDetail) {
       patch.accCheckoutActive = true;
+      // 保留配件详情弹窗在原位，不做下滑收起；结算层直接叠在上面
       patch.showAccDetail = true;
       patch.accDetailShowPurchaseFooter = true;
     }
@@ -6839,7 +7052,13 @@ module.exports = function createShopPageConfig(opts = {}) {
         orderSheetClosing: false,
         agreedToDisclaimer: false,
         accCheckoutActive: false,
-        hasModalOpen: false
+        hasModalOpen: false,
+        selectedCouponIds: [],
+        couponDiscountYuan: 0,
+        couponSheetOpen: false,
+        couponSheetClosing: false,
+        couponSheetAnimIn: false,
+        couponHint: ''
       };
       if (restoreAccDetail) {
         patch.showAccDetail = true;
@@ -6858,22 +7077,7 @@ module.exports = function createShopPageConfig(opts = {}) {
   // 6. [核心] 提交校验与组装
   // ========================================================
   submitOrder(e) {
-    console.log('[submitOrder] 按钮被点击');
-    console.log('[submitOrder] 事件数据:', e?.currentTarget?.dataset);
-    console.log('[submitOrder] 当前数据状态:', {
-      agreedToDisclaimer: this.data.agreedToDisclaimer,
-      type: typeof this.data.agreedToDisclaimer
-    });
-    
     const { cart, orderInfo, detailAddress, finalTotalPrice, shippingFee, shippingMethod } = this.data;
-
-    console.log('[submitOrder] 当前数据:', { 
-      cartLength: cart.length, 
-      orderInfo, 
-      detailAddress, 
-      finalTotalPrice 
-    });
-
     // 【未勾选免责时】点击灰色立即支付：弹出「是否阅读免责协议」确认，确认后自动打钩
     if (!this.data.agreedToDisclaimer) {
       this.setData({ 'autoToast.show': false });
@@ -6892,32 +7096,27 @@ module.exports = function createShopPageConfig(opts = {}) {
 
     // A. 购物车校验
     if (cart.length === 0) {
-      console.log('[submitOrder] 购物车为空');
       return this.showError('购物车为空');
     }
 
     // B. 信息校验
     if (!orderInfo.name) {
-      console.log('[submitOrder] 校验失败：收货人姓名为空');
       return this.showError('请填写收货人姓名');
     }
 
     // 手机号 11 位校验
     if (!orderInfo.phone || !/^1[3-9]\d{9}$/.test(orderInfo.phone)) {
-      console.log('[submitOrder] 校验失败：手机号格式错误', orderInfo.phone);
       return this.showError('请输入正确的11位手机号');
     }
 
     // 地址校验
     if (!detailAddress || !detailAddress.trim()) {
-      console.log('[submitOrder] 校验失败：详细地址为空');
       return this.showError('请填写详细地址');
     }
 
     // C. 省市区：详细地址框 + 选择器 + orderInfo.address（智能粘贴）合并后再校验
     const addr = this.resolveAddressForOrder();
     if (!addr.province && !addr.city) {
-      console.log('[submitOrder] 校验失败：省市区未填写', addr);
       return this.showError('请填写省、市、区');
     }
 
@@ -6930,29 +7129,19 @@ module.exports = function createShopPageConfig(opts = {}) {
       address: fullAddressString
     };
 
-    // E. 运费校验（顺丰始终计费；仅配件订单的中通也需计费）
-    const needShipFee =
-      shippingMethod === 'sf' ||
-      (shippingMethod === 'zto' && this._cartIsAccessoryOnly(cart));
+    // E. 运费校验（未达商城包邮条件时需有运费）
+    const needShipFee = !this.data.checkoutFreeShipping;
     if (needShipFee && shippingFee === 0) {
-      console.log('[submitOrder] 校验失败：运费未计算');
       return this.showError('请完善地址信息以计算运费');
     }
-
-    console.log('[submitOrder] 协议校验通过，继续支付流程');
-
     // 【修复】在调用支付前，重新计算最终价格，确保金额准确
     this.reCalcFinalPrice();
     const currentFinalTotalPrice = this.data.finalTotalPrice;
     const currentShippingFee = this.data.shippingFee;
 
-    console.log('[submitOrder] 所有校验通过，准备弹出「定制产品不可退换」确认');
-    console.log('[submitOrder] 重新计算后的价格:', {
-      finalTotalPrice: currentFinalTotalPrice,
-      shippingFee: currentShippingFee,
-      cartTotalPrice: this.data.cartTotalPrice
-    });
-
+    if (this.data.couponHint && (this.data.selectedCouponIds || []).length) {
+      return this.showError(this.data.couponHint);
+    }
     // 先关闭可能存在的自动提示，确保确认弹窗能马上显示
     this.setData({ 'autoToast.show': false });
 
@@ -6974,11 +7163,8 @@ module.exports = function createShopPageConfig(opts = {}) {
   // 真实支付流程
   // ========================================================
   doRealPayment(cart, orderInfo, finalTotalPrice, shippingFee, shippingMethod) {
-    console.log('[doRealPayment] 开始执行支付流程');
-    
     // 如果没有传入参数，则从 this.data 读取（兼容旧调用）
     if (!cart) {
-      console.log('[doRealPayment] 参数为空，从 this.data 读取');
       const data = this.data;
       cart = data.cart;
       orderInfo = data.orderInfo;
@@ -6986,33 +7172,19 @@ module.exports = function createShopPageConfig(opts = {}) {
       shippingFee = data.shippingFee;
       shippingMethod = data.shippingMethod;
     }
-
-    console.log('[doRealPayment] 支付参数:', {
-      cartLength: cart ? cart.length : 0,
-      orderInfo,
-      finalTotalPrice,
-      shippingFee,
-      shippingMethod
-    });
-
     // 【新增】仅管理员身份支付 0.01 元（普通用户按真实金额）
     const isAdminPay = this.data.isAdmin;
     let payAmount = finalTotalPrice;
     if (isAdminPay) {
       payAmount = 0.01;
-      console.log('[doRealPayment] 管理员身份，支付金额调整为 0.01 元');
     }
 
     // 【新增】检查支付金额
-    console.log('[doRealPayment] 正在支付，金额为:', payAmount);
-    
     if (!payAmount || payAmount <= 0 || isNaN(payAmount)) {
       console.error('[doRealPayment] 金额异常:', payAmount);
       this.showAutoToast('支付失败', `订单金额异常（${payAmount}），请重新选择商品`);
       return;
     }
-
-    console.log('[doRealPayment] 准备调用云函数 createOrder');
     this.showMyLoading('唤起收银台...');
 
     // 🔴 获取用户昵称
@@ -7056,14 +7228,14 @@ module.exports = function createShopPageConfig(opts = {}) {
             r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
           } catch (e) {}
           return r;
-        })() // 🔴 从维修/引导购配件进入商城下单时写入，供管理员端区分黄色卡片
+        })(),
+        couponIds: typeof this.getSelectedCouponIdsForOrder === 'function'
+          ? this.getSelectedCouponIdsForOrder()
+          : []
       },
       success: res => {
-        console.log('[doRealPayment] 云函数调用成功，返回结果:', res);
         this.hideMyLoading();
         const payment = res.result;
-        console.log('[doRealPayment] 支付参数:', payment);
-
         // 【新增检测】检查云函数返回的错误
         if (payment && payment.error) {
           console.error('[doRealPayment] 云函数返回错误:', payment);
@@ -7077,18 +7249,14 @@ module.exports = function createShopPageConfig(opts = {}) {
           this.showAutoToast('提示', '支付系统对接中，请稍后再试');
           return;
         }
-
-        console.log('[doRealPayment] 准备调用 wx.requestPayment');
         // 4. 唤起微信原生支付界面
         wx.requestPayment({
           ...payment,
           success: (payRes) => {
-            console.log('[doRealPayment] 支付成功:', payRes);
-            // 支付成功处理
-            this.showAutoToast('成功', '支付成功');
-            this.setData({ accCheckoutActive: false, showAccDetail: false });
+            this.closeAccessoryDetail({ immediate: true });
             this.closeOrderModal({ skipRevert: true });
-            
+            this._dismissShopOverlaysAfterPay();
+
             // 🔴 如果是从维修单跳转过来的，更新维修单状态
             let repairId = (this.data.repairId || '').toString().trim();
             if (!repairId) {
@@ -7097,108 +7265,27 @@ module.exports = function createShopPageConfig(opts = {}) {
               } catch (e) {}
             }
             const orderIdPatch = payment.outTradeNo;
-            if (orderIdPatch && repairId && wx.cloud) {
-              wx.cloud.database().collection('shop_orders').where({ orderId: orderIdPatch }).update({
-                data: { repairId }
-              }).catch(() => {});
-            }
-            // 与 shouhou 一致：走云函数服务端写入 shop_orders.repairId（客户端 update 常被权限拦截）
             if (orderIdPatch && repairId) {
-              let nick = '';
-              try {
-                nick = wx.getStorageSync('user_nickname') || '';
-                if (!nick) {
-                  const ui = wx.getStorageSync('userInfo');
-                  if (ui && ui.nickName) nick = ui.nickName;
-                }
-              } catch (e) {}
-              wx.cloud.callFunction({
-                name: 'writeShouhouguoqi',
-                data: {
-                  repairId,
-                  goodsList: cart || [],
-                  addressData: orderInfo || this.data.orderInfo || {},
-                  userNickname: nick,
-                  orderId: orderIdPatch || ''
-                },
-                fail: (err) => console.error('[doRealPayment] writeShouhouguoqi:', err)
-              });
+              this._pendingPayCtx = {
+                orderId: orderIdPatch,
+                repairId,
+                cart: cart || [],
+                addr: orderInfo || this.data.orderInfo || {}
+              };
             }
-            try {
-              wx.removeStorageSync('guided_parts_repair_id');
-            } catch (e) {}
-            if (repairId) {
-              const db = wx.cloud.database();
-              db.collection('shouhou_repair').doc(repairId).update({
-                data: {
-                  purchasePartsStatus: 'completed'
-                }
-              }).then(() => {
-                console.log('[doRealPayment] 维修单配件购买状态已更新');
-              }).catch(err => {
-                console.error('[doRealPayment] 更新维修单状态失败:', err);
-              });
-            }
-            
-            // 清理购物车
-            this.setData({ cart: [], cartTotalPrice: 0 });
-            wx.removeStorageSync('my_cart');
-            wx.setStorageSync('last_address', this.data.orderInfo);
-            
-            // 🔴 支付成功后，延迟同步订单信息（等待支付回调先处理，获得交易单号）
-            const orderId = payment.outTradeNo;
-            console.log('[doRealPayment] 支付成功，订单号:', orderId);
-            
-            if (orderId) {
-              this.startPaymentVerification(orderId);
-            }
-            
-            this.showMyDialog({
-              title: '支付成功',
-              content: '是否前往个人中心查看订单？',
-              showCancel: true,
-              confirmText: '去个人中心',
-              cancelText: '继续选购',
-              success: () => {
-                // 延迟一下再跳转，给支付成功状态和查单请求一点缓冲时间
-                setTimeout(() => {
-                  const pages = getCurrentPages();
-                  const prevPage = pages.length > 1 ? pages[pages.length - 2] : null;
-                  // 仅当上一页就是 my 时才返回；否则统一直接跳 my，避免“返回到别的页导致看起来没跳转”
-                  if (prevPage && prevPage.route && (prevPage.route.endsWith('/orders/orders') || prevPage.route.endsWith('/my/my'))) {
-                    wx.navigateBack({
-                      delta: 1,
-                      success: () => {
-                        console.log('[doRealPayment] 返回 my 页面成功');
-                        setTimeout(() => {
-                          if (typeof prevPage.loadMyOrders === 'function') prevPage.loadMyOrders();
-                          if (typeof prevPage.loadMyActivitiesPromise === 'function') prevPage.loadMyActivitiesPromise();
-                          if (prevPage.data && prevPage.data.isAdmin && typeof prevPage.loadPendingRepairs === 'function') {
-                            prevPage.loadPendingRepairs();
-                          }
-                        }, 300);
-                      },
-                      fail: () => {
-                        wx.reLaunch({ url: '/package-app/pages/orders/orders' });
-                      }
-                    });
-                    return;
-                  }
 
-                  wx.reLaunch({
-                    url: '/package-app/pages/orders/orders',
-                    fail: () => {
-                      wx.redirectTo({
-                        url: '/package-app/pages/orders/orders',
-                        fail: () => {
-                          wx.navigateTo({ url: '/package-app/pages/orders/orders' });
-                        }
-                      });
-                    }
-                  });
-                }, 500);
-              }
-            });
+            wx.setStorageSync('last_address', this.data.orderInfo);
+            this._cartClearedAfterPay = false;
+
+            const orderId = payment.outTradeNo;
+            if (orderId) {
+              this.startPaymentVerification(orderId, {
+                clearCartOnConfirm: true,
+                finalizeRepairParts: !!(orderIdPatch && repairId)
+              });
+            }
+
+            setTimeout(() => this._showPaySuccessNavigateDialog(), 280);
           },
           fail: (err) => {
             console.error('[doRealPayment] 支付失败:', err);
@@ -7214,22 +7301,66 @@ module.exports = function createShopPageConfig(opts = {}) {
     });
   },
 
-  startPaymentVerification(orderId) {
+  _clearCartAfterPaid() {
+    if (this._cartClearedAfterPay) return;
+    this._cartClearedAfterPay = true;
+    this.setData({ cart: [], cartTotalPrice: 0 });
+    try {
+      wx.removeStorageSync('my_cart');
+      this.saveCartToCache([]);
+    } catch (e) {}
+  },
+
+  _syncRepairPartsAfterPaid(ctx) {
+    const orderId = ctx && ctx.orderId;
+    const repairId = ctx && ctx.repairId;
+    if (!orderId || !repairId) return;
+    let nick = '';
+    try {
+      nick = wx.getStorageSync('user_nickname') || '';
+      if (!nick) {
+        const ui = wx.getStorageSync('userInfo');
+        if (ui && ui.nickName) nick = ui.nickName;
+      }
+    } catch (e) {}
+    wx.cloud.callFunction({
+      name: 'writeShouhouguoqi',
+      data: {
+        repairId,
+        goodsList: (ctx && ctx.cart) || [],
+        addressData: (ctx && ctx.addr) || {},
+        userNickname: nick,
+        orderId
+      },
+      fail: (err) => console.error('[doRealPayment] writeShouhouguoqi:', err)
+    });
+    try {
+      wx.removeStorageSync('guided_parts_repair_id');
+    } catch (e) {}
+  },
+
+  startPaymentVerification(orderId, opts = {}) {
     if (!orderId) return;
-    // 第一段：即时轮询，尽快确认支付成功并触发状态同步
-    this.callCheckPayResult(orderId, 1, {
+    const baseOpts = {
       maxAttempts: 6,
       intervalMs: 2500,
       showLoading: true,
-      silent: false
-    });
+      silent: false,
+      clearCartOnConfirm: !!opts.clearCartOnConfirm,
+      finalizeRepairParts: !!opts.finalizeRepairParts
+    };
+    this.callCheckPayResult(orderId, 1, baseOpts);
     // 第二段：延迟复查，覆盖回调慢/网络抖动导致的漏检
+    const clearCartOnConfirm = !!opts.clearCartOnConfirm;
+    const finalizeRepairParts = !!opts.finalizeRepairParts;
     setTimeout(() => {
       this.callCheckPayResult(orderId, 1, {
         maxAttempts: 4,
         intervalMs: 3000,
         showLoading: false,
-        silent: true
+        silent: true,
+        clearCartOnConfirm,
+        finalizeRepairParts
       });
     }, 12000);
     setTimeout(() => {
@@ -7237,7 +7368,9 @@ module.exports = function createShopPageConfig(opts = {}) {
         maxAttempts: 3,
         intervalMs: 3500,
         showLoading: false,
-        silent: true
+        silent: true,
+        clearCartOnConfirm,
+        finalizeRepairParts
       });
     }, 28000);
   },
@@ -7257,14 +7390,21 @@ module.exports = function createShopPageConfig(opts = {}) {
       data: { orderId },
       success: (res) => {
         const result = res.result || {};
-        console.log('[callCheckPayResult] 云函数返回:', result);
         if (result.success) {
-          if (!silent) {
+          this._dismissShopOverlaysAfterPay();
+          if (options.clearCartOnConfirm) {
+            this._clearCartAfterPaid();
+          }
+          if (options.finalizeRepairParts && this._pendingPayCtx) {
+            this._syncRepairPartsAfterPaid(this._pendingPayCtx);
+            this._pendingPayCtx = null;
+          }
+          if (!silent && !this._paySuccessDialogShown && !(this.data.dialog && this.data.dialog.show)) {
             this.showAutoToast('成功', '订单已确认');
           }
         } else if (attempt < maxAttempts) {
           setTimeout(() => this.callCheckPayResult(orderId, attempt + 1, options), intervalMs);
-        } else if (!silent) {
+        } else if (!silent && !this._paySuccessDialogShown) {
           this.showAutoToast('提示', result.msg || '支付状态待确认，请稍后在"我的订单"查看');
         }
       },
@@ -7315,19 +7455,34 @@ module.exports = function createShopPageConfig(opts = {}) {
   // ========================================================
   // 5. [核心] 运费与总价计算逻辑（从详细地址解析省市区）
   // ========================================================
-  /** 购物车是否仅含配件（管理员挂在版本行单独售卖的配件，无主机） */
+  /** 购物车是否仅含配件（无主机） */
   _cartIsAccessoryOnly(cart) {
     const list = cart || this.data.cart || [];
     if (!list.length) return false;
-    return list.every(item => item && item.type === 'accessory');
+    if (list.some((item) => item && item.type === 'main')) return false;
+    return list.every((item) => item && item.type === 'accessory');
   },
 
-  /** 省内 13 / 省外 22（与顺丰一致） */
+  /** 商城包邮：仅配件，或商品金额合计 > 50 元 */
+  _shopQualifiesFreeShipping(cart, goodsSubtotal) {
+    if (this._cartIsAccessoryOnly(cart)) return true;
+    return (Number(goodsSubtotal) || 0) > 50;
+  },
+
+  /** 顺丰：省内 13 / 省外 22 */
   _provinceShippingFee(province) {
     const p = (province || '').trim();
     if (!p) return 0;
     if (p.indexOf('广东') > -1) return 13;
     return 22;
+  },
+
+  /** 商城仅配件 + 中通：省内 12 / 省外 15 */
+  _ztoAccessoryShippingFee(province) {
+    const p = (province || '').trim();
+    if (!p) return 0;
+    if (p.indexOf('广东') > -1) return 12;
+    return 15;
   },
 
   _resolveProvinceForShipping() {
@@ -7338,22 +7493,29 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   reCalcFinalPrice(goodsPrice = this.data.cartTotalPrice) {
     const { shippingMethod } = this.data;
-    const accessoryOnly = this._cartIsAccessoryOnly();
+    const cart = this.data.cart || [];
+    const freeShipping = this._shopQualifiesFreeShipping(cart, goodsPrice);
     const province = this._resolveProvinceForShipping();
     let fee = 0;
 
-    if (shippingMethod === 'zto') {
-      // 含主机订单：中通包邮；仅配件订单：中通按省计费
-      fee = accessoryOnly ? this._provinceShippingFee(province) : 0;
-    } else if (shippingMethod === 'sf') {
-      fee = this._provinceShippingFee(province);
+    if (!freeShipping) {
+      if (shippingMethod === 'zto') {
+        fee = this._ztoAccessoryShippingFee(province);
+      } else if (shippingMethod === 'sf') {
+        fee = this._provinceShippingFee(province);
+      }
     }
+
+    const subtotal = this._roundMoney ? this._roundMoney(goodsPrice + fee) : Math.round((goodsPrice + fee) * 100) / 100;
+    const couponPatch = typeof this.patchFinalPriceWithCoupons === 'function'
+      ? this.patchFinalPriceWithCoupons(subtotal)
+      : { finalTotalPrice: subtotal };
 
     this.setData({
       shippingFee: fee,
       cartTotalPrice: goodsPrice,
-      finalTotalPrice: goodsPrice + fee,
-      checkoutAccessoryOnly: accessoryOnly
+      checkoutFreeShipping: freeShipping,
+      ...couponPatch
     });
   },
 
@@ -7378,7 +7540,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     
     // 如果缓存存在且未过期，直接使用
     if (cachedProvinceList && cachedProvinceList.length > 0 && (now - cacheTime) < cacheValidTime) {
-      console.log('[shop] 使用缓存的省份列表（未过期）');
       this.setData({
         provinceList: cachedProvinceList
       });
@@ -7387,14 +7548,12 @@ module.exports = function createShopPageConfig(opts = {}) {
     
     // 如果缓存过期，清除旧缓存
     if (cachedProvinceList && (now - cacheTime) >= cacheValidTime) {
-      console.log('[shop] 省份列表缓存已过期，重新加载');
       wx.removeStorageSync('province_list');
       wx.removeStorageSync('province_list_time');
     }
     
     // 🔴 修复：如果API配额用完，直接使用本地数据，不调用API
     // 先尝试使用默认省份列表（不依赖API）
-    console.log('[shop] 使用本地省份列表（避免API配额限制）');
     this.setDefaultProvinceList();
   },
   
@@ -7441,7 +7600,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     this.setData({
       provinceList: defaultProvinces
     });
-    console.log('[shop] 使用默认省份列表（不依赖API）');
   },
 
   // [新增] 省份选择变化
@@ -7920,7 +8078,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         .get();
       
       if (adminCheck.data && adminCheck.data.length > 0) {
-        console.log('[shop] ✅ 检测到管理员身份，豁免封禁检查');
         return; // 管理员直接返回，不检查封禁状态
       }
       
@@ -7936,7 +8093,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         const isBanned = rawFlag === true || rawFlag === 1 || rawFlag === 'true' || rawFlag === '1';
         
         if (isBanned) {
-          console.log('[shop] 检测到封禁状态，跳转到封禁页');
           const banType = btn.banReason === 'screenshot' || btn.banReason === 'screen_record' 
             ? 'screenshot' 
             : (btn.banReason === 'location_blocked' ? 'location' : 'banned');
@@ -7947,7 +8103,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     } catch (err) {
       const msg = (err.errMsg || err.message || '') + '';
       if (msg.indexOf('access_token') !== -1) {
-        console.warn('[shop] 云会话未就绪，跳过封禁检查（请确保已登录/选择云环境）');
         return;
       }
       console.error('[shop] 检查封禁状态失败:', err);
@@ -7960,7 +8115,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     if (wx.setVisualEffectOnCapture) {
       wx.setVisualEffectOnCapture({
         visualEffect: 'hidden',
-        success: () => console.log('[shop] 🛡️ 硬件级防偷拍锁定')
+        success: () => {}
       });
     }
 
@@ -8058,9 +8213,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     if (type === 'screenshot') {
       wx.setStorageSync('is_screenshot_banned', true);
     }
-
-    console.log('[shop] 🔴 截屏/录屏检测，立即跳转');
-    
     // 🔴 立即跳转到封禁页面（不等待云函数）
     this._jumpToBlocked(type);
 
@@ -8075,7 +8227,6 @@ module.exports = function createShopPageConfig(opts = {}) {
         phoneModel: sysInfo.model || ''
       },
       success: (res) => {
-        console.log('[shop] ✅ 设置封禁状态成功:', res);
       },
       fail: (err) => {
         console.error('[shop] ⚠️ 设置封禁状态失败:', err);
@@ -8092,14 +8243,12 @@ module.exports = function createShopPageConfig(opts = {}) {
           ...locationData
         },
         success: (res) => {
-          console.log('[shop] 补充位置信息成功，类型:', type, '结果:', res);
         },
         fail: (err) => {
           console.error('[shop] 补充位置信息失败:', err);
         }
       });
     }).catch(() => {
-      console.log('[shop] 位置信息获取失败，但封禁状态已设置');
     });
   },
 
@@ -8107,7 +8256,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     // 🔴 防止重复跳转
     const app = getApp();
     if (app.globalData._isJumpingToBlocked) {
-      console.log('[shop] 正在跳转中，忽略重复跳转请求');
       return;
     }
 
@@ -8115,7 +8263,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     const pages = getCurrentPages();
     const currentPage = pages[pages.length - 1];
     if (currentPage && currentPage.route === 'pages/blocked/blocked') {
-      console.log('[shop] 已在 blocked 页面，无需重复跳转');
       return;
     }
 
@@ -8124,7 +8271,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     wx.reLaunch({
       url: `/pages/blocked/blocked?type=${type}`,
       success: () => {
-        console.log('[shop] 跳转到 blocked 页面成功');
         setTimeout(() => {
           app.globalData._isJumpingToBlocked = false;
         }, 2000);
@@ -8137,4 +8283,6 @@ module.exports = function createShopPageConfig(opts = {}) {
     });
   }
   };
+  Object.assign(pageConfig, checkoutCouponMixin.methods);
+  return pageConfig;
 };

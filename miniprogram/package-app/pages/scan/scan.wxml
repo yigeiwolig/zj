@@ -144,10 +144,17 @@
             style="transform: translateX({{item.status === 'active' ? (modelDragOffset + 'px') : (item.status === 'next' ? (nextCardOffsetPercent + '%') : (item.status === 'prev' ? (prevCardOffsetPercent + '%') : '0'))}}) scale({{item.status === 'active' ? modelActiveScale : (item.status === 'next' ? nextModelScale : (item.status === 'prev' ? prevModelScale : modelSideScale))}}); opacity: {{item.status === 'active' ? activeCardOpacity : (item.status === 'next' ? nextCardOpacity : (item.status === 'prev' ? prevCardOpacity : 0))}}; transition: {{isDraggingModel ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.22s ease'}}; will-change: transform, opacity;">
         <view class="card-header">
           <view class="series-tag">{{item.tag}}</view>
-          <view class="model-name">{{item.name}} <text class="model-suffix {{item.type === 'Max' ? 'max' : ''}} {{item.type === 'Max Long' ? 'max-long' : ''}}">{{item.type}}</text></view>
+          <view class="model-name">{{item.name}} <text class="model-suffix {{item.type === 'Max' ? 'max' : ''}} {{item.type === 'Max Long' ? 'max-long' : ''}} {{item.type === 'Pro Max' ? 'pro-max' : ''}}">{{item.type}}</text></view>
         </view>
-        <view class="visual-area">
-          <image class="custom-icon" src="{{item.icon}}" mode="aspectFit" lazy-load="true"></image>
+        <view class="visual-area {{item.name === 'F3' ? 'visual-area--f3' : ''}}">
+          <block wx:if="{{item.name === 'F3'}}">
+            <view class="f3-icon-wrap f3-icon-wrap--gallery {{item.type === 'Pro' ? 'f3-icon-wrap--pro' : 'f3-icon-wrap--max'}}">
+              <image class="custom-icon custom-icon--f3" src="{{item.icon}}" mode="widthFix" lazy-load="true"></image>
+            </view>
+          </block>
+          <block wx:else>
+            <image class="custom-icon" src="{{item.icon}}" mode="aspectFit" lazy-load="true"></image>
+          </block>
         </view>
         <view class="action-btn" catchtap="openDetail" data-index="{{index}}">
           点击进入控制台
@@ -160,7 +167,7 @@
   <!-- ======================= -->
   <!-- 详情与控制区 -->
   <!-- ======================= -->
-  <view class="control-page {{showDetail ? 'show' : ''}}"
+  <view class="control-page {{showDetail ? 'is-mounted' : ''}} {{detailEnterAnim ? 'show' : ''}}"
         bindtouchstart="onDetailSwipeStart"
         bindtouchmove="onDetailSwipeMove"
         bindtouchend="onDetailSwipeEnd">
@@ -183,7 +190,7 @@
       <view class="view-layer {{detailMode === 'main' ? 'active' : ''}}">
         
 
-        <view class="integrated-card">
+        <view class="integrated-card {{currentModel.name === 'F3' ? 'integrated-card--f3' : ''}}">
 
 
 
@@ -256,8 +263,15 @@
           </view>
           
           <!-- 3. 设备图 -->
-          <view class="card-visual">
-            <image class="card-device-img" src="{{currentModel.icon}}" mode="widthFix" lazy-load="true"></image>
+          <view class="card-visual {{currentModel.name === 'F3' ? 'card-visual--f3' : ''}}">
+            <block wx:if="{{currentModel.name === 'F3'}}">
+              <view class="f3-icon-wrap f3-icon-wrap--detail {{currentModel.type === 'Pro' ? 'f3-icon-wrap--pro' : 'f3-icon-wrap--max'}}">
+                <image class="card-device-img card-device-img--f3" src="{{currentModel.icon}}" mode="widthFix" lazy-load="true"></image>
+              </view>
+            </block>
+            <block wx:else>
+              <image class="card-device-img" src="{{currentModel.icon}}" mode="widthFix" lazy-load="true"></image>
+            </block>
           </view>
 
           <!-- 4. 底部按钮 -->
@@ -275,8 +289,8 @@
               </view>
             </view>
 
-            <!-- 🔴 隐蔽模式教学入口（非Max型号显示） -->
-            <view class="split-btn-group" wx:if="{{currentModel.type !== 'Max' && currentModel.type !== 'Max Long'}}">
+            <!-- 🔴 隐蔽模式教学入口（非 Max 型号显示，F1 PRO 不显示） -->
+            <view class="split-btn-group" wx:if="{{currentModel.type !== 'Max' && currentModel.type !== 'Max Long' && currentModel.type !== 'Pro Max' && !(currentModel.name === 'F1' && currentModel.type === 'Pro')}}">
               <view class="split-item" bindtap="openStealthTutorial">
                 <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}" lazy-load="true"></image></view>
                 <text class="btn-text">开启隐蔽模式</text>
@@ -288,8 +302,8 @@
               </view>
             </view>
 
-            <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Max Long'}}">
-               <view class="split-item" style="{{currentModel.name === 'F1' ? 'opacity:0.3; pointer-events:none;' : ''}}" bindtap="handleAutoCalibrate">
+            <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Max Long' || currentModel.type === 'Pro Max'}}">
+               <view class="split-item" style="{{currentModel.name === 'F1' && currentModel.type === 'Max' ? 'opacity:0.3; pointer-events:none;' : ''}}" bindtap="handleAutoCalibrate">
                  <view class="btn-icon-circle"><image class="svg-icon rotate-icon" src="{{icons.cali}}" lazy-load="true"></image></view>
                  <text class="btn-text">自动校准</text>
                </view>
@@ -301,7 +315,7 @@
             </view>
 
             <!-- 🔴 隐蔽模式教学入口（在自动校准/高级设置下面） -->
-            <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Max Long'}}">
+            <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Max Long' || currentModel.type === 'Pro Max'}}">
               <view class="split-item" bindtap="openStealthTutorial">
                 <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}" lazy-load="true"></image></view>
                 <text class="btn-text">开启隐蔽模式</text>
@@ -503,7 +517,7 @@
           <text class="m-title">高级配置</text>
           <view class="m-close" bindtap="closeSettings">✕</view>
         </view>
-        <view class="setting-row" wx:if="{{currentModel.name !== 'F1'}}">
+        <view class="setting-row" wx:if="{{currentModel.name !== 'F1' || currentModel.type === 'Pro Max'}}">
           <view class="row-info"><text class="label-main">主动故障检测</text><text class="label-sub">FAULT DETECTION</text></view>
           <view class="mag-track" data-key="faultDetect" data-state="{{settingState.faultDetect}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="faultDetect" data-val="left"></view>

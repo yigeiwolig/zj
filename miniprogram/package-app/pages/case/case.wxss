@@ -414,9 +414,9 @@ page {
 }
 
 .card-label {
-  font-size: 28rpx;
-  color: #000;
-  font-weight: 700;
+  font-size: 22rpx;
+  color: #8E8E93;
+  font-weight: 500;
   flex-shrink: 0;
 }
 
@@ -1488,12 +1488,17 @@ page {
   z-index: 10001; /* 🔴 修复：确保在 header (10000) 之上 */
   overflow: hidden;
   will-change: transform;
+  pointer-events: auto;
 }
 .fullscreen-player-container.fs-ty-smooth {
   transition: transform 0.38s cubic-bezier(0.32, 0.72, 0, 1);
 }
 .fullscreen-player-container.fs-ty-instant {
   transition: none !important;
+}
+.fullscreen-player-container.fs-cover-hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 .fullscreen-video { width: 100%; height: 100%; }
 
@@ -1715,8 +1720,8 @@ page {
 /* 关闭按钮 & 底部信息 */
 .close-video-btn {
   position: absolute;
-  top: 80rpx; /* 🔴 修复：下移，避免太高 */
-  left: 30rpx;
+  top: 100rpx;
+  left: 48rpx;
   width: 70rpx;
   height: 70rpx;
   background: rgba(0,0,0,0.6);

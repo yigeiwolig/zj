@@ -18,18 +18,57 @@
 .hub-embed-portal-layer .custom-modal-mask,
 .hub-embed-portal-layer .return-required-mask,
 .hub-embed-portal-layer .bottom-modal-mask,
+.hub-embed-portal-layer .return-required-mask,
 .hub-embed-portal-layer .fill-repair-mask,
 .hub-embed-portal-layer .purchase-parts-mask,
 .hub-embed-portal-layer .location-permission-mask,
-.hub-embed-portal-layer .smart-paste-mask,
+.hub-embed-portal-layer .custom-dialog-mask,
+.hub-embed-portal-layer .custom-modal-mask {
+  z-index: 100000010;
+}
+
 .hub-embed-portal-layer .logistics-modal-mask,
-.hub-embed-portal-layer .password-modal-mask,
+.hub-embed-portal-layer .password-modal-mask {
+  z-index: 100000040;
+}
+
+.hub-embed-portal-layer .coupon-sheet-portal,
+.hub-embed-portal-layer .coupon-sheet-portal--hub {
+  z-index: 100000045;
+}
+
+.hub-embed-portal-layer .smart-paste-mask,
+.hub-embed-portal-layer .smart-paste-mask--above-sheet,
+.hub-embed-portal-layer .smart-paste-mask--in-bottom-modal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  box-sizing: border-box;
+  z-index: 100000050;
+}
+
+.hub-embed-portal-layer .bottom-modal-mask .smart-paste-mask--in-bottom-modal {
+  z-index: 100000060 !important;
+}
+
+.hub-embed-portal-layer .video-modal-mask,
+.hub-embed-portal-layer .video-modal-mask--top {
+  z-index: 100000060;
+}
+
 .hub-embed-portal-layer .upload-modal-overlay,
 .hub-embed-portal-layer .full-modal,
-.hub-embed-portal-layer .video-modal-mask,
 .hub-embed-portal-layer .success-mask,
 .hub-embed-portal-layer .action-sheet-mask,
-.hub-embed-portal-layer .center-toast-mask {
+.hub-embed-portal-layer .center-toast-mask,
+.hub-embed-portal-layer .auto-toast-mask,
+.hub-embed-portal-layer .loading-mask,
+.hub-embed-portal-layer .acc-slot-picker-mask,
+.hub-embed-portal-layer .fill-repair-mask,
+.hub-embed-portal-layer .purchase-parts-mask,
+.hub-embed-portal-layer .paid-repair-confirm-mask {
   position: fixed;
   left: 0;
   top: 0;

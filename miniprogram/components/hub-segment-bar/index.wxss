@@ -1,10 +1,8 @@
 .hub-segment-wrap {
   position: relative;
   z-index: 120;
-  padding-left: 28rpx;
-  padding-right: 28rpx;
-  padding-bottom: 8rpx;
-  background: #f2f2f7;
+  padding: 0 32rpx 14rpx;
+  background: #f4f4f7;
   box-sizing: border-box;
 }
 
@@ -13,33 +11,65 @@
   flex-direction: row;
   align-items: flex-end;
   gap: 40rpx;
+  min-height: 108rpx;
+  padding: 28rpx 0 8rpx;
+  box-sizing: border-box;
 }
 
 .hub-segment-tab {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding-bottom: 8rpx;
+  align-items: flex-start;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 0 2rpx 0 0;
+  box-sizing: border-box;
 }
 
 .hub-segment-label {
-  font-size: 32rpx;
-  font-weight: 500;
-  color: rgba(60, 60, 67, 0.55);
-  line-height: 1.2;
-  transition: font-size 0.22s ease, color 0.22s ease, font-weight 0.22s ease;
+  display: block;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    font-size 0.28s cubic-bezier(0.25, 0.1, 0.25, 1),
+    color 0.24s ease,
+    font-weight 0.24s ease,
+    opacity 0.24s ease,
+    transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
+/* 未选中：明显小一档 */
+.hub-segment-tab:not(.is-active) .hub-segment-label {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #b0b0b5;
+  opacity: 0.9;
+  transform: translateY(-4rpx);
+}
+
+/* 选中：大字主标题 */
 .hub-segment-tab.is-active .hub-segment-label {
-  font-size: 44rpx;
-  font-weight: 700;
+  font-size: 64rpx;
+  font-weight: 800;
   color: #1d1d1f;
+  letter-spacing: -2rpx;
+  transform: translateY(0);
 }
 
 .hub-segment-indicator {
-  width: 40rpx;
-  height: 6rpx;
-  border-radius: 6rpx;
+  width: 44rpx;
+  height: 7rpx;
+  margin-top: 12rpx;
+  border-radius: 999rpx;
   background: #1d1d1f;
-  margin-top: 10rpx;
+  opacity: 0;
+  transform: scaleX(0.35);
+  transition:
+    opacity 0.24s ease,
+    transform 0.28s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.hub-segment-tab.is-active .hub-segment-indicator {
+  opacity: 1;
+  transform: scaleX(1);
 }

@@ -251,6 +251,46 @@ page {
   z-index: 10;
 }
 
+/* F3 控制台：整体上移、图标区留白、底部按钮不贴边 */
+.integrated-card--f3 {
+  margin-top: 200rpx;
+  padding-bottom: 48rpx;
+}
+.integrated-card--f3 .card-visual--f3 {
+  flex: 0 0 auto;
+  min-height: 280rpx;
+  padding: 64rpx 0 56rpx;
+  box-sizing: border-box;
+}
+.integrated-card--f3 .card-controls {
+  margin-top: 8rpx;
+  margin-bottom: 56rpx;
+}
+
+/* F3 横版标光学居中：左重右轻，用 wrap + padding 补偿（image 上 transform 在部分机型不生效） */
+.f3-icon-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+}
+.f3-icon-wrap--gallery.f3-icon-wrap--max {
+  padding-left: 112rpx;
+}
+.f3-icon-wrap--gallery.f3-icon-wrap--pro {
+  padding-left: 64rpx;
+}
+.f3-icon-wrap--detail {
+  min-height: 152rpx;
+}
+.f3-icon-wrap--detail.f3-icon-wrap--max {
+  padding-left: 104rpx;
+}
+.f3-icon-wrap--detail.f3-icon-wrap--pro {
+  padding-left: 56rpx;
+}
+
 /* ========================================= */
 /* 2. 胶囊容器 (控制位置与跳动动画) */
 /* ========================================= */
@@ -688,11 +728,20 @@ page {
   display: flex; align-items: center; justify-content: center;
   background: #FFFFFF; position: relative;
 }
+.card-visual--f3 {
+  width: 100%;
+  align-self: stretch;
+}
 .card-device-img {
   width: 420rpx; height: auto; 
   filter: drop-shadow(0 20rpx 40rpx rgba(0,0,0,0.05));
 }
-
+.card-device-img--f3 {
+  width: 360rpx;
+  height: auto;
+  flex-shrink: 0;
+  display: block;
+}
 .card-controls {
   width: 100%; padding: 0 40rpx; box-sizing: border-box;
   margin-top: auto; margin-bottom: 20rpx;
@@ -945,9 +994,18 @@ page {
   width: 100%; height: 100%;
   display: flex; align-items: center; justify-content: center;
   perspective: 1000px; z-index: 10;
-  transition: opacity 0.4s, transform 0.4s; pointer-events: auto;
+  transition:
+    opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: auto;
+  will-change: opacity, transform;
 }
-.gallery-container.fade-out { opacity: 0; pointer-events: none; transform: scale(0.9); z-index: 0; }
+.gallery-container.fade-out {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.94) translateY(-24rpx);
+  z-index: 0;
+}
 
 .card {
   position: absolute; width: 620rpx; height: 1000rpx;
@@ -969,8 +1027,17 @@ page {
 .model-suffix.max { color: #FF3B30; }
 .model-suffix.pro-long { color: #007AFF; }
 .model-suffix.max-long { color: #FF3B30; }
+.model-suffix.pro-max { color: #FF3B30; }
 .visual-area { flex: 1; display: flex; align-items: center; justify-content: center; }
+.visual-area--f3 { width: 100%; align-self: stretch; }
 .custom-icon { width: 400rpx; height: 300rpx; filter: drop-shadow(0 20rpx 40rpx rgba(0,0,0,0.1)); }
+/* F3 横版整机标（轮播主页）：仅定宽，height 随 SVG 比例自适应，避免压扁 */
+.custom-icon--f3 {
+  width: 360rpx;
+  height: auto;
+  flex-shrink: 0;
+  display: block;
+}
 .action-btn {
   width: 100%; height: 100rpx; background: #1c1c1e; color: #fff;
   border-radius: 50rpx; display: flex; align-items: center; justify-content: center;
@@ -984,9 +1051,21 @@ page {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%;
   background: #eef1f5; display: flex; flex-direction: column; align-items: center;
   opacity: 0; visibility: hidden; z-index: 0; pointer-events: none;
-  transform: translateY(50rpx); transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+  transform: translateY(56rpx) scale(0.96);
+  transition:
+    opacity 0.46s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.46s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
 }
-.control-page.show { opacity: 1; visibility: visible; z-index: 50; pointer-events: auto; transform: translateY(0); }
+.control-page.is-mounted {
+  visibility: visible;
+  z-index: 50;
+}
+.control-page.is-mounted.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
 .detail-touch-guard {
   position: absolute;
   left: 0;
@@ -1010,10 +1089,15 @@ page {
 .view-layer { 
   position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
   display: flex; flex-direction: column; align-items: center; justify-content: center; 
-  transition: opacity 0.24s ease, transform 0.24s ease;
-  opacity: 0; pointer-events: none; z-index: 50; transform: scale(0.95); 
+  transition:
+    opacity 0.36s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  opacity: 0; pointer-events: none; z-index: 50; transform: translateY(20rpx) scale(0.97); 
 }
-.view-layer.active { opacity: 1; pointer-events: auto; transform: scale(1); }
+.control-page.is-mounted .view-layer.active {
+  transition-delay: 0.08s;
+}
+.view-layer.active { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
 
 /* 编辑页相关 */
 .top-presets-row {

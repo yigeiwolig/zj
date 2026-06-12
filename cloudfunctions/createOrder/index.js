@@ -7,16 +7,26 @@ const path = require('path')
 // 使用当前环境
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
-// 🔴 微信支付配置
-const WX_PAY_CONFIG = {
-  // 优先读取环境变量，未配置时回退到当前值（兼容旧部署）
-  mchId: process.env.WX_PAY_MCH_ID || '1103782674',
-  appId: process.env.WX_PAY_APP_ID || 'wxf1a81dd77d810edf',
-  apiV3Key: process.env.WX_PAY_API_V3_KEY || 'MTMoGaiSheWeChatPay2025Key888888',
-  serialNo: process.env.WX_PAY_SERIAL_NO || '73F820E3A9CBFF6FF509EAB7B2449CEBAB33E479', // 🔴 从证书中提取的实际序列号
-  certPath: path.join(__dirname, 'apiclient_cert.p12'),
-  keyPath: path.join(__dirname, 'apiclient_key.pem'), // 私钥文件路径
-  certPassword: process.env.WX_PAY_CERT_PASSWORD || '1103782674' // p12证书密码通常是商户号
+let _wxPayConfigCache = null
+
+function getWxPayConfig() {
+  if (_wxPayConfigCache) return _wxPayConfigCache
+  const mchId = process.env.WX_PAY_MCH_ID
+  const appId = process.env.WX_PAY_APP_ID
+  const apiV3Key = process.env.WX_PAY_API_V3_KEY
+  if (!mchId || !appId || !apiV3Key) {
+    throw new Error('缺少微信支付环境变量 WX_PAY_MCH_ID / WX_PAY_APP_ID / WX_PAY_API_V3_KEY')
+  }
+  _wxPayConfigCache = {
+    mchId,
+    appId,
+    apiV3Key,
+    serialNo: process.env.WX_PAY_SERIAL_NO || '',
+    certPath: path.join(__dirname, 'apiclient_cert.p12'),
+    keyPath: path.join(__dirname, 'apiclient_key.pem'),
+    certPassword: process.env.WX_PAY_CERT_PASSWORD || mchId
+  }
+  return _wxPayConfigCache
 }
 
 // 🔴 加载私钥（优先使用单独的私钥文件）
@@ -26,20 +36,21 @@ function getPrivateKey() {
   
   try {
     // 🔴 方式1：直接读取私钥文件（更可靠）
-    if (fs.existsSync(WX_PAY_CONFIG.keyPath)) {
-      privateKey = fs.readFileSync(WX_PAY_CONFIG.keyPath, 'utf8')
+    const cfg = getWxPayConfig()
+    if (fs.existsSync(cfg.keyPath)) {
+      privateKey = fs.readFileSync(cfg.keyPath, 'utf8')
       console.log('[createOrder] 从私钥文件加载成功')
       return privateKey
     }
     
     // 🔴 方式2：从p12证书中提取（备用方案）
     const forge = require('node-forge')
-    const p12Buffer = fs.readFileSync(WX_PAY_CONFIG.certPath)
+    const p12Buffer = fs.readFileSync(cfg.certPath)
     
     let p12
     try {
       const p12Asn1 = forge.asn1.fromDer(p12Buffer.toString('binary'))
-      p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, WX_PAY_CONFIG.certPassword)
+      p12 = forge.pkcs12.pkcs12FromAsn1(p12Asn1, false, cfg.certPassword)
     } catch (e1) {
       try {
         const p12Asn1 = forge.asn1.fromDer(p12Buffer.toString('binary'))
@@ -102,7 +113,7 @@ function generateWxPaySignature(method, url, timestamp, nonce, body) {
 // 🔴 调用微信支付统一下单接口
 function createWxPayOrder(orderData) {
   return new Promise((resolve, reject) => {
-    const { mchId, appId, serialNo } = WX_PAY_CONFIG
+    const { mchId, appId, serialNo } = getWxPayConfig()
     const url = '/v3/pay/transactions/jsapi'
     const method = 'POST'
     const timestamp = Math.floor(Date.now() / 1000).toString()
@@ -183,7 +194,7 @@ function createWxPayOrder(orderData) {
 
 // 🔴 生成前端支付参数（小程序支付）
 function generatePaymentParams(prepayId) {
-  const { appId, mchId, apiV3Key } = WX_PAY_CONFIG
+  const { appId, mchId, apiV3Key } = getWxPayConfig()
   const timeStamp = Math.floor(Date.now() / 1000).toString()
   const nonceStr = crypto.randomBytes(16).toString('hex')
   const packageStr = `prepay_id=${prepayId}`
@@ -226,14 +237,24 @@ function guessProvince(addressData) {
   return first
 }
 
-/** 购物车是否仅含配件（单独购买配件，无主机） */
-function cartIsAccessoryOnly(goods) {
-  const typed = (goods || []).filter(it => it && (it.type === 'main' || it.type === 'accessory'))
-  if (typed.length === 0) return false
-  return typed.every(it => it.type === 'accessory')
+/** 商城购物车：是否仅含配件（无主机） */
+function shopCartIsAccessoryOnly(goods) {
+  const list = (goods || []).filter((it) => it && (it.type === 'main' || it.type === 'accessory'))
+  if (!list.length) return false
+  if (list.some((it) => it.type === 'main')) return false
+  return list.every((it) => it.type === 'accessory')
 }
 
-/** 省内 13 / 省外 22（单位：元） */
+/**
+ * 商城包邮：仅配件订单，或商品金额合计 > 50 元
+ */
+function shopQualifiesFreeShipping(goods, goodsSubtotal) {
+  if (shopCartIsAccessoryOnly(goods)) return true
+  if (Number(goodsSubtotal) > 50) return true
+  return false
+}
+
+/** 顺丰等：省内 13 / 省外 22（单位：元） */
 function provinceShippingFee(province) {
   const p = province ? String(province).trim() : ''
   if (!p) return 0
@@ -241,16 +262,34 @@ function provinceShippingFee(province) {
   return 22
 }
 
-/** 与小页面 shop.reCalcFinalPrice 一致：主机订单中通包邮；仅配件订单中通/顺丰均按省计费 */
-function computeShippingFeeServer(shippingMethod, addressData, goods) {
+/** 商城仅配件 + 中通：省内 12 / 省外 15 */
+function ztoAccessoryShippingFee(province) {
+  const p = province ? String(province).trim() : ''
+  if (!p) return 0
+  if (p.indexOf('广东') !== -1) return 12
+  return 15
+}
+
+/** 收运费时：中通省内12/省外15，顺丰省内13/省外22 */
+function computePaidShippingFee(shippingMethod, province) {
+  const m = String(shippingMethod || 'zto').toLowerCase()
+  if (m === 'zto') return ztoAccessoryShippingFee(province)
+  if (m === 'sf') return provinceShippingFee(province)
+  return 0
+}
+
+/**
+ * 商城：仅配件或商品>50包邮；售后购配件(part)始终收运费
+ */
+function computeShippingFeeServer(shippingMethod, addressData, goods, goodsSubtotal) {
   const m = String(shippingMethod || 'zto').toLowerCase()
   if (m === 'none' || m === '') return 0
   const province = guessProvince(addressData || {})
-  if (m === 'zto') {
-    if (cartIsAccessoryOnly(goods)) return provinceShippingFee(province)
-    return 0
+  const cat = classifyGoods(goods || [])
+  if (cat === 'shop' && shopQualifiesFreeShipping(goods, goodsSubtotal)) return 0
+  if (cat === 'shop' || cat === 'shouhou_parts') {
+    return computePaidShippingFee(m, province)
   }
-  if (m === 'sf') return provinceShippingFee(province)
   return 0
 }
 
@@ -331,10 +370,14 @@ async function computeShouhouPartsSubtotal(db, goods) {
   return roundMoney(subtotal)
 }
 
-async function computeRepairSubtotal(db, repairId) {
+async function computeRepairSubtotal(db, repairId, payerOpenid) {
   if (!repairId) throw new Error('缺少维修单 ID')
   const res = await db.collection('shouhou_repair').doc(repairId).get()
   if (!res.data) throw new Error('维修单不存在')
+  const owner = res.data._openid || ''
+  if (payerOpenid && owner && owner !== payerOpenid) {
+    throw new Error('无权支付该维修单')
+  }
   const items = res.data.repairItems || []
   const sum = items.reduce((s, it) => s + (Number(it.price) || 0), 0)
   return roundMoney(sum)
@@ -377,25 +420,26 @@ async function resolveServerPricing(db, event, wxOpenId) {
 
   // --- 维修费用支付（个人中心发起）---
   if (isRepairPayment && repairId) {
-    goodsSubtotal = await computeRepairSubtotal(db, repairId)
+    goodsSubtotal = await computeRepairSubtotal(db, repairId, wxOpenId)
     shippingFee = 0
     mode = 'repair'
   } else {
     const first = (goods && goods[0]) || {}
     const ridGuess = extractRepairIdFromGoods(goods)
     if (first.spec === '维修项目' && ridGuess) {
-      goodsSubtotal = await computeRepairSubtotal(db, ridGuess)
+      goodsSubtotal = await computeRepairSubtotal(db, ridGuess, wxOpenId)
       shippingFee = 0
       mode = 'repair_repay'
     } else {
       const cat = classifyGoods(goods || [])
       if (cat === 'empty') throw new Error('订单商品为空')
-      shippingFee = computeShippingFeeServer(shippingMethod, addressData, goods)
       if (cat === 'shop') {
         goodsSubtotal = await computeShopCartSubtotal(db, goods)
+        shippingFee = computeShippingFeeServer(shippingMethod, addressData, goods, goodsSubtotal)
         mode = 'shop'
       } else {
         goodsSubtotal = await computeShouhouPartsSubtotal(db, goods)
+        shippingFee = computeShippingFeeServer(shippingMethod, addressData, goods, goodsSubtotal)
         mode = 'shouhou_parts'
       }
     }
@@ -442,8 +486,16 @@ exports.main = async (event, context) => {
   const db = cloud.database()
   let repayExistingDoc = null
 
+  if (!wxContext.OPENID) {
+    return { error: true, msg: '请先登录' }
+  }
+
   try {
     let pricingInput = { ...event }
+
+    if ((orderSource === 'shouhou' || isRepairPayment) && !(repairId && String(repairId).trim())) {
+      return { error: true, msg: '缺少维修单信息，请从维修引导重新下单' }
+    }
 
     if (action === 'repay' && existingOrderId) {
       const existRes = await db.collection('shop_orders').where({
@@ -456,7 +508,8 @@ exports.main = async (event, context) => {
       }
 
       const existing = existRes.data[0]
-      if (existing.status !== 'UNPAID') {
+      const existingStatus = existing.status || existing.realStatus
+      if (existingStatus !== 'UNPAID') {
         return { error: true, msg: '该订单当前不可重新支付' }
       }
 
@@ -474,10 +527,49 @@ exports.main = async (event, context) => {
     const pricing = await resolveServerPricing(db, pricingInput, wxContext.OPENID)
     console.log('[createOrder] server pricing:', pricing)
 
+    let couponIds = Array.isArray(event.couponIds) ? event.couponIds.filter(Boolean) : []
+    if (repayExistingDoc && Array.isArray(repayExistingDoc.couponIds) && repayExistingDoc.couponIds.length > 0) {
+      couponIds = repayExistingDoc.couponIds.filter(Boolean)
+    }
+    const eventCouponDiscountYuan = Number(event.couponDiscountYuan) || 0
+    const eventPreCouponTotalYuan = Number(event.preCouponTotalYuan) || 0
+    let couponDiscountYuan = Number(repayExistingDoc && repayExistingDoc.couponDiscountYuan) || eventCouponDiscountYuan || 0
+    let preCouponTotalYuan = Number(repayExistingDoc && repayExistingDoc.preCouponTotalYuan) || eventPreCouponTotalYuan || pricing.serverFullTotal
+
+    if (
+      couponIds.length > 0 &&
+      !pricing.adminUser &&
+      pricing.pricingMode === 'shop'
+    ) {
+      const couponRes = await cloud.callFunction({
+        name: 'referral',
+        data: {
+          action: 'computeCouponDiscount',
+          couponIds,
+          fullTotalYuan: pricing.serverFullTotal,
+          pricingMode: pricing.pricingMode
+        }
+      })
+      const cr = (couponRes && couponRes.result) || {}
+      if (!cr.success) {
+        return { error: true, msg: cr.error || '优惠券不可用' }
+      }
+      couponIds = cr.appliedIds || couponIds
+      couponDiscountYuan = cr.discountYuan || 0
+      preCouponTotalYuan = cr.preCouponTotalYuan || pricing.serverFullTotal
+      pricing.payAmountYuan = cr.payAmountYuan != null ? cr.payAmountYuan : roundMoney(pricing.serverFullTotal - couponDiscountYuan)
+      if (pricing.payAmountYuan < 0.01) pricing.payAmountYuan = 0.01
+    } else if (couponIds.length > 0 && pricing.pricingMode !== 'shop') {
+      return { error: true, msg: '当前订单类型不可使用优惠券' }
+    }
+
     const auditBase = {
       goodsSubtotal: pricing.goodsSubtotal,
       shippingFee: pricing.shippingFee,
       serverFullTotal: pricing.serverFullTotal,
+      preCouponTotalYuan,
+      couponDiscountYuan,
+      couponIds,
       pricingMode: pricing.pricingMode,
       adminTestPay: !!pricing.adminUser,
       serverPricedAt: new Date()
@@ -513,7 +605,7 @@ exports.main = async (event, context) => {
     }
     // 非管理员且非维修类：应付通常应大于 0.01（防止未配置价格却被下单）
     const repairLike = pricing.pricingMode === 'repair' || pricing.pricingMode === 'repair_repay'
-    if (!pricing.adminUser && payYuan <= 0.01 && !repairLike) {
+    if (!pricing.adminUser && payYuan <= 0.01 && !repairLike && !(couponDiscountYuan > 0)) {
       return { error: true, msg: '订单金额过低，请确认商品价格已配置' }
     }
 
@@ -529,7 +621,10 @@ exports.main = async (event, context) => {
       isRepairPayment: repayExistingDoc ? !!repayExistingDoc.isRepairPayment : !!isRepairPayment,
       repairId: (repayExistingDoc && repayExistingDoc.repairId) || repairId || '',
       orderSource: (repayExistingDoc && repayExistingDoc.orderSource) || orderSource || '',
-      pricingAudit: auditBase
+      pricingAudit: auditBase,
+      couponIds: couponIds.length ? couponIds : [],
+      couponDiscountYuan: couponDiscountYuan || 0,
+      preCouponTotalYuan: preCouponTotalYuan || payYuan
     }
 
     if (repayExistingDoc) {

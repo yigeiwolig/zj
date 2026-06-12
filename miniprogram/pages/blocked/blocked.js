@@ -1,4 +1,6 @@
 // miniprogram/pages/blocked/blocked.js
+const referralPendingBind = require('../../utils/referralPendingBind.js');
+
 Page({
   data: {
     checkTimer: null,
@@ -229,6 +231,7 @@ Page({
           if (nickname) {
             wx.setStorageSync('user_nickname', nickname);
           }
+          referralPendingBind.flushPendingReferralBind({ silent: true });
 
           this._closeAllPopups();
           this.setData({
@@ -264,6 +267,7 @@ Page({
           wx.removeStorageSync('is_user_banned');
           wx.removeStorageSync('is_screenshot_banned');
           // 保持 has_permanent_auth 和 user_nickname，不清除
+          referralPendingBind.flushPendingReferralBind({ silent: true });
           
           // 🔴 使用自定义弹窗替代微信官方弹窗
             this._closeAllPopups();
@@ -289,7 +293,8 @@ Page({
           // 清除所有封禁标记和授权状态
         wx.removeStorageSync('is_user_banned');
           wx.removeStorageSync('is_screenshot_banned');
-        wx.removeStorageSync('has_permanent_auth'); 
+        wx.removeStorageSync('has_permanent_auth');
+        referralPendingBind.clearBoundFlagIfNeeded();
         
         setTimeout(() => {
             this.setData({ showCustomSuccessModal: false });

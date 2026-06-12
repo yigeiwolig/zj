@@ -30,17 +30,21 @@ function extractFlags(doc) {
   return {};
 }
 
-async function readHubNewCover() {
+async function readHubHomeConfig() {
   try {
     const res = await db.collection('shop_config').doc(HUB_HOME_DOC_ID).get();
     const data = (res && res.data) || {};
-    return String(data.hubNewCover || '').trim();
+    return {
+      hubNewCover: String(data.hubNewCover || '').trim(),
+      hubNewMediaList: Array.isArray(data.hubNewMediaList) ? data.hubNewMediaList : [],
+      hubNewMediaAutoplay: data.hubNewMediaAutoplay === true
+    };
   } catch (err) {
     const msg = String((err && err.message) || err || '');
     if (msg.includes('does not exist') || msg.includes('not exist') || msg.includes('DOCUMENT_NOT_EXIST')) {
-      return '';
+      return { hubNewCover: '', hubNewMediaList: [], hubNewMediaAutoplay: false };
     }
-    return '';
+    return { hubNewCover: '', hubNewMediaList: [], hubNewMediaAutoplay: false };
   }
 }
 
@@ -48,19 +52,35 @@ exports.main = async () => {
   try {
     const res = await db.collection('shop_config').doc(DOC_ID).get();
     const data = (res && res.data) || {};
-    const hubNewCover = await readHubNewCover();
+    const homeCfg = await readHubHomeConfig();
     return {
       success: true,
       flags: extractFlags(data),
       updateTime: data.updateTime || null,
-      hubNewCover
+      hubNewCover: homeCfg.hubNewCover,
+      hubNewMediaList: homeCfg.hubNewMediaList,
+      hubNewMediaAutoplay: homeCfg.hubNewMediaAutoplay
     };
   } catch (err) {
     const msg = String((err && err.message) || err || '');
     if (msg.includes('does not exist') || msg.includes('not exist') || msg.includes('DOCUMENT_NOT_EXIST')) {
-      const hubNewCover = await readHubNewCover();
-      return { success: true, flags: {}, updateTime: null, hubNewCover };
+      const homeCfg = await readHubHomeConfig();
+      return {
+        success: true,
+        flags: {},
+        updateTime: null,
+        hubNewCover: homeCfg.hubNewCover,
+        hubNewMediaList: homeCfg.hubNewMediaList,
+        hubNewMediaAutoplay: homeCfg.hubNewMediaAutoplay
+      };
     }
-    return { success: false, error: msg, flags: {}, hubNewCover: '' };
+    return {
+      success: false,
+      error: msg,
+      flags: {},
+      hubNewCover: '',
+      hubNewMediaList: [],
+      hubNewMediaAutoplay: false
+    };
   }
 };
