@@ -15,6 +15,7 @@
         "pages/products/products",
         "pages/case/case",
         "pages/scan/scan",
+        "pages/can-learn/can-learn",
         "pages/faq/faq"
       ]
     },

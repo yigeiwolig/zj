@@ -1,0 +1,77 @@
+<view class="page" style="padding-top: {{statusBarHeight}}px;">
+  <view class="nav" style="height: {{navBarHeight}}px;">
+    <view class="nav-back" bindtap="goBack">‹ 返回</view>
+    <text class="nav-title">CAN 信号学习</text>
+  </view>
+
+  <scroll-view class="body" scroll-y enhanced show-scrollbar="{{false}}">
+    <!-- 连接 -->
+    <view class="card">
+      <view class="card-head">
+        <text class="card-title">设备连接</text>
+        <text class="badge {{connected ? 'on' : ''}}">{{connected ? '已连接' : '未连接'}}</text>
+      </view>
+      <text class="card-desc">请确保 ESP32 已上电，蓝牙广播名为 MT-CAN-Learn</text>
+      <view class="btn-row">
+        <button class="btn primary" bindtap="onConnect" loading="{{connecting}}" disabled="{{connecting}}">连接设备</button>
+        <button class="btn ghost" bindtap="onDisconnect" disabled="{{!connected}}">断开</button>
+      </view>
+    </view>
+
+    <!-- 学习向导 -->
+    <view class="card" wx:if="{{phase === 'learn'}}">
+      <view class="card-head">
+        <text class="card-title">引导式录制</text>
+        <text class="step-tag">步骤 {{stepIndex + 1}}/4</text>
+      </view>
+      <text class="step-title">{{currentStep.title}}</text>
+      <text class="step-desc">{{currentStep.desc}}</text>
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{learnProgress}}%;"></view>
+      </view>
+      <text class="hint">{{learnHint}}</text>
+      <button class="btn primary block" bindtap="onStartStep" disabled="{{!connected || stepRunning}}">
+        {{stepRunning ? '采集中…' : currentStep.actionLabel}}
+      </button>
+    </view>
+
+    <!-- 分析结果 -->
+    <view class="card" wx:if="{{phase === 'analyze'}}">
+      <view class="card-head"><text class="card-title">分析结果</text></view>
+      <view class="result-block" wx:if="{{gearResult}}">
+        <text class="result-label">挡位信号</text>
+        <text class="result-val">{{gearResult.idHex}} 字节[{{gearResult.gear_offset}}]</text>
+        <text class="result-sub">空挡={{gearResult.gear_neutral}} · 1挡={{gearResult.gear_one}}</text>
+      </view>
+      <view class="result-block" wx:if="{{rpmResult}}">
+        <text class="result-label">转速信号</text>
+        <text class="result-val">{{rpmResult.idHex}} 16位偏移[{{rpmResult.rpm_pair_offset}}]</text>
+        <text class="result-sub">学习 Delta={{rpmResult.delta}} · 原始最大={{rpmResult.rpm_raw_max}}</text>
+      </view>
+      <view class="warn" wx:if="{{!gearResult || !rpmResult}}">未能锁定全部信号，请重新学习</view>
+      <button class="btn primary block" bindtap="onApplyRuntime" disabled="{{!canApplyRuntime || !connected}}">写入设备并进入实时模式</button>
+      <button class="btn ghost block" bindtap="onRestartLearn">重新学习</button>
+    </view>
+
+    <!-- 实时显示 -->
+    <view class="card runtime-card" wx:if="{{phase === 'runtime'}}">
+      <view class="card-head"><text class="card-title">实时数据</text></view>
+      <view class="gauge-row">
+        <view class="gauge">
+          <text class="gauge-label">转速</text>
+          <text class="gauge-value">{{runtime.rpm}}</text>
+          <text class="gauge-unit">RPM</text>
+        </view>
+        <view class="gauge">
+          <text class="gauge-label">挡位</text>
+          <text class="gauge-value gear">{{runtime.gearLabel}}</text>
+          <text class="gauge-unit">{{runtime.gear === 0 ? '空挡' : runtime.gear === 1 ? '1挡' : '未知'}}</text>
+        </view>
+      </view>
+      <text class="result-sub">原始 RPM 值: {{runtime.rpmRaw}}</text>
+      <button class="btn ghost block" bindtap="onRestartLearn">重新学习</button>
+    </view>
+  </scroll-view>
+</view>
+
+<custom-toast id="customToast" />

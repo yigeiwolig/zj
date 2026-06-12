@@ -1,0 +1,220 @@
+.page {
+  min-height: 100vh;
+  background: #f3f4f6;
+  box-sizing: border-box;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 0 32rpx;
+}
+
+.nav-back {
+  position: absolute;
+  left: 24rpx;
+  font-size: 30rpx;
+  color: #111827;
+  padding: 12rpx 0;
+}
+
+.nav-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.body {
+  height: calc(100vh - 120px);
+  padding: 24rpx 28rpx 48rpx;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #fff;
+  border-radius: 28rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 8rpx 24rpx rgba(17, 24, 39, 0.06);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.card-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #111827;
+}
+
+.card-desc {
+  font-size: 26rpx;
+  color: #6b7280;
+  line-height: 1.5;
+  margin-bottom: 20rpx;
+}
+
+.badge {
+  font-size: 22rpx;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.badge.on {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.btn-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  border: none;
+  margin: 0;
+  padding: 0;
+}
+
+.btn.block {
+  width: 100%;
+  margin-top: 16rpx;
+}
+
+.btn.primary {
+  background: #111827;
+  color: #fff;
+}
+
+.btn.ghost {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.step-tag {
+  font-size: 24rpx;
+  color: #6b7280;
+}
+
+.step-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8rpx;
+}
+
+.step-desc {
+  display: block;
+  font-size: 26rpx;
+  color: #4b5563;
+  line-height: 1.6;
+  margin-bottom: 20rpx;
+}
+
+.progress-bar {
+  height: 8rpx;
+  background: #e5e7eb;
+  border-radius: 999rpx;
+  overflow: hidden;
+  margin-bottom: 12rpx;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #34d399, #10b981);
+  transition: width 0.3s ease;
+}
+
+.hint {
+  display: block;
+  font-size: 24rpx;
+  color: #9ca3af;
+  margin-bottom: 8rpx;
+}
+
+.result-block {
+  padding: 20rpx;
+  background: #f9fafb;
+  border-radius: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.result-label {
+  display: block;
+  font-size: 24rpx;
+  color: #6b7280;
+  margin-bottom: 6rpx;
+}
+
+.result-val {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #111827;
+}
+
+.result-sub {
+  display: block;
+  font-size: 24rpx;
+  color: #9ca3af;
+  margin-top: 6rpx;
+}
+
+.warn {
+  color: #b45309;
+  font-size: 26rpx;
+  margin-bottom: 16rpx;
+}
+
+.gauge-row {
+  display: flex;
+  gap: 20rpx;
+  margin-bottom: 20rpx;
+}
+
+.gauge {
+  flex: 1;
+  background: #111827;
+  border-radius: 24rpx;
+  padding: 28rpx 20rpx;
+  text-align: center;
+  color: #fff;
+}
+
+.gauge-label {
+  display: block;
+  font-size: 24rpx;
+  opacity: 0.7;
+}
+
+.gauge-value {
+  display: block;
+  font-size: 56rpx;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 8rpx 0;
+}
+
+.gauge-value.gear {
+  font-size: 72rpx;
+}
+
+.gauge-unit {
+  display: block;
+  font-size: 22rpx;
+  opacity: 0.6;
+}

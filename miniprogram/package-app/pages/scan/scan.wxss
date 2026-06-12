@@ -1030,6 +1030,10 @@ page {
 .model-suffix.pro-max { color: #FF3B30; }
 .visual-area { flex: 1; display: flex; align-items: center; justify-content: center; }
 .visual-area--f3 { width: 100%; align-self: stretch; }
+.visual-area--can { align-items: center; justify-content: center; }
+.can-learn-badge { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 280rpx; height: 200rpx; border: 4rpx solid #1c1c1e; border-radius: 24rpx; background: #fafafa; }
+.can-learn-badge-main { font-size: 56rpx; font-weight: 800; color: #1c1c1e; letter-spacing: 4rpx; }
+.can-learn-badge-sub { font-size: 24rpx; color: #6b7280; margin-top: 8rpx; }
 .custom-icon { width: 400rpx; height: 300rpx; filter: drop-shadow(0 20rpx 40rpx rgba(0,0,0,0.1)); }
 /* F3 横版整机标（轮播主页）：仅定宽，height 随 SVG 比例自适应，避免压扁 */
 .custom-icon--f3 {
