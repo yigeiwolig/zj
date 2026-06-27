@@ -165,11 +165,30 @@ exports.main = async (event) => {
 
     let updateObj = {}
     if (action === 'ship') {
+      const shipRemark = String(ev.shipRemark || ev.note || '').trim()
       updateObj = {
         status: 'SHIPPED',
         trackingId: trackingId || '',
         solveTime: db.serverDate()
       }
+      if (shipRemark) updateObj.shipRemark = shipRemark
+
+      let canShipRes = { canShip: true }
+      try {
+        const gate = await cloud.callFunction({
+          name: 'deviceReplacement',
+          data: { action: 'checkCanShip', repairId: docId }
+        })
+        canShipRes = (gate.result && gate.result.success) ? gate.result : canShipRes
+      } catch (gateErr) {
+        console.warn('[adminUpdateRepair] checkCanShip failed:', gateErr)
+      }
+      if (canShipRes.canShip === false) {
+        return { success: false, errMsg: canShipRes.msg || '暂不可录单发货' }
+      }
+
+      await db.collection('shouhou_repair').doc(docId).update({ data: updateObj })
+      return { success: true }
     } else if (action === 'tutorial') {
       updateObj = {
         status: 'TUTORIAL',

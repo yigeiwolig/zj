@@ -53,6 +53,12 @@
   font-weight: 700;
   color: #000;
 }
+.ct-modal-title.error {
+  color: #cf1322;
+}
+.ct-modal-title.warn {
+  color: #d48806;
+}
 .ct-modal-content {
   padding: 30rpx 40rpx 40rpx;
   text-align: center;

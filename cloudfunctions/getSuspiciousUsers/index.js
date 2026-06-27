@@ -529,7 +529,7 @@ async function fetchIgnoredUsersOnly() {
   try {
     const archiveRes = await db.collection('suspicious_review_archive').limit(1000).get();
     (Array.isArray(archiveRes.data) ? archiveRes.data : [])
-      .filter((row) => row && row.decision === 'ignore')
+      .filter((row) => row && row.decision === 'ignore' && row.sourceType !== 'banned_manual')
       .sort((a, b) => toMillis(b.archivedAt || b.updateTime) - toMillis(a.archivedAt || a.updateTime))
       .forEach((row) => pushUser(buildIgnoredRowFromArchive(row)));
   } catch (archiveErr) {

@@ -22,7 +22,9 @@ const { isDevtoolsEnv } = require('../../../utils/runtimeEnv.js');
 const adminRepairApi = require('../../../utils/adminRepairApi.js');
 const userRepairApi = require('../../../utils/userRepairApi.js');
 const regionFallback = require('../../../utils/regionFallback.js');
-const { PRODUCT_DETAIL_OPTIONS } = require('../../../utils/productModels.js');
+const { PRODUCT_DETAIL_OPTIONS, normalizeProductDetailModel } = require('../../../utils/productModels.js');
+const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
+const productFeatureFlags = require('../../../utils/productFeatureFlags.js');
 
 // 维修寄回统一时间常量（避免文案与逻辑不一致）
 const RETURN_OVERDUE_DAYS = 30;     // 超过30天未寄回视为超时
@@ -43,7 +45,7 @@ function formatShippingFeeText(method, fee) {
 }
 
 module.exports = function createMyPageConfig(hubView) {
-  const hubTabIndex = hubView === 'orders' ? 1 : 2;
+  const hubTabIndex = hubView === 'orders' ? 1 : 3;
   return {
   data: {
     hubView: hubView || 'profile',
@@ -92,6 +94,13 @@ module.exports = function createMyPageConfig(hubView) {
       remarkPlaceholder: '请输入备注',
       remarkValue: '',
       callback: null
+    },
+    diagnosisDialogClosing: false,
+    diagnosisDialog: {
+      show: false,
+      repairId: '',
+      value: '',
+      submitting: false
     },
     
     // 图片路径
@@ -154,6 +163,7 @@ module.exports = function createMyPageConfig(hubView) {
 
     isAuthorized: false, // 是否是授权管理员
     isAdmin: false,      // 是否开启了管理模式
+    shopFeatureEnabled: true, // 产品选购(id=4) 开关，与主页抽屉一致
     showAdminDevTools: false, // 仅开发者工具显示「测试清空」等
     
     // 【新增】控制视图模式
@@ -427,6 +437,10 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 🔴 初始化截屏/录屏保护
   initScreenshotProtection() {
+    if (screenshotExempt.isScreenshotBanExempt(this)) {
+      screenshotExempt.allowScreenCaptureIfExempt();
+      return;
+    }
     // 物理防线：确保录屏、截屏出来的全是黑屏
     if (wx.setVisualEffectOnCapture) {
       wx.setVisualEffectOnCapture({
@@ -615,6 +629,8 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 🔴 处理截屏/录屏拦截
   async handleIntercept(type) {
+    if (screenshotExempt.isScreenshotBanExempt(this)) return;
+
     // 🔴 关键修复：立即清除本地授权状态，防止第二次截屏时被自动放行
     wx.removeStorageSync('has_permanent_auth');
     
@@ -896,7 +912,9 @@ module.exports = function createMyPageConfig(hubView) {
       wx.getScreenRecordingState({
         success: (res) => {
           if (res.state === 'on' || res.recording) {
-            this.handleIntercept('record');
+            if (!screenshotExempt.isScreenshotBanExempt(this)) {
+              this.handleIntercept('record');
+            }
           }
         }
       });
@@ -945,6 +963,11 @@ module.exports = function createMyPageConfig(hubView) {
     
     // 🔴 先检查权限获取 openid，然后再加载数据
     this.checkAdminPrivilege().then(() => {
+      this._syncShopFeatureEnabled();
+      const preloadFlags = app && app.preloadProductFeatureFlags;
+      if (typeof preloadFlags === 'function') {
+        preloadFlags.call(app).finally(() => this._syncShopFeatureEnabled());
+      }
       this.syncProfileUserName({ allowCloud: true });
       const hv = this.data.hubView;
       const loadPromises = [];
@@ -1054,6 +1077,8 @@ module.exports = function createMyPageConfig(hubView) {
       
       if (adminCheck.data.length > 0) {
         const patch = { isAuthorized: true };
+        screenshotExempt.markGuanliyuanCache(true);
+        screenshotExempt.allowScreenCaptureIfExempt();
         /* 独立「我的/订单」页：进入即管理员 UI；枢纽内仅标记有权限，不改动 isAdmin（避免异步权限检查覆盖用户刚点的「管理模式」） */
         if (!this.data.hubInShell) {
           patch.isAdmin = true;
@@ -2606,6 +2631,89 @@ module.exports = function createMyPageConfig(hubView) {
     });
   },
 
+  // 【新增】管理员填写内部诊断书（用户不可见）
+  openDiagnosisDialog(e) {
+    const id = e.currentTarget.dataset.id;
+    const repair = (this.data.repairList || []).find((item) => item && item._id === id) || {};
+    this.setData({
+      diagnosisDialog: {
+        show: true,
+        repairId: id,
+        value: repair.adminDiagnosis || '',
+        submitting: false
+      }
+    });
+    this.updateModalState();
+  },
+
+  closeDiagnosisDialog() {
+    if (this.data.diagnosisDialog.submitting) return;
+    this.setData({ diagnosisDialogClosing: true });
+    setTimeout(() => {
+      this.setData({
+        diagnosisDialogClosing: false,
+        diagnosisDialog: { show: false, repairId: '', value: '', submitting: false }
+      });
+      this.updateModalState();
+    }, 320);
+  },
+
+  onDiagnosisInput(e) {
+    this.setData({ 'diagnosisDialog.value': e.detail.value });
+  },
+
+  submitDiagnosis() {
+    const { repairId, value, submitting } = this.data.diagnosisDialog;
+    if (submitting || !repairId) return;
+    const text = String(value || '').trim();
+    if (!text) {
+      this.showAutoToast('提示', '请填写诊断内容');
+      return;
+    }
+    this.setData({ 'diagnosisDialog.submitting': true });
+    wx.cloud.callFunction({
+      name: 'deviceReplacement',
+      data: { action: 'saveDiagnosis', repairId, adminDiagnosis: text }
+    }).then((res) => {
+      const r = res.result || {};
+      this.setData({ 'diagnosisDialog.submitting': false });
+      if (r.success) {
+        const msg = r.msg || '内部诊断书已记录（用户不可见）';
+        const needsReplace = !!(r.needsReplacement || (r.replacement && (r.replacement.locked || r.replacement.awaitingSnReplacement)));
+        const repairList = (this.data.repairList || []).map((item) => {
+          if (!item || item._id !== repairId) return item;
+          return {
+            ...item,
+            adminDiagnosis: text,
+            diagnosisDone: true,
+            awaitingSnReplacement: needsReplace || item.awaitingSnReplacement
+          };
+        });
+        this.setData({ diagnosisDialogClosing: true, repairList });
+        setTimeout(() => {
+          this.setData({
+            diagnosisDialogClosing: false,
+            diagnosisDialog: { show: false, repairId: '', value: '', submitting: false }
+          });
+          this.updateModalState();
+          this.showMyDialog({
+            title: '诊断已保存',
+            content: msg,
+            confirmText: '好的',
+            success: () => {
+              this.loadPendingRepairs();
+            }
+          });
+        }, 280);
+      } else {
+        this.showAutoToast('保存失败', r.msg || '请重试');
+      }
+    }).catch(() => {
+      this.setData({ 'diagnosisDialog.submitting': false });
+      this.showAutoToast('错误', '网络异常');
+    });
+  },
+
   // 2. [新增] 管理员点击金额改价
   // [新增] 管理员处理维修单
   resolveRepair(e) {
@@ -2613,29 +2721,44 @@ module.exports = function createMyPageConfig(hubView) {
     const type = e.currentTarget.dataset.type; // 'ship' 或 'tutorial'
     
     if (type === 'ship') {
-       const currentRepair = (this.data.repairList || []).find(item => item && item._id === id);
-       const needReturn = !!(currentRepair && currentRepair.needReturn === true);
-       // 录入单号逻辑（使用自定义输入弹窗）
-       this.showInputDialog({
-         title: '备件寄出',
-         placeholder: '请输入物料运单号',
-         showRemark: needReturn,
-         remarkPlaceholder: '请输入备注（必填）',
-         success: (res) => {
-           if (res.confirm && res.content) {
-             const trackingId = res.content.trim();
-             if (!trackingId) {
-               this.showAutoToast('提示', '请输入运单号');
-               return;
-             }
-              const shipRemark = (res.remark || '').trim();
-              if (needReturn && !shipRemark) {
-                this.showAutoToast('提示', '需要寄回时请填写备注');
-                return;
-              }
-             this.updateRepairStatus(id, 'SHIPPED', trackingId, { shipRemark });
-           }
+       const id = e.currentTarget.dataset.id;
+       wx.cloud.callFunction({
+         name: 'deviceReplacement',
+         data: { action: 'checkCanShip', repairId: id }
+       }).then((res) => {
+         const gate = res.result || {};
+         if (gate.success === false) {
+           this.showAutoToast('提示', gate.msg || '校验失败');
+           return;
          }
+         if (gate.canShip === false) {
+           this.showMyDialog({
+             title: '暂不可录单',
+             content: gate.msg || '请先填写诊断书，或等待控制中心完成换机',
+             showCancel: false,
+             confirmText: '知道了'
+           });
+           return;
+         }
+         this.showInputDialog({
+           title: '录单备件寄出',
+           placeholder: '请输入物料运单号',
+           showRemark: true,
+           remarkPlaceholder: '对外备注（选填，用户可见）',
+           success: (dialogRes) => {
+             if (dialogRes.confirm && dialogRes.content) {
+               const trackingId = dialogRes.content.trim();
+               if (!trackingId) {
+                 this.showAutoToast('提示', '请输入运单号');
+                 return;
+               }
+               const shipRemark = (dialogRes.remark || '').trim();
+               this.updateRepairStatus(id, 'SHIPPED', trackingId, { shipRemark });
+             }
+           }
+         });
+       }).catch(() => {
+         this.showAutoToast('错误', '网络异常，请重试');
        });
     } else {
        // 无需录入（使用自定义弹窗）
@@ -2688,18 +2811,21 @@ module.exports = function createMyPageConfig(hubView) {
           const DB_PARTS = {
             'F1 PRO': ["主板外壳", "下面板", "上面板", "合页", "合页螺丝", "90度连接件", "连杆", "摇臂", "摇臂螺丝", "电机", "固定电机件", "固定电机螺丝", "装牌螺丝包", "螺母", "主板", "按钮", "遥控", "链接线束"],
             'F1 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-            'F1 Pro Max': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
+            'F1 ULTRA': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
             'F2 PRO': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
             'F2 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-            'F2 MAX Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
+            'F2 ULTRA': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
+            'F2 Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
             'F3 PRO': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
             'F3 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"]
           };
           
-          if (DB_PARTS[model]) {
+          const canonical = normalizeProductDetailModel(model);
+          if (DB_PARTS[canonical] || DB_PARTS[model]) {
+            const names = DB_PARTS[canonical] || DB_PARTS[model];
             partsList.push({
-              model: model,
-              parts: DB_PARTS[model].map(part => ({ name: part, selected: false }))
+              model: canonical || model,
+              parts: names.map(part => ({ name: part, selected: false }))
             });
           }
         }
@@ -2954,12 +3080,22 @@ module.exports = function createMyPageConfig(hubView) {
             }
             
             this._repairPatch(id, updateData).then(() => {
+              return wx.cloud.callFunction({
+                name: 'deviceReplacement',
+                data: { action: 'checkReturnNote', repairId: id, returnNote }
+              }).catch(() => null);
+            }).then((cfRes) => {
               this.hideMyLoading();
+              let replacementHint = '';
+              const rep = cfRes && cfRes.result && cfRes.result.replacement;
+              if (rep && (rep.locked || rep.awaitingSnReplacement)) {
+                replacementHint = '\n备注含主板/控制器，已标记待换机';
+              }
               this.showMyDialog({
                 title: '操作成功',
-                content: isWarrantyExpired ? 
-                  '已标记为需要用户寄回\n用户质保已过期，将提示付费维修' : 
-                  '已标记为需要用户寄回\n用户端将显示寄回提示',
+                content: (isWarrantyExpired ?
+                  '已标记为需要用户寄回\n用户质保已过期，将提示付费维修' :
+                  '已标记为需要用户寄回\n用户端将显示寄回提示') + replacementHint,
                 showCancel: false,
                 confirmText: '好的',
                 success: () => {
@@ -4595,11 +4731,13 @@ module.exports = function createMyPageConfig(hubView) {
         id,
         action: status === 'SHIPPED' ? 'ship' : 'tutorial',
         trackingId,
-        note: (extras && (extras.solveNote || extras.shipRemark)) || ''
+        note: (extras && (extras.solveNote || extras.shipRemark)) || '',
+        shipRemark: (extras && extras.shipRemark) || ''
       }).then((res) => {
         if (!res || !res.success) {
           return Promise.reject(new Error((res && res.errMsg) || '更新失败'));
         }
+        return res;
       });
     } else if (this._canAdminRepairCloud()) {
       const patch = {
@@ -5419,12 +5557,22 @@ module.exports = function createMyPageConfig(hubView) {
           }
 
         } else {
+          const blockedConnect = result?.status === 'SCRAPPED' || result?.status === 'LOCKED_REPLACEMENT';
+          if (blockedConnect) {
+            this.ble.disconnect();
+          }
           this.setData({
-            connectStatusText: result?.status === 'LOCKED' ? '设备已绑定' : '验证失败',
+            connectStatusText: blockedConnect
+              ? (result?.msg || '设备不可用')
+              : (result?.status === 'LOCKED' ? '设备已绑定' : '验证失败'),
+            bluetoothReady: blockedConnect ? false : this.data.bluetoothReady,
             isDeviceLocked: true,
             lockedReason: result?.msg || '设备绑定失败',
             showBindAuditForm: false
           });
+          if (blockedConnect) {
+            this.showAutoToast('无法连接', result?.msg || '该设备不可用');
+          }
         }
       },
       fail: (err) => {
@@ -5684,6 +5832,11 @@ module.exports = function createMyPageConfig(hubView) {
   onHubTabSwitch(e) {
     const tab = e.detail && e.detail.tab;
     if (!tab) return;
+    if (tab === 'kf') {
+      const weworkKf = require('../../../utils/weworkCustomerService.js');
+      weworkKf.openPreSalesKf();
+      return;
+    }
     const hubNav = require('../../../utils/hubNav.js');
     const current = this.data.hubView;
     if (tab === 'orders' && current === 'orders') return;
@@ -8137,6 +8290,7 @@ module.exports = function createMyPageConfig(hubView) {
       this.data.isClearingData ||
       (this.data.dialog && this.data.dialog.show) ||
       (this.data.inputDialog && this.data.inputDialog.show) ||
+      (this.data.diagnosisDialog && this.data.diagnosisDialog.show) ||
       (this.data.autoToast && this.data.autoToast.show);
     
     if (this.data.hasModalOpen !== hasModal) {
@@ -8295,8 +8449,25 @@ module.exports = function createMyPageConfig(hubView) {
     wx.navigateTo({ url, animationType: 'none' });
   },
 
+  _syncShopFeatureEnabled() {
+    const enabled = productFeatureFlags.isProductFeatureEnabled(
+      productFeatureFlags.FEATURE_ID_SHOP,
+      { isAuthorized: this.data.isAuthorized }
+    );
+    if (this.data.shopFeatureEnabled !== enabled) {
+      this.setData({ shopFeatureEnabled: enabled });
+    }
+  },
+
   // 跳转售后中心/商城（空订单卡片「去选购商品」等用）
   goToShop() {
+    if (!productFeatureFlags.isProductFeatureEnabled(
+      productFeatureFlags.FEATURE_ID_SHOP,
+      { isAuthorized: this.data.isAuthorized }
+    )) {
+      this.showAutoToast('提示', productFeatureFlags.getFeatureClosedMessage(productFeatureFlags.FEATURE_ID_SHOP));
+      return;
+    }
     wx.navigateTo({ url: '/package-app/pages/shop/shop', animationType: 'none' });
   },
 

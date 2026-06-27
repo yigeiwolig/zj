@@ -1,77 +1,595 @@
-<view class="page" style="padding-top: {{statusBarHeight}}px;">
-  <view class="nav" style="height: {{navBarHeight}}px;">
-    <view class="nav-back" bindtap="goBack">‹ 返回</view>
-    <text class="nav-title">CAN 信号学习</text>
+<view class="page" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
+  <view class="nav" style="height: {{navBarHeight}}px; padding-top: {{statusBarHeight}}px;">
+    <view class="nav-back" bindtap="goBack">‹</view>
+    <view class="nav-center">
+      <view class="nav-admin" wx:if="{{isAdmin}}" bindtap="toggleAdminMode">
+        {{adminMode ? '用户' : '管理员'}}
+      </view>
+      <text class="nav-title">CAN 学习配置</text>
+    </view>
   </view>
 
-  <scroll-view class="body" scroll-y enhanced show-scrollbar="{{false}}">
-    <!-- 连接 -->
+  <!-- ========== 用户采集 ========== -->
+  <block wx:if="{{!adminMode}}">
+    <view class="card">
+      <view class="row">
+        <text class="label">蓝牙</text>
+        <text class="value {{connected ? 'ok' : ''}}">{{connected ? '已连接' : '未连接'}}</text>
+      </view>
+      <view class="row" wx:if="{{connected}}">
+        <text class="label">设备模式</text>
+        <text class="value {{deviceMode === 'runtime' ? 'ok' : ''}}">{{deviceMode === 'runtime' ? '运行 RUNTIME' : '采集 STREAM'}}</text>
+      </view>
+      <view class="row" wx:if="{{connected}}">
+        <text class="label">CAN 帧率</text>
+        <text class="value">{{streamFps}}/s 蓝牙 · 日志 {{liveStreamTotal}} 行</text>
+      </view>
+      <view class="row" wx:if="{{connected}}">
+        <text class="label">CAN 波特率</text>
+        <text class="value {{canBitrateLocked ? 'ok' : 'warn'}}">{{canBitrateText}}</text>
+      </view>
+      <view class="row" wx:if="{{connected}}">
+        <text class="label">CAN 收包</text>
+        <text class="value">{{canRxTotal}} 帧{{canBitrateLocked ? ' · 已锁定' : ' · 自动探测中'}}</text>
+      </view>
+      <view class="row" wx:if="{{sessionId}}">
+        <text class="label">会话 ID</text>
+        <text class="value mono">{{sessionId}}</text>
+      </view>
+      <view class="row">
+        <text class="label">灯珠总数</text>
+        <input
+          class="field-input inline-num-leds"
+          type="number"
+          value="{{num_leds}}"
+          bindinput="onNumLedsInput"
+          bindblur="onNumLedsBlur"
+        />
+      </view>
+      <text class="hint">测试灯带比例时可手动修改（1–{{maxNumLeds}}），写入设备时一并下发</text>
+      <view class="btn-row">
+        <button class="btn primary" wx:if="{{!connected}}" loading="{{connecting}}" bindtap="onConnect">连接设备</button>
+        <button class="btn ghost" wx:else bindtap="onDisconnect">断开</button>
+      </view>
+    </view>
+
+    <view class="card vehicle-profile-card">
+      <view class="row">
+        <text class="label">车型协议</text>
+        <text class="value">无极（500k 被动监听）</text>
+      </view>
+      <text class="hint vehicle-profile-hint">仅支持 CAN 总线；LIN 协议车辆无法使用本设备采集</text>
+    </view>
+
+    <!-- 用户 Tab：初始化录入 / 转速调节 / 历史记录 -->
+    <view class="user-segments" wx:if="{{!adminMode}}">
+      <view
+        class="user-seg {{userTab === 'capture' ? 'active' : ''}}"
+        data-tab="capture"
+        bindtap="onUserTab"
+      >初始化录入</view>
+      <view
+        class="user-seg {{userTab === 'tune' ? 'active' : ''}}"
+        data-tab="tune"
+        bindtap="onUserTab"
+      >转速调节</view>
+      <view
+        class="user-seg {{userTab === 'history' ? 'active' : ''}}"
+        data-tab="history"
+        bindtap="onUserTab"
+      >历史记录</view>
+    </view>
+
+    <!-- 第 10 步已合并：RPM 自动采集完成后直接分析，表盘参数在下方结果区填写 -->
+
+    <!-- CAN 监视器：所有 Tab 共用（连接后始终可见） -->
+    <view class="card stream-card" wx:if="{{!adminMode && connected}}">
+      <view class="card-head">
+        <text class="card-title">CAN 监视器</text>
+        <view class="copy-row">
+          <view class="copy-chip" bindtap="onReprobeCan">重探测</view>
+          <view class="copy-chip" bindtap="onCopyLiveStream">复制</view>
+        </view>
+      </view>
+      <text class="format-hint">逐帧日志 · 蓝牙 {{streamFps}}/s · 共 {{liveStreamTotal}} 行{{liveStreamTruncated ? '（屏显最近' + liveLineCount + '行，复制全部）' : ''}} · {{liveVehicleIdCount}} 个车身 ID</text>
+      <view class="copy-row stream-actions">
+        <view class="copy-chip" bindtap="onClearLiveStream">清空</view>
+      </view>
+      <view class="stream-warn" wx:if="{{liveStreamWarn}}">
+        <text class="stream-warn-text">{{liveStreamWarn}}</text>
+      </view>
+      <scroll-view scroll-y class="probe-scroll" scroll-with-animation wx:if="{{canProbeLogText}}">
+        <text class="probe-log-text mono">{{canProbeLogText}}</text>
+      </scroll-view>
+      <text class="format-hint">每行一帧（十进制），含 OBD 与车身广播，点「复制」分享全部</text>
+      <scroll-view scroll-y class="stream-scroll" scroll-with-animation>
+        <text class="stream-text mono" wx:if="{{liveStreamText}}">{{liveStreamText}}</text>
+        <text class="hint" wx:else>等待 CAN 数据… 若上方帧率>0 仍无列表，请重连蓝牙或点重探测</text>
+      </scroll-view>
+    </view>
+
+    <!-- 共用分析区：采集完成 or 历史载入后，在上方展示并可上传 -->
+    <view class="card user-done-card" id="analysis-result" wx:if="{{!adminMode && (userAnalyzing || (gearTotalAnalysis && (allDone || historyLoaded)))}}">
+      <text class="step-title">{{historyLoaded ? '历史分析' : (userAnalyzing ? '正在分析' : '采集完成')}}</text>
+      <text class="hint">{{hint}}</text>
+      <text class="hint mono" wx:if="{{sessionId}}">会话 {{sessionId}} · {{captures.length}} 步</text>
+
+      <text wx:if="{{userAnalyzing}}" class="hint analyzing-tip">正在分析挡位与转速，请稍候…</text>
+
+      <view class="user-analysis-block" wx:if="{{gearTotalAnalysis && !userAnalyzing}}">
+        <text class="sec-label">挡位识别</text>
+        <text class="hint">{{gearTotalAnalysis.hint}}</text>
+      </view>
+
+      <view class="user-gear-pick" wx:if="{{gearTotalAnalysis && gearTotalAnalysis.candidates.length && !userAnalyzing}}">
+        <text class="sec-label">挡位方案（点选自测）</text>
+        <view
+          class="gear-candidate user-gear-option {{selectedUserGearIdx === index ? 'picked' : ''}} {{item.qualified ? 'best' : (item.inferenceApplied ? 'inferred' : 'partial')}}"
+          wx:for="{{gearTotalAnalysis.candidates}}"
+          wx:key="index"
+          wx:for-index="index"
+          data-idx="{{index}}"
+          bindtap="onSelectUserGearCandidate"
+        >
+          <view class="gear-candidate-head">
+            <text class="gear-candidate-title mono">#{{item.rank}} ID:{{item.idDec}} · 字节 {{item.offset}}</text>
+            <text class="gear-candidate-score">{{item.completeCount || 0}}/7 · 得分 {{item.score}}{{item.inferenceApplied ? ' · 含补猜' : ''}}</text>
+          </view>
+          <text class="gear-seq-hint mono" wx:if="{{item.sequenceText}}">{{item.sequenceText}}</text>
+          <text wx:if="{{item.issuesText}}" class="gear-issue-hint">{{item.issuesText}}</text>
+          <view class="gear-value-row">
+            <view
+              class="gear-value-cell {{cell.inferred ? 'inferred' : (cell.missing ? 'missing' : (cell.conflict ? 'conflict' : 'ok'))}}"
+              wx:for="{{item.valuesByGear}}"
+              wx:for-item="cell"
+              wx:key="gear"
+            >
+              <text class="gear-value-label">{{cell.gear}}</text>
+              <text class="gear-value-val mono">{{cell.inferred ? ('~' + cell.val) : (cell.conflict ? '!' : (cell.missing ? '-' : cell.val))}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view class="user-analysis-block" wx:if="{{rpmTotalAnalysis && !userAnalyzing}}">
+        <text class="sec-label">转速识别</text>
+        <text class="hint">{{rpmTotalAnalysis.hint}}</text>
+        <view wx:if="{{rpmTotalAnalysis.best}}" class="rpm-metrics user-rpm-metrics">
+          <text class="rpm-metric">ID {{rpmTotalAnalysis.best.rpm_id}} · 字节 {{rpmTotalAnalysis.best.rpm_pair_offset}}</text>
+          <text class="rpm-metric">4000转 raw {{rpmTotalAnalysis.best.calib_raw || rpmTotalAnalysis.best.rpm_raw_max}}</text>
+        </view>
+      </view>
+
+      <view class="form-section user-meter-section" wx:if="{{allDone || userAnalysisReady}}">
+        <text class="sec-label">仪表参数（表盘 rpm，怠速 &lt; {{rpmCalibTarget}} &lt; 红区）</text>
+        <view class="field-row">
+          <view class="field half">
+            <text class="field-label">怠速（表盘 rpm）</text>
+            <input class="field-input" type="number" value="{{input_idle}}" data-field="input_idle" bindinput="onUserMeterInput" />
+          </view>
+          <view class="field half">
+            <text class="field-label">红区（表盘 rpm）</text>
+            <input class="field-input" type="number" value="{{input_redline}}" data-field="input_redline" bindinput="onUserMeterInput" />
+          </view>
+        </view>
+        <button wx:if="{{userAnalysisReady}}" class="btn ghost big" bindtap="onConfirmMeterParams">修改后重新分析</button>
+      </view>
+
+      <view class="user-runtime-preview" wx:if="{{userRuntimeConfig}}">
+        <text class="sec-label">即将下发 ESP32</text>
+        <view class="runtime-kv mono"><text class="runtime-k">N挡怠速 raw → 0 灯</text><text>{{userRuntimeConfig.rpm_idle}}</text></view>
+        <view class="runtime-kv mono"><text class="runtime-k">{{userRuntimeConfig.calib_rpm || rpmCalibTarget}}转 raw</text><text>{{userRuntimeConfig.detected_calib_raw}}</text></view>
+        <view class="runtime-kv mono"><text class="runtime-k">外推红区 raw → {{userRuntimeConfig.num_leds}} 灯</text><text>{{userRuntimeConfig.rpm_raw_max}}</text></view>
+        <view class="runtime-kv mono"><text class="runtime-k">表盘区间</text><text>{{userRuntimeConfig.input_idle}}–{{userRuntimeConfig.input_redline}} rpm</text></view>
+      </view>
+
+      <view class="user-action-row" wx:if="{{userAnalysisReady}}">
+        <button
+          class="btn primary big write-btn"
+          loading="{{writingDevice}}"
+          disabled="{{writingDevice || !connected}}"
+          bindtap="onWriteRuntimeToDevice"
+        >{{connected ? '写入 ESP32 开始跑灯' : '连接蓝牙后写入'}}</button>
+        <button
+          class="btn ghost big save-analysis-btn"
+          loading="{{savingAnalysis}}"
+          disabled="{{savingAnalysis}}"
+          bindtap="onSaveAnalysisSnapshot"
+        >保存分析到云端</button>
+      </view>
+      <text wx:if="{{userAnalysisReady && !connected}}" class="wait-tip">写入设备需先连接蓝牙；分析结果可先保存</text>
+      <text wx:elif="{{userAnalysisError}}" class="wait-tip">{{userAnalysisError}}</text>
+    </view>
+
+    <!-- ========== Tab 1：初始化录入 ========== -->
+    <block wx:if="{{!adminMode && userTab === 'capture'}}">
+    <view class="card warn-card" wx:if="{{connected && deviceMode === 'runtime' && userTab === 'capture'}}">
+      <text class="hint">设备当前处于运行模式，无法采集 CAN。如需重新录入，请先切换采集模式。</text>
+      <button class="btn ghost" bindtap="onResetCaptureMode">切换为采集模式</button>
+    </view>
+
+    <view class="card step-card" wx:if="{{connected && deviceMode !== 'runtime' && !allDone}}">
+      <view class="step-badge">步骤 {{stepIndex + 1}} / 9</view>
+      <text class="step-title">{{currentStep.label}}</text>
+      <text class="step-desc">{{currentStep.hint}}</text>
+      <text class="hint status-hint">{{hint}}</text>
+      <button
+        class="btn primary big"
+        disabled="{{recording || uploading}}"
+        loading="{{recording || uploading}}"
+        bindtap="onRecordStep"
+      >{{recording ? '录制中…' : (uploading ? '上传中…' : currentStep.confirmText)}}</button>
+    </view>
+
+    <view class="card" wx:if="{{connected && !allDone && !captures.length}}">
+      <text class="hint">请先连接 MT-CAN-Learn，再按步骤采集</text>
+    </view>
+
+    <view class="card" wx:if="{{captures.length && userTab === 'capture'}}">
+      <view class="card-head">
+        <text class="card-title">已上传 {{captures.length}} / 9</text>
+        <view class="analyze-chip" bindtap="onNewCaptureSession">新采集</view>
+      </view>
+      <view class="cap-item" wx:for="{{captures}}" wx:key="key">
+        <text>{{item.label}}</text>
+        <text class="mono cap-count">{{item.frameCount}} 帧</text>
+      </view>
+    </view>
+    </block>
+
+    <!-- ========== Tab 2：转速调节 ========== -->
+    <block wx:if="{{!adminMode && userTab === 'tune'}}">
+    <view class="card tune-live-card">
+      <text class="card-title">设备实时反馈</text>
+      <view wx:if="{{deviceMode === 'runtime'}}" class="tune-live-row">
+        <text class="tune-live-item">挡位 {{liveRuntimeGear >= 0 ? liveRuntimeGear : '—'}}</text>
+        <text class="tune-live-item mono">CAN raw {{liveRuntimeRpmRaw}} · 灯 {{liveRuntimeLedCount}}/{{num_leds}}</text>
+      </view>
+      <text wx:else class="hint">设备尚未写入配置，发送后将进入运行模式并点亮灯带</text>
+    </view>
+
+    <view class="card tune-card" wx:if="{{savedMotoConfig || userRuntimeConfig}}">
+      <text class="card-title">仪表转速校准</text>
+      <text class="hint">填写表盘怠速/红区。系统按 N挡 raw、{{rpmCalibTarget}}转 raw 外推红区 raw，映射 {{num_leds}} 颗灯</text>
+
+      <view class="form-section user-meter-section">
+        <view class="field-row">
+          <view class="field half">
+            <text class="field-label">怠速（表盘 rpm）</text>
+            <input
+              class="field-input"
+              type="number"
+              value="{{input_idle}}"
+              data-field="input_idle"
+              bindinput="onUserMeterInput"
+            />
+          </view>
+          <view class="field half">
+            <text class="field-label">红区（表盘 rpm）</text>
+            <input
+              class="field-input"
+              type="number"
+              value="{{input_redline}}"
+              data-field="input_redline"
+              bindinput="onUserMeterInput"
+            />
+          </view>
+        </view>
+      </view>
+
+      <view class="user-runtime-preview" wx:if="{{tuneRuntimeConfig}}">
+        <text class="sec-label">下发 ESP32</text>
+        <view class="runtime-kv mono"><text class="runtime-k">怠速 raw（{{tuneRuntimeConfig.idleSourceText}}）</text><text>{{tuneRuntimeConfig.detected_idle_raw}}</text></view>
+        <view class="runtime-kv mono"><text class="runtime-k">{{tuneRuntimeConfig.calibRpmText}}转 raw</text><text>{{tuneRuntimeConfig.detected_calib_raw}}</text></view>
+        <view class="runtime-kv mono"><text class="runtime-k">外推红区 raw → {{tuneRuntimeConfig.num_leds}} 灯</text><text>{{tuneRuntimeConfig.rpm_raw_max}}</text></view>
+        <view class="runtime-kv mono"><text class="runtime-k">表盘区间</text><text>{{tuneRuntimeConfig.input_idle}}–{{tuneRuntimeConfig.input_redline}} rpm</text></view>
+        <view class="runtime-kv mono" wx:if="{{connected && deviceMode === 'runtime'}}"><text class="runtime-k">当前 raw / 灯</text><text>{{liveRuntimeRpmRaw}} / {{liveRuntimeLedCount}}</text></view>
+      </view>
+
+      <button
+        class="btn primary big write-btn"
+        loading="{{tuneSending}}"
+        disabled="{{tuneSending || !tuneRuntimeConfig}}"
+        bindtap="onSendRpmCalibration"
+      >发送到 ESP32-C3</button>
+    </view>
+
+    <view class="card" wx:else>
+      <text class="hint">请先在「初始化录入」或「历史记录」完成分析，再调节转速。</text>
+    </view>
+
+    <view class="card" wx:if="{{connected && deviceMode === 'runtime'}}">
+      <text class="hint">需要重新录入 CAN 时，可切换回采集模式。</text>
+      <button class="btn ghost" bindtap="onResetCaptureMode">切换为采集模式</button>
+    </view>
+    </block>
+
+    <!-- ========== Tab 3：历史记录 ========== -->
+    <block wx:if="{{!adminMode && userTab === 'history'}}">
+    <view class="card history-card">
+      <view class="card-head">
+        <view>
+          <text class="card-title">我的采集历史</text>
+          <text class="hint">点选下方会话读取数据，上方可保存分析或写入 ESP32</text>
+        </view>
+        <view class="analyze-chip" bindtap="loadUserHistory">刷新</view>
+      </view>
+
+      <view wx:if="{{loadingUserHistory}}" class="hint">加载中…</view>
+      <view wx:elif="{{!userHistoryGroups.length}}" class="empty-tip">暂无历史记录，完成采集后会出现在这里</view>
+
+      <view
+        class="history-item {{selectedHistorySessionId === item.sessionId ? 'active' : ''}}"
+        wx:for="{{userHistoryGroups}}"
+        wx:key="sessionId"
+        data-id="{{item.sessionId}}"
+        bindtap="onSelectUserHistory"
+      >
+        <view class="history-item-main">
+          <text class="history-id mono">{{item.sessionId}}</text>
+          <text class="history-meta">{{item.stepCount}} 步 · {{item.timeLabel}}</text>
+        </view>
+        <text wx:if="{{item.hasSnapshot}}" class="history-badge">已保存分析</text>
+      </view>
+    </view>
+
+    <view class="card" wx:if="{{historyLoaded && captures.length}}">
+      <text class="card-title">已载入 {{captures.length}} 步</text>
+      <view class="cap-item" wx:for="{{captures}}" wx:key="key">
+        <text>{{item.label}}</text>
+        <text class="mono cap-count">{{item.frameCount}} 帧</text>
+      </view>
+    </view>
+    </block>
+  </block>
+
+  <!-- ========== 管理员 ========== -->
+  <block wx:else>
     <view class="card">
       <view class="card-head">
-        <text class="card-title">设备连接</text>
-        <text class="badge {{connected ? 'on' : ''}}">{{connected ? '已连接' : '未连接'}}</text>
+        <view>
+          <text class="card-title">采集会话</text>
+          <text class="hint">点选会话后，下方可逐挡查看 / 复制数据</text>
+        </view>
+        <view class="delete-all-chip" bindtap="onClearAllCanData">清空全部</view>
       </view>
-      <text class="card-desc">请确保 ESP32 已上电，蓝牙广播名为 MT-CAN-Learn</text>
-      <view class="btn-row">
-        <button class="btn primary" bindtap="onConnect" loading="{{connecting}}" disabled="{{connecting}}">连接设备</button>
-        <button class="btn ghost" bindtap="onDisconnect" disabled="{{!connected}}">断开</button>
-      </view>
+      <view wx:if="{{!sessionGroups.length}}" class="empty-tip">暂无采集记录</view>
+      <scroll-view scroll-x class="session-scroll">
+        <view
+          class="session-chip {{selectedSessionId === item.sessionId ? 'active' : ''}}"
+          wx:for="{{sessionGroups}}"
+          wx:key="sessionId"
+          data-id="{{item.sessionId}}"
+          bindtap="onSelectSession"
+        >
+          <text class="chip-id">{{item.sessionId}}</text>
+          <text class="chip-sub">{{item.items.length}} 步</text>
+        </view>
+      </scroll-view>
     </view>
 
-    <!-- 学习向导 -->
-    <view class="card" wx:if="{{phase === 'learn'}}">
+    <!-- 档位总分析 -->
+    <view class="card gear-total-card" wx:if="{{selectedSessionId && gearTotalAnalysis}}">
       <view class="card-head">
-        <text class="card-title">引导式录制</text>
-        <text class="step-tag">步骤 {{stepIndex + 1}}/4</text>
+        <view>
+          <text class="card-title">档位总分析</text>
+          <text class="hint">{{gearTotalAnalysis.hint}}</text>
+        </view>
+        <view class="analyze-chip" bindtap="onGearTotalAnalyze">重新分析</view>
       </view>
-      <text class="step-title">{{currentStep.title}}</text>
-      <text class="step-desc">{{currentStep.desc}}</text>
-      <view class="progress-bar">
-        <view class="progress-fill" style="width: {{learnProgress}}%;"></view>
+
+      <view
+        class="gear-candidate {{item.qualified ? (index === 0 ? 'best' : '') : (item.inferenceApplied ? 'inferred' : 'partial')}}"
+        wx:for="{{gearTotalAnalysis.candidates}}"
+        wx:key="index"
+        wx:for-index="index"
+      >
+        <view class="gear-candidate-head">
+          <text class="gear-candidate-title mono">#{{item.rank}} ID:{{item.idDec}} · 字节 {{item.offset}}</text>
+          <text class="gear-candidate-score">{{item.completeCount || 0}}/7 · {{item.uniqueCount}} 种取值 · 得分 {{item.score}}{{item.inferenceApplied ? ' · 含补猜' : (item.qualified ? '' : ' · 未完整')}}</text>
+        </view>
+        <text class="gear-seq-hint mono" wx:if="{{item.sequenceText}}">{{item.sequenceText}}</text>
+        <text wx:if="{{item.issuesText}}" class="gear-issue-hint">{{item.issuesText}}</text>
+        <view class="gear-value-row">
+          <view
+            class="gear-value-cell {{cell.inferred ? 'inferred' : (cell.missing ? 'missing' : (cell.conflict ? 'conflict' : 'ok'))}}"
+            wx:for="{{item.valuesByGear}}"
+            wx:for-item="cell"
+            wx:key="gear"
+            data-text="{{cell.val}}"
+            catchtap="onCopyGearAnalysisCell"
+          >
+            <text class="gear-value-label">{{cell.gear}}</text>
+            <text class="gear-value-val mono">{{cell.inferred ? ('~' + cell.val) : (cell.conflict ? '!' : (cell.missing ? '-' : cell.val))}}</text>
+          </view>
+        </view>
+        <button class="btn apply-btn" size="mini" data-idx="{{index}}" bindtap="onApplyGearAnalysis">
+          {{item.qualified ? (index === 0 ? '填入最佳挡位配置' : '填入此条') : (item.inferenceApplied ? '填入（含补猜）' : '仍填入此条（需人工核对）')}}
+        </button>
       </view>
-      <text class="hint">{{learnHint}}</text>
-      <button class="btn primary block" bindtap="onStartStep" disabled="{{!connected || stepRunning}}">
-        {{stepRunning ? '采集中…' : currentStep.actionLabel}}
-      </button>
+
+      <view wx:if="{{gearTotalAnalysis.hasPartialOnly && !gearTotalAnalysis.best}}" class="partial-tip">
+        以上为最接近结果。若呈现 +1 顺序（如 8,9,10,?,12,13），系统已自动补猜（~ 标记）；请挂挡自测核对。
+      </view>
+      <view wx:elif="{{!gearTotalAnalysis.candidates.length}}" class="empty-tip">未找到跨挡位变化的固定字段</view>
     </view>
 
-    <!-- 分析结果 -->
-    <view class="card" wx:if="{{phase === 'analyze'}}">
-      <view class="card-head"><text class="card-title">分析结果</text></view>
-      <view class="result-block" wx:if="{{gearResult}}">
-        <text class="result-label">挡位信号</text>
-        <text class="result-val">{{gearResult.idHex}} 字节[{{gearResult.gear_offset}}]</text>
-        <text class="result-sub">空挡={{gearResult.gear_neutral}} · 1挡={{gearResult.gear_one}}</text>
+    <!-- 转速总分析 -->
+    <view class="card rpm-total-card" wx:if="{{selectedSessionId && rpmTotalAnalysis}}">
+      <view class="card-head">
+        <view>
+          <text class="card-title">转速总分析</text>
+          <text class="hint">{{rpmTotalAnalysis.hint}}</text>
+        </view>
+        <view class="analyze-chip" bindtap="onRpmTotalAnalyze">重新分析</view>
       </view>
-      <view class="result-block" wx:if="{{rpmResult}}">
-        <text class="result-label">转速信号</text>
-        <text class="result-val">{{rpmResult.idHex}} 16位偏移[{{rpmResult.rpm_pair_offset}}]</text>
-        <text class="result-sub">学习 Delta={{rpmResult.delta}} · 原始最大={{rpmResult.rpm_raw_max}}</text>
+
+      <view
+        class="gear-candidate {{index === 0 ? 'best' : ''}}"
+        wx:for="{{rpmTotalAnalysis.candidates}}"
+        wx:key="index"
+        wx:for-index="index"
+      >
+        <view class="gear-candidate-head">
+          <text class="gear-candidate-title mono">ID:{{item.rpm_id}} · 字节 {{item.rpm_pair_offset}} · {{item.endianLabel}}</text>
+          <text class="gear-candidate-score">得分 {{item.score}} · 增量 {{item.range}}</text>
+        </view>
+        <view class="rpm-metrics">
+          <text class="rpm-metric">怠速 {{item.rpm_idle}}</text>
+          <text class="rpm-metric">峰值 {{item.rpm_raw_max}}</text>
+          <text class="rpm-metric">变化率 {{item.changeRate}}</text>
+          <text class="rpm-metric">单调 {{item.monotonicRatio}}</text>
+        </view>
+        <button class="btn apply-btn rpm-apply-btn" size="mini" data-idx="{{index}}" bindtap="onApplyRpmAnalysis">
+          {{index === 0 ? '填入最佳转速配置' : '填入此条'}}
+        </button>
       </view>
-      <view class="warn" wx:if="{{!gearResult || !rpmResult}}">未能锁定全部信号，请重新学习</view>
-      <button class="btn primary block" bindtap="onApplyRuntime" disabled="{{!canApplyRuntime || !connected}}">写入设备并进入实时模式</button>
-      <button class="btn ghost block" bindtap="onRestartLearn">重新学习</button>
+
+      <view wx:if="{{!rpmTotalAnalysis.candidates.length}}" class="empty-tip">未识别到转速字段，请重新采集转速步骤</view>
     </view>
 
-    <!-- 实时显示 -->
-    <view class="card runtime-card" wx:if="{{phase === 'runtime'}}">
-      <view class="card-head"><text class="card-title">实时数据</text></view>
-      <view class="gauge-row">
-        <view class="gauge">
-          <text class="gauge-label">转速</text>
-          <text class="gauge-value">{{runtime.rpm}}</text>
-          <text class="gauge-unit">RPM</text>
+    <!-- 每挡独立数据 -->
+    <view class="card" wx:if="{{selectedSessionId}}">
+      <view class="card-head">
+        <text class="card-title">分挡数据包</text>
+        <text class="session-tag">{{selectedSessionId}}</text>
+      </view>
+      <view wx:if="{{loadingSteps}}" class="hint">加载中…</view>
+      <view wx:elif="{{!sessionSteps.length}}" class="empty-tip">该会话暂无数据</view>
+
+      <view class="step-data-card" wx:for="{{sessionSteps}}" wx:key="gearKey">
+        <view class="step-data-head">
+          <view class="step-data-left">
+            <text class="step-data-title">{{item.gearLabel}}</text>
+            <text class="step-data-count">{{item.frameCount}} 帧</text>
+          </view>
+          <view class="step-data-actions">
+            <view class="analyze-chip" data-key="{{item.gearKey}}" catchtap="onAnalyzeStep">分析</view>
+            <view class="copy-chip" data-key="{{item.gearKey}}" catchtap="onCopyStep">复制</view>
+            <view class="expand-chip" data-key="{{item.gearKey}}" catchtap="onToggleStepExpand">
+              {{item.expanded ? '收起' : '展开'}}
+            </view>
+          </view>
         </view>
-        <view class="gauge">
-          <text class="gauge-label">挡位</text>
-          <text class="gauge-value gear">{{runtime.gearLabel}}</text>
-          <text class="gauge-unit">{{runtime.gear === 0 ? '空挡' : runtime.gear === 1 ? '1挡' : '未知'}}</text>
+        <view wx:if="{{item.showAnalyze}}" class="analyze-box">
+          <text class="analyze-hint">点击有值的格子复制；空白=该字节在变化，已过滤</text>
+          <view class="analyze-id-block" wx:for="{{item.analyzeRows}}" wx:for-item="row" wx:key="idDec">
+            <view class="analyze-id-row">
+              <text
+                class="analyze-id mono tap-id"
+                data-iddec="{{row.idDec}}"
+                catchtap="onCopyAnalyzeId"
+              >ID:{{row.idDec}}</text>
+              <text class="analyze-id-meta">{{row.frameCount}} 帧</text>
+              <view
+                class="id-copy-chip"
+                data-iddec="{{row.idDec}}"
+                catchtap="onCopyAnalyzeId"
+              >复制 ID</view>
+            </view>
+            <view class="byte-grid">
+              <view
+                class="byte-cell {{slot.stable ? 'stable' : 'empty'}}"
+                wx:for="{{row.slots}}"
+                wx:for-item="slot"
+                wx:key="offset"
+                data-stable="{{slot.stable ? 1 : 0}}"
+                data-val="{{slot.val}}"
+                data-offset="{{slot.offset}}"
+                catchtap="onCopyAnalyzeByte"
+              >
+                <text class="byte-idx">{{slot.offset}}</text>
+                <text class="byte-val mono">{{slot.stable ? slot.val : ''}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+        <scroll-view wx:if="{{item.expanded}}" scroll-y class="step-preview-scroll">
+          <text class="stream-text mono">{{item.previewText}}</text>
+        </scroll-view>
+        <text wx:else class="preview-one mono">{{item.previewFirstLine}} …</text>
+      </view>
+    </view>
+
+    <!-- 配置表单 -->
+    <view class="card form-card" wx:if="{{selectedSessionId}}">
+      <text class="card-title">解析配置</text>
+      <text class="hint">根据上方复制的数据，填写 CAN ID 与各挡字节值</text>
+
+      <view class="form-section">
+        <text class="sec-label">基本信息</text>
+        <view class="field">
+          <text class="field-label">配置名称</text>
+          <input class="field-input" placeholder="如：某某车型" data-field="name" bindinput="onInput" value="{{form.name}}" />
+        </view>
+        <view class="field">
+          <text class="field-label">车型</text>
+          <input class="field-input" placeholder="选填" data-field="model" bindinput="onInput" value="{{form.model}}" />
         </view>
       </view>
-      <text class="result-sub">原始 RPM 值: {{runtime.rpmRaw}}</text>
-      <button class="btn ghost block" bindtap="onRestartLearn">重新学习</button>
+
+      <view class="form-section">
+        <text class="sec-label">挡位 CAN</text>
+        <view class="field-row">
+          <view class="field half">
+            <text class="field-label">gear_id</text>
+            <input class="field-input" type="number" placeholder="如 544" data-field="gear_id" bindinput="onInput" value="{{form.gear_id}}" />
+          </view>
+          <view class="field half">
+            <text class="field-label">字节偏移</text>
+            <input class="field-input" type="number" placeholder="0-7" data-field="gear_offset" bindinput="onInput" value="{{form.gear_offset}}" />
+          </view>
+        </view>
+        <view class="gear-grid">
+          <view class="gear-cell" wx:for="{{gearFormFields}}" wx:key="key">
+            <text class="gear-cell-label">{{item.label}}</text>
+            <input
+              class="gear-cell-input"
+              type="number"
+              placeholder="十进制"
+              data-field="{{item.key}}"
+              bindinput="onInput"
+              value="{{item.value}}"
+            />
+          </view>
+        </view>
+      </view>
+
+      <view class="form-section">
+        <text class="sec-label">转速 CAN</text>
+        <view class="field-row">
+          <view class="field half">
+            <text class="field-label">rpm_id</text>
+            <input class="field-input" type="number" placeholder="如 272" data-field="rpm_id" bindinput="onInput" value="{{form.rpm_id}}" />
+          </view>
+          <view class="field half">
+            <text class="field-label">字节偏移</text>
+            <input class="field-input" type="number" placeholder="0-6" data-field="rpm_pair_offset" bindinput="onInput" value="{{form.rpm_pair_offset}}" />
+          </view>
+        </view>
+        <view class="field-row">
+          <view class="field half">
+            <text class="field-label">怠速原始值</text>
+            <input class="field-input" type="number" data-field="rpm_idle" bindinput="onInput" value="{{form.rpm_idle}}" />
+          </view>
+          <view class="field half">
+            <text class="field-label">峰值原始值</text>
+            <input class="field-input" type="number" data-field="rpm_raw_max" bindinput="onInput" value="{{form.rpm_raw_max}}" />
+          </view>
+        </view>
+        <view class="field">
+          <text class="field-label">显示上限 rpm_max</text>
+          <input class="field-input" type="number" data-field="rpm_max" bindinput="onInput" value="{{form.rpm_max}}" />
+        </view>
+        <view class="switch-row">
+          <text class="field-label">转速大端 BE</text>
+          <switch checked="{{form.rpm_be}}" bindchange="onToggleBe" color="#007aff" />
+        </view>
+      </view>
+
+      <button class="btn primary big publish-btn" bindtap="onPublishConfig">上传并发布配置</button>
     </view>
-  </scroll-view>
+  </block>
 </view>
 
 <custom-toast id="customToast" />

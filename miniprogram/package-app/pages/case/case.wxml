@@ -1,14 +1,14 @@
 <!-- 背景大水印 -->
 <view class="brand-bg-watermark">MT-摩改社</view>
 
-<!-- 自定义导航栏 -->
-<view class="header" hidden="{{showVideoPlayer}}" style="padding-top: {{statusBarHeight}}px;">
+<!-- 自定义导航栏（全屏播放时由上层遮罩盖住，不 hidden，下滑关闭时底栏即时可见） -->
+<view class="header" style="padding-top: {{statusBarHeight}}px;">
   <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
     <text class="back-arrow">‹</text>
   </view>
 </view>
-<!-- 顶部固定区：标题 + 管理员子模式 + Tab + 搜索（单层，避免管理员模式顶栏「双重垫高」） -->
-<view class="case-top-chrome" hidden="{{showVideoPlayer}}">
+<!-- 顶部固定区：标题 + 管理员子模式 + Tab + 搜索（与全屏播放器分层，不随播放卸载） -->
+<view class="case-top-chrome">
   <view class="case-top-inner" style="padding-top: {{statusBarHeight}}px;">
     <view class="case-title-row" style="min-height: {{navBarHeight}}px;">
       <text class="case-title-text">MT 案例库</text>
@@ -80,16 +80,18 @@
         <view class="pending-card full-width">
           
           <!-- 1. 视频预览区 (极大) -->
-          <video 
-            class="pending-video-large" 
-            src="{{item.videoFileID}}" 
-            preload="metadata"
-            show-center-play-btn="{{true}}" 
-            show-fullscreen-btn="{{true}}"
-            controls="{{true}}"
-            object-fit="contain"
-            muted
-          ></video>
+          <view class="pending-video-wrap">
+            <video 
+              class="pending-video-el" 
+              src="{{item.videoFileID}}" 
+              preload="metadata"
+              show-center-play-btn="{{true}}" 
+              show-fullscreen-btn="{{true}}"
+              controls="{{true}}"
+              object-fit="contain"
+              muted
+            ></video>
+          </view>
           
           <!-- 2. 信息区 -->
           <view class="pending-info">
@@ -188,6 +190,14 @@
           <view wx:if="{{isAdmin && adminSubMode === 'manage'}}" class="delete-btn" catchtap="deleteCase" data-id="{{item._id}}">
             <view class="delete-x">×</view>
           </view>
+
+          <!-- 下载按钮（管理员） -->
+          <view
+            wx:if="{{isAdmin}}"
+            class="case-download-btn"
+            catchtap="downloadOfficialCase"
+            data-id="{{item._id}}"
+          >⬇</view>
         </view>
         <view class="card-content">
           <!-- 1. 车型行：强调车型名称 -->
@@ -626,6 +636,7 @@
   <video 
     id="caseFullscreenVideo"
     src="{{currentVideo.videoUrl}}" 
+    poster="{{currentVideo.coverUrl || currentVideo.coverFull || ''}}"
     class="fullscreen-video" 
     preload="metadata"
     autoplay="{{true}}" 
@@ -634,61 +645,113 @@
     show-fullscreen-btn="{{false}}"
     enable-play-gesture="{{false}}"
     object-fit="contain" 
-    bindended="closeVideoPlayer"
+    bindended="onCaseFullscreenEnded"
     show-center-play-btn="{{false}}"
     show-mute-btn="{{false}}"
     bindtimeupdate="onCaseFullscreenTimeUpdate"
     bindloadedmetadata="onCaseFullscreenLoadedMeta"
+    bindloadeddata="onCaseFullscreenLoadedData"
     bindplay="onCaseFullscreenPlayEvt"
     bindpause="onCaseFullscreenPauseEvt"
+    bindwaiting="onCaseFullscreenWaiting"
     binderror="onCaseFullscreenVideoError"
-  >
-    <cover-view
-      wx:if="{{!caseFullscreenCoverHidden}}"
+  ></video>
+
+  <view
+    wx:if="{{!caseFullscreenCoverHidden && !caseFullscreenExiting}}"
+    class="close-video-btn close-video-btn--fs"
+    catchtap="closeVideoPlayer"
+  >×</view>
+
+  <view
+    wx:if="{{isAdmin && !caseFullscreenCoverHidden && !caseFullscreenExiting}}"
+    class="case-fs-download-btn"
+    catchtap="downloadCurrentFullscreenVideo"
+  >⬇ 下载</view>
+
+  <!-- 水印/进度条：打开即显示，与视频同步 -->
+  <view class="case-fs-chrome" wx:if="{{!caseFullscreenCoverHidden && caseFullscreenChromeReady}}">
+    <view
       class="case-fs-overlay"
       catchtouchstart="onCaseFullscreenOverlayTouchStart"
       catchtouchmove="onCaseFullscreenOverlayTouchMove"
       catchtouchend="onCaseFullscreenOverlayTouchEnd"
       catchtouchcancel="onCaseFullscreenOverlayTouchEnd"
-    ></cover-view>
-    <!-- 🔴 视频加密：使用多层 cover-view 覆盖，防止直接访问 -->
-    <cover-view wx:if="{{!caseFullscreenCoverHidden}}" class="auto-watermark"><cover-view class="wm-text">MT-摩改社</cover-view></cover-view>
-    <cover-view wx:if="{{!caseFullscreenCoverHidden && videoWatermarkNickname}}" class="auto-watermark auto-watermark-nick">
-      <cover-view class="wm-text wm-text-nick">@{{videoWatermarkNickname}}</cover-view>
-    </cover-view>
-    <cover-view wx:if="{{!caseFullscreenCoverHidden}}" class="video-protection-layer"></cover-view>
-    <cover-view wx:if="{{!caseFullscreenExiting && !caseFullscreenCoverHidden}}" class="close-video-btn" catchtap="closeVideoPlayer">×</cover-view>
-    <cover-view wx:if="{{!caseFullscreenCoverHidden}}" class="video-bottom-info">
-      <cover-view class="v-title">{{currentVideo.title}}</cover-view>
-      <cover-view class="v-tags">
-        <cover-view class="v-tag blue">{{currentVideo.categoryName}}</cover-view>
-        <cover-view class="v-tag gray">型号：{{currentVideo.model}}</cover-view>
-      </cover-view>
-    </cover-view>
-    <cover-view wx:if="{{!caseFullscreenCoverHidden}}" class="case-fs-controls">
-      <cover-view class="case-fs-play" bindtap="toggleCaseFullscreenPlay">{{caseFullscreenPaused ? '▶' : '‖'}}</cover-view>
-      <cover-view class="case-fs-time-l">{{caseFullscreenCurrentStr}}</cover-view>
-      <cover-view
+    ></view>
+    <view class="auto-watermark"><text class="wm-text">MT-摩改社</text></view>
+    <view wx:if="{{videoWatermarkNickname}}" class="auto-watermark auto-watermark-nick">
+      <text class="wm-text wm-text-nick">@{{videoWatermarkNickname}}</text>
+    </view>
+    <view class="video-protection-layer"></view>
+    <view class="video-bottom-info">
+      <view class="v-title">{{currentVideo.title}}</view>
+      <view class="v-tags">
+        <view class="v-tag blue">{{currentVideo.categoryName}}</view>
+        <view class="v-tag gray">型号：{{currentVideo.model}}</view>
+      </view>
+    </view>
+    <view class="case-fs-controls">
+      <view class="case-fs-play" catchtap="toggleCaseFullscreenPlay">{{caseFullscreenEnded ? '↻' : (caseFullscreenPaused ? '▶' : '‖')}}</view>
+      <view class="case-fs-time-l">{{caseFullscreenCurrentStr}}</view>
+      <view
         class="case-fs-track-hit"
         catchtouchstart="onCaseFullscreenProgressTouchStart"
         catchtouchmove="onCaseFullscreenProgressTouchMove"
         catchtouchend="onCaseFullscreenProgressTouchEnd"
         catchtouchcancel="onCaseFullscreenProgressTouchEnd"
       >
-        <cover-view class="case-fs-track-inner" id="case-fullscreen-track-inner">
-          <cover-view class="case-fs-track">
-            <cover-view class="case-fs-fill" style="width: {{caseFullscreenProgressPercent}}%;"></cover-view>
-          </cover-view>
-          <cover-view class="case-fs-thumb-float" style="left: {{caseFullscreenProgressPercent}}%;">MT</cover-view>
-        </cover-view>
-      </cover-view>
-      <cover-view class="case-fs-time-r">{{caseFullscreenDurationStr}}</cover-view>
-    </cover-view>
-  </video>
+        <view class="case-fs-track-inner" id="case-fullscreen-track-inner">
+          <view class="case-fs-track">
+            <view class="case-fs-fill" style="transform: scaleX({{caseFullscreenProgressRatio}});"></view>
+          </view>
+          <view class="case-fs-thumb-float" style="left: {{caseFullscreenProgressPercent}}%;">MT</view>
+        </view>
+      </view>
+      <view class="case-fs-time-r">{{caseFullscreenDurationStr}}</view>
+    </view>
+  </view>
 
-  <!-- 居中播放图标（视频暂停时显示，移出 video 标签以支持高级 CSS） -->
-  <view class="case-fs-center-play-wrap" wx:if="{{caseFullscreenPaused && !caseFullscreenCoverHidden}}" catchtap="toggleCaseFullscreenPlay">
-    <view class="center-play-triangle">
+  <!-- 首开等画：仅居中 MT -->
+  <view
+    class="case-fs-buffering case-fs-buffering--center"
+    wx:if="{{caseFullscreenInitialLoading && !caseFullscreenBuffering && !caseFullscreenCoverHidden}}"
+  >
+    <view class="case-fs-buffering-inner">
+      <view class="case-fs-mt-loader">
+        <view class="case-fs-mt-ring"></view>
+        <view class="case-fs-mt-logo">
+          <text class="case-fs-mt-logo-text">MT</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 播放中缓冲：暗膜 + 居中 MT + 下方小字 -->
+  <view
+    class="case-fs-buffering case-fs-buffering--playback"
+    wx:if="{{caseFullscreenBuffering && !caseFullscreenCoverHidden}}"
+  >
+    <view class="case-fs-buffering-inner">
+      <view class="case-fs-mt-loader">
+        <view class="case-fs-mt-ring"></view>
+        <view class="case-fs-mt-logo">
+          <text class="case-fs-mt-logo-text">MT</text>
+        </view>
+      </view>
+      <text class="case-fs-buffering-hint">缓冲中，请稍候</text>
+    </view>
+  </view>
+
+  <!-- 暂停 / 播完：居中播放或重播 -->
+  <view
+    class="case-fs-center-play-wrap {{(caseFullscreenPaused || caseFullscreenEnded) && !caseFullscreenInitialLoading && !caseFullscreenBuffering && !caseFullscreenCoverHidden ? '' : 'case-fs-center-play-wrap--hidden'}}"
+    catchtap="onCaseFullscreenCenterTap"
+  >
+    <view wx:if="{{caseFullscreenEnded}}" class="case-fs-replay-btn">
+      <text class="case-fs-replay-icon">↻</text>
+      <text class="case-fs-replay-label">重播</text>
+    </view>
+    <view wx:else class="center-play-triangle">
       <text class="mt-logo-text">MT</text>
     </view>
   </view>

@@ -1,0 +1,21 @@
+.page { min-height: 100vh; background: #f5f5f7; padding-bottom: 40rpx; }
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  background: #fff; border-bottom: 1rpx solid #eee;
+}
+.nav-back { position: absolute; left: 0; bottom: 0; height: 88rpx; line-height: 88rpx; padding: 0 24rpx; font-size: 48rpx; color: #007aff; }
+.nav-title { font-size: 32rpx; font-weight: 600; }
+.card { margin: 24rpx; padding: 24rpx; background: #fff; border-radius: 16rpx; }
+.title { display: block; font-size: 30rpx; font-weight: 600; margin-bottom: 16rpx; }
+.sec { display: block; margin: 20rpx 0 8rpx; font-size: 26rpx; color: #666; }
+.inp { border: 1rpx solid #e5e5e5; border-radius: 8rpx; padding: 16rpx; margin-bottom: 12rpx; font-size: 28rpx; }
+.session { padding: 16rpx 0; border-bottom: 1rpx solid #f0f0f0; }
+.sid { font-family: monospace; font-size: 24rpx; }
+.sub { display: block; color: #999; font-size: 24rpx; }
+.item { display: flex; justify-content: space-between; font-size: 26rpx; padding: 8rpx 0; }
+.link { color: #007aff; }
+.pre { display: block; font-size: 22rpx; white-space: pre-wrap; max-height: 360rpx; overflow: auto; font-family: monospace; }
+.hint { color: #999; }
+.chk { display: flex; align-items: center; gap: 12rpx; margin: 12rpx 0; font-size: 26rpx; }
+.btn { margin-top: 20rpx; background: #007aff; color: #fff; border-radius: 12rpx; }

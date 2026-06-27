@@ -2,10 +2,23 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
+async function isGuanliyuan(openid) {
+  if (!openid) return false;
+  let r = await db.collection('guanliyuan').where({ openid }).limit(1).get();
+  if (r.data && r.data.length > 0) return true;
+  r = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get();
+  return !!(r.data && r.data.length > 0);
+}
+
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext();
   const OPENID = wxContext.OPENID;
   const banType = event.type || 'screenshot'; // 'screenshot' 或 'record'
+
+  if (await isGuanliyuan(OPENID)) {
+    console.log('[banUserByScreenshot] 管理员豁免，跳过封禁');
+    return { success: true, skipped: true, reason: 'admin_exempt' };
+  }
   
   // 🔴 接收前端传递的地址信息、页面信息、设备信息
   const {

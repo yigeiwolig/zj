@@ -37,7 +37,8 @@ Component({
           cancelText: opts.cancelText || '取消',
           confirmText: opts.confirmText || '确定',
           cancelColor: opts.cancelColor,
-          confirmColor: opts.confirmColor
+          confirmColor: opts.confirmColor,
+          titleClass: opts.titleClass || ''
         }
       });
     },

@@ -2,6 +2,7 @@
 const app = getApp();
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
+const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 
 Page({
   data: {
@@ -152,6 +153,8 @@ Page({
         adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
       }
       if (adminCheck.data.length > 0) {
+        screenshotExempt.markGuanliyuanCache(true);
+        screenshotExempt.allowScreenCaptureIfExempt();
         this.setData({ isAuthorized: true });
         try { wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized: true, ts: Date.now() }); } catch (e) {}
         console.log('[pagenew.js] 身份验证成功：合法管理员');
@@ -668,6 +671,8 @@ Page({
 
   // 🔴 截屏/录屏拦截：本地立即封禁 + 云端记录
   async handleIntercept(type) {
+    if (screenshotExempt.isScreenshotBanExempt(this)) return;
+
     wx.removeStorageSync('has_permanent_auth');
     wx.setStorageSync('is_user_banned', true);
     if (type === 'screenshot') {
@@ -730,6 +735,10 @@ Page({
 
   // 🔴 初始化截屏/录屏保护
   initScreenshotProtection() {
+    if (screenshotExempt.isScreenshotBanExempt(this)) {
+      screenshotExempt.allowScreenCaptureIfExempt();
+      return;
+    }
     if (wx.setVisualEffectOnCapture) {
       wx.setVisualEffectOnCapture({
         visualEffect: 'hidden',

@@ -6,8 +6,14 @@
 // ==========================================
 const iconLock = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIzIiB5PSIxMSIgd2lkdGg9IjE4IiBoZWlnaHQ9IjExIiByeD0iMiIgcnk9IjIiPjwvcmVjdD48cGF0aCBkPSJNNyAxMVY3YTUgNSAwIDAgMSAxMCAwdjQiPjwvcGF0aD48L3N2Zz4=';
 
-// 箭头 (打开)
+// 箭头 (打开角度)
 const iconArrowUp = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTggMTUgMTIgOSA2IDE1Ii8+PC9zdmc+';
+
+// 翻开（牌面下放）
+const iconFlapOpen = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNSA3aDE0Ii8+PHBhdGggZD0iTTggN2wyIDExaDRsMi0xMSIvPjxwYXRoIGQ9Ik0xMiAxOHY0Ii8+PC9zdmc+';
+
+// 收起（牌面收回贴合）
+const iconFlapFold = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik01IDdoMTQiLz48cGF0aCBkPSJNMTIgNHY0Ii8+PHBhdGggZD0ibTkgNi41IDMgLTMgMyAzIi8+PHBhdGggZD0iTTggN2g4djEyaC04eiIvPjwvc3ZnPg==';
 
 // 校准 (水平线+箭头)
 const iconCali = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxRDFEMUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjEgMTJhOSA5IDAgMCAwLTktOSA5Ljc1IDkuNzUgMCAwIDAtNi43NCAyLjc0TDMgOCIvPjxwYXRoIGQ9Ik0zIDN2NWg1Ii8+PHBhdGggZD0iTTMgMTJhOSA5IDAgMCAwIDkgOSA5Ljc1IDkuNzUgMCAwIDAgNi43NC0yLjc0TDIxIDE2Ii8+PHBhdGggZD0iTTE2IDIxaDV2LTUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSIjMUQxRDFGIiBzdHJva2U9Im5vbmUiLz48L3N2Zz4=';
@@ -17,6 +23,9 @@ const iconGear = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5v
 
 // 蓝牙小图标 (白色)
 const iconBtSmall = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg==';
+
+// 麦克风 (语音控制)
+const iconMic = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTIgMmEzIDMgMCAwIDAtMyAzdjdhMyAzIDAgMCAwIDYgMFY1YTMzIDAgMCAwLTEyLTNaIi8+PHBhdGggZD0iTTE5IDEwdjJhNyA3IDAgMCAxLTE0IDB2LTIiLz48bGluZSB4MT0iMTIiIHgyPSIxMiIgeTE9IjE5IiB5Mj0iMjIiLz48L3N2Zz4=';
 
 // 重置图标 (圆形箭头)
 const iconReset = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAxMkExMiAxMiAwIDAgMSAxNSA0LjA0VjFhMSAxIDAgMCAxIDEuNzA3LS43MDdsNCA0YTEgMSAwIDAgMSAwIDEuNDE0bC00IDRhMSAxIDAgMCAxLTEuNzA3LS43MDdWOC4wNEE5IDkgMCAwIDAgMyAxMkgzWiIvPjxwYXRoIGQ9Ik0yMSAxMkE5IDkgMCAwIDAgOSA4LjA0VjExYTEgMSAwIDAgMS0xLjcwNy43MDdsLTQtNGExIDEgMCAwIDEgMC0xLjQxNGw0LTRhMSAxIDAgMCAxIDEuNzA3LjcwN1Y0LjA0QTEyIDEyIDAgMCAxIDIxIDEySDIxWiIvPjwvc3ZnPg==';
@@ -40,6 +49,8 @@ const iconF2Pro = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE
 const iconF2Max = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDMwIEgxOTAgQzE5NSAzMCAxOTUgMzUgMTk1IDM1IFY0OCBDMTk1IDUzIDE5MCA1MyAxOTAgNTMgSDEyMSBWNjkgSDEyMi41IEMxMjcuNSA2OSAxMjcuNSA3NCAxMjcuNSA3NCBWOTQgQzEyNy41IDk5IDEyMi41IDk5IDEyMi41IDk5IEg4Mi41IEM3Ny41IDk5IDc3LjUgOTQgNzcuNSA5NCBWNzQgQzc3LjUgNjkgODIuNSA2OSA4Mi41IDY5IEg4NCBWNTMgSDE1IEMxMCA1MyAxMCA0OCAxMCA0OCBWMzUgQzEwIDMwIDE1IDMwIDE1IDMwIFoiIGZpbGw9IiMxQzFDMUUiLz48cmVjdCB4PSIzNiIgeT0iMzciIHdpZHRoPSIyNiIgaGVpZ2h0PSI4IiByeD0iNSIgZmlsbD0iI0ZGRkZGRiIvPjxyZWN0IHg9IjE0NSIgeT0iMzgiIHdpZHRoPSIyNSIgaGVpZ2h0PSI4IiByeD0iNCIgZmlsbD0iI0ZGRkZGRiIvPjx0ZXh0IHg9IjEwMi41IiB5PSI3MiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjRkZGRkZGIj48dHNwYW4geD0iMTAyLjUiIGR5PSIwIj5NPC90c3Bhbj48dHNwYW4geD0iMTAyLjUiIGR5PSIxNiI+VDwvdHNwYW4+PC90ZXh0Pjwvc3ZnPg==';
 // F2 MAX Long 图标（独立）
 const iconF2MaxLong = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDI5SDE5MEMxOTUgMjkgMTk1IDM0LjE0NjQgMTk1IDM0LjE0NjRWNDcuNTI2OUMxOTUgNTIuNjczMiAxOTAgNTIuNjczMiAxOTAgNTIuNjczMkgxMjFWMTEwLjVIMTIyLjVDMTMwLjg0NSAxMTAuNSAxMzAuODQ1IDExNy40NiAxMzAuODQ1IDExNy40NlYxMzcuNzI5QzEzMC44NDUgMTQ0LjUgMTIyLjUgMTQ0LjUgMTIyLjUgMTQ0LjVIODIuNUM3NC4xNTQ1IDE0NC41IDc0LjE1NDUgMTM3LjcyOSA3NC4xNTQ1IDEzNy43MjlWMTE3LjQ2Qzc0LjE1NDUgMTEwLjUgODIuNSAxMTAuNSA4Mi41IDExMC41VjUyLjY3MzJIMTVDMTAgNTIuNjczMiAxMCA0Ny41MjY5IDEwIDQ3LjUyNjlWMzQuMTQ2NEMxMCAyOSAxNSAyOSAxNSAyOVoiIGZpbGw9IiMxQzFDMUUiLz48cGF0aCBkPSJNNTYgMzdINDBDMzcuMjM4NiAzNyAzNSAzOC43OTA5IDM1IDQxQzM1IDQzLjIwOTEgMzcuMjM4NiA0NSA0MCA0NUg1NkM1OC43NjE0IDQ1IDYxIDQzLjIwOTEgNjEgNDFDNjEgMzguNzkwOSA1OC43NjE0IDM3IDU2IDM3WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTY1IDM3SDE0OUMxNDYuMjM5IDM3IDE0NCAzOC43OTA5IDE0NCA0MUMxNDQgNDMuMjA5MSAxNDYuMjM5IDQ1IDE0OSA0NUgxNjVDMTY3Ljc2MSA0NSAxNzAgNDMuMjA5MSAxNzAgNDFDMTcwIDM4Ljc5MDkgMTY3Ljc2MSAzNyAxNjUgMzdaIiBmaWxsPSJ3aGl0ZSIvPjxwYXRoIGQ9Ik04NCA4N0gxMjEiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMTAyLjUgNjRDMTA0LjQzMyA2NCAxMDYgNjIuNDMzIDEwNiA2MC41QzEwNiA1OC41NjcgMTA0LjQzMyA1NyAxMDIuNSA1N0MxMDAuNTY3IDU3IDk5IDU4LjU2NyA5OSA2MC41Qzk5IDYyLjQzMyAxMDAuNTY3IDY0IDEwMi41IDY0WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgODJDMTA0LjQzMyA4MiAxMDYgODAuNDMzIDEwNiA3OC41QzEwNiA3Ni41NjcgMTA0LjQzMyA3NSAxMDIuNSA3NUMxMDAuNTY3IDc1IDk5IDc2LjU2NyA5OSA3OC41Qzk5IDgwLjQzMyAxMDAuNTY3IDgyIDEwMi41IDgyWiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgMTAxQzEwNC40MzMgMTAxIDEwNiA5OS40MzMgMTA2IDk3LjVDMTA2IDk1LjU2NyAxMDQuNDMzIDk0IDEwMi41IDk0QzEwMC41NjcgOTQgOTkgOTUuNTY3IDk5IDk3LjVDOTkgOTkuNDMzIDEwMC41NjcgMTAxIDEwMi41IDEwMVoiIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTkwLjMzOTggMTE5LjA5MUg5My4xODQyTDk2LjE4ODUgMTI2LjQySDk2LjMxNjNMOTkuMzIwNiAxMTkuMDkxSDEwMi4xNjVWMTMwSDk5LjkyNzhWMTIyLjlIOTkuODM3M0w5Ny4wMTQxIDEyOS45NDdIOTUuNDkwN0w5Mi42Njc1IDEyMi44NzNIOTIuNTc3VjEzMEg5MC4zMzk4VjExOS4wOTFaTTEwNy4xMjIgMTIwLjk5M1YxMTkuMDkxSDExNi4wODFWMTIwLjk5M0gxMTIuNzQxVjEzMEgxMTAuNDYxVjEyMC45OTNIMTA3LjEyMloiIGZpbGw9IndoaXRlIi8+PC9zdmc+';
+// F2 Ultra 图标（与 MAX 同款视觉，可后续替换独立 SVG）
+const iconF2Ultra = iconF2Max;
 // F3 横版 MT 整机标：Max 实心 / Pro 线条（源文件 images/mt-f3-machine-*.svg，可直接替换为你的原 SVG）
 const iconF3Pro = '/images/mt-f3-machine-pro.svg';
 const iconF3Max = '/images/mt-f3-machine-max.svg';
@@ -66,6 +77,9 @@ class BLEHelper {
     
     // 设备信息
     this.device = null;
+    this.lastConnectedDevice = null;
+    this._manualDisconnect = false;
+    this._connListenerSetup = false;
     this.serviceId = '';
     this.characteristicId = '';      
     this.characteristicId2 = '';     
@@ -76,7 +90,9 @@ class BLEHelper {
     // 回调函数
     this.onDeviceFound = null;       
     this.onConnecting = null;        // 新增：连接中回调
-    this.onConnected = null;         
+    this.onLinkEstablished = null;   // BLE 物理链路已建立（早于服务发现）
+    this.onConnected = null;
+    this.onConnectFailed = null;         
     this.onDisconnected = null;      
     this.onDataReceived = null;      
     this.onError = null;             
@@ -199,7 +215,7 @@ class BLEHelper {
         }
         this.hasConnected = true;
         // 设置连接中状态
-        if (this.onConnecting) this.onConnecting();
+        if (this.onConnecting) this.onConnecting(device);
         this.connectDevice(device); // 内部会stopScan
         return;
       }
@@ -215,17 +231,27 @@ class BLEHelper {
         deviceId: device.deviceId,
         success: (res) => {
           this.device = device;
+          this.lastConnectedDevice = device;
           this.isScanning = false;
-          
+          this._ensureConnectionStateListener();
+          if (this.onLinkEstablished) this.onLinkEstablished(device);
+
           setTimeout(() => {
             this.discoverServices().then(() => {
               if (this.onConnected) this.onConnected(device);
               resolve(device);
-            }).catch(reject);
-          }, 1500);
+            }).catch((err) => {
+              console.warn('[BLE] discoverServices failed', err);
+              const manual = !!this._manualDisconnect;
+              this._manualDisconnect = false;
+              if (this.onConnectFailed) this.onConnectFailed(err, device, { manual });
+              reject(err);
+            });
+          }, 800);
         },
         fail: (err) => {
           this.isScanning = false;
+          if (this.onConnectFailed) this.onConnectFailed(err, device, { manual: false });
           if (this.onError) this.onError(err);
           reject(err);
         }
@@ -233,16 +259,69 @@ class BLEHelper {
     });
   }
 
-  disconnect() {
-    if (this.device) {
-      this.api.closeBLEConnection({
-        deviceId: this.device.deviceId,
-        success: () => {
-          this.device = null;
-          this.hasConnected = false;
-          if (this.onDisconnected) this.onDisconnected();
-        }
+  _ensureConnectionStateListener() {
+    if (this._connListenerSetup) return;
+    this._connListenerSetup = true;
+    this.api.onBLEConnectionStateChange((res) => {
+      const activeId = (this.device && this.device.deviceId)
+        || (this.lastConnectedDevice && this.lastConnectedDevice.deviceId);
+      if (!activeId || res.deviceId !== activeId) return;
+      if (res.connected) return;
+      const disconnectedDevice = this.device
+        ? { ...this.device }
+        : (this.lastConnectedDevice ? { ...this.lastConnectedDevice } : null);
+      const wasManual = this._manualDisconnect;
+      this._manualDisconnect = false;
+      this.device = null;
+      this.hasConnected = false;
+      if (this.onDisconnected) {
+        this.onDisconnected({ unexpected: !wasManual, device: disconnectedDevice, source: 'state_change' });
+      }
+    });
+  }
+
+  probeLinkAlive(deviceId) {
+    if (!deviceId) return Promise.resolve(false);
+    if (typeof this.api.getBLEConnectionState === 'function') {
+      return new Promise((resolve) => {
+        this.api.getBLEConnectionState({
+          deviceId,
+          success: (res) => resolve(!!res.connected),
+          fail: () => resolve(false)
+        });
       });
+    }
+    return new Promise((resolve) => {
+      this.api.getConnectedBluetoothDevices({
+        services: this.serviceId ? [this.serviceId] : ['0000FFF0-0000-1000-8000-00805F9B34FB'],
+        success: (res) => {
+          const list = (res && res.devices) || [];
+          resolve(list.some((d) => d.deviceId === deviceId));
+        },
+        fail: () => resolve(false)
+      });
+    });
+  }
+
+  disconnect(manual = true) {
+    this._manualDisconnect = !!manual;
+    const device = this.device || this.lastConnectedDevice;
+    const deviceId = device && device.deviceId;
+    const finish = () => {
+      const disconnectedDevice = device ? { ...device } : null;
+      this.device = null;
+      this.hasConnected = false;
+      if (this.onDisconnected) {
+        this.onDisconnected({ unexpected: false, device: disconnectedDevice });
+      }
+    };
+    if (deviceId) {
+      this.api.closeBLEConnection({
+        deviceId,
+        complete: finish
+      });
+    } else {
+      finish();
     }
   }
 
@@ -255,15 +334,17 @@ class BLEHelper {
       this.api.getBLEDeviceServices({
         deviceId: this.device.deviceId,
         success: (res) => {
-          res.services.forEach(service => {
+          const services = res.services || [];
+          for (let i = 0; i < services.length; i++) {
+            const service = services[i];
             const serviceUuid = service.uuid.toString().toUpperCase();
             if (serviceUuid.includes('FFF0')) {
               this.serviceId = service.uuid;
               this.discoverCharacteristics(this.serviceId).then(resolve).catch(reject);
+              return;
             }
-          });
-          // 如果没有找到特定服务，也resolve以便不卡流程（视实际硬件而定）
-          resolve(); 
+          }
+          resolve();
         },
         fail: reject
       });
@@ -313,12 +394,6 @@ class BLEHelper {
              // 接收数据逻辑
              if (this.onDataReceived) this.onDataReceived(res.value);
           });
-          this.api.onBLEConnectionStateChange((res) => {
-            if (res.deviceId === this.device.deviceId && !res.connected) {
-              this.device = null;
-              if (this.onDisconnected) this.onDisconnected();
-            }
-          });
           resolve(res);
         },
         fail: reject
@@ -327,17 +402,177 @@ class BLEHelper {
   }
 }
 
+function isF2LongType(type) {
+  return type === 'Long' || type === 'Max Long';
+}
+
+function isF1UltraType(type) {
+  return type === 'Ultra' || type === 'ultra' || type === 'Pro Max';
+}
+
+function isF1UltraModel(model) {
+  return !!(model && model.name === 'F1' && isF1UltraType(model.type));
+}
+
 function isMaxControlLayoutType(type) {
-  return type === 'Max' || type === 'Max Long' || type === 'Pro Max';
+  return type === 'Max' || isF2LongType(type) || isF1UltraType(type) || type === 'Ultra';
+}
+
+function isF2MaxModel(model) {
+  if (!model) return false;
+  return model.name === 'F2' && (model.type === 'Max' || isF2LongType(model.type));
+}
+
+function isF2UltraModel(model) {
+  if (!model) return false;
+  return model.name === 'F2' && model.type === 'Ultra';
+}
+
+function isF3MaxModel(model) {
+  return !!(model && model.name === 'F3' && model.type === 'Max');
+}
+
+/** Pin2/Pin5 硬件实时监测：仅 F1 Ultra、F2 Ultra、F3 MAX */
+function isHwPinMonitorModel(model) {
+  return isF1UltraModel(model) || isF2UltraModel(model) || isF3MaxModel(model);
+}
+
+function buildF2ServoSpeedUi(rawSpeed) {
+  const v = Math.min(100, Math.max(10, Math.round(Number(rawSpeed))));
+  return { f2ServoSpeed: v };
+}
+
+function f2ServoSpeedFromTouchX(touchX, sliderLeft, sliderWidth) {
+  if (!sliderWidth) return null;
+  const relativeX = touchX - sliderLeft;
+  const v = Math.round(10 + (relativeX / sliderWidth) * 90);
+  return Math.min(100, Math.max(10, v));
+}
+
+function isF2MaxSeriesModel(model) {
+  return isF2MaxModel(model) || isF2UltraModel(model);
+}
+
+/** F1 Ultra / F2 MAX 系固件：预设与微调走「自定义功能 / 完全打开 / 往上收 / 往下」 */
+function usesF2StyleOpenAngleBle(model) {
+  if (!model) return false;
+  if (isF1UltraModel(model)) return true;
+  if (model.name === 'F2') return true;
+  return false;
+}
+
+function openAngleInternalToDisplayDeg(model, internal) {
+  const v = parseInt(internal, 10);
+  if (isNaN(v)) return 0;
+  if (!model || !usesF2StyleOpenAngleBle(model)) {
+    return Math.max(0, Math.min(180, v));
+  }
+  if (v <= 90) return Math.round(v * 30 / 90);
+  return Math.round(30 + (v - 90) * 60 / 70);
+}
+
+function openAngleStickRotateDeg(model, internal) {
+  return 180 - openAngleInternalToDisplayDeg(model, internal);
+}
+
+function openAnglePresetBleCommand(model, angle) {
+  if (!model) return '';
+  if (usesF2StyleOpenAngleBle(model)) {
+    if (angle === 90) return '自定义功能';
+    if (angle === 160 || angle === 180) return '完全打开';
+    return '';
+  }
+  if (model.name === 'F1') {
+    if (angle === 90) return '90度';
+    if (angle === 180) return '180度';
+  }
+  return '';
+}
+
+function openAngleSlideBleCommands(model) {
+  if (usesF2StyleOpenAngleBle(model)) {
+    return { increase: '往上收', decrease: '往下' };
+  }
+  if (model.name === 'F1') {
+    return { increase: '往上收', decrease: '往下放' };
+  }
+  return null;
 }
 
 function isF2MaxLikeControl(model) {
   if (!model) return false;
-  const name = model.name || '';
-  const type = model.type || '';
-  return (name.includes('F2') && (type === 'Max' || type === 'Max Long'))
-    || (name.includes('F1') && type === 'Pro Max');
+  return isF2MaxSeriesModel(model)
+    || isF1UltraModel(model);
 }
+
+function isF2MaxDelayPowerModel(model) {
+  return isF2UltraModel(model);
+}
+
+function isF2MaxStatusBleModel(model) {
+  // 状态包监听：F2 MAX 系故障/高级配置 + 需硬件监测的 Ultra / F3 MAX
+  return isF2MaxSeriesModel(model) || isF1UltraModel(model) || isF3MaxModel(model);
+}
+
+const F2_DELAY_POWER_RISK_MINUTES = 240; // 超过 4 小时才提示可能亏电
+const F2_DELAY_POWER_RISK_SUFFIX = '　可能有亏电风险';
+
+function buildF2DelayPowerOffOption(label, minutes) {
+  const risk = minutes > F2_DELAY_POWER_RISK_MINUTES;
+  return {
+    label,
+    minutes,
+    risk,
+    pickerLabel: risk ? `${label}${F2_DELAY_POWER_RISK_SUFFIX}` : label
+  };
+}
+
+const F2_DELAY_POWER_OFF_OPTIONS = [
+  buildF2DelayPowerOffOption('关闭（关钥匙仅保持10秒）', 0),
+  buildF2DelayPowerOffOption('5分钟（系统默认）', 5),
+  buildF2DelayPowerOffOption('30分钟', 30),
+  buildF2DelayPowerOffOption('1小时', 60),
+  buildF2DelayPowerOffOption('2小时', 120),
+  buildF2DelayPowerOffOption('4小时', 240),
+  buildF2DelayPowerOffOption('12小时', 720),
+  buildF2DelayPowerOffOption('48小时', 2880)
+];
+
+function f2DelayPowerOffIndexByMinutes(minutes) {
+  const idx = F2_DELAY_POWER_OFF_OPTIONS.findIndex((o) => o.minutes === minutes);
+  return idx >= 0 ? idx : 0;
+}
+
+// 蓝牙写入队列：上一条写成功后再等 gap 才发下一条，避免串口粘包导致指令乱码
+const BLE_SEND_GAP_MS = 320;
+const BLE_ANGLE_STEP_GAP_MS = 380;
+const OPEN_ANGLE_TICKS_PER_GESTURE = 3;
+const OPEN_ANGLE_RAPID_SWIPE_WINDOW_MS = 2500;
+/** 波轮：手指移动多少 px 才算拨过 1 格（1 格 = 2°，对应 tickWidthPx） */
+const OPEN_ANGLE_RULER_SENSITIVITY = 1;
+
+
+const { PRODUCT_DETAIL_OPTIONS } = require('../../../utils/productModels.js');
+
+const ADMIN_BIND_MODEL_OPTIONS = PRODUCT_DETAIL_OPTIONS;
+
+const {
+  loadStoredNumLeds,
+  saveStoredNumLeds,
+  DEFAULT_NUM_LEDS
+} = require('../../../utils/canRuntimeConfig.js');
+const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
+const { parseF2StatusLine, buildF2FaultModalPayload, buildF2AdvUiUpdates, buildFlapPanelStateFromItm, buildF2ConnectModalQueue, buildF2HwMonitorUpdates } = require('../../../utils/f2FaultReport.js');
+const { createVoiceRecognizer, warmupVoicePlugin } = require('../../../utils/voiceControl.js');
+const {
+  scanModelToProductKey,
+  isRemoteAssistProduct,
+  callRemoteAssist,
+  collectDeviceState,
+  buildStatePatch
+} = require('../../../utils/remoteAssist.js');
+
+const REMOTE_ASSIST_STORAGE_KEY = 'remote_assist_local_v1';
 
 
 Page({
@@ -345,10 +580,11 @@ Page({
     models: [
       { id: 1, name: 'F1', type: 'Pro', tag: 'SERIES 1', icon: iconF1Pro, status: 'active' },
       { id: 2, name: 'F1', type: 'Max', tag: 'SERIES 1', icon: iconF1Max, status: 'next' },
-      { id: 8, name: 'F1', type: 'Pro Max', tag: 'SERIES 1', icon: iconF1ProMax, status: 'hidden' },
+      { id: 8, name: 'F1', type: 'Ultra', tag: 'SERIES 1', icon: iconF1ProMax, status: 'hidden' },
       { id: 3, name: 'F2', type: 'Pro', tag: 'SERIES 2', icon: iconF2Pro, status: 'hidden' },
       { id: 4, name: 'F2', type: 'Max', tag: 'SERIES 2', icon: iconF2Max, status: 'hidden' },
-      { id: 5, name: 'F2', type: 'Max Long', tag: 'SERIES 2', icon: iconF2MaxLong, status: 'hidden' },
+      { id: 9, name: 'F2', type: 'Ultra', tag: 'SERIES 2', icon: iconF2Ultra, status: 'hidden' },
+      { id: 5, name: 'F2', type: 'Long', tag: 'SERIES 2', icon: iconF2MaxLong, status: 'hidden' },
       { id: 6, name: 'F3', type: 'Pro', tag: 'SERIES 3', icon: iconF3Pro, status: 'hidden' },
       { id: 7, name: 'F3', type: 'Max', tag: 'SERIES 3', icon: iconF3Max, status: 'hidden' },
       { id: 100, name: 'CAN', type: 'Learn', tag: 'OBD DEBUG', icon: iconCanLearn, status: 'hidden', canLearn: true },
@@ -379,6 +615,26 @@ Page({
     // === 权限控制 ===
     isAuthorized: false, // 密码验证一次后有效
     isAdmin: false, // 管理员身份
+
+    // === 远程协助 ===
+    uiBleConnected: false,
+    remoteAssistCardEnabled: true,
+    remoteAssistPendingForCard: false,
+    remoteAssistPendingSessionId: '',
+    remoteAssistSessionId: '',
+    remoteAssistSessionStatus: '',
+    remoteAssistSessionProductKey: '',
+    remoteAssistRole: '',
+    remoteAssistUserAccepted: false,
+    remoteSessionBleConnected: false,
+    remoteAssistCapsuleActive: false,
+    remoteAssistPendingSessions: [],
+    remoteAssistPendingCount: 0,
+    showRemoteAssistPickModal: false,
+    remoteAssistLastCmdAt: 0,
+    remoteAssistDebugLogs: [],
+    remoteAssistConsentVisible: false,
+
     screenshotHourlyCount: 0,
     screenshotDailyCount: 0,
 
@@ -401,12 +657,35 @@ Page({
     adminSnModalTargetModel: '',
     adminSnModalExistingModel: '',
     adminSnRegisterSubmitting: false,
+    adminSnShowModelPicker: false,
+    adminBindModelOptions: ADMIN_BIND_MODEL_OPTIONS,
+    /** 管理员本会话已绑定 SN（与当前卡片型号无关） */
+    adminRegisteredSn: '',
+    adminRegisteredModel: '',
     currentConnectedRawSn: '',
+    /** 售后换机：待选工单列表与选中项 */
+    showAdminRepairPicker: false,
+    adminRepairPickerClosing: false,
+    adminAwaitingRepairs: [],
+    adminSelectedRepairId: '',
+    adminSelectedRepair: null,
+    /** 蓝牙意外断开后自动重连 */
+    isBleAutoReconnecting: false,
+    bleReconnectAttempt: 0,
+    /** CAN Learn 测试：灯带总灯珠数 */
+    canLearnNumLeds: String(DEFAULT_NUM_LEDS),
     
     // 新增：自动校准中弹窗
     showCalibratingModal: false,
     calibratingModalClosing: false, // 校准弹窗退出动画中
     calibratingBtnDisabled: true, // 校准弹窗按钮禁用状态
+
+    // 打开角度：快速连滑时提示蓝牙仍在发送
+    showOpenAngleSendingModal: false,
+    openAngleSendingModalClosing: false,
+    openAngleSendingBtnDisabled: true,
+    /** 打开角度：非阻塞提示条（仅 UI 提示，不挡操作） */
+    showOpenAngleSendHint: false,
     
     // 弹窗退出动画状态
     passwordModalClosing: false, // 密码弹窗退出动画中
@@ -488,10 +767,11 @@ Page({
     foldDemoPlaying: false,      // 是否正在播放"自动上滑调整"演示（播放时禁用手动滑动）
     isAdjustDemo: false,         // 调整按钮当前是否处在"演示动画"模式（有过渡），手动滑动时为 false
 
-    angleBtnText: '160°', // 角度按钮文本（F1显示180°，F2显示160°）
+    angleBtnText: '90°', // F1=180°，F2 系列 UI 显示 90°（内部仍 160）
 
     // 打开角度：标尺 & 数值显示相关
     isCalibrated: false,          // 是否已通过 90/160(180) 按钮激活校准
+    openAngleUiActive: false,     // 是否已点预设：未激活时棍子/数字不动，波轮仍可发蓝牙
     statusText: '等待校准',      // 状态文字
     currentAngle: 0,              // 当前角度数值 (0~maxAngle)
     ticks: [],                    // 波浪尺刻度数组
@@ -523,16 +803,50 @@ Page({
       gearSmall: iconGearSmall,
       ghostOpen: iconGhostOpen,
       ghostClose: iconGhostClose,
-      btSmall: iconBtSmall
+      flapOpen: iconFlapOpen,
+      flapFold: iconFlapFold,
+      btSmall: iconBtSmall,
+      mic: iconMic
     },
+
+    voiceListening: false,
+    voiceHint: '',
+    voiceLastCmd: '',
+    voiceHearing: false,
+    voiceStatusClass: 'dormant',
+    voiceStatusText: '点击开启语音控制',
+    f2ControlPanelOpen: false,
+    flapPanelState: 'unknown',
+    flapPanelStateText: '状态未知',
+    showF2DemoModal: false,
+    f2DemoRunning: false,
+    f2DemoStatusText: '',
     
-    // 滑块状态 (默认 mid)
+    // 滑块状态（连接后由设备状态包覆盖）
     settingState: {
-      faultDetect: 'mid',
-      selfRepair: 'mid',
-      powerOn: 'mid',
-      shutdown: 'mid'
+      faultDetect: 'left',
+      selfRepair: 'left',
+      powerOn: 'left',
+      shutdown: 'left',
+      travelMode: 'left',
+      smoothMode: 'right'
     },
+
+    delayPowerOffOptions: F2_DELAY_POWER_OFF_OPTIONS,
+    delayPowerOffIndex: 0,
+    delayPowerOffTip: '请根据电瓶容量选择',
+    f2TravelModeOn: false,
+    travelModeTip: '关钥匙保持供电3分钟，24小时内可反复自动放牌',
+    f2TravelReadbackText: '读取中…',
+    f2DelayPowerReadbackText: '读取中…',
+    f2HwMonitorVisible: false,
+    f2KeyOn: null,
+    f2BtnPressed: null,
+    f2KeyStatusText: '监测中…',
+    f2BtnStatusText: '监测中…',
+    ...buildF2ServoSpeedUi(100),
+    f2SpeedSliderWidth: 0,
+    f2SpeedSliderLeft: 0,
     
     // === 指示灯确认弹窗（调整按钮用）===
     showIndicatorCheckModal: false,      // 是否显示指示灯检查弹窗
@@ -567,15 +881,13 @@ Page({
   onLoad(options) {
     // 🔴 计算导航栏高度（适配所有机型）
     this.calcNavBarInfo();
-    
-    // 🔴 更新页面访问统计
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('scan');
     }
     
     // 初始化当前模型（支持从 products 兜底恢复到指定卡片）
-    this._scanPerfDebug = true; // 临时开启：用于真机滑动卡顿诊断
+    this._scanPerfDebug = false;
     this._scanPerf = {
       moveEvents: 0,
       moveSetDataCostTotal: 0,
@@ -590,6 +902,9 @@ Page({
       }
     }
     const currentModel = this.data.models[restoreIndex] || this.data.models[0];
+    this.setData({
+      canLearnNumLeds: String(loadStoredNumLeds())
+    });
     this.setData({ currentModel });
     // 确保首屏状态：active/next/prev，且不循环
     this.updateCardStatus(restoreIndex);
@@ -602,59 +917,130 @@ Page({
 
     this.ble = new BLEHelper(wx);
     this.initScreenshotProtection();
+    warmupVoicePlugin();
+    this.initVoiceRecognizer();
     
     // 重置跳转标记
     this.setData({ isNavigatingToOta: false });
     
-    this.ble.onConnecting = () => {
-      // 开始连接时设置状态
+    this.ble.onConnecting = (device) => {
+      if (device) this._lastBleDevice = device;
       this.setData({
         isScanning: false,
         isConnecting: true
       });
     };
-    
+
+    this.ble.onLinkEstablished = (device) => {
+      if (device) this._lastBleDevice = device;
+      const rawName = device.name || device.localName || '';
+      const numMatch = rawName.replace(/[^0-9]/g, '');
+      const finalName = numMatch ? `MT-ID:${numMatch}` : rawName;
+      // 物理链路已建立，但特征值尚未发现完毕，保持「正在连接」
+      this.setData({
+        isConnecting: true,
+        isScanning: false,
+        connectedDeviceName: finalName || this.data.connectedDeviceName
+      });
+      this._startBleLinkWatch();
+    };
+
     this.ble.onConnected = async (device) => {
       const rawName = device.name || device.localName || '';
       const normalizedSn = this.normalizeSnFromBluetoothName(rawName);
-      // 先拉取管理员身份，否则 checkOtaConnection 无法跳过 OTA，预登记弹窗不会出现
-      if (normalizedSn) {
-        await this.ensureAdminPrivilegeForSnFlow();
-      }
+      this._lastBleDevice = device;
+      this._activeBleDeviceId = device.deviceId || '';
+      this._bleReconnectStoppedByUser = false;
+      this._clearBleReconnectTimers();
 
-      const hasOtaRecord = await this.checkOtaConnection(device.deviceId);
-      
-      if (!hasOtaRecord) {
-        // 没有OTA记录，断开连接并提示（管理员已在上方校验后跳过）
-        console.log('❌ [onConnected] 设备未进行OTA升级，断开连接');
-        this.ble.disconnect();
-        this.setData({
-          isConnected: false,
-          isScanning: false,
-          isConnecting: false
-        });
-        this.showOtaRequiredTip();
-        return;
-      }
-      
-      // 提取名称中的数字
-      const numMatch = rawName.replace(/[^0-9]/g, ''); // 只保留数字
+      const numMatch = rawName.replace(/[^0-9]/g, '');
       const finalName = numMatch ? `MT-ID:${numMatch}` : rawName;
 
-      this.setData({
+      // 系统 BLE 已连通：先更新 UI，避免云函数/OTA 校验期间一直卡在「正在连接」
+      this._applyBleLinkUi({
         isConnected: true,
         isScanning: false,
         isConnecting: false,
+        isBleAutoReconnecting: false,
+        bleReconnectAttempt: 0,
         connectedDeviceName: finalName,
         currentConnectedRawSn: normalizedSn || ''
+      }, () => {
+        this._scheduleRemoteStatePush();
       });
 
-      if (normalizedSn && this.data.isAdmin) {
-        await this.maybeShowAdminSnRegisterModal(normalizedSn);
+      try {
+        if (normalizedSn) {
+          await this.ensureAdminPrivilegeForSnFlow();
+        }
+
+        if (normalizedSn && !this.data.isAdmin) {
+          const snOk = await this._checkConnectedSnAllowed(normalizedSn);
+          if (!snOk) {
+            this.ble.disconnect(true);
+            this._activeBleDeviceId = '';
+            this._applyBleLinkUi({
+              isConnected: false,
+              isScanning: false,
+              isConnecting: false,
+              isBleAutoReconnecting: false
+            });
+            return;
+          }
+        }
+
+        const hasOtaRecord = await this.checkOtaConnection(device.deviceId);
+
+        if (!hasOtaRecord) {
+          console.log('❌ [onConnected] 设备未进行OTA升级，断开连接');
+          this.ble.disconnect(true);
+          this._activeBleDeviceId = '';
+          this._applyBleLinkUi({
+            isConnected: false,
+            isScanning: false,
+            isConnecting: false,
+            isBleAutoReconnecting: false
+          });
+          this.showOtaRequiredTip();
+          return;
+        }
+
+        if (normalizedSn && this.data.isAdmin) {
+          await this._maybeShowAdminRepairPickerThenSn(normalizedSn);
+        }
+
+        if (isF2MaxStatusBleModel(this.data.currentModel)) {
+          this._setupF2FaultBleListener();
+        }
+        this._resumeVoiceAfterBleReconnect();
+      } catch (err) {
+        console.error('❌ [onConnected] 连接后校验失败', err);
+        this.ble.disconnect(true);
+        this._activeBleDeviceId = '';
+        this._applyBleLinkUi({
+          isConnected: false,
+          isScanning: false,
+          isConnecting: false,
+          isBleAutoReconnecting: false
+        });
+        this._showCustomToast('连接校验失败，请重试', 'none', 2200);
       }
     };
+    this.ble.onConnectFailed = (err, device, opts) => {
+      const manual = !!(opts && opts.manual);
+      if (device) this._lastBleDevice = device;
+      const shouldReconnect = !manual && !this._bleReconnectStoppedByUser && this._lastBleDevice;
+      this._applyBleLinkUi({
+        isConnected: false,
+        isScanning: false,
+        isConnecting: false,
+        ...(shouldReconnect ? {} : { isBleAutoReconnecting: false })
+      }, () => {
+        if (shouldReconnect) this._requestBleAutoReconnect('connect_failed');
+      });
+    };
     this.ble.onError = (err) => {
-      this.setData({ isScanning: false });
+      this.setData({ isScanning: false, isConnecting: false });
       
       // 🔴 处理蓝牙权限错误，使用自定义弹窗
       if (err && err.type === 'auth_deny') {
@@ -667,9 +1053,33 @@ Page({
       }
       // 可以在这里做必要的错误上报或静默处理
     };
-    this.ble.onDisconnected = () => {
-      this.onBleDisconnected(); // 使用统一的断开处理
+    this.ble.onDisconnected = (meta) => {
+      this._stopBleLinkWatch();
+      this.onBleDisconnected(meta);
     };
+
+    this.ble._ensureConnectionStateListener();
+    if (!this._bleAdapterListenerSetup) {
+      this._bleAdapterListenerSetup = true;
+      wx.onBluetoothAdapterStateChange((res) => {
+        if (!res.available && this.data.isConnected) {
+          this._handleBleLinkLost('adapter_off');
+        }
+      });
+    }
+    this._adminSessionRegisteredSn = '';
+    this._adminSessionRegisteredModel = '';
+    this._adminSnMismatchHintShown = false;
+    this._lastBleDevice = null;
+    this._activeBleDeviceId = '';
+    this._bleReconnectTimer = null;
+    this._bleReconnectStoppedByUser = false;
+    this._bleScanTimeoutTimer = null;
+    this._voiceResumeAfterBle = false;
+    this._voiceHintLastAt = 0;
+    this._bleSendQueue = [];
+    this._bleSendDraining = false;
+    this._openAngleFullSwipeTimes = [];
 
     // 计算 px 比例 (CSS bar宽度6px + 间距14px = 20px)
     // 🔴 获取状态栏高度（已在 onLoad 中设置过，这里无需重复声明 winInfo）
@@ -696,6 +1106,7 @@ Page({
     // 🔴 管理员检查延后到首帧后，避免首屏进入卡顿
     setTimeout(() => {
       this.checkAdminPrivilege();
+      this._refreshRemoteAssistCardFlags();
     }, 80);
   },
 
@@ -725,7 +1136,12 @@ Page({
         adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
       }
       if (adminCheck.data.length > 0) {
-        this.setData({ isAdmin: true });
+        this.setData({ isAdmin: true }, () => {
+          this._refreshRemoteAssistCardFlags();
+          this._startRemoteAssistPendingPoll();
+        });
+        screenshotExempt.markGuanliyuanCache(true);
+        screenshotExempt.allowScreenCaptureIfExempt();
         try {
           wx.setStorageSync(ADMIN_CACHE_KEY, { isAdmin: true, ts: Date.now() });
         } catch (e) {}
@@ -754,6 +1170,7 @@ Page({
       'showDisconnectTip',
       'showApproachTip',
       'showCalibratingModal',
+      'showOpenAngleSendingModal',
       'showConnectBluetoothTip',
       'showOtaTip',
       'showIndicatorCheckModal',
@@ -768,6 +1185,7 @@ Page({
       'keyModalClosing',
       'indicatorCheckModalClosing',
       'calibratingModalClosing',
+      'openAngleSendingModalClosing',
       'bluetoothAlertClosing',
       // 兜底：防止 detail-touch-guard 偶发残留导致整页无法触摸
       'blockDetailTouch',
@@ -802,17 +1220,31 @@ Page({
         wx.getScreenRecordingState({
           success: (res) => {
             if (res.state === 'on' || res.recording) {
-              this.handleIntercept('record');
+              if (!screenshotExempt.isScreenshotBanExempt(this)) {
+                this.handleIntercept('record');
+              }
             }
           }
         });
       }
     }, 120);
 
+    if (this.data.isConnected) {
+      this._tickBleLinkWatch();
+      if (!this._bleLinkWatchTimer) this._startBleLinkWatch();
+    }
+
+    this._resumeRemoteAssistPollers();
+    this._restoreRemoteAssistLocal();
+
     console.log('✅ [onShow] 页面状态已恢复');
   },
 
   initScreenshotProtection() {
+    if (screenshotExempt.isScreenshotBanExempt(this)) {
+      screenshotExempt.allowScreenCaptureIfExempt();
+      return;
+    }
     try {
       if (wx.setVisualEffectOnCapture) {
         wx.setVisualEffectOnCapture({
@@ -920,6 +1352,8 @@ Page({
   },
 
   async handleIntercept(type) {
+    if (screenshotExempt.isScreenshotBanExempt(this)) return;
+
     if (type === 'record') {
       await this._banForCapture('record');
       return;
@@ -939,6 +1373,8 @@ Page({
   },
 
   onHide() {
+    this._stopRemoteAssistPollers();
+    this._stopF2DemoMode(false);
     // 兜底：若详情主层被系统手势带走，记录恢复信息给 products onShow 使用
     try {
       if (this.data.showDetail && this.data.detailMode === 'main') {
@@ -982,13 +1418,952 @@ Page({
       clearTimeout(this._foldFineTuneHintTimer);
       this._foldFineTuneHintTimer = null;
     }
-    if (this.ble) this.ble.disconnect();
+    if (this.ble) {
+      this._stopBleLinkWatch();
+      this.stopBleAutoReconnect(false);
+      this.ble.disconnect(true);
+    }
     if (typeof this._teardownScreenshotProtection === 'function') {
       this._teardownScreenshotProtection();
     }
+    this._stopVoiceRecognizer();
+    this._stopF2DemoMode(false);
+    this._stopRemoteAssistPollers();
   },
 
   preventBubble() { return; },
+
+  // ===============================================
+  // 远程协助
+  // ===============================================
+  _getRemoteAssistModel() {
+    if (this.data.showDetail && this.data.currentModel) {
+      return this.data.currentModel;
+    }
+    return this.data.models[this.data.currentIndex] || null;
+  },
+
+  _remoteStatePatchChanged(patch) {
+    const data = this.data;
+    return Object.keys(patch).some((k) => {
+      const next = patch[k];
+      const cur = data[k];
+      if (next && typeof next === 'object') {
+        try {
+          return JSON.stringify(cur) !== JSON.stringify(next);
+        } catch (e) {
+          return cur !== next;
+        }
+      }
+      return cur !== next;
+    });
+  },
+
+  _isRemoteAssistAdminActive() {
+    return this.data.remoteAssistRole === 'admin' &&
+      !!this.data.remoteAssistSessionId &&
+      this.data.remoteAssistSessionStatus === 'active';
+  },
+
+  _formatRemoteAssistLogTime(ts) {
+    const d = new Date(ts || Date.now());
+    const p = (n) => (n < 10 ? `0${n}` : `${n}`);
+    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  },
+
+  _remoteAssistLogLabel(status) {
+    const map = {
+      sending: '发送中',
+      ok: '已送达',
+      fail: '送达失败',
+      enqueue_fail: '入队失败',
+      coalesced: '已合并',
+      timeout: '未收到回传'
+    };
+    return map[status] || status;
+  },
+
+  _getRemoteAssistDebugLogs() {
+    if (this._raDebugLogsMem && this._raDebugLogsMem.length) return this._raDebugLogsMem;
+    return this.data.remoteAssistDebugLogs || [];
+  },
+
+  _setRemoteAssistDebugLogs(logs) {
+    this._raDebugLogsMem = logs;
+    this.setData({ remoteAssistDebugLogs: logs });
+  },
+
+  _resetRemoteAssistDebugLogsMem() {
+    this._raDebugLogsMem = null;
+  },
+
+  _remoteAssistLogCmdMatch(logCmd, rawCmd) {
+    if (!logCmd || !rawCmd) return false;
+    const base = String(logCmd).split(' ×')[0].trim();
+    return base === rawCmd || logCmd === rawCmd;
+  },
+
+  _syncRemoteAssistDebugLogsFromSession(session) {
+    if (!session) return null;
+    const commands = session.commands || [];
+    const fb = session.lastCmdFeedback;
+    let logs = [...this._getRemoteAssistDebugLogs()];
+    let changed = false;
+    let lastAt = this.data.remoteAssistLastCmdAt || 0;
+    const now = Date.now();
+
+    const touch = (commandId, cmd, ok, at) => {
+      if (!commandId) return;
+      const ts = at || now;
+      const status = ok ? 'ok' : 'fail';
+      const label = this._remoteAssistLogLabel(status);
+      let idx = logs.findIndex((l) => l.id === commandId);
+      if (idx < 0 && cmd) {
+        idx = logs.findIndex((l) => l.status === 'sending' && this._remoteAssistLogCmdMatch(l.cmd, cmd));
+      }
+      if (idx < 0) return;
+      if (logs[idx].status === status && logs[idx].id === commandId) return;
+      logs[idx] = {
+        ...logs[idx],
+        id: commandId,
+        status,
+        label,
+        time: this._formatRemoteAssistLogTime(ts)
+      };
+      changed = true;
+      if (ts > lastAt) lastAt = ts;
+    };
+
+    if (fb && fb.commandId) touch(fb.commandId, fb.cmd, fb.ok !== false, fb.at);
+    commands.forEach((c) => {
+      if (!c || !c.id) return;
+      if (c.status === 'done') touch(c.id, c.cmd, true, c.ackAt);
+      else if (c.status === 'failed') touch(c.id, c.cmd, false, c.ackAt);
+    });
+
+    logs = logs.map((l) => {
+      if (l.status !== 'sending' || !l.enqueueAt) return l;
+      if (now - l.enqueueAt < 8000) return l;
+      changed = true;
+      return {
+        ...l,
+        status: 'timeout',
+        label: this._remoteAssistLogLabel('timeout')
+      };
+    });
+
+    if (!changed) return null;
+    this._raDebugLogsMem = logs;
+    return { remoteAssistDebugLogs: logs, remoteAssistLastCmdAt: lastAt };
+  },
+
+  _pushRemoteAssistDebugLog(entry) {
+    const logs = [entry, ...this._getRemoteAssistDebugLogs()];
+    if (logs.length > 30) logs.length = 30;
+    this._setRemoteAssistDebugLogs(logs);
+  },
+
+  _patchRemoteAssistDebugLog(findId, updates) {
+    const logs = this._getRemoteAssistDebugLogs().map((l) => (
+      l.id === findId ? { ...l, ...updates } : l
+    ));
+    this._setRemoteAssistDebugLogs(logs);
+  },
+
+  _mergeRemoteAssistCmdFeedback(fb) {
+    if (!fb || !fb.at) return this._getRemoteAssistDebugLogs();
+    const patch = this._syncRemoteAssistDebugLogsFromSession({ lastCmdFeedback: fb, commands: [] });
+    if (patch && patch.remoteAssistDebugLogs) return patch.remoteAssistDebugLogs;
+    return this._getRemoteAssistDebugLogs();
+  },
+
+  _canControlDevice() {
+    if (this._isRemoteAssistAdminActive()) return true;
+    if (this.data.isConnected) return true;
+    // 兜底：胶囊已显示连接且 GATT 就绪时，避免 UI/逻辑标志短暂不同步导致无法操控
+    const ble = this.ble;
+    const liveId = ble && ble.device && ble.device.deviceId;
+    if (liveId && liveId === this._activeBleDeviceId && ble.serviceId && this._getBleWriteCharacteristicId()) {
+      return true;
+    }
+    return false;
+  },
+
+  _shouldSkipIndicatorModal() {
+    return this._isRemoteAssistAdminActive();
+  },
+
+  _buildRemoteStatePatch(deviceState, options) {
+    return buildStatePatch(deviceState, {
+      models: this.data.models,
+      currentModel: this.data.currentModel,
+      ...(options || {})
+    });
+  },
+
+  _applyRemoteStatePatch(patch, callback) {
+    if (!patch || !Object.keys(patch).length) {
+      if (callback) callback();
+      return;
+    }
+    if (!this._remoteStatePatchChanged(patch)) {
+      if (callback) callback();
+      return;
+    }
+    this.setData(patch, callback);
+  },
+
+  _saveRemoteAssistLocal() {
+    const {
+      remoteAssistRole,
+      remoteAssistSessionId,
+      remoteAssistSessionStatus,
+      remoteAssistSessionProductKey,
+      remoteAssistUserAccepted
+    } = this.data;
+    if (!remoteAssistSessionId || !remoteAssistRole) {
+      try { wx.removeStorageSync(REMOTE_ASSIST_STORAGE_KEY); } catch (e) { /* ignore */ }
+      return;
+    }
+    try {
+      wx.setStorageSync(REMOTE_ASSIST_STORAGE_KEY, {
+        remoteAssistRole,
+        remoteAssistSessionId,
+        remoteAssistSessionStatus,
+        remoteAssistSessionProductKey,
+        remoteAssistUserAccepted: !!remoteAssistUserAccepted
+      });
+    } catch (e) { /* ignore */ }
+  },
+
+  async _restoreRemoteAssistLocal() {
+    if (this.data.remoteAssistSessionId && this.data.remoteAssistRole) return;
+    let saved;
+    try {
+      saved = wx.getStorageSync(REMOTE_ASSIST_STORAGE_KEY);
+    } catch (e) {
+      return;
+    }
+    if (!saved || !saved.remoteAssistSessionId || !saved.remoteAssistRole) return;
+    try {
+      const r = await callRemoteAssist({
+        action: 'getSession',
+        sessionId: saved.remoteAssistSessionId
+      });
+      const session = r.session;
+      if (!session || session.status === 'ended') {
+        try { wx.removeStorageSync(REMOTE_ASSIST_STORAGE_KEY); } catch (e) { /* ignore */ }
+        return;
+      }
+      const productKey = saved.remoteAssistSessionProductKey || session.productKey || '';
+      const userAccepted = !!saved.remoteAssistUserAccepted;
+
+      // 用户端：仅恢复「已同意且进行中」的会话，避免未点击就弹出远协界面
+      if (saved.remoteAssistRole === 'user') {
+        if (!(session.status === 'active' && userAccepted)) {
+          try { wx.removeStorageSync(REMOTE_ASSIST_STORAGE_KEY); } catch (e) { /* ignore */ }
+          return;
+        }
+      }
+
+      const patch = {
+        remoteAssistRole: saved.remoteAssistRole,
+        remoteAssistSessionId: saved.remoteAssistSessionId,
+        remoteAssistSessionStatus: session.status,
+        remoteAssistSessionProductKey: productKey,
+        remoteAssistUserAccepted: userAccepted,
+        remoteSessionBleConnected: !!session.bleConnected,
+        remoteAssistConsentVisible: false
+      };
+      if (saved.remoteAssistRole === 'admin') {
+        let idx = this.data.models.findIndex((m) => scanModelToProductKey(m) === productKey);
+        if (idx < 0) idx = this.data.currentIndex;
+        const currentModel = this.data.models[idx];
+        if (currentModel) patch.currentModel = currentModel;
+        if (session.deviceSn) patch.currentConnectedRawSn = session.deviceSn;
+      }
+      this.setData(patch, () => {
+        this._syncUiBleConnected();
+        if (session.deviceState) this._applyRemoteDeviceState(session.deviceState);
+        if (saved.remoteAssistRole === 'user') {
+          if (userAccepted) wx.setKeepScreenOn({ keepScreenOn: true });
+          this._startRemoteAssistUserPoll();
+        } else if (saved.remoteAssistRole === 'admin') {
+          this._startRemoteAssistAdminPoll();
+        }
+      });
+    } catch (e) {
+      console.warn('[远协] 恢复会话失败', e);
+    }
+  },
+
+  _executeRemoteAssistCommands(cmds) {
+    const list = cmds || [];
+    if (!list.length) return Promise.resolve(true);
+    let chain = Promise.resolve(true);
+    list.forEach((item) => {
+      if (!item || !item.cmd) return;
+      chain = chain.then((prevOk) => {
+        if (!prevOk) return false;
+        return this._executeRemoteAssistCommand(item);
+      });
+    });
+    return chain;
+  },
+
+  _executeRemoteAssistCommand(item) {
+    const times = Math.min(5, Math.max(1, Number(item.times) || 1));
+    const interval = Math.max(0, Number(item.interval) || 0);
+    const cmd = item.cmd;
+    return new Promise((resolve) => {
+      if (this.data.remoteAssistRole !== 'user') {
+        resolve(false);
+        return;
+      }
+      if (!this._isBleWriteReady()) {
+        console.warn('[远协] 用户端蓝牙未就绪，无法发送:', cmd,
+          'isConnected=', this.data.isConnected,
+          'device=', !!(this.ble && this.ble.device),
+          'char=', !!(this.ble && (this.ble.characteristicId2 || this.ble.characteristicId)));
+        resolve(false);
+        return;
+      }
+      let sent = 0;
+      const sendNext = () => {
+        if (this.data.remoteAssistRole !== 'user' || !this._isBleWriteReady()) {
+          resolve(false);
+          return;
+        }
+        const arrayBuffer = this.stringToArrayBuffer(cmd);
+        this.writeBleDataPromise(arrayBuffer).then((ok) => {
+          if (!ok) {
+            resolve(false);
+            return;
+          }
+          sent += 1;
+          if (sent >= times) {
+            resolve(true);
+            return;
+          }
+          setTimeout(sendNext, interval > 0 ? interval : 300);
+        });
+      };
+      sendNext();
+    });
+  },
+
+  _refreshRemoteAssistCardFlags() {
+    const model = this._getRemoteAssistModel();
+    const enabled = isRemoteAssistProduct(model);
+    const patch = { remoteAssistCardEnabled: enabled };
+    if (!enabled) {
+      patch.remoteAssistPendingForCard = false;
+      patch.remoteAssistPendingSessionId = '';
+    }
+    this.setData(patch, () => {
+      if (this.data.isAdmin && enabled) this._pollRemoteAssistPending();
+    });
+  },
+
+  _syncUiBleConnected() {
+    const isAdminAssist = this.data.remoteAssistRole === 'admin' &&
+      this.data.remoteAssistSessionStatus === 'active';
+    const connected = !!this.data.isConnected;
+    const ui = isAdminAssist ? false : connected;
+    const patch = {};
+    if (ui !== this.data.uiBleConnected) patch.uiBleConnected = ui;
+    // 已稳定连接时，强制清除重连/扫描 UI，避免与「已连接」叠在一起
+    if (connected) {
+      if (this.data.isBleAutoReconnecting) patch.isBleAutoReconnecting = false;
+      if (this.data.isScanning) patch.isScanning = false;
+      if (this.data.isConnecting) patch.isConnecting = false;
+    }
+    const capsuleActive = isAdminAssist;
+    if (capsuleActive !== this.data.remoteAssistCapsuleActive) {
+      patch.remoteAssistCapsuleActive = capsuleActive;
+    }
+    if (Object.keys(patch).length) this.setData(patch);
+  },
+
+  _applyBleLinkUi(patch, callback) {
+    this.setData(patch, () => {
+      this._syncUiBleConnected();
+      if (callback) callback();
+    });
+  },
+
+  _isStaleBleDisconnect(meta) {
+    const lostId = meta && meta.device && meta.device.deviceId;
+    const activeId = this._activeBleDeviceId ||
+      (this.ble && this.ble.device && this.ble.device.deviceId) || '';
+    if (!lostId || !activeId) return false;
+    return lostId !== activeId;
+  },
+
+  _formatRemoteAssistSessionLabel(session) {
+    if (!session) return '';
+    const sn = session.deviceSn ||
+      (session.deviceState && session.deviceState.connectedDeviceName) || '未知设备';
+    const ble = session.bleConnected ? '已连蓝牙' : '未连蓝牙';
+    return `${sn} · ${ble}`;
+  },
+
+  _stopRemoteAssistPollers() {
+    this._remoteAssistUserPollActive = false;
+    this._remoteAssistAdminPollActive = false;
+    if (this._remoteAssistUserPollTimer) {
+      clearTimeout(this._remoteAssistUserPollTimer);
+      this._remoteAssistUserPollTimer = null;
+    }
+    if (this._remoteAssistAdminPollTimer) {
+      clearTimeout(this._remoteAssistAdminPollTimer);
+      this._remoteAssistAdminPollTimer = null;
+    }
+    if (this._remoteAssistPendingPollTimer) {
+      clearInterval(this._remoteAssistPendingPollTimer);
+      this._remoteAssistPendingPollTimer = null;
+    }
+    if (this._remoteStatePushTimer) {
+      clearTimeout(this._remoteStatePushTimer);
+      this._remoteStatePushTimer = null;
+    }
+  },
+
+  _resumeRemoteAssistPollers() {
+    if (this.data.remoteAssistSessionId && this.data.remoteAssistRole === 'user') {
+      this._startRemoteAssistUserPoll();
+    }
+    if (this.data.remoteAssistSessionId && this.data.remoteAssistRole === 'admin') {
+      this._startRemoteAssistAdminPoll();
+    }
+    if (this.data.isAdmin && this.data.remoteAssistCardEnabled) {
+      this._startRemoteAssistPendingPoll();
+    }
+  },
+
+  _startRemoteAssistPendingPoll() {
+    if (this._remoteAssistPendingPollTimer) return;
+    this._pollRemoteAssistPending();
+    this._remoteAssistPendingPollTimer = setInterval(() => {
+      this._pollRemoteAssistPending();
+    }, 2500);
+  },
+
+  async _pollRemoteAssistPending() {
+    if (!this.data.isAdmin || !this.data.remoteAssistCardEnabled) return;
+    if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) return;
+    const model = this._getRemoteAssistModel();
+    const productKey = scanModelToProductKey(model);
+    if (!productKey) return;
+    try {
+      const r = await callRemoteAssist({ action: 'hasPending', productKey });
+      const sessions = r.sessions || (r.session ? [r.session] : []);
+      const has = sessions.length > 0;
+      const firstId = sessions[0] ? sessions[0]._id : '';
+      if (has !== this.data.remoteAssistPendingForCard ||
+          firstId !== (this.data.remoteAssistPendingSessionId || '') ||
+          sessions.length !== (this.data.remoteAssistPendingSessions || []).length) {
+        this.setData({
+          remoteAssistPendingForCard: has,
+          remoteAssistPendingSessionId: firstId,
+          remoteAssistPendingSessions: sessions,
+          remoteAssistPendingCount: sessions.length
+        });
+      }
+    } catch (e) { /* ignore */ }
+  },
+
+  async onUserRemoteAssistTap(e) {
+    const ds = e && e.currentTarget && e.currentTarget.dataset;
+    const cardModel = (ds && ds.index !== undefined && this.data.models[ds.index])
+      ? this.data.models[ds.index]
+      : this._getRemoteAssistModel();
+    const productKey = scanModelToProductKey(cardModel);
+    if (!productKey) return;
+
+    if (this.data.remoteAssistSessionId &&
+        this.data.remoteAssistSessionProductKey === productKey) {
+      if (this.data.remoteAssistSessionStatus === 'pending') {
+        wx.showModal({
+          title: '取消远协',
+          content: '确定取消远程协助请求吗？',
+          success: async (res) => {
+            if (res.confirm) await this._endRemoteAssistSession('cancel');
+          }
+        });
+      } else {
+        if (this.data.remoteAssistSessionStatus === 'active' && !this.data.remoteAssistUserAccepted) {
+          this.setData({ remoteAssistConsentVisible: true });
+          return;
+        }
+        this._showCustomToast('协助进行中，可点下方结束', 'none', 2000);
+      }
+      return;
+    }
+    if (!this.data.isConnected) {
+      this.setData({ showConnectBluetoothTip: true });
+      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+      return;
+    }
+    const model = cardModel;
+    try {
+      const r = await callRemoteAssist({
+        action: 'request',
+        productKey,
+        productName: model.name,
+        productType: model.type,
+        bleConnected: this.data.isConnected,
+        deviceSn: this.data.currentConnectedRawSn || '',
+        deviceState: collectDeviceState(this)
+      });
+      const status = r.status || 'pending';
+      this.setData({
+        remoteAssistRole: 'user',
+        remoteAssistSessionId: r.sessionId,
+        remoteAssistSessionStatus: status,
+        remoteAssistSessionProductKey: productKey,
+        remoteAssistUserAccepted: false,
+        remoteAssistConsentVisible: status === 'active'
+      });
+      this._saveRemoteAssistLocal();
+      wx.setKeepScreenOn({ keepScreenOn: true });
+      this._startRemoteAssistUserPoll();
+      this._showCustomToast('已发起远程协助', 'success', 1800);
+    } catch (err) {
+      let msg = err.message || '发起失败';
+      if (msg.includes('FUNCTION_NOT_FOUND')) {
+        msg = '远协功能暂未开放(云函数未部署)';
+      } else if (msg.length > 30) {
+        msg = msg.substring(0, 30) + '...';
+      }
+      this._showCustomToast(msg, 'none', 2500);
+    }
+  },
+
+  async onAdminRemoteAssistTap() {
+    if (!this.data.isAdmin) return;
+    if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) {
+      this._showCustomToast('已在远协中', 'none', 2000);
+      return;
+    }
+    const sessions = this.data.remoteAssistPendingSessions || [];
+    if (!sessions.length) {
+      this._showCustomToast('当前型号暂无远协请求', 'none', 2000);
+      await this._pollRemoteAssistPending();
+      return;
+    }
+    if (sessions.length === 1) {
+      await this._acceptRemoteAssistSession(sessions[0]._id);
+      return;
+    }
+    this.setData({ showRemoteAssistPickModal: true });
+  },
+
+  onCloseRemoteAssistPickModal() {
+    this.setData({ showRemoteAssistPickModal: false });
+  },
+
+  async onPickRemoteAssistSession(e) {
+    const sessionId = e && e.currentTarget && e.currentTarget.dataset &&
+      e.currentTarget.dataset.sessionId;
+    if (!sessionId) return;
+    this.setData({ showRemoteAssistPickModal: false });
+    await this._acceptRemoteAssistSession(sessionId);
+  },
+
+  async _acceptRemoteAssistSession(sessionId) {
+    if (!sessionId) return;
+    try {
+      const r = await callRemoteAssist({ action: 'accept', sessionId });
+      this._enterRemoteAssistAdmin(r.session);
+    } catch (err) {
+      this._showCustomToast(err.message || '接入失败', 'none', 2200);
+      this._pollRemoteAssistPending();
+    }
+  },
+
+  _enterRemoteAssistAdmin(session) {
+    if (!session) return;
+    const productKey = session.productKey;
+    let idx = this.data.models.findIndex((m) => scanModelToProductKey(m) === productKey);
+    if (idx < 0) idx = this.data.currentIndex;
+    const currentModel = this.data.models[idx];
+    const isF1 = currentModel && currentModel.name.includes('F1');
+    this.updateCardStatus(idx);
+    this._resetRemoteAssistDebugLogsMem();
+    const patch = {
+      remoteAssistRole: 'admin',
+      remoteAssistSessionId: session._id,
+      remoteAssistSessionStatus: session.status || 'active',
+      remoteAssistSessionProductKey: productKey,
+      remoteAssistPendingForCard: false,
+      remoteAssistPendingSessionId: '',
+      remoteAssistPendingSessions: [],
+      currentModel,
+      remoteSessionBleConnected: !!session.bleConnected,
+      remoteAssistLastCmdAt: 0,
+      remoteAssistDebugLogs: [],
+      angleBtnText: isF1 ? '180°' : '90°'
+    };
+    this.setData(patch, () => {
+      this._saveRemoteAssistLocal();
+      this._applyRemoteDeviceState(session.deviceState);
+      this._syncUiBleConnected();
+      if (!this.data.showDetail) {
+        this._openDetailAnimated({
+          currentModel,
+          angleBtnText: isF1 ? '180°' : '90°'
+        });
+      }
+      this._startRemoteAssistAdminPoll();
+    });
+  },
+
+  _startRemoteAssistUserPoll() {
+    if (this._remoteAssistUserPollActive) return;
+    this._remoteAssistUserPollActive = true;
+    this._scheduleRemoteAssistUserPoll(0);
+  },
+
+  _scheduleRemoteAssistUserPoll(delayMs) {
+    if (!this._remoteAssistUserPollActive) return;
+    if (this._remoteAssistUserPollTimer) {
+      clearTimeout(this._remoteAssistUserPollTimer);
+    }
+    this._remoteAssistUserPollTimer = setTimeout(() => {
+      this._remoteAssistUserPollTimer = null;
+      if (!this._remoteAssistUserPollActive) return;
+      this._tickRemoteAssistUserPoll().finally(() => {
+        if (!this._remoteAssistUserPollActive) return;
+        const active = this.data.remoteAssistSessionStatus === 'active' &&
+          this.data.remoteAssistUserAccepted;
+        this._scheduleRemoteAssistUserPoll(active ? 160 : 700);
+      });
+    }, delayMs);
+  },
+
+  _startRemoteAssistAdminPoll() {
+    if (this._remoteAssistAdminPollActive) return;
+    this._remoteAssistAdminPollActive = true;
+    this._scheduleRemoteAssistAdminPoll(0);
+  },
+
+  _scheduleRemoteAssistAdminPoll(delayMs) {
+    if (!this._remoteAssistAdminPollActive) return;
+    if (this._remoteAssistAdminPollTimer) {
+      clearTimeout(this._remoteAssistAdminPollTimer);
+    }
+    this._remoteAssistAdminPollTimer = setTimeout(() => {
+      this._remoteAssistAdminPollTimer = null;
+      if (!this._remoteAssistAdminPollActive) return;
+      this._tickRemoteAssistAdminPoll().finally(() => {
+        if (!this._remoteAssistAdminPollActive) return;
+        const hasSending = this._getRemoteAssistDebugLogs().some((l) => l.status === 'sending');
+        this._scheduleRemoteAssistAdminPoll(hasSending ? 100 : 280);
+      });
+    }, delayMs);
+  },
+
+  async _tickRemoteAssistUserPoll() {
+    const sessionId = this.data.remoteAssistSessionId;
+    if (!sessionId || this.data.remoteAssistRole !== 'user') return;
+    if (this._remoteAssistUserPollBusy) return;
+    this._remoteAssistUserPollBusy = true;
+    try {
+      const pull = await callRemoteAssist({ action: 'pullCommands', sessionId });
+
+      if (this.data.remoteAssistSessionId !== sessionId) return;
+
+      const session = pull.session;
+      if (!session || session.status === 'ended') {
+        this._clearRemoteAssistLocal('ended');
+        return;
+      }
+
+      // 技师已接入但用户尚未同意：只更新状态，不自动弹全屏确认
+      if (session.status === 'active' && !this.data.remoteAssistUserAccepted) {
+        const wasPending = this.data.remoteAssistSessionStatus === 'pending';
+        const patch = {};
+        if (this.data.remoteAssistSessionStatus !== 'active') {
+          patch.remoteAssistSessionStatus = 'active';
+          patch.blockDetailTouch = false;
+        }
+        if (wasPending) {
+          patch.remoteAssistConsentVisible = true;
+        }
+        if (Object.keys(patch).length) {
+          this.setData(patch);
+          this._saveRemoteAssistLocal();
+        }
+        return;
+      }
+
+      if (session.status !== this.data.remoteAssistSessionStatus) {
+        this.setData({
+          remoteAssistSessionStatus: session.status,
+          blockDetailTouch: session.status === 'active' ? false : this.data.blockDetailTouch
+        });
+        this._saveRemoteAssistLocal();
+        if (session.status === 'active' && this.data.remoteAssistUserAccepted) {
+          wx.setKeepScreenOn({ keepScreenOn: true });
+        }
+      }
+      const cmds = pull.commands || [];
+      if (cmds.length > 0) {
+        const item = cmds[0];
+        const execOk = await this._executeRemoteAssistCommand(item);
+        if (item && item.id) {
+          const feedback = {
+            commandId: item.id,
+            cmd: item.cmd || '',
+            ok: execOk,
+            at: Date.now()
+          };
+          let acked = false;
+          for (let i = 0; i < 3 && !acked; i++) {
+            try {
+              await callRemoteAssist({
+                action: 'ackCommand',
+                sessionId,
+                commandIds: [item.id],
+                ok: execOk
+              });
+              acked = true;
+            } catch (e) {
+              console.warn('[远协] ackCommand 失败', i + 1, e);
+              if (i < 2) await new Promise((r) => setTimeout(r, 180));
+            }
+          }
+          if (!acked) {
+            try {
+              await callRemoteAssist({
+                action: 'pushState',
+                sessionId,
+                lastCmdFeedback: feedback,
+                bleConnected: this.data.isConnected,
+                deviceSn: this.data.currentConnectedRawSn || '',
+                deviceState: collectDeviceState(this)
+              });
+            } catch (e) {
+              console.warn('[远协] pushState 回传执行结果失败', e);
+            }
+          }
+        }
+        await this._pushRemoteDeviceState(true);
+      } else {
+        await this._pushRemoteDeviceState(false);
+      }
+    } catch (e) {
+      console.warn('[远协] 用户端轮询失败', e);
+    } finally {
+      this._remoteAssistUserPollBusy = false;
+    }
+  },
+
+  async _tickRemoteAssistAdminPoll() {
+    const sessionId = this.data.remoteAssistSessionId;
+    if (!sessionId || this.data.remoteAssistRole !== 'admin') return;
+    if (this._remoteAssistAdminPollBusy) return;
+    this._remoteAssistAdminPollBusy = true;
+    try {
+      const r = await callRemoteAssist({ action: 'getSession', sessionId });
+      
+      if (this.data.remoteAssistSessionId !== sessionId) return;
+      
+      const session = r.session;
+      if (!session || session.status === 'ended') {
+        this._clearRemoteAssistLocal('ended');
+        this._showCustomToast('远协已结束', 'none', 2000);
+        return;
+      }
+      const patch = {
+        remoteSessionBleConnected: !!session.bleConnected
+      };
+      if (session.deviceSn) patch.currentConnectedRawSn = session.deviceSn;
+      const logPatch = this._syncRemoteAssistDebugLogsFromSession(session);
+      if (logPatch) Object.assign(patch, logPatch);
+      const statePatch = this.data.detailMode === 'edit'
+        ? {}
+        : this._buildRemoteStatePatch(session.deviceState, { forAdmin: true });
+      this._applyRemoteStatePatch({ ...patch, ...statePatch }, () => {
+        this._syncUiBleConnected();
+      });
+    } catch (e) {
+      console.warn('[远协] 技师端轮询失败', e);
+    } finally {
+      this._remoteAssistAdminPollBusy = false;
+    }
+  },
+
+  _applyRemoteDeviceState(deviceState) {
+    const forAdmin = this.data.remoteAssistRole === 'admin';
+    const patch = this._buildRemoteStatePatch(deviceState, { forAdmin });
+    this._applyRemoteStatePatch(patch);
+  },
+
+  _scheduleRemoteStatePush() {
+    if (this.data.remoteAssistRole !== 'user' || !this.data.remoteAssistSessionId) return;
+    if (this._remoteStatePushTimer) return;
+    this._remoteStatePushTimer = setTimeout(() => {
+      this._remoteStatePushTimer = null;
+      this._pushRemoteDeviceState(true);
+    }, 250);
+  },
+
+  async _pushRemoteDeviceState(force) {
+    if (this.data.remoteAssistRole !== 'user' || !this.data.remoteAssistSessionId) return;
+    if (this.data.remoteAssistSessionStatus === 'active' && !this.data.remoteAssistUserAccepted) return;
+    const ts = Date.now();
+    if (!force && this._lastRemoteStatePushMs && ts - this._lastRemoteStatePushMs < 1500) return;
+    this._lastRemoteStatePushMs = ts;
+    try {
+      await callRemoteAssist({
+        action: 'pushState',
+        sessionId: this.data.remoteAssistSessionId,
+        bleConnected: this.data.isConnected,
+        deviceSn: this.data.currentConnectedRawSn || '',
+        deviceState: {
+          ...collectDeviceState(this),
+          bleWriteReady: this._isBleWriteReady()
+        }
+      });
+    } catch (e) {
+      console.warn('[远协] pushState 失败', e);
+    }
+  },
+
+  async _remoteAssistEnqueueCommand(text, times, interval) {
+    if (!this.data.remoteAssistSessionId) return;
+
+    const safeTimes = times || 1;
+    const safeInterval = Number.isFinite(Number(interval)) ? Number(interval) : 0;
+
+    const finalTimes = Math.min(5, Math.max(1, safeTimes));
+    const dedupeKey = `${text}|${finalTimes}|${safeInterval}`;
+    const now = Date.now();
+    if (this._lastRemoteEnqueueKey === dedupeKey &&
+        now - (this._lastRemoteEnqueueMs || 0) < 350) {
+      return;
+    }
+    this._lastRemoteEnqueueKey = dedupeKey;
+    this._lastRemoteEnqueueMs = now;
+
+    const pendingId = `pending_${now}`;
+    const cmdLabel = finalTimes > 1 ? `${text} ×${finalTimes}` : text;
+    this._pushRemoteAssistDebugLog({
+      id: pendingId,
+      time: this._formatRemoteAssistLogTime(now),
+      cmd: cmdLabel,
+      status: 'sending',
+      label: this._remoteAssistLogLabel('sending'),
+      enqueueAt: now
+    });
+
+    try {
+      const r = await callRemoteAssist({
+        action: 'enqueueCommand',
+        sessionId: this.data.remoteAssistSessionId,
+        cmd: text,
+        times: finalTimes,
+        interval: safeInterval
+      });
+      const commandId = r.commandId || pendingId;
+      if (r.coalesced) {
+        this._patchRemoteAssistDebugLog(pendingId, {
+          id: commandId,
+          status: 'coalesced',
+          label: this._remoteAssistLogLabel('coalesced')
+        });
+      } else {
+        this._patchRemoteAssistDebugLog(pendingId, { id: commandId });
+      }
+      console.log('[远协] 指令已入队:', text, finalTimes, safeInterval);
+    } catch (err) {
+      console.warn('[远协] 入队失败', err);
+      this._patchRemoteAssistDebugLog(pendingId, {
+        status: 'enqueue_fail',
+        label: this._remoteAssistLogLabel('enqueue_fail')
+      });
+      this._showCustomToast(err.message || '远协发送失败', 'none', 2200);
+    }
+  },
+
+  onAcceptRemoteAssist() {
+    if (this.data.remoteAssistRole !== 'user') return;
+    if (this.data.remoteAssistUserAccepted) return;
+    this.setData({
+      remoteAssistUserAccepted: true,
+      remoteAssistConsentVisible: false,
+      blockDetailTouch: false
+    }, () => {
+      this._saveRemoteAssistLocal();
+      wx.setKeepScreenOn({ keepScreenOn: true });
+      this._pushRemoteDeviceState(true);
+      this._showCustomToast('已同意远程协助', 'success', 1500);
+    });
+  },
+
+  onRejectRemoteAssist() {
+    this.onEndRemoteAssistSession();
+  },
+
+  async onEndRemoteAssistSession() {
+    if (this._endingRemoteAssist) return;
+    this._endingRemoteAssist = true;
+    const sessionId = this.data.remoteAssistSessionId;
+    // 先关本地遮罩，避免云函数失败时用户被困住
+    this._clearRemoteAssistLocal('end');
+    this._endingRemoteAssist = false;
+    if (!sessionId) return;
+    try {
+      await callRemoteAssist({ action: 'end', sessionId });
+    } catch (e) {
+      console.warn('[远协] 结束会话云端失败，本地已退出', e);
+      this._showCustomToast('已结束协助', 'none', 1800);
+    }
+  },
+
+  async _endRemoteAssistSession(action) {
+    if (this._endingRemoteAssist) return;
+    this._endingRemoteAssist = true;
+    const sessionId = this.data.remoteAssistSessionId;
+    const act = action || 'end';
+    this._clearRemoteAssistLocal(act);
+    this._endingRemoteAssist = false;
+    if (!sessionId) return;
+    try {
+      await callRemoteAssist({ action: act, sessionId });
+    } catch (e) {
+      console.warn('[远协] 结束会话云端失败，本地已退出', e);
+    }
+  },
+
+  _clearRemoteAssistLocal(reason) {
+    const wasAdmin = this.data.remoteAssistRole === 'admin';
+    this._stopRemoteAssistPollers();
+    this._resetRemoteAssistDebugLogsMem();
+    try { wx.removeStorageSync(REMOTE_ASSIST_STORAGE_KEY); } catch (e) { /* ignore */ }
+    wx.setKeepScreenOn({ keepScreenOn: false });
+    this.setData({
+      remoteAssistRole: '',
+      remoteAssistSessionId: '',
+      remoteAssistSessionStatus: '',
+      remoteAssistSessionProductKey: '',
+      remoteAssistUserAccepted: false,
+      remoteSessionBleConnected: false,
+      remoteAssistCapsuleActive: false,
+      remoteAssistConsentVisible: false,
+      remoteAssistLastCmdAt: 0,
+      remoteAssistDebugLogs: [],
+      uiBleConnected: false
+    }, () => {
+      this._syncUiBleConnected();
+      if (wasAdmin) this._pollRemoteAssistPending();
+      if (reason === 'ended' && wasAdmin && this.data.showDetail) {
+        this._closeDetailAnimated();
+      }
+    });
+  },
 
   // ===============================================
   // 隐蔽模式教学逻辑
@@ -1061,14 +2436,14 @@ Page({
     const name = currentModel.name || '';
     const type = currentModel.type || '';
 
-    const isF2MaxSeries = name.includes('F2') && (type === 'Max' || type === 'Max Long');
+    const isF2MaxSeries = isF2MaxSeriesModel(currentModel);
     const isF2ProSeries = name.includes('F2') && type === 'Pro';
     const isF1Max = name.includes('F1') && type === 'Max';
     const isF1Pro = name.includes('F1') && type === 'Pro';
     const isSupported = isF2MaxSeries || isF2ProSeries || isF1Max || isF1Pro;
     
     if (!isSupported) {
-      this._showCustomToast('仅支持 F1 MAX / F2 PRO / F2 MAX 系列', 'none', 2000);
+      this._showCustomToast('仅支持 F1 MAX / F2 PRO / F2 MAX / F2 ULTRA 系列', 'none', 2000);
       return;
     }
     
@@ -1085,7 +2460,7 @@ Page({
     const name = currentModel.name || '';
     const type = currentModel.type || '';
 
-    const isF2MaxSeries = name.includes('F2') && (type === 'Max' || type === 'Max Long');
+    const isF2MaxSeries = isF2MaxSeriesModel(currentModel);
     const isF2ProSeries = name.includes('F2') && type === 'Pro';
     const isF1Max = name.includes('F1') && type === 'Max';
     const isF1Pro = name.includes('F1') && type === 'Pro';
@@ -1476,10 +2851,11 @@ Page({
     const type = model.type || '';
     if (name === 'F1' && type === 'Pro') return 'F1 PRO';
     if (name === 'F1' && type === 'Max') return 'F1 MAX';
-    if (name === 'F1' && type === 'Pro Max') return 'F1 Pro Max';
+    if (name === 'F1' && isF1UltraType(type)) return 'F1 ULTRA';
     if (name === 'F2' && type === 'Pro') return 'F2 PRO';
     if (name === 'F2' && type === 'Max') return 'F2 MAX';
-    if (name === 'F2' && type === 'Max Long') return 'F2 MAX Long';
+    if (name === 'F2' && isF2LongType(type)) return 'F2 Long';
+    if (name === 'F2' && type === 'Ultra') return 'F2 ULTRA';
     if (name === 'F3' && type === 'Pro') return 'F3 PRO';
     if (name === 'F3' && type === 'Max') return 'F3 MAX';
     return `${name} ${type}`.trim();
@@ -1508,6 +2884,15 @@ Page({
     await this.checkAdminPrivilege();
   },
 
+  _markAdminDeviceRegistered(sn, registeredModel) {
+    const model = String(registeredModel || '').trim();
+    this._adminSessionRegisteredSn = sn || '';
+    this._adminSessionRegisteredModel = model;
+    const patch = { adminRegisteredSn: sn || '' };
+    if (model) patch.adminRegisteredModel = model;
+    this.setData(patch);
+  },
+
   async maybeShowAdminSnRegisterModal(normalizedSn) {
     const model =
       this.data.currentModel ||
@@ -1515,7 +2900,11 @@ Page({
       null;
     const productModel = this.scanModelToProductModel(model);
     if (!productModel) {
-      console.warn('[scan] 无法解析产品型号，跳过预登记弹窗', model);
+      console.warn('[scan] 无法解析产品型号，跳过绑定弹窗', model);
+      return;
+    }
+
+    if (this._adminSessionRegisteredSn && this._adminSessionRegisteredSn === normalizedSn) {
       return;
     }
 
@@ -1529,7 +2918,14 @@ Page({
         }
       });
       const r = res.result || {};
-      if (!r.success || !r.showDialog) return;
+      if (!r.success) return;
+
+      if (!r.showDialog) {
+        if (r.reason === 'already_registered' && r.sn) {
+          this._markAdminDeviceRegistered(r.sn, r.registeredModel);
+        }
+        return;
+      }
 
       this.setData({
         showAdminSnModal: true,
@@ -1538,7 +2934,8 @@ Page({
         adminSnModalSn: r.sn || normalizedSn,
         adminSnModalTargetModel: r.targetModel || productModel,
         adminSnModalExistingModel: r.existingModel || '',
-        adminSnRegisterSubmitting: false
+        adminSnRegisterSubmitting: false,
+        adminSnShowModelPicker: false
       });
     } catch (err) {
       console.error('[scan] adminRegisterSn check failed', err);
@@ -1555,7 +2952,8 @@ Page({
         adminSnModalSn: '',
         adminSnModalTargetModel: '',
         adminSnModalExistingModel: '',
-        adminSnRegisterSubmitting: false
+        adminSnRegisterSubmitting: false,
+        adminSnShowModelPicker: false
       });
     }, 420);
   },
@@ -1565,20 +2963,63 @@ Page({
     this.closeAdminSnModal();
   },
 
-  onAdminSnSwitchDevice() {
+  /** 已绑定其他型号时：沿用原绑定，不随当前卡片改型号 */
+  confirmAdminSnKeepBinding() {
     if (this.data.adminSnRegisterSubmitting) return;
+    const sn = this.data.currentConnectedRawSn || this.data.adminSnModalSn;
+    const model = this.data.adminSnModalExistingModel || this.data.adminRegisteredModel;
+    if (sn) this._markAdminDeviceRegistered(sn, model);
     this.closeAdminSnModal();
-    this.handleDisconnect();
-    setTimeout(() => {
-      this.handleConnect();
-    }, 500);
+    this._showCustomToast(`已沿用 ${model || '原'} 绑定`, 'none', 2000);
+  },
+
+  /** 型号不一致：切换为当前卡片型号 */
+  confirmAdminSnSwitchBinding() {
+    if (this.data.adminSnRegisterSubmitting) return;
+    const target = this.data.adminSnModalTargetModel;
+    if (!target) return;
+    this._submitAdminSnRegister(target, true);
+  },
+
+  openAdminSnOtherModelPicker() {
+    if (this.data.adminSnRegisterSubmitting) return;
+    this.setData({ adminSnShowModelPicker: true });
+  },
+
+  closeAdminSnModelPicker() {
+    if (this.data.adminSnRegisterSubmitting) return;
+    this.setData({ adminSnShowModelPicker: false });
+  },
+
+  onAdminSnPickOtherModel(e) {
+    if (this.data.adminSnRegisterSubmitting) return;
+    const picked = e.currentTarget.dataset.model;
+    if (!picked) return;
+    this.setData({ adminSnShowModelPicker: false });
+    this._submitAdminSnRegister(picked, this.data.adminSnModalMode === 'change_model');
   },
 
   async confirmAdminSnRegister() {
     if (this.data.adminSnRegisterSubmitting) return;
-    const { adminSnModalSn, adminSnModalTargetModel, adminSnModalMode, currentConnectedRawSn } = this.data;
+    const { adminSnModalTargetModel } = this.data;
+    if (!adminSnModalTargetModel) return;
+    await this._submitAdminSnRegister(adminSnModalTargetModel, false);
+  },
+
+  async _submitAdminSnRegister(productModel, isUpdate) {
+    if (this.data.adminSnRegisterSubmitting) return;
+    const { adminSnModalSn, adminSnModalMode, currentConnectedRawSn, adminSelectedRepairId } = this.data;
     const sn = currentConnectedRawSn || adminSnModalSn;
-    if (!sn || !adminSnModalTargetModel) return;
+    if (!sn || !productModel) return;
+
+    // 已选售后工单：走换机 SN 替换（继承质保，旧机报废）
+    if (adminSelectedRepairId) {
+      await this._completeDeviceReplacementIfNeeded(sn, productModel);
+      return;
+    }
+
+    const needUpdate =
+      isUpdate || adminSnModalMode === 'change_model';
 
     this.setData({ adminSnRegisterSubmitting: true });
 
@@ -1586,15 +3027,16 @@ Page({
       const res = await wx.cloud.callFunction({
         name: 'adminRegisterSn',
         data: {
-          action: adminSnModalMode === 'change_model' ? 'update_model' : 'register',
+          action: needUpdate ? 'update_model' : 'register',
           sn,
-          productModel: adminSnModalTargetModel,
+          productModel,
           deviceName: sn
         }
       });
       const r = res.result || {};
       if (r.success) {
-        this._showCustomToast(r.msg || '预登记成功', 'success', 2000);
+        this._markAdminDeviceRegistered(sn, productModel);
+        this._showCustomToast(r.msg || '绑定成功', 'success', 2000);
         this.closeAdminSnModal();
       } else {
         this._showCustomToast(r.msg || '操作失败', 'none', 2500);
@@ -1607,58 +3049,329 @@ Page({
     }
   },
 
+  onAdminSnSwitchDevice() {
+    if (this.data.adminSnRegisterSubmitting) return;
+    this.closeAdminSnModal();
+    this.handleDisconnect();
+    setTimeout(() => {
+      this.handleConnect();
+    }, 500);
+  },
+
   // ===============================================
   // 蓝牙连接交互 (修改版)
   // ===============================================
   async handleConnect() {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
+
+    // 自动重连中：点击胶囊 → 停止重连并立即进入手动扫描（无需再点第二次）
+    if (this.data.isBleAutoReconnecting) {
+      this.stopBleAutoReconnect(false);
+    }
+
     // 防止重复点击：如果已连接、正在连接、正在跳转到OTA页面，则直接返回
+    if (this.data.remoteAssistCapsuleActive) {
+      this._showCustomToast('远协中，请通过上方结束远协', 'none', 2000);
+      return;
+    }
     if (this.data.isConnected || this.data.isConnecting || this.data.isNavigatingToOta) {
       return;
     }
-    
-    // 1. 显示"靠近车辆"提示 (2秒)
-    this.setData({ showApproachTip: true });
-    setTimeout(() => { this.setData({ showApproachTip: false }); }, 2000);
 
-    // 2. 进入扫描
+    // 用户主动连接：扫描期间不自动重连上一台设备，避免换机后仍卡在「正在重连」
+    this._bleReconnectStoppedByUser = true;
+    this._clearBleReconnectTimers();
+    this._startBleScanSession();
+  },
+
+  _startBleScanSession() {
+    if (this._bleScanTimeoutTimer) {
+      clearTimeout(this._bleScanTimeoutTimer);
+      this._bleScanTimeoutTimer = null;
+    }
+
+    const isAutoReconnect = !!this.data.isBleAutoReconnecting;
+
+    // 自动重连时跳过「靠近车辆」提示，立即扫描
+    if (!isAutoReconnect) {
+      this.setData({ showApproachTip: true });
+      setTimeout(() => { this.setData({ showApproachTip: false }); }, 2000);
+    }
+
     this.setData({ isScanning: true, isConnecting: false });
 
     // 3. 初始化蓝牙适配器
     this.ble.initBluetoothAdapter()
       .then(() => { 
-        // --- 蓝牙已开启，开始扫描 ---
         this.ble.startScan(); 
         
-        // 设置扫描超时
-        setTimeout(() => {
+        this._bleScanTimeoutTimer = setTimeout(() => {
           if (!this.data.isConnected && this.data.isScanning) {
-            this.setData({ isScanning: false, isConnecting: false });
             this.ble.stopScan();
-            // 这里可以静默，也可以给个轻提示
+            if (this.data.isBleAutoReconnecting) {
+              this.setData({ isScanning: false, isConnecting: false });
+              this.startBleAutoReconnect();
+              return;
+            }
+            if (!this.data.isBleAutoReconnecting) {
+              this.setData({ isScanning: false, isConnecting: false });
+            }
           }
-        }, 15000); 
+        }, isAutoReconnect ? 8000 : 15000);
       })
       .catch((err) => {
-        // --- 蓝牙初始化失败 (通常是没开蓝牙) ---
         console.error("蓝牙初始化失败", err);
         
         this.setData({ 
-          isScanning: false,       // 停止胶囊的扫描动画
+          isScanning: false,
           isConnecting: false,
-          showBluetoothAlert: true // 弹出自定义提示框
+          isBleAutoReconnecting: false,
+          showBluetoothAlert: true
         });
         
-        // 启动防误触延迟
         this.setModalDelay();
-
-        // 震动反馈
         wx.vibrateLong(); 
       });
   },
 
+  stopBleAutoReconnect(showTip) {
+    this._clearBleReconnectTimers();
+    this._bleReconnectStoppedByUser = true;
+    if (this.ble) this.ble.stopScan();
+    this._applyBleLinkUi({
+      isBleAutoReconnecting: false,
+      isScanning: false,
+      isConnecting: false,
+      bleReconnectAttempt: 0
+    });
+    if (showTip) {
+      this._showCustomToast('已停止重连', 'none', 1500);
+    }
+  },
+
+  _clearBleReconnectTimers() {
+    if (this._bleReconnectTimer) {
+      clearTimeout(this._bleReconnectTimer);
+      this._bleReconnectTimer = null;
+    }
+    if (this._bleScanTimeoutTimer) {
+      clearTimeout(this._bleScanTimeoutTimer);
+      this._bleScanTimeoutTimer = null;
+    }
+  },
+
+  startBleAutoReconnect() {
+    this._requestBleAutoReconnect('start');
+  },
+
+  _requestBleAutoReconnect(reason) {
+    if (this._bleReconnectStoppedByUser || !this._lastBleDevice) return;
+    if (this.data.isConnected || this.data.uiBleConnected) return;
+
+    if (this._bleReconnectTimer) {
+      clearTimeout(this._bleReconnectTimer);
+      this._bleReconnectTimer = null;
+    }
+
+    const attempt = (this.data.bleReconnectAttempt || 0) + 1;
+    if (attempt > 8) {
+      this.stopBleAutoReconnect(false);
+      this.setData({ showDisconnectTip: true });
+      setTimeout(() => this.setData({ showDisconnectTip: false }), 2000);
+      return;
+    }
+
+    console.log('[BLE] schedule auto reconnect', { reason, attempt });
+
+    this.setData({
+      isBleAutoReconnecting: true,
+      isScanning: true,
+      isConnecting: false,
+      showDisconnectTip: false,
+      bleReconnectAttempt: attempt
+    });
+
+    const delayMs = attempt === 1 ? 0 : Math.min(1000, 120 + (attempt - 1) * 180);
+    this._bleReconnectTimer = setTimeout(() => {
+      this._bleReconnectTimer = null;
+      if (this._bleReconnectStoppedByUser || this.data.isConnected) return;
+      this._attemptBleReconnect();
+    }, delayMs);
+  },
+
+  _attemptBleReconnect() {
+    const dev = this._lastBleDevice;
+    this.ble.initBluetoothAdapter()
+      .then(() => {
+        if (this._bleReconnectStoppedByUser || this.data.isConnected) return;
+        if (!dev || !dev.deviceId) {
+          this._startBleScanSession();
+          return;
+        }
+        this.setData({ isConnecting: true, isScanning: false });
+        return this.ble.connectDevice(dev).catch((err) => {
+          console.warn('[BLE] direct reconnect connect failed', err);
+          this.setData({ isConnecting: false });
+        });
+      })
+      .catch((err) => {
+        console.warn('[BLE] direct reconnect init failed', err);
+        if (!this._bleReconnectStoppedByUser && !this.data.isConnected) {
+          this.setData({ isConnecting: false });
+          this._requestBleAutoReconnect('init_failed');
+        }
+      });
+  },
+
+  async _checkConnectedSnAllowed(normalizedSn) {
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'deviceReplacement',
+        data: { action: 'checkSn', sn: normalizedSn }
+      });
+      const r = res.result || {};
+      if (r.success && r.ok === false) {
+        this._showCustomToast(r.msg || '该设备不可用', 'none', 2800);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.warn('[scan] checkSn failed', err);
+      return true;
+    }
+  },
+
+  async _loadAwaitingReplacementRepairs() {
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'deviceReplacement',
+        data: { action: 'listAwaiting' }
+      });
+      const r = res.result || {};
+      if (r.success && Array.isArray(r.data)) return r.data;
+    } catch (err) {
+      console.warn('[scan] listAwaiting failed', err);
+    }
+    return [];
+  },
+
+  async _maybeShowAdminRepairPickerThenSn(normalizedSn) {
+    const awaiting = await this._loadAwaitingReplacementRepairs();
+    if (awaiting.length > 0) {
+      this.setData({
+        showAdminRepairPicker: true,
+        adminRepairPickerClosing: false,
+        adminAwaitingRepairs: awaiting,
+        adminSelectedRepairId: '',
+        adminSelectedRepair: null
+      });
+      this._pendingAdminSnAfterRepair = normalizedSn;
+      return;
+    }
+    await this.maybeShowAdminSnRegisterModal(normalizedSn);
+  },
+
+  closeAdminRepairPicker() {
+    this.setData({ adminRepairPickerClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showAdminRepairPicker: false,
+        adminRepairPickerClosing: false,
+        adminAwaitingRepairs: []
+      });
+      const pendingSn = this._pendingAdminSnAfterRepair;
+      this._pendingAdminSnAfterRepair = '';
+      if (pendingSn) this.maybeShowAdminSnRegisterModal(pendingSn);
+    }, 320);
+  },
+
+  onPickAdminRepair(e) {
+    const id = e.currentTarget.dataset.id;
+    const item = (this.data.adminAwaitingRepairs || []).find((r) => r._id === id);
+    if (!item) return;
+    this.setData({
+      adminSelectedRepairId: id,
+      adminSelectedRepair: item
+    });
+  },
+
+  confirmAdminRepairPick() {
+    const { adminSelectedRepairId, adminSelectedRepair } = this.data;
+    if (!adminSelectedRepairId || !adminSelectedRepair) {
+      this._showCustomToast('请选择售后工单', 'none', 2000);
+      return;
+    }
+    const pendingSn = this._pendingAdminSnAfterRepair;
+    this._pendingAdminSnAfterRepair = '';
+    this.setData({
+      showAdminRepairPicker: false,
+      adminRepairPickerClosing: false
+    });
+    if (pendingSn) {
+      this.maybeShowAdminSnRegisterModal(pendingSn);
+    }
+  },
+
+  skipAdminRepairPick() {
+    this.setData({
+      adminSelectedRepairId: '',
+      adminSelectedRepair: null
+    });
+    this.closeAdminRepairPicker();
+  },
+
+  async _completeDeviceReplacementIfNeeded(sn, productModel) {
+    const repairId = this.data.adminSelectedRepairId;
+    if (!repairId) return false;
+
+    this.setData({ adminSnRegisterSubmitting: true });
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'deviceReplacement',
+        data: {
+          action: 'complete',
+          repairId,
+          newSn: sn,
+          productModel
+        }
+      });
+      const r = res.result || {};
+      if (r.success) {
+        this._markAdminDeviceRegistered(sn, r.productModel || productModel);
+        this.setData({
+          adminSelectedRepairId: '',
+          adminSelectedRepair: null
+        });
+        this._showCustomToast(r.msg || '换机完成，用户 SN 已更新', 'success', 2500);
+        this.closeAdminSnModal();
+        return true;
+      }
+      this._showCustomToast(r.msg || '换机失败', 'none', 2800);
+      this.setData({ adminSnRegisterSubmitting: false });
+      return false;
+    } catch (err) {
+      console.error('[scan] complete replacement failed', err);
+      this._showCustomToast('换机失败，请重试', 'none', 2500);
+      this.setData({ adminSnRegisterSubmitting: false });
+      return false;
+    }
+  },
+
   handleDisconnect() {
-    this.ble.disconnect();
+    if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) {
+      this.onEndRemoteAssistSession();
+      return;
+    }
+    this.stopBleAutoReconnect(false);
+    this._bleReconnectStoppedByUser = true;
+    this._activeBleDeviceId = '';
+    this._stopBleLinkWatch();
+    if (this.ble) {
+      this.ble.stopScan();
+      this.ble.disconnect(true);
+    } else if (this.data.isConnected) {
+      this.onBleDisconnected({ unexpected: false, device: this._lastBleDevice });
+    }
   },
 
   // 新增：关闭蓝牙提示弹窗（带收缩退出动画）
@@ -1674,18 +3387,161 @@ Page({
   },
 
 
-  // 监听断开 (修改：增加 UI 反馈)
-  onBleDisconnected() {
-    this.setData({ 
-      isConnected: false, 
-      isScanning: false,
-      showDisconnectTip: true // 显示断开提示
-    });
+  // 监听断开 (修改：增加 UI 反馈 + 自动重连)
+  _startBleLinkWatch() {
+    this._stopBleLinkWatch();
+    this._f2LastBleRxAt = Date.now();
+    this._bleLinkWatchTick = 0;
+    this._tickBleLinkWatch();
+    this._bleLinkWatchTimer = setInterval(() => {
+      this._tickBleLinkWatch();
+    }, 250);
+  },
 
-    // 1.5秒后隐藏提示
-    setTimeout(() => {
-      this.setData({ showDisconnectTip: false });
-    }, 1500);
+  _stopBleLinkWatch() {
+    if (this._bleLinkWatchTimer) {
+      clearInterval(this._bleLinkWatchTimer);
+      this._bleLinkWatchTimer = null;
+    }
+  },
+
+  _tickBleLinkWatch() {
+    if (!this.data.isConnected) {
+      this._stopBleLinkWatch();
+      return;
+    }
+    const ble = this.ble;
+    const deviceId = ble && ble.device && ble.device.deviceId;
+    if (!deviceId) return;
+
+    this._bleLinkWatchTick = (this._bleLinkWatchTick || 0) + 1;
+
+    if (typeof wx.getBLEConnectionState === 'function') {
+      wx.getBLEConnectionState({
+        deviceId,
+        success: (res) => {
+          if (!res.connected) this._handleBleLinkLost('connection_state');
+        },
+        fail: () => {
+          this._handleBleLinkLost('connection_state_fail');
+        }
+      });
+    } else {
+      wx.getConnectedBluetoothDevices({
+        services: ble.serviceId ? [ble.serviceId] : ['0000FFF0-0000-1000-8000-00805F9B34FB'],
+        success: (res) => {
+          const list = (res && res.devices) || [];
+          if (!list.some((d) => d.deviceId === deviceId)) {
+            this._handleBleLinkLost('connected_list');
+          }
+        },
+        fail: () => {
+          this._handleBleLinkLost('connected_list_fail');
+        }
+      });
+    }
+
+    if (isF2MaxDelayPowerModel(this.data.currentModel) && this._f2LastBleRxAt) {
+      const staleMs = Date.now() - this._f2LastBleRxAt;
+      if (staleMs > 650) {
+        wx.getBLEDeviceServices({
+          deviceId,
+          fail: () => {
+            this._handleBleLinkLost('gatt_probe');
+          }
+        });
+      }
+    } else if (this._bleLinkWatchTick % 2 === 0) {
+      wx.getBLEDeviceServices({
+        deviceId,
+        fail: () => {
+          this._handleBleLinkLost('gatt_probe');
+        }
+      });
+    }
+  },
+
+  _handleBleLinkLost(source) {
+    if (this._bleLinkLostPending) return;
+    if (!this.data.isConnected && !(this.ble && this.ble.device)) return;
+
+    const dev = (this.ble && this.ble.device) || this._lastBleDevice;
+    const deviceId = dev && dev.deviceId;
+    if (!deviceId) return;
+
+    const activeId = this._activeBleDeviceId || deviceId;
+    if (deviceId !== activeId) return;
+
+    this._bleLinkLostPending = true;
+    const finishLost = () => {
+      console.warn('[BLE] link lost:', source);
+
+      if (this.ble) {
+        this.ble._manualDisconnect = false;
+        this.ble.device = null;
+        this.ble.hasConnected = false;
+      }
+      this._activeBleDeviceId = '';
+      wx.closeBLEConnection({ deviceId, complete: () => {} });
+      this._stopBleLinkWatch();
+      this.onBleDisconnected({ unexpected: true, device: dev, source });
+      setTimeout(() => {
+        this._bleLinkLostPending = false;
+      }, 300);
+    };
+
+    if (this.ble && typeof this.ble.probeLinkAlive === 'function') {
+      this.ble.probeLinkAlive(deviceId).then((alive) => {
+        if (alive) {
+          this._bleLinkLostPending = false;
+          return;
+        }
+        finishLost();
+      });
+      return;
+    }
+    finishLost();
+  },
+
+  onBleDisconnected(meta) {
+    const info = meta || {};
+    if (this._isStaleBleDisconnect(info)) {
+      console.log('[BLE] ignore stale disconnect', info.device && info.device.deviceId);
+      return;
+    }
+
+    const unexpected = !!info.unexpected;
+    if (info.device) this._lastBleDevice = info.device;
+    this._activeBleDeviceId = '';
+
+    this._voiceResumeAfterBle = !!this._voiceSessionWanted;
+    if (this.data.voiceListening && this._voice) {
+      try { this._voice.stop(); } catch (e) { /* ignore */ }
+      this.setData(this._syncVoiceUiPatch({
+        voiceListening: false,
+        voiceHint: ''
+      }));
+    }
+
+    this._teardownF2FaultBleListener();
+    this._clearBleSendQueue();
+
+    const shouldReconnect = unexpected && !this._bleReconnectStoppedByUser && this._lastBleDevice;
+
+    this._applyBleLinkUi({
+      isConnected: false,
+      isConnecting: false,
+      isScanning: false,
+      showDisconnectTip: !unexpected && !this.data.isBleAutoReconnecting
+    }, () => {
+      this._scheduleRemoteStatePush();
+      if (shouldReconnect) this._requestBleAutoReconnect('disconnected');
+      else if (!this.data.isBleAutoReconnecting) {
+        setTimeout(() => {
+          this.setData({ showDisconnectTip: false });
+        }, 1500);
+      }
+    });
   },
 
   // 🔴 检查指定设备是否有OTA连接记录（根据设备ID判断）
@@ -1783,7 +3639,7 @@ Page({
           currentIndex: this.data.currentIndex
         });
       }
-      this.setData({ 
+      this.setData({
         touchStartX: e.changedTouches[0].clientX,
         isDraggingModel: true,
         modelDragOffset: 0
@@ -1796,17 +3652,15 @@ Page({
     if (this._isSwipeAnimating) return;
     if (!this.data.isDraggingModel) return;
     if (!e.touches || !e.touches.length) return;
-    
+
     const touchCurrentX = e.touches[0].clientX;
     const startX = this.data.touchStartX;
     let diff = touchCurrentX - startX;
-    
-    // 🔴 1:1 跟手，仅做极限限制
-    const maxDrag = 250; // 最大拖动距离，防止拖太远
+
+    const maxDrag = 250;
     if (diff > maxDrag) diff = maxDrag;
     if (diff < -maxDrag) diff = -maxDrag;
-    
-    // 方向性跟手：当前滑向哪边，就让对应侧卡更快“顶上来”
+
     const dragRatio = Math.min(1, Math.abs(diff) / maxDrag);
     let nextCardOffset = 85;
     let prevCardOffset = -85;
@@ -1817,28 +3671,23 @@ Page({
     let nextCardOpacity = 0.9;
     let prevCardOpacity = 0.9;
     if (diff < 0) {
-      // 左滑：next 卡加速靠近中心（85 -> 0）
       nextCardOffset = 85 - dragRatio * 85;
-      activeScale = 1.08 - dragRatio * 0.2;     // 当前卡明显下去
-      nextModelScale = 0.86 + dragRatio * 0.2;  // 目标卡明显上来
-      activeCardOpacity = 1 - dragRatio * 0.34; // 当前卡更明显变浅
-      nextCardOpacity = 0.86 + dragRatio * 0.14;  // 目标卡更明显变深
-      // 严格双卡：左滑时左侧非目标卡固定隐藏
+      activeScale = 1.08 - dragRatio * 0.2;
+      nextModelScale = 0.86 + dragRatio * 0.2;
+      activeCardOpacity = 1 - dragRatio * 0.34;
+      nextCardOpacity = 0.86 + dragRatio * 0.14;
       prevCardOffset = -108;
       prevCardOpacity = 0;
     } else if (diff > 0) {
-      // 右滑：prev 卡加速靠近中心（-85 -> 0）
       prevCardOffset = -85 + dragRatio * 85;
       activeScale = 1.08 - dragRatio * 0.2;
       prevModelScale = 0.86 + dragRatio * 0.2;
       activeCardOpacity = 1 - dragRatio * 0.34;
       prevCardOpacity = 0.86 + dragRatio * 0.14;
-      // 严格双卡：右滑时右侧非目标卡固定隐藏
       nextCardOffset = 108;
       nextCardOpacity = 0;
     }
 
-    // 真机优先：拖动过程中只更新位移，减少视觉“台阶感”
     const setDataStart = Date.now();
     this.setData({
       modelDragOffset: diff,
@@ -1882,7 +3731,7 @@ Page({
     if (this._isSwipeAnimating) return;
     const touchEndX = e.changedTouches[0].clientX;
     const diff = touchEndX - this.data.touchStartX;
-    const threshold = 80; // 更灵敏的切换阈值
+    const threshold = 80;
 
     const needSwipe = Math.abs(diff) >= threshold;
     const direction = diff > 0 ? 'prev' : 'next';
@@ -1891,12 +3740,9 @@ Page({
       ? this.data.currentIndex < total - 1
       : this.data.currentIndex > 0;
 
-    // 先退出拖动态，避免松手瞬间 transition 逻辑抖动
     this.setData({ isDraggingModel: false });
 
-    // 判断是否切换
     if (!needSwipe || !canSwipe) {
-      // 滑动距离不够，回弹到当前卡片
       this.setData({
         modelDragOffset: 0,
         nextCardOffsetPercent: 85,
@@ -1915,7 +3761,6 @@ Page({
       return;
     }
 
-    // 有效切换：先把当前卡甩出场，再切到下一张，视觉更连贯
     this._animateSwipeOutAndSwitch(direction);
     if (this._scanPerfDebug) {
       console.log('[scan-perf] touchEnd(swipe)', {
@@ -1931,11 +3776,10 @@ Page({
 
     const isNext = direction === 'next';
     this.setData({
-      modelDragOffset: isNext ? -420 : 420,      // 当前卡快速出场
-      nextCardOffsetPercent: isNext ? 0 : 108,   // 非目标卡固定在场外
+      modelDragOffset: isNext ? -420 : 420,
+      nextCardOffsetPercent: isNext ? 0 : 108,
       prevCardOffsetPercent: isNext ? -108 : 0,
       modelActiveScale: 0.82,
-      // 目标卡一次到位到最终比例，避免“放大两次”
       nextModelScale: isNext ? 1.08 : 0.86,
       prevModelScale: isNext ? 0.86 : 1.08,
       activeCardOpacity: 0.06,
@@ -1996,9 +3840,9 @@ Page({
     let current = this.data.currentIndex;
     const total = this.data.models.length;
     if (direction === 'next') {
-      if (current < total - 1) current = current + 1; // 末尾不再循环
+      if (current < total - 1) current = current + 1;
     } else {
-      if (current > 0) current = current - 1; // 开头不再循环
+      if (current > 0) current = current - 1;
     }
     this.updateCardStatus(current);
   },
@@ -2015,7 +3859,6 @@ Page({
       return 'hidden';
     };
 
-    // 只更新受影响卡片，避免整数组重建导致重渲染
     const affected = new Set([prevCurrent, prevCurrent - 1, prevCurrent + 1, safeCurrent, safeCurrent - 1, safeCurrent + 1]);
     const patch = {
       currentIndex: safeCurrent,
@@ -2042,12 +3885,13 @@ Page({
         affectedCount: Object.keys(patch).filter(k => k.startsWith('models[')).length,
         setDataCostMs: Date.now() - updateStart
       });
+      this._refreshRemoteAssistCardFlags();
     });
   },
 
   onTapCard(e) {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
-    const index = parseInt(e.currentTarget.dataset.index);
+    const index = parseInt(e.currentTarget.dataset.index, 10);
     if (index !== this.data.currentIndex) {
       this.updateCardStatus(index);
     }
@@ -2064,9 +3908,13 @@ Page({
       showDetail: true,
       detailMode: 'main',
       showStealthTutorial: false,
+      f2ControlPanelOpen: false,
       detailOpenGuardUntil: Date.now() + guardMs,
       blockDetailTouch: true,
-      ...patch
+      ...patch,
+      ...(patch.currentModel && this.data.isConnected
+        ? this._resetF2HwMonitorState(true, patch.currentModel)
+        : {})
     });
     wx.nextTick(() => {
       this._detailEnterTimer = setTimeout(() => {
@@ -2080,6 +3928,8 @@ Page({
       this.setData({ blockDetailTouch: false });
       this._detailBlockTimer = null;
     }, guardMs);
+    this._refreshRemoteAssistCardFlags();
+    if (this.data.isAdmin) this._startRemoteAssistPendingPoll();
   },
 
   _closeDetailAnimated(extraPatch = {}) {
@@ -2093,6 +3943,7 @@ Page({
       this.setData({
         showDetail: false,
         detailMode: 'main',
+        f2ControlPanelOpen: false,
         ...extraPatch
       });
     }, guardMs);
@@ -2109,7 +3960,7 @@ Page({
     const isF1 = currentModel && currentModel.name.includes('F1');
     this._openDetailAnimated({
       currentModel,
-      angleBtnText: isF1 ? '180°' : '160°'
+      angleBtnText: isF1 ? '180°' : '90°'
     });
   },
 
@@ -2153,8 +4004,8 @@ Page({
   // ===============================================
   enterEdit(e) {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
-    // 🔴 检查蓝牙连接状态：未连接时不允许进入编辑模式（管理员除外）
-    if (!this.data.isConnected && !this.data.isAdmin) {
+    // 未连接且非远协技师时不可进入编辑
+    if (!this._canControlDevice()) {
       // 显示"请先连接蓝牙"小胶囊提示
       this.setData({ showConnectBluetoothTip: true });
       // 2秒后自动隐藏
@@ -2365,8 +4216,12 @@ Page({
         keyBtnLocked: false,
         showFoldFineTuneHint: false,
         showAngleHint: false,
+        showOpenAngleSendingModal: false,
+        openAngleSendingModalClosing: false,
+        openAngleSendingBtnDisabled: true,
         detailMode: 'main'
       });
+      this._openAngleFullSwipeTimes = [];
       return;
     }
 
@@ -2425,8 +4280,7 @@ Page({
   initOpenMode() {
     const model = this.data.currentModel || {};
     const isF1 = model.name && model.name.includes('F1');
-    const isF2Max = model.name && model.name.includes('F2') &&
-                    (model.type === 'Max' || model.type === 'Max Long');
+    const isF2MaxSeries = isF2MaxSeriesModel(model);
     
     // F1系列上限180，F2系列上限170
     this.maxAngle = isF1 ? 180 : 170;
@@ -2450,6 +4304,7 @@ Page({
       foldDemoPlaying: false,
       ticks: ticks,
       statusText: '点击180度或90度同步画面',
+      openAngleUiActive: false,
       currentAngle: 0,
       angleMode: '', // 保持为空，让棍子显示为 0 度（水平状态）
       angleRotation: 180, 
@@ -2457,9 +4312,10 @@ Page({
       translateX: 0,
       transition: 'none' // 🔴 关键：禁用动画，防止残留的 transition 导致闪烁
     });
+    this._openAngleFullSwipeTimes = [];
     
     // 修改：F1 系列 & F2 MAX 系列【每次】进入都弹出打开角度引导弹窗
-    if (isF1 || isF2Max) {
+    if (isF1 || isF2MaxSeries) {
        this.setData({ showAngleHint: true });
        this.startOpenAngleTutorialLoop();
        // 🔴 启动倒计时
@@ -2473,8 +4329,7 @@ Page({
   // 切换预设角度 (F2 点击160跳转，但能滑到170)
   // ===============================================
   switchAngle(e) {
-    // 🔴 检查蓝牙连接状态
-    if (!this.data.isConnected) {
+    if (!this._canControlDevice()) {
       this._showCustomToast('未连接蓝牙', 'none', 2000);
       return;
     }
@@ -2488,34 +4343,22 @@ Page({
     // 此时目标是 160，而不是 maxAngle(170)
     // 已经在 wxml 传参 data-angle="160" 了，所以这里直接用 angle 即可
 
+    this.data.openAngleUiActive = true;
     this.setData({
       statusText: '已校准',
-      angleMode: angle.toString()
+      angleMode: angle.toString(),
+      openAngleUiActive: true
     });
 
-    // 🔴 F2 PRO/MAX：点击角度按钮时发送对应数据
     const currentModel = this.data.currentModel;
-    const isF2 = currentModel && currentModel.name && currentModel.name.includes('F2');
-    const isF1 = currentModel && currentModel.name && currentModel.name.includes('F1');
-    
-    if (isF2 && this.data.isConnected) {
-      if (angle === 90) {
-        console.log('📤 [蓝牙] F2 发送"自定义功能"');
-        this.sendData('自定义功能');
-      } else if (angle === 160) {
-        console.log('📤 [蓝牙] F2 发送"完全打开"');
-        this.sendData('完全打开');
-      }
-    }
-    
-    // 🔴 F1 PRO/MAX：点击角度按钮时发送对应数据
-    if (isF1 && this.data.isConnected) {
-      if (angle === 90) {
-        console.log('📤 [蓝牙] F1 发送"90度"');
-        this.sendData('90度');
-      } else if (angle === 180) {
-        console.log('📤 [蓝牙] F1 发送"180度"');
-        this.sendData('180度');
+    const presetCmd = openAnglePresetBleCommand(currentModel, angle);
+    if (presetCmd && this._canControlDevice()) {
+      if (usesF2StyleOpenAngleBle(currentModel)) {
+        console.log(`📤 [蓝牙] 打开角度预设 ${angle}° → "${presetCmd}" x2`);
+        this.sendDataMultiple(presetCmd, 2, 500);
+      } else {
+        console.log(`📤 [蓝牙] 打开角度预设 ${angle}° → "${presetCmd}"`);
+        this.sendData(presetCmd);
       }
     }
 
@@ -2534,9 +4377,10 @@ Page({
     // 计算波轮位置
     const index = deg / 2;
     const trans = -(index * this.tickWidthPx);
+    this._rulerTranslateX = trans;
 
-    // 计算棍子视觉旋转 (180是拉直, 0是折叠)
-    const visualRot = 180 - deg;
+    // 棍子视觉：F2 按 UI 显示角度算夹角（90° 预设 → 两棍夹角 90°）
+    const visualRot = openAngleStickRotateDeg(this.data.currentModel, deg);
 
     this.setData({
       currentAngle: deg,
@@ -2555,148 +4399,168 @@ Page({
   // 触摸交互核心修复 (物理驱动动画)
   // ===============================================
 
+  _openAngleRulerMinTranslate() {
+    const maxIdx = (this.maxAngle || 180) / 2;
+    return -(maxIdx * this.tickWidthPx);
+  },
+
+  _clampOpenAngleTranslate(trans) {
+    const minT = this._openAngleRulerMinTranslate();
+    if (trans > 0) return 0;
+    if (trans < minT) return minT;
+    return trans;
+  },
+
   // ===============================================
   // 触摸开始
   // ===============================================
   onTouchStart(e) {
-    this.touchStartX = e.touches[0].clientX;
-    this.startTranslateX = this.data.translateX || 0;
-    
-    // 记录上一次震动的"物理刻度索引"，而不是角度
-    // 这样保证越界后依然能检测到刻度变化
-    this.lastVibrateIndex = Math.round(-this.startTranslateX / this.tickWidthPx);
+    const touchX = e.touches[0].clientX;
+    this._rulerLastTouchX = touchX;
+    this._rulerTranslateX = this.data.translateX || 0;
+
+    const startIndex = Math.round(-this._rulerTranslateX / this.tickWidthPx);
+    this.lastVibrateIndex = startIndex;
+    this._rulerGestureStartIndex = startIndex;
+    this._rulerGestureEndIndex = startIndex;
+    this._rulerGestureMinIndex = startIndex - OPEN_ANGLE_TICKS_PER_GESTURE;
+    this._rulerGestureMaxIndex = startIndex + OPEN_ANGLE_TICKS_PER_GESTURE;
   },
 
   // ===============================================
-  // 触摸移动 (核心修复：限速 + 精确高亮 + 降低灵敏度)
+  // 触摸移动：增量跟手；单次手势最多 ±3 格；无需先点预设也可发蓝牙
+  // 从右往左拨 = 角度增大；从左往右拨 = 角度减小
   // ===============================================
   onTouchMove(e) {
-    const touchCurrentX = e.touches[0].clientX;
-    
-    // 计算原始拖动距离
-    let diff = touchCurrentX - this.touchStartX;
-    
-    // 🔴 降低灵敏度：添加灵敏度系数，让滑动更平滑
-    // 0.4 表示手指移动 1px，波轮只移动 0.4px，需要移动更多才能滑动一格
-    // 可以调整这个值：越小越不灵敏，越大越灵敏（建议范围：0.3-0.6）
-    const sensitivity = 0.4;
-    diff = diff * sensitivity;
-    
-    // --- 需求：每次波轮最大只能拨动3格 ---
-    // 1格 = 20px (this.tickWidthPx)
-    // 3格 = 60px
-    const maxDragDistance = 60; 
+    const touchX = e.touches[0].clientX;
+    if (this._rulerLastTouchX == null) {
+      this.onTouchStart(e);
+      return;
+    }
 
-    // 限制 diff 的范围在 -60 到 60 之间
-    // 这意味着手指划得再远，波轮最多也只动 3格的距离
-    if (diff > maxDragDistance) diff = maxDragDistance;
-    if (diff < -maxDragDistance) diff = -maxDragDistance;
-    
-    // 1. 物理层：计算位移
-    let newTranslateX = this.startTranslateX + diff;
+    const delta = (touchX - this._rulerLastTouchX) * OPEN_ANGLE_RULER_SENSITIVITY;
+    this._rulerLastTouchX = touchX;
 
-    // 2. 视觉层：立即更新
+    if (Math.abs(delta) < 0.5) return;
+
+    let newTranslateX = this._clampOpenAngleTranslate(this._rulerTranslateX + delta);
+
+    let rawIndex = Math.round(-newTranslateX / this.tickWidthPx);
+    if (this._rulerGestureMinIndex != null && this._rulerGestureMaxIndex != null) {
+      if (rawIndex < this._rulerGestureMinIndex) rawIndex = this._rulerGestureMinIndex;
+      if (rawIndex > this._rulerGestureMaxIndex) rawIndex = this._rulerGestureMaxIndex;
+      newTranslateX = -rawIndex * this.tickWidthPx;
+    }
+
+    this._rulerTranslateX = newTranslateX;
+
     this.setData({
       translateX: newTranslateX,
       transition: 'none'
     });
 
-    // 3. 震动层 + 蓝牙发送层
-    let rawIndex = Math.round(-newTranslateX / this.tickWidthPx);
-    if (rawIndex !== this.lastVibrateIndex) {
-      wx.vibrateShort({ type: 'light' });
-      
-      // 🔴 F2 PRO/MAX：打开角度模式，滑动时发送数据
-      const currentModel = this.data.currentModel;
-      const isF2 = currentModel && 
-                   currentModel.name && currentModel.name.includes('F2');
-      const isF1 = currentModel && 
-                   currentModel.name && currentModel.name.includes('F1');
-      const isOpenMode = this.data.editType === 'open';
-      const isConnected = this.data.isConnected;
-      
-      // F2 PRO/MAX 的滑动发送逻辑
-      if (isF2 && isOpenMode && isConnected) {
-        // 往右滑动 = rawIndex 减小 → 发送"往上收"
-        // 往左滑动 = rawIndex 增大 → 发送"往下"
-        if (rawIndex < this.lastVibrateIndex) {
-          // 往右滑动
-          const diff = this.lastVibrateIndex - rawIndex;
-          console.log(`📤 [蓝牙] F2 检测到往右滑动 ${diff} 格，准备发送"往上收"`);
-          // 每滑动一格，发送一次"往上收"
-          for (let i = 0; i < diff; i++) {
-            console.log(`📤 [蓝牙] 发送"往上收" (第${i + 1}次)`);
-            this.sendData('往上收');
-          }
-        } else if (rawIndex > this.lastVibrateIndex) {
-          // 往左滑动
-          const diff = rawIndex - this.lastVibrateIndex;
-          console.log(`📤 [蓝牙] F2 检测到往左滑动 ${diff} 格，准备发送"往下"`);
-          // 每滑动一格，发送一次"往下"
-          for (let i = 0; i < diff; i++) {
-            console.log(`📤 [蓝牙] 发送"往下" (第${i + 1}次)`);
-            this.sendData('往下');
-          }
-        }
+    if (rawIndex === this.lastVibrateIndex) return;
+
+    wx.vibrateShort({ type: 'light' });
+
+    const currentModel = this.data.currentModel;
+    const isOpenMode = this.data.editType === 'open';
+    const canSend = this._canControlDevice();
+    const slideCmds = openAngleSlideBleCommands(currentModel);
+
+    if (slideCmds && isOpenMode && canSend) {
+      // 从右往左（index 增大）= 调大；从左往右 = 调小（与原先映射相反）
+      if (rawIndex > this.lastVibrateIndex) {
+        const step = rawIndex - this.lastVibrateIndex;
+        console.log(`📤 [蓝牙] 角度增大 ${step} 格 → "${slideCmds.decrease}" x${step}`);
+        this._enqueueBleSendBurst(slideCmds.decrease, step, BLE_ANGLE_STEP_GAP_MS);
+      } else {
+        const step = this.lastVibrateIndex - rawIndex;
+        console.log(`📤 [蓝牙] 角度减小 ${step} 格 → "${slideCmds.increase}" x${step}`);
+        this._enqueueBleSendBurst(slideCmds.increase, step, BLE_ANGLE_STEP_GAP_MS);
       }
-      
-      // 🔴 F1 PRO/MAX：打开角度模式，滑动时发送数据
-      if (isF1 && isOpenMode && isConnected) {
-        // 往右滑动 = rawIndex 减小 → 发送"往上收"
-        // 往左滑动 = rawIndex 增大 → 发送"往下放"
-        if (rawIndex < this.lastVibrateIndex) {
-          // 往右滑动
-          const diff = this.lastVibrateIndex - rawIndex;
-          console.log(`📤 [蓝牙] F1 检测到往右滑动 ${diff} 格，准备发送"往上收"`);
-          // 每滑动一格，发送一次"往上收"
-          for (let i = 0; i < diff; i++) {
-            console.log(`📤 [蓝牙] 发送"往上收" (第${i + 1}次)`);
-            this.sendData('往上收');
-          }
-        } else if (rawIndex > this.lastVibrateIndex) {
-          // 往左滑动
-          const diff = rawIndex - this.lastVibrateIndex;
-          console.log(`📤 [蓝牙] F1 检测到往左滑动 ${diff} 格，准备发送"往下放"`);
-          // 每滑动一格，发送一次"往下放"
-          for (let i = 0; i < diff; i++) {
-            console.log(`📤 [蓝牙] 发送"往下放" (第${i + 1}次)`);
-            this.sendData('往下放');
-          }
-        }
-      }
-      
-      this.lastVibrateIndex = rawIndex;
     }
 
-    // 4. 逻辑层：只有激活后才同步数据
-    if (!this.data.angleMode) {
-      return;
-    }
+    this.lastVibrateIndex = rawIndex;
+    this._rulerGestureEndIndex = rawIndex;
 
-    // 反推角度
+    if (this.data.editType !== 'open') return;
+
+    // 未点预设：波轮可动、可发蓝牙，但棍子/数字 UI 不更新
+    if (!this.data.openAngleUiActive) return;
+
     let rawAngle = (-newTranslateX / this.tickWidthPx) * 2;
-    let clampedAngle = rawAngle;
-    if (clampedAngle < 0) clampedAngle = 0;
-    if (clampedAngle > this.maxAngle) clampedAngle = this.maxAngle;
-    
-    const displayAngle = Math.round(clampedAngle);
+    if (rawAngle < 0) rawAngle = 0;
+    if (rawAngle > this.maxAngle) rawAngle = this.maxAngle;
+    const displayAngle = Math.round(rawAngle);
 
-    // 更新数据
     this.setData({
-      currentAngle: displayAngle, 
-      activeIndex: Math.round(clampedAngle / 2)
+      currentAngle: displayAngle,
+      activeIndex: Math.round(rawAngle / 2)
     });
-    
-    // 更新按钮状态
-    this.updateAngleText(displayAngle); 
+    this.updateAngleText(displayAngle);
+  },
+
+  onRulerTouchEnd() {
+    if (this.data.editType !== 'open') return;
+    this._rulerLastTouchX = null;
+    this._rulerGestureMinIndex = null;
+    this._rulerGestureMaxIndex = null;
+    const startIndex = this._rulerGestureStartIndex;
+    const endIndex = this._rulerGestureEndIndex != null
+      ? this._rulerGestureEndIndex
+      : Math.round(-(this.data.translateX || 0) / this.tickWidthPx);
+    if (startIndex == null) return;
+    const tickMoved = Math.abs(endIndex - startIndex);
+    if (tickMoved >= OPEN_ANGLE_TICKS_PER_GESTURE) {
+      this._recordOpenAngleFullSwipe();
+    }
+    this._rulerGestureStartIndex = null;
+    this._rulerGestureEndIndex = null;
+  },
+
+  _recordOpenAngleFullSwipe() {
+    const now = Date.now();
+    if (!this._openAngleFullSwipeTimes) this._openAngleFullSwipeTimes = [];
+    this._openAngleFullSwipeTimes.push(now);
+    this._openAngleFullSwipeTimes = this._openAngleFullSwipeTimes.filter(
+      (t) => now - t <= OPEN_ANGLE_RAPID_SWIPE_WINDOW_MS
+    );
+    if (this._openAngleFullSwipeTimes.length >= 2) {
+      this._openAngleFullSwipeTimes = [];
+      this._showOpenAngleSendingModal();
+    }
+  },
+
+  _showOpenAngleSendingModal() {
+    if (this._openAngleSendHintTimer) {
+      clearTimeout(this._openAngleSendHintTimer);
+      this._openAngleSendHintTimer = null;
+    }
+    this.setData({ showOpenAngleSendHint: true });
+    this._openAngleSendHintTimer = setTimeout(() => {
+      this._openAngleSendHintTimer = null;
+      this.setData({ showOpenAngleSendHint: false });
+    }, 2200);
+  },
+
+  closeOpenAngleSendingModal() {
+    if (this._openAngleSendHintTimer) {
+      clearTimeout(this._openAngleSendHintTimer);
+      this._openAngleSendHintTimer = null;
+    }
+    this.setData({ showOpenAngleSendHint: false });
+  },
+
+  _onBleSendQueueIdle() {
+    // 打开角度发送提示为非阻塞 UI，无需等待队列空闲
   },
 
   // ===============================================
   // 3. 微调逻辑 (核心修正)
   // ===============================================
   handleAdjust(e) {
-    // 🔴 检查蓝牙连接状态（管理员除外）
-    if (!this.data.isConnected && !this.data.isAdmin) {
+    if (!this._canControlDevice()) {
       this._showCustomToast('未连接蓝牙', 'none', 2000);
       return;
     }
@@ -2730,13 +4594,13 @@ Page({
       
       if (action === 'left' || action === 'fine-tune-up') {
         gap += step;
-        if (isF1OrF2 && (this.data.isConnected || this.data.isAdmin)) {
+        if (isF1OrF2 && this._canControlDevice()) {
           console.log('📤 [蓝牙] 发送"调大"');
           this.sendData('调大');
         }
       } else if (action === 'right' || action === 'fine-tune-down') {
         gap -= step;
-        if (isF1OrF2 && (this.data.isConnected || this.data.isAdmin)) {
+        if (isF1OrF2 && this._canControlDevice()) {
           console.log('📤 [蓝牙] 发送"调小"');
           this.sendData('调小');
         }
@@ -2750,8 +4614,10 @@ Page({
           modelName: currentModel?.name
         });
         if (isF1OrF2) {
-          if (this.data.isConnected || this.data.isAdmin) {
-            // 🔴 显示指示灯确认弹窗
+          if (this._shouldSkipIndicatorModal()) {
+            console.log('📤 [远协] 发送"调整折叠角度"');
+            this.sendDataMultiple('调整折叠角度', 2, 500);
+          } else if (this._canControlDevice()) {
             this.setData({
               showIndicatorCheckModal: true,
               indicatorCheckModalClosing: false,
@@ -2781,7 +4647,7 @@ Page({
           modelName: currentModel?.name
         });
         if (isF1OrF2) {
-          if (this.data.isConnected || this.data.isAdmin) {
+          if (this._canControlDevice()) {
             // 🔴 按你的要求：归零也发送 2 次，间隔 0.5 秒
             console.log('📤 [蓝牙] 发送"初始化角度"（连续2次，间隔0.5秒）');
             this.sendDataMultiple('初始化角度', 2, 500);
@@ -2836,59 +4702,25 @@ Page({
   // 实时更新按钮状态 (修改：只有刚好90/180/160才亮)
   // ===============================================
   updateAngleText(currentAngle) {
-    const isF1 = this.data.currentModel && this.data.currentModel.name.includes('F1');
-    let activeMode = ''; // 默认全灭
+    if (!this.data.openAngleUiActive) return;
 
-    // 容差范围：允许 ±2 度 (方便手指定位，因为完全精准很难)
-    // 如果您需要绝对精准，把 2 改为 0
-    const tolerance = 2; 
+    const isF1 = this.data.currentModel && this.data.currentModel.name.includes('F1');
+    let activeMode = '';
+
+    const tolerance = 2;
 
     if (Math.abs(currentAngle - 90) <= tolerance) {
       activeMode = '90';
     } else {
       if (isF1) {
-        // F1 匹配 180
         if (Math.abs(currentAngle - 180) <= tolerance) activeMode = '180';
       } else {
-        // F2 匹配 160
         if (Math.abs(currentAngle - 160) <= tolerance) activeMode = '160';
       }
     }
-    
-    // 状态改变才更新
+
     if (this.data.angleMode !== activeMode) {
-      // 如果 activeMode 变为空，说明偏离了特定角度
-      // 但我们需要保持"激活"状态(数据同步)，只是按钮不亮
-      // 所以这里我们只更新 angleMode 如果它依然是有效的，或者为了熄灭按钮
-      
-      // 注意：之前的逻辑用 angleMode 判断是否激活同步。
-      // 现在需求是：同步开启后，按钮亮灭只代表"是否对准"。
-      // 但如果把 angleMode 设为空，onTouchMove 里的同步就会停止。
-      
-      // 解决方案：我们不应该清空 angleMode，因为它是"同步开关"。
-      // 我们的需求是：按钮亮起样式 和 同步开关 分离。
-      // 但现在的架构 angleMode 既是开关又是样式。
-      
-      // 妥协方案：保持 angleMode 有值(比如上次的值)，但在 WXML 里判断样式时增加条件。
-      // 或者：既然已经激活了，就不应该把 angleMode 设为空。
-      
-      // 修正逻辑：
-      // 题目说"按钮才会对应的亮起"。
-      // 这意味着如果不在 90/160/180，按钮应该是灭的。
-      
-      // 这里直接setData即可。注意：如果设为空字符串，会断开同步。
-      // 所以我们必须引入一个新的变量 isSynced 来控制同步，或者修改 angleMode 的定义。
-      
-      // 鉴于不改动太大结构：
-      // 我们保持 angleMode 有值（为了保持同步），但在 switchAngle 里赋予初始值。
-      // 在滑动过程中，只有刚好到位时，我们才把 angleMode 设为 '90'/'180'。
-      // 那不到位时设为什么？设为 'active_but_no_highlight' ?
-      
-      // 让我们简单点：只有到位了才 setData，不到位时，我们设为一个特殊值 'synced'
-      // 这样 onTouchMove 里 if(this.data.angleMode) 依然为真 (同步继续)
-      // 但 WXML 里的 class="{{angleMode === '90' ? 'active' : ''}}" 就会变假 (按钮熄灭)
-      
-      this.setData({ angleMode: activeMode || 'synced' });
+      this.setData({ angleMode: activeMode });
     }
   },
 
@@ -3007,7 +4839,7 @@ Page({
   handleAutoCalibrate() {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
     // 🔴 检查蓝牙连接状态：未连接时不允许使用（管理员除外）
-    if (!this.data.isConnected && !this.data.isAdmin) {
+    if (!this._canControlDevice()) {
       // 显示"请先连接蓝牙"小胶囊提示
       this.setData({ showConnectBluetoothTip: true });
       // 2秒后自动隐藏
@@ -3019,15 +4851,18 @@ Page({
     
     const currentModel = this.data.currentModel;
     const isF2 = currentModel && currentModel.name && currentModel.name.includes('F2');
-    const isF1ProMax = currentModel && currentModel.name && currentModel.name.includes('F1')
-      && currentModel.type === 'Pro Max';
+    const isF1ProMax = isF1UltraModel(currentModel);
 
-    // F2 MAX 系列 & F1 Pro Max 可点击
+    // F2 MAX 系列 & F1 Ultra 可点击
     if (!isF2 && !isF1ProMax) return;
+
+    if (!this._isBleWriteReady() && !this._canControlDevice()) {
+      this._showCustomToast('蓝牙初始化中，请稍候', 'none', 2000);
+      return;
+    }
     
-    console.log('📤 [蓝牙] 发送"自动调平"（5次，间隔0.5秒）');
-    // 发送5次数据，间隔0.5秒（500ms）
-    this.sendDataMultiple('自动调平', 5, 500);
+    console.log('📤 [蓝牙] 发送"自动调平"');
+    this.sendDataMultiple('自动调平', 2, 500);
     
     // 🔴 显示校准中弹窗，并禁用按钮
     this.setData({ 
@@ -3064,15 +4899,465 @@ Page({
   },
   noop() {},
 
+  onCanLearnNumLedsInput(e) {
+    const raw = e.detail.value;
+    this.setData({ canLearnNumLeds: raw });
+    if (String(raw).trim() === '' || !Number.isFinite(Number(raw))) return;
+    saveStoredNumLeds(raw);
+  },
+
+  onCanLearnNumLedsBlur() {
+    const n = saveStoredNumLeds(this.data.canLearnNumLeds);
+    this.setData({ canLearnNumLeds: String(n) });
+  },
+
+
   // ===============================================
   // 新增：高级设置交互逻辑
   // ===============================================
+
+  // F2 ULTRA 蓝牙远程控制 + 语音（仅打开/关闭）
+  _buildVoiceUiState(listening, hearing, hint) {
+    if (listening && hearing) {
+      return {
+        voiceStatusClass: 'speaking',
+        voiceStatusText: hint || '识别中…'
+      };
+    }
+    if (listening) {
+      return {
+        voiceStatusClass: 'quiet',
+        voiceStatusText: hint || '正在聆听…'
+      };
+    }
+    return {
+      voiceStatusClass: 'dormant',
+      voiceStatusText: '点击开启语音控制'
+    };
+  },
+
+  _syncVoiceUiPatch(extra = {}) {
+    const listening = extra.voiceListening !== undefined
+      ? extra.voiceListening
+      : this.data.voiceListening;
+    const hearing = extra.voiceHearing !== undefined
+      ? extra.voiceHearing
+      : this.data.voiceHearing;
+    const hint = extra.voiceHint !== undefined
+      ? extra.voiceHint
+      : this.data.voiceHint;
+    return {
+      ...extra,
+      ...this._buildVoiceUiState(listening, hearing, hint)
+    };
+  },
+
+  initVoiceRecognizer() {
+    this._voiceSessionWanted = false;
+    this._voiceResumeAfterBle = false;
+    this._voiceHintLastAt = 0;
+    this._voice = createVoiceRecognizer({
+      onStart: () => {
+        this.setData(this._syncVoiceUiPatch({
+          voiceListening: true,
+          voiceHint: '说 打开 / 关闭 / 开 / 关',
+          voiceHearing: false
+        }));
+      },
+      onRecognize: (res) => {
+        if (!res || !res.result) return;
+        const now = Date.now();
+        if (this._voiceHearTimer) clearTimeout(this._voiceHearTimer);
+        const patch = { voiceHearing: true };
+        if (!this._voiceHintLastAt || now - this._voiceHintLastAt > 280) {
+          this._voiceHintLastAt = now;
+          const raw = res.result;
+          const hint = raw.length > 14 ? `…${raw.slice(-14)}` : raw;
+          const nextHint = hint ? `识别：${hint}` : '聆听中…';
+          if (nextHint !== this.data.voiceHint) {
+            patch.voiceHint = nextHint;
+          }
+        }
+        this.setData(this._syncVoiceUiPatch(patch));
+        this._voiceHearTimer = setTimeout(() => {
+          this._voiceHearTimer = null;
+          if (this.data.voiceListening && this.data.voiceHearing) {
+            this.setData(this._syncVoiceUiPatch({ voiceHearing: false }));
+          }
+        }, 1200);
+      },
+      onCommand: (cmd, text, source) => {
+        this._sendF2VoiceCommand(cmd, { continuous: true, source, text });
+      },
+      onStop: () => {
+        if (this._voiceSessionWanted) {
+          this.setData(this._syncVoiceUiPatch({ voiceHint: '说 打开 / 关闭 / 开 / 关' }));
+        }
+      },
+      onError: (res, meta) => {
+        if (!meta || !meta.sessionActive || !this._voiceSessionWanted) {
+          this._resetVoiceUi();
+          const msg = (res && (res.msg || res.errMsg)) || '语音识别失败';
+          this._showCustomToast(msg, 'none', 2000);
+          return;
+        }
+        this.setData(this._syncVoiceUiPatch({ voiceHint: '重新聆听中…' }));
+      }
+    });
+  },
+
+  _resetVoiceUi() {
+    if (this._voiceHearTimer) {
+      clearTimeout(this._voiceHearTimer);
+      this._voiceHearTimer = null;
+    }
+    this._voiceSessionWanted = false;
+    this.setData(this._syncVoiceUiPatch({
+      voiceListening: false,
+      voiceHint: '',
+      voiceLastCmd: '',
+      voiceHearing: false
+    }));
+  },
+
+  _setFlapPanelStateOptimistic(cmd) {
+    if (!isF2UltraModel(this.data.currentModel)) return;
+    if (cmd === '打开') {
+      this.setData({ flapPanelState: 'moving', flapPanelStateText: '打开中' });
+    } else if (cmd === '关闭') {
+      this.setData({ flapPanelState: 'moving', flapPanelStateText: '关闭中' });
+    }
+  },
+
+  _resetFlapPanelState() {
+    this.setData({
+      flapPanelState: 'unknown',
+      flapPanelStateText: '状态未知'
+    });
+  },
+
+  _stopVoiceRecognizer() {
+    this._voiceSessionWanted = false;
+    if (this._voice && this._voice.supported) {
+      try {
+        this._voice.stop();
+      } catch (e) {
+        // ignore
+      }
+    }
+    this._resetVoiceUi();
+  },
+
+  _sendF2VoiceCommand(cmd, options = {}) {
+    const { continuous = false, source = 'final', text = '' } = options;
+    console.log(`📤 [语音${source}] F2 ULTRA 发送"${cmd}"`, text);
+
+    if (continuous) {
+      this._voiceHintLastAt = Date.now();
+      this.setData(this._syncVoiceUiPatch({
+        voiceLastCmd: cmd,
+        voiceHint: `已执行：${cmd}`
+      }));
+    } else {
+      this._showCustomToast(`已识别：${cmd}`, 'success', 1200);
+    }
+
+    if (!this.data.isConnected) return;
+    this._setFlapPanelStateOptimistic(cmd);
+    this.sendData(cmd);
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  _resumeVoiceAfterBleReconnect() {
+    if (!this._voiceResumeAfterBle) return;
+    if (!this._voice || !this._voice.supported) {
+      this._voiceResumeAfterBle = false;
+      return;
+    }
+    this._voiceResumeAfterBle = false;
+    this._voiceSessionWanted = true;
+    setTimeout(() => {
+      if (!this.data.isConnected || !this._voiceSessionWanted) return;
+      try {
+        this._voice.start({ continuous: true, duration: 60000 });
+        this.setData(this._syncVoiceUiPatch({
+          voiceListening: true,
+          voiceHint: '说 打开 / 关闭 / 开 / 关',
+          voiceHearing: false
+        }));
+      } catch (e) {
+        console.warn('[语音] 重连后恢复聆听失败', e);
+      }
+    }, 200);
+  },
+
+  handleVoiceControl() {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
+    if (this._f2DemoActive) {
+      this._showCustomToast('演示进行中，请先停止', 'none', 1800);
+      return;
+    }
+
+    const model = this.data.currentModel;
+    if (!isF2UltraModel(model)) {
+      return;
+    }
+    if (!this._canControlDevice()) {
+      this.setData({ showConnectBluetoothTip: true });
+      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+      return;
+    }
+    if (!this._voice || !this._voice.supported) {
+      this._showCustomToast('语音插件未就绪，请在小程序后台添加同声传译插件', 'none', 2500);
+      return;
+    }
+
+    if (this.data.voiceListening) {
+      this._stopVoiceRecognizer();
+      return;
+    }
+
+    const startVoice = () => {
+      this._voiceSessionWanted = true;
+      wx.vibrateShort({ type: 'light' });
+      this._voice.start({ continuous: true, duration: 60000 });
+    };
+
+    wx.getSetting({
+      success: (res) => {
+        const auth = res.authSetting || {};
+        if (auth['scope.record']) {
+          startVoice();
+          return;
+        }
+        wx.authorize({
+          scope: 'scope.record',
+          success: startVoice,
+          fail: () => {
+            wx.showModal({
+              title: '需要麦克风权限',
+              content: '请允许使用麦克风，以便语音控制翻板',
+              confirmText: '去设置',
+              success: (r) => {
+                if (r.confirm) wx.openSetting();
+              }
+            });
+          }
+        });
+      },
+      fail: startVoice
+    });
+  },
+
+  toggleF2ControlPanel() {
+    const nextOpen = !this.data.f2ControlPanelOpen;
+    this.setData({ f2ControlPanelOpen: nextOpen }, () => {
+      if (nextOpen && isF2UltraModel(this.data.currentModel)) {
+        setTimeout(() => this._measureF2SpeedSlider(), 120);
+      }
+    });
+  },
+
+  handleF2RemoteControl(e) {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
+    if (this._f2DemoActive) {
+      this._showCustomToast('演示进行中，请先停止', 'none', 1800);
+      return;
+    }
+    const cmd = e.currentTarget.dataset.cmd;
+    if (!cmd) return;
+
+    const model = this.data.currentModel;
+    if (!isF2UltraModel(model)) {
+      return;
+    }
+    if (!this._canControlDevice()) {
+      this.setData({ showConnectBluetoothTip: true });
+      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+      return;
+    }
+    if ((cmd === '打开' || cmd === '关闭') && this.data.flapPanelState === 'stealth') {
+      this._showCustomToast('隐蔽模式中，请先退出', 'none', 2000);
+      return;
+    }
+
+    console.log(`📤 [蓝牙] F2 ULTRA 远程控制发送"${cmd}"`);
+    if (cmd === '打开' || cmd === '关闭') {
+      this._setFlapPanelStateOptimistic(cmd);
+    }
+    this.sendDataMultiple(cmd, 2, 500);
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  openF2DemoModal() {
+    if (!isF2UltraModel(this.data.currentModel)) return;
+    if (!this._canControlDevice()) {
+      this.setData({ showConnectBluetoothTip: true });
+      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+      return;
+    }
+    this.setData({
+      showF2DemoModal: true,
+      f2DemoRunning: false,
+      f2DemoStatusText: ''
+    });
+  },
+
+  closeF2DemoModal() {
+    if (this._f2DemoActive) return;
+    this.setData({ showF2DemoModal: false });
+  },
+
+  startF2DemoMode() {
+    if (!isF2UltraModel(this.data.currentModel) || !this._canControlDevice()) return;
+    this._stopVoiceRecognizer();
+    this._f2DemoActive = true;
+    this._f2DemoAwaitStable = null;
+    this.setData({
+      f2DemoRunning: true,
+      f2DemoStatusText: '演示进行中，翻板将自动循环开关…'
+    });
+    const state = this.data.flapPanelState;
+    const firstCmd = state === 'open' ? '关闭' : '打开';
+    this._sendF2DemoCommand(firstCmd);
+    const target = firstCmd === '打开' ? 'open' : 'closed';
+    if (state === target) {
+      this._onF2DemoFlapStable(state);
+    }
+  },
+
+  stopF2DemoMode() {
+    this._stopF2DemoMode(true);
+  },
+
+  _stopF2DemoMode(homeFold) {
+    const wasActive = this._f2DemoActive;
+    this._f2DemoActive = false;
+    this._f2DemoAwaitStable = null;
+    this.setData({
+      showF2DemoModal: false,
+      f2DemoRunning: false,
+      f2DemoStatusText: ''
+    });
+    if (homeFold && wasActive && this.data.isConnected && isF2UltraModel(this.data.currentModel)) {
+      this._setFlapPanelStateOptimistic('关闭');
+      this.sendDataMultiple('关闭', 2, 500);
+      wx.vibrateShort({ type: 'light' });
+    }
+  },
+
+  _sendF2DemoCommand(cmd) {
+    if (!this._f2DemoActive || !this.data.isConnected) return;
+    this._f2DemoAwaitStable = cmd === '打开' ? 'open' : 'closed';
+    this._setFlapPanelStateOptimistic(cmd);
+    this.sendDataMultiple(cmd, 2, 500);
+    this.setData({
+      f2DemoStatusText: cmd === '打开' ? '正在打开…' : '正在关闭…'
+    });
+  },
+
+  _onF2DemoFlapStable(state) {
+    if (!this._f2DemoActive) return;
+    if (state === 'stealth') {
+      this._stopF2DemoMode(true);
+      return;
+    }
+    if (state !== 'open' && state !== 'closed') return;
+    if (!this._f2DemoAwaitStable || state !== this._f2DemoAwaitStable) return;
+    const nextCmd = state === 'open' ? '关闭' : '打开';
+    this._f2DemoAwaitStable = null;
+    this._sendF2DemoCommand(nextCmd);
+  },
+
+  _measureF2SpeedSlider() {
+    const query = wx.createSelectorQuery().in(this);
+    query.select('#f2SpeedSliderTrack').boundingClientRect((rect) => {
+      if (rect && rect.width) {
+        this.setData({
+          f2SpeedSliderWidth: rect.width,
+          f2SpeedSliderLeft: rect.left
+        });
+      }
+    }).exec();
+  },
+
+  onF2ServoSpeedTouchStart(e) {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
+    this._f2SpeedDragFrom = this.data.f2ServoSpeed;
+    this.onF2ServoSpeedTouch(e);
+  },
+
+  onF2ServoSpeedTouch(e) {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
+    const touchX = e.touches[0].clientX;
+    const { f2SpeedSliderWidth, f2SpeedSliderLeft } = this.data;
+    if (!f2SpeedSliderWidth) {
+      this._measureF2SpeedSlider();
+      return;
+    }
+    const v = f2ServoSpeedFromTouchX(touchX, f2SpeedSliderLeft, f2SpeedSliderWidth);
+    if (v == null || v === this.data.f2ServoSpeed) return;
+    this.setData(buildF2ServoSpeedUi(v));
+    if (v % 5 === 0) {
+      wx.vibrateShort({ type: 'light' });
+    }
+  },
+
+  onF2ServoSpeedTouchEnd(e) {
+    if (Date.now() < (this._controlTapLockUntil || 0)) return;
+    const touch = e.changedTouches && e.changedTouches[0];
+    const { f2SpeedSliderWidth, f2SpeedSliderLeft } = this.data;
+    let v = this.data.f2ServoSpeed;
+    if (touch && f2SpeedSliderWidth) {
+      const fromTouch = f2ServoSpeedFromTouchX(touch.clientX, f2SpeedSliderLeft, f2SpeedSliderWidth);
+      if (fromTouch != null) {
+        v = fromTouch;
+        this.setData(buildF2ServoSpeedUi(v));
+      }
+    }
+    if (v === this._f2SpeedDragFrom) return;
+    this._commitF2ServoSpeed(v);
+  },
+
+  _applyF2ServoSpeed(rawValue) {
+    const model = this.data.currentModel;
+    if (!isF2UltraModel(model)) return;
+
+    const v = Math.min(100, Math.max(10, Math.round(Number(rawValue))));
+    if (!Number.isFinite(v)) return;
+    if (v === this.data.f2ServoSpeed) return;
+
+    this.setData(buildF2ServoSpeedUi(v));
+    this._commitF2ServoSpeed(v);
+  },
+
+  _commitF2ServoSpeed(v) {
+    const model = this.data.currentModel;
+    if (!isF2UltraModel(model)) return;
+
+    const speed = Math.min(100, Math.max(10, Math.round(Number(v))));
+    if (!Number.isFinite(speed)) return;
+
+    try {
+      wx.setStorageSync('f2_servo_speed', speed);
+    } catch (err) { /* ignore */ }
+
+    if (!this._canControlDevice()) {
+      this.setData({ showConnectBluetoothTip: true });
+      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+      return;
+    }
+
+    console.log(`📤 [蓝牙] F2 ULTRA 调速 ${speed}%`);
+    this.sendDataMultiple(`调速${speed}`, 2, 400);
+    wx.vibrateShort({ type: 'light' });
+  },
 
   // 打开设置弹窗
   openSettings() {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
     // 🔴 检查蓝牙连接状态：未连接时不允许使用（管理员除外）
-    if (!this.data.isConnected && !this.data.isAdmin) {
+    if (!this._canControlDevice()) {
       // 显示"请先连接蓝牙"小胶囊提示
       this.setData({ showConnectBluetoothTip: true });
       // 2秒后自动隐藏
@@ -3091,12 +5376,52 @@ Page({
       return; // Pro 机型点击无效
     }
 
+    const storedMinutes = wx.getStorageSync('f2_delayPowerOffMinutes');
+    let delayPowerOffIndex = this.data.delayPowerOffIndex;
+    if (!this.data.isConnected) {
+      if (Number.isFinite(Number(storedMinutes))) {
+        delayPowerOffIndex = f2DelayPowerOffIndexByMinutes(Number(storedMinutes));
+      } else {
+        const storedIdx = wx.getStorageSync('f2_delayPowerOffIndex');
+        if (Number.isFinite(Number(storedIdx))) {
+          delayPowerOffIndex = Math.min(Number(storedIdx), F2_DELAY_POWER_OFF_OPTIONS.length - 1);
+        }
+      }
+    }
+
     // 🔴 重置指示灯弹窗标记，每次打开高级设置都重置
-    this.setData({ 
+    this.setData({
       showSettingsModal: true,
-      hasShownSettingsIndicatorModal: false
+      hasShownSettingsIndicatorModal: false,
+      delayPowerOffIndex
     });
     this.showToast();
+  },
+
+  onDelayPowerOffChange(e) {
+    if (this.data.f2TravelModeOn) {
+      this._showCustomToast('出行模式已开启，请先关闭出行模式', 'none', 2200);
+      return;
+    }
+    const model = this.data.currentModel;
+    if (!isF2MaxDelayPowerModel(model)) return;
+    if (!this._canControlDevice()) {
+      this.setData({ showConnectBluetoothTip: true });
+      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+      return;
+    }
+
+    const idx = Number(e.detail.value);
+    const opt = this.data.delayPowerOffOptions[idx];
+    if (!opt) return;
+
+    const sendText = `延时断电${opt.minutes}`;
+    console.log(`📤 [蓝牙] F2 ULTRA 设置延时断电: ${sendText}`);
+    this.sendDataMultiple(sendText, 2, 500);
+    wx.setStorageSync('f2_delayPowerOffIndex', idx);
+    wx.setStorageSync('f2_delayPowerOffMinutes', opt.minutes);
+    this.setData({ delayPowerOffIndex: idx });
+    wx.vibrateShort({ type: 'light' });
   },
 
   closeSettings() {
@@ -3114,7 +5439,7 @@ Page({
 
     const { type, sendText } = this.data.pendingSendData;
     const currentModel = this.data.currentModel;
-    const isF2Max = isF2MaxLikeControl(currentModel);
+    const isF2Ble = isF2MaxLikeControl(currentModel);
     
     // 关闭弹窗
     this.setData({ 
@@ -3136,10 +5461,12 @@ Page({
         this.sendDataMultiple(sendText, 2, 500);
       } else if (type === 'settings') {
         // 高级设置：发送3次，间隔0.5秒
-        const modelName = isF2Max 
-          ? (currentModel.type === 'Pro Max'
-            ? 'F1 Pro Max'
-            : (currentModel.type === 'Max Long' ? 'F2 MAX Long' : 'F2 MAX'))
+        const modelName = isF2Ble
+          ? (isF1UltraModel(currentModel)
+            ? 'F1 ULTRA'
+            : (currentModel.type === 'Ultra'
+              ? 'F2 ULTRA'
+              : (isF2LongType(currentModel.type) ? 'F2 Long' : 'F2 MAX')))
           : 'F1 MAX';
         console.log(`📤 [蓝牙] ${modelName} 发送"${sendText}"（连续3次，间隔0.5秒）`);
         this.sendDataMultiple(sendText, 3, 500);
@@ -3176,17 +5503,23 @@ Page({
 
     let newState = { ...this.data.settingState };
     newState[key] = targetVal;
-    
-    this.setData({ settingState: newState });
-    
-    // 🔴 F2 MAX：高级配置发送对应数据
+
     const currentModel = this.data.currentModel;
-    const isF2Max = isF2MaxLikeControl(currentModel);
-    const isF1Max = currentModel && 
-                    currentModel.name && currentModel.name.includes('F1') && 
+    const isF2Ble = isF2MaxSeriesModel(currentModel);
+    const isF2Ultra = isF2UltraModel(currentModel);
+    const isF1Max = currentModel &&
+                    currentModel.name && currentModel.name.includes('F1') &&
                     currentModel.type === 'Max';
-    
-    if (isF2Max && (this.data.isConnected || this.data.isAdmin)) {
+
+    this.setData({ settingState: newState });
+    if (isF2Ultra) {
+      try {
+        wx.setStorageSync('f2_ultra_adv_settingState', newState);
+      } catch (e) { /* ignore */ }
+    }
+
+    // 🔴 F2 MAX / ULTRA：高级配置发送对应数据
+    if (isF2Ble && this._canControlDevice()) {
       let sendText = '';
       
       if (key === 'faultDetect') {
@@ -3206,22 +5539,30 @@ Page({
       } else if (key === 'shutdown') {
         // 关机位置
         if (targetVal === 'left') {
-          // 🔴 收回：发送“打开收回”（与 F1 MAX 一致）
           sendText = '打开收回';
         } else if (targetVal === 'right') {
-          // 🔴 保持：发送“关闭收回”
-          sendText = '关闭收回'; // 用户要求保持也是"关闭收回"
+          sendText = '关闭收回';
+        }
+      } else if (key === 'travelMode' && isF2Ultra) {
+        if (targetVal === 'left') {
+          sendText = '关闭出行';
+        } else if (targetVal === 'right') {
+          sendText = '开启出行';
+        }
+      } else if (key === 'smoothMode' && isF2Ultra) {
+        if (targetVal === 'left') {
+          sendText = '开启平滑';
+        } else if (targetVal === 'right') {
+          sendText = '关闭平滑';
         }
       }
       
       if (sendText) {
-        // 🔴 只有第一次点击才显示指示灯确认弹窗
-        if (!this.data.hasShownSettingsIndicatorModal) {
-          // 第一次点击：显示弹窗
+        if (!this.data.hasShownSettingsIndicatorModal && !this._shouldSkipIndicatorModal()) {
           this.setData({
             showIndicatorCheckModal: true,
             indicatorCheckModalClosing: false,
-            hasShownSettingsIndicatorModal: true, // 标记已显示过
+            hasShownSettingsIndicatorModal: true,
             pendingSendData: {
               type: 'settings',
               sendText: sendText,
@@ -3231,15 +5572,15 @@ Page({
           });
           console.log(`🔍 [蓝牙] 准备发送"${sendText}"，等待用户确认`);
         } else {
-          // 第二次及以后：直接发送
-        console.log(`📤 [蓝牙] F2 MAX 发送"${sendText}"（连续3次，间隔0.5秒）`);
-        this.sendDataMultiple(sendText, 3, 500);
+          const label = isF2Ultra ? 'F2 ULTRA' : 'F2 MAX';
+          console.log(`📤 [蓝牙] ${label} 发送"${sendText}"（连续3次，间隔0.5秒）`);
+          this.sendDataMultiple(sendText, 3, 500);
         }
       }
     }
     
     // 🔴 F1 MAX：高级配置发送对应数据
-    if (isF1Max && (this.data.isConnected || this.data.isAdmin)) {
+    if (isF1Max && this._canControlDevice()) {
       let sendText = '';
       
       if (key === 'powerOn') {
@@ -3259,13 +5600,11 @@ Page({
       }
       
       if (sendText) {
-        // 🔴 只有第一次点击才显示指示灯确认弹窗
-        if (!this.data.hasShownSettingsIndicatorModal) {
-          // 第一次点击：显示弹窗
+        if (!this.data.hasShownSettingsIndicatorModal && !this._shouldSkipIndicatorModal()) {
           this.setData({
             showIndicatorCheckModal: true,
             indicatorCheckModalClosing: false,
-            hasShownSettingsIndicatorModal: true, // 标记已显示过
+            hasShownSettingsIndicatorModal: true,
             pendingSendData: {
               type: 'settings',
               sendText: sendText,
@@ -3275,9 +5614,8 @@ Page({
           });
           console.log(`🔍 [蓝牙] 准备发送"${sendText}"，等待用户确认`);
         } else {
-          // 第二次及以后：直接发送
-        console.log(`📤 [蓝牙] F1 MAX 发送"${sendText}"（连续3次，间隔0.5秒）`);
-        this.sendDataMultiple(sendText, 3, 500);
+          console.log(`📤 [蓝牙] F1 MAX 发送"${sendText}"（连续3次，间隔0.5秒）`);
+          this.sendDataMultiple(sendText, 3, 500);
         }
       }
     }
@@ -3644,39 +5982,139 @@ Page({
     return new Uint8Array(bytes).buffer;
   },
 
+  _getBleWriteCharacteristicId() {
+    const ble = this.ble;
+    if (!ble) return '';
+    return ble.characteristicId2 || ble.characteristicId || '';
+  },
+
+  _isBleWriteReady() {
+    const ble = this.ble;
+    if (!ble || !ble.device || !ble.serviceId) return false;
+    if (!this.data.isConnected && this.data.remoteAssistRole === 'user') return false;
+    return !!this._getBleWriteCharacteristicId();
+  },
+
+  writeBleDataPromise(arrayBuffer) {
+    const ble = this.ble;
+    const charId = this._getBleWriteCharacteristicId();
+    if (!ble || !ble.device || !ble.serviceId || !charId) {
+      return Promise.resolve(false);
+    }
+    return new Promise((resolve) => {
+      wx.writeBLECharacteristicValue({
+        deviceId: ble.device.deviceId,
+        serviceId: ble.serviceId,
+        characteristicId: charId,
+        value: arrayBuffer,
+        success: () => resolve(true),
+        fail: (err) => {
+          console.log('❌ [蓝牙] 发送失败:', err.errMsg);
+          resolve(false);
+        }
+      });
+    });
+  },
+
+  _clearBleSendQueue() {
+    this._bleSendQueue = [];
+    this._bleSendDraining = false;
+    this._onBleSendQueueIdle();
+  },
+
+  _enqueueBleSend(text, gapAfterMs = BLE_SEND_GAP_MS) {
+    if (!text) return;
+    if (!this._bleSendQueue) this._bleSendQueue = [];
+    this._bleSendQueue.push({ text, gapAfterMs });
+    this._drainBleSendQueue();
+  },
+
+  _enqueueBleSendBurst(text, count, gapAfterMs = BLE_ANGLE_STEP_GAP_MS) {
+    const n = Math.max(0, Math.min(8, Number(count) || 0));
+    for (let i = 0; i < n; i++) {
+      this._enqueueBleSend(text, gapAfterMs);
+    }
+  },
+
+  _drainBleSendQueue() {
+    if (this._bleSendDraining) return;
+    if (!this._bleSendQueue || !this._bleSendQueue.length) return;
+
+    const runNext = () => {
+      if (!this._bleSendQueue || !this._bleSendQueue.length) {
+        this._bleSendDraining = false;
+        this._onBleSendQueueIdle();
+        return;
+      }
+      if (!this._isBleWriteReady()) {
+        this._clearBleSendQueue();
+        return;
+      }
+      const item = this._bleSendQueue.shift();
+      const arrayBuffer = this.stringToArrayBuffer(item.text);
+      this.writeBleDataPromise(arrayBuffer).then((ok) => {
+        if (!ok) {
+          this._clearBleSendQueue();
+          return;
+        }
+        if (this._bleSendQueue.length) {
+          setTimeout(runNext, item.gapAfterMs || BLE_SEND_GAP_MS);
+        } else {
+          this._bleSendDraining = false;
+          this._onBleSendQueueIdle();
+        }
+      });
+    };
+
+    this._bleSendDraining = true;
+    runNext();
+  },
+
   // 核心发送方法
   writeBleData(arrayBuffer) {
-    if (!this.ble || !this.ble.device || !this.ble.characteristicId2) {
+    if (!this._isBleWriteReady()) {
       console.log('❌ [蓝牙] 设备未连接或特征值未找到');
-      return;
+      return false;
     }
-
+    const ble = this.ble;
     wx.writeBLECharacteristicValue({
-      deviceId: this.ble.device.deviceId,
-      serviceId: this.ble.serviceId,
-      characteristicId: this.ble.characteristicId2,
+      deviceId: ble.device.deviceId,
+      serviceId: ble.serviceId,
+      characteristicId: this._getBleWriteCharacteristicId(),
       value: arrayBuffer,
       success: (res) => {
         console.log('✅ [蓝牙] 发送成功:', res.errMsg);
       },
       fail: (err) => {
         console.log('❌ [蓝牙] 发送失败:', err.errMsg);
+        this._handleBleLinkLost('write_fail');
       }
     });
+    return true;
   },
 
-  // 发送字符串数据
-  sendData(text) {
-    const arrayBuffer = this.stringToArrayBuffer(text);
-    this.writeBleData(arrayBuffer);
+  // 发送字符串数据（经队列串行写出，避免 BLE 连发粘包）
+  sendData(text, gapAfterMs) {
+    if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) {
+      // 通过 _remoteAssistEnqueueCommand 中继发送
+      // 防止如果调用方自身已经有循环或重试，这里再排队会堆积
+      this._remoteAssistEnqueueCommand(text, 1, 0);
+      return;
+    }
+    this._enqueueBleSend(text, gapAfterMs != null ? gapAfterMs : BLE_SEND_GAP_MS);
   },
 
-  // 连续发送三次信号（用于 Max 版本）
+  // 连续发送多次（用于 Max 版本），同样走队列间隔发送
   sendDataMultiple(text, times = 3, interval = 300) {
+    if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) {
+      // 避免 enqueueCommand 和 timeout 嵌套导致指令乘方爆炸
+      // 直接交给远协云端队列去循环发送
+      this._remoteAssistEnqueueCommand(text, times, interval);
+      return;
+    }
+    const gap = Math.max(interval, BLE_SEND_GAP_MS);
     for (let i = 0; i < times; i++) {
-      setTimeout(() => {
-        this.sendData(text);
-      }, i * interval);
+      this._enqueueBleSend(text, gap);
     }
   },
 
@@ -3715,6 +6153,7 @@ Page({
           showCancel: options.showCancel !== false,
           confirmText: options.confirmText || '确定',
           cancelText: options.cancelText || '取消',
+          titleClass: options.titleClass || '',
           success: options.success
         });
       } else if (attempt < 3) {
@@ -3727,5 +6166,202 @@ Page({
       }
     };
     tryShow();
+  },
+
+  _arrayBufferToUtf8(buffer) {
+    const arr = new Uint8Array(buffer);
+    let out = '';
+    for (let i = 0; i < arr.length; i++) {
+      out += String.fromCharCode(arr[i]);
+    }
+    return out;
+  },
+
+  _resetF2HwMonitorState(connected, model) {
+    const m = model || this.data.currentModel;
+    return {
+      f2HwMonitorVisible: connected && isHwPinMonitorModel(m),
+      f2KeyOn: null,
+      f2BtnPressed: null,
+      f2KeyStatusText: connected ? '监测中…' : '未连接',
+      f2BtnStatusText: connected ? '监测中…' : '未连接'
+    };
+  },
+
+  _setupF2FaultBleListener() {
+    this._f2BleRxLine = '';
+    this._f2LastFaultKey = '';
+    this._f2FaultConnectPending = true;
+    this._f2AdvSyncPending = true;
+    if (!this.ble) return;
+    this.ble.onDataReceived = (buffer) => this._onF2BleDataReceived(buffer);
+    this.setData({
+      f2TravelReadbackText: '读取中…',
+      f2DelayPowerReadbackText: '读取中…',
+      ...this._resetF2HwMonitorState(true)
+    });
+  },
+
+  _teardownF2FaultBleListener() {
+    this._stopF2DemoMode(false);
+    this._f2BleRxLine = '';
+    this._f2LastFaultKey = '';
+    this._f2FaultConnectPending = false;
+    this._f2AdvSyncPending = false;
+    if (this.ble) this.ble.onDataReceived = null;
+    this._resetFlapPanelState();
+    this.setData({
+      f2TravelReadbackText: '读取中…',
+      f2DelayPowerReadbackText: '读取中…',
+      ...this._resetF2HwMonitorState(false)
+    });
+  },
+
+  _onF2BleDataReceived(buffer) {
+    if (!buffer || !isF2MaxStatusBleModel(this.data.currentModel)) return;
+    this._f2LastBleRxAt = Date.now();
+    this._f2BleRxLine += this._arrayBufferToUtf8(buffer);
+    const parts = this._f2BleRxLine.split('\n');
+    this._f2BleRxLine = parts.pop() || '';
+    parts.forEach((line) => {
+      const trimmed = (line || '').trim();
+      if (trimmed) this._handleF2BleStatusLine(trimmed);
+    });
+  },
+
+  _handleF2BleStatusLine(line) {
+    const parsed = parseF2StatusLine(line);
+    if (!parsed) return;
+    const forcePopup = !!this._f2FaultConnectPending;
+    if (forcePopup) this._f2FaultConnectPending = false;
+    if (forcePopup) {
+      this._showF2ConnectModalQueue(buildF2ConnectModalQueue(parsed));
+      this._f2LastFaultKey = `${parsed.err}:${parsed.wrn}`;
+    } else {
+      this._maybeShowF2FaultPopup(parsed.err, parsed.wrn, false);
+    }
+    this._syncF2StatusFromPacket(parsed);
+  },
+
+  _syncF2StatusFromPacket(parsed) {
+    if (!isF2MaxStatusBleModel(this.data.currentModel)) return;
+    const forceAdv = !!this._f2AdvSyncPending;
+    const updates = buildF2AdvUiUpdates(parsed, {
+      currentState: this.data.settingState,
+      delayPowerOffOptions: this.data.delayPowerOffOptions,
+      force: forceAdv,
+      currentUi: {
+        f2TravelModeOn: this.data.f2TravelModeOn,
+        delayPowerOffIndex: this.data.delayPowerOffIndex,
+        f2TravelReadbackText: this.data.f2TravelReadbackText,
+        f2DelayPowerReadbackText: this.data.f2DelayPowerReadbackText
+      }
+    });
+
+    if (forceAdv) {
+      this._f2AdvSyncPending = false;
+    }
+
+    if (parsed.itm !== null && parsed.itm !== undefined) {
+      const flap = buildFlapPanelStateFromItm(parsed.itm, parsed.stm);
+      if (flap) {
+        if (flap.flapPanelState !== this.data.flapPanelState) {
+          updates.flapPanelState = flap.flapPanelState;
+        }
+        if (flap.flapPanelStateText !== this.data.flapPanelStateText) {
+          updates.flapPanelStateText = flap.flapPanelStateText;
+        }
+        if (this._f2DemoActive) {
+          this._onF2DemoFlapStable(flap.flapPanelState);
+        }
+      }
+    }
+
+    if (parsed.spd !== null && parsed.spd >= 10 && parsed.spd <= 100) {
+      if (forceAdv || parsed.spd !== this.data.f2ServoSpeed) {
+        Object.assign(updates, buildF2ServoSpeedUi(parsed.spd));
+        try {
+          wx.setStorageSync('f2_servo_speed', parsed.spd);
+        } catch (e) { /* ignore */ }
+      }
+    }
+
+    Object.assign(updates, buildF2HwMonitorUpdates(parsed, {
+      f2KeyOn: this.data.f2KeyOn,
+      f2BtnPressed: this.data.f2BtnPressed
+    }));
+
+    if (!isHwPinMonitorModel(this.data.currentModel)) {
+      delete updates.f2KeyOn;
+      delete updates.f2BtnPressed;
+      delete updates.f2KeyStatusText;
+      delete updates.f2BtnStatusText;
+      delete updates.f2HwMonitorVisible;
+    }
+
+    if (Object.keys(updates).length) {
+      this.setData(updates);
+      this._scheduleRemoteStatePush();
+      if (updates.settingState) {
+        try {
+          wx.setStorageSync('f2_ultra_adv_settingState', updates.settingState);
+        } catch (e) { /* ignore */ }
+      }
+      if (updates.delayPowerOffIndex !== undefined) {
+        const opt = this.data.delayPowerOffOptions[updates.delayPowerOffIndex];
+        if (opt) {
+          try {
+            wx.setStorageSync('f2_delayPowerOffIndex', updates.delayPowerOffIndex);
+            wx.setStorageSync('f2_delayPowerOffMinutes', opt.minutes);
+          } catch (e) { /* ignore */ }
+        }
+      }
+    }
+  },
+
+  _maybeShowF2FaultPopup(err, wrn, forcePopup) {
+    const key = `${err}:${wrn}`;
+    if (!err && !wrn) {
+      this._f2LastFaultKey = key;
+      return;
+    }
+    if (!forcePopup && key === this._f2LastFaultKey) return;
+    this._f2LastFaultKey = key;
+
+    const showWarn = () => {
+      const warnPayload = buildF2FaultModalPayload(0, wrn);
+      if (warnPayload) this._showF2FaultModal(warnPayload);
+    };
+
+    const errPayload = buildF2FaultModalPayload(err, 0);
+    if (errPayload) {
+      this._showF2FaultModal(errPayload, () => {
+        if (wrn > 0) showWarn();
+      });
+    } else if (wrn > 0) {
+      showWarn();
+    }
+  },
+
+  _showF2ConnectModalQueue(queue) {
+    const list = Array.isArray(queue) ? queue : [];
+    const showNext = (idx) => {
+      if (idx >= list.length) return;
+      this._showF2FaultModal(list[idx], () => showNext(idx + 1));
+    };
+    showNext(0);
+  },
+
+  _showF2FaultModal(payload, afterClose) {
+    this._showCustomModal({
+      title: payload.title,
+      content: payload.content,
+      showCancel: false,
+      confirmText: '知道了',
+      titleClass: payload.kind === 'warn' ? 'warn' : (payload.kind === 'error' ? 'error' : (payload.kind === 'info' ? 'info' : '')),
+      success: () => {
+        if (typeof afterClose === 'function') afterClose();
+      }
+    });
   },
 });

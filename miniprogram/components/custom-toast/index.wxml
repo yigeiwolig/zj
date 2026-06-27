@@ -2,7 +2,7 @@
 <view class="ct-mask {{modalClosing ? 'closing' : ''}}" wx:if="{{modal.show || loading.show}}" catchtouchmove="preventTouchMove">
   <!-- Modal（带收缩退出动画） -->
   <view class="ct-modal {{modal.editable ? 'editable' : ''}}" wx:if="{{modal.show}}">
-    <view class="ct-modal-title" wx:if="{{modal.title}}">{{modal.title}}</view>
+    <view class="ct-modal-title {{modal.titleClass}}" wx:if="{{modal.title}}">{{modal.title}}</view>
     <view class="ct-modal-content" wx:if="{{!modal.editable}}">{{modal.content}}</view>
     <view class="ct-modal-content ct-modal-content-editable" wx:if="{{modal.editable}}">
       <input

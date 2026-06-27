@@ -132,7 +132,7 @@ page {
   line-height: 1;
 }
 
-/* 顶部固定区：标题 / 管理员子模式 / Tab / 搜索 合一 */
+/* 顶部固定区：标题 / 管理员子模式 / Tab / 搜索 合一（z-index 低于全屏层，播放时由遮罩盖住） */
 .case-top-chrome {
   position: fixed;
   top: 0;
@@ -142,6 +142,7 @@ page {
   background: rgba(242, 242, 247, 0.96);
   backdrop-filter: blur(20px);
   box-sizing: border-box;
+  pointer-events: auto;
 }
 
 .case-top-inner {
@@ -1367,6 +1368,38 @@ page {
   margin-top: -4rpx;
 }
 
+.case-download-btn {
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+  min-width: 44rpx;
+  height: 44rpx;
+  padding: 0 10rpx;
+  background: rgba(52, 199, 89, 0.92);
+  border-radius: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 700;
+  z-index: 10;
+}
+
+.case-fs-download-btn {
+  position: absolute;
+  top: 100rpx;
+  right: 48rpx;
+  z-index: 10031;
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  background: rgba(52, 199, 89, 0.88);
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 700;
+  pointer-events: auto;
+}
+
 /* =========================== */
 /* 🆕 视频播放器弹窗样式 */
 /* =========================== */
@@ -1410,13 +1443,6 @@ page {
   height: 0;
   background: #000;
   position: relative;
-}
-.main-video video {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
 }
 
 .video-info-box {
@@ -1500,9 +1526,200 @@ page {
   opacity: 0;
   pointer-events: none;
 }
-.fullscreen-video { width: 100%; height: 100%; }
+.fullscreen-video {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+}
 
-/* 全屏手势层：须可被命中（嵌在 video 内时纯空 cover-view 部分机型无 tap）；子层铺半透明底 */
+/* 全屏 UI 层：与 video 同级，避免 cover-view 刷新拖垮解码 */
+.case-fs-chrome {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10010;
+  pointer-events: none;
+}
+.case-fs-chrome .case-fs-overlay,
+.case-fs-chrome .close-video-btn,
+.case-fs-chrome .case-fs-play,
+.case-fs-chrome .case-fs-track-hit {
+  pointer-events: auto;
+}
+
+.case-fs-buffering--center {
+  background: transparent;
+  pointer-events: none;
+}
+
+.case-fs-buffering--playback {
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+
+.case-fs-buffering-hint {
+  margin-top: 22rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.82);
+  letter-spacing: 2rpx;
+  line-height: 1.4;
+}
+
+.case-fs-replay-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 168rpx;
+  height: 168rpx;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 12rpx 40rpx rgba(0, 0, 0, 0.35);
+  pointer-events: auto;
+}
+
+.case-fs-replay-btn:active {
+  transform: scale(0.92);
+  opacity: 0.9;
+}
+
+.case-fs-replay-icon {
+  color: #fff;
+  font-size: 56rpx;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 8rpx;
+}
+
+.case-fs-replay-label {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 26rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+}
+
+.case-fs-buffering {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10020;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.case-fs-buffering--brand {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.88) 100%);
+}
+
+.case-fs-buffering-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.case-fs-mt-loader {
+  position: relative;
+  width: 168rpx;
+  height: 168rpx;
+}
+
+.case-fs-mt-ring {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border: 5rpx solid rgba(255, 255, 255, 0.12);
+  border-top-color: rgba(255, 255, 255, 0.92);
+  border-right-color: rgba(255, 255, 255, 0.35);
+  border-radius: 50%;
+  box-sizing: border-box;
+  animation: caseFsSpin 0.85s linear infinite;
+}
+
+.case-fs-mt-logo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.case-fs-mt-ring--static {
+  animation: none;
+  border-top-color: rgba(255, 255, 255, 0.55);
+  border-right-color: rgba(255, 255, 255, 0.22);
+}
+
+.case-fs-mt-logo-text {
+  color: #fff;
+  font-size: 52rpx;
+  font-weight: 900;
+  font-family: 'Arial Black', Impact, sans-serif;
+  letter-spacing: 3rpx;
+  text-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.45);
+  animation: none;
+}
+
+.case-fs-rebuffer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(120rpx + env(safe-area-inset-bottom, 0px));
+  z-index: 10021;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.case-fs-rebuffer-pill {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+}
+
+.case-fs-rebuffer-mt {
+  font-size: 24rpx;
+  font-weight: 900;
+  font-style: italic;
+  color: #fff;
+  letter-spacing: 1rpx;
+}
+
+.case-fs-rebuffer-text {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+@keyframes caseFsMtPulse {
+  0%, 100% { opacity: 0.82; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes caseFsSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* 全屏手势层：与 video 同级，普通 view 即可 */
 .case-fs-overlay {
   position: absolute;
   left: 0;
@@ -1556,7 +1773,12 @@ page {
   display: flex;
   align-items: center;
   justify-content: center;
-  pointer-events: none; /* 让外层不拦截点击，只让内部图标拦截 */
+  pointer-events: auto;
+}
+.case-fs-center-play-wrap--hidden {
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
 }
 
 /* 自定义底部控件：略下移；高度与标题区 bottom 错开，避免压字 */
@@ -1646,11 +1868,15 @@ page {
   overflow: visible;
 }
 .case-fs-fill {
-  position: relative;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
   height: 10rpx;
   background: #ffffff;
   border-radius: 5rpx;
-  min-width: 0;
+  transform-origin: left center;
+  will-change: transform;
 }
 /* 滑块百分比相对于 .case-fs-track-inner，0% 时中心在内层左缘，一半落在左侧缓冲区内 */
 .case-fs-thumb-float {
@@ -1731,7 +1957,9 @@ page {
   line-height: 70rpx;
   font-size: 50rpx;
   z-index: 10030; /* 高于手势层与底部控件 */
-  backdrop-filter: blur(10rpx);
+}
+.close-video-btn--fs {
+  pointer-events: auto;
 }
 /* 底部标题：去掉发黑渐变，改透明 + 字影（可读性靠阴影，不再铺脏渐变） */
 .video-bottom-info {
@@ -1949,14 +2177,14 @@ page {
 }
 
 /* 视频区域 - 16:9比例 */
-.pending-video-large {
+.pending-video-wrap {
   width: 100%;
   padding-bottom: 56.25%; /* 16:9 比例 */
   height: 0;
   background: #000;
   position: relative;
 }
-.pending-video-large video {
+.pending-video-el {
   position: absolute;
   top: 0;
   left: 0;

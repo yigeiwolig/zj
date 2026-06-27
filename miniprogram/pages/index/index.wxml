@@ -27,7 +27,62 @@
   </view>
 </view>
 
-<!-- 抖音/闲鱼用户：首个弹窗，引导添加管理员微信（与昵称层互斥） -->
+<!-- 闲鱼/抖音：进入后首个须知弹窗（在加微信引导之前） -->
+<view class="custom-modal-mask first-time-modal-mask {{xianyuWarningModalEnterReady ? 'first-time-modal-enter-ready' : ''}} {{xianyuWarningModalClosing ? 'closing' : ''}}" wx:if="{{showXianyuWarningModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box first-time-modal xianyu-notice-card" catchtouchmove="noop" catchtap="noop">
+    <view class="first-time-icon">📋</view>
+    <view class="first-time-title">使用须知</view>
+    <view class="first-time-desc-wrap">
+      <view class="first-time-desc-line">闲鱼 / 抖音用户请先阅读</view>
+      <view class="first-time-desc-line">按步骤操作即可查看案例库</view>
+    </view>
+
+    <view class="xianyu-notice-panel">
+      <view class="xianyu-notice-row">
+        <view class="xianyu-notice-badge xianyu-notice-badge--ban">禁</view>
+        <text class="xianyu-notice-row-text">闲鱼勿发「加了」「已加」及微信、微信号、加微信、加我微信、vx、wx、威信、薇信等词</text>
+      </view>
+      <view class="xianyu-notice-row">
+        <view class="xianyu-notice-badge xianyu-notice-badge--ban">禁</view>
+        <text class="xianyu-notice-row-text">申请发送后请稍等，客服会联系你，勿在闲鱼发敏感词</text>
+      </view>
+      <view class="xianyu-notice-split"></view>
+      <view class="xianyu-notice-row">
+        <view class="xianyu-notice-badge">1</view>
+        <text class="xianyu-notice-row-text">点击「复制微信号」添加管理员</text>
+      </view>
+      <view class="xianyu-notice-row">
+        <view class="xianyu-notice-badge">2</view>
+        <text class="xianyu-notice-row-text">或长按二维码扫码添加微信</text>
+      </view>
+      <view class="xianyu-notice-row xianyu-notice-row--last">
+        <view class="xianyu-notice-badge">3</view>
+        <text class="xianyu-notice-row-text">添加客服后请耐心等待，等待客服通过</text>
+      </view>
+    </view>
+
+    <text class="xianyu-notice-foot">违反以上规则，将无法查看案例库</text>
+
+    <view class="first-time-btns xianyu-notice-btns">
+      <view class="xianyu-notice-progress" wx:if="{{!xianyuWarningActionReady}}">
+        <view class="xianyu-notice-progress-track">
+          <view class="xianyu-notice-progress-fill" style="width: {{xianyuWarningProgress}}%;"></view>
+        </view>
+        <text class="xianyu-notice-wait">{{xianyuWarningActionCountdown}} 秒后可确认</text>
+      </view>
+      <view
+        class="first-time-btn primary {{xianyuWarningActionReady ? '' : 'is-disabled'}}"
+        bindtap="closeXianyuWarningModal"
+        hover-class="{{xianyuWarningActionReady ? 'first-time-btn-active' : ''}}"
+        hover-start-time="10"
+        hover-stay-time="70">
+        {{xianyuWarningActionReady ? '我知道了' : '请仔细阅读…'}}
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- 抖音/闲鱼用户：加微信引导（须知关闭后再显示，与昵称层互斥） -->
 <view class="custom-modal-mask first-time-modal-mask {{firstTimeModalEnterReady ? 'first-time-modal-enter-ready' : ''}} {{firstTimeModalClosing ? 'closing' : ''}}" wx:if="{{showFirstTimeModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box first-time-modal" catchtouchmove="noop" catchtap="noop">
     <image class="first-time-qr-preload" src="/images/qrcode.jpg" mode="aspectFit" aria-hidden="true" />
@@ -64,7 +119,7 @@
 </view>
 
 <!-- 昵称授权窗口：抖音/闲鱼引导关闭后再显示 -->
-<view class="auth-mask {{nicknameUiClosing ? 'closing' : ''}}" wx:if="{{(!isAuthorized && isShowNicknameUI && !showFirstTimeModal) || nicknameUiClosing}}" catchtouchmove="noop">
+<view class="auth-mask {{nicknameUiClosing ? 'closing' : ''}}" wx:if="{{(!isAuthorized && isShowNicknameUI && !showFirstTimeModal && !showXianyuWarningModal) || nicknameUiClosing}}" catchtouchmove="noop">
   <view class="auth-panel-new {{nicknameUiClosing ? 'closing' : ''}}" catchtouchmove="noop">
     <view class="auth-icon-lock">✨</view>
     <view class="auth-title-new">开启专属体验</view>
@@ -108,7 +163,7 @@
         <text class="back-icon">←</text>
         <text class="back-text">返回</text>
       </view>
-      <text class="admin-title">{{adminViewMode === 'nickname' ? '昵称录入' : (adminViewMode === 'suspicious' ? '可疑人员处理' : (adminViewMode === 'suspiciousIgnored' ? '无视人员追溯' : (adminViewMode === 'suspiciousBanned' ? '可疑手动封禁留存' : (manualBannedMode ? '手动封禁处理' : '封禁管理'))))}}</text>
+      <text class="admin-title">{{adminViewMode === 'nickname' ? '昵称录入' : (adminViewMode === 'suspicious' ? '可疑人员处理' : (adminViewMode === 'suspiciousIgnored' ? '无视人员追溯' : (adminViewMode === 'bannedIgnored' ? '无视人员追溯' : (adminViewMode === 'suspiciousBanned' ? '可疑手动封禁留存' : (manualBannedMode ? '手动封禁处理' : '封禁管理')))))}}</text>
       <view class="header-capsule-spacer"></view>
     </view>
 
@@ -117,41 +172,122 @@
       <view class="admin-subnav-btn" catchtap="goToIgnoredUsersFromHeader">无视人员追溯</view>
       <view class="admin-subnav-btn admin-subnav-btn--dark" catchtap="goToBannedUsersFromHeader">被封禁人员</view>
     </view>
-    <view wx:elif="{{adminViewMode === 'suspiciousIgnored' || adminViewMode === 'suspiciousBanned'}}" class="admin-subnav admin-subnav--single">
-      <view class="admin-subnav-btn admin-subnav-btn--ghost" catchtap="goBackToSuspiciousFromHeader">← 返回待处理列表</view>
+    <view wx:elif="{{adminViewMode === 'banned'}}" class="admin-subnav admin-subnav--single">
+      <view class="admin-subnav-btn" catchtap="goToBannedIgnoredUsersFromHeader">无视人员追溯</view>
+    </view>
+    <view wx:elif="{{adminViewMode === 'suspiciousIgnored' || adminViewMode === 'suspiciousBanned' || adminViewMode === 'bannedIgnored'}}" class="admin-subnav admin-subnav--single">
+      <view class="admin-subnav-btn admin-subnav-btn--ghost" catchtap="{{adminViewMode === 'bannedIgnored' ? 'goBackToBannedFromHeader' : 'goBackToSuspiciousFromHeader'}}">← {{adminViewMode === 'bannedIgnored' ? '返回封禁列表' : '返回待处理列表'}}</view>
     </view>
 
     <!-- 昵称录入界面 -->
-    <view class="admin-nickname-container" wx:if="{{adminViewMode === 'nickname'}}">
-      <input 
-        class="nickname-input" 
-        type="text" 
-        placeholder="输入昵称"
-        value="{{nicknameInput}}"
-        bindinput="onNicknameInput"
-        maxlength="20"
-      />
-      
-      <view class="nickname-option">
-        <view class="option-info">
-          <text class="option-label">地域放行</text>
-          <text class="option-desc">不受地域拦截限制</text>
-        </view>
-        <switch 
-          checked="{{nicknameBypassLocation}}"
-          bindchange="toggleNicknameBypass"
-          color="#000"
+    <scroll-view
+      class="admin-nickname-scroll"
+      scroll-y
+      wx:if="{{adminViewMode === 'nickname'}}"
+      enhanced
+      show-scrollbar="{{false}}">
+      <view class="admin-nickname-container">
+        <view class="admin-section-title">昵称白名单</view>
+        <input 
+          class="nickname-input" 
+          type="text" 
+          placeholder="输入昵称"
+          value="{{nicknameInput}}"
+          bindinput="onNicknameInput"
+          maxlength="20"
         />
+        
+        <view class="nickname-option">
+          <view class="option-info">
+            <text class="option-label">地域放行</text>
+            <text class="option-desc">不受地域拦截限制</text>
+          </view>
+          <switch 
+            checked="{{nicknameBypassLocation}}"
+            bindchange="toggleNicknameBypass"
+            color="#000"
+          />
+        </view>
+        
+        <button 
+          class="nickname-submit-btn" 
+          bindtap="submitNickname"
+          disabled="{{isSubmittingNickname || !nicknameInput}}"
+        >
+          {{isSubmittingNickname ? '提交中...' : '添加'}}
+        </button>
+
+        <view class="admin-section-divider"></view>
+
+        <view class="admin-section-title">封禁地址</view>
+        <text class="admin-section-desc">选择需要拦截的地区，保存到 app_config.blocking_rules</text>
+
+        <view class="nickname-option">
+          <view class="option-info">
+            <text class="option-label">地域拦截</text>
+            <text class="option-desc">{{blockingRulesActive ? '已开启，命中地址将被拦截' : '已关闭（审核放行模式）'}}</text>
+          </view>
+          <switch
+            checked="{{blockingRulesActive}}"
+            bindchange="toggleBlockingRulesActive"
+            color="#000"
+          />
+        </view>
+
+        <picker mode="region" value="{{blockedRegionValue}}" bindchange="onBlockedRegionChange">
+          <view class="blocked-region-picker">
+            <view class="option-info">
+              <text class="option-label">选择地区</text>
+              <text class="option-desc">{{blockedRegionText || '点击选择省 / 市 / 区'}}</text>
+            </view>
+            <text class="blocked-region-picker-arrow">›</text>
+          </view>
+        </picker>
+
+        <view class="nickname-option">
+          <view class="option-info">
+            <text class="option-label">拦截整市</text>
+            <text class="option-desc">开启后只按城市拦截，不限区县</text>
+          </view>
+          <switch
+            checked="{{blockedWholeCity}}"
+            bindchange="toggleBlockedWholeCity"
+            color="#000"
+          />
+        </view>
+
+        <button
+          class="nickname-submit-btn blocked-region-submit-btn"
+          bindtap="submitBlockedRegion"
+          disabled="{{isSubmittingBlockedRegion || isLoadingBlockedRegions}}"
+        >
+          {{isSubmittingBlockedRegion ? '保存中...' : '添加封禁地址'}}
+        </button>
+
+        <view class="blocked-region-list-wrap">
+          <view class="blocked-region-list-head">
+            <text class="blocked-region-list-title">已封禁地址</text>
+            <text class="blocked-region-list-count" wx:if="{{blockedCitiesDisplay.length}}">共 {{blockedCitiesDisplay.length}} 条</text>
+          </view>
+          <view wx:if="{{isLoadingBlockedRegions}}" class="blocked-region-empty">加载中...</view>
+          <view wx:elif="{{blockedCitiesDisplay.length === 0}}" class="blocked-region-empty">暂无封禁地址</view>
+          <view wx:else class="blocked-region-list">
+            <view class="blocked-region-item" wx:for="{{blockedCitiesDisplay}}" wx:key="index">
+              <text class="blocked-region-item-label">{{item.label}}</text>
+              <view
+                class="blocked-region-item-remove"
+                catchtap="removeBlockedRegion"
+                data-index="{{item.index}}"
+                data-city="{{item.city}}"
+                data-district="{{item.district}}"
+                data-label="{{item.label}}">
+                移除
+              </view>
+            </view>
+          </view>
+        </view>
       </view>
-      
-      <button 
-        class="nickname-submit-btn" 
-        bindtap="submitNickname"
-        disabled="{{isSubmittingNickname || !nicknameInput}}"
-      >
-        {{isSubmittingNickname ? '提交中...' : '添加'}}
-      </button>
-    </view>
+    </scroll-view>
 
     <!-- 封禁用户列表 -->
     <scroll-view
@@ -311,6 +447,9 @@
             <!-- 🔴 昵称验证失败时显示"重试"按钮 -->
             <view class="action-btn retry-btn" wx:if="{{item.banReason === 'nickname_verify_fail'}}" catchtap="retryNickname" data-button-id="{{item._id}}" data-index="{{idx}}" data-nickname="{{item.nickname}}">
               <text class="action-btn-text">重试</text>
+            </view>
+            <view class="action-btn unban-btn" wx:if="{{adminViewMode === 'banned'}}" catchtap="handleBannedDecision" data-button-id="{{item._id}}" data-index="{{idx}}" data-nickname="{{item.nickname}}">
+              <text class="action-btn-text">无视</text>
             </view>
             <view class="action-btn unban-btn" catchtap="unbanUser" data-button-id="{{item._id}}" data-index="{{idx}}" data-ban-reason="{{item.banReason}}" data-openid="{{item._openid}}" data-nickname="{{item.nickname}}">
               <text class="action-btn-text">放行</text>
@@ -623,11 +762,152 @@
           </view>
         </view>
       </block>
+
+      <block wx:elif="{{adminViewMode === 'bannedIgnored'}}">
+        <view class="admin-search-bar" catchtap="noop">
+          <view class="admin-search-inner">
+            <text class="admin-search-icon" aria-hidden="true">⌕</text>
+            <input
+              class="admin-search-input"
+              type="text"
+              placeholder="搜索昵称、openid、封禁原因、地区…"
+              value="{{adminBannedIgnoredSearch}}"
+              bindinput="onAdminBannedIgnoredSearchInput"
+              confirm-type="search"
+            />
+            <view wx:if="{{adminBannedIgnoredSearch}}" class="admin-search-clear" catchtap="onAdminBannedIgnoredSearchClear">清除</view>
+          </view>
+          <text class="admin-search-hint" wx:if="{{bannedIgnoredUsers.length}}">共 {{bannedIgnoredUsers.length}} 人{{adminBannedIgnoredSearchTrim ? ' · 匹配 ' + bannedIgnoredSearchMatchCount + ' 人 · 全部可见' : ''}}</text>
+        </view>
+        <view wx:if="{{isLoadingBannedIgnoredUsers}}" class="admin-loading">
+          <text class="loading-dot">···</text>
+        </view>
+        <view wx:elif="{{bannedIgnoredUsers.length === 0}}" class="admin-empty">
+          <text class="empty-icon">📋</text>
+          <text class="empty-title">暂无无视人员记录</text>
+          <text class="empty-desc">在「封禁列表」中点击「无视」的用户会留档显示在这里</text>
+        </view>
+        <view wx:else class="admin-user-cards">
+          <view wx:if="{{adminBannedIgnoredSearchTrim && bannedIgnoredSearchMatchCount === 0}}" class="admin-search-no-match">
+            <text class="admin-search-no-match-title">未找到匹配「{{adminBannedIgnoredSearchTrim}}」的记录</text>
+            <text class="admin-search-no-match-desc">支持多关键词（空格/逗号分隔）；下方仍显示全部无视人员</text>
+          </view>
+          <view class="admin-user-card admin-user-card--archived {{item._searchMatch ? 'admin-user-card-match' : ''}} {{adminExpandedCardKeys[item.rowKey] ? 'is-expanded' : 'is-collapsed'}}" wx:for="{{bannedIgnoredDisplayList}}" wx:key="rowKey" wx:for-index="bidx">
+            <view class="ignored-badge">已无视</view>
+            <view class="admin-card-summary" catchtap="toggleAdminCardExpand" data-row-key="{{item.rowKey}}">
+              <view class="admin-card-summary-top">
+                <view class="admin-card-name-row" catchtap="copyAdminNickname" data-text="{{item.viewerNickname}}">
+                  <text class="admin-card-summary-name">{{item.viewerNickname}}</text>
+                  <text class="admin-copy-tag">复制</text>
+                </view>
+                <text class="admin-card-expand-hint">{{adminExpandedCardKeys[item.rowKey] ? '收起 ▲' : '展开 ▼'}}</text>
+              </view>
+              <text class="admin-card-summary-reason">{{item.banReasonText || item.triggerReasonText}}</text>
+              <view class="admin-card-summary-stats">
+                <view class="admin-stat-line">
+                  <text class="admin-stat-label">总访问</text>
+                  <text class="admin-stat-value">{{item.totalVisits || 0}} 次</text>
+                </view>
+                <view class="admin-stat-line">
+                  <text class="admin-stat-label">失败次数</text>
+                  <text class="admin-stat-value">{{item.failCount || 0}} 次</text>
+                </view>
+                <view class="admin-stat-line" wx:if="{{item.banPageText}}">
+                  <text class="admin-stat-label">封禁页面</text>
+                  <text class="admin-stat-value">{{item.banPageText}}</text>
+                </view>
+              </view>
+              <text class="admin-card-summary-meta">无视于 {{item.ignoredAt}} · {{item.sourceTypeLabel}}<text wx:if="{{item.regionText && item.regionText !== '-'}}"> · {{item.regionText}}</text></text>
+            </view>
+            <view class="user-card-info" wx:if="{{adminExpandedCardKeys[item.rowKey]}}">
+              <view class="data-section">
+                <view class="data-section-title">用户信息</view>
+                <view class="data-chip data-chip-full data-chip-copyable" catchtap="copyAdminNickname" data-text="{{item.viewerNickname}}">
+                  <text class="data-chip-k">用户昵称</text>
+                  <text class="data-chip-v">{{item.viewerNickname}}</text>
+                  <text class="admin-copy-tag">复制</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">OpenID</text>
+                  <text class="data-chip-v data-chip-mono">{{item.viewerOpenid || '—'}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">封禁原因</text>
+                  <text class="data-chip-v">{{item.banReasonText || '—'}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">封禁页面</text>
+                  <text class="data-chip-v">{{item.banPageText || '—'}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">无视时间</text>
+                  <text class="data-chip-v">{{item.ignoredAt}}</text>
+                </view>
+                <view class="data-chip data-chip-full" wx:if="{{item.bannedAt}}">
+                  <text class="data-chip-k">原封禁时间</text>
+                  <text class="data-chip-v">{{item.bannedAt}}</text>
+                </view>
+              </view>
+
+              <view class="data-section">
+                <view class="data-section-title">访问统计</view>
+                <view class="data-chip-grid data-chip-grid-2">
+                  <view class="data-chip">
+                    <text class="data-chip-k">总访问</text>
+                    <text class="data-chip-v">{{item.totalVisits || 0}} 次</text>
+                  </view>
+                  <view class="data-chip">
+                    <text class="data-chip-k">失败次数</text>
+                    <text class="data-chip-v">{{item.failCount || 0}} 次</text>
+                  </view>
+                </view>
+                <view class="data-chip data-chip-full" wx:if="{{item.phoneModel}}">
+                  <text class="data-chip-k">设备</text>
+                  <text class="data-chip-v">{{item.phoneModel}}</text>
+                </view>
+              </view>
+
+              <view class="data-section">
+                <view class="data-section-head">
+                  <text class="data-section-title">上报位置</text>
+                  <text class="data-gps-tag {{item.latitude && item.longitude ? 'on' : 'off'}}">{{item.latitude && item.longitude ? '含GPS' : '无GPS'}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">地区</text>
+                  <text class="data-chip-v">{{item.regionText}}</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">详细地址</text>
+                  <text wx:if="{{item.address}}" class="data-chip-v data-chip-link" catchtap="handleAddressTap"
+                    data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-nickname="{{item.viewerNickname}}">{{item.addressDisplay}}</text>
+                  <text wx:else class="data-chip-v data-chip-muted">—</text>
+                </view>
+                <view class="data-chip data-chip-full">
+                  <text class="data-chip-k">经纬度</text>
+                  <text wx:if="{{item.latitude && item.longitude}}" class="data-chip-v data-chip-link data-chip-mono" catchtap="handleAddressTap"
+                    data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-nickname="{{item.viewerNickname}}">{{item.geoText}}</text>
+                  <text wx:else class="data-chip-v data-chip-muted">无定位坐标</text>
+                </view>
+                <view class="data-chip-map {{(item.latitude && item.longitude) || item.address || item.province || item.city || item.district ? '' : 'disabled'}}"
+                  catchtap="handleAddressTap"
+                  data-latitude="{{item.latitude}}" data-longitude="{{item.longitude}}" data-province="{{item.province}}" data-city="{{item.city}}" data-district="{{item.district}}" data-address="{{item.address}}" data-nickname="{{item.viewerNickname}}">
+                  地图中查看此位置
+                </view>
+              </view>
+            </view>
+            <view class="user-card-actions">
+              <view class="action-btn unban-btn" catchtap="handleBannedIgnoredUserUnban" data-item-row-key="{{item.rowKey}}">
+                <text class="action-btn-text">解封</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </block>
     </scroll-view>
 
     <!-- 底部切换栏 -->
     <view class="admin-bottom-tabs">
-      <view class="tab-item {{adminViewMode === 'banned' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="banned">
+      <view class="tab-item {{adminViewMode === 'banned' || adminViewMode === 'bannedIgnored' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="banned">
         <text class="tab-text">封禁列表</text>
       </view>
       <view class="tab-item {{adminViewMode === 'suspicious' || adminViewMode === 'suspiciousBanned' || adminViewMode === 'suspiciousIgnored' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="suspicious">

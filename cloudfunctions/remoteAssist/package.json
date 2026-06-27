@@ -1,0 +1,9 @@
+{
+  "name": "remoteAssist",
+  "version": "1.0.0",
+  "description": "远程协助会话与指令中继",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -122,11 +122,18 @@ function getPlaceholderNickname(openid) {
   return `用户_${suffix}`;
 }
 
-function mapSourceLabel(fromSourceType) {
+function mapSourceLabel(fromSourceType, sourceType) {
   const t = String(fromSourceType || '').trim();
+  const st = String(sourceType || '').trim();
+  if (st === 'banned_manual') return '封禁列表';
   if (t === 'screenshot') return '截图风险';
   if (t === 'screenshot_archive') return '截图留档';
   if (t === 'session') return '会话可疑';
+  if (t === 'nickname_verify_fail') return '昵称审核失败';
+  if (t === 'location_blocked') return '定位异常';
+  if (t === 'screenshot') return '截屏封号';
+  if (t === 'screen_record') return '录屏封号';
+  if (t === 'suspicious_manual') return '可疑手动封禁';
   return t || '可疑会话';
 }
 
@@ -319,16 +326,72 @@ async function enrichFromSessionsAndFenxi(users) {
   });
 }
 
+function buildRowFromBannedArchive(doc) {
+  const openid = doc._openid || '';
+  const province = doc.province || '';
+  const city = doc.city || '';
+  const district = doc.district || '';
+  const address = String(doc.address || '').trim();
+  const banReasonText = doc.banReasonText || doc.triggerReasonText || '封禁（已无视）';
+  const banPageText = doc.banPageText || '';
+  const regionText = buildRegionText(province, city, district);
+  const addressDisplay = buildAddressDisplay(address);
+  const geoText = buildGeoText(doc.latitude, doc.longitude);
+  return {
+    rowKey: `bign_${doc._id || doc.buttonId || openid}`,
+    archiveId: doc._id || '',
+    buttonId: doc.buttonId || '',
+    riskId: '',
+    sessionRowKey: '',
+    viewerOpenid: openid,
+    viewerNickname: doc.viewerNickname || getPlaceholderNickname(openid),
+    fromSourceType: doc.fromSourceType || doc.banReason || 'banned',
+    sourceType: 'banned_manual',
+    sourceTypeLabel: '封禁列表',
+    shareCode: '封禁列表',
+    banReason: doc.banReason || '',
+    banPage: doc.banPage || '',
+    banReasonText,
+    banPageText,
+    triggerReasonText: doc.triggerReasonText || `${banReasonText}（已无视）`,
+    ignoredAt: formatDate(doc.archivedAt || doc.updateTime || doc.createTime) || '-',
+    ignoredAtTs: toMillis(doc.archivedAt || doc.updateTime || doc.createTime),
+    bannedAt: doc.bannedAt || '',
+    regionText,
+    address,
+    addressDisplay,
+    province,
+    city,
+    district,
+    latitude: doc.latitude != null ? doc.latitude : null,
+    longitude: doc.longitude != null ? doc.longitude : null,
+    geoText,
+    totalVisits: Number(doc.totalVisits || 0),
+    failCount: Number(doc.failCount || 0),
+    phoneModel: doc.phoneModel || '',
+    enterCount: 0,
+    sectionClicksTotal: 0,
+    pageVisitsCount: 0,
+    totalStayMinutesText: '0.00',
+    totalVideoMinutesText: '0.00',
+    pageVisitsDetailList: [],
+    lastViewTime: doc.bannedAt || formatDate(doc.archivedAt || doc.updateTime) || '-'
+  };
+}
+
 function buildRowFromArchive(doc) {
+  if (doc && doc.sourceType === 'banned_manual') {
+    return buildRowFromBannedArchive(doc);
+  }
   const openid = doc._openid || '';
   const province = doc.province || '';
   const city = doc.city || '';
   const district = doc.district || '';
   const address = String(doc.address || '').trim();
   const fromSourceType = doc.fromSourceType || 'session';
+  const sourceType = doc.sourceType || '';
   const regionText = buildRegionText(province, city, district);
   const addressDisplay = buildAddressDisplay(address);
-  const hasGeo = doc.latitude != null && doc.longitude != null && doc.latitude !== '' && doc.longitude !== '';
   const geoText = buildGeoText(doc.latitude, doc.longitude);
   const enterCount = Number(doc.enterCount || 0);
   const sectionClicksTotal = Number(doc.sectionClicksTotal || 0);
@@ -341,8 +404,9 @@ function buildRowFromArchive(doc) {
     viewerOpenid: openid,
     viewerNickname: doc.viewerNickname || getPlaceholderNickname(openid),
     fromSourceType,
-    sourceTypeLabel: mapSourceLabel(fromSourceType),
-    shareCode: mapSourceLabel(fromSourceType),
+    sourceType,
+    sourceTypeLabel: mapSourceLabel(fromSourceType, sourceType),
+    shareCode: mapSourceLabel(fromSourceType, sourceType),
     triggerReasonText: doc.triggerReasonText || (fromSourceType === 'screenshot'
       ? `截图行为（已无视）`
       : '可疑行为（已无视）'),
@@ -453,9 +517,38 @@ function buildRowFromSession(row) {
   };
 }
 
-exports.main = async () => {
+async function loadBannedIgnoredUsers() {
+  const users = [];
+  let archiveRows = [];
+  try {
+    const archiveRes = await db.collection('suspicious_review_archive').limit(1000).get();
+    archiveRows = (Array.isArray(archiveRes.data) ? archiveRes.data : [])
+      .filter((row) => row && row.sourceType === 'banned_manual' && row.decision === 'ignore')
+      .sort((a, b) => toMillis(b.archivedAt || b.updateTime) - toMillis(a.archivedAt || a.updateTime));
+  } catch (err) {
+    const msg = String((err && err.message) || err || '');
+    if (!msg.includes('collection not exists') && !msg.includes('Db or Table not exist')) {
+      throw err;
+    }
+  }
+  archiveRows.forEach((row) => users.push(buildRowFromBannedArchive(row)));
+  users.sort((a, b) => (b.ignoredAtTs || 0) - (a.ignoredAtTs || 0));
+  let filled = await fillViewerNicknames(users);
+  return filled;
+}
+
+exports.main = async (event = {}) => {
   try {
     await assertAdmin();
+    const scope = String((event && event.scope) || '').trim();
+    if (scope === 'banned_ignored_only') {
+      const users = await loadBannedIgnoredUsers();
+      return {
+        success: true,
+        version: API_VERSION,
+        users
+      };
+    }
 
     const users = [];
     const seenKeys = new Set();
@@ -494,7 +587,7 @@ exports.main = async () => {
     try {
       const archiveRes = await db.collection('suspicious_review_archive').limit(1000).get();
       archiveRows = (Array.isArray(archiveRes.data) ? archiveRes.data : [])
-        .filter((row) => row && row.decision === 'ignore')
+        .filter((row) => row && row.decision === 'ignore' && row.sourceType !== 'banned_manual')
         .sort((a, b) => toMillis(b.archivedAt || b.updateTime) - toMillis(a.archivedAt || a.updateTime));
     } catch (err) {
       const msg = String((err && err.message) || err || '');

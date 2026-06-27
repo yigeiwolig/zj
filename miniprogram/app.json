@@ -16,6 +16,7 @@
         "pages/case/case",
         "pages/scan/scan",
         "pages/can-learn/can-learn",
+        "pages/can-learn-admin/can-learn-admin",
         "pages/faq/faq"
       ]
     },
@@ -61,6 +62,15 @@
   "permission": {
     "scope.userLocation": {
       "desc": "用于展示附近维修门店和计算配送距离"
+    },
+    "scope.record": {
+      "desc": "用于语音控制翻板打开、关闭等操作"
+    }
+  },
+  "plugins": {
+    "WechatSI": {
+      "version": "0.3.5",
+      "provider": "wx069ba97219f66d99"
     }
   },
   "requiredPrivateInfos": [

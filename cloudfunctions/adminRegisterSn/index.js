@@ -124,22 +124,27 @@ async function handleCheck(db, _, normalizedSn, productModel) {
     }
   }
 
-  if (preReg && normModel(preReg.productModel) === normModel(productModel)) {
-    return {
-      success: true,
-      showDialog: false,
-      reason: 'already_registered',
-      sn: normalizedSn
-    }
-  }
+  const registeredModel =
+    (preReg && preReg.productModel) ||
+    (device && device.preRegistered && device.productModel) ||
+    ''
 
-  if (preReg && normModel(preReg.productModel) !== normModel(productModel)) {
+  if (registeredModel) {
+    if (normModel(registeredModel) === normModel(productModel)) {
+      return {
+        success: true,
+        showDialog: false,
+        reason: 'already_registered',
+        sn: normalizedSn,
+        registeredModel
+      }
+    }
     return {
       success: true,
       showDialog: true,
       mode: 'change_model',
       sn: normalizedSn,
-      existingModel: preReg.productModel,
+      existingModel: registeredModel,
       targetModel: productModel
     }
   }
@@ -171,7 +176,7 @@ async function handleRegister(db, _, normalizedSn, productModel, deviceName, adm
 
   return {
     success: true,
-    msg: '预登记成功',
+    msg: '绑定成功',
     sn: normalizedSn,
     productModel
   }

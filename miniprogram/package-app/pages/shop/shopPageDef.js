@@ -7,6 +7,7 @@ const app = getApp();
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const hubNav = require('../../../utils/hubNav.js');
+const shareApp = require('../../../utils/shareApp.js');
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js'); 
 const SHOP_MAIN_DOC_ID = 'shopMain';
 /** 列表卡片封面比例 4:3 → padding-bottom = 3/4 = 75% */
@@ -26,6 +27,8 @@ var qqmapsdkDistrict = new QQMapWX({
 const { MUNICIPALITY_DISTRICTS } = require('../../../utils/smartAddressParser.js');
 const checkoutCouponMixin = require('../../../utils/checkoutCouponMixin.js');
 const dbPermissionHint = require('../../../utils/dbPermissionHint.js');
+const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
+const weworkKf = require('../../../utils/weworkCustomerService.js');
 
 module.exports = function createShopPageConfig(opts = {}) {
   const __hubEmbed = !!(opts && opts.hubEmbed);
@@ -670,6 +673,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     const s = { ...series };
     delete s.coverDisplay;
     delete s.compareVideoDisplay;
+    delete s.coverPreview;
     if (Array.isArray(s.options)) {
       s.options = s.options.map(o => {
         if (!o || typeof o !== 'object') return o;
@@ -678,13 +682,227 @@ module.exports = function createShopPageConfig(opts = {}) {
       });
     }
     if (Array.isArray(s.detailImages)) {
-      s.detailImages = s.detailImages.map(d => {
-        if (!d || typeof d !== 'object') return d;
-        const { urlDisplay, ...r } = d;
-        return r;
-      });
+      s.detailImages = this.sanitizeDetailImagesForDb(s.detailImages);
     }
     return s;
+  },
+
+  /** 写入数据库前的详情图：去掉展示字段与本地临时路径 */
+  sanitizeDetailImagesForDb(detailImages) {
+    return (detailImages || [])
+      .map(d => {
+        if (typeof d === 'string') {
+          const url = d.trim();
+          if (!url || url.indexOf('wxfile://') === 0 || url.indexOf('http://tmp') === 0) return null;
+          return { type: 'image', url };
+        }
+        if (!d || typeof d !== 'object') return d;
+        const { urlDisplay, previewUrl, ...r } = d;
+        const item = { ...r };
+        const url = typeof item.url === 'string' ? item.url.trim() : '';
+        if (
+          !url ||
+          url.indexOf('wxfile://') === 0 ||
+          url.indexOf('http://tmp') === 0 ||
+          url.indexOf('https://tmp') === 0
+        ) {
+          return null;
+        }
+        item.url = url;
+        const poster = typeof item.poster === 'string' ? item.poster.trim() : '';
+        if (
+          !poster ||
+          poster.indexOf('wxfile://') === 0 ||
+          poster.indexOf('http://tmp') === 0 ||
+          poster.indexOf('https://tmp') === 0
+        ) {
+          delete item.poster;
+        }
+        return item;
+      })
+      .filter(Boolean);
+  },
+
+  _shopErrText(err) {
+    if (!err) return '';
+    return String(
+      (typeof err === 'string' ? err : '') ||
+        err.message ||
+        err.errMsg ||
+        err.error ||
+        (err.result && err.result.message) ||
+        ''
+    ).trim();
+  },
+
+  _normalizeDetailUrlForSig(url) {
+    let u = String(url || '').trim();
+    if (!u) return '';
+    const q = u.indexOf('?');
+    if (q >= 0) u = u.slice(0, q);
+    const h = u.indexOf('#');
+    if (h >= 0) u = u.slice(0, h);
+    try {
+      u = decodeURIComponent(u);
+    } catch (e) {
+      // keep raw
+    }
+    if (u.indexOf('http://') === 0) u = 'https://' + u.slice(7);
+    const cosKey = cosUpload.extractCosKeyFromPublicUrl(u);
+    if (cosKey) return cosKey.toLowerCase();
+    if (u.indexOf('cloud://') === 0) return u;
+    return u.toLowerCase();
+  },
+
+  _isAndroidDevice() {
+    try {
+      const info = typeof wx.getDeviceInfo === 'function' ? wx.getDeviceInfo() : wx.getSystemInfoSync();
+      return String((info && info.platform) || '').toLowerCase() === 'android';
+    } catch (e) {
+      return false;
+    }
+  },
+
+  _readSeriesDetailImages(docId) {
+    const coll = this.db.collection('shop_series');
+    const pick = (snap) => ((snap && snap.data && snap.data.detailImages) || []);
+    const readDoc = () => coll.doc(docId).field({ detailImages: true }).get().then(pick).catch(() => []);
+    const readWhere = () => coll.where({ _id: docId }).field({ detailImages: true }).limit(1).get()
+      .then((res) => {
+        const row = res && res.data && res.data[0];
+        return (row && row.detailImages) || [];
+      })
+      .catch(() => []);
+    return Promise.all([readDoc(), readWhere()]).then(([fromDoc, fromWhere]) => {
+      if (fromWhere.length >= fromDoc.length) return fromWhere;
+      return fromDoc.length ? fromDoc : fromWhere;
+    });
+  },
+
+  _saveDetailImagesViaCloud(docId, detailImages) {
+    if (!wx.cloud || !wx.cloud.callFunction) {
+      return Promise.reject(new Error('云开发未就绪'));
+    }
+    const sanitized = this.sanitizeDetailImagesForDb(detailImages);
+    return wx.cloud.callFunction({
+      name: 'patchShopSeriesDetailImages',
+      data: {
+        seriesId: docId,
+        detailImages: sanitized
+      }
+    }).then((res) => {
+      const payload = (res && res.result) || {};
+      if (!payload.success) {
+        const err = new Error(payload.error || '详情图保存失败，请部署云函数 patchShopSeriesDetailImages');
+        err.payload = payload;
+        throw err;
+      }
+      return payload.detailImages || sanitized;
+    });
+  },
+
+  _detailImageUrlList(list) {
+    return (list || [])
+      .map(d => {
+        if (typeof d === 'string') return this._normalizeDetailUrlForSig(d);
+        return this._normalizeDetailUrlForSig(d && d.url);
+      })
+      .filter(Boolean)
+      .sort();
+  },
+
+  _detailImagesDbMatch(expected, saved) {
+    const a = this._detailImageUrlList(expected);
+    const b = this._detailImageUrlList(saved);
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  },
+
+  _detailImagesDbContainsUrls(saved, requiredUrls) {
+    const savedSet = new Set(this._detailImageUrlList(saved));
+    const required = (requiredUrls || [])
+      .map(u => this._normalizeDetailUrlForSig(u))
+      .filter(Boolean);
+    if (!required.length) return true;
+    return required.every(u => savedSet.has(u));
+  },
+
+  _detailImagesDbSignature(list) {
+    try {
+      return JSON.stringify(this._detailImageUrlList(list));
+    } catch (e) {
+      return '[]';
+    }
+  },
+
+  /** 写库后读回校验（安卓读回偏慢，多试几次；最终仍失败则信任 update 成功结果） */
+  _verifyDetailImagesInDb(docId, expectedImages, opts = {}) {
+    const attempt = opts.attempt || 0;
+    const rewrote = opts.rewrote === true;
+    const requiredUrls = Array.isArray(opts.requiredUrls) ? opts.requiredUrls : null;
+    const android = this._isAndroidDevice();
+    const delays = android
+      ? [1200, 2500, 4000, 6000, 9000, 12000]
+      : [800, 1800, 3500, 5500];
+    const delay = delays[Math.min(attempt, delays.length - 1)];
+
+    const isMatch = (saved) => {
+      if (requiredUrls && requiredUrls.length) {
+        return this._detailImagesDbContainsUrls(saved, requiredUrls);
+      }
+      return this._detailImagesDbMatch(expectedImages, saved);
+    };
+
+    return new Promise((resolve) => setTimeout(resolve, delay))
+      .then(() => this._readSeriesDetailImages(docId))
+      .then((saved) => {
+        if (isMatch(saved)) {
+          return saved;
+        }
+        if (attempt < delays.length - 1) {
+          return this._verifyDetailImagesInDb(docId, expectedImages, {
+            attempt: attempt + 1,
+            rewrote,
+            requiredUrls
+          });
+        }
+        if (!rewrote) {
+          return this.db.collection('shop_series').doc(docId).update({
+            data: {
+              detailImages: this.sanitizeDetailImagesForDb(expectedImages),
+              updateTime: new Date()
+            }
+          }).then(() =>
+            this._verifyDetailImagesInDb(docId, expectedImages, {
+              attempt: 0,
+              rewrote: true,
+              requiredUrls
+            })
+          );
+        }
+        throw new Error('详情图未写入数据库，请检查网络后重试');
+      });
+  },
+
+  /** 删除商城媒体：cloud:// 走云存储，https 走 COS 桶 */
+  _deleteShopMediaFromCos(url) {
+    const u = String(url || '').trim();
+    if (!u) return Promise.resolve({ skipped: true });
+    if (u.indexOf('cloud://') === 0) {
+      return new Promise((resolve) => {
+        wx.cloud.deleteFile({
+          fileList: [u],
+          complete: () => resolve({ deleted: 1 })
+        });
+      });
+    }
+    return cosUpload.deleteCosObjectsByUrls([u]).catch((err) => {
+      console.error('[shop.js] COS 桶删除失败:', u, err);
+      throw err;
+    });
   },
 
   stripSeriesListForCache(list) {
@@ -951,6 +1169,34 @@ module.exports = function createShopPageConfig(opts = {}) {
       this.data.detailLongPressTimer = null;
     }
     this._teardownScreenshotProtection();
+  },
+
+  onShareAppMessage() {
+    const idx = this.data.currentSeriesIdx;
+    const series = idx >= 0 && this.data.seriesList ? this.data.seriesList[idx] : null;
+    if (series && series.jumpNumber != null) {
+      return shareApp.getShareAppMessage({
+        title: (series.name || shareApp.DEFAULT_TITLE) + ' - MT商城',
+        path: '/package-app/pages/shop/shop?jumpNumber=' + series.jumpNumber
+      });
+    }
+    return shareApp.getShareAppMessage({
+      path: '/package-app/pages/products/products'
+    });
+  },
+
+  onShareTimeline() {
+    const idx = this.data.currentSeriesIdx;
+    const series = idx >= 0 && this.data.seriesList ? this.data.seriesList[idx] : null;
+    if (series && series.jumpNumber != null) {
+      return shareApp.getShareTimeline({
+        title: (series.name || shareApp.DEFAULT_TITLE) + ' - MT商城',
+        query: 'jumpNumber=' + series.jumpNumber
+      });
+    }
+    return shareApp.getShareTimeline({
+      path: '/package-app/pages/products/products'
+    });
   },
 
   /** 离开商城页（如返回 PRODUCTS）时写入全局，便于下次 navigateTo 恢复详情弹层 */
@@ -1348,6 +1594,8 @@ module.exports = function createShopPageConfig(opts = {}) {
       }
       // 3. 如果找到了记录，说明你是受信任的管理员
       if (adminCheck.data.length > 0) {
+        screenshotExempt.markGuanliyuanCache(true);
+        screenshotExempt.allowScreenCaptureIfExempt();
         this.setData({ isAuthorized: true });
         try { wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized: true, ts: Date.now() }); } catch (e) {}
     } else {
@@ -2491,26 +2739,28 @@ module.exports = function createShopPageConfig(opts = {}) {
   // ========================================================
   // 保存产品系列到云端
   // ========================================================
-  saveSeriesToCloud(series, isNew = false) {
+  saveSeriesToCloud(series, isNew = false, saveOpts = {}) {
     if (!this.db) {
       console.error('[shop.js] saveSeriesToCloud: this.db 不存在！');
       return Promise.reject(new Error('数据库未初始化'));
     }
-    
+
     const data = {
       ...this.stripOneSeriesEphemeral(series),
       updateTime: new Date()
     };
-    // 【修复】移除 _id 和 _openid，因为它们是数据库自动管理的字段
     delete data._id;
     delete data._openid;
+
+    const detailImages = this.sanitizeDetailImagesForDb(data.detailImages);
+    data.detailImages = detailImages;
+
     if (isNew || !series._id) {
       return this.db.collection('shop_series').add({ data }).then(res => {
         series._id = res._id;
         if (this.data.currentSeriesIdx >= 0) {
           this.setData({ [`seriesList[${this.data.currentSeriesIdx}]`]: series });
         }
-        // 🔴 刷新缓存
         this.refreshShopDataCacheAfterSave();
         return res;
       }).catch(err => {
@@ -2520,79 +2770,67 @@ module.exports = function createShopPageConfig(opts = {}) {
         console.error('[shop.js] ❌ 添加产品系列失败:', err);
         throw err;
       });
-    } else {
-      // 【关键修复】对于已存在的文档，直接使用 update 方法
-      // update 方法专门用于更新已存在的文档，不会产生重复键错误
-      // 先单独更新 cover 字段（最关键）
-      return this.db.collection('shop_series').doc(series._id).update({
-        data: { cover: data.cover }
-      }).then(coverRes => {
-        // 更新其他字段（除了 cover）
-        const otherData = { ...data };
-        delete otherData.cover;
-        
-        const updateOtherPromise = Object.keys(otherData).length > 0 
-          ? this.db.collection('shop_series').doc(series._id).update({
-              data: otherData
-            }).then(otherRes => {
-              return otherRes;
-            }).catch(otherErr => {
-              console.error('[shop.js] ⚠️ 其他字段更新失败（非关键）:', otherErr);
-              // 其他字段更新失败不影响，继续执行
-              return { updated: 0 };
-            })
-          : Promise.resolve({ updated: 0 });
-        
-        return updateOtherPromise.then(() => {
-          // 【关键修复】多次重试验证直到成功
-          const verifyWithRetry = (retryCount = 0, maxRetries = 5) => {
-            return new Promise((resolve) => {
-              setTimeout(() => {
-                this.db.collection('shop_series').doc(series._id).get().then(verifyRes => {
-                  const isMatch = verifyRes.data?.cover === data.cover;
-                  if (isMatch) {
-                    // 🔴 刷新缓存
-                    this.refreshShopDataCacheAfterSave();
-                    resolve({ success: true, verified: verifyRes.data, retried: retryCount > 0 });
-                  } else if (retryCount < maxRetries) {
-                    // 如果验证失败，再次尝试更新
-                    return this.db.collection('shop_series').doc(series._id).update({
-                      data: { cover: data.cover }
-                    }).then(() => {
-                      return verifyWithRetry(retryCount + 1, maxRetries);
-                    }).catch(updateErr => {
-                      console.error('[shop.js] 重试更新失败:', updateErr);
-                      return verifyWithRetry(retryCount + 1, maxRetries);
-                    });
-                  } else {
-                    console.error('[shop.js] ❌ 验证失败，已达到最大重试次数');
-                    console.error('[shop.js] 最终读取到的 cover:', verifyRes.data?.cover);
-                    console.error('[shop.js] 期望的 cover:', data.cover);
-                    // 即使验证失败，也返回成功（因为更新操作本身成功了）
-                    resolve({ success: true, verified: verifyRes.data, retried: true, warning: '验证失败但更新操作已执行' });
-                  }
-                }).catch(verifyErr => {
-                  console.error('[shop.js] ⚠️ 验证时出错:', verifyErr);
-                  if (retryCount < maxRetries) {
-                    return verifyWithRetry(retryCount + 1, maxRetries);
-                  } else {
-                    resolve({ success: true, verified: null, retried: true });
-                  }
-                });
-              }, 500 * (retryCount + 1)); // 每次重试等待时间递增
-            });
-          };
-          
-          return verifyWithRetry();
+    }
+
+    const docId = series._id;
+    const rest = { ...data };
+    delete rest.detailImages;
+
+    const updateDoc = (patch) =>
+      this.db.collection('shop_series').doc(docId).update({ data: patch });
+
+    const verifyOpts = {};
+    if (Array.isArray(saveOpts.verifyAddedUrls) && saveOpts.verifyAddedUrls.length) {
+      verifyOpts.requiredUrls = saveOpts.verifyAddedUrls;
+    }
+
+    const saveDetailImages = () =>
+      this._saveDetailImagesViaCloud(docId, detailImages).then((savedImages) => {
+        if (verifyOpts.requiredUrls && verifyOpts.requiredUrls.length) {
+          if (!this._detailImagesDbContainsUrls(savedImages, verifyOpts.requiredUrls)) {
+            throw new Error('详情图未写入数据库，请检查网络后重试');
+          }
+        } else if (!this._detailImagesDbMatch(detailImages, savedImages)) {
+          throw new Error('详情图未写入数据库，请检查网络后重试');
+        }
+        return savedImages;
+      });
+
+    if (saveOpts.detailImagesOnly) {
+      return saveDetailImages()
+        .then(() => {
+          this.refreshShopDataCacheAfterSave();
+          return { success: true };
+        })
+        .catch(err => {
+          if (dbPermissionHint.isPermissionDenied(err)) {
+            dbPermissionHint.toastPermissionDenied('shop_series');
+          }
+          console.error('[shop.js] ❌ 保存详情图失败:', err);
+          throw err;
         });
-      }).catch(updateErr => {
-        if (dbPermissionHint.isPermissionDenied(updateErr)) {
+    }
+
+    return saveDetailImages()
+      .then(() => {
+        const keys = Object.keys(rest);
+        if (!keys.length) return null;
+        return updateDoc(rest).catch((err) => {
+          console.warn('[shop.js] detailImages 已写入，其余字段保存失败:', err);
+          return null;
+        });
+      })
+      .then(() => {
+        this.refreshShopDataCacheAfterSave();
+        return { success: true };
+      })
+      .catch(err => {
+        if (dbPermissionHint.isPermissionDenied(err)) {
           dbPermissionHint.toastPermissionDenied('shop_series');
         }
-        console.error('[shop.js] ❌ update 操作失败:', updateErr);
-        throw updateErr;
+        console.error('[shop.js] ❌ 保存产品系列失败:', err);
+        throw err;
       });
-    }
   },
 
   // ========================================================
@@ -2786,22 +3024,11 @@ module.exports = function createShopPageConfig(opts = {}) {
     saveList.splice(index, 1);
     this.setTopMediaListForRender(saveList)
       .then(() => this.saveTopMediaToCloud(saveList))
+      .then(() => this._deleteShopMediaFromCos(oldFileID))
       .catch((err) => {
-        console.error('[shop.js] adminDelTopMedia 保存失败:', err);
+        console.error('[shop.js] adminDelTopMedia 保存/删除失败:', err);
         this.showAutoToast('提示', '删除后保存失败，请重试');
       });
-    
-    // 🔴 删除云存储中的文件
-    if (oldFileID && oldFileID.startsWith('cloud://')) {
-      wx.cloud.deleteFile({
-        fileList: [oldFileID],
-        success: () => {
-        },
-        fail: (err) => {
-          console.error('[shop.js] 删除顶部媒体失败:', err);
-        }
-      });
-    }
   },
 
   adminToggleTopVideoAutoplay(e) {
@@ -3040,7 +3267,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     // 如果正在拖拽，保存到云端
     if (this.data.isDetailDragging) {
       const currentSeries = this.data.currentSeries;
-      this.saveSeriesToCloud(currentSeries);
+      this.saveSeriesToCloud(currentSeries, false, { detailImagesOnly: true });
     }
     
     // 🔴 修复：无论是否在拖拽状态，都要重置所有状态，防止卡住
@@ -4172,6 +4399,31 @@ module.exports = function createShopPageConfig(opts = {}) {
     });
   },
 
+  _detailUploadFailToast(err, done) {
+    const msg = this._shopErrText(err);
+    if (msg.indexOf('详情图未写入') !== -1 || msg.indexOf('数据库') !== -1) {
+      this.showAutoToast('提示', '图片已上传但保存失败，请重试');
+      return;
+    }
+    if (done > 0) {
+      this.showAutoToast('提示', `部分成功，已添加 ${done} 项`);
+      return;
+    }
+    if (msg.indexOf('合法域名') !== -1 || msg.indexOf('domain list') !== -1) {
+      this.showAutoToast('提示', 'COS 域名未配置，请联系管理员');
+      return;
+    }
+    if (msg.indexOf('getCosUploadUrl') !== -1 || msg.indexOf('云函数') !== -1) {
+      this.showAutoToast('提示', '上传服务未就绪，请部署云函数后重试');
+      return;
+    }
+    if (msg.indexOf('无法读取文件大小') !== -1 || msg.indexOf('读取本地文件') !== -1) {
+      this.showAutoToast('提示', '读取图片失败，请换一张或重选');
+      return;
+    }
+    this.showAutoToast('提示', msg ? `上传失败：${msg.slice(0, 48)}` : '上传失败');
+  },
+
   // 修改 2：详情页添加媒体（支持视频+图片）
   adminAddDetailMedia() {
     const cur = (this.data.currentSeries && this.data.currentSeries.detailImages) || [];
@@ -4186,7 +4438,11 @@ module.exports = function createShopPageConfig(opts = {}) {
         this.showMyLoading(`上传中 0/${files.length}`);
         let done = 0;
         try {
-          const s = this.data.currentSeries;
+          const idx = this.data.currentSeriesIdx;
+          const s = (idx >= 0 && this.data.seriesList[idx]) || this.data.currentSeries;
+          if (!s || !s._id) {
+            throw new Error('商品数据未加载完成，请返回后重试');
+          }
           if (!s.detailImages) s.detailImages = [];
           const added = [];
           for (let i = 0; i < files.length; i++) {
@@ -4211,8 +4467,6 @@ module.exports = function createShopPageConfig(opts = {}) {
             added.push({
               type: file.fileType,
               url: fileID,
-              previewUrl: file.fileType === 'image' ? this.buildLowQualityUrl(fileID) : '',
-              poster: file.fileType === 'video' ? (file.thumbTempFilePath || '') : '',
               autoplay: false,
               isPinned: false,
               ...(file.fileType === 'video' ? { aspectPaddingPercent } : {})
@@ -4222,6 +4476,10 @@ module.exports = function createShopPageConfig(opts = {}) {
           }
           const updatedDetailImages = [...s.detailImages, ...added];
           const updatedSeries = { ...s, detailImages: updatedDetailImages };
+      await this.saveSeriesToCloud(updatedSeries, false, {
+        detailImagesOnly: true,
+        verifyAddedUrls: added.map(item => item.url)
+      });
           const hydratedList = await this.hydrateSeriesCloudDisplayUrls([updatedSeries]);
           const merged = hydratedList[0] || updatedSeries;
           this.setData({
@@ -4229,7 +4487,6 @@ module.exports = function createShopPageConfig(opts = {}) {
             [`seriesList[${this.data.currentSeriesIdx}]`]: merged,
             [`seriesList[${this.data.currentSeriesIdx}].detailImages`]: merged.detailImages
           });
-          await this.saveSeriesToCloud(merged);
           if (this.data.isAdmin) {
             this.setData({ showFooterBar: true });
           } else {
@@ -4240,7 +4497,7 @@ module.exports = function createShopPageConfig(opts = {}) {
         } catch (err) {
           console.error('[shop.js] adminAddDetailMedia 上传失败:', err);
           this.hideMyLoading();
-          this.showAutoToast('提示', done > 0 ? `部分成功，已添加 ${done} 项` : '上传失败');
+          this._detailUploadFailToast(err, done);
         } finally {
           if (this.data.detailLongPressTimer) {
             clearTimeout(this.data.detailLongPressTimer);
@@ -4274,43 +4531,49 @@ module.exports = function createShopPageConfig(opts = {}) {
       }
     });
   },
-  adminDelDetailImg(e) {
+  async adminDelDetailImg(e) {
     const idx = e.currentTarget.dataset.index;
     const s = this.data.currentSeries;
-    
-    // 【修复】确保 detailImages 数组存在
+
     if (!s.detailImages || idx >= s.detailImages.length) {
       this.showAutoToast('提示', '删除失败');
       return;
     }
-    
+
     const deletedItem = s.detailImages[idx];
-    const oldFileID = deletedItem.url; // 🔴 保存要删除的图片/视频ID
-    
-    // 【修复】使用深拷贝创建新数组
+    const oldFileID = deletedItem.url;
     const updatedDetailImages = s.detailImages.filter((item, i) => i !== idx);
     const updatedSeries = { ...s, detailImages: updatedDetailImages };
-    
-    // 【修复】使用明确的路径更新
-    this.setData({ 
+
+    this.showMyLoading('删除中...');
+    this.setData({
       currentSeries: updatedSeries,
       [`seriesList[${this.data.currentSeriesIdx}]`]: updatedSeries,
       [`seriesList[${this.data.currentSeriesIdx}].detailImages`]: updatedDetailImages
     });
-    
-    // 【修复】保存到云端
-    this.saveSeriesToCloud(updatedSeries);
-    
-    // 🔴 删除云存储中的文件
-    if (oldFileID && oldFileID.startsWith('cloud://')) {
-      wx.cloud.deleteFile({
-        fileList: [oldFileID],
-        success: () => {
-        },
-        fail: (err) => {
-          console.error('[shop.js] 删除详情图片/视频失败:', err);
-        }
+
+    try {
+      await this.saveSeriesToCloud(updatedSeries, false, { detailImagesOnly: true });
+      try {
+        await this._deleteShopMediaFromCos(oldFileID);
+      } catch (cosErr) {
+        console.error('[shop.js] 详情图 COS 删除失败:', cosErr);
+        this.hideMyLoading();
+        this.showAutoToast('提示', '已从商品移除，但存储桶文件未删，请稍后重试');
+        return;
+      }
+      this.hideMyLoading();
+      this.showAutoToast('成功', '已删除');
+    } catch (err) {
+      console.error('[shop.js] 删除详情图保存失败:', err);
+      this.hideMyLoading();
+      this.setData({
+        currentSeries: s,
+        [`seriesList[${this.data.currentSeriesIdx}]`]: s,
+        [`seriesList[${this.data.currentSeriesIdx}].detailImages`]: s.detailImages
       });
+      this.showAutoToast('提示', '删除未保存，请重试');
+      return;
     }
   },
 
@@ -6576,6 +6839,14 @@ module.exports = function createShopPageConfig(opts = {}) {
   },
 
   // ========================================================
+  // 售前咨询（企业微信客服）
+  // ========================================================
+  openPreSalesCustomerService() {
+    const series = this.data.currentSeries || {};
+    weworkKf.openPreSalesKf({ series });
+  },
+
+  // ========================================================
   // 3. 新增：购物车逻辑
   // ========================================================
   
@@ -8111,6 +8382,10 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   // 🔴 初始化截屏/录屏保护
   initScreenshotProtection() {
+    if (screenshotExempt.isScreenshotBanExempt(this)) {
+      screenshotExempt.allowScreenCaptureIfExempt();
+      return;
+    }
     // 物理防线：确保录屏、截屏出来的全是黑屏
     if (wx.setVisualEffectOnCapture) {
       wx.setVisualEffectOnCapture({
@@ -8205,6 +8480,8 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   // 🔴 处理截屏/录屏拦截
   async handleIntercept(type) {
+    if (screenshotExempt.isScreenshotBanExempt(this)) return;
+
     // 🔴 关键修复：立即清除本地授权状态，防止第二次截屏时被自动放行
     wx.removeStorageSync('has_permanent_auth');
     

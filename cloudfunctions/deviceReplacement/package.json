@@ -1,0 +1,9 @@
+{
+  "name": "deviceReplacement",
+  "version": "1.0.0",
+  "description": "售后换机 SN 锁定与替换",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

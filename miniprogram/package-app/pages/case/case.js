@@ -1,13 +1,20 @@
 const app = getApp();
 const db = wx.cloud.database();
-const cosUpload = require('../../../utils/cosUpload.js');
 const dbPermissionHint = require('../../../utils/dbPermissionHint.js');
-const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const { CASE_MODEL_OPTIONS } = require('../../../utils/productModels.js');
-var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js'); 
-var qqmapsdk = new QQMapWX({
-    key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
-});
+const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
+
+let _cosUploadMod;
+function getCosUpload() {
+  if (!_cosUploadMod) _cosUploadMod = require('../../../utils/cosUpload.js');
+  return _cosUploadMod;
+}
+
+let _shopImagePrepareMod;
+function getShopImagePrepare() {
+  if (!_shopImagePrepareMod) _shopImagePrepareMod = require('../../../utils/shopImagePrepare.js');
+  return _shopImagePrepareMod;
+}
 
 // 🔴 静默发送调试日志（不显示错误）
 // ⚠️ 性能优化：调试日志上报在正式环境关闭，避免多余的 HTTP 请求拖慢加载
@@ -71,18 +78,27 @@ Page({
     showVideoPlayer: false, 
     currentVideo: null,     
     videoWatermarkNickname: '', // 播放器昵称水印（淡色）
-    /** 全屏自定义控件（不缩放视频，仅抬高 cover-view） */
+    /** 全屏自定义控件（叠在 video 之上，不嵌在 video 内） */
     caseFullscreenDuration: 0,
     caseFullscreenProgressPercent: 0,
+    caseFullscreenProgressRatio: 0,
     caseFullscreenCurrentStr: '00:00',
     caseFullscreenDurationStr: '00:00',
     caseFullscreenPaused: false,
+    /** 播放到结尾：居中显示重播，不自动退出 */
+    caseFullscreenEnded: false,
+    /** 全屏视频缓冲中（播放中短暂卡顿）；此期间不播 BGM */
+  caseFullscreenBuffering: false,
+  /** 打开后长时间未出画：顶部 MT 加载条（非常规首屏必显） */
+  caseFullscreenInitialLoading: false,
+  /** 全屏水印/进度条层 */
+  caseFullscreenChromeReady: false,
     /** 全屏退场：translateY(px)，下拉跟手与动画共用 */
     caseFullscreenTy: 0,
     caseFullscreenNoTrans: true,
     /** 全屏退场动画中：顶栏保持挂载并提前露出，避免关闭后整页重绘卡顿 */
     caseFullscreenExiting: false,
-    /** 先隐藏 video 内 cover-view（原生层卸载慢于外层 view） */
+    /** 退场时先隐藏 chrome 层 */
     caseFullscreenCoverHidden: false,
 
     // --- 🆕 搜索栏状态 ---
@@ -217,8 +233,10 @@ Page({
       return rows.map((item) => {
         const next = { ...item };
         if (typeof next.videoUrl === 'string' && next.videoUrl.indexOf('cloud://') === 0) {
-          const resolved = map[next.videoUrl] || next.videoUrl;
-          next.videoUrl = this._swapCosHost(resolved) || resolved;
+          const cloudId = next.videoUrl;
+          if (!next.originalVideoRef) next.originalVideoRef = cloudId;
+          const resolved = map[cloudId] || cloudId;
+          next.videoUrl = this._swapCosHost(resolved, { forVideo: true }) || resolved;
         }
         if (typeof next.coverFull === 'string' && next.coverFull.indexOf('cloud://') === 0) {
           const resolved = map[next.coverFull] || next.coverFull;
@@ -235,8 +253,9 @@ Page({
     }
   },
 
-  _swapCosHost(url) {
+  _swapCosHost(url, opts) {
     if (!url || typeof url !== 'string') return url;
+    const forVideo = !!(opts && opts.forVideo);
     let parsed;
     try {
       parsed = new URL(url);
@@ -246,7 +265,7 @@ Page({
     const host = parsed.hostname || '';
     // 兼容历史错误链接：把云开发静态域名的 video_go 资源切到 COS 桶域名
     if (/\.tcb\.qcloud\.la$/i.test(host)) {
-      parsed.hostname = 'mt-1392958388.cos.accelerate.myqcloud.com';
+      parsed.hostname = 'mt-1392958388.cos.ap-guangzhou.myqcloud.com';
       return parsed.toString();
     }
     const acc = host.match(/^([^.]+)\.cos\.accelerate\.myqcloud\.com$/i);
@@ -255,11 +274,46 @@ Page({
       return parsed.toString();
     }
     const region = host.match(/^([^.]+)\.cos\.(ap-[^.]+)\.myqcloud\.com$/i);
-    if (region && region[1]) {
+    if (region && region[1] && !forVideo) {
       parsed.hostname = `${region[1]}.cos.accelerate.myqcloud.com`;
       return parsed.toString();
     }
     return url;
+  },
+
+  _buildRetryVideoUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+    if (url.indexOf('cloud://') === 0) return url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) return url;
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (e) {
+      return url;
+    }
+    const host = parsed.hostname || '';
+    const acc = host.match(/^([^.]+)\.cos\.accelerate\.myqcloud\.com$/i);
+    const region = host.match(/^([^.]+)\.cos\.(ap-[^.]+)\.myqcloud\.com$/i);
+    if (acc && acc[1]) {
+      parsed.hostname = `${acc[1]}.cos.ap-guangzhou.myqcloud.com`;
+    } else if (region && region[1]) {
+      parsed.hostname = `${region[1]}.cos.accelerate.myqcloud.com`;
+    }
+    const swapped = parsed.toString();
+    const joiner = swapped.indexOf('?') === -1 ? '?' : '&';
+    return `${swapped}${joiner}rt=${Date.now()}`;
+  },
+
+  _isWxDevtools() {
+    try {
+      const info = wx.getAppBaseInfo && wx.getAppBaseInfo();
+      if (info && info.platform === 'devtools') return true;
+    } catch (e) {}
+    try {
+      const sys = wx.getSystemInfoSync();
+      if (sys && sys.platform === 'devtools') return true;
+    } catch (e) {}
+    return false;
   },
 
   async _buildRetryImageUrl(url) {
@@ -316,10 +370,15 @@ Page({
     const key = cur._id || cur.videoUrl;
     if (this._caseVideoRetryMap[key]) return;
     this._caseVideoRetryMap[key] = true;
-    const nextUrl = this._buildRetryImageUrl(cur.videoUrl);
-    Promise.resolve(nextUrl).then((retryUrl) => {
-      if (!retryUrl || retryUrl === cur.videoUrl) return;
-      this.setData({ 'currentVideo.videoUrl': retryUrl });
+    const retryUrl = this._buildRetryVideoUrl(cur.videoUrl);
+    if (!retryUrl || retryUrl === cur.videoUrl) return;
+    this.setData({ 'currentVideo.videoUrl': retryUrl }, () => {
+      wx.nextTick(() => {
+        try {
+          const videoCtx = wx.createVideoContext('caseFullscreenVideo', this);
+          if (videoCtx && typeof videoCtx.play === 'function') videoCtx.play();
+        } catch (e) {}
+      });
     });
   },
 
@@ -344,39 +403,55 @@ Page({
   },
 
   onLoad() {
-    // 🔴 更新页面访问统计
-    const app = getApp();
-    if (app && app.globalData && app.globalData.updatePageVisit) {
-      app.globalData.updatePageVisit('case');
+    const appInst = getApp();
+    if (appInst && appInst.globalData && appInst.globalData.updatePageVisit) {
+      appInst.globalData.updatePageVisit('case');
     }
-    
-    // 🔴 计算屏幕适配信息（状态栏和导航栏高度）
     this.calcNavBarInfo();
-    
+    if (this.data.showIntro) {
+      this._playCasePromoDialogIn('introAnimIn');
+    }
+    wx.nextTick(() => {
+      setTimeout(() => this._initCasePageDeferred(), 0);
+    });
+  },
+
+  /** 延后初始化，避免 onLoad 阻塞 navigateTo 导致超时 */
+  _initCasePageDeferred() {
+    if (this._pageDestroyed) return;
+
     this.ctx = wx.createCameraContext();
-    
-    // 加载拍摄指南视频
     this.loadShootingGuideVideo();
     this.loadCaseBgmAudio();
-
-    // 🔴 物理防线：确保录屏、截屏出来的全是黑屏 (这是最稳的)
-    if (wx.setVisualEffectOnCapture) {
+    if (wx.setInnerAudioOption) {
       try {
-      wx.setVisualEffectOnCapture({
-        visualEffect: 'hidden',
+        wx.setInnerAudioOption({
+          mixWithOther: true,
+          obeyMuteSwitch: false,
+          speakerOn: true
+        });
+      } catch (e) {}
+    }
+
+    if (wx.setVisualEffectOnCapture && !screenshotExempt.isScreenshotBanExempt(this)) {
+      try {
+        wx.setVisualEffectOnCapture({
+          visualEffect: 'hidden',
           success: () => console.log('🛡️ 硬件级防偷拍锁定'),
           fail: (err) => {
             console.warn('⚠️ setVisualEffectOnCapture 失败（可能是预览模式）:', err);
           }
-      });
+        });
       } catch (e) {
         console.warn('⚠️ setVisualEffectOnCapture 不支持（可能是预览模式）:', e);
       }
-    } else {
+    } else if (!wx.setVisualEffectOnCapture) {
       console.warn('⚠️ setVisualEffectOnCapture API 不存在（可能是预览模式）');
+    } else {
+      screenshotExempt.allowScreenCaptureIfExempt();
     }
 
-    // 🔴 截屏/录屏监听（保存引用，onUnload 注销避免重复注册）
+    if (!screenshotExempt.isScreenshotBanExempt(this)) {
     try {
       this._onCaptureScreenHandler = () => {
         console.log('🛡️ [case] 检测到截屏');
@@ -397,6 +472,7 @@ Page({
       } catch (e) {
         console.warn('⚠️ onUserScreenRecord 不支持（可能是预览模式）:', e);
       }
+    }
     } else {
       console.warn('⚠️ onUserScreenRecord API 不存在（可能是预览模式）');
     }
@@ -406,13 +482,9 @@ Page({
     this.loadUserDevices();
     this.detectEnvironment();
     this.refreshVideoWatermarkNickname();
-    
+
     setTimeout(() => { this.initTabPosition(); }, 500);
     this._scheduleCaseMainScrollLayout();
-
-    if (this.data.showIntro) {
-      this._playCasePromoDialogIn('introAnimIn');
-    }
   },
 
   /** 免单抽奖活动截止日（含当天） */
@@ -464,7 +536,9 @@ Page({
         success: (res) => {
           if (res.state === 'on' || res.recording) {
               console.log('🛡️ [case] onShow 检测到录屏');
-            this.handleIntercept('record');
+            if (!screenshotExempt.isScreenshotBanExempt(this)) {
+              this.handleIntercept('record');
+            }
           }
           },
           fail: (err) => {
@@ -506,6 +580,7 @@ Page({
 
   onHide() {
     this._forceStopCaseBgm();
+    this._stopCaseFsProgressUiLoop();
     if (this.data.showVideoPlayer) {
       this._stopCaseFullscreenVideoPlayback();
     }
@@ -541,9 +616,8 @@ Page({
     return sb + nb + adminH + tabH + searchH + 4;
   },
 
-  /** 只量可见底边：有搜索框量搜索框，否则量顶栏，避免 chrome 含多余 padding 导致留白过大 */
+  /** 只量可见底边：有搜索框量搜索框，否则量顶栏 */
   _syncCaseMainScrollLayout() {
-    if (this.data.showVideoPlayer && !this.data.caseFullscreenExiting) return;
     wx.nextTick(() => {
       const q = this.createSelectorQuery();
       if (this.data.showSearchBar) {
@@ -706,7 +780,7 @@ Page({
       const cloudListWithIndex = rawList.map((item, idx) => {
           const rawVideo = item.videoFileID || item.videoUrl || item.videoURL || '';
           const rawCover = item.coverFileID || item.coverUrl || item.thumbFileID || item.thumbUrl || '';
-          const videoUrl = this._swapCosHost(rawVideo || '') || rawVideo || '';
+          const videoUrl = this._swapCosHost(rawVideo || '', { forVideo: true }) || rawVideo || '';
           const coverFull = this._swapCosHost(rawCover || '') || rawCover || null;
           const coverThumb = coverFull ? this.buildLowQualityUrl(coverFull) : null;
           const vehicleName = item.vehicleName || item.title || '';
@@ -719,6 +793,7 @@ Page({
             categoryName: item.categoryName || null,
             color: this.getRandomColor(),
             videoUrl: videoUrl,
+            originalVideoRef: rawVideo,
             coverUrl: coverFull,
             coverFull: coverFull,
             coverThumb: coverThumb,
@@ -770,6 +845,8 @@ Page({
       }
       
       if (adminCheck.data.length > 0) {
+        screenshotExempt.markGuanliyuanCache(true);
+        screenshotExempt.allowScreenCaptureIfExempt();
         this.setData({ isAuthorized: true });
       }
     } catch (err) {
@@ -1455,64 +1532,96 @@ Page({
     });
   },
 
-  // [新增] 下载视频到相册
-  downloadPending(e) {
-    const fileID = e.currentTarget.dataset.fileid;
-    if (!fileID) return;
-
-    // 🔴 修复：获取原始 fileID（用于下载）
-    const itemId = e.currentTarget.dataset.id;
-    const item = this.data.pendingList.find(i => i._id === itemId);
-    const originalFileID = item?.originalFileID || fileID; // 如果有原始 fileID 则使用，否则使用传入的
-    
+  /** 管理员：下载视频到相册（支持 cloud:// 与 COS/HTTP） */
+  _downloadVideoRefToAlbum(playUrl, originalRef) {
+    const playRef = String(playUrl || '').trim();
+    const origRef = String(originalRef || playRef || '').trim();
+    if (!playRef && !origRef) {
+      this._showCustomToast('暂无视频地址', 'none');
+      return;
+    }
+    if (this._caseVideoDownloading) return;
+    this._caseVideoDownloading = true;
     getApp().showLoading({ title: '下载中...', mask: true });
 
-    // 🔴 修复：判断是云存储路径还是临时 URL
-    if (originalFileID && originalFileID.startsWith('cloud://')) {
-      // 云存储路径：使用 wx.cloud.downloadFile
+    const fail = (err, msg) => {
+      this._caseVideoDownloading = false;
+      getApp().hideLoading();
+      if (err) console.error('❌ [下载] 失败:', err);
+      this._showCustomToast(msg || '下载文件失败', 'none');
+    };
+
+    const done = (tempFilePath) => {
+      this._caseVideoDownloading = false;
+      this.saveVideoToAlbum(tempFilePath);
+    };
+
+    if (origRef.startsWith('cloud://')) {
       wx.cloud.downloadFile({
-        fileID: originalFileID,
-        success: async (res) => {
-          this.saveVideoToAlbum(res.tempFilePath);
-        },
-        fail: err => {
-          getApp().hideLoading();
-          console.error('❌ [下载] 云存储下载失败:', err);
-          this._showCustomToast('下载文件失败', 'none');
-        }
+        fileID: origRef,
+        success: (res) => done(res.tempFilePath),
+        fail: (err) => fail(err)
       });
-    } else if (fileID.startsWith('http://') || fileID.startsWith('https://')) {
-      // 临时 URL：直接下载
-      wx.downloadFile({
-        url: fileID,
-        success: res => {
-          if (res.statusCode === 200) {
-            this.saveVideoToAlbum(res.tempFilePath);
-          } else {
-            getApp().hideLoading();
-            this._showCustomToast('下载失败', 'none');
-          }
-        },
-        fail: err => {
-          getApp().hideLoading();
-          console.error('❌ [下载] 临时 URL 下载失败:', err);
-          this._showCustomToast('下载文件失败', 'none');
-        }
-      });
-    } else {
-      // 其他情况：尝试作为云存储路径
-      wx.cloud.downloadFile({
-        fileID: originalFileID,
-        success: res => {
-          this.saveVideoToAlbum(res.tempFilePath);
-        },
-        fail: err => {
-          getApp().hideLoading();
-          console.error('❌ [下载] 下载失败:', err);
-          this._showCustomToast('下载文件失败', 'none');
-        }
-      });
+      return;
     }
+
+    const httpUrl = playRef.startsWith('http') ? playRef : (origRef.startsWith('http') ? origRef : '');
+    if (httpUrl) {
+      wx.downloadFile({
+        url: httpUrl,
+        success: (res) => {
+          if (res.statusCode === 200) done(res.tempFilePath);
+          else fail(null, '下载失败');
+        },
+        fail: (err) => fail(err)
+      });
+      return;
+    }
+
+    if (playRef.startsWith('cloud://')) {
+      wx.cloud.downloadFile({
+        fileID: playRef,
+        success: (res) => done(res.tempFilePath),
+        fail: (err) => fail(err)
+      });
+      return;
+    }
+
+    fail(null, '无法识别的视频地址');
+  },
+
+  downloadPending(e) {
+    if (!this.data.isAdmin) return;
+    const fileID = e.currentTarget.dataset.fileid;
+    if (!fileID) return;
+    const itemId = e.currentTarget.dataset.id;
+    const item = this.data.pendingList.find(i => i._id === itemId);
+    const originalFileID = (item && item.originalFileID) || fileID;
+    this._downloadVideoRefToAlbum(fileID, originalFileID);
+  },
+
+  downloadOfficialCase(e) {
+    if (e) {
+      e.stopPropagation && e.stopPropagation();
+    }
+    if (!this.data.isAdmin) return;
+    const id = e.currentTarget.dataset.id;
+    const item = this.data.displayList.find(i => i._id === id);
+    if (!item || !item.videoUrl) {
+      this._showCustomToast('暂无视频资源', 'none');
+      return;
+    }
+    this._downloadVideoRefToAlbum(item.videoUrl, item.originalVideoRef || item.videoFileID);
+  },
+
+  downloadCurrentFullscreenVideo() {
+    if (!this.data.isAdmin) return;
+    const v = this.data.currentVideo;
+    if (!v || !v.videoUrl) {
+      this._showCustomToast('暂无视频资源', 'none');
+      return;
+    }
+    this._downloadVideoRefToAlbum(v.videoUrl, v.originalVideoRef || v.videoFileID);
   },
   
   // 🔴 新增：保存视频到相册的通用方法
@@ -1520,10 +1629,12 @@ Page({
     wx.saveVideoToPhotosAlbum({
       filePath: tempFilePath,
       success: () => {
+        this._caseVideoDownloading = false;
         getApp().hideLoading();
         this._showCustomToast('已保存到相册', 'success');
       },
       fail: (err) => {
+        this._caseVideoDownloading = false;
         getApp().hideLoading();
         console.error('❌ [保存] 保存到相册失败:', err);
         // 如果用户拒绝授权，提示去设置
@@ -1974,7 +2085,7 @@ Page({
         // 1. 先读取旧的视频 fileID
         db.collection('config').doc('shooting_guide').get().then(oldRes => {
           const oldFileID = oldRes.data && oldRes.data.videoFileID;
-          cosUpload
+          getCosUpload()
             .uploadVideoToCos(tempFilePath, 'case/shooting-guide', {
               knownSize: typeof res.size === 'number' ? res.size : undefined
             })
@@ -2020,7 +2131,7 @@ Page({
             });
         }).catch(() => {
           console.log('📝 未找到旧配置，直接上传新视频');
-          cosUpload
+          getCosUpload()
             .uploadVideoToCos(tempFilePath, 'case/shooting-guide', {
               knownSize: typeof res.size === 'number' ? res.size : undefined
             })
@@ -2146,8 +2257,15 @@ Page({
     } else if (this._caseBgmAudio) {
       this._caseBgmAudio.src = src;
     }
-    if (this._caseBgmSessionActive && this._isCaseBgmPlaybackAllowed()) {
-      this._scheduleCaseBgmStart();
+    if (this._caseBgmSessionActive && this._caseBgmStartedForCurrent) {
+      this._syncCaseBgmPlayback();
+    } else if (
+      this._caseBgmSessionActive &&
+      this.data.showVideoPlayer &&
+      !this.data.caseFullscreenPaused &&
+      !this.data.caseFullscreenInitialLoading
+    ) {
+      this._startCaseBgmAfterVideoReady(true);
     }
   },
 
@@ -2160,10 +2278,13 @@ Page({
   _isCaseBgmPlaybackAllowed() {
     return !!(
       this._caseBgmSessionActive &&
+      this._caseBgmStartedForCurrent &&
       this.data.showVideoPlayer &&
       !this.data.caseFullscreenExiting &&
       !this.data.caseFullscreenCoverHidden &&
-      !this.data.caseFullscreenPaused
+      !this.data.caseFullscreenPaused &&
+      !this.data.caseFullscreenBuffering &&
+      !this.data.caseFullscreenInitialLoading
     );
   },
 
@@ -2198,23 +2319,48 @@ Page({
 
   _beginCaseBgmSession() {
     this._caseBgmSessionActive = true;
+    this._caseBgmStartedForCurrent = false;
     this._clearCaseBgmStartTimers();
-    this._scheduleCaseBgmStart();
+    if (this._caseBgmSrc) {
+      this._ensureCaseBgmAudio();
+    }
   },
 
-  _scheduleCaseBgmStart() {
+  /** 视频首帧已出后再播 BGM；forceReady 跳过 loading 检查；opts.quick 缩短延迟（暂停/seek 恢复用） */
+  _startCaseBgmAfterVideoReady(forceReady, opts) {
+    if (!this._caseBgmSessionActive || this._caseBgmStartedForCurrent) return;
+    if (!this.data.showVideoPlayer || this.data.caseFullscreenPaused) return;
+    if (!forceReady && (this.data.caseFullscreenBuffering || this.data.caseFullscreenInitialLoading)) {
+      return;
+    }
+    this._caseBgmStartedForCurrent = true;
     this._clearCaseBgmStartTimers();
-    if (!this._caseBgmSessionActive) return;
-    const delays = [0, 120, 360, 720];
-    this._caseBgmStartTimers = delays.map((ms) => setTimeout(() => {
-      if (!this._caseBgmSessionActive) return;
+    const delayMs = opts && opts.quick ? 40 : 120;
+    const tid = setTimeout(() => {
+      if (!this._caseBgmSessionActive || !this._caseBgmStartedForCurrent) return;
       this._syncCaseBgmPlayback();
-    }, ms));
+    }, delayMs);
+    this._caseBgmStartTimers = [tid];
+  },
+
+  /** 恢复播放时续播 BGM（含首次未能启动时的补启） */
+  _resumeCaseBgm(forceReady) {
+    if (!this._caseBgmSessionActive) return;
+    if (!this._caseBgmStartedForCurrent) {
+      this._startCaseBgmAfterVideoReady(!!forceReady, { quick: !!forceReady });
+      return;
+    }
+    this._clearCaseBgmStartTimers();
+    const tid = setTimeout(() => this._syncCaseBgmPlayback(), 100);
+    this._caseBgmStartTimers = [tid];
   },
 
   _syncCaseBgmPlayback() {
+    if (!this._caseBgmSessionActive || !this._caseBgmStartedForCurrent) {
+      return;
+    }
     if (!this._isCaseBgmPlaybackAllowed()) {
-      this._forceStopCaseBgm();
+      this._pauseCaseBgm();
       return;
     }
     const src = this._caseBgmSrc || '';
@@ -2242,6 +2388,7 @@ Page({
 
   _forceStopCaseBgm() {
     this._caseBgmSessionActive = false;
+    this._caseBgmStartedForCurrent = false;
     this._clearCaseBgmStartTimers();
     if (!this._caseBgmAudio) {
       this._caseBgmPlaying = false;
@@ -2430,6 +2577,15 @@ Page({
     }
   },
 
+  _preloadCaseVideo(url) {
+    if (this._isWxDevtools()) return;
+    const src = this._swapCosHost(String(url || '').trim(), { forVideo: true });
+    if (!src || typeof wx.preloadVideo !== 'function') return;
+    try {
+      wx.preloadVideo({ src, fail: () => {} });
+    } catch (e) {}
+  },
+
   // ==========================================
   // 🆕 3. 智能卡片点击 (播放 vs 编辑)
   // ==========================================
@@ -2443,35 +2599,40 @@ Page({
     } else {
       // ▶️ 普通模式或管理现有视频模式：播放视频
       if (targetItem && targetItem.videoUrl) {
-        this.refreshVideoWatermarkNickname();
         this._forceStopCaseBgm();
+        this._caseBgmStartedForCurrent = false;
+        this._caseFsPlaybackStarted = false;
+        this._caseFsDurationApplied = false;
+        this._caseFsLastTuHandleAt = 0;
+        if (this._caseFsChromeTimer) {
+          clearTimeout(this._caseFsChromeTimer);
+          this._caseFsChromeTimer = null;
+        }
+        this._clearCaseFullscreenStuckTimer();
         this.setData({
           currentVideo: targetItem,
           showVideoPlayer: true,
           caseFullscreenExiting: false,
           caseFullscreenCoverHidden: false,
+          caseFullscreenChromeReady: true,
           caseFullscreenDuration: 0,
           caseFullscreenProgressPercent: 0,
+          caseFullscreenProgressRatio: 0,
           caseFullscreenCurrentStr: '00:00',
           caseFullscreenDurationStr: '00:00',
           caseFullscreenPaused: false,
+          caseFullscreenEnded: false,
+          caseFullscreenBuffering: false,
+          caseFullscreenInitialLoading: false,
           caseFullscreenTy: 0,
           caseFullscreenNoTrans: true
         }, () => {
           this._beginCaseBgmSession();
-          wx.nextTick(() => {
-            try {
-              const videoCtx = wx.createVideoContext('caseFullscreenVideo', this);
-              if (videoCtx && typeof videoCtx.play === 'function') {
-                videoCtx.play();
-              }
-            } catch (e) {}
-            this._syncCaseBgmPlayback();
-          });
+          this.refreshVideoWatermarkNickname();
+          wx.nextTick(() => this._refreshCaseFullscreenTrackRect());
+          this._scheduleCaseFullscreenStuckCheck();
         });
         this._caseFullscreenTrackRectCached = null;
-        wx.nextTick(() => this._refreshCaseFullscreenTrackRect());
-        setTimeout(() => this._refreshCaseFullscreenTrackRect(), 160);
       } else {
         this._showCustomToast('暂无视频资源', 'none');
       }
@@ -2691,7 +2852,7 @@ Page({
     const uploadTasks = [];
     if (isNewVideo) {
       uploadTasks.push(
-        cosUpload.uploadVideoToCos(adminVideoPath, 'video_go', {
+        getCosUpload().uploadVideoToCos(adminVideoPath, 'video_go', {
           knownSize: this.data.adminVideoKnownSize || undefined
         })
       );
@@ -2699,7 +2860,7 @@ Page({
       uploadTasks.push(Promise.resolve(adminVideoPath));
     }
     if (isNewCover) {
-      uploadTasks.push(cosUpload.uploadImageToCos(adminThumbPath, 'video_go'));
+      uploadTasks.push(getCosUpload().uploadImageToCos(adminThumbPath, 'video_go'));
     } else {
       uploadTasks.push(Promise.resolve(adminThumbPath || null));
     }
@@ -3045,7 +3206,7 @@ Page({
     console.log('🔵 [提交] 准备提交，targetSn:', targetSn);
     this.showMyLoading('上传中...');
     console.log('🔵 [提交] 开始上传视频(COS)...');
-    cosUpload
+    getCosUpload()
       .uploadVideoToCos(videoPath, 'video/user', {
         knownSize: this.data.videoKnownSize || undefined
       })
@@ -3220,10 +3381,10 @@ Page({
     }});
   },
   chooseAdminCover() {
-    shopImagePrepare.chooseAndPrepare('caseThumb', { sourceType: ['album'] }).then((path) => {
+    getShopImagePrepare().chooseAndPrepare('caseThumb', { sourceType: ['album'] }).then((path) => {
       this.setData({ adminThumbPath: path });
     }).catch((err) => {
-      if (!shopImagePrepare.isCropCancelled(err)) console.error('[case] chooseAdminCover', err);
+      if (!getShopImagePrepare().isCropCancelled(err)) console.error('[case] chooseAdminCover', err);
     });
   },
 
@@ -3236,12 +3397,12 @@ Page({
     if (this._caseFullscreenExitPending) return;
     this._caseFullscreenExitPending = true;
     this._forceStopCaseBgm();
+    this._stopCaseFsProgressUiLoop();
     this._stopCaseFullscreenVideoPlayback();
     this.setData({ caseFullscreenCoverHidden: true }, () => {
       wx.nextTick(() => {
         this._resetCaseFullscreenPlayerState();
         this._caseFullscreenExitPending = false;
-        wx.nextTick(() => this._syncCaseMainScrollLayout());
       });
     });
   },
@@ -3258,6 +3419,7 @@ Page({
   _resetCaseFullscreenPlayerState() {
     this._forceStopCaseBgm();
     this._stopCaseFullscreenVideoPlayback();
+    this._stopCaseFsProgressUiLoop();
     this._caseFullscreenSeeking = false;
     this._caseFullscreenBarTouchActive = false;
     this._caseFullscreenProgressGen = (this._caseFullscreenProgressGen || 0) + 1;
@@ -3274,24 +3436,33 @@ Page({
       currentVideo: null,
       caseFullscreenDuration: 0,
       caseFullscreenProgressPercent: 0,
+      caseFullscreenProgressRatio: 0,
       caseFullscreenCurrentStr: '00:00',
       caseFullscreenDurationStr: '00:00',
       caseFullscreenPaused: false,
+      caseFullscreenEnded: false,
+      caseFullscreenBuffering: false,
+      caseFullscreenInitialLoading: false,
+      caseFullscreenChromeReady: false,
       caseFullscreenTy: 0,
       caseFullscreenNoTrans: true
     });
+    this._caseBgmStartedForCurrent = false;
+    this._caseFsPlaybackStarted = false;
+    this._clearCaseFullscreenStuckTimer();
   },
 
   closeVideoPlayerAnimated() {
     if (this._caseFullscreenExitPending) return;
     this._caseFullscreenExitPending = true;
     this._forceStopCaseBgm();
+    this._stopCaseFsProgressUiLoop();
     this._stopCaseFullscreenVideoPlayback();
     wx.nextTick(() => this._stopCaseFullscreenVideoPlayback());
     const win = wx.getWindowInfo();
     const h = win.windowHeight || 667;
     const from = Number(this.data.caseFullscreenTy) || 0;
-    // 顶栏/Tab 保持挂载，退场开始即在底层渲染，避免动画结束后整页「重新长出来」
+    // 底栏/列表始终挂载；仅全屏层下滑，避免关闭后 Tab 才「长出来」
     this.setData({
       caseFullscreenExiting: true,
       caseFullscreenNoTrans: false,
@@ -3300,13 +3471,12 @@ Page({
     wx.nextTick(() => {
       this.setData({ caseFullscreenTy: h });
       if (this._caseFullscreenExitTimer) clearTimeout(this._caseFullscreenExitTimer);
-      this._caseFullscreenExitTimer = setTimeout(() => {
+        this._caseFullscreenExitTimer = setTimeout(() => {
         this._caseFullscreenExitTimer = null;
         this.setData({ caseFullscreenCoverHidden: true }, () => {
           wx.nextTick(() => {
             this._resetCaseFullscreenPlayerState();
             this._caseFullscreenExitPending = false;
-            wx.nextTick(() => this._syncCaseMainScrollLayout());
           });
         });
       }, 420);
@@ -3322,14 +3492,111 @@ Page({
 
   onCaseFullscreenLoadedMeta(e) {
     const dur = Number((e.detail && e.detail.duration) || 0) || 0;
-    if (dur <= 0) return;
+    if (dur <= 0 || this._caseFsDurationApplied) return;
+    this._caseFsDurationApplied = true;
     this.setData({
       caseFullscreenDuration: dur,
       caseFullscreenDurationStr: this._formatCaseFullscreenClock(dur)
     });
-    wx.nextTick(() => {
-      this._refreshCaseFullscreenTrackRect();
-      this._syncCaseBgmPlayback();
+  },
+
+  onCaseFullscreenLoadedData() {
+    this._onCaseFullscreenPlaybackStarted();
+  },
+
+  _clearCaseFullscreenStuckTimer() {
+    if (this._caseFsStuckTimer) {
+      clearTimeout(this._caseFsStuckTimer);
+      this._caseFsStuckTimer = null;
+    }
+  },
+
+  /** 打开后若迟迟未出画，才显示顶部 MT 加载条 */
+  _scheduleCaseFullscreenStuckCheck() {
+    this._clearCaseFullscreenStuckTimer();
+    this._caseFsStuckTimer = setTimeout(() => {
+      this._caseFsStuckTimer = null;
+      if (this._caseFsPlaybackStarted || !this.data.showVideoPlayer) return;
+      if (this.data.caseFullscreenPaused || this.data.caseFullscreenCoverHidden) return;
+      this.setData({ caseFullscreenInitialLoading: true });
+    }, 1200);
+  },
+
+  /** 停止进度 UI 定时器（避免 timeupdate 高频 setData 导致 video/cover-view 卡顿） */
+  _stopCaseFsProgressUiLoop() {
+    if (this._caseFsProgressUiTimer) {
+      clearInterval(this._caseFsProgressUiTimer);
+      this._caseFsProgressUiTimer = null;
+    }
+    if (this._caseFsWaitingTimer) {
+      clearTimeout(this._caseFsWaitingTimer);
+      this._caseFsWaitingTimer = null;
+    }
+    if (this._caseFsSeekResumeTimer) {
+      clearTimeout(this._caseFsSeekResumeTimer);
+      this._caseFsSeekResumeTimer = null;
+    }
+    this._clearCaseFullscreenStuckTimer();
+    if (this._caseFsChromeTimer) {
+      clearTimeout(this._caseFsChromeTimer);
+      this._caseFsChromeTimer = null;
+    }
+    this._caseFsPlaybackCur = 0;
+    this._caseFsPlaybackDur = 0;
+    this._caseFsLastUiPctKey = -1;
+    this._caseFsLastUiSecKey = -1;
+  },
+
+  _startCaseFsProgressUiLoop() {
+    this._stopCaseFsProgressUiLoop();
+    this._caseFsProgressUiTimer = setInterval(() => {
+      if (!this.data.showVideoPlayer || this.data.caseFullscreenPaused || this._caseFullscreenSeeking) return;
+      this._flushCaseFsProgressUi(false);
+    }, 2000);
+  },
+
+  /** 视频已开始出画：关加载条、启 BGM、保水印层 */
+  _onCaseFullscreenPlaybackStarted() {
+    if (this._caseFsPlaybackStarted || !this.data.showVideoPlayer) return;
+    this._caseFsPlaybackStarted = true;
+    this._clearCaseFullscreenStuckTimer();
+    this._clearCaseFullscreenLoadingState(() => {
+      if (!this.data.caseFullscreenChromeReady) {
+        this.refreshVideoWatermarkNickname();
+        this.setData({ caseFullscreenChromeReady: true }, () => {
+          wx.nextTick(() => this._refreshCaseFullscreenTrackRect());
+        });
+      }
+      this._startCaseBgmAfterVideoReady(true, { quick: true });
+      if (!this._caseFsProgressUiTimer && !this.data.caseFullscreenPaused) {
+        this._startCaseFsProgressUiLoop();
+      }
+    });
+  },
+
+  /** 将进度条/时间刷到界面；播放中由定时器调用，拖拽时 force=true 立即刷新 */
+  _flushCaseFsProgressUi(force) {
+    const cur = Number(this._caseFsPlaybackCur) || 0;
+    const dur = Number(this._caseFsPlaybackDur) || Number(this.data.caseFullscreenDuration) || 0;
+    if (dur <= 0 && !force) return;
+    const ratio = dur > 0 ? Math.min(1, cur / dur) : 0;
+    const pct = ratio * 100;
+    const curStr = this._formatCaseFullscreenClock(cur);
+    const pctKey = Math.round(pct);
+    const secKey = Math.floor(cur);
+    if (
+      !force &&
+      pctKey === this._caseFsLastUiPctKey &&
+      secKey === this._caseFsLastUiSecKey
+    ) {
+      return;
+    }
+    this._caseFsLastUiPctKey = pctKey;
+    this._caseFsLastUiSecKey = secKey;
+    this.setData({
+      caseFullscreenProgressPercent: pct,
+      caseFullscreenProgressRatio: ratio,
+      caseFullscreenCurrentStr: curStr
     });
   },
 
@@ -3350,45 +3617,184 @@ Page({
 
   onCaseFullscreenTimeUpdate(e) {
     if (!this.data.showVideoPlayer || this._caseFullscreenSeeking) return;
+
     const cur = Number((e.detail && e.detail.currentTime) || 0) || 0;
     let dur = Number((e.detail && e.detail.duration) || 0) || 0;
     if (dur <= 0) dur = Number(this.data.caseFullscreenDuration) || 0;
-    const pct = dur > 0 ? (cur / dur) * 100 : 0;
+
+    this._caseFsPlaybackCur = cur;
+    this._caseFsPlaybackDur = dur;
+
+    if (this._caseFsWaitingTimer) {
+      clearTimeout(this._caseFsWaitingTimer);
+      this._caseFsWaitingTimer = null;
+    }
+
+    if (!this._caseFsPlaybackStarted && cur > 0.02) {
+      this._onCaseFullscreenPlaybackStarted();
+      return;
+    }
+
+    const now = Date.now();
+    if (now - (this._caseFsLastTuHandleAt || 0) < 300) return;
+    this._caseFsLastTuHandleAt = now;
+
+    if (
+      this._caseBgmSessionActive &&
+      !this._caseBgmStartedForCurrent &&
+      !this.data.caseFullscreenPaused &&
+      !this.data.caseFullscreenInitialLoading &&
+      !this.data.caseFullscreenBuffering &&
+      cur > 0.02
+    ) {
+      this._startCaseBgmAfterVideoReady(true, { quick: true });
+    }
+
+    if (this.data.caseFullscreenBuffering) {
+      this.setData({ caseFullscreenBuffering: false }, () => {
+        this._resumeCaseBgm(true);
+      });
+    }
+
+    if (dur > 0 && !this._caseFsDurationApplied && Math.abs(dur - (Number(this.data.caseFullscreenDuration) || 0)) > 0.25) {
+      this._caseFsDurationApplied = true;
+      this.setData({
+        caseFullscreenDuration: dur,
+        caseFullscreenDurationStr: this._formatCaseFullscreenClock(dur)
+      });
+    }
+  },
+
+  toggleCaseFullscreenPlay() {
+    if (this.data.caseFullscreenEnded) {
+      this._replayCaseFullscreenVideo();
+      return;
+    }
+    const ctx = wx.createVideoContext('caseFullscreenVideo', this);
+    if (!ctx) return;
+    if (this.data.caseFullscreenPaused) {
+      ctx.play();
+    } else {
+      ctx.pause();
+    }
+  },
+
+  onCaseFullscreenCenterTap() {
+    this.toggleCaseFullscreenPlay();
+  },
+
+  _replayCaseFullscreenVideo() {
+    const ctx = wx.createVideoContext('caseFullscreenVideo', this);
+    if (!ctx) return;
+    this._caseFsPlaybackCur = 0;
+    this._caseFsLastUiPctKey = -1;
+    this._caseFsLastUiSecKey = -1;
+    this._caseFsPlaybackStarted = false;
+    this.setData({
+      caseFullscreenEnded: false,
+      caseFullscreenPaused: false,
+      caseFullscreenProgressPercent: 0,
+      caseFullscreenProgressRatio: 0,
+      caseFullscreenCurrentStr: '00:00'
+    }, () => {
+      try {
+        if (typeof ctx.seek === 'function') ctx.seek(0);
+        ctx.play();
+      } catch (e) {}
+      this._beginCaseBgmSession();
+      this._caseBgmStartedForCurrent = false;
+    });
+  },
+
+  onCaseFullscreenEnded() {
+    if (!this.data.showVideoPlayer || this.data.caseFullscreenEnded) return;
+    this._stopCaseFsProgressUiLoop();
+    this._forceStopCaseBgm();
+    const dur = Number(this.data.caseFullscreenDuration) || Number(this._caseFsPlaybackDur) || 0;
     const patch = {
-      caseFullscreenProgressPercent: pct,
-      caseFullscreenCurrentStr: this._formatCaseFullscreenClock(cur)
+      caseFullscreenEnded: true,
+      caseFullscreenPaused: true
     };
-    if (dur > 0 && (!this.data.caseFullscreenDuration || this.data.caseFullscreenDuration !== dur)) {
-      patch.caseFullscreenDuration = dur;
-      patch.caseFullscreenDurationStr = this._formatCaseFullscreenClock(dur);
+    if (dur > 0) {
+      patch.caseFullscreenProgressPercent = 100;
+      patch.caseFullscreenProgressRatio = 1;
+      patch.caseFullscreenCurrentStr = this._formatCaseFullscreenClock(dur);
+      this._caseFsPlaybackCur = dur;
     }
     this.setData(patch);
   },
 
-  toggleCaseFullscreenPlay() {
-    const ctx = wx.createVideoContext('caseFullscreenVideo', this);
-    if (!ctx) return;
-    const paused = !!this.data.caseFullscreenPaused;
-    if (paused) {
-      ctx.play();
-      this.setData({ caseFullscreenPaused: false }, () => this._syncCaseBgmPlayback());
-    } else {
-      ctx.pause();
-      this.setData({ caseFullscreenPaused: true }, () => this._pauseCaseBgm());
+  _clearCaseFullscreenLoadingState(done) {
+    if (this._caseFsWaitingTimer) {
+      clearTimeout(this._caseFsWaitingTimer);
+      this._caseFsWaitingTimer = null;
     }
+    const patch = {};
+    if (this.data.caseFullscreenInitialLoading) patch.caseFullscreenInitialLoading = false;
+    if (this.data.caseFullscreenBuffering) patch.caseFullscreenBuffering = false;
+    if (Object.keys(patch).length) {
+      this.setData(patch, () => {
+        if (typeof done === 'function') done();
+      });
+      return;
+    }
+    if (typeof done === 'function') done();
   },
 
   onCaseFullscreenPlayEvt() {
-    this.setData({ caseFullscreenPaused: false }, () => this._syncCaseBgmPlayback());
+    const wasPaused = !!this.data.caseFullscreenPaused;
+    if (!wasPaused && !this._caseFsPlaybackStarted) {
+      this._onCaseFullscreenPlaybackStarted();
+      return;
+    }
+    if (wasPaused || this.data.caseFullscreenEnded) {
+      this._caseFsResumeGraceUntil = Date.now() + 2200;
+      this._clearCaseFullscreenLoadingState(() => {
+        this.setData({ caseFullscreenPaused: false, caseFullscreenEnded: false }, () => {
+          this._resumeCaseBgm(true);
+          if (!this._caseFsProgressUiTimer && this.data.caseFullscreenChromeReady) {
+            this._startCaseFsProgressUiLoop();
+          }
+        });
+      });
+      return;
+    }
+    this.setData({ caseFullscreenPaused: false }, () => {
+      this._resumeCaseBgm(true);
+      if (!this._caseFsProgressUiTimer && this.data.caseFullscreenChromeReady) {
+        this._startCaseFsProgressUiLoop();
+      }
+    });
   },
 
   onCaseFullscreenPauseEvt() {
+    if (this.data.caseFullscreenEnded) return;
+    this._stopCaseFsProgressUiLoop();
     this.setData({ caseFullscreenPaused: true }, () => this._pauseCaseBgm());
+  },
+
+  onCaseFullscreenWaiting() {
+    if (Date.now() < (this._caseFsResumeGraceUntil || 0)) return;
+    if (this.data.caseFullscreenPaused || this.data.caseFullscreenEnded || this.data.caseFullscreenInitialLoading) return;
+    this._pauseCaseBgm();
+    if (this._caseFsWaitingTimer) clearTimeout(this._caseFsWaitingTimer);
+    this._caseFsWaitingTimer = setTimeout(() => {
+      this._caseFsWaitingTimer = null;
+      if (
+        this.data.showVideoPlayer &&
+        !this.data.caseFullscreenPaused &&
+        !this.data.caseFullscreenInitialLoading &&
+        !this.data.caseFullscreenBuffering
+      ) {
+        this.setData({ caseFullscreenBuffering: true });
+      }
+    }, 1400);
   },
 
   onCaseFullscreenProgressTouchStart(e) {
     this._caseFullscreenBarTouchActive = true;
     this._caseFullscreenSeeking = true;
+    this._pauseCaseBgm();
     const gen = (this._caseFullscreenProgressGen = (this._caseFullscreenProgressGen || 0) + 1);
     const cached = this._caseFullscreenTrackRectCached;
     if (cached && cached.width > 0) {
@@ -3421,6 +3827,8 @@ Page({
     this._caseFullscreenProgressGen = (this._caseFullscreenProgressGen || 0) + 1;
     this._caseFullscreenSeeking = false;
     this._caseFullscreenTrackRect = null;
+    this._flushCaseFsProgressUi(true);
+    this._finishCaseFullscreenSeek();
     setTimeout(() => {
       this._caseFullscreenBarTouchActive = false;
     }, 120);
@@ -3455,29 +3863,51 @@ Page({
     const ratio = this._caseFullscreenRatioFromClientX(x);
     if (ratio == null) return;
     const seekSec = ratio * dur;
-    try {
-      const ctx = wx.createVideoContext('caseFullscreenVideo', this);
-      if (ctx && typeof ctx.seek === 'function') ctx.seek(seekSec);
-    } catch (err) {}
-    this.setData({
-      caseFullscreenProgressPercent: ratio * 100,
-      caseFullscreenCurrentStr: this._formatCaseFullscreenClock(seekSec)
-    });
+    this._caseFsPlaybackCur = seekSec;
+    this._caseFsPlaybackDur = dur;
+    const isEnd = !!(e.changedTouches && e.changedTouches[0]);
+    this._seekCaseFullscreenByRatio(ratio, { force: isEnd });
   },
 
-  _seekCaseFullscreenByRatio(ratio) {
+  /** 拖拽/seek 结束后恢复 BGM（seek 会触发 waiting，需短延迟 + 宽限期） */
+  _finishCaseFullscreenSeek() {
+    if (!this.data.showVideoPlayer || this.data.caseFullscreenPaused) return;
+    this._caseFsResumeGraceUntil = Date.now() + 2500;
+    if (this._caseFsSeekResumeTimer) {
+      clearTimeout(this._caseFsSeekResumeTimer);
+      this._caseFsSeekResumeTimer = null;
+    }
+    this._caseFsSeekResumeTimer = setTimeout(() => {
+      this._caseFsSeekResumeTimer = null;
+      if (!this.data.showVideoPlayer || this.data.caseFullscreenPaused) return;
+      this._resumeCaseBgm(true);
+    }, 200);
+  },
+
+  _seekCaseFullscreenByRatio(ratio, opts = {}) {
     const dur = Number(this.data.caseFullscreenDuration) || 0;
     if (dur <= 0) return;
     const r = Math.max(0, Math.min(1, ratio));
     const seekSec = r * dur;
+    const now = Date.now();
+    if (!opts.force && now - (this._caseFsLastSeekAt || 0) < 150) {
+      this._flushCaseFsProgressUi(true);
+      return;
+    }
+    this._caseFsLastSeekAt = now;
     try {
       const ctx = wx.createVideoContext('caseFullscreenVideo', this);
       if (ctx && typeof ctx.seek === 'function') ctx.seek(seekSec);
     } catch (err) {}
+    this._caseFsPlaybackCur = seekSec;
+    const pct = r * 100;
     this.setData({
-      caseFullscreenProgressPercent: r * 100,
+      caseFullscreenProgressPercent: pct,
+      caseFullscreenProgressRatio: r,
       caseFullscreenCurrentStr: this._formatCaseFullscreenClock(seekSec)
     });
+    this._caseFsLastUiPctKey = Math.round(pct);
+    this._caseFsLastUiSecKey = Math.floor(seekSec);
   },
 
   onCaseFullscreenOverlayTouchStart(e) {
@@ -3505,6 +3935,7 @@ Page({
       } else if (Math.abs(dx) > 22 && Math.abs(dx) > Math.abs(dy) * 1.15) {
         this._fsGestureMode = 'scrub';
         this._caseFullscreenSeeking = true;
+        this._pauseCaseBgm();
       }
     }
     if (this._fsGestureMode === 'pull' || this._fsGestureMode === 'scrub') {
@@ -3536,6 +3967,8 @@ Page({
     if (this._fsGestureMode === 'scrub') {
       this._caseFullscreenSeeking = false;
       this._fsGestureMode = null;
+      this._flushCaseFsProgressUi(true);
+      this._finishCaseFullscreenSeek();
       return;
     }
 
@@ -3899,6 +4332,8 @@ Page({
   },
 
   async handleIntercept(type) {
+    if (screenshotExempt.isScreenshotBanExempt(this)) return;
+
     // 1. 停止视频播放
     this._resetCaseFullscreenPlayerState();
     

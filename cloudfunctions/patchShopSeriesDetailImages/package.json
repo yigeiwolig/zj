@@ -1,0 +1,9 @@
+{
+  "name": "patchShopSeriesDetailImages",
+  "version": "1.0.0",
+  "description": "管理员保存商城产品系列详情图（服务端写库+读回）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -1,10 +1,21 @@
 const app = getApp();
+const { PRODUCT_DETAIL_OPTIONS } = require('../../../utils/productModels.js');
 
 const iconF1Pro = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMjUiIHk9IjMwIiB3aWR0aD0iMTUwIiBoZWlnaHQ9IjkwIiByeD0iMTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSI0Ii8+PHJlY3QgeD0iNDUiIHk9IjQ1IiB3aWR0aD0iMzUiIGhlaWdodD0iOCIgcng9IjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iMTIwIiB5PSI0NSIgd2lkdGg9IjM1IiBoZWlnaHQ9IjgiIHJ4PSI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMyIvPjx0ZXh0IHg9IjEwMCIgeT0iOTAiIGZvbnQtZmFtaWx5PSJBcmlhbCwgc2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9IjkwMCIgZm9udC1zaXplPSIyNCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSIgZmlsbD0iI0ZGRkZGRiIgbGV0dGVyLXNwYWNpbmc9IjMiPk1UPC90ZXh0Pjwvc3ZnPg==';
 const iconF1Max = iconF1Pro; 
 const iconF2Pro = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDMwIEgxOTAgQzE5NSAzMCAxOTUgMzUgMTk1IDM1IFY0OCBDMTk1IDUzIDE5MCA1MyAxOTAgNTMgSDEyMSBWNjkgSDEyMi41IEMxMjcuNSA2OSAxMjcuNSA3NCAxMjcuNSA3NCBWOTQgQzEyNy41IDk5IDEyMi41IDk5IDEyMi41IDk5IEg4Mi41IEM3Ny41IDk5IDc3LjUgOTQgNzcuNSA5NCBWNzQgQzc3LjUgNjkgODIuNSA2OSA4Mi41IDY5IEg4NCBWNTMgSDE1IEMxMCA1MyAxMCA0OCAxMCA0OCBWMzUgQzEwIDMwIDE1IDMwIDE1IDMwIFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHJlY3QgeD0iMzYiIHk9IjM3IiB3aWR0aD0iMjYiIGhlaWdodD0iOCIgcng9IjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI0ZGRkZGRiIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iMTQ1IiB5PSIzOCIgd2lkdGg9IjI1IiBoZWlnaHQ9IjgiIHJ4PSI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMyIvPjx0ZXh0IHg9IjEwMi41IiB5PSI3MiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjRkZGRkZGIj48dHNwYW4geD0iMTAyLjUiIGR5PSIwIj5NPC90c3Bhbj48dHNwYW4geD0iMTAyLjUiIGR5PSIxNiI+VDwvdHNwYW4+PC90ZXh0Pjwvc3ZnPg==';
 
-// BLE Helper (保持不变)
+function otaIconForDevice(name) {
+  const n = String(name || '');
+  if (n.startsWith('F2') || n.startsWith('F3')) return iconF2Pro;
+  return iconF1Pro;
+}
+
+function otaIsF2OrF3Series(name) {
+  const n = String(name || '');
+  return n.startsWith('F2') || n.startsWith('F3');
+}
+
 class BLEHelper {
   constructor(api = wx) {
     this.api = api; this.device = null;
@@ -133,7 +144,7 @@ Page({
     isInjecting: false, revealProgress: 0, exploded: false,
     showEnd: false, showFinishBtn: false, showFail: false,
     targetDevice: null,
-    devices: ['F1 PRO', 'F1 MAX', 'F2 PRO', 'F2 MAX'],
+    devices: PRODUCT_DETAIL_OPTIONS.slice(),
     currentDevIdx: 0,
     currentSvg: iconF1Pro,
     hasSavedOtaRecord: false, // 仅在动画完成且显示"升级完成"后再保存
@@ -477,7 +488,7 @@ Page({
     if(idx < 0) idx = this.data.devices.length - 1;
     if(idx >= this.data.devices.length) idx = 0;
     
-    let svg = idx >= 2 ? iconF2Pro : iconF1Pro;
+    let svg = otaIconForDevice(this.data.devices[idx]);
     this.setData({ currentDevIdx: idx, currentSvg: svg });
   },
 
@@ -494,9 +505,8 @@ Page({
     this.isRaining = true; 
     
     // 【修改点1】根据设备类型设置不同的初始值
-    // F1系列（currentDevIdx < 2）：15%
-    // F2系列（currentDevIdx >= 2）：30%（更快显示）
-    let p = this.data.currentDevIdx >= 2 ? 30 : 15;
+    const devName = this.data.devices[this.data.currentDevIdx];
+    let p = otaIsF2OrF3Series(devName) ? 30 : 15;
     
     // 【修改点2】时间改为 20000 (20秒)
     const duration = 20000; 
@@ -658,7 +668,8 @@ Page({
         // 计算粒子从底部到顶部的进度（0 = 底部，1 = 顶部）
         const hitOffsetF1 = 70;
         const hitOffsetF2 = 40;
-        let currentOffset = this.data.currentDevIdx >= 2 ? hitOffsetF2 : hitOffsetF1;
+        const devName = this.data.devices[this.data.currentDevIdx];
+        let currentOffset = otaIsF2OrF3Series(devName) ? hitOffsetF2 : hitOffsetF1;
         const topY = this.h/2 + currentOffset; // 顶部位置
         const bottomY = this.h; // 底部位置
         const progress = 1 - (p.y - topY) / (bottomY - topY); // 0=底部, 1=顶部

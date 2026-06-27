@@ -2,6 +2,7 @@ const app = getApp();
 const db = wx.cloud.database();
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
+const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 /** 附近门店对用户仅展示此半径（公里）内且已授权的门店 */
 const NEARBY_STORE_RADIUS_KM = 50;
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js'); 
@@ -833,6 +834,8 @@ Page({
         adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
       }
       if (adminCheck.data.length > 0) {
+        screenshotExempt.markGuanliyuanCache(true);
+        screenshotExempt.allowScreenCaptureIfExempt();
         this.setData({ isAuthorized: true });
         console.log('[home.js] 身份验证成功：合法管理员');
       }
@@ -1891,6 +1894,10 @@ Page({
 
   // 🔴 初始化截屏/录屏保护
   initScreenshotProtection() {
+    if (screenshotExempt.isScreenshotBanExempt(this)) {
+      screenshotExempt.allowScreenCaptureIfExempt();
+      return;
+    }
     // 物理防线：确保录屏、截屏出来的全是黑屏
     if (wx.setVisualEffectOnCapture) {
       wx.setVisualEffectOnCapture({
@@ -1983,6 +1990,8 @@ Page({
 
   // 🔴 处理截屏/录屏拦截
   async handleIntercept(type) {
+    if (screenshotExempt.isScreenshotBanExempt(this)) return;
+
     // 🔴 关键修复：立即清除本地授权状态，防止第二次截屏时被自动放行
     wx.removeStorageSync('has_permanent_auth');
     

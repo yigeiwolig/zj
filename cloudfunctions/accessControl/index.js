@@ -100,10 +100,14 @@ exports.main = async (event, context) => {
       bypassLocationCheck = bypassLocationCheck || existingBypass;
 
       if (isBannedFlag) {
-        // 🔴 截屏/录屏封禁：最高优先级，不允许任何方式绕过
-        if (btn.banReason === 'screenshot' || btn.banReason === 'screen_record') {
-          globalBan = true;
-          console.log('[accessControl] 🔒 检测到截屏/录屏封禁，全局封禁');
+        // 截屏/录屏封禁：管理员（guanliyuan）豁免
+        if (btn.banReason === 'screenshot' || btn.banReason === 'screen_record' || btn.banReason === 'screenshot_risk_review') {
+          if (adminBypassLocation) {
+            console.log('[accessControl] 管理员豁免截屏/录屏封禁');
+          } else {
+            globalBan = true;
+            console.log('[accessControl] 🔒 检测到截屏/录屏封禁，全局封禁');
+          }
         } else if (btn.banReason === 'location_blocked') {
           if (existingBypass) {
             locationBannedByButton = false;

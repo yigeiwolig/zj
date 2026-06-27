@@ -4,6 +4,14 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 const _ = db.command
 
+async function isGuanliyuan(openid) {
+  if (!openid) return false;
+  let r = await db.collection('guanliyuan').where({ openid }).limit(1).get();
+  if (r.data && r.data.length > 0) return true;
+  r = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get();
+  return !!(r.data && r.data.length > 0);
+}
+
 /** 地址拦截解封后同步「地域放行」，避免首页/全局守卫再次踢回 blocked */
 async function syncLocationBypass(db, OPENID, buttonRecord) {
   if (buttonRecord && buttonRecord._id) {
@@ -211,7 +219,30 @@ exports.main = async (event, context) => {
     // 🚀 2. 优先检查免死金牌（针对地址拦截封禁）
     //    如果用户有免死金牌且是地址拦截封禁，直接放行到 index 页面
     // ==========================================================
-    const isScreenshotBan = buttonRecord && (buttonRecord.banReason === 'screenshot' || buttonRecord.banReason === 'screen_record');
+    const isScreenshotBan = buttonRecord && (buttonRecord.banReason === 'screenshot' || buttonRecord.banReason === 'screen_record' || buttonRecord.banReason === 'screenshot_risk_review');
+    const isAdminUser = await isGuanliyuan(OPENID);
+    if (isAdminUser && isScreenshotBan && isBanned && buttonRecord && buttonRecord._id) {
+      try {
+        await db.collection('login_logbutton').doc(buttonRecord._id).update({
+          data: { isBanned: false, updateTime: db.serverDate() }
+        });
+      } catch (e) {
+        console.error('[checkUnlockStatus] 管理员解除截屏封禁失败:', e);
+      }
+      if (recordId) {
+        try {
+          await db.collection('login_logs').doc(recordId).update({
+            data: { failCount: 0, updateTime: db.serverDate() }
+          });
+        } catch (e) {}
+      }
+      return { action: 'PASS', nickname, returnToIndex: true, msg: '管理员豁免截屏封禁' };
+    }
+
+    // ==========================================================
+    // 🚀 2. 优先检查免死金牌（针对地址拦截封禁）
+    //    如果用户有免死金牌且是地址拦截封禁，直接放行到 index 页面
+    // ==========================================================
     const isLocationBan = buttonRecord && buttonRecord.banReason === 'location_blocked';
     
     if (isLocationBan && isBanned && bypassLocationCheck) {

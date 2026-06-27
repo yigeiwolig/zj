@@ -386,7 +386,12 @@
             <!-- 其他状态：主按钮 + 次要操作（竖向排列，便于点击） -->
             <block wx:if="{{item.returnStatus !== 'USER_SENT' && item.status !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
               <view class="repair-actions-primary">
+                <view class="r-btn diagnosis" bindtap="openDiagnosisDialog" data-id="{{item._id}}">填写诊断书</view>
                 <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单备件寄出</view>
+              </view>
+              <view class="repair-diagnosis-meta" wx:if="{{item.diagnosisDone || item.awaitingSnReplacement}}">
+                <text class="r-diagnosis-pill" wx:if="{{item.diagnosisDone}}">已诊断</text>
+                <text class="r-diagnosis-pill warn" wx:if="{{item.awaitingSnReplacement}}">待换机</text>
               </view>
               <view class="repair-actions-secondary repair-actions-grid">
                 <view class="r-btn purchase grid-half" bindtap="openPurchasePartsModal" data-item="{{item}}">请购买配件</view>
@@ -601,9 +606,9 @@
       </swiper-item>
     </swiper>
 
-    <!-- 情况 B: 没订单，显示"去选购商品"诱导卡片 -->
+    <!-- 情况 B: 没订单，显示"去选购商品"诱导卡片（产品选购关闭时不展示） -->
     <view 
-      wx:if="{{orders.length === 0}}"
+      wx:if="{{orders.length === 0 && shopFeatureEnabled}}"
       class="empty-order-card" 
       bindtap="goToShop"
     >
@@ -651,9 +656,13 @@
         <view class="hub-cart-checkout-btn" bindtap="goToShopCheckout">去结算</view>
       </block>
 
-      <view wx:else class="hub-cart-empty" bindtap="goToShop">
+      <view wx:elif="{{shopFeatureEnabled}}" class="hub-cart-empty" bindtap="goToShop">
         <text class="hub-cart-empty-text">购物车还是空的</text>
         <text class="hub-cart-empty-link">去商城逛逛 →</text>
+      </view>
+      <view wx:else class="hub-cart-empty hub-cart-empty--closed">
+        <text class="hub-cart-empty-text">购物车还是空的</text>
+        <text class="hub-cart-empty-muted">商城暂未开放</text>
       </view>
     </view>
     </view>
@@ -1380,6 +1389,70 @@
       <view class="cd-btn-row">
         <view class="cd-btn cancel" bindtap="closeInputDialog">取消</view>
         <view class="cd-btn confirm" bindtap="onInputDialogConfirm">确定</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- ================= 内部诊断书（仅管理员，用户不可见） ================= -->
+  <view class="diag-sheet-mask {{diagnosisDialogClosing ? 'closing' : ''}}" wx:if="{{diagnosisDialog.show}}" catchtouchmove="noop" bindtap="closeDiagnosisDialog">
+    <view class="diag-sheet {{diagnosisDialogClosing ? 'closing' : ''}}" catchtouchmove="noop" catchtap="noop">
+      <view class="diag-sheet-handle"></view>
+
+      <scroll-view scroll-y class="diag-sheet-scroll" enhanced show-scrollbar="{{false}}" catchtouchmove="noop">
+        <view class="diag-sheet-header">
+          <view class="diag-sheet-close" catchtap="closeDiagnosisDialog">
+            <text class="diag-sheet-close-icon">×</text>
+          </view>
+          <view class="diag-sheet-icon-wrap">
+            <view class="diag-sheet-icon-doc">
+              <view class="diag-doc-line"></view>
+              <view class="diag-doc-line short"></view>
+              <view class="diag-doc-line"></view>
+            </view>
+          </view>
+          <text class="diag-sheet-title">售后诊断书</text>
+          <view class="diag-sheet-badges">
+            <text class="diag-sheet-badge">内部</text>
+            <text class="diag-sheet-badge muted">用户不可见</text>
+          </view>
+        </view>
+
+        <view class="diag-sheet-body">
+          <view class="diag-field-head">
+            <text class="diag-field-label">故障诊断结论</text>
+            <text class="diag-field-count">{{diagnosisDialog.value.length || 0}}/500</text>
+          </view>
+          <view class="diag-field-box">
+            <textarea
+              class="diag-field-input"
+              placeholder="请描述检测结论，例如：CAN 无通讯，判定主板损坏，需更换主板整机…"
+              placeholder-class="diag-field-placeholder"
+              value="{{diagnosisDialog.value}}"
+              maxlength="500"
+              show-confirm-bar="{{false}}"
+              adjust-position="{{true}}"
+              cursor-spacing="24"
+              bindinput="onDiagnosisInput"
+            />
+          </view>
+
+          <view class="diag-callout">
+            <view class="diag-callout-dot"></view>
+            <view class="diag-callout-text">
+              <text class="diag-callout-main">换机触发说明</text>
+              <text class="diag-callout-sub">文中出现「主板」或「控制器」时，将标记待换机；维修专员在控制中心完成 SN 更换后，客服方可录单发货。</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <view class="diag-sheet-footer">
+        <view
+          class="diag-submit-btn {{diagnosisDialog.submitting ? 'disabled' : ''}}"
+          catchtap="submitDiagnosis">
+          {{diagnosisDialog.submitting ? '保存中…' : '保存诊断书'}}
+        </view>
+        <view class="diag-cancel-link" catchtap="closeDiagnosisDialog">取消</view>
       </view>
     </view>
   </view>

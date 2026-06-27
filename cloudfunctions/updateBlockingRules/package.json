@@ -1,0 +1,9 @@
+{
+  "name": "updateBlockingRules",
+  "version": "1.0.0",
+  "description": "管理员维护 app_config.blocking_rules 封禁地址",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -29,10 +29,10 @@ const FALLBACK_FAQS = {
     { question: '如何调节性能模式？', answer: '进入控制中心，选择 F1 MAX 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
     { question: '设备固件更新失败？', answer: '请保持设备电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
   ],
-  'F1 Pro Max': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F1 Pro Max 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F1 Pro Max 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
-    { question: '设备固件更新失败？', answer: '请保持 F1 Pro Max 电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
+  'F1 ULTRA': [
+    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F1 ULTRA 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
+    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F1 Ultra 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
+    { question: '设备固件更新失败？', answer: '请保持 F1 ULTRA 电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
   ],
   'F2 PRO': [
     { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F2 PRO 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
@@ -43,10 +43,15 @@ const FALLBACK_FAQS = {
     { question: '如何调节性能模式？', answer: '进入控制中心，选择 F2 MAX 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
     { question: '设备固件更新失败？', answer: '请保持设备电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
   ],
-  'F2 MAX LONG': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F2 MAX LONG 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F2 MAX LONG 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
-    { question: 'F2 MAX 与 F2 MAX LONG 有何区别？', answer: 'F2 MAX LONG 为加长版线束/安装方案，核心控制逻辑与 F2 MAX 一致；具体线长与安装位请以产品说明书为准。', videoUrl: '' }
+  'F2 ULTRA': [
+    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F2 ULTRA 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
+    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F2 Ultra 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
+    { question: '设备固件更新失败？', answer: '请保持 F2 ULTRA 电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
+  ],
+  'F2 Long': [
+    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F2 Long 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
+    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F2 Long 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
+    { question: 'F2 MAX 与 F2 Long 有何区别？', answer: 'F2 Long 为加长版线束/安装方案，核心控制逻辑与 F2 MAX 一致；具体线长与安装位请以产品说明书为准。', videoUrl: '' }
   ],
   'F3 PRO': [
     { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F3 PRO 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
@@ -121,7 +126,7 @@ Page({
       { name: '联系客服', icon: 'MT' }
     ],
     products: PRODUCT_DETAIL_OPTIONS.map((name) => ({
-      name: name === 'F2 MAX Long' ? 'F2 MAX LONG' : name,
+      name,
       icon: 'MT'
     })),
     showAdminModal: false,

@@ -1,6 +1,8 @@
 // pages/shouhou/shouhou.js
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
+const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
+const { normalizeProductDetailModel } = require('../../../utils/productModels.js');
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js'); 
 // 🔴 统一使用已验证可用的腾讯key，避免多key在不同环境权限不一致导致选择器异常
 const MAP_KEY = 'CFDBZ-B6K6N-B3EFF-SPDJ2-Y2MRZ-7UBH2';
@@ -30,50 +32,57 @@ function buildShippingDisplay(method, fee, freeShipping) {
   return { shippingMethodLabel, shippingFeeText };
 }
 
-// 配件数据 - 按型号独立存储
+const F2_STYLE_PARTS = ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"];
+
+// 配件数据 - 按型号独立存储（标准明细名）
 const DB_PARTS = {
   'F1 PRO': ["主板外壳", "下面板", "上面板", "合页", "合页螺丝", "90度连接件", "连杆", "摇臂", "摇臂螺丝", "电机", "固定电机件", "固定电机螺丝", "装牌螺丝包", "螺母", "主板", "按钮", "遥控", "链接线束"],
-  'F1 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-  // F1 Pro Max 配件暂复用 F1 MAX，后续可单独调整
-  'F1 Pro Max': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-  'F2 PRO': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-  'F2 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-  'F2 MAX Long': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-  // F3 配件暂复用 F2，后续可单独调整
-  'F3 PRO': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"],
-  'F3 MAX': ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"]
+  'F1 MAX': F2_STYLE_PARTS.slice(),
+  'F1 ULTRA': F2_STYLE_PARTS.slice(),
+  'F2 PRO': F2_STYLE_PARTS.slice(),
+  'F2 MAX': F2_STYLE_PARTS.slice(),
+  'F2 ULTRA': F2_STYLE_PARTS.slice(),
+  'F2 Long': F2_STYLE_PARTS.slice(),
+  'F3 PRO': F2_STYLE_PARTS.slice(),
+  'F3 MAX': F2_STYLE_PARTS.slice()
 };
 
 // 视频数据 - 按组同步（同组型号共享视频）
-// 分组：F1 / F1 Pro Max / F2 / F2 Long / F3 各独立一组
 const VIDEO_GROUPS = {
   'F1': ['F1 PRO', 'F1 MAX'],
-  'F1 Pro Max': ['F1 Pro Max'],
+  'F1 Ultra': ['F1 ULTRA'],
   'F2': ['F2 PRO', 'F2 MAX'],
-  'F2 Long': ['F2 MAX Long'],
+  'F2 Ultra': ['F2 ULTRA'],
+  'F2 Long': ['F2 Long'],
   'F3': ['F3 PRO', 'F3 MAX']
 };
 
-// 型号到组的映射
+// 型号到组的映射（含历史别名）
 const MODEL_TO_GROUP = {
   'F1 PRO': 'F1',
   'F1 MAX': 'F1',
-  'F1 Pro Max': 'F1 Pro Max',
+  'F1 ULTRA': 'F1 Ultra',
   'F2 PRO': 'F2',
   'F2 MAX': 'F2',
-  'F2 MAX Long': 'F2 Long',
+  'F2 ULTRA': 'F2 Ultra',
+  'F2 Long': 'F2 Long',
   'F3 PRO': 'F3',
-  'F3 MAX': 'F3'
+  'F3 MAX': 'F3',
+  'F1 Pro Max': 'F1 Ultra',
+  'F2 MAX Long': 'F2 Long',
+  'F2 MAX LONG': 'F2 Long',
+  'F2 Max Long': 'F2 Long'
 };
 
 // 本地视频数据（已清空演示视频）
 const DB_VIDEOS = {
   'F1 PRO': [],
   'F1 MAX': [],
-  'F1 Pro Max': [],
+  'F1 ULTRA': [],
   'F2 PRO': [],
   'F2 MAX': [],
-  'F2 MAX Long': [],
+  'F2 ULTRA': [],
+  'F2 Long': [],
   'F3 PRO': [],
   'F3 MAX': []
 };
@@ -82,13 +91,14 @@ const DB_VIDEOS = {
 const { MUNICIPALITY_DISTRICTS } = require('../../../utils/smartAddressParser.js');
 
 // 密码 - 按型号独立设置（可以设置不同密码）
-const CODES = { 
-  'F1 PRO': '123456', 
+const CODES = {
+  'F1 PRO': '123456',
   'F1 MAX': '123456',
-  'F1 Pro Max': '123456',
+  'F1 ULTRA': '123456',
   'F2 PRO': '123456',
   'F2 MAX': '123456',
-  'F2 MAX Long': '123456',
+  'F2 ULTRA': '123456',
+  'F2 Long': '123456',
   'F3 PRO': '123456',
   'F3 MAX': '123456'
 };
@@ -388,7 +398,13 @@ Page({
     this._openTutorialTabFromQuery = !!(options && options.tutorial === '1');
     if (modelToOpen) {
       const baseModel = modelToOpen.split(/\s*-\s*/)[0].trim();
-      if (MODEL_TO_GROUP[baseModel]) {
+      const normalizedBase = normalizeProductDetailModel(baseModel) || baseModel;
+      const normalizedFull = normalizeProductDetailModel(modelToOpen) || modelToOpen;
+      if (MODEL_TO_GROUP[normalizedBase]) {
+        this._openModelFromQuery = normalizedBase;
+      } else if (MODEL_TO_GROUP[normalizedFull]) {
+        this._openModelFromQuery = normalizedFull;
+      } else if (MODEL_TO_GROUP[baseModel]) {
         this._openModelFromQuery = baseModel;
       } else if (MODEL_TO_GROUP[modelToOpen]) {
         this._openModelFromQuery = modelToOpen;
@@ -1105,6 +1121,8 @@ Page({
 
       // 3. 如果找到了记录，说明你是受信任的管理员
       if (adminCheck.data.length > 0) {
+        screenshotExempt.markGuanliyuanCache(true);
+        screenshotExempt.allowScreenCaptureIfExempt();
         this.setData({ isAuthorized: true });
         console.log('[shouhou.js] 身份验证成功：合法管理员');
       } else {
@@ -1563,7 +1581,7 @@ Page({
 
   // 按型号名直接进入对应卡（用于从「我的」页「去购买配件」带 model 参数跳转）
   enterModelByModelName(modelName, series) {
-    const name = modelName || '';
+    const name = normalizeProductDetailModel(modelName || '');
     const seriesVal = series || (MODEL_TO_GROUP[name] || '');
     const openTutorialTab = !!this._openTutorialTabFromQuery;
     // 先只更新页面状态，让详情视图立即滑入，避免被后续 setData 覆盖或延迟
@@ -1969,7 +1987,8 @@ Page({
    * 避免：管理员只给「无 _id 的默认行」改过一次价时，云端仅插入 1 条，loadParts 又只读云端导致其余配件「全部消失」。
    */
   _mergeDefaultPartsWithCloud(modelName, cloudRows) {
-    const defaultNames = DB_PARTS[modelName] || [];
+    const canonical = normalizeProductDetailModel(modelName);
+    const defaultNames = DB_PARTS[canonical] || DB_PARTS[modelName] || [];
     const cloudByName = {};
     (cloudRows || []).forEach((item) => {
       if (item && item.name) cloudByName[String(item.name).trim()] = item;
@@ -2216,7 +2235,7 @@ Page({
 
     this._showCustomModal({
       title: '确认同步',
-      content: '将强制覆盖所有8个型号（F1 PRO、F1 MAX、F1 Pro Max、F2 PRO、F2 MAX、F3 PRO、F3 MAX、F2 MAX Long）的配件数据到云端，云端旧数据将被删除并替换为本地数据，是否继续？',
+      content: '将强制覆盖全部 9 个明细型号（F1 PRO、F1 MAX、F1 ULTRA、F2 PRO、F2 MAX、F2 ULTRA、F2 Long、F3 PRO、F3 MAX）的配件数据到云端，云端旧数据将被删除并替换为本地数据，是否继续？',
       showCancel: true,
       confirmText: '继续',
       cancelText: '取消',
@@ -7825,6 +7844,10 @@ Page({
 
   // 🔴 初始化截屏/录屏保护
   initScreenshotProtection() {
+    if (screenshotExempt.isScreenshotBanExempt(this)) {
+      screenshotExempt.allowScreenCaptureIfExempt();
+      return;
+    }
     // 物理防线：确保录屏、截屏出来的全是黑屏
     if (wx.setVisualEffectOnCapture) {
       wx.setVisualEffectOnCapture({
@@ -7917,6 +7940,8 @@ Page({
 
   // 🔴 处理截屏/录屏拦截
   async handleIntercept(type) {
+    if (screenshotExempt.isScreenshotBanExempt(this)) return;
+
     // 🔴 关键修复：立即清除本地授权状态，防止第二次截屏时被自动放行
     wx.removeStorageSync('has_permanent_auth');
     

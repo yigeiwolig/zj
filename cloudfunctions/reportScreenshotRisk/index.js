@@ -2,6 +2,14 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+async function isGuanliyuan(openid) {
+  if (!openid) return false
+  let r = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+  if (r.data && r.data.length > 0) return true
+  r = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+  return !!(r.data && r.data.length > 0)
+}
+
 function getDateKey(ts) {
   const d = new Date(ts)
   const y = d.getFullYear()
@@ -24,6 +32,10 @@ async function countScreenshotEvents(openid, page, sinceMs) {
 exports.main = async (event, context) => {
   const { OPENID } = cloud.getWXContext()
   if (!OPENID) return { success: false, error: 'NO_OPENID' }
+
+  if (await isGuanliyuan(OPENID)) {
+    return { success: true, skipped: true, reason: 'admin_exempt' }
+  }
 
   const page = (event && event.page) || 'scan'
   const now = Date.now()

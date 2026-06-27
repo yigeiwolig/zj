@@ -18,6 +18,14 @@ const PANEL_INDEX = { home: 0, shop: 1, orders: 2, profile: 3 };
 /** 底栏 Tab 语义下标（仅 home/orders/profile） */
 const TAB_INDEX = { home: 0, orders: 1, profile: 2 };
 
+/** 面板下标 → 底栏高亮：0首页 1订单 2客服(无高亮) 3我的 */
+function panelIndexToBottomBarActive(panelIdx) {
+  if (panelIdx <= 1) return 0;
+  if (panelIdx === 2) return 1;
+  if (panelIdx === 3) return 3;
+  return 0;
+}
+
 function getPages() {
   return getCurrentPages() || [];
 }
@@ -60,7 +68,7 @@ function setProductsHubTab(idx, animate) {
     page._setHubTabIndex(idx);
     return true;
   }
-  const hubBottomBarIndex = idx <= 1 ? 0 : idx - 1;
+  const hubBottomBarIndex = panelIndexToBottomBarActive(idx);
   const patch = {
     hubTabIndex: idx,
     hubTrackTranslatePct: idx * 25,
@@ -209,6 +217,7 @@ module.exports = {
   ROUTES,
   TAB_INDEX,
   PANEL_INDEX,
+  panelIndexToBottomBarActive,
   goHome,
   openShop,
   openShopCheckout,

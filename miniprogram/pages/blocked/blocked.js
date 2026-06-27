@@ -1,5 +1,6 @@
 // miniprogram/pages/blocked/blocked.js
 const referralPendingBind = require('../../utils/referralPendingBind.js');
+const screenshotExempt = require('../../utils/screenshotAdminExempt.js');
 
 Page({
   data: {
@@ -66,11 +67,19 @@ Page({
       app.globalData.updatePageVisit('blocked');
     }
     
-    // 🔴 检查是否是管理员
-    const isAdmin = wx.getStorageSync('is_admin') === true;
-    
+    // 🔴 检查是否是管理员（guanliyuan 白名单）
     const type = options.type || '';
-    this.setData({ type, isAdmin });
+    this.setData({ type });
+
+    screenshotExempt.ensureScreenshotBanExempt(this).then((exempt) => {
+      if (!exempt) return;
+      this.setData({ isAdmin: true });
+      if (type === 'screenshot' || type === 'record') {
+        wx.removeStorageSync('is_user_banned');
+        wx.removeStorageSync('is_screenshot_banned');
+        wx.reLaunch({ url: '/pages/index/index' });
+      }
+    });
     
     // 🔴 重置跳转标志，允许后续跳转
     app.globalData._isJumpingToBlocked = false;

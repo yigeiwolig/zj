@@ -2,6 +2,7 @@
 const app = getApp();
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js');
 const referralPendingBind = require('../../utils/referralPendingBind.js');
+const shareApp = require('../../utils/shareApp.js');
 const { redirectToPcBlockedIfNeeded } = require('../../utils/runtimeEnv.js');
 var qqmapsdk = new QQMapWX({
     key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
@@ -57,6 +58,12 @@ Page({
     _pendingUnbanData: null, // 存储待执行的放行数据
     
     // 【新增】首次进入提示弹窗
+    showXianyuWarningModal: false,
+    xianyuWarningModalEnterReady: false,
+    xianyuWarningModalClosing: false,
+    xianyuWarningActionReady: false,
+    xianyuWarningActionCountdown: 5,
+    xianyuWarningProgress: 0,
     showFirstTimeModal: false,
     firstTimeModalEnterReady: false, // 下一帧再开过渡，避免 wx:if 首帧「硬切」
     firstTimeModalClosing: false,
@@ -81,7 +88,7 @@ Page({
     // 【新增】管理员相关状态
     isAdmin: false,        // 是否是管理员
     isAdminMode: false,    // 是否开启了管理员模式
-    adminViewMode: 'banned', // banned | suspicious | suspiciousBanned | suspiciousIgnored | nickname
+    adminViewMode: 'banned', // banned | bannedIgnored | suspicious | suspiciousBanned | suspiciousIgnored | nickname
     manualBannedMode: false, // true: 仅手动封禁名单
     suspiciousManualBannedMode: false, // true: 仅可疑人员处理中手动封禁留存名单
     bannedUsers: [],       // 被封禁的用户列表
@@ -97,6 +104,12 @@ Page({
     adminIgnoredSearch: '',
     adminIgnoredSearchTrim: '',
     isLoadingIgnoredUsers: false,
+    bannedIgnoredUsers: [],
+    bannedIgnoredDisplayList: [],
+    bannedIgnoredSearchMatchCount: 0,
+    adminBannedIgnoredSearch: '',
+    adminBannedIgnoredSearchTrim: '',
+    isLoadingBannedIgnoredUsers: false,
     isLoadingBannedUsers: false,  // 是否正在加载封禁用户列表
     isLoadingScreenshotRiskUsers: false,
     isLoadingSuspiciousUsers: false,
@@ -105,7 +118,14 @@ Page({
     // 🔴 昵称录入相关状态
     nicknameInput: '',    // 昵称输入
     isSubmittingNickname: false, // 是否正在提交昵称
-    nicknameBypassLocation: false // 放行开关（是否跳过地域拦截）
+    nicknameBypassLocation: false, // 放行开关（是否跳过地域拦截）
+    blockedRegionValue: ['广东省', '广州市', '天河区'],
+    blockedRegionText: '广东省 广州市 天河区',
+    blockedWholeCity: false,
+    blockedCitiesDisplay: [],
+    blockingRulesActive: true,
+    isLoadingBlockedRegions: false,
+    isSubmittingBlockedRegion: false
   },
 
   _clearNoLoadingTimer() {
@@ -217,14 +237,19 @@ Page({
   },
 
   async _initIndexAuthFlow() {
-    const isAdmin = await this._checkAdminPrivilegeAsync();
-    if (isAdmin) {
-      this._bypassAuthForAdmin();
-      return;
-    }
+    this._indexAuthFlowInProgress = true;
+    try {
+      const isAdmin = await this._checkAdminPrivilegeAsync();
+      if (isAdmin) {
+        this._bypassAuthForAdmin();
+        return;
+      }
 
-    // 必须以 valid_users 云端记录为准，避免本地残留昵称跳过「抖音/闲鱼」引导
-    await this.checkValidUserFromDatabase();
+      // 必须以 valid_users 云端记录为准，避免本地残留昵称跳过「抖音/闲鱼」引导
+      await this.checkValidUserFromDatabase();
+    } finally {
+      this._indexAuthFlowInProgress = false;
+    }
   },
 
   /** 管理员：跳过昵称/口令与「专属体验」引导 */
@@ -236,7 +261,10 @@ Page({
       isShowNicknameUI: false,
       showFirstTimeModal: false,
       firstTimeModalEnterReady: false,
-      firstTimeModalClosing: false
+      firstTimeModalClosing: false,
+      showXianyuWarningModal: false,
+      xianyuWarningModalEnterReady: false,
+      xianyuWarningModalClosing: false
     });
   },
 
@@ -255,11 +283,19 @@ Page({
 
   /** 全局守卫清掉本地昵称后，补拉「抖音/闲鱼」引导或昵称层 */
   _refreshNewUserGuideOnShow() {
+    if (this._indexAuthFlowInProgress) return;
     if (this.data.isAdmin || this.data.isAuthorized) return;
     const hasAuth = wx.getStorageSync('has_permanent_auth');
     const nick = wx.getStorageSync('user_nickname');
     if (hasAuth && nick) return;
-    if (this.data.showFirstTimeModal || this.data.isShowNicknameUI) return;
+    if (
+      this.data.showFirstTimeModal ||
+      this.data.showXianyuWarningModal ||
+      this.data.xianyuWarningModalClosing ||
+      this.data.isShowNicknameUI
+    ) {
+      return;
+    }
     this._showUnauthorizedEntryUI();
   },
 
@@ -291,7 +327,50 @@ Page({
       this._firstTimeModalEnterFallbackTimer = null;
     }
     this._clearFirstTimeActionCooldown();
+    this._clearXianyuWarningActionCooldown();
     this._clearNoLoadingTimer();
+  },
+
+  onShareAppMessage() {
+    return shareApp.getShareAppMessage();
+  },
+
+  onShareTimeline() {
+    return shareApp.getShareTimeline();
+  },
+
+  _clearXianyuWarningActionCooldown() {
+    if (this._xianyuWarningActionCooldownTimer) {
+      clearInterval(this._xianyuWarningActionCooldownTimer);
+      this._xianyuWarningActionCooldownTimer = null;
+    }
+  },
+
+  _startXianyuWarningActionCooldown() {
+    const total = 5;
+    this._clearXianyuWarningActionCooldown();
+    this.setData({
+      xianyuWarningActionReady: false,
+      xianyuWarningActionCountdown: total,
+      xianyuWarningProgress: 0
+    });
+    this._xianyuWarningActionCooldownTimer = setInterval(() => {
+      const next = (this.data.xianyuWarningActionCountdown || 0) - 1;
+      if (next <= 0) {
+        this._clearXianyuWarningActionCooldown();
+        this.setData({
+          xianyuWarningActionReady: true,
+          xianyuWarningActionCountdown: 0,
+          xianyuWarningProgress: 100
+        });
+        return;
+      }
+      const progress = Math.round(((total - next) / total) * 100);
+      this.setData({
+        xianyuWarningActionCountdown: next,
+        xianyuWarningProgress: progress
+      });
+    }, 1000);
   },
 
   _clearFirstTimeActionCooldown() {
@@ -340,7 +419,10 @@ Page({
           isShowNicknameUI: false,
           showFirstTimeModal: false,
           firstTimeModalEnterReady: false,
-          firstTimeModalClosing: false
+          firstTimeModalClosing: false,
+          showXianyuWarningModal: false,
+          xianyuWarningModalEnterReady: false,
+          xianyuWarningModalClosing: false
         });
         return;
       }
@@ -351,7 +433,7 @@ Page({
       
       if (!openid) {
         console.warn('[index] 无法获取 openid，显示抖音/闲鱼引导');
-        this._resetDouyinXianyuGuideState();
+        this._clearStaleLocalAuthOnly();
         this._showUnauthorizedEntryUI();
         return;
       }
@@ -381,7 +463,10 @@ Page({
             inputNickName: nickname,
             showFirstTimeModal: false,
             firstTimeModalEnterReady: false,
-            firstTimeModalClosing: false
+            firstTimeModalClosing: false,
+            showXianyuWarningModal: false,
+            xianyuWarningModalEnterReady: false,
+            xianyuWarningModalClosing: false
           });
           this._retryPendingReferralBindIfAuthed();
           console.log('[index] 从 valid_users 自动恢复用户昵称:', nickname);
@@ -391,24 +476,34 @@ Page({
       
       // 没有找到记录：清掉可能残留的本地授权，先展示抖音/闲鱼加微信引导
       console.log('[index] valid_users 中未找到用户记录，先展示抖音/闲鱼引导');
-      wx.removeStorageSync('has_permanent_auth');
-      wx.removeStorageSync('user_nickname');
+      this._clearStaleLocalAuthOnly();
       this.setData({ isAuthorized: false, inputNickName: '' });
-      this._resetDouyinXianyuGuideState();
       this._showUnauthorizedEntryUI();
       
     } catch (err) {
       console.error('[index] 检查 valid_users 失败:', err);
-      this._resetDouyinXianyuGuideState();
+      this._clearStaleLocalAuthOnly();
       this._showUnauthorizedEntryUI();
     }
   },
 
-  /** 未录入用户：每次进入先走抖音/闲鱼加微信引导（同一会话内点「我知道了」后再进昵称层） */
+  /** 仅清理本地残留授权，不重置本会话已展示的引导状态（避免弹窗重复弹出） */
+  _clearStaleLocalAuthOnly() {
+    wx.removeStorageSync('has_permanent_auth');
+    wx.removeStorageSync('user_nickname');
+  },
+
+  /** 未录入用户：每次冷启动重置引导；勿在引导已展示/已关闭后再调用 */
   _resetDouyinXianyuGuideState() {
+    this._xianyuWarningDismissedThisSession = false;
+    this._xianyuWarningShownOnce = false;
     this._firstTimeGuideDismissedThisSession = false;
     this._firstTimeModalShownOnce = false;
     wx.removeStorageSync('has_seen_first_time_modal');
+  },
+
+  _markXianyuWarningDismissed() {
+    this._xianyuWarningDismissedThisSession = true;
   },
 
   _markDouyinXianyuGuideDismissed() {
@@ -416,11 +511,34 @@ Page({
     wx.setStorageSync('has_seen_first_time_modal', true);
   },
 
-  /** 未授权入口：新用户先抖音/闲鱼引导，否则直接昵称验证（互斥，不叠两层） */
+  _xianyuWarningModalPatch(closed = true) {
+    return closed ? {
+      showXianyuWarningModal: false,
+      xianyuWarningModalEnterReady: false,
+      xianyuWarningModalClosing: false
+    } : {
+      showXianyuWarningModal: true,
+      xianyuWarningModalEnterReady: true,
+      xianyuWarningModalClosing: false
+    };
+  },
+
+  /** 未授权入口：新用户先闲鱼须知，再加微信引导，否则直接昵称验证（互斥，不叠两层） */
   _showUnauthorizedEntryUI() {
     if (this.data.isAdmin || this.data.isAuthorized) return;
+    if (this.data.showXianyuWarningModal || this.data.showFirstTimeModal) return;
+    if (this._openXianyuWarningModalIfNeeded()) return;
     if (this._openFirstTimeModalIfNeeded()) return;
     this._showNicknameUI();
+  },
+
+  /** @returns {boolean} 是否已拉起闲鱼须知 */
+  _openXianyuWarningModalIfNeeded() {
+    if (this.data.isAdmin || this.data.isAuthorized) return false;
+    if (this._xianyuWarningDismissedThisSession) return false;
+    if (this.data.showXianyuWarningModal || this.data.xianyuWarningModalClosing) return false;
+    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
+    return this._openXianyuWarningModalAnimated();
   },
 
   /** @returns {boolean} 是否已拉起首次引导 */
@@ -538,7 +656,10 @@ Page({
         isAuthorized: true,
         showFirstTimeModal: false,
         firstTimeModalEnterReady: false,
-        firstTimeModalClosing: false
+        firstTimeModalClosing: false,
+        showXianyuWarningModal: false,
+        xianyuWarningModalEnterReady: false,
+        xianyuWarningModalClosing: false
       });
       setTimeout(() => {
         wx.reLaunch({ url: '/package-biz/pages/azjc/azjc' });
@@ -660,6 +781,9 @@ Page({
               showFirstTimeModal: false,
               firstTimeModalEnterReady: false,
               firstTimeModalClosing: false,
+              showXianyuWarningModal: false,
+              xianyuWarningModalEnterReady: false,
+              xianyuWarningModalClosing: false,
               showCustomSuccessModal: false,
               inputInviteCode: keepInvite ? this.data.inputInviteCode : ''
             });
@@ -758,6 +882,15 @@ Page({
         firstTimeModalEnterReady: false,
         firstTimeModalClosing: false,
         showFirstTimeModal: false,
+        ...this._xianyuWarningModalPatch(true),
+        isShowNicknameUI: !this.data.isAuthorized,
+        nicknameUiClosing: false
+      });
+    } else if (this.data.showXianyuWarningModal) {
+      this._clearXianyuWarningActionCooldown();
+      this._markXianyuWarningDismissed();
+      this.setData({
+        ...this._xianyuWarningModalPatch(true),
         isShowNicknameUI: !this.data.isAuthorized,
         nicknameUiClosing: false
       });
@@ -2052,6 +2185,279 @@ Page({
     }
   },
 
+  _bannedIgnoredUserHaystack(item) {
+    if (!item) return '';
+    return [
+      item.viewerNickname,
+      item.viewerOpenid,
+      item.banReasonText,
+      item.banPageText,
+      item.triggerReasonText,
+      item.sourceTypeLabel,
+      item.regionText,
+      item.province,
+      item.city,
+      item.district,
+      item.address,
+      item.addressDisplay,
+      item.geoText,
+      item.phoneModel,
+      item.ignoredAt,
+      item.bannedAt,
+      item.totalVisits != null ? `${item.totalVisits}次` : '',
+      item.failCount != null ? `${item.failCount}次` : ''
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+  },
+
+  _itemMatchesBannedIgnoredSearchTokens(item, tokens) {
+    if (!tokens || !tokens.length) return true;
+    const haystack = this._bannedIgnoredUserHaystack(item);
+    return tokens.every((token) => haystack.indexOf(token) !== -1);
+  },
+
+  _syncBannedIgnoredDisplayList() {
+    const users = Array.isArray(this.data.bannedIgnoredUsers) ? this.data.bannedIgnoredUsers : [];
+    const kw = String(this.data.adminBannedIgnoredSearch || '').trim();
+    const tokens = this._parseSuspiciousSearchTokens(kw);
+    let displayList;
+    let matchCount;
+    if (!tokens.length) {
+      displayList = users.slice().sort((a, b) => (b.ignoredAtTs || 0) - (a.ignoredAtTs || 0));
+      matchCount = users.length;
+    } else {
+      const matched = users.filter((item) => this._itemMatchesBannedIgnoredSearchTokens(item, tokens));
+      const matchKeys = new Set(matched.map((u) => u.rowKey).filter(Boolean));
+      displayList = users
+        .map((u) => ({ ...u, _searchMatch: matchKeys.has(u.rowKey) }))
+        .sort((a, b) => {
+          const matchDiff = Number(b._searchMatch) - Number(a._searchMatch);
+          return matchDiff !== 0 ? matchDiff : (b.ignoredAtTs || 0) - (a.ignoredAtTs || 0);
+        });
+      matchCount = matched.length;
+    }
+    this.setData({
+      bannedIgnoredDisplayList: displayList,
+      bannedIgnoredSearchMatchCount: matchCount,
+      adminBannedIgnoredSearchTrim: kw
+    });
+  },
+
+  _applyBannedIgnoredUsersList(users, options = {}) {
+    const list = Array.isArray(users) ? users : [];
+    const silent = !!(options && options.silent);
+    const localList = this.data.bannedIgnoredUsers || [];
+    if (!list.length && silent && localList.length) {
+      return;
+    }
+    this.setData({ bannedIgnoredUsers: list }, () => this._syncBannedIgnoredDisplayList());
+  },
+
+  _mergeBannedIgnoredUsersFromServer(serverUsers, options = {}) {
+    const serverList = Array.isArray(serverUsers) ? serverUsers : [];
+    const localList = this.data.bannedIgnoredUsers || [];
+    if (!serverList.length) {
+      if (localList.length) return;
+      this._applyBannedIgnoredUsersList([]);
+      return;
+    }
+    const serverKeys = new Set(
+      serverList.map((u) => u && (u.rowKey || u.viewerOpenid || u.buttonId)).filter(Boolean)
+    );
+    const localOnly = localList.filter((u) => {
+      if (!u) return false;
+      const key = u.rowKey || u.viewerOpenid || u.buttonId;
+      return key && !serverKeys.has(key);
+    });
+    this._applyBannedIgnoredUsersList(serverList.concat(localOnly));
+  },
+
+  onAdminBannedIgnoredSearchInput(e) {
+    const keyword = (e.detail && e.detail.value) || '';
+    this.setData({ adminBannedIgnoredSearch: keyword }, () => this._syncBannedIgnoredDisplayList());
+  },
+
+  onAdminBannedIgnoredSearchClear() {
+    this.setData({ adminBannedIgnoredSearch: '' }, () => this._syncBannedIgnoredDisplayList());
+  },
+
+  async loadBannedIgnoredUsers(options = {}) {
+    const silent = !!options.silent;
+    if (!silent) {
+      this.setData({ isLoadingBannedIgnoredUsers: true });
+    }
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'getIgnoredUsers',
+        data: { scope: 'banned_ignored_only' }
+      });
+      if (res.result && res.result.success) {
+        this._mergeBannedIgnoredUsersFromServer(res.result.users || [], { silent });
+      } else {
+        console.error('[index] 加载封禁无视人员列表失败:', res.result?.error);
+        if (!silent) {
+          this.showAutoToast('提示', res.result?.error || '加载无视人员失败');
+          this._applyBannedIgnoredUsersList([]);
+        }
+      }
+    } catch (err) {
+      console.error('[index] 加载封禁无视人员列表异常:', err);
+      if (!silent) {
+        this.showAutoToast('提示', '加载无视人员失败，请重新部署云函数');
+        this._applyBannedIgnoredUsersList([]);
+      }
+    } finally {
+      if (!silent) {
+        this.setData({ isLoadingBannedIgnoredUsers: false });
+      }
+    }
+  },
+
+  _prependBannedIgnoredUserFromCard(card) {
+    if (!card) return;
+    const record = {
+      rowKey: `bign_local_${card._id || card.buttonId || card._openid}`,
+      buttonId: card._id || card.buttonId || '',
+      viewerOpenid: card._openid || card.viewerOpenid || '',
+      viewerNickname: card.nickname || card.viewerNickname || '该用户',
+      banReason: card.banReason || '',
+      banPage: card.banPage || '',
+      banReasonText: card.banReasonText || '',
+      banPageText: card.banPageText || '',
+      triggerReasonText: card.banReasonText ? `${card.banReasonText}（已无视）` : '封禁（已无视）',
+      ignoredAt: this._formatIgnoredAtNow(),
+      ignoredAtTs: Date.now(),
+      bannedAt: card.updateTime || '',
+      regionText: [card.province, card.city, card.district].filter(Boolean).join(' ') || '-',
+      province: card.province || '',
+      city: card.city || '',
+      district: card.district || '',
+      address: card.address || '',
+      addressDisplay: card.address || '-',
+      latitude: card.latitude,
+      longitude: card.longitude,
+      geoText: card.latitude && card.longitude ? `${card.latitude}, ${card.longitude}` : '-',
+      totalVisits: Number(card.totalVisits || 0),
+      failCount: Number(card.failCount || 0),
+      phoneModel: card.phoneModel || '',
+      sourceTypeLabel: '封禁列表'
+    };
+    const list = (this.data.bannedIgnoredUsers || []).filter((item) => {
+      if (!item) return false;
+      if (record.buttonId && item.buttonId === record.buttonId) return false;
+      if (record.viewerOpenid && item.viewerOpenid === record.viewerOpenid) return false;
+      return true;
+    });
+    this._applyBannedIgnoredUsersList([record].concat(list));
+  },
+
+  _removeBannedIgnoredUserCard({ rowKey, viewerOpenid, buttonId } = {}) {
+    const list = (this.data.bannedIgnoredUsers || []).filter((item) => {
+      if (!item) return false;
+      if (rowKey && item.rowKey === rowKey) return false;
+      if (buttonId && item.buttonId === buttonId) return false;
+      if (viewerOpenid && item.viewerOpenid === viewerOpenid) return false;
+      return true;
+    });
+    this._applyBannedIgnoredUsersList(list);
+  },
+
+  async handleBannedDecision(e) {
+    const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const buttonId = dataset.buttonId || '';
+    const userIndex = dataset.index;
+    const nickname = dataset.nickname || '该用户';
+    if (!buttonId) return;
+
+    const sourceCard = Number.isFinite(Number(userIndex))
+      ? (this.data.bannedUsers || [])[Number(userIndex)]
+      : (this.data.bannedUsers || []).find((item) => item && item._id === buttonId);
+
+    this.showMyDialog({
+      title: '确认操作',
+      content: `确定要无视「${nickname}」吗？用户将被放行并留档到无视人员追溯。`,
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      success: async (res) => {
+        if (!res.confirm) return;
+        try {
+          this.showMyLoading('处理中...');
+          const result = await wx.cloud.callFunction({
+            name: 'handleBannedUserDecision',
+            data: {
+              action: 'ignore',
+              buttonId,
+              snapshot: sourceCard ? {
+                nickname: sourceCard.nickname,
+                banReason: sourceCard.banReason,
+                banPage: sourceCard.banPage,
+                banReasonText: sourceCard.banReasonText,
+                banPageText: sourceCard.banPageText,
+                triggerReasonText: sourceCard.banReasonText ? `${sourceCard.banReasonText}（已无视）` : '',
+                totalVisits: sourceCard.totalVisits,
+                failCount: sourceCard.failCount,
+                phoneModel: sourceCard.phoneModel,
+                province: sourceCard.province,
+                city: sourceCard.city,
+                district: sourceCard.district,
+                address: sourceCard.address,
+                latitude: sourceCard.latitude,
+                longitude: sourceCard.longitude,
+                bannedAt: sourceCard.updateTime
+              } : {}
+            }
+          });
+          this.hideMyLoading();
+          if (result.result && result.result.success) {
+            if (result.result.archiveOk === false) {
+              const detail = result.result.archiveError || '留档写入失败';
+              this.showAutoToast('提示', `已无视，但留档失败：${detail}`);
+            } else {
+              this.showAutoToast('成功', '已无视');
+            }
+            if (sourceCard) {
+              this._prependBannedIgnoredUserFromCard(sourceCard);
+            }
+            const bannedUsers = (this.data.bannedUsers || []).filter((item) => item && item._id !== buttonId);
+            this.setData({ bannedUsers });
+            this.loadBannedIgnoredUsers({ silent: true });
+          } else {
+            this.showAutoToast('失败', result.result?.error || '处理失败');
+          }
+        } catch (err) {
+          this.hideMyLoading();
+          this.showAutoToast('失败', err.message || '处理失败');
+        }
+      }
+    });
+  },
+
+  handleBannedIgnoredUserUnban(e) {
+    const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const itemRowKey = dataset.itemRowKey || '';
+    const card = itemRowKey
+      ? (this.data.bannedIgnoredUsers || []).find((item) => item && item.rowKey === itemRowKey)
+      : null;
+    if (!card || !card.buttonId) return;
+    const nickname = card.viewerNickname || '该用户';
+    this.setData({
+      showConfirmModal: true,
+      confirmModalClosing: false,
+      confirmModalContent: `确定要解除对「${nickname}」的封禁吗？`,
+      _pendingUnbanData: {
+        buttonId: card.buttonId,
+        banReason: card.banReason,
+        openid: card.viewerOpenid,
+        nickname,
+        fromBannedIgnored: true,
+        itemRowKey
+      }
+    });
+  },
+
   _formatIgnoredAtNow() {
     const d = new Date();
     const pad = (n) => String(n).padStart(2, '0');
@@ -2128,6 +2534,10 @@ Page({
       patch.adminIgnoredSearch = '';
       patch.adminIgnoredSearchTrim = '';
     }
+    if (mode !== 'bannedIgnored') {
+      patch.adminBannedIgnoredSearch = '';
+      patch.adminBannedIgnoredSearchTrim = '';
+    }
     if (mode === 'suspicious') {
       patch.adminViewMode = 'suspicious';
       patch.suspiciousManualBannedMode = false;
@@ -2139,16 +2549,47 @@ Page({
       if (mode === 'suspiciousIgnored') {
         this._syncIgnoredDisplayList();
       }
+      if (mode === 'bannedIgnored') {
+        this._syncBannedIgnoredDisplayList();
+      }
     });
     if (mode === 'banned' && this.data.bannedUsers.length === 0) {
       this.loadBannedUsers();
       this.loadScreenshotRiskUsers();
+    } else if (mode === 'bannedIgnored' && this.data.bannedIgnoredUsers.length === 0) {
+      this.loadBannedIgnoredUsers();
     } else if (mode === 'suspicious' && this.data.suspiciousUsers.length === 0) {
       this.loadSuspiciousUsers();
     } else if (mode === 'suspiciousIgnored' && this.data.ignoredUsers.length === 0) {
       this.loadIgnoredUsers();
+    } else if (mode === 'nickname') {
+      this.loadBlockedRegionsAdmin();
     }
     this._startSuspiciousAutoRefresh();
+  },
+
+  goToBannedIgnoredUsersFromHeader() {
+    if (this.data.adminViewMode === 'bannedIgnored') return;
+    this.setData({
+      adminViewMode: 'bannedIgnored',
+      manualBannedMode: false,
+      suspiciousManualBannedMode: false
+    });
+    this.loadBannedIgnoredUsers();
+    this._stopSuspiciousAutoRefresh();
+  },
+
+  goBackToBannedFromHeader() {
+    if (this.data.adminViewMode === 'banned') return;
+    this.setData({
+      adminViewMode: 'banned',
+      manualBannedMode: false,
+      suspiciousManualBannedMode: false
+    });
+    if (!this.data.bannedUsers.length) {
+      this.loadBannedUsers();
+      this.loadScreenshotRiskUsers();
+    }
   },
 
   goToIgnoredUsersFromHeader() {
@@ -2219,6 +2660,8 @@ Page({
         await this.loadSuspiciousUsers();
       } else if (this.data.adminViewMode === 'suspiciousIgnored') {
         await this.loadIgnoredUsers();
+      } else if (this.data.adminViewMode === 'bannedIgnored') {
+        await this.loadBannedIgnoredUsers();
       }
     } catch (err) {
       console.warn('[index] 管理列表刷新失败:', err);
@@ -2654,12 +3097,53 @@ Page({
     });
   },
 
+  /** @returns {boolean} 是否实际打开了闲鱼须知 */
+  _openXianyuWarningModalAnimated() {
+    if (this._xianyuWarningShownOnce) return false;
+    if (this.data.isAuthorized) return false;
+    if (this._xianyuWarningDismissedThisSession) return false;
+    if (this.data.showXianyuWarningModal || this.data.xianyuWarningModalClosing) return false;
+    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
+    this._xianyuWarningShownOnce = true;
+    this.setData({
+      ...this._xianyuWarningModalPatch(false),
+      isShowNicknameUI: false,
+      nicknameUiClosing: false,
+      showFirstTimeModal: false,
+      firstTimeModalEnterReady: false,
+      firstTimeModalClosing: false
+    });
+    this._allowScreenCaptureOnIndex();
+    this._startXianyuWarningActionCooldown();
+    return true;
+  },
+
+  closeXianyuWarningModal() {
+    if (this.data.xianyuWarningModalClosing) return;
+    if (!this.data.xianyuWarningActionReady) return;
+    this._clearXianyuWarningActionCooldown();
+    this._markXianyuWarningDismissed();
+    this.setData({ xianyuWarningModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        ...this._xianyuWarningModalPatch(true),
+        xianyuWarningModalClosing: false
+      });
+      if (!this.data.isAuthorized && !this.data.isAdmin) {
+        if (!this._openFirstTimeModalIfNeeded()) {
+          this._showNicknameUI();
+        }
+      }
+    }, 380);
+  },
+
   /** @returns {boolean} 是否实际打开了首次引导 */
   _openFirstTimeModalAnimated() {
     // 防抖：本次进入 index 只允许弹一次，避免异步流程里重复触发
     if (this._firstTimeModalShownOnce) return false;
     if (this.data.isAuthorized) return false;
     if (this._firstTimeGuideDismissedThisSession) return false;
+    if (this.data.showFirstTimeModal || this.data.firstTimeModalClosing) return false;
     if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
     if (this._firstTimeModalEnterTimer) {
       clearTimeout(this._firstTimeModalEnterTimer);
@@ -2671,6 +3155,9 @@ Page({
       showFirstTimeModal: true,
       firstTimeModalEnterReady: true,
       firstTimeModalClosing: false,
+      showXianyuWarningModal: false,
+      xianyuWarningModalEnterReady: false,
+      xianyuWarningModalClosing: false,
       isShowNicknameUI: false,
       nicknameUiClosing: false,
       showWechatQRCode: true,
@@ -2819,7 +3306,14 @@ Page({
 
   // 🔴 确认执行放行
   async handleConfirmAction() {
-    const { buttonId, userIndex, banReason, openid } = this.data._pendingUnbanData || {};
+    const {
+      buttonId,
+      userIndex,
+      banReason,
+      openid,
+      fromBannedIgnored,
+      itemRowKey
+    } = this.data._pendingUnbanData || {};
     
     if (!buttonId) {
       this.hideConfirmModal();
@@ -2893,9 +3387,17 @@ Page({
       }
 
       // 从列表中移除该用户（立即更新UI）
-      const users = this.data.bannedUsers;
-      users.splice(userIndex, 1);
-      this.setData({ bannedUsers: users });
+      if (fromBannedIgnored) {
+        this._removeBannedIgnoredUserCard({
+          rowKey: itemRowKey,
+          viewerOpenid: openid,
+          buttonId
+        });
+      } else if (Number.isFinite(Number(userIndex))) {
+        const users = this.data.bannedUsers;
+        users.splice(userIndex, 1);
+        this.setData({ bannedUsers: users });
+      }
 
       console.log('[unbanUser] 操作成功，已从列表中移除');
 
@@ -2913,9 +3415,13 @@ Page({
       // 2秒后自动关闭弹窗并刷新列表
       setTimeout(() => {
         this.setData({ showCustomSuccessModal: false });
-        // 延迟重新加载封禁用户列表，等待数据库更新生效
+        // 延迟重新加载列表，等待数据库更新生效
         setTimeout(() => {
-          this.loadBannedUsers();
+          if (fromBannedIgnored) {
+            this.loadBannedIgnoredUsers({ silent: true });
+          } else {
+            this.loadBannedUsers();
+          }
         }, 500);
       }, 2000);
 
@@ -3023,11 +3529,15 @@ Page({
 
   // 🔴 切换昵称录入模式
   toggleNicknameMode() {
-    // 兼容旧调用：切换到昵称录入页
+    const entering = this.data.adminViewMode !== 'nickname';
     this.setData({
-      adminViewMode: this.data.adminViewMode === 'nickname' ? 'banned' : 'nickname',
+      adminViewMode: entering ? 'nickname' : 'banned',
       nicknameInput: '',
       nicknameBypassLocation: false
+    }, () => {
+      if (entering) {
+        this.loadBlockedRegionsAdmin();
+      }
     });
   },
 
@@ -3106,6 +3616,172 @@ Page({
       
       this.showAutoToast('录入失败', err.errMsg || '网络错误，请稍后重试');
     }
+  },
+
+  _syncBlockedCitiesDisplay(config) {
+    const list = (config && config.blocked_cities) || [];
+    const display = list.map((item, index) => {
+      const normalized = typeof item === 'string'
+        ? { city: item, district: '' }
+        : { city: (item && item.city) || '', district: (item && item.district) || '' };
+      const label = normalized.district
+        ? `${normalized.city} ${normalized.district}`
+        : `${normalized.city}（整市）`;
+      return {
+        city: normalized.city,
+        district: normalized.district,
+        label,
+        index
+      };
+    }).filter((item) => item.city);
+    this.setData({
+      blockedCitiesDisplay: display,
+      blockingRulesActive: config ? config.is_active !== false : true
+    });
+    this._reviewPassModeCache = config ? config.is_active === false : false;
+  },
+
+  async loadBlockedRegionsAdmin() {
+    if (this.data.isLoadingBlockedRegions) return;
+    this.setData({ isLoadingBlockedRegions: true });
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'updateBlockingRules',
+        data: { action: 'get' }
+      });
+      if (res.result && res.result.success) {
+        this._syncBlockedCitiesDisplay(res.result.config);
+      } else {
+        this.showAutoToast('提示', (res.result && res.result.errMsg) || '加载封禁地址失败');
+      }
+    } catch (err) {
+      console.error('[index] 加载封禁地址失败:', err);
+      this.showAutoToast('提示', '加载封禁地址失败，请部署 updateBlockingRules 云函数');
+    } finally {
+      this.setData({ isLoadingBlockedRegions: false });
+    }
+  },
+
+  onBlockedRegionChange(e) {
+    const value = (e && e.detail && e.detail.value) || [];
+    this.setData({
+      blockedRegionValue: value,
+      blockedRegionText: value.filter(Boolean).join(' ')
+    });
+  },
+
+  toggleBlockedWholeCity(e) {
+    this.setData({
+      blockedWholeCity: !!(e && e.detail && e.detail.value)
+    });
+  },
+
+  async toggleBlockingRulesActive(e) {
+    const isActive = !!(e && e.detail && e.detail.value);
+    try {
+      this.showMyLoading('保存中...');
+      const res = await wx.cloud.callFunction({
+        name: 'updateBlockingRules',
+        data: { action: 'set_active', is_active: isActive }
+      });
+      this.hideMyLoading();
+      if (res.result && res.result.success) {
+        this._syncBlockedCitiesDisplay(res.result.config);
+        this.showAutoToast('成功', res.result.message || (isActive ? '已开启地域拦截' : '已关闭地域拦截'));
+      } else {
+        this.setData({ blockingRulesActive: !isActive });
+        this.showAutoToast('失败', (res.result && res.result.errMsg) || '保存失败');
+      }
+    } catch (err) {
+      this.hideMyLoading();
+      this.setData({ blockingRulesActive: !isActive });
+      this.showAutoToast('失败', err.errMsg || '保存失败');
+    }
+  },
+
+  async submitBlockedRegion() {
+    const region = this.data.blockedRegionValue || [];
+    const province = region[0] || '';
+    const city = region[1] || '';
+    const district = this.data.blockedWholeCity ? '' : (region[2] || '');
+    if (!city) {
+      this.showMyDialog({
+        title: '提示',
+        content: '请先选择省 / 市 / 区',
+        showCancel: false
+      });
+      return;
+    }
+    if (this.data.isSubmittingBlockedRegion) return;
+
+    this.setData({ isSubmittingBlockedRegion: true });
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'updateBlockingRules',
+        data: {
+          action: 'add_city',
+          province,
+          city,
+          district,
+          wholeCity: this.data.blockedWholeCity
+        }
+      });
+      if (res.result && res.result.success) {
+        this._syncBlockedCitiesDisplay(res.result.config);
+        this.showMyDialog({
+          title: '添加成功',
+          content: res.result.message || '封禁地址已保存到 app_config',
+          showCancel: false
+        });
+      } else {
+        this.showAutoToast('添加失败', (res.result && res.result.errMsg) || '请稍后重试');
+      }
+    } catch (err) {
+      console.error('[index] 添加封禁地址失败:', err);
+      this.showAutoToast('添加失败', err.errMsg || '网络错误，请稍后重试');
+    } finally {
+      this.setData({ isSubmittingBlockedRegion: false });
+    }
+  },
+
+  removeBlockedRegion(e) {
+    const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const index = Number(dataset.index);
+    const city = dataset.city || '';
+    const district = dataset.district || '';
+    const label = dataset.label || city || '该地址';
+    this.showMyDialog({
+      title: '确认移除',
+      content: `确定要从封禁列表移除「${label}」吗？`,
+      showCancel: true,
+      confirmText: '移除',
+      cancelText: '取消',
+      success: async (res) => {
+        if (!res.confirm) return;
+        try {
+          this.showMyLoading('处理中...');
+          const result = await wx.cloud.callFunction({
+            name: 'updateBlockingRules',
+            data: {
+              action: 'remove_city',
+              index: Number.isInteger(index) ? index : -1,
+              city,
+              district
+            }
+          });
+          this.hideMyLoading();
+          if (result.result && result.result.success) {
+            this._syncBlockedCitiesDisplay(result.result.config);
+            this.showAutoToast('成功', result.result.message || '已移除');
+          } else {
+            this.showAutoToast('失败', (result.result && result.result.errMsg) || '移除失败');
+          }
+        } catch (err) {
+          this.hideMyLoading();
+          this.showAutoToast('失败', err.errMsg || '移除失败');
+        }
+      }
+    });
   },
 
   // 🔴 格式化时间

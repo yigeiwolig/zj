@@ -20,71 +20,64 @@
   
   <!-- F1 系列 -->
   <view class="section-title">F1 系列</view>
-  <view class="card-grid">
-    <view class="i-card style-white" bindtap="enterModel" data-name="F1 PRO" data-series="F1">
+  <view class="card-grid card-grid-triple">
+    <view class="i-card i-card--compact style-white" bindtap="enterModel" data-name="F1 PRO" data-series="F1">
       <view class="card-top"><text class="badge">标准版</text></view>
-      <view class="card-btm"><view class="p-name">F1 PRO</view><view class="p-desc">标准版</view></view>
+      <view class="card-btm"><view class="p-name">F1 PRO</view><view class="p-desc">日常优选</view></view>
       <view class="circle-decor"></view>
     </view>
-    <view class="i-card style-black" bindtap="enterModel" data-name="F1 MAX" data-series="F1">
+    <view class="i-card i-card--compact style-black" bindtap="enterModel" data-name="F1 MAX" data-series="F1">
       <view class="card-top"><text class="badge">高级版</text></view>
-      <view class="card-btm"><view class="p-name">F1 MAX</view><view class="p-desc">高级版</view></view>
+      <view class="card-btm"><view class="p-name">F1 MAX</view><view class="p-desc">性能进阶</view></view>
       <view class="circle-decor"></view>
     </view>
-  </view>
-  <view class="card-grid card-grid-single">
-    <view class="fusion-card" bindtap="enterModel" data-name="F1 Pro Max" data-series="F1" hover-class="card-hover" hover-stay-time="100">
-      <view class="white-section"></view>
-      <view class="circle-symbol"></view>
-      <view class="content-area">
-        <view class="status-tag">
-          <text class="tag-text">旗舰版</text>
-        </view>
-        <text class="main-title">F1 Pro Max</text>
-        <text class="sub-title">Pro Max 旗舰款</text>
-      </view>
+    <view class="i-card i-card--compact style-ultra" bindtap="enterModel" data-name="F1 ULTRA" data-series="F1">
+      <view class="card-top"><text class="badge badge--gold">旗舰款</text></view>
+      <view class="card-btm"><view class="p-name">F1 ULTRA</view><view class="p-desc">巅峰配置</view></view>
+      <view class="circle-decor"></view>
     </view>
   </view>
 
-  <!-- F2 系列 -->
-  <view class="section-title">F2 系列</view>
-  <view class="card-grid">
-    <view class="i-card style-white" bindtap="enterModel" data-name="F2 PRO" data-series="F2">
+  <!-- F2 家族系列 -->
+  <view class="section-title">F2 家族系列</view>
+  <view class="card-grid card-grid-triple card-grid-triple--with-long">
+    <view class="i-card i-card--compact style-white" bindtap="enterModel" data-name="F2 PRO" data-series="F2">
       <view class="card-top"><text class="badge">普通版</text></view>
-      <view class="card-btm"><view class="p-name">F2 PRO</view><view class="p-desc">普通版</view></view>
+      <view class="card-btm"><view class="p-name">F2 PRO</view><view class="p-desc">日常优选</view></view>
       <view class="circle-decor"></view>
     </view>
-    <view class="i-card style-black" bindtap="enterModel" data-name="F2 MAX" data-series="F2">
-      <view class="card-top"><text class="badge">旗舰款</text></view>
-      <view class="card-btm"><view class="p-name">F2 MAX</view><view class="p-desc">旗舰款</view></view>
+    <view class="i-card i-card--compact style-black" bindtap="enterModel" data-name="F2 MAX" data-series="F2">
+      <view class="card-top"><text class="badge">高级版</text></view>
+      <view class="card-btm"><view class="p-name">F2 MAX</view><view class="p-desc">性能进阶</view></view>
+      <view class="circle-decor"></view>
+    </view>
+    <view class="i-card i-card--compact style-ultra" bindtap="enterModel" data-name="F2 ULTRA" data-series="F2">
+      <view class="card-top"><text class="badge badge--gold">旗舰款</text></view>
+      <view class="card-btm"><view class="p-name">F2 ULTRA</view><view class="p-desc">巅峰配置</view></view>
       <view class="circle-decor"></view>
     </view>
   </view>
-  <view class="card-grid card-grid-single">
-    <view class="fusion-card" bindtap="enterModel" data-name="F2 MAX Long" data-series="F2" hover-class="card-hover" hover-stay-time="100">
-      <view class="white-section"></view>
-      <view class="circle-symbol"></view>
-      <view class="content-area">
-        <view class="status-tag">
-          <text class="tag-text">加长款</text>
-        </view>
-        <text class="main-title">F2 MAX Long</text>
-        <text class="sub-title">加长款</text>
+  <view class="card-grid card-grid-f2long">
+    <view class="f2-long-bar" bindtap="enterModel" data-name="F2 Long" data-series="F2 Long">
+      <view class="f2-long-bar__main">
+        <text class="f2-long-bar__tag">加长款</text>
+        <text class="f2-long-bar__title">F2 Long</text>
       </view>
+      <text class="f2-long-bar__link">查看详情 ›</text>
     </view>
   </view>
 
   <!-- F3 系列 -->
   <view class="section-title">F3 系列</view>
-  <view class="card-grid">
-    <view class="i-card style-white" bindtap="enterModel" data-name="F3 PRO" data-series="F3">
-      <view class="card-top"><text class="badge">普通版</text></view>
-      <view class="card-btm"><view class="p-name">F3 PRO</view><view class="p-desc">普通版</view></view>
+  <view class="card-grid card-grid-double">
+    <view class="i-card i-card--compact style-white" bindtap="enterModel" data-name="F3 PRO" data-series="F3">
+      <view class="card-top"><text class="badge">标准版</text></view>
+      <view class="card-btm"><view class="p-name">F3 PRO</view><view class="p-desc">日常优选</view></view>
       <view class="circle-decor"></view>
     </view>
-    <view class="i-card style-black" bindtap="enterModel" data-name="F3 MAX" data-series="F3">
+    <view class="i-card i-card--compact style-black" bindtap="enterModel" data-name="F3 MAX" data-series="F3">
       <view class="card-top"><text class="badge">旗舰款</text></view>
-      <view class="card-btm"><view class="p-name">F3 MAX</view><view class="p-desc">旗舰款</view></view>
+      <view class="card-btm"><view class="p-name">F3 MAX</view><view class="p-desc">巅峰配置</view></view>
       <view class="circle-decor"></view>
     </view>
   </view>

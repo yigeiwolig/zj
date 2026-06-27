@@ -1,0 +1,63 @@
+<view class="page" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
+  <view class="nav" style="height: {{navBarHeight}}px; padding-top: {{statusBarHeight}}px;">
+    <view class="nav-back" bindtap="goBack">‹</view>
+    <text class="nav-title">CAN 数据管理</text>
+  </view>
+
+  <block wx:if="{{!isAdmin}}">
+    <view class="card"><text class="hint">需要管理员权限</text></view>
+  </block>
+
+  <block wx:else>
+    <view class="card">
+      <text class="title">采集会话</text>
+      <view
+        class="session"
+        wx:for="{{sessionGroups}}"
+        wx:key="sessionId"
+        data-id="{{item.sessionId}}"
+        bindtap="onSelectSession"
+      >
+        <text class="sid">{{item.sessionId}}</text>
+        <text class="sub">{{item.items.length}} 个文件</text>
+        <view class="item" wx:for="{{item.items}}" wx:for-item="cap" wx:key="docId">
+          <text>{{cap.gearLabel}} · {{cap.frameCount}}帧</text>
+          <text class="link" data-url="{{cap.cosUrl}}" catchtap="onPreviewCos">查看</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="card" wx:if="{{previewText}}">
+      <text class="title">数据预览</text>
+      <text class="pre">{{previewText}}</text>
+    </view>
+
+    <view class="card">
+      <text class="title">手动填写解析结果</text>
+      <input class="inp" placeholder="配置名称" data-field="name" bindinput="onInput" value="{{form.name}}" />
+      <input class="inp" placeholder="车型" data-field="model" bindinput="onInput" value="{{form.model}}" />
+
+      <text class="sec">挡位 CAN</text>
+      <input class="inp" placeholder="gear_id (十进制)" data-field="gear_id" bindinput="onInput" value="{{form.gear_id}}" />
+      <input class="inp" placeholder="gear_offset (0-7)" data-field="gear_offset" bindinput="onInput" value="{{form.gear_offset}}" />
+      <input class="inp" placeholder="N挡字节值" data-field="gear_neutral" bindinput="onInput" value="{{form.gear_neutral}}" />
+      <input class="inp" placeholder="1挡字节值" data-field="gear_1" bindinput="onInput" value="{{form.gear_1}}" />
+      <input class="inp" placeholder="2挡" data-field="gear_2" bindinput="onInput" value="{{form.gear_2}}" />
+      <input class="inp" placeholder="3挡" data-field="gear_3" bindinput="onInput" value="{{form.gear_3}}" />
+      <input class="inp" placeholder="4挡" data-field="gear_4" bindinput="onInput" value="{{form.gear_4}}" />
+      <input class="inp" placeholder="5挡" data-field="gear_5" bindinput="onInput" value="{{form.gear_5}}" />
+      <input class="inp" placeholder="6挡" data-field="gear_6" bindinput="onInput" value="{{form.gear_6}}" />
+
+      <text class="sec">转速 CAN</text>
+      <input class="inp" placeholder="rpm_id" data-field="rpm_id" bindinput="onInput" value="{{form.rpm_id}}" />
+      <input class="inp" placeholder="rpm_pair_offset" data-field="rpm_pair_offset" bindinput="onInput" value="{{form.rpm_pair_offset}}" />
+      <input class="inp" placeholder="rpm_idle (原始怠速)" data-field="rpm_idle" bindinput="onInput" value="{{form.rpm_idle}}" />
+      <input class="inp" placeholder="rpm_raw_max (原始峰值)" data-field="rpm_raw_max" bindinput="onInput" value="{{form.rpm_raw_max}}" />
+      <input class="inp" placeholder="rpm_max (显示上限)" data-field="rpm_max" bindinput="onInput" value="{{form.rpm_max}}" />
+      <label class="chk"><switch checked="{{form.rpm_be}}" bindchange="onToggleBe" /> 大端 BE</label>
+      <label class="chk"><switch checked="{{form.published}}" bindchange="onTogglePublish" /> 发布供用户下载</label>
+
+      <button class="btn" bindtap="onSaveProfile">保存并上传配置</button>
+    </view>
+  </block>
+</view>

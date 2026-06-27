@@ -5,8 +5,9 @@ const path = require('path');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
+const _ = db.command;
 
-const DELETE_KEY_RE = /^(video_go|video\/user|case)(\/|$)/;
+const DELETE_KEY_RE = /^(video_go|video\/user|case|shop|uploads|hub|proofs|repair|repair_image|tutorial|avatar|home|azjc|shouhou|paihang|mt_products|products|can-capture|can-config)(\/|$)/;
 
 function getEnv(name) {
   return (process.env[name] || '').trim();
@@ -53,6 +54,10 @@ const ALLOWED_FOLDERS = new Set([
   'shop/topMedia',
   'shop/accessories',
   'shop/series',
+  'shop/detailMedia',
+  'shop/covers',
+  'shop/options',
+  'shop/compare_videos',
   'hub/home',
   'uploads',
   'mt_products',
@@ -67,7 +72,9 @@ const ALLOWED_FOLDERS = new Set([
   'azjc',
   'shouhou',
   'paihang',
-  'video_go'
+  'video_go',
+  'can-capture',
+  'can-config'
 ])
 
 /** 云函数直传上限（避免 callFunction 体过大） */
@@ -218,6 +225,111 @@ async function handleDeleteObjects(event) {
   return { success: true, deleted, failed: [] }
 }
 
+const CAN_LEARN_COS_PREFIXES = ['can-capture/', 'can-config/'];
+const CAN_LEARN_COLLECTIONS = ['can_capture_sessions', 'can_moto_profiles'];
+const DB_FETCH_BATCH = 100;
+const DB_IN_LIMIT = 20;
+
+async function deleteCosByPrefix(cos, bucket, region, prefix) {
+  let deleted = 0;
+  let marker = '';
+  while (true) {
+    const params = { Bucket: bucket, Region: region, Prefix: prefix, MaxKeys: 1000 };
+    if (marker) params.Marker = marker;
+    const listData = await new Promise((resolve, reject) => {
+      cos.getBucket(params, (err, data) => (err ? reject(err) : resolve(data)));
+    });
+    const contents = listData.Contents || [];
+    if (!contents.length) break;
+    const objects = contents.map((c) => ({ Key: c.Key }));
+    await new Promise((resolve, reject) => {
+      cos.deleteMultipleObject(
+        { Bucket: bucket, Region: region, Objects: objects },
+        (err, data) => (err ? reject(err) : resolve(data))
+      );
+    });
+    deleted += objects.length;
+    if (!listData.IsTruncated) break;
+    marker = listData.NextMarker || contents[contents.length - 1].Key;
+  }
+  return deleted;
+}
+
+async function removeCollectionAll(collectionName) {
+  let deleted = 0;
+  while (true) {
+    const res = await db.collection(collectionName).field({ _id: true }).limit(DB_FETCH_BATCH).get();
+    const rows = res.data || [];
+    if (!rows.length) break;
+    const ids = rows.map((doc) => doc._id);
+    for (let i = 0; i < ids.length; i += DB_IN_LIMIT) {
+      const chunk = ids.slice(i, i + DB_IN_LIMIT);
+      const del = await db.collection(collectionName).where({ _id: _.in(chunk) }).remove();
+      deleted += del.stats.removed || 0;
+    }
+    if (rows.length < DB_FETCH_BATCH) break;
+  }
+  return deleted;
+}
+
+async function handleClearCanLearnData(event) {
+  try {
+    await verifyDeletePermission(event);
+  } catch (e) {
+    const msg = String((e && e.message) || e || '');
+    if (msg.includes('UNAUTHORIZED') || msg.includes('FORBIDDEN')) {
+      return { success: false, message: '无管理员权限' };
+    }
+    return { success: false, message: msg };
+  }
+
+  const secretId = getEnv('COS_SECRET_ID');
+  const secretKey = getEnv('COS_SECRET_KEY');
+  const bucket = normalizeBucket(getEnv('COS_BUCKET'));
+  const region = getEnv('COS_REGION');
+
+  let cosDeleted = 0;
+  const cosDetails = [];
+
+  if (secretId && secretKey && bucket && region) {
+    const cos = makeCosClient(secretId, secretKey);
+    for (const prefix of CAN_LEARN_COS_PREFIXES) {
+      try {
+        const n = await deleteCosByPrefix(cos, bucket, region, prefix);
+        cosDeleted += n;
+        cosDetails.push({ prefix, deleted: n });
+      } catch (err) {
+        console.warn('[getCosUploadUrl] clearCanLearn prefix fail', prefix, err);
+        cosDetails.push({ prefix, deleted: 0, error: err.message || String(err) });
+      }
+    }
+  } else {
+    cosDetails.push({ skipped: true, message: 'COS 未配置，已跳过' });
+  }
+
+  const dbDetails = [];
+  let dbDeleted = 0;
+  for (const name of CAN_LEARN_COLLECTIONS) {
+    try {
+      const n = await removeCollectionAll(name);
+      dbDeleted += n;
+      dbDetails.push({ collection: name, deleted: n });
+    } catch (err) {
+      console.warn('[getCosUploadUrl] clearCanLearn db fail', name, err);
+      dbDetails.push({ collection: name, deleted: 0, error: err.message || String(err) });
+    }
+  }
+
+  return {
+    success: true,
+    cosDeleted,
+    dbDeleted,
+    cosDetails,
+    dbDetails,
+    message: `已清空 CAN 数据：COS ${cosDeleted} 个文件，数据库 ${dbDeleted} 条`
+  };
+}
+
 const CASE_BGM_KEY = 'case/bgm/case-bgm.mp3';
 
 async function handlePublishCaseBgm() {
@@ -277,6 +389,10 @@ exports.main = async (event = {}) => {
   try {
     if (String(event.action || '') === 'deleteObjects') {
       return await handleDeleteObjects(event)
+    }
+
+    if (String(event.action || '') === 'clearCanLearnData') {
+      return await handleClearCanLearnData(event)
     }
 
     if (String(event.action || '') === 'publishCaseBgm') {

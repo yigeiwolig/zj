@@ -1,6 +1,9 @@
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const hubNav = require('../../../utils/hubNav.js');
+const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
+const shareApp = require('../../../utils/shareApp.js');
+const weworkKf = require('../../../utils/weworkCustomerService.js');
 
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js');
 var qqmapsdk = new QQMapWX({
@@ -98,7 +101,7 @@ Page({
     /** 商城全屏层 top（px，紧贴分段栏下沿） */
     hubShopLayerTop: 88,
     hubShopEmbedScrollHeight: 0,
-    /** 底栏高亮：0=首页区(主页/商城)，1=订单，2=我的 */
+    /** 底栏高亮：0=首页 1=订单 2=客服 3=我的 */
     hubBottomBarIndex: 0,
     hubSwiperDuration: 0,
     hubPanelsAnim: false,
@@ -705,6 +708,8 @@ Page({
     const cached = this._readAdminPrivilegeCache();
     if (cached === true) {
       if (!this.data.isAuthorized) this.setData({ isAuthorized: true });
+      screenshotExempt.markGuanliyuanCache(true);
+      screenshotExempt.allowScreenCaptureIfExempt();
       this._syncHubPanelsAuth();
       return;
     }
@@ -720,6 +725,10 @@ Page({
         adminCheck = await this.db.collection('guanliyuan').where({ _openid: myOpenid }).get();
       }
       const isAuthorized = !!(adminCheck.data && adminCheck.data.length);
+      if (isAuthorized) {
+        screenshotExempt.markGuanliyuanCache(true);
+        screenshotExempt.allowScreenCaptureIfExempt();
+      }
       this.setData({ isAuthorized }, () => {
         this._syncHubPanelsAuth();
         this._updateHubShopEmbedScrollHeight();
@@ -1123,7 +1132,7 @@ Page({
         const patch = {
           hubTabIndex: panelIndex,
           hubTrackTranslatePct: panelIndex * 25,
-          hubBottomBarIndex: hubTab,
+          hubBottomBarIndex: hubNav.panelIndexToBottomBarActive(panelIndex),
           hubSwiperDuration: 0,
           showHubTabBar: panelIndex !== 1
         };
@@ -1192,6 +1201,45 @@ Page({
       this.setData({ hasEntered: true });
       this._maybeScheduleNewArrivalFromIndex();
     }, 200);
+
+    setTimeout(() => this._preloadCasePageOnce(), 600);
+  },
+
+  /** 预载案例库页代码，减轻 navigateTo timeout */
+  _preloadCasePageOnce() {
+    if (this._casePagePreloaded) return;
+    if (typeof wx.preloadPage !== 'function') return;
+    wx.preloadPage({
+      url: '/package-app/pages/case/case',
+      success: () => { this._casePagePreloaded = true; },
+      fail: () => {}
+    });
+  },
+
+  _navigateToPage(url, options = {}) {
+    const retries = options.retries != null ? options.retries : 0;
+    const attempt = (left) => {
+      wx.navigateTo({
+        url,
+        animationType: 'none',
+        success: options.onSuccess,
+        fail: (err) => {
+          const msg = (err && err.errMsg) || '';
+          const isTimeout = msg.indexOf('timeout') >= 0;
+          if (isTimeout && left > 0) {
+            const retry = () => attempt(left - 1);
+            if (typeof wx.preloadPage === 'function') {
+              wx.preloadPage({ url, complete: () => setTimeout(retry, 150) });
+            } else {
+              setTimeout(retry, 200);
+            }
+            return;
+          }
+          if (options.onFail) options.onFail(err);
+        }
+      });
+    };
+    attempt(retries);
   },
 
   /** index 是否刚通过入场动画写入的一次性标记（未消费） */
@@ -1721,6 +1769,18 @@ Page({
     this._teardownScreenshotProtection();
   },
 
+  onShareAppMessage() {
+    return shareApp.getShareAppMessage({
+      path: '/package-app/pages/products/products'
+    });
+  },
+
+  onShareTimeline() {
+    return shareApp.getShareTimeline({
+      path: '/package-app/pages/products/products'
+    });
+  },
+
   onHide() {
     if (this._newArrivalTimer) {
       clearTimeout(this._newArrivalTimer);
@@ -1745,6 +1805,10 @@ Page({
 
   // 🔴 初始化截屏/录屏保护
   initScreenshotProtection() {
+    if (screenshotExempt.isScreenshotBanExempt(this)) {
+      screenshotExempt.allowScreenCaptureIfExempt();
+      return;
+    }
     // 物理防线：确保录屏、截屏出来的全是黑屏
     if (wx.setVisualEffectOnCapture) {
       wx.setVisualEffectOnCapture({
@@ -1847,6 +1911,8 @@ Page({
 
   // 🔴 处理截屏/录屏拦截
   async handleIntercept(type) {
+    if (screenshotExempt.isScreenshotBanExempt(this)) return;
+
     // 🔴 关键修复：立即清除本地授权状态，防止第二次截屏时被自动放行
     wx.removeStorageSync('has_permanent_auth');
     
@@ -2404,7 +2470,17 @@ Page({
       case 4: // 产品选购 → 商城（顶栏「MT商城」同路径，横向切屏）
         this._openHubShopPanel();
         return;
-      case 10: target = '/package-app/pages/case/case'; break;      // 案例展示
+      case 10: // 案例展示（页面较大，预载 + 超时重试）
+        this.rememberReturnFocus(numId);
+        this._preloadCasePageOnce();
+        this._navigateToPage('/package-app/pages/case/case', {
+          retries: 2,
+          onFail: (err) => {
+            console.error('[products] navigateTo fail:', '/package-app/pages/case/case', err);
+            this.showAutoToast('提示', '页面打开失败，请稍后重试');
+          }
+        });
+        return;
       case 5: target = '/package-biz/pages/paihang/paihang'; break; // 排行榜单
       case 1: target = '/package-app/pages/scan/scan'; break;       // 控制中心
       case 9: target = '/package-biz/pages/ota/ota'; break;         // OTA升级
@@ -2743,7 +2819,7 @@ Page({
     if (idx >= 2) {
       this._dismissHubShopOverlays();
     }
-    const hubBottomBarIndex = idx <= 1 ? 0 : idx - 1;
+    const hubBottomBarIndex = hubNav.panelIndexToBottomBarActive(idx);
     const prevTrackPct = this.data.hubTrackTranslatePct || 0;
     const hubTrackTranslatePct = idx * 25;
     const trackMoves = prevTrackPct !== hubTrackTranslatePct;
@@ -2799,6 +2875,10 @@ Page({
   onHubTabSwitch(e) {
     const tab = e.detail && e.detail.tab;
     if (!tab) return;
+    if (tab === 'kf') {
+      weworkKf.openPreSalesKf();
+      return;
+    }
     const map = { home: 0, orders: 2, profile: 3 };
     const idx = map[tab];
     if (idx == null) return;

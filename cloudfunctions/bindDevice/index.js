@@ -90,6 +90,17 @@ exports.main = async (event, context) => {
     const res = await db.collection('sn').where({ sn: _.in(candidates) }).get()
     const device = res.data.length > 0 ? res.data[0] : null
 
+    if (device && device.deviceStatus === 'scrapped') {
+      return { success: false, status: 'SCRAPPED', msg: '该设备已报废，无法连接' }
+    }
+    if (device && device.snLocked && device.snLockReason === 'replacement_pending') {
+      return {
+        success: false,
+        status: 'LOCKED_REPLACEMENT',
+        msg: '该设备正在售后换机中，请使用新设备'
+      }
+    }
+
     if (device && device.openid && device.openid !== '' && device.openid !== myOpenid) {
       return { success: false, status: 'LOCKED', msg: '设备已被绑定，请联系原主解绑' }
     }

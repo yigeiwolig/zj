@@ -1,0 +1,33 @@
+function productKey(name, type) {
+  if (name === 'F1' && type === 'Pro') return 'F1 PRO';
+  if (name === 'F1' && type === 'Max') return 'F1 MAX';
+  if (name === 'F1' && (type === 'Ultra' || type === 'ultra' || type === 'Pro Max')) return 'F1 ULTRA';
+  if (name === 'F2' && type === 'Pro') return 'F2 PRO';
+  if (name === 'F2' && type === 'Max') return 'F2 MAX';
+  if (name === 'F2' && (type === 'Long' || type === 'Max Long')) return 'F2 Long';
+  if (name === 'F2' && type === 'Ultra') return 'F2 ULTRA';
+  if (name === 'F3' && type === 'Pro') return 'F3 PRO';
+  if (name === 'F3' && type === 'Max') return 'F3 MAX';
+  return (name + ' ' + type).trim();
+}
+
+function isAssistProduct(name, canLearn, status) {
+  if (canLearn || status !== 'active') return false;
+  return name === 'F1' || name === 'F2' || name === 'F3';
+}
+
+function showRequestBtn(name, type, canLearn, status, sessionId, sessionKey) {
+  if (!isAssistProduct(name, canLearn, status)) return false;
+  if (!sessionId) return true;
+  return productKey(name, type) === sessionKey;
+}
+
+function isCardSession(sessionKey, name, type, sessionId) {
+  if (!sessionId || !sessionKey) return false;
+  return productKey(name, type) === sessionKey;
+}
+
+module.exports = {
+  showRequestBtn: showRequestBtn,
+  isCardSession: isCardSession
+};

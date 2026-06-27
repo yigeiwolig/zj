@@ -666,10 +666,76 @@ function uploadVideoToCos(filePath, folder, extra = {}) {
   });
 }
 
+/** 从 COS 公网 URL 解析对象 Key（去掉 query，如 imageMogr2 参数） */
+function extractCosKeyFromPublicUrl(url) {
+  const u = String(url || '').trim();
+  if (!u || u.indexOf('cloud://') === 0) return '';
+  if (!/^https?:\/\//i.test(u)) return '';
+
+  const parsePathname = (pathname) => {
+    let key = String(pathname || '').replace(/^\/+/, '');
+    try {
+      key = decodeURIComponent(key);
+    } catch (e) {
+      // keep raw path
+    }
+    return key;
+  };
+
+  try {
+    if (typeof URL !== 'undefined') {
+      const parsed = new URL(u);
+      return parsePathname(parsed.pathname);
+    }
+  } catch (e) {
+    // fall through to manual parse
+  }
+
+  let manual = u.replace(/^https?:\/\/[^/?#]+/i, '');
+  const q = manual.indexOf('?');
+  if (q >= 0) manual = manual.slice(0, q);
+  const h = manual.indexOf('#');
+  if (h >= 0) manual = manual.slice(0, h);
+  return parsePathname(manual);
+}
+
+/** 管理员删除：通过 getCosUploadUrl 云函数删 COS 对象（https 直链） */
+function deleteCosObjectsByUrls(urls) {
+  const keys = [
+    ...new Set(
+      (Array.isArray(urls) ? urls : [urls])
+        .map(extractCosKeyFromPublicUrl)
+        .filter(Boolean)
+    )
+  ];
+  if (!keys.length) {
+    return Promise.resolve({ success: true, deleted: 0, skipped: true });
+  }
+  if (!wx.cloud || !wx.cloud.callFunction) {
+    return Promise.reject(new Error('wx.cloud 未就绪'));
+  }
+  return wx.cloud
+    .callFunction({
+      name: 'getCosUploadUrl',
+      data: { action: 'deleteObjects', keys }
+    })
+    .then((res) => {
+      const payload = (res && res.result) || {};
+      if (!payload.success) {
+        const err = new Error(payload.message || 'COS 删除失败');
+        err.payload = payload;
+        throw err;
+      }
+      return payload;
+    });
+}
+
 module.exports = {
   uploadLocalFileToCos,
   uploadImageToCos,
   uploadVideoToCos,
+  extractCosKeyFromPublicUrl,
+  deleteCosObjectsByUrls,
   readBinaryForCos,
   normalizeLocalUploadPath,
   cleanupCopiedUploadPath,

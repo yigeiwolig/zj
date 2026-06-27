@@ -604,6 +604,17 @@
   color: #007aff;
 }
 
+.hub-cart-empty--closed {
+  opacity: 0.72;
+}
+
+.hub-cart-empty-muted {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 26rpx;
+  color: #aeaeb2;
+}
+
 .order-swiper--hub {
   margin-top: 8rpx;
 }
@@ -8382,7 +8393,7 @@
 
 /* ================= 维修工单卡片 (管理员) - 优化版 ================= */
 .repair-list-admin {
-  padding: 0 32rpx calc(40rpx + env(safe-area-inset-bottom));
+  padding: 0 32rpx calc(160rpx + env(safe-area-inset-bottom));
 }
 
 .repair-section-label {
@@ -8545,6 +8556,9 @@
 /* 主操作：需要用户寄回 - 长椭圆 */
 .repair-actions-primary {
   width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
 }
 
 .repair-actions-primary .r-btn {
@@ -8614,8 +8628,37 @@
 
 .r-btn.ship { 
   color: #1565C0;
-  border-color: #64B5F6;
+  border: 2rpx solid #64B5F6;
   background: #EFF6FF;
+}
+
+.r-btn.diagnosis {
+  color: #1c1c1e;
+  border: 2rpx solid #d1d1d6;
+  background: #fff;
+  box-shadow: 0 4rpx 14rpx rgba(0, 0, 0, 0.05);
+}
+
+.repair-diagnosis-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin: 8rpx 0 4rpx;
+  padding: 0 4rpx;
+}
+
+.r-diagnosis-pill {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #007aff;
+  background: #eef6ff;
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+}
+
+.r-diagnosis-pill.warn {
+  color: #c93400;
+  background: #fff2e8;
 }
 
 .r-btn.purchase {
@@ -11246,4 +11289,314 @@
   color: #86868b;
   font-weight: 500;
   padding: 4rpx 0;
+}
+
+/* 内部诊断书 · 底部抽屉（仅管理员） */
+.diag-sheet-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 12000;
+  background: rgba(0, 0, 0, 0.38);
+  backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  animation: diagMaskIn 0.32s ease forwards;
+}
+
+.diag-sheet-mask.closing {
+  animation: diagMaskOut 0.28s ease forwards;
+}
+
+.diag-sheet {
+  width: 100%;
+  max-height: 92vh;
+  background: #f9f9fb;
+  border-radius: 40rpx 40rpx 0 0;
+  padding: 12rpx 0 0;
+  box-sizing: border-box;
+  box-shadow: 0 -12rpx 60rpx rgba(0, 0, 0, 0.12);
+  animation: diagSheetUp 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.diag-sheet.closing {
+  animation: diagSheetDown 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.diag-sheet-handle {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: #d1d1d6;
+  margin: 8rpx auto 12rpx;
+  flex-shrink: 0;
+}
+
+.diag-sheet-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: calc(92vh - 220rpx);
+  padding: 0 32rpx;
+  box-sizing: border-box;
+}
+
+.diag-sheet-header {
+  position: relative;
+  text-align: center;
+  padding: 0 56rpx 24rpx;
+}
+
+.diag-sheet-close {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: #ececf0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.diag-sheet-close:active {
+  opacity: 0.7;
+  transform: scale(0.96);
+}
+
+.diag-sheet-close-icon {
+  font-size: 40rpx;
+  line-height: 1;
+  color: #636366;
+  font-weight: 300;
+  margin-top: -4rpx;
+}
+
+.diag-sheet-icon-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20rpx;
+}
+
+.diag-sheet-icon-doc {
+  width: 88rpx;
+  height: 104rpx;
+  border-radius: 18rpx;
+  background: linear-gradient(160deg, #ffffff 0%, #f2f2f7 100%);
+  border: 2rpx solid #e5e5ea;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.06);
+  padding: 22rpx 18rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12rpx;
+}
+
+.diag-doc-line {
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: #1c1c1e;
+  opacity: 0.12;
+}
+
+.diag-doc-line.short {
+  width: 62%;
+}
+
+.diag-sheet-title {
+  display: block;
+  font-size: 38rpx;
+  font-weight: 800;
+  color: #1c1c1e;
+  letter-spacing: 0.5rpx;
+  line-height: 1.25;
+}
+
+.diag-sheet-badges {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  margin-top: 14rpx;
+}
+
+.diag-sheet-badge {
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #007aff;
+  background: rgba(0, 122, 255, 0.1);
+  padding: 6rpx 16rpx;
+  border-radius: 999rpx;
+  letter-spacing: 1rpx;
+}
+
+.diag-sheet-badge.muted {
+  color: #8e8e93;
+  background: #ececf0;
+  font-weight: 600;
+}
+
+.diag-sheet-body {
+  background: #fff;
+  border-radius: 28rpx;
+  padding: 28rpx;
+  margin-bottom: 24rpx;
+  box-shadow: 0 2rpx 16rpx rgba(0, 0, 0, 0.04);
+}
+
+.diag-field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.diag-field-label {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #3a3a3c;
+}
+
+.diag-field-count {
+  font-size: 22rpx;
+  color: #aeaeb2;
+  font-variant-numeric: tabular-nums;
+}
+
+.diag-field-box {
+  background: #f5f5f7;
+  border-radius: 20rpx;
+  border: 2rpx solid #ececf0;
+  padding: 4rpx;
+  transition: border-color 0.2s ease;
+}
+
+.diag-field-input {
+  width: 100%;
+  min-height: 200rpx;
+  max-height: 280rpx;
+  padding: 20rpx 22rpx;
+  box-sizing: border-box;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #1c1c1e;
+}
+
+.diag-field-placeholder {
+  color: #aeaeb2;
+  font-size: 28rpx;
+}
+
+.diag-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-top: 24rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 18rpx;
+  background: #f0f7ff;
+  border: 1rpx solid #d6e8ff;
+}
+
+.diag-callout-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #007aff;
+  margin-top: 10rpx;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 6rpx rgba(0, 122, 255, 0.15);
+}
+
+.diag-callout-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.diag-callout-main {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #1c1c1e;
+}
+
+.diag-callout-sub {
+  font-size: 22rpx;
+  color: #636366;
+  line-height: 1.5;
+}
+
+.diag-sheet-footer {
+  flex-shrink: 0;
+  padding: 16rpx 32rpx calc(20rpx + env(safe-area-inset-bottom));
+  background: #f9f9fb;
+  border-top: 1rpx solid #e8e8ed;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.diag-submit-btn {
+  width: 100%;
+  height: 96rpx;
+  border-radius: 48rpx;
+  background: #1c1c1e;
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10rpx 28rpx rgba(28, 28, 30, 0.22);
+}
+
+.diag-submit-btn:active {
+  transform: scale(0.985);
+  opacity: 0.92;
+}
+
+.diag-submit-btn.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.diag-cancel-link {
+  font-size: 28rpx;
+  color: #8e8e93;
+  font-weight: 500;
+  padding: 8rpx 24rpx 4rpx;
+}
+
+.diag-cancel-link:active {
+  color: #636366;
+}
+
+@keyframes diagMaskIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes diagMaskOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes diagSheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes diagSheetDown {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
 }
