@@ -1,0 +1,8 @@
+{
+  "navigationStyle": "custom",
+  "backgroundColor": "#ffffff",
+  "disableSwipeBack": false,
+  "usingComponents": {
+    "custom-toast": "/components/custom-toast/index"
+  }
+}

@@ -5,13 +5,17 @@ const CLOSE_CMD = '关闭';
 
 /** 越长越优先匹配，避免「开」误抢「打开」 */
 const OPEN_PHRASES = [
+  '翻开牌照', '打开牌照', '牌照翻开', '牌照打开', '翻开车牌', '打开车牌', '车牌翻开',
+  '翻开牌子', '打开牌子', '翻开标志', '打开标志',
   '打开翻板', '翻开翻板', '打开面板', '翻开面板', '打开盖板', '翻开盖板',
-  '打开盖子', '翻开盖子', '打开开', '翻开面', '打开来', '开起来',
+  '打开盖子', '翻开盖子', '打开来', '开起来',
   '打开', '开启', '敞开', '翻开', '翻板', '开板', '开翻板', '升板', '起板',
   '弹开', '展开', '撑起', '抬起', '开一下', '开开', '开盖', '开'
 ];
 
 const CLOSE_PHRASES = [
+  '收起牌照', '关闭牌照', '合上牌照', '关掉牌照', '牌照收起', '牌照关闭', '牌照合上',
+  '收起车牌', '关闭车牌', '车牌收起', '车牌关闭',
   '关闭翻板', '合上翻板', '关闭面板', '合上面板', '关掉面板', '关闭盖板',
   '合上盖板', '关闭盖子', '合上盖子', '关上面板',
   '关闭', '关掉', '合上', '收回', '折叠', '收板', '合板', '关板', '关翻板',
@@ -26,17 +30,49 @@ const KEYWORD_LIST = Object.keys(CMD_MAP).sort((a, b) => b.length - a.length);
 
 const FILLER_PATTERN = /[嗯啊呃诶嘿喂哦噢额呢吧呀啦嘛哇哈]+/g;
 const NOISE_PHRASES = ['风声', '噪音', '音乐', '电视', '说话', '背景', '杂音', '嗡嗡', '哒哒'];
-const CORE_HINT = /打开|关闭|开启|关掉|合上|收回|折叠|翻开|翻板|面板|盖板|敞开|弹开|展开|收起|开|关/;
+const CORE_HINT = /打开|关闭|开启|关掉|合上|收回|折叠|翻开|翻板|面板|盖板|牌照|车牌|牌子|敞开|弹开|展开|收起|开|关/;
 
-const SAME_CMD_COOLDOWN_MS = 180;
+/** 同声传译常见误识别，匹配前统一纠正 */
+const ASR_CORRECTIONS = [
+  ['翻牌照', '翻开牌照'],
+  ['反开', '翻开'],
+  ['翻盖', '翻开'],
+  ['开牌照', '打开牌照'],
+  ['关牌照', '关闭牌照'],
+  ['首起', '收起'],
+  ['说起', '收起'],
+  ['官闭', '关闭'],
+  ['管闭', '关闭'],
+  ['凯', '开'],
+  ['冠', '关']
+];
+
+/** 实时识别：多字立即触发；单字仅在整句就是「开/关」时也可触发 */
+const PARTIAL_MIN_KW_LEN = 2;
+
+function canDispatchHit(hit, source, text) {
+  if (!hit) return false;
+  if (source === 'final') return true;
+  if (hit.kwLen >= PARTIAL_MIN_KW_LEN) return true;
+  const raw = denoiseVoiceText(text || '');
+  return (raw === '开' || raw === '关') && hit.kw === raw;
+}
+
+const SAME_CMD_COOLDOWN_MS = 120;
 const ANY_CMD_COOLDOWN_MS = 0;
-const RESTART_DELAY_MS = 0;
-const RESTART_ERROR_DELAY_MS = 80;
+const RESTART_DELAY_MS = 40;
+const RESTART_ERROR_DELAY_MS = 60;
+const RECOGNIZE_STALL_MS = 7000;
+const HEALTH_CHECK_MS = 2000;
 
 function normalizeVoiceText(text) {
-  return String(text || '')
+  let s = String(text || '')
     .replace(/[，。！？、；：,.!?;:\s]/g, '')
     .trim();
+  for (const [from, to] of ASR_CORRECTIONS) {
+    if (s.includes(from)) s = s.split(from).join(to);
+  }
+  return s;
 }
 
 function denoiseVoiceText(text) {
@@ -60,9 +96,10 @@ function isNoiseDominant(rawText, denoised) {
 
   const raw = normalizeVoiceText(rawText);
   if (!raw) return true;
-  if (denoised.length <= 4) return false;
-  if (raw.length >= 12 && denoised.length <= 1) return true;
-  return denoised.length > 36;
+  // 短句不轻易当噪音丢掉，避免小声/短口令识别不到
+  if (denoised.length <= 6) return false;
+  if (raw.length >= 16 && denoised.length <= 1) return true;
+  return denoised.length > 48;
 }
 
 /** 「打开」里的「开」、「关闭」里的「关」不单判 */
@@ -153,6 +190,103 @@ function createVoiceRecognizer(handlers) {
   let lastFireCmd = '';
   let streamText = '';
   let consumedLen = 0;
+  let managerRecording = false;
+  let stopInFlight = false;
+  let pendingStartOptions = null;
+  let lastRecognizeAt = 0;
+  let healthTimer = null;
+  let sessionStartedAt = 0;
+
+  function clearHealthWatch() {
+    if (healthTimer) {
+      clearInterval(healthTimer);
+      healthTimer = null;
+    }
+  }
+
+  function startHealthWatch() {
+    clearHealthWatch();
+    healthTimer = setInterval(() => {
+      if (!continuous || !sessionActive) return;
+
+      const now = Date.now();
+      if (!managerRecording && !stopInFlight && !restarting) {
+        scheduleRestart(0);
+        return;
+      }
+
+      if (!managerRecording || !lastRecognizeAt) return;
+      if (now - sessionStartedAt < RECOGNIZE_STALL_MS) return;
+      if (now - lastRecognizeAt < RECOGNIZE_STALL_MS) return;
+
+      resetStreamState();
+      safeManagerStop();
+      scheduleRestart(RESTART_DELAY_MS);
+    }, HEALTH_CHECK_MS);
+  }
+
+  function clearStopInFlightSoon() {
+    setTimeout(() => {
+      stopInFlight = false;
+    }, 280);
+  }
+
+  function safeManagerStop() {
+    if (!managerRecording && !stopInFlight) return;
+    if (stopInFlight) return;
+    stopInFlight = true;
+    const wasRecording = managerRecording;
+    managerRecording = false;
+    if (!wasRecording) {
+      clearStopInFlightSoon();
+      return;
+    }
+    try {
+      manager.stop();
+    } catch (e) {
+      clearStopInFlightSoon();
+    }
+    clearStopInFlightSoon();
+  }
+
+  function runStart(options) {
+    if (!sessionActive) return;
+    if (stopInFlight) {
+      pendingStartOptions = options;
+      setTimeout(() => {
+        const opts = pendingStartOptions;
+        pendingStartOptions = null;
+        if (opts && sessionActive && !managerRecording && !stopInFlight) {
+          runStart(opts);
+        }
+      }, 120);
+      return;
+    }
+    if (managerRecording) {
+      safeManagerStop();
+      pendingStartOptions = options;
+      setTimeout(() => {
+        const opts = pendingStartOptions;
+        pendingStartOptions = null;
+        if (opts && sessionActive && !managerRecording) {
+          runStart(opts);
+        }
+      }, 120);
+      return;
+    }
+    restarting = true;
+    resetStreamState();
+    try {
+      manager.start({
+        duration: options.duration || 60000,
+        lang: options.lang || 'zh_CN'
+      });
+    } catch (e) {
+      restarting = false;
+      managerRecording = false;
+      scheduleRestart(RESTART_ERROR_DELAY_MS);
+    }
+  }
 
   function clearRestartTimer() {
     if (restartTimer) {
@@ -212,13 +346,12 @@ function createVoiceRecognizer(handlers) {
     truncating = true;
     skipFinalDispatch = true;
     resetStreamState();
-    try {
-      manager.stop();
-    } catch (e) {
+    if (!managerRecording) {
       truncating = false;
       skipFinalDispatch = false;
-      scheduleRestart(RESTART_ERROR_DELAY_MS);
+      return;
     }
+    safeManagerStop();
   }
 
   function fireCommand(cmd, text, source) {
@@ -232,7 +365,7 @@ function createVoiceRecognizer(handlers) {
 
   function tryDispatchFromText(text, source) {
     const hit = findFirstCommandInText(text);
-    if (!hit || !canFire(hit.cmd)) return false;
+    if (!hit || !canFire(hit.cmd) || !canDispatchHit(hit, source, text)) return false;
 
     updateStreamText(text);
     consumeAllPending();
@@ -245,7 +378,7 @@ function createVoiceRecognizer(handlers) {
     if (!pending) return false;
 
     const hit = findFirstCommandInText(pending);
-    if (!hit || !canFire(hit.cmd)) return false;
+    if (!hit || !canFire(hit.cmd) || !canDispatchHit(hit, source, pending)) return false;
 
     markConsumedThrough(hit.end);
     fireCommand(hit.cmd, streamText, source);
@@ -253,22 +386,16 @@ function createVoiceRecognizer(handlers) {
   }
 
   function scheduleRestart(delay) {
-    if (!continuous || !sessionActive || restarting) return;
+    if (!continuous || !sessionActive) return;
     clearRestartTimer();
     const run = () => {
       restartTimer = null;
       if (!continuous || !sessionActive) return;
-      restarting = true;
-      resetStreamState();
-      try {
-        manager.start({
-          duration: 60000,
-          lang: 'zh_CN'
-        });
-      } catch (e) {
-        restarting = false;
-        scheduleRestart(RESTART_ERROR_DELAY_MS);
+      if (restarting || stopInFlight) {
+        scheduleRestart(60);
+        return;
       }
+      runStart({ duration: 60000, lang: 'zh_CN' });
     };
     if (delay <= 0) {
       run();
@@ -278,29 +405,42 @@ function createVoiceRecognizer(handlers) {
   }
 
   manager.onStart = () => {
+    managerRecording = true;
+    stopInFlight = false;
+    pendingStartOptions = null;
     restarting = false;
     truncating = false;
+    sessionStartedAt = Date.now();
+    lastRecognizeAt = sessionStartedAt;
     resetStreamState();
     if (handlers.onStart) handlers.onStart();
   };
 
   manager.onRecognize = (res) => {
-    if (!res || !res.result) return;
+    if (!res) return;
+    lastRecognizeAt = Date.now();
     if (handlers.onRecognize) handlers.onRecognize(res, streamText);
 
-    updateStreamText(res.result);
-    if (tryDispatchFromText(res.result, 'partial-fast')) return;
+    const piece = res.result != null ? String(res.result).trim() : '';
+    if (!piece) return;
+
+    updateStreamText(piece);
+    if (tryDispatchFromText(piece, 'partial-fast')) return;
     tryDispatchFromPending('partial');
   };
 
   manager.onStop = (res) => {
+    managerRecording = false;
+    stopInFlight = false;
     const skip = skipFinalDispatch;
     skipFinalDispatch = false;
     truncating = false;
 
-    if (!skip && res && res.result) {
-      updateStreamText(res.result);
-      if (!tryDispatchFromText(res.result, 'final')) {
+    if (!skip) {
+      const finalPiece = res && res.result != null ? String(res.result).trim() : '';
+      if (finalPiece) updateStreamText(finalPiece);
+      const dispatchText = finalPiece || denoiseVoiceText(streamText);
+      if (!tryDispatchFromText(dispatchText, 'final')) {
         tryDispatchFromPending('final');
       }
     }
@@ -315,12 +455,20 @@ function createVoiceRecognizer(handlers) {
     const code = res && res.retcode;
     if (handlers.onError) handlers.onError(res, { continuous, sessionActive });
 
-    if (!sessionActive) return;
-    if (code === -30012 || code === -30002) return;
+    managerRecording = false;
+    stopInFlight = false;
+
+    if (!sessionActive) {
+      return;
+    }
+    // 连接已关闭 / 用户取消，勿再 restart 或 stop
+    if (code === -30012 || code === -30002 || code === -30003) {
+      return;
+    }
 
     if (continuous && sessionActive) {
       resetStreamState();
-      scheduleRestart(code === -30011 ? 60 : RESTART_ERROR_DELAY_MS);
+      scheduleRestart(code === -30011 ? 120 : Math.max(RESTART_ERROR_DELAY_MS, 100));
     }
   };
 
@@ -329,6 +477,9 @@ function createVoiceRecognizer(handlers) {
     manager,
     isContinuous() {
       return continuous && sessionActive;
+    },
+    isActive() {
+      return !!(sessionActive || restarting || managerRecording);
     },
     start(options = {}) {
       continuous = options.continuous !== false;
@@ -339,10 +490,8 @@ function createVoiceRecognizer(handlers) {
       truncating = false;
       resetStreamState();
       clearRestartTimer();
-      manager.start({
-        duration: options.duration || 60000,
-        lang: options.lang || 'zh_CN'
-      });
+      startHealthWatch();
+      runStart(options);
     },
     stop() {
       continuous = false;
@@ -350,13 +499,11 @@ function createVoiceRecognizer(handlers) {
       restarting = false;
       skipFinalDispatch = false;
       truncating = false;
+      pendingStartOptions = null;
       resetStreamState();
       clearRestartTimer();
-      try {
-        manager.stop();
-      } catch (e) {
-        // ignore
-      }
+      clearHealthWatch();
+      safeManagerStop();
     }
   };
 }

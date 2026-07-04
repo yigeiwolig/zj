@@ -1,10 +1,12 @@
-// cloudfunctions/addNicknameToWhitelist/index.js
-// 管理员直接录入昵称到 valid_users 白名单（不经过验证）
-// 🔴 录入时 _openid 为空，供其他用户绑定
+// 管理员：生成访问口令 / 维护 valid_users 白名单
+// 一用户一码：accessCode 未绑定前可作废，绑定后不可复用
 
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
+
+const ACCESS_CODE_PREFIX = 'VK';
+const CODE_CHARS = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 
 async function assertAdmin() {
   const { OPENID } = cloud.getWXContext();
@@ -16,150 +18,228 @@ async function assertAdmin() {
   throw new Error('FORBIDDEN');
 }
 
-exports.main = async (event, context) => {
-  const nickname = (event && event.nickname ? String(event.nickname) : '').trim();
-  const bypassLocationCheck = event && event.bypassLocationCheck === true; // 🔴 放行开关
+function isEmptyOpenid(value) {
+  return !value || value === '' || value === null || value === undefined;
+}
 
-  // 基本校验
-  if (!nickname) {
-    return { 
-      success: false, 
-      errMsg: '昵称不能为空' 
-    };
+async function generateUniqueAccessCode() {
+  for (let attempt = 0; attempt < 24; attempt += 1) {
+    let body = '';
+    for (let i = 0; i < 6; i += 1) {
+      body += CODE_CHARS.charAt(Math.floor(Math.random() * CODE_CHARS.length));
+    }
+    const code = ACCESS_CODE_PREFIX + body;
+    const exist = await db.collection('valid_users').where({ accessCode: code }).limit(1).get();
+    if (!exist.data || exist.data.length === 0) {
+      return code;
+    }
   }
+  throw new Error('GENERATE_FAILED');
+}
+
+function extractPlainAccessCode(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return '';
+  if (s.indexOf('用户-') === 0) {
+    s = s.slice(3);
+  }
+  const normalized = s.replace(/[\s-]/g, '').toUpperCase();
+  if (/^VK[A-Z0-9]{6}$/.test(normalized)) return normalized;
+  return s.trim();
+}
+
+function formatListItem(doc) {
+  const bound = !isEmptyOpenid(doc._openid);
+  const accessCode = extractPlainAccessCode(doc.accessCode || doc.nickname || '');
+  return {
+    _id: doc._id,
+    accessCode,
+    nickname: doc.nickname || '',
+    bound,
+    statusLabel: bound ? '已使用' : '未使用',
+    bypassLocationCheck: doc.bypassLocationCheck === true,
+    bindTime: doc.bindTime || '',
+    createTime: doc.createTime || '',
+    updateTime: doc.updateTime || ''
+  };
+}
+
+async function handleGenerate(bypassLocationCheck) {
+  const accessCode = await generateUniqueAccessCode();
+  const nickname = accessCode;
+  const addRes = await db.collection('valid_users').add({
+    data: {
+      accessCode,
+      nickname,
+      _openid: '',
+      desc: '管理员生成口令',
+      bypassLocationCheck: bypassLocationCheck === true,
+      createTime: db.serverDate(),
+      updateTime: db.serverDate()
+    }
+  });
+  return {
+    success: true,
+    accessCode,
+    nickname,
+    recordId: addRes._id,
+    message: `口令 ${accessCode} 已生成，请发给用户使用（一码一人）`
+  };
+}
+
+async function handleList() {
+  const res = await db.collection('valid_users')
+    .orderBy('createTime', 'desc')
+    .limit(120)
+    .get();
+  const list = (res.data || [])
+    .filter((item) => item && extractPlainAccessCode(item.accessCode || item.nickname || ''))
+    .slice(0, 80)
+    .map(formatListItem);
+  return { success: true, list };
+}
+
+async function handleRevoke(recordId, accessCode) {
+  let doc = null;
+  if (recordId) {
+    try {
+      const one = await db.collection('valid_users').doc(recordId).get();
+      doc = one.data || null;
+    } catch (e) {}
+  }
+  if (!doc && accessCode) {
+    const byCode = await db.collection('valid_users').where({ accessCode }).limit(1).get();
+    doc = byCode.data && byCode.data[0] ? byCode.data[0] : null;
+  }
+  if (!doc || !doc._id) {
+    return { success: false, errMsg: '口令不存在' };
+  }
+  if (!isEmptyOpenid(doc._openid)) {
+    return { success: false, errMsg: '该口令已被使用，无法作废' };
+  }
+  await db.collection('valid_users').doc(doc._id).remove();
+  return { success: true, message: `口令 ${doc.accessCode || ''} 已作废` };
+}
+
+async function handleLegacyNickname(nickname, bypassLocationCheck) {
+  const existingRes = await db.collection('valid_users')
+    .where({ nickname })
+    .get();
+
+  if (existingRes.data && existingRes.data.length > 0) {
+    const emptySlot = existingRes.data.find((item) => isEmptyOpenid(item._openid));
+    if (emptySlot) {
+      if (bypassLocationCheck) {
+        await db.collection('valid_users').doc(emptySlot._id).update({
+          data: {
+            bypassLocationCheck: true,
+            updateTime: db.serverDate()
+          }
+        });
+        await updateUserListBypass(db, nickname, true);
+        await updateLoginLogbuttonBypass(db, nickname, true);
+      }
+      return {
+        success: false,
+        errMsg: `昵称 "${nickname}" 已存在且有空位，无需重复录入${bypassLocationCheck ? '（已更新地域放行设置）' : ''}`
+      };
+    }
+  }
+
+  await db.collection('valid_users').add({
+    data: {
+      nickname,
+      _openid: '',
+      desc: '管理员直接录入（旧版昵称）',
+      bypassLocationCheck: bypassLocationCheck === true,
+      createTime: db.serverDate(),
+      updateTime: db.serverDate()
+    }
+  });
+
+  if (bypassLocationCheck) {
+    await updateUserListBypass(db, nickname, true);
+    await updateLoginLogbuttonBypass(db, nickname, true);
+  }
+
+  return {
+    success: true,
+    message: `昵称 "${nickname}" 已成功录入到白名单（旧版）${bypassLocationCheck ? '，已开启地域放行' : ''}`,
+    isNew: true
+  };
+}
+
+exports.main = async (event = {}) => {
+  const action = event.action || 'generate';
 
   try {
     await assertAdmin();
 
-    // 检查昵称是否已存在
-    const existingRes = await db.collection('valid_users')
-      .where({ nickname: nickname })
-      .get();
-
-    if (existingRes.data && existingRes.data.length > 0) {
-      // 如果已存在，检查是否有空位（未绑定 openid）
-      // 🔴 与 verifyNickname 保持一致：查找 _openid 不存在或为空/null 的记录
-      const emptySlot = existingRes.data.find(item => !item._openid);
-      
-      if (emptySlot) {
-        // 有空位，说明已经有一个空位了，不需要再添加
-        // 🔴 但如果放行开关打开，需要更新 valid_users 中的 bypassLocationCheck，并同步到 user_list 和 login_logbutton
-        if (bypassLocationCheck) {
-          // 更新 valid_users 中的 bypassLocationCheck
-          await db.collection('valid_users').doc(emptySlot._id).update({
-            data: {
-              bypassLocationCheck: true,
-              updateTime: db.serverDate()
-            }
-          });
-          // 同步更新 user_list 和 login_logbutton
-          await updateUserListBypass(db, nickname, true);
-          await updateLoginLogbuttonBypass(db, nickname, true);
-        }
-        return {
-          success: false,
-          errMsg: `昵称 "${nickname}" 已存在且有空位，无需重复录入${bypassLocationCheck ? '（已更新地域放行设置）' : ''}`
-        };
-      } else {
-        // 所有位置都被占用，可以再添加一个空位
-        // 继续执行下面的添加逻辑
-      }
+    if (action === 'generate') {
+      return await handleGenerate(event.bypassLocationCheck === true);
     }
 
-    // 🔴 不存在或需要添加新空位：添加新记录，不设置 _openid 字段（或设置为空字符串）
-    // 注意：微信数据库可能会自动生成 _openid，所以我们需要明确不设置或设置为空
-    // 为了与 verifyNickname 的占位逻辑兼容（!r._openid），我们设置为空字符串
-    await db.collection('valid_users').add({
-      data: {
-        nickname: nickname,
-        // 🔴 不设置 _openid 字段，或者设置为空字符串，让 verifyNickname 的 !r._openid 能匹配到
-        // 微信数据库可能会自动添加 _openid，所以我们显式设置为空字符串更安全
-        _openid: '', 
-        desc: '管理员直接录入',
-        bypassLocationCheck: bypassLocationCheck, // 🔴 地域放行开关存储在 valid_users 中
-        createTime: db.serverDate(),
-        updateTime: db.serverDate()
-      }
-    });
-
-    // 🔴 如果放行开关打开，同步更新 user_list 和 login_logbutton 中该昵称对应的所有记录
-    if (bypassLocationCheck) {
-      await updateUserListBypass(db, nickname, true);
-      await updateLoginLogbuttonBypass(db, nickname, true);
+    if (action === 'list') {
+      return await handleList();
     }
 
-    return {
-      success: true,
-      message: `昵称 "${nickname}" 已成功录入到白名单（空位）${bypassLocationCheck ? '，已开启地域放行' : ''}`,
-      isNew: true
-    };
+    if (action === 'revoke') {
+      return await handleRevoke(event.recordId || '', String(event.accessCode || '').trim().toUpperCase());
+    }
 
+    if (action === 'add_nickname') {
+      const nickname = (event.nickname ? String(event.nickname) : '').trim();
+      if (!nickname) {
+        return { success: false, errMsg: '昵称不能为空' };
+      }
+      return await handleLegacyNickname(nickname, event.bypassLocationCheck === true);
+    }
+
+    return { success: false, errMsg: 'INVALID_ACTION' };
   } catch (err) {
-    console.error('[addNicknameToWhitelist] 录入失败:', err);
+    console.error('[addNicknameToWhitelist] failed:', err);
     if (String(err && err.message).includes('UNAUTHORIZED') || String(err && err.message).includes('FORBIDDEN')) {
       return { success: false, errMsg: '无管理员权限' };
     }
     return {
       success: false,
-      errMsg: err.message || '录入失败，请稍后重试'
+      errMsg: err.message || '操作失败，请稍后重试'
     };
   }
 };
 
-// 🔴 更新 user_list 中指定昵称的所有记录的 bypassLocationCheck 字段
 async function updateUserListBypass(db, nickname, bypassLocationCheck) {
   try {
-    // 查找 user_list 中所有匹配该昵称的记录
-    const userListRes = await db.collection('user_list')
-      .where({ nickName: nickname })
-      .get();
-    
+    const userListRes = await db.collection('user_list').where({ nickName: nickname }).get();
     if (userListRes.data && userListRes.data.length > 0) {
-      // 批量更新所有匹配的记录
-      const updatePromises = userListRes.data.map(user => 
+      await Promise.all(userListRes.data.map((user) =>
         db.collection('user_list').doc(user._id).update({
           data: {
-            bypassLocationCheck: bypassLocationCheck,
+            bypassLocationCheck,
             updateTime: db.serverDate()
           }
         })
-      );
-      await Promise.all(updatePromises);
-      console.log(`[addNicknameToWhitelist] 已更新 ${userListRes.data.length} 条 user_list 记录的 bypassLocationCheck 为 ${bypassLocationCheck}`);
-    } else {
-      console.log(`[addNicknameToWhitelist] user_list 中未找到昵称 "${nickname}" 的记录，跳过更新`);
+      ));
     }
   } catch (err) {
     console.error('[addNicknameToWhitelist] 更新 user_list 失败:', err);
-    // 不抛出错误，因为 valid_users 的添加已经成功
   }
 }
 
-// 🔴 更新 login_logbutton 中指定昵称的所有记录的 bypassLocationCheck 字段
 async function updateLoginLogbuttonBypass(db, nickname, bypassLocationCheck) {
   try {
-    // 查找 login_logbutton 中所有匹配该昵称的记录
-    const buttonRes = await db.collection('login_logbutton')
-      .where({ nickname: nickname })
-      .get();
-    
+    const buttonRes = await db.collection('login_logbutton').where({ nickname }).get();
     if (buttonRes.data && buttonRes.data.length > 0) {
-      // 批量更新所有匹配的记录
-      const updatePromises = buttonRes.data.map(button => 
+      await Promise.all(buttonRes.data.map((button) =>
         db.collection('login_logbutton').doc(button._id).update({
           data: {
-            bypassLocationCheck: bypassLocationCheck,
+            bypassLocationCheck,
             updateTime: db.serverDate()
           }
         })
-      );
-      await Promise.all(updatePromises);
-      console.log(`[addNicknameToWhitelist] 已更新 ${buttonRes.data.length} 条 login_logbutton 记录的 bypassLocationCheck 为 ${bypassLocationCheck}`);
-    } else {
-      console.log(`[addNicknameToWhitelist] login_logbutton 中未找到昵称 "${nickname}" 的记录，跳过更新`);
+      ));
     }
   } catch (err) {
     console.error('[addNicknameToWhitelist] 更新 login_logbutton 失败:', err);
-    // 不抛出错误，因为 valid_users 的添加已经成功
   }
 }

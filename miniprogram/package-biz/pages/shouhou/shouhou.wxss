@@ -695,6 +695,10 @@ page {
   min-height: 0; /* 防止 flex 子元素溢出 */
 }
 
+.content-scroll--table-mode {
+  padding-bottom: calc(200rpx + env(safe-area-inset-bottom));
+}
+
 /* Tabs */
 .tab-group {
   display: flex;
@@ -745,7 +749,199 @@ page {
   font-size: 24rpx;
   color: #86868B;
   font-weight: 700;
+  margin-bottom: 0;
+}
+
+.parts-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 20rpx;
+}
+
+.parts-table-mode-toggle {
+  font-size: 22rpx;
+  color: #007AFF;
+  font-weight: 600;
+  padding: 8rpx 20rpx;
+  border: 2rpx solid #007AFF;
+  border-radius: 24rpx;
+  background: #F0F8FF;
+}
+.parts-table-mode-toggle.on {
+  background: #007AFF;
+  color: #fff;
+}
+.parts-table-mode-toggle:active {
+  opacity: 0.75;
+}
+
+/* 管理员表格模式 */
+.parts-table-wrap {
+  background: #fff;
+  border-radius: 16rpx;
+  border: 2rpx solid #F0F0F0;
+  overflow: hidden;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.parts-table-head,
+.parts-table-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1rpx solid #F0F0F0;
+}
+
+.parts-table-head {
+  background: #F9F9F9;
+  min-height: 72rpx;
+}
+
+.parts-table-row {
+  min-height: 88rpx;
+}
+
+.parts-th,
+.parts-td {
+  font-size: 24rpx;
+  color: #333;
+}
+
+.parts-th {
+  font-weight: 700;
+  color: #86868B;
+  padding: 16rpx 12rpx;
+}
+
+.parts-td {
+  padding: 12rpx;
+}
+
+.parts-th--idx,
+.parts-td--idx {
+  width: 56rpx;
+  flex: none;
+  text-align: center;
+  color: #999;
+}
+
+.parts-th--name,
+.parts-td-cell.parts-td--name {
+  flex: 1;
+  min-width: 0;
+}
+
+.parts-th--price,
+.parts-td-cell.parts-td--price {
+  width: 132rpx;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.parts-td-cell {
+  padding: 8rpx 6rpx;
+  box-sizing: border-box;
+}
+
+.parts-td-cell.parts-td--name {
+  padding-left: 4rpx;
+  padding-right: 8rpx;
+}
+
+.parts-th--act,
+.parts-td--act {
+  width: 56rpx;
+  flex: none;
+  text-align: center;
+  color: #FF3B30;
+  font-size: 28rpx;
+}
+
+.parts-td-input {
+  width: 100%;
+  font-size: 26rpx;
+  color: #111;
+  background: #F9F9F9;
+  border-radius: 8rpx;
+  padding: 12rpx 12rpx;
+  box-sizing: border-box;
+  min-height: 64rpx;
+  line-height: 1.4;
+}
+
+.parts-price-prefix {
+  font-size: 24rpx;
+  color: #007AFF;
+  margin-right: 2rpx;
+  flex: none;
+}
+
+.parts-price-input {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  text-align: right;
+  padding: 12rpx 8rpx;
+}
+
+.parts-table-add-row {
+  text-align: center;
+  padding: 24rpx;
+  font-size: 26rpx;
+  color: #007AFF;
+  font-weight: 600;
+  border-bottom: 1rpx solid #F0F0F0;
+}
+.parts-table-add-row:active {
+  background: #F9F9F9;
+}
+
+/* 表格模式底部固定栏 */
+.parts-table-dock {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  padding: 20rpx 30rpx;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #eee;
+  display: flex;
+  gap: 20rpx;
+  align-items: center;
+  z-index: 210;
+  box-sizing: border-box;
+}
+
+.parts-table-dock-btn {
+  flex: 1;
+  height: 90rpx;
+  line-height: 90rpx;
+  text-align: center;
+  border-radius: 45rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  background: #000;
+  color: #fff;
+}
+
+.parts-table-dock-btn--ghost {
+  flex: 0 0 200rpx;
+  background: #F5F5F7;
+  color: #111;
+}
+
+.parts-table-dock-btn:active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
+.parts-table-dock-btn.disabled {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 /* 首页一键同步数据按钮容器 */
@@ -777,6 +973,9 @@ page {
 }
 .parts-section {
   padding-bottom: calc(220rpx + env(safe-area-inset-bottom));
+}
+.parts-section.parts-section--table-mode {
+  padding-bottom: 0;
 }
 /* 卡片包装器 */
 .part-tag-wrapper {

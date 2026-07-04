@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" width="200" height="140">
+  <defs>
+    <clipPath id="f2-ultra-l">
+      <rect x="0" y="0" width="102.5" height="140"/>
+    </clipPath>
+    <clipPath id="f2-ultra-r">
+      <rect x="102.5" y="0" width="97.5" height="140"/>
+    </clipPath>
+  </defs>
+  <path d="M15 30 H190 C195 30 195 35 195 35 V48 C195 53 190 53 190 53 H121 V69 H122.5 C127.5 69 127.5 74 127.5 74 V94 C127.5 99 122.5 99 122.5 99 H82.5 C77.5 99 77.5 94 77.5 94 V74 C77.5 69 82.5 69 82.5 69 H84 V53 H15 C10 53 10 48 10 48 V35 C10 30 15 30 15 30 Z" fill="#1C1C1E"/>
+  <path d="M102.5 30 H15 C10 30 10 35 10 35 V48 C10 48 10 53 15 53 H84 V69 H82.5 C77.5 69 77.5 74 77.5 74 V94 C77.5 99 82.5 99 82.5 99 H102.5 V30 Z" fill="#FFFFFF"/>
+  <path d="M15 30 H190 C195 30 195 35 195 35 V48 C195 53 190 53 190 53 H121 V69 H122.5 C127.5 69 127.5 74 127.5 74 V94 C127.5 99 122.5 99 122.5 99 H82.5 C77.5 99 77.5 94 77.5 94 V74 C77.5 69 82.5 69 82.5 69 H84 V53 H15 C10 53 10 48 10 48 V35 C10 30 15 30 15 30 Z" fill="none" stroke="#1C1C1E" stroke-width="3" stroke-linejoin="round"/>
+  <rect x="36" y="37" width="26" height="8" rx="5" fill="#1C1C1E"/>
+  <rect x="145" y="38" width="25" height="8" rx="4" fill="#FFFFFF"/>
+  <!-- 与 F2 Max 完全相同的 MT 文字定义 -->
+  <g clip-path="url(#f2-ultra-l)">
+    <text x="102.5" y="72" font-family="Arial, sans-serif" font-weight="900" font-size="14" text-anchor="middle" fill="#1C1C1E">
+      <tspan x="104.5" dy="0">M</tspan>
+      <tspan x="102.5" dy="16">T</tspan>
+    </text>
+  </g>
+  <g clip-path="url(#f2-ultra-r)">
+    <text x="102.5" y="72" font-family="Arial, sans-serif" font-weight="900" font-size="14" text-anchor="middle" fill="#1C1C1E" stroke="#FFFFFF" stroke-width="2" paint-order="stroke fill" stroke-linejoin="round">
+      <tspan x="104.5" dy="0">M</tspan>
+      <tspan x="102.5" dy="16">T</tspan>
+    </text>
+  </g>
+</svg>

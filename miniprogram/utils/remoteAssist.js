@@ -46,7 +46,9 @@ const REMOTE_STATE_KEYS = [
   'detailMode',
   'editType',
   'foldGap',
+  'foldServoAngle',
   'currentAngle',
+  'translateX',
   'angleMode',
   'openAngleUiActive',
   'angleBtnText',
@@ -111,13 +113,17 @@ function buildStatePatch(deviceState, options = {}) {
       'isConnected',
       'connectedDeviceName',
       'currentConnectedRawSn',
+      'showDetail',
       'detailMode',
       'editType',
       'foldGap',
       'currentAngle',
       'angleMode',
       'openAngleUiActive',
-      'angleBtnText'
+      'angleBtnText',
+      'f2ControlPanelOpen',
+      'blockDetailTouch',
+      'detailEnterAnim'
     ]
     : [];
   const patch = {};

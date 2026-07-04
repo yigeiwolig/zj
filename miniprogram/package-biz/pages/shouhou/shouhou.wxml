@@ -104,7 +104,7 @@
     <view style="width: 40px;"></view>
   </view>
 
-  <view class="content-scroll"
+  <view class="content-scroll {{partsTableMode ? 'content-scroll--table-mode' : ''}}"
         bindtouchmove="handleAdminContainerTouchMove"
         bindtouchend="handleAdminContainerTouchEnd"
         bindtouchcancel="handleAdminContainerTouchEnd">
@@ -124,9 +124,53 @@
       </view>
 
       <!-- A. 配件选择区 -->
-      <view wx:if="{{serviceType === 'parts'}}" class="parts-section">
-        <view class="section-label">配件清单</view>
-        <view class="parts-container">
+      <view wx:if="{{serviceType === 'parts'}}" class="parts-section {{partsTableMode ? 'parts-section--table-mode' : ''}}">
+        <view class="parts-section-header">
+          <view class="section-label">配件清单</view>
+          <view wx:if="{{isAdmin}}" class="parts-table-mode-toggle {{partsTableMode ? 'on' : ''}}" catchtap="togglePartsTableMode">
+            {{partsTableMode ? '卡片模式' : '表格模式'}}
+          </view>
+        </view>
+
+        <!-- 管理员表格模式：批量编辑名称/价格 -->
+        <view wx:if="{{partsTableMode}}" class="parts-table-wrap">
+          <view class="parts-table-head">
+            <text class="parts-th parts-th--idx">#</text>
+            <text class="parts-th parts-th--name">配件名称</text>
+            <text class="parts-th parts-th--price">价格</text>
+            <text class="parts-th parts-th--act"></text>
+          </view>
+          <block wx:for="{{partsTableDraft}}" wx:key="tableKey">
+            <view class="parts-table-row">
+              <text class="parts-td parts-td--idx">{{index + 1}}</text>
+              <view class="parts-td-cell parts-td--name">
+                <input
+                  class="parts-td-input"
+                  value="{{item.name}}"
+                  bindinput="onPartsTableNameInput"
+                  data-index="{{index}}"
+                  placeholder="配件名称"
+                />
+              </view>
+              <view class="parts-td-cell parts-td--price">
+                <text class="parts-price-prefix">¥</text>
+                <input
+                  class="parts-td-input parts-price-input"
+                  type="digit"
+                  value="{{item.price}}"
+                  bindinput="onPartsTablePriceInput"
+                  data-index="{{index}}"
+                  placeholder="0"
+                />
+              </view>
+              <view class="parts-td parts-td--act" catchtap="adminRemovePartTableRow" data-index="{{index}}">✕</view>
+            </view>
+          </block>
+          <view class="parts-table-add-row" catchtap="adminAddPartTableRow">+ 添加配件行</view>
+        </view>
+
+        <!-- 默认卡片模式 -->
+        <view wx:else class="parts-container">
           <block wx:for="{{currentPartsList}}" wx:key="listKey">
             <view class="part-tag-wrapper" 
                   data-index="{{index}}">
@@ -187,7 +231,7 @@
       </view>
 
       <!-- 购买配件模式下的占位 - 根据内容动态调整 -->
-      <view wx:if="{{serviceType === 'parts'}}" style="height: {{partsPlaceholderHeight}};"></view> 
+      <view wx:if="{{serviceType === 'parts' && !partsTableMode}}" style="height: {{partsPlaceholderHeight}};"></view> 
     </view>
 
     <!-- TAB 2: 维修教程 -->
@@ -336,7 +380,7 @@
   </view>
 
   <!-- 底部栏 (根据 Service Type 变化) -->
-  <view class="bottom-dock" wx:if="{{activeTab === 'order'}}">
+  <view class="bottom-dock" wx:if="{{activeTab === 'order' && !partsTableMode}}">
     
     <!-- 情况A: 购买配件 (双按钮) -->
     <view class="footer-btn-group" wx:if="{{serviceType === 'parts'}}">
@@ -349,6 +393,14 @@
       <view class="btn-black full" bindtap="openRepairOrder">提交维修工单</view>
     </view>
 
+  </view>
+
+  <!-- 表格模式底部栏：固定显示同步按钮 -->
+  <view class="parts-table-dock" wx:if="{{activeTab === 'order' && serviceType === 'parts' && partsTableMode}}">
+    <view class="parts-table-dock-btn parts-table-dock-btn--ghost" catchtap="togglePartsTableMode">退出表格</view>
+    <view class="parts-table-dock-btn {{partsTableSyncing ? 'disabled' : ''}}" catchtap="syncPartsTableToCloud">
+      {{partsTableSyncing ? '同步中...' : '完成同步'}}
+    </view>
   </view>
 </view>
 

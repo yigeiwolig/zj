@@ -123,21 +123,29 @@
   <view class="auth-panel-new {{nicknameUiClosing ? 'closing' : ''}}" catchtouchmove="noop">
     <view class="auth-icon-lock">✨</view>
     <view class="auth-title-new">开启专属体验</view>
-    <view class="auth-subtitle-new">请输入访问口令，解锁更多精彩内容</view>
+    <view class="auth-subtitle-new">输入访问口令即可进入，无需邀请码</view>
     
-    <view class="auth-input-wrapper">
-      <input type="nickname" class="auth-input-new" placeholder="点击下方微信昵称填入" bindinput="onNickNameInput" bindchange="onNickNameChange" value="{{inputNickName}}"/>
+    <view class="auth-input-wrapper auth-input-wrapper--main">
+      <input type="text" class="auth-input-new" placeholder="VK 访问口令" bindinput="onNickNameInput" bindchange="onNickNameChange" value="{{inputNickName}}" maxlength="8"/>
     </view>
 
-    <view class="auth-input-wrapper auth-invite-wrap">
-      <input
-        class="auth-input-new auth-input-invite {{inviteCodeInputInvalid ? 'is-invalid' : ''}}"
-        placeholder="好友邀请码（选填，如 INVXXXXXX）"
-        placeholder-class="auth-invite-placeholder"
-        maxlength="9"
-        bindinput="onInviteCodeInput"
-        value="{{inputInviteCode}}"
-      />
+    <view wx:if="{{!showInviteCodeInput}}" class="auth-foot-link auth-foot-link--under-input" bindtap="openInviteCodeInput">有好友邀请码？点此填写（可不填，不影响进入）</view>
+    <view wx:else class="auth-invite-expand auth-invite-expand--under-input">
+      <view class="auth-invite-expand-head">
+        <text class="auth-invite-expand-label">邀请有礼 · 可选</text>
+        <text class="auth-invite-expand-close" catchtap="closeInviteCodeInput">收起</text>
+      </view>
+      <view class="auth-input-wrapper auth-invite-wrap">
+        <input
+          class="auth-input-new auth-input-invite {{inviteCodeInputInvalid ? 'is-invalid' : ''}}"
+          placeholder="没有请留空"
+          placeholder-class="auth-invite-placeholder"
+          maxlength="9"
+          bindinput="onInviteCodeInput"
+          value="{{inputInviteCode}}"
+        />
+      </view>
+      <text class="auth-invite-panel-tip">不填邀请码也能正常进入，仅用于邀请活动</text>
     </view>
     
     <view
@@ -148,8 +156,10 @@
       hover-stay-time="80">
       {{isLoading ? '正在开启…' : '立即开启'}}
     </view>
-    
-    <view class="auth-hint-text">安装人员请在上方输入安装码以获得权限</view>
+
+    <view class="auth-foot">
+      <text class="auth-foot-line">普通用户填 VK · 安装人员填 MT</text>
+    </view>
   </view>
 </view>
 
@@ -163,7 +173,7 @@
         <text class="back-icon">←</text>
         <text class="back-text">返回</text>
       </view>
-      <text class="admin-title">{{adminViewMode === 'nickname' ? '昵称录入' : (adminViewMode === 'suspicious' ? '可疑人员处理' : (adminViewMode === 'suspiciousIgnored' ? '无视人员追溯' : (adminViewMode === 'bannedIgnored' ? '无视人员追溯' : (adminViewMode === 'suspiciousBanned' ? '可疑手动封禁留存' : (manualBannedMode ? '手动封禁处理' : '封禁管理')))))}}</text>
+      <text class="admin-title">{{adminViewMode === 'nickname' ? '口令管理' : (adminViewMode === 'suspicious' ? '可疑人员处理' : (adminViewMode === 'suspiciousIgnored' ? '无视人员追溯' : (adminViewMode === 'bannedIgnored' ? '无视人员追溯' : (adminViewMode === 'suspiciousBanned' ? '可疑手动封禁留存' : (manualBannedMode ? '手动封禁处理' : '封禁管理')))))}}</text>
       <view class="header-capsule-spacer"></view>
     </view>
 
@@ -187,35 +197,49 @@
       enhanced
       show-scrollbar="{{false}}">
       <view class="admin-nickname-container">
-        <view class="admin-section-title">昵称白名单</view>
-        <input 
-          class="nickname-input" 
-          type="text" 
-          placeholder="输入昵称"
-          value="{{nicknameInput}}"
-          bindinput="onNicknameInput"
-          maxlength="20"
-        />
-        
+        <view class="admin-section-title">访问口令</view>
+        <text class="admin-section-desc">一用户一码，生成后复制发给用户；用户首次登录即自动绑定</text>
+
         <view class="nickname-option">
           <view class="option-info">
             <text class="option-label">地域放行</text>
-            <text class="option-desc">不受地域拦截限制</text>
+            <text class="option-desc">该口令用户不受地域拦截限制</text>
           </view>
-          <switch 
-            checked="{{nicknameBypassLocation}}"
-            bindchange="toggleNicknameBypass"
+          <switch
+            checked="{{accessCodeBypassLocation}}"
+            bindchange="toggleAccessCodeBypass"
             color="#000"
           />
         </view>
-        
-        <button 
-          class="nickname-submit-btn" 
-          bindtap="submitNickname"
-          disabled="{{isSubmittingNickname || !nicknameInput}}"
+
+        <button
+          class="nickname-submit-btn"
+          bindtap="generateAccessCode"
+          disabled="{{isGeneratingAccessCode}}"
         >
-          {{isSubmittingNickname ? '提交中...' : '添加'}}
+          {{isGeneratingAccessCode ? '生成中...' : '生成访问口令'}}
         </button>
+
+        <view class="access-code-list-wrap">
+          <view class="blocked-region-list-head">
+            <text class="blocked-region-list-title">口令列表</text>
+            <text class="blocked-region-list-count" wx:if="{{accessCodeList.length}}">共 {{accessCodeList.length}} 条</text>
+          </view>
+          <view wx:if="{{isLoadingAccessCodes}}" class="blocked-region-empty">加载中...</view>
+          <view wx:elif="{{accessCodeList.length === 0}}" class="blocked-region-empty">暂无口令，点击上方生成</view>
+          <view wx:else class="access-code-list">
+            <view class="access-code-item" wx:for="{{accessCodeList}}" wx:key="_id">
+              <view class="access-code-item-main">
+                <text class="access-code-item-code">{{item.accessCode}}</text>
+                <text class="access-code-item-status access-code-item-status--{{item.statusClass}}">{{item.statusLabel}}</text>
+              </view>
+              <view class="access-code-item-actions">
+                <text class="access-code-item-btn" catchtap="copyAccessCode" data-code="{{item.accessCode}}">复制</text>
+                <text wx:if="{{!item.bound}}" class="access-code-item-btn access-code-item-btn--danger" catchtap="revokeAccessCode" data-id="{{item._id}}" data-code="{{item.accessCode}}">作废</text>
+              </view>
+            </view>
+          </view>
+        </view>
 
         <view class="admin-section-divider"></view>
 
@@ -914,7 +938,7 @@
         <text class="tab-text">可疑人员处理</text>
       </view>
       <view class="tab-item {{adminViewMode === 'nickname' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="nickname">
-        <text class="tab-text">昵称录入</text>
+        <text class="tab-text">口令管理</text>
       </view>
     </view>
   </view>
@@ -954,6 +978,12 @@
         <view class="gear-shape"><view class="teeth"></view><view class="hub"></view></view>
         <view class="highlight-dot"></view>
         <text class="btn-text" wx:if="{{step === 0}}">MT  RIDE</text>
+      </view>
+
+      <view wx:if="{{isAdmin && !isAdminMode}}" class="admin-quick-gen" catchtap="generateAccessCode">
+        <view class="admin-quick-gen-btn {{isGeneratingAccessCode ? 'is-loading' : ''}}">
+          {{isGeneratingAccessCode ? '生成中…' : '生成访问口令'}}
+        </view>
       </view>
     </view>
     
@@ -997,8 +1027,8 @@
     
     <!-- 3. 内容 -->
     <view class="modal-content-new">
-      <view class="content-main">该昵称暂未获得授权</view>
-      <view class="content-sub">建议点击一键填写确保准确</view>
+      <view class="content-main">访问口令无效或已被使用</view>
+      <view class="content-sub">请核对管理员发给您的 VK 口令后重试</view>
     </view>
 
     <!-- 4. 按钮：纯黑风格 -->

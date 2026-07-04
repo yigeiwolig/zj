@@ -156,7 +156,11 @@ Page({
     shareCodeStatsRows: [],
     shareCodeStatsDisplayRows: [],
     statsSearchKeyword: '',
-    statsScrollTop: 0
+    statsScrollTop: 0,
+
+    // 闲鱼订单截图验证（无小程序订单/未绑设备时解锁教程）
+    showXianyuVerifyModal: false,
+    xianyuVerifying: false
   },
 
   _isCloudFileId(u) {
@@ -797,6 +801,16 @@ Page({
         return;
       }
 
+      // 2.5 闲鱼订单截图已验证通过 -> 放行（适用于在闲鱼下单、无小程序订单的用户）
+      const xianyuVerified = await this._checkXianyuOrderVerified(openid);
+      if (xianyuVerified) {
+        console.log('[azjc checkAccessPermission] ✅ 闲鱼订单验证已通过，直接放行');
+        this.hideMyLoading();
+        await this.checkAdminPrivilege();
+        this.loadDataFromCloud();
+        return;
+      }
+
       // 3. 如果有未确认收货的订单 -> 提示先确认收货
       if (realPendingOrders.length > 0) {
         console.log('[azjc checkAccessPermission] ⚠️ 有未确认收货的订单:', realPendingOrders.length);
@@ -805,12 +819,11 @@ Page({
         return;
       }
 
-      // 4. 既没订单也没绑定设备 -> 显示提示（只给这种情况）
-      // 🔴 这个提示只显示给：没下过单，并且没绑定设备的用户
+      // 4. 既没订单也没绑定设备 -> 引导上传闲鱼订单截图验证
       if (allOrdersRes.data.length === 0 && !hasDevice) {
-        console.log('[azjc checkAccessPermission] ⚠️ 既没订单也没绑定设备');
+        console.log('[azjc checkAccessPermission] ⚠️ 既没订单也没绑定设备，展示闲鱼验证');
         this.hideMyLoading();
-        this.showRejectModal('请前往个人中心-我的订单\n确认收货后解锁教程');
+        this.showXianyuVerifyModal();
         return;
       }
 
@@ -836,6 +849,96 @@ Page({
       success: () => {
         const pageBack = require('../../../utils/pageBack.js');
         pageBack.popOrHub();
+      }
+    });
+  },
+
+  async _checkXianyuOrderVerified(openid) {
+    if (!openid) return false;
+    try {
+      const db = wx.cloud.database();
+      const res = await db.collection('xianyu_azjc_verified')
+        .where({ _openid: openid, verified: true })
+        .limit(1)
+        .get();
+      return !!(res.data && res.data.length > 0);
+    } catch (err) {
+      console.warn('[azjc] 查询闲鱼验证记录失败:', err);
+      return false;
+    }
+  },
+
+  showXianyuVerifyModal() {
+    this.setData({ showXianyuVerifyModal: true });
+  },
+
+  closeXianyuVerifyModal() {
+    if (this.data.xianyuVerifying) return;
+    this.setData({ showXianyuVerifyModal: false });
+    const pageBack = require('../../../utils/pageBack.js');
+    pageBack.popOrHub();
+  },
+
+  onChooseXianyuOrderScreenshot() {
+    if (this.data.xianyuVerifying) return;
+    wx.chooseMedia({
+      count: 1,
+      mediaType: ['image'],
+      sourceType: ['album'],
+      sizeType: ['compressed'],
+      success: (res) => {
+        const file = res.tempFiles && res.tempFiles[0];
+        if (!file || !file.tempFilePath) {
+          this._showCustomToast('未选择图片', 'none');
+          return;
+        }
+        this._verifyXianyuOrderScreenshot(file.tempFilePath);
+      },
+      fail: (err) => {
+        const msg = String((err && err.errMsg) || '');
+        if (msg.indexOf('cancel') === -1) {
+          this._showCustomToast('选择图片失败', 'none');
+        }
+      }
+    });
+  },
+
+  _verifyXianyuOrderScreenshot(filePath) {
+    this.setData({ xianyuVerifying: true });
+    this.showMyLoading('识别订单中...');
+    const fs = wx.getFileSystemManager();
+    fs.readFile({
+      filePath,
+      encoding: 'base64',
+      success: (readRes) => {
+        wx.cloud.callFunction({
+          name: 'recognizeXianyuOrder',
+          data: { imageBase64: readRes.data }
+        }).then((cfRes) => {
+          const result = cfRes && cfRes.result ? cfRes.result : {};
+          this.hideMyLoading();
+          this.setData({ xianyuVerifying: false });
+          if (result.success) {
+            this.setData({ showXianyuVerifyModal: false });
+            this._showCustomToast(result.message || '验证通过', 'success');
+            this.checkAdminPrivilege().then(() => {
+              this.loadDataFromCloud();
+            });
+            return;
+          }
+          this._showCustomToast(result.message || '验证未通过，请重试', 'none', 3000);
+        }).catch((err) => {
+          console.error('[azjc] 闲鱼订单识别失败:', err);
+          this.hideMyLoading();
+          this.setData({ xianyuVerifying: false });
+          this._showCustomToast('识别失败，请稍后重试', 'none');
+        });
+      },
+      fail: (err) => {
+        console.error('[azjc] 读取订单截图失败:', err);
+        this.hideMyLoading();
+        this.setData({ xianyuVerifying: false });
+        this._showCustomToast('读取图片失败', 'none');
       }
     });
   },

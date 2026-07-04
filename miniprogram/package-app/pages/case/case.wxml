@@ -39,6 +39,9 @@
 
       <!-- 文字按钮 (背景透明，只负责触发事件) -->
       <view class="tab-item {{currentTab === 'all' ? 'active' : ''}}" bindtap="switchTab" data-type="all">全部</view>
+      <view class="tab-item {{currentTab === 'F1' ? 'active' : ''}}" bindtap="switchTab" data-type="F1">F1</view>
+      <view class="tab-item {{currentTab === 'F2' ? 'active' : ''}}" bindtap="switchTab" data-type="F2">F2</view>
+      <view class="tab-item {{currentTab === 'F3' ? 'active' : ''}}" bindtap="switchTab" data-type="F3">F3</view>
       <view class="tab-item {{currentTab === 'street' ? 'active' : ''}}" bindtap="switchTab" data-type="street">街车</view>
       <view class="tab-item {{currentTab === 'sport' ? 'active' : ''}}" bindtap="switchTab" data-type="sport">仿赛</view>
       <view class="tab-item {{currentTab === 'scooter' ? 'active' : ''}}" bindtap="switchTab" data-type="scooter">踏板</view>
@@ -651,6 +654,8 @@
     bindtimeupdate="onCaseFullscreenTimeUpdate"
     bindloadedmetadata="onCaseFullscreenLoadedMeta"
     bindloadeddata="onCaseFullscreenLoadedData"
+    bindcanplay="onCaseFullscreenCanPlay"
+    bindprogress="onCaseFullscreenProgress"
     bindplay="onCaseFullscreenPlayEvt"
     bindpause="onCaseFullscreenPauseEvt"
     bindwaiting="onCaseFullscreenWaiting"

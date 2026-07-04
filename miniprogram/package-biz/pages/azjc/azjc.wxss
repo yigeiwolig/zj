@@ -2315,6 +2315,38 @@ page { height: 100%; background: #fff; overflow: hidden; }
   box-shadow: 0 10rpx 20rpx rgba(0,0,0,0.1);
 }
 
+.xianyu-verify-modal {
+  min-height: 420rpx;
+  padding: 56rpx 40rpx 40rpx;
+}
+
+.xianyu-verify-hint {
+  margin-top: 12rpx;
+  line-height: 1.5;
+}
+
+.xianyu-verify-sample {
+  margin: 28rpx 0 36rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: #f5f5f7;
+  color: #666;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+.xianyu-verify-modal .modal-btn-new.is-disabled {
+  opacity: 0.55;
+}
+
+.xianyu-verify-cancel {
+  margin-top: 24rpx;
+  text-align: center;
+  color: #8e8e93;
+  font-size: 28rpx;
+  padding: 12rpx 0;
+}
+
 /* ================= MT 自定义暂停键（azjc 全屏视频） ================= */
 .azjc-fs-video-tap-layer {
   position: absolute;

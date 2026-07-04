@@ -1,0 +1,57 @@
+<view class="f3-cal-panel f3-cal-panel--wide">
+  <text class="f3-cal-title">{{f3CalTitle || 'F3 自动校准'}}</text>
+  <text class="f3-cal-desc" wx:if="{{f3CalDesc}}">{{f3CalDesc}}</text>
+
+  <block wx:if="{{f3CalStep === 'sample1' || f3CalStep === 'sample2' || f3CalStep === 'restoring'}}">
+    <view class="f3-cal-ring" wx:if="{{f3CalStep !== 'restoring'}}">
+      <text class="f3-cal-num">{{f3CalCountdown}}</text>
+      <text class="f3-cal-unit">秒</text>
+    </view>
+    <text class="f3-cal-live">实时高度：{{f3CalLiveText || '—'}}</text>
+    <text class="f3-cal-min" wx:if="{{f3CalMedianText}}">{{f3CalStep === 'sample2' ? '当前最小' : '当前中位'}}：{{f3CalMedianText}}</text>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'wheel'}}">
+    <text class="f3-cal-wheel-hint">滑动波轮或点按钮微调短尾（仅预览，不改折叠角）</text>
+    <view class="f3-cal-fold-btns">
+      <view class="f3-cal-fold-btn" catchtap="onF3CalFoldNudge" data-dir="down">调小</view>
+      <view class="f3-cal-fold-btn" catchtap="onF3CalFoldNudge" data-dir="up">调大</view>
+    </view>
+    <view class="f3-cal-ruler-wave-area" catchtouchstart="onF3CalRulerTouchStart" catchtouchmove="onF3CalRulerTouchMove" catchtouchend="onF3CalRulerTouchEnd" catchtouchcancel="onF3CalRulerTouchEnd">
+      <view class="mask-fade left"></view>
+      <view class="mask-fade right"></view>
+      <view class="wave-track" style="transform: translateX({{f3CalTranslateX}}px); transition: {{f3CalRulerTransition || 'none'}};">
+        <block wx:for="{{f3CalPadTicks}}" wx:key="index">
+          <view class="bar {{filters.getWaveClassByX(-50 + index, f3CalTranslateX)}}" style="{{index === 0 ? 'margin-left: -1000px;' : ''}}"></view>
+        </block>
+        <block wx:for="{{f3CalTicks}}" wx:key="index">
+          <view class="bar {{filters.getWaveClassByX(index, f3CalTranslateX)}}"></view>
+        </block>
+        <block wx:for="{{f3CalPadTicks}}" wx:key="index">
+          <view class="bar {{filters.getWaveClassByX((f3CalTicks.length || 46) + index, f3CalTranslateX)}}"></view>
+        </block>
+      </view>
+    </view>
+    <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalReady">我已经准备好了</view>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'cardboard'}}">
+    <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalCardboardKnow">我知道了</view>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'compress'}}">
+    <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalCompressStart">开始采集</view>
+  </block>
+
+  <text class="f3-cal-result" wx:if="{{f3CalResultText}}">{{f3CalResultText}}</text>
+  <text class="f3-cal-sub" wx:if="{{f3CalStatusText}}">{{f3CalStatusText}}</text>
+
+  <view class="f3-cal-btn f3-cal-btn--ghost" wx:if="{{f3CalStep && f3CalStep !== 'done' && f3CalStep !== 'error'}}" catchtap="onF3CalCancel">取消</view>
+</view>
+<view class="f3-cal-hold-mask" wx:if="{{f3CalShowHoldModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="f3-cal-hold-dialog" catchtap="noop">
+    <text class="f3-cal-hold-title">请勿移动纸板</text>
+    <text class="f3-cal-hold-desc">请保持纸板水平、不要晃动，确认后将开始 5 秒采集。</text>
+    <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalHoldConfirm">开始采集</view>
+  </view>
+</view>

@@ -2,6 +2,23 @@ const app = getApp();
 const db = wx.cloud.database();
 const dbPermissionHint = require('../../../utils/dbPermissionHint.js');
 const { CASE_MODEL_OPTIONS } = require('../../../utils/productModels.js');
+
+/** 案例库顶部 Tab：车型与 F 系列同级，互斥单选 */
+const CASE_TAB_LIST = [
+  { id: 'all', label: '全部' },
+  { id: 'F1', label: 'F1' },
+  { id: 'F2', label: 'F2' },
+  { id: 'F3', label: 'F3' },
+  { id: 'street', label: '街车' },
+  { id: 'sport', label: '仿赛' },
+  { id: 'scooter', label: '踏板' },
+  { id: 'cruise', label: '巡航' },
+  { id: 'rally', label: '拉力' },
+  { id: 'touring', label: '旅行车' },
+  { id: 'ebike', label: '电摩' },
+  { id: 'bicycle', label: '电动自行车' }
+];
+const CASE_MODEL_TAB_SET = new Set(['F1', 'F2', 'F3']);
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 
 let _cosUploadMod;
@@ -2608,7 +2625,7 @@ Page({
           clearTimeout(this._caseFsChromeTimer);
           this._caseFsChromeTimer = null;
         }
-        this._clearCaseFullscreenStuckTimer();
+        this._clearCaseFullscreenReadyTimers();
         this.setData({
           currentVideo: targetItem,
           showVideoPlayer: true,
@@ -2629,7 +2646,10 @@ Page({
         }, () => {
           this._beginCaseBgmSession();
           this.refreshVideoWatermarkNickname();
-          wx.nextTick(() => this._refreshCaseFullscreenTrackRect());
+          wx.nextTick(() => {
+            this._refreshCaseFullscreenTrackRect();
+            this._kickCaseFullscreenAutoplay(2);
+          });
           this._scheduleCaseFullscreenStuckCheck();
         });
         this._caseFullscreenTrackRectCached = null;
@@ -2672,15 +2692,34 @@ Page({
   // ==========================================
   // 1. 切换 Tab (修复：使用 SelectorQuery 获取准确坐标)
   // ==========================================
+  _matchesCaseModelSeries(modelName, seriesTab) {
+    if (!seriesTab || seriesTab === 'all') return true;
+    const raw = String(modelName || '').trim();
+    if (!raw) return false;
+    const m = raw.toUpperCase();
+    const s = String(seriesTab).trim().toUpperCase();
+    if (m === s) return true;
+    if (s === 'F1' || s === 'F2' || s === 'F3') {
+      return m.startsWith(s + ' ');
+    }
+    return m === s;
+  },
+
+  _filterCaseDisplayList(list, tab) {
+    let pool = list || [];
+    const type = tab != null ? tab : this.data.currentTab;
+    if (!type || type === 'all') return pool;
+    if (CASE_MODEL_TAB_SET.has(type)) {
+      return pool.filter((item) => this._matchesCaseModelSeries(item.model, type));
+    }
+    return pool.filter((item) => item.type === type);
+  },
+
   switchTab(e) {
     const type = e.currentTarget.dataset.type;
     console.log('🔵 [调试] switchTab 被调用，type:', type);
     
-    // 先更新数据，让界面立刻响应
-    let baseList = this.data.list;
-    if (type !== 'all') {
-      baseList = baseList.filter(item => item.type === type);
-    }
+    const baseList = this._filterCaseDisplayList(this.data.list, type);
 
     this.setData({
       currentTab: type,
@@ -2690,9 +2729,7 @@ Page({
       searchTip: ''
     }, () => this._syncCaseMainScrollLayout());
 
-    // 🔴 核心修复：使用小程序专用 API 获取位置
-    // 小程序不支持属性选择器，需要查询所有 tab-item 然后找到对应的
-    const tabTypes = ['all', 'street', 'sport', 'scooter', 'cruise', 'rally', 'touring', 'ebike', 'bicycle'];
+    const tabTypes = CASE_TAB_LIST.map((t) => t.id);
     const targetIndex = tabTypes.indexOf(type);
     
     if (targetIndex === -1) {
@@ -2789,11 +2826,7 @@ Page({
     const val = e.detail.value;
     this.setData({ searchText: val, searchTip: '' });
 
-    const type = this.data.currentTab;
-    let currentPool = this.data.list;
-    if (type !== 'all') {
-      currentPool = currentPool.filter(item => item.type === type);
-    }
+    const currentPool = this._filterCaseDisplayList(this.data.list, this.data.currentTab);
 
     if (!val) {
       this.setData({ displayList: currentPool });
@@ -3449,7 +3482,7 @@ Page({
     });
     this._caseBgmStartedForCurrent = false;
     this._caseFsPlaybackStarted = false;
-    this._clearCaseFullscreenStuckTimer();
+    this._clearCaseFullscreenReadyTimers();
   },
 
   closeVideoPlayerAnimated() {
@@ -3492,16 +3525,56 @@ Page({
 
   onCaseFullscreenLoadedMeta(e) {
     const dur = Number((e.detail && e.detail.duration) || 0) || 0;
-    if (dur <= 0 || this._caseFsDurationApplied) return;
-    this._caseFsDurationApplied = true;
-    this.setData({
-      caseFullscreenDuration: dur,
-      caseFullscreenDurationStr: this._formatCaseFullscreenClock(dur)
-    });
+    if (dur > 0 && !this._caseFsDurationApplied) {
+      this._caseFsDurationApplied = true;
+      this.setData({
+        caseFullscreenDuration: dur,
+        caseFullscreenDurationStr: this._formatCaseFullscreenClock(dur)
+      });
+    }
+    this._kickCaseFullscreenAutoplay(1);
+    this._scheduleCaseFullscreenMetaReadyFallback();
   },
 
   onCaseFullscreenLoadedData() {
     this._onCaseFullscreenPlaybackStarted();
+  },
+
+  onCaseFullscreenCanPlay() {
+    this._onCaseFullscreenPlaybackStarted();
+  },
+
+  onCaseFullscreenProgress(e) {
+    const buffered = Number((e.detail && e.detail.buffered) || 0) || 0;
+    if (buffered > 0 && !this._caseFsPlaybackStarted) {
+      this._kickCaseFullscreenAutoplay(0);
+    }
+  },
+
+  /** 部分机型 autoplay 不触发 play 事件，主动补一次 play */
+  _kickCaseFullscreenAutoplay(retries) {
+    if (!this.data.showVideoPlayer || this.data.caseFullscreenPaused || this.data.caseFullscreenEnded) return;
+    try {
+      const ctx = wx.createVideoContext('caseFullscreenVideo', this);
+      if (ctx && typeof ctx.play === 'function') ctx.play();
+    } catch (err) {}
+    const left = Number(retries) || 0;
+    if (left > 0) {
+      setTimeout(() => this._kickCaseFullscreenAutoplay(left - 1), 320);
+    }
+  },
+
+  /** metadata 已就绪但 loadeddata/play/timeupdate 未到时，兜底解除首屏加载 */
+  _scheduleCaseFullscreenMetaReadyFallback() {
+    if (this._caseFsMetaReadyTimer) clearTimeout(this._caseFsMetaReadyTimer);
+    this._caseFsMetaReadyTimer = setTimeout(() => {
+      this._caseFsMetaReadyTimer = null;
+      if (!this.data.showVideoPlayer || this._caseFsPlaybackStarted) return;
+      if (this.data.caseFullscreenPaused || this.data.caseFullscreenEnded) return;
+      const dur = Number(this.data.caseFullscreenDuration) || 0;
+      if (dur <= 0 && !this._caseFsDurationApplied) return;
+      this._onCaseFullscreenPlaybackStarted();
+    }, 650);
   },
 
   _clearCaseFullscreenStuckTimer() {
@@ -3511,6 +3584,22 @@ Page({
     }
   },
 
+  _clearCaseFullscreenLoadingRecovery() {
+    if (this._caseFsLoadingRecoveryTimer) {
+      clearInterval(this._caseFsLoadingRecoveryTimer);
+      this._caseFsLoadingRecoveryTimer = null;
+    }
+  },
+
+  _clearCaseFullscreenReadyTimers() {
+    this._clearCaseFullscreenStuckTimer();
+    if (this._caseFsMetaReadyTimer) {
+      clearTimeout(this._caseFsMetaReadyTimer);
+      this._caseFsMetaReadyTimer = null;
+    }
+    this._clearCaseFullscreenLoadingRecovery();
+  },
+
   /** 打开后若迟迟未出画，才显示顶部 MT 加载条 */
   _scheduleCaseFullscreenStuckCheck() {
     this._clearCaseFullscreenStuckTimer();
@@ -3518,8 +3607,36 @@ Page({
       this._caseFsStuckTimer = null;
       if (this._caseFsPlaybackStarted || !this.data.showVideoPlayer) return;
       if (this.data.caseFullscreenPaused || this.data.caseFullscreenCoverHidden) return;
-      this.setData({ caseFullscreenInitialLoading: true });
+      this._kickCaseFullscreenAutoplay(2);
+      this._caseFsStuckTimer = setTimeout(() => {
+        this._caseFsStuckTimer = null;
+        if (this._caseFsPlaybackStarted || !this.data.showVideoPlayer) return;
+        if (this.data.caseFullscreenPaused || this.data.caseFullscreenCoverHidden) return;
+        this.setData({ caseFullscreenInitialLoading: true });
+        this._startCaseFullscreenLoadingRecovery();
+      }, 700);
     }, 1200);
+  },
+
+  /** 加载圈已显示但仍未收到播放事件时，轮询补 play 并在有时长后强制解除 */
+  _startCaseFullscreenLoadingRecovery() {
+    this._clearCaseFullscreenLoadingRecovery();
+    let attempts = 0;
+    this._caseFsLoadingRecoveryTimer = setInterval(() => {
+      attempts += 1;
+      if (!this.data.showVideoPlayer || this._caseFsPlaybackStarted) {
+        this._clearCaseFullscreenLoadingRecovery();
+        return;
+      }
+      this._kickCaseFullscreenAutoplay(0);
+      const hasDuration = this._caseFsDurationApplied || (Number(this.data.caseFullscreenDuration) > 0);
+      if (this.data.caseFullscreenInitialLoading && hasDuration && attempts >= 2) {
+        this._onCaseFullscreenPlaybackStarted();
+        this._clearCaseFullscreenLoadingRecovery();
+        return;
+      }
+      if (attempts >= 10) this._clearCaseFullscreenLoadingRecovery();
+    }, 400);
   },
 
   /** 停止进度 UI 定时器（避免 timeupdate 高频 setData 导致 video/cover-view 卡顿） */
@@ -3536,7 +3653,7 @@ Page({
       clearTimeout(this._caseFsSeekResumeTimer);
       this._caseFsSeekResumeTimer = null;
     }
-    this._clearCaseFullscreenStuckTimer();
+    this._clearCaseFullscreenReadyTimers();
     if (this._caseFsChromeTimer) {
       clearTimeout(this._caseFsChromeTimer);
       this._caseFsChromeTimer = null;
@@ -3559,7 +3676,7 @@ Page({
   _onCaseFullscreenPlaybackStarted() {
     if (this._caseFsPlaybackStarted || !this.data.showVideoPlayer) return;
     this._caseFsPlaybackStarted = true;
-    this._clearCaseFullscreenStuckTimer();
+    this._clearCaseFullscreenReadyTimers();
     this._clearCaseFullscreenLoadingState(() => {
       if (!this.data.caseFullscreenChromeReady) {
         this.refreshVideoWatermarkNickname();

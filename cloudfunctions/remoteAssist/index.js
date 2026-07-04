@@ -144,10 +144,24 @@ exports.main = async (event) => {
     }
 
     if (action === 'hasPending') {
-      const productKey = String(event.productKey || '').trim();
-      if (!productKey) return ok({ hasPending: false, sessions: [] });
       const admin = await isGuanliyuan(openid);
       if (!admin) return ok({ hasPending: false, sessions: [] });
+      const productKey = String(event.productKey || '').trim();
+      const all = event.all === true || !productKey;
+      if (all) {
+        const res = await db.collection(COL).where({
+          status: 'pending'
+        }).limit(50).get();
+        const sessions = (res.data || []).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        const first = sessions[0] || null;
+        return ok({
+          hasPending: sessions.length > 0,
+          sessions,
+          sessionId: first ? first._id : '',
+          session: first
+        });
+      }
+      if (!productKey) return ok({ hasPending: false, sessions: [] });
       const res = await db.collection(COL).where({
         productKey,
         status: 'pending'
@@ -198,6 +212,13 @@ exports.main = async (event) => {
       const isUser = session.userOpenid === openid;
       const isAdmin = session.adminOpenid === openid;
       if (!isUser && !isAdmin && !admin) return fail('无权限');
+      if (session.status === 'active') {
+        await db.collection(COL).doc(sessionId).update({
+          data: { updatedAt: now(), expiresAt: now() + ACTIVE_TTL_MS }
+        }).catch(() => {});
+        const fresh = await getSessionById(sessionId);
+        return ok({ session: fresh || session });
+      }
       return ok({ session });
     }
 
@@ -227,6 +248,10 @@ exports.main = async (event) => {
             at: Number(fb.at) || now()
           };
         }
+      }
+      if (event.userAccepted !== undefined) {
+        patch.userAccepted = !!event.userAccepted;
+        if (patch.userAccepted) patch.userAcceptedAt = now();
       }
       await db.collection(COL).doc(sessionId).update({ data: patch });
       return ok({ sessionId });

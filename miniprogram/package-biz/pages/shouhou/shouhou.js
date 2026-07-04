@@ -111,6 +111,8 @@ const DRAG_CONFIG = {
   VIBRATE_INTERVAL: 200     // 震动反馈最小间隔（ms），避免过于频繁
 };
 
+const PARTS_MANIFEST_TYPE = 'parts_manifest';
+
 Page({
   data: {
     inDetail: false,
@@ -141,6 +143,11 @@ Page({
 
     // 动态占位高度
     partsPlaceholderHeight: '180rpx',
+
+    // 管理员表格模式（批量编辑配件名称/价格）
+    partsTableMode: false,
+    partsTableDraft: [],
+    partsTableSyncing: false,
     
     // 拖拽相关
     isDragging: false,
@@ -1141,6 +1148,9 @@ Page({
     }
     
     const nextState = !this.data.isAdmin;
+    if (!nextState && this.data.partsTableMode) {
+      this._resetPartsTableMode();
+    }
     this.setData({ isAdmin: nextState });
     
     getApp().showDialog({
@@ -1634,6 +1644,7 @@ Page({
     }
     this._repairTermsAcked = false;
     this.closeRepairTermsModal();
+    this._resetPartsTableMode();
     // 直接返回选择界面，不需要管理员模式
     this.setData({ inDetail: false });
     this.setData({
@@ -2060,12 +2071,65 @@ Page({
       .limit(PAGE)
       .get()
       .then((res) => {
-        const batch = res.data || [];
+        const batch = (res.data || []).filter((row) => (
+          row
+          && row.recordType !== PARTS_MANIFEST_TYPE
+          && row.name
+        ));
         all.push(...batch);
-        if (batch.length >= PAGE) return load(skip + PAGE);
+        if ((res.data || []).length >= PAGE) return load(skip + PAGE);
         return all;
       });
     return load(0);
+  },
+
+  _fetchPartsListMode(modelName) {
+    const db = wx.cloud.database();
+    return db.collection('shouhou')
+      .where({ modelName, recordType: PARTS_MANIFEST_TYPE })
+      .limit(1)
+      .get()
+      .then((res) => {
+        const doc = (res.data && res.data[0]) || null;
+        return doc && doc.partsListMode === 'custom' ? 'custom' : 'default';
+      })
+      .catch(() => 'default');
+  },
+
+  _savePartsListMode(modelName, mode) {
+    const db = wx.cloud.database();
+    const payload = {
+      modelName,
+      recordType: PARTS_MANIFEST_TYPE,
+      partsListMode: mode === 'custom' ? 'custom' : 'default',
+      updatedAt: db.serverDate()
+    };
+    return db.collection('shouhou')
+      .where({ modelName, recordType: PARTS_MANIFEST_TYPE })
+      .limit(1)
+      .get()
+      .then((res) => {
+        const existing = (res.data && res.data[0]) || null;
+        if (existing && existing._id) {
+          return db.collection('shouhou').doc(existing._id).update({ data: payload });
+        }
+        return db.collection('shouhou').add({ data: payload });
+      });
+  },
+
+  _mapCloudRowsToParts(cloudRows, modelName) {
+    const parts = (cloudRows || []).map((item) => ({
+      _id: item._id,
+      name: item.name,
+      price: item.price || 0,
+      modelName: item.modelName || modelName,
+      order: item.order != null ? item.order : 0,
+      defaultName: item.defaultName || '',
+      selected: false,
+      preselected: false
+    }));
+    parts.sort((a, b) => (a.order || 0) - (b.order || 0));
+    return parts;
   },
 
   /** 底部固定栏高度约 180rpx + 安全区，占位不足时最后一行会被挡住 */
@@ -2094,25 +2158,22 @@ Page({
     console.log('[loadParts] 当前管理员状态 - isAuthorized:', this.data.isAuthorized);
     
     // 从 shouhou 集合读取（分页，避免默认 20 条上限漏掉新配件）
-    this._fetchShouhouPartsByModel(modelName).then(cloudRows => {
-      console.log(`[loadParts] ${modelName} 从云端读取到 ${cloudRows.length} 条数据`);
+    Promise.all([
+      this._fetchShouhouPartsByModel(modelName),
+      this._fetchPartsListMode(modelName)
+    ]).then(([cloudRows, listMode]) => {
+      console.log(`[loadParts] ${modelName} 从云端读取到 ${cloudRows.length} 条数据，清单模式: ${listMode}`);
       const defaultNames = DB_PARTS[modelName] || [];
       let parts = [];
 
-      if (defaultNames.length > 0) {
+      if (listMode === 'custom') {
+        parts = this._mapCloudRowsToParts(cloudRows, modelName);
+        console.log(`[loadParts] ${modelName} 使用自定义清单，共 ${parts.length} 个配件`);
+      } else if (defaultNames.length > 0) {
         parts = this._mergeDefaultPartsWithCloud(modelName, cloudRows);
         console.log(`[loadParts] ${modelName} 默认+云端合并，共 ${parts.length} 个配件`);
       } else if (cloudRows.length > 0) {
-        parts = cloudRows.map(item => ({
-          _id: item._id,
-          name: item.name,
-          price: item.price || 0,
-          modelName: item.modelName,
-          order: item.order || 0,
-          selected: false,
-          preselected: false
-        }));
-        parts.sort((a, b) => (a.order || 0) - (b.order || 0));
+        parts = this._mapCloudRowsToParts(cloudRows, modelName);
         console.log(`[loadParts] ${modelName} 无本地默认列表，仅使用云端，共 ${parts.length} 个配件`);
       } else {
         console.log(`[loadParts] ${modelName} 云端与默认均为空`);
@@ -2325,6 +2386,211 @@ Page({
       selectedCount: count,
       totalPrice: Number(total.toFixed(2))
     });
+  },
+
+  _resetPartsTableMode() {
+    this._partsTableOriginal = null;
+    this.setData({
+      partsTableMode: false,
+      partsTableDraft: [],
+      partsTableSyncing: false
+    });
+  },
+
+  _clonePartsForTable(parts) {
+    return (parts || []).map((p, i) => ({
+      _id: p._id || '',
+      name: p.name || '',
+      price: p.price != null && p.price !== '' ? String(p.price) : '0',
+      order: p.order != null ? p.order : i,
+      defaultName: p.defaultName || '',
+      tableKey: p._id || `draft-${i}-${p.name || ''}`
+    }));
+  },
+
+  _partsTableHasChanges() {
+    const draft = this.data.partsTableDraft || [];
+    const original = this._partsTableOriginal || [];
+    const serialize = (list) => list.map((r) => [
+      r._id || '',
+      String(r.name || '').trim(),
+      this._toPriceNumber(r.price)
+    ].join('\t')).join('\n');
+    return serialize(draft) !== serialize(original);
+  },
+
+  togglePartsTableMode() {
+    if (!this.data.isAdmin) return;
+    if (this.data.serviceType !== 'parts') return;
+
+    const entering = !this.data.partsTableMode;
+    if (!entering) {
+      if (this._partsTableHasChanges()) {
+        this._showCustomModal({
+          title: '未保存的修改',
+          content: '表格中有未同步的修改，确定要退出表格模式吗？',
+          confirmText: '退出',
+          cancelText: '继续编辑',
+          success: (res) => {
+            if (res.confirm) this._resetPartsTableMode();
+          }
+        });
+        return;
+      }
+      this._resetPartsTableMode();
+      return;
+    }
+
+    const source = this.data.currentPartsList || [];
+    this._partsTableOriginal = source.map((p) => ({
+      _id: p._id || '',
+      name: p.name || '',
+      price: p.price != null ? p.price : 0,
+      order: p.order != null ? p.order : 0,
+      defaultName: p.defaultName || ''
+    }));
+    this.setData({
+      partsTableMode: true,
+      partsTableDraft: this._clonePartsForTable(source)
+    });
+  },
+
+  onPartsTableNameInput(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(idx)) return;
+    this.setData({ [`partsTableDraft[${idx}].name`]: e.detail.value });
+  },
+
+  onPartsTablePriceInput(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(idx)) return;
+    this.setData({ [`partsTableDraft[${idx}].price`]: e.detail.value });
+  },
+
+  adminAddPartTableRow() {
+    if (!this.data.isAdmin || !this.data.partsTableMode) return;
+    const draft = (this.data.partsTableDraft || []).slice();
+    draft.push({
+      _id: '',
+      name: '',
+      price: '0',
+      order: draft.length,
+      defaultName: '',
+      tableKey: `new-${Date.now()}-${draft.length}`
+    });
+    this.setData({ partsTableDraft: draft });
+  },
+
+  adminRemovePartTableRow(e) {
+    if (!this.data.isAdmin || !this.data.partsTableMode) return;
+    const idx = Number(e.currentTarget.dataset.index);
+    if (Number.isNaN(idx)) return;
+    const draft = (this.data.partsTableDraft || []).slice();
+    draft.splice(idx, 1);
+    this.setData({ partsTableDraft: draft });
+  },
+
+  syncPartsTableToCloud() {
+    if (!this.data.isAdmin || !this.data.partsTableMode || this.data.partsTableSyncing) return;
+
+    const draft = this.data.partsTableDraft || [];
+    const original = this._partsTableOriginal || [];
+    const modelName = this.data.currentModelName;
+    if (!modelName) return;
+
+    const trimmedRows = draft.map((row, i) => ({
+      _id: row._id || '',
+      name: String(row.name || '').trim(),
+      price: this._toPriceNumber(row.price),
+      order: i,
+      defaultName: row.defaultName || ''
+    }));
+
+    if (trimmedRows.some((r) => !r.name)) {
+      this._showCustomToast('请填写所有配件名称', 'none');
+      return;
+    }
+    const nameSet = new Set();
+    for (const row of trimmedRows) {
+      if (nameSet.has(row.name)) {
+        this._showCustomToast('存在重复配件名称', 'none');
+        return;
+      }
+      nameSet.add(row.name);
+    }
+
+    const removedFromDraft = original.filter((r) => !trimmedRows.some((row) => (
+      (r._id && row._id === r._id)
+      || (!r._id && String(r.name || '').trim() === row.name)
+    )));
+    const toAdd = trimmedRows.filter((r) => !r._id).length;
+
+    const summary = [
+      `保留 ${trimmedRows.length} 个`,
+      removedFromDraft.length ? `移除 ${removedFromDraft.length} 个` : '',
+      toAdd ? `新增 ${toAdd} 个` : ''
+    ].filter(Boolean).join('，');
+
+    this._showCustomModal({
+      title: '确认同步',
+      content: `将以表格内容覆盖当前型号配件清单（${summary}）。删除的默认配件不会再自动恢复，是否继续？`,
+      confirmText: '完成同步',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) this._executePartsTableSync(trimmedRows, modelName);
+      }
+    });
+  },
+
+  async _executePartsTableSync(trimmedRows, modelName) {
+    const db = wx.cloud.database();
+    this.setData({ partsTableSyncing: true });
+    this.showMyLoading('同步中...');
+
+    try {
+      const allCloud = await this._fetchShouhouPartsByModel(modelName);
+      for (const part of allCloud) {
+        if (!part._id) continue;
+        const delRes = await wx.cloud.callFunction({
+          name: 'deleteShouhouPart',
+          data: { _id: part._id }
+        });
+        const delResult = (delRes && delRes.result) || {};
+        if (!delResult.success) {
+          throw new Error(delResult.error || `删除「${part.name}」失败`);
+        }
+      }
+
+      for (let i = 0; i < trimmedRows.length; i++) {
+        const row = trimmedRows[i];
+        const addRes = await db.collection('shouhou').add({
+          data: {
+            modelName,
+            name: row.name,
+            price: row.price,
+            order: i,
+            defaultName: row.defaultName || undefined,
+            createTime: db.serverDate()
+          }
+        });
+        if (!addRes._id) {
+          throw new Error(`添加「${row.name}」失败`);
+        }
+      }
+
+      await this._savePartsListMode(modelName, 'custom');
+
+      this.hideMyLoading();
+      this.setData({ partsTableSyncing: false });
+      this._showCustomToast('同步完成', 'success');
+      this._resetPartsTableMode();
+      this.loadParts(modelName);
+    } catch (err) {
+      this.hideMyLoading();
+      this.setData({ partsTableSyncing: false });
+      console.error('[syncPartsTableToCloud]', err);
+      this._showCustomToast('同步失败: ' + (err.errMsg || err.message || '未知错误'), 'none', 3000);
+    }
   },
 
   // [修改] 管理员编辑配件（点击铅笔触发）

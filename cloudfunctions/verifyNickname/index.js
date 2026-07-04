@@ -2,10 +2,28 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 
+const ACCESS_CODE_RE = /^VK[A-Z0-9]{6}$/;
+
+function normalizeAccessCode(raw) {
+  return String(raw || '').replace(/[\s-]/g, '').toUpperCase();
+}
+
+function isAccessCodeFormat(raw) {
+  return ACCESS_CODE_RE.test(normalizeAccessCode(raw));
+}
+
+function isEmptyOpenid(value) {
+  return !value || value === '' || value === null || value === undefined;
+}
+
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext();
   const openid = wxContext.OPENID;
-  const nickname = (event && event.nickname ? String(event.nickname) : '').trim();
+  const rawInput = (event && (event.accessCode || event.nickname) ? String(event.accessCode || event.nickname) : '').trim();
+  const normalizedAccessCode = normalizeAccessCode(rawInput);
+  const isAccessCodeLogin = isAccessCodeFormat(normalizedAccessCode);
+  const lookupNickname = isAccessCodeLogin ? '' : rawInput;
+  let resolvedNickname = lookupNickname || normalizedAccessCode;
 
   // 🔴 接收前端传递的地址信息、设备信息
   const {
@@ -20,8 +38,8 @@ exports.main = async (event, context) => {
   } = event;
 
   // 0. 基本校验
-  if (!nickname) {
-    return { success: false, isBlocked: false, error: 'EMPTY_NICKNAME' };
+  if (!rawInput) {
+    return { success: false, isBlocked: false, error: 'EMPTY_ACCESS_CODE' };
   }
 
   // 🔴 构建地址和设备信息对象
@@ -150,45 +168,66 @@ exports.main = async (event, context) => {
     let isWhitelisted = false;
     let targetValidUserDocId = null;
     let isNewBinding = false;
+    let accessCodeUsedByOther = false;
 
     try {
-      const validRes = await db.collection('valid_users').where({ nickname }).get();
-      
-      if (validRes.data.length > 0) {
-        const records = validRes.data;
-        
-        // 4.1 优先查找已绑定当前用户的记录
-        const myRecord = records.find(r => r._openid === openid);
-        
-        if (myRecord) {
-          isWhitelisted = true;
-          targetValidUserDocId = myRecord._id;
-          console.log('[verifyNickname] 老用户回归，命中白名单');
-        } else {
-          // 4.2 查找未绑定的空位 (没有 _openid 字段，或者 _openid 为空/null/空字符串)
-          // 注意：有些历史数据可能有 _openid 但不是当前用户，那些是被占用的
-          // 🔴 更严格的空位判断：_openid 不存在、为 null、为空字符串、或为 undefined
-          const emptyRecord = records.find(r => {
-            const openidValue = r._openid;
-            return !openidValue || openidValue === '' || openidValue === null || openidValue === undefined;
-          });
-          
-          if (emptyRecord) {
+      if (isAccessCodeLogin) {
+        const codeRes = await db.collection('valid_users').where({ accessCode: normalizedAccessCode }).limit(1).get();
+        if (codeRes.data.length > 0) {
+          const record = codeRes.data[0];
+          resolvedNickname = record.nickname || resolvedNickname;
+          if (record._openid === openid) {
             isWhitelisted = true;
-            targetValidUserDocId = emptyRecord._id;
+            targetValidUserDocId = record._id;
+            console.log('[verifyNickname] 访问口令老用户回归');
+          } else if (isEmptyOpenid(record._openid)) {
+            isWhitelisted = true;
+            targetValidUserDocId = record._id;
             isNewBinding = true;
-            console.log('[verifyNickname] 发现空位，准备绑定 - 记录ID:', emptyRecord._id, '当前_openid值:', emptyRecord._openid);
+            console.log('[verifyNickname] 访问口令命中空位，准备绑定');
           } else {
-            console.log('[verifyNickname] 昵称存在但所有位置已被占用，记录数:', records.length);
-            // 🔴 调试：打印所有记录的 _openid 值
-            records.forEach((r, idx) => {
-              console.log(`[verifyNickname] 记录${idx}: _id=${r._id}, _openid=${r._openid}, nickname=${r.nickname}`);
-            });
+            accessCodeUsedByOther = true;
+            console.log('[verifyNickname] 访问口令已被其他用户使用');
+          }
+        } else {
+          console.log('[verifyNickname] 访问口令不存在:', normalizedAccessCode);
+        }
+      } else {
+        const validRes = await db.collection('valid_users').where({ nickname: lookupNickname }).get();
+      
+        if (validRes.data.length > 0) {
+          const records = validRes.data;
+        
+          // 4.1 优先查找已绑定当前用户的记录
+          const myRecord = records.find(r => r._openid === openid);
+        
+          if (myRecord) {
+            isWhitelisted = true;
+            targetValidUserDocId = myRecord._id;
+            resolvedNickname = myRecord.nickname || lookupNickname;
+            console.log('[verifyNickname] 老用户回归，命中白名单');
+          } else {
+            // 4.2 查找未绑定的空位
+            const emptyRecord = records.find(r => isEmptyOpenid(r._openid));
+          
+            if (emptyRecord) {
+              isWhitelisted = true;
+              targetValidUserDocId = emptyRecord._id;
+              isNewBinding = true;
+              resolvedNickname = emptyRecord.nickname || lookupNickname;
+              console.log('[verifyNickname] 发现空位，准备绑定 - 记录ID:', emptyRecord._id);
+            } else {
+              console.log('[verifyNickname] 昵称存在但所有位置已被占用，记录数:', records.length);
+            }
           }
         }
       }
     } catch (e) {
       console.error('[verifyNickname] 查询 valid_users 失败:', e);
+    }
+
+    if (accessCodeUsedByOther) {
+      isWhitelisted = false;
     }
 
     // 如果是新绑定，执行绑定操作
@@ -224,15 +263,14 @@ exports.main = async (event, context) => {
         }
     }
 
-    // 5. 自动录入模式 (Auto Mode)
-    // 如果开启了自动模式，且没在白名单，自动加白
-    if (autoMode && !isWhitelisted) {
+    // 5. 自动录入模式 (Auto Mode) — 口令登录不走自动加白
+    if (autoMode && !isWhitelisted && !isAccessCodeLogin) {
       console.log('[verifyNickname] 🚀 Auto 模式开启，开始自动添加白名单...');
-      console.log('[verifyNickname] 当前状态 - nickname:', nickname, ', openid:', openid, ', isWhitelisted:', isWhitelisted);
+      console.log('[verifyNickname] 当前状态 - nickname:', lookupNickname, ', openid:', openid, ', isWhitelisted:', isWhitelisted);
       try {
         const addResult = await db.collection('valid_users').add({
           data: {
-            nickname,
+            nickname: lookupNickname,
             _openid: openid,
             desc: 'auto 模式自动录入',
             createTime: db.serverDate(),
@@ -240,6 +278,7 @@ exports.main = async (event, context) => {
           }
         });
         isWhitelisted = true;
+        resolvedNickname = lookupNickname;
         console.log('[verifyNickname] ✅ Auto 模式自动加白成功，记录ID:', addResult._id);
       } catch (e) {
         console.error('[verifyNickname] ❌ Auto 模式写入失败:', e);
@@ -260,7 +299,8 @@ exports.main = async (event, context) => {
     if (isWhitelisted) {
       // 更新 login_logs 为成功状态，重置 failCount
       const successData = {
-              nickname,
+              nickname: resolvedNickname,
+              accessCode: isAccessCodeLogin ? normalizedAccessCode : (event.accessCode || ''),
               success: true,
         failCount: 0, // 重置计数
         auto: autoMode,
@@ -304,7 +344,7 @@ exports.main = async (event, context) => {
          }
       } catch(e) {}
 
-      return { success: true, isBlocked: false };
+      return { success: true, isBlocked: false, nickname: resolvedNickname, accessCode: isAccessCodeLogin ? normalizedAccessCode : '' };
     }
 
     // ==========================================================
@@ -312,10 +352,12 @@ exports.main = async (event, context) => {
     // ==========================================================
     const newFailCount = lastFailCount + 1;
     const willBan = newFailCount >= 3;
+    const failType = accessCodeUsedByOther ? 'access_code_used' : (isAccessCodeLogin ? 'invalid_access_code' : 'invalid_nickname');
 
     // 更新 login_logs
     const failData = {
-            nickname,
+            nickname: resolvedNickname,
+            accessCode: isAccessCodeLogin ? normalizedAccessCode : '',
             success: false,
             failCount: newFailCount,
       auto: false,
@@ -372,7 +414,7 @@ exports.main = async (event, context) => {
     }
 
     // 失败但未封号
-    return { success: false, isBlocked: false, type: 'invalid_nickname', failCount: newFailCount };
+    return { success: false, isBlocked: false, type: failType, failCount: newFailCount };
 
   } catch (err) {
     console.error('[verifyNickname] 系统错误:', err);

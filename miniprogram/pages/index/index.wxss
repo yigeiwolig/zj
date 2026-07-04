@@ -184,6 +184,38 @@ input, textarea { text-align: left; }
   transition: opacity 0.1s; 
 }
 
+.admin-quick-gen {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 32rpx;
+  display: flex;
+  justify-content: center;
+  z-index: 250;
+  pointer-events: auto;
+}
+
+.admin-quick-gen-btn {
+  padding: 18rpx 36rpx;
+  background: #ffffff;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #007AFF;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.06);
+  border: 1rpx solid rgba(0, 122, 255, 0.15);
+}
+
+.admin-quick-gen-btn.is-loading {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+.admin-quick-gen-btn:active {
+  transform: scale(0.97);
+  opacity: 0.88;
+}
+
 /* 隐藏其他多余的 step，因为我们直接跳到文字显示和跳转 */
 .liquid-btn.step-2, .liquid-btn.step-4 {
   display: none;
@@ -370,7 +402,7 @@ input, textarea { text-align: left; }
   width: 100%;
   background: #ffffff;
   border-radius: 48rpx;
-  padding: 80rpx 56rpx 64rpx;
+  padding: 64rpx 48rpx 48rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -407,35 +439,98 @@ input, textarea { text-align: left; }
 
 /* 图标 */
 .auth-icon-lock {
-  font-size: 72rpx;
-  margin-bottom: 28rpx;
-  /* 移除阴影，保持扁平 */
-  text-shadow: none; 
+  font-size: 64rpx;
+  margin-bottom: 20rpx;
+  text-shadow: none;
 }
 
-/* 标题 */
 .auth-title-new {
   font-size: 40rpx;
-  font-weight: 800; /* 加粗 */
+  font-weight: 800;
   color: #000000;
-  margin-bottom: 20rpx;
+  margin-bottom: 12rpx;
   letter-spacing: -0.5rpx;
 }
 
-/* 副标题 */
 .auth-subtitle-new {
-  font-size: 28rpx;
+  font-size: 26rpx;
   color: #8E8E93;
   text-align: center;
-  line-height: 1.6;
-  margin-bottom: 60rpx;
-  padding: 0 20rpx;
+  line-height: 1.5;
+  margin-bottom: 40rpx;
+  padding: 0 12rpx;
   font-weight: 500;
 }
 
-/* 邀请码输入框容器 */
+.auth-foot {
+  width: 100%;
+  margin-top: 24rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.auth-foot-line {
+  font-size: 22rpx;
+  color: #C7C7CC;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.auth-foot-link {
+  font-size: 22rpx;
+  color: #007AFF;
+  line-height: 1.5;
+  text-align: center;
+  padding: 0 8rpx;
+}
+
+.auth-foot-link--under-input {
+  width: 100%;
+  margin-bottom: 28rpx;
+}
+
+.auth-invite-expand {
+  width: 100%;
+}
+
+.auth-invite-expand--under-input {
+  margin-bottom: 20rpx;
+  padding-top: 0;
+  border-top: none;
+}
+
+.auth-invite-expand-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
+.auth-invite-expand-label {
+  font-size: 24rpx;
+  color: #86868B;
+  font-weight: 500;
+}
+
+.auth-invite-expand-close {
+  font-size: 22rpx;
+  color: #007AFF;
+}
+
+.auth-invite-panel-tip {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #AEAEB2;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .auth-invite-wrap {
-  margin-top: -10rpx;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .auth-input-new.auth-input-invite.is-invalid {
@@ -455,7 +550,11 @@ input, textarea { text-align: left; }
 
 .auth-input-wrapper {
   width: 100%;
-  margin-bottom: 40rpx;
+  margin-bottom: 24rpx;
+}
+
+.auth-input-wrapper--main {
+  margin-bottom: 12rpx;
 }
 
 /* 输入框 */
@@ -516,17 +615,6 @@ input, textarea { text-align: left; }
 .auth-btn-new.auth-btn-loading {
   opacity: 0.72;
   pointer-events: none;
-}
-
-/* 底部提示 */
-.auth-hint-text {
-  margin-top: 30rpx;
-  font-size: 24rpx;
-  color: #C7C7CC; /* 很浅的灰色 */
-  text-align: center;
-  line-height: 1.4;
-  padding: 0 20rpx;
-  font-weight: 500;
 }
 
 /* ================= 授权引导弹窗样式 ================= */
@@ -2187,6 +2275,76 @@ input, textarea { text-align: left; }
   font-size: 24rpx;
   color: #FF3B30;
   padding: 8rpx 0 8rpx 16rpx;
+}
+
+.access-code-list-wrap {
+  background: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx 28rpx;
+  margin-bottom: 8rpx;
+}
+
+.access-code-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.access-code-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 18rpx 0;
+  border-top: 1rpx solid rgba(0, 0, 0, 0.06);
+}
+
+.access-code-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.access-code-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  min-width: 0;
+}
+
+.access-code-item-code {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #000;
+  letter-spacing: 1rpx;
+}
+
+.access-code-item-status {
+  font-size: 22rpx;
+  color: #86868B;
+}
+
+.access-code-item-status--unused {
+  color: #34C759;
+}
+
+.access-code-item-status--used {
+  color: #86868B;
+}
+
+.access-code-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  flex-shrink: 0;
+}
+
+.access-code-item-btn {
+  font-size: 24rpx;
+  color: #007AFF;
+}
+
+.access-code-item-btn--danger {
+  color: #FF3B30;
 }
 
 .nickname-input {

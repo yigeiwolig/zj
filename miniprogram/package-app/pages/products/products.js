@@ -1685,10 +1685,16 @@ Page({
         wx.removeStorageSync('__scan_recover_payload__');
         const idx = Number(payload.index || 0);
         setTimeout(() => {
-          wx.reLaunch({
-            url: `/package-app/pages/scan/scan?restoreIndex=${idx}`
+          wx.navigateTo({
+            url: `/package-app/pages/scan/scan?restoreIndex=${idx}`,
+            animationType: 'none',
+            fail: () => {
+              wx.reLaunch({
+                url: `/package-app/pages/scan/scan?restoreIndex=${idx}`
+              });
+            }
           });
-        }, 30);
+        }, 50);
         return;
       }
     } catch (e) {}

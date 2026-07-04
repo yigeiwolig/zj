@@ -502,3 +502,19 @@
     </view>
   </view>
 </view>
+
+<!-- 闲鱼订单截图验证 -->
+<view class="custom-modal-mask {{showXianyuVerifyModal ? 'active' : ''}}" wx:if="{{showXianyuVerifyModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box xianyu-verify-modal" catchtouchmove="noop" catchtap="noop">
+    <view class="modal-title-large">闲鱼订单验证</view>
+    <view class="modal-desc">请上传闲鱼「订单详情」截图</view>
+    <view class="modal-sub-desc xianyu-verify-hint">系统将识别卖家昵称，确认是否在本店下单后即可查看安装教程</view>
+    <view class="xianyu-verify-sample">需包含：卖家昵称、下单时间</view>
+    <view
+      class="modal-btn-new btn-black {{xianyuVerifying ? 'is-disabled' : ''}}"
+      bindtap="onChooseXianyuOrderScreenshot">
+      {{xianyuVerifying ? '识别中…' : '上传订单截图'}}
+    </view>
+    <view class="xianyu-verify-cancel" bindtap="closeXianyuVerifyModal">返回</view>
+  </view>
+</view>

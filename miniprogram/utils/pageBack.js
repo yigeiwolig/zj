@@ -4,6 +4,25 @@
 const INDEX_URL = '/pages/index/index';
 const HUB_URL = '/package-app/pages/products/products';
 
+let _navBusy = false;
+let _navBusyTimer = null;
+
+function _beginNav() {
+  _navBusy = true;
+  if (_navBusyTimer) clearTimeout(_navBusyTimer);
+  _navBusyTimer = setTimeout(() => {
+    _navBusy = false;
+    _navBusyTimer = null;
+  }, 480);
+}
+
+function _runNav(task) {
+  if (_navBusy) return false;
+  _beginNav();
+  task();
+  return true;
+}
+
 function getPages() {
   return getCurrentPages() || [];
 }
@@ -27,7 +46,19 @@ function resolveFallbackUrl(fallback, fallbackUrl) {
 }
 
 function reLaunchFallback(fallback, fallbackUrl) {
-  wx.reLaunch({ url: resolveFallbackUrl(fallback, fallbackUrl) });
+  const url = resolveFallbackUrl(fallback, fallbackUrl);
+  _runNav(() => {
+    wx.reLaunch({
+      url,
+      complete: () => {
+        _navBusy = false;
+        if (_navBusyTimer) {
+          clearTimeout(_navBusyTimer);
+          _navBusyTimer = null;
+        }
+      }
+    });
+  });
 }
 
 /**
@@ -60,10 +91,20 @@ function goBack(options = {}) {
   if (preferProducts && delta == null) {
     const productsIdx = findRouteIndex('products/products');
     if (productsIdx >= 0 && productsIdx < pages.length - 1) {
-      wx.navigateBack({
-        delta: pages.length - 1 - productsIdx,
-        fail: () => reLaunchFallback(fallback, fallbackUrl)
-      });
+      const popDelta = pages.length - 1 - productsIdx;
+      if (!_runNav(() => {
+        wx.navigateBack({
+          delta: popDelta,
+          fail: () => reLaunchFallback(fallback, fallbackUrl),
+          complete: () => {
+            _navBusy = false;
+            if (_navBusyTimer) {
+              clearTimeout(_navBusyTimer);
+              _navBusyTimer = null;
+            }
+          }
+        });
+      })) return;
       return;
     }
   }
@@ -74,10 +115,20 @@ function goBack(options = {}) {
     return;
   }
 
-  wx.navigateBack({
-    delta: delta != null ? delta : 1,
-    fail: () => reLaunchFallback(fallback, fallbackUrl)
-  });
+  const popDelta = delta != null ? delta : 1;
+  if (!_runNav(() => {
+    wx.navigateBack({
+      delta: popDelta,
+      fail: () => reLaunchFallback(fallback, fallbackUrl),
+      complete: () => {
+        _navBusy = false;
+        if (_navBusyTimer) {
+          clearTimeout(_navBusyTimer);
+          _navBusyTimer = null;
+        }
+      }
+    });
+  })) return;
 }
 
 /** 子功能页默认：回到枢纽 products，而不是启动页 index */
@@ -102,10 +153,19 @@ function safePop(delta, options = {}) {
     reLaunchFallback(fallback, fallbackUrl);
     return;
   }
-  wx.navigateBack({
-    delta: d,
-    fail: () => reLaunchFallback(fallback, fallbackUrl)
-  });
+  if (!_runNav(() => {
+    wx.navigateBack({
+      delta: d,
+      fail: () => reLaunchFallback(fallback, fallbackUrl),
+      complete: () => {
+        _navBusy = false;
+        if (_navBusyTimer) {
+          clearTimeout(_navBusyTimer);
+          _navBusyTimer = null;
+        }
+      }
+    });
+  })) return;
 }
 
 /** 栈内存在 route 片段则 pop 到该页，否则枢纽 */

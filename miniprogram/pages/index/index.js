@@ -2,6 +2,7 @@
 const app = getApp();
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js');
 const referralPendingBind = require('../../utils/referralPendingBind.js');
+const { normalizeAccessCode, isAccessCodeFormat, extractPlainAccessCode } = require('../../utils/accessCode.js');
 const shareApp = require('../../utils/shareApp.js');
 const { redirectToPcBlockedIfNeeded } = require('../../utils/runtimeEnv.js');
 var qqmapsdk = new QQMapWX({
@@ -22,6 +23,7 @@ Page({
     inputNickName: '',
     inputInviteCode: '',
     inviteCodeInputInvalid: false,
+    showInviteCodeInput: false,
     step: 0, 
     locationResult: null,
     // 🔴 动画完成后的跳转目标（等待动画完成后再跳转）
@@ -115,10 +117,11 @@ Page({
     isLoadingSuspiciousUsers: false,
     adminListRefreshing: false,
     adminExpandedCardKeys: {}, // 管理员卡片展开状态 rowKey -> true
-    // 🔴 昵称录入相关状态
-    nicknameInput: '',    // 昵称输入
-    isSubmittingNickname: false, // 是否正在提交昵称
-    nicknameBypassLocation: false, // 放行开关（是否跳过地域拦截）
+    // 🔴 访问口令管理
+    accessCodeList: [],
+    isGeneratingAccessCode: false,
+    isLoadingAccessCodes: false,
+    accessCodeBypassLocation: false,
     blockedRegionValue: ['广东省', '广州市', '天河区'],
     blockedRegionText: '广东省 广州市 天河区',
     blockedWholeCity: false,
@@ -582,8 +585,10 @@ Page({
   },
 
   // === 昵称输入处理 ===
-  onNickNameInput(e) { 
-    this.setData({ inputNickName: e.detail.value }); 
+  onNickNameInput(e) {
+    const val = (e.detail && e.detail.value) || '';
+    const compact = val.replace(/\s/g, '').toUpperCase();
+    this.setData({ inputNickName: compact.length >= 2 && /^(VK|MT)/.test(compact) ? compact : val });
   },
 
   onNickNameChange(e) {
@@ -598,6 +603,19 @@ Page({
     if (!inviteCodeInputInvalid) {
       referralPendingBind.setPendingInviteCode(val);
     }
+  },
+
+  openInviteCodeInput() {
+    this.setData({ showInviteCodeInput: true });
+  },
+
+  closeInviteCodeInput() {
+    this.setData({
+      showInviteCodeInput: false,
+      inputInviteCode: '',
+      inviteCodeInputInvalid: false
+    });
+    referralPendingBind.clearPendingInviteCode();
   },
 
   _bindReferralInviteAfterAuth() {
@@ -620,11 +638,12 @@ Page({
     if (this.data.isLoading) return;
     const raw = this.data.inputNickName.trim();
     if (!raw) {
-      this.showAutoToast('提示', '请输入昵称或安装分享码');
+      this.showAutoToast('提示', '请输入访问口令');
       return;
     }
-    const normalizedCode = raw.replace(/[\s-]/g, '').toUpperCase();
+    const normalizedCode = normalizeAccessCode(raw);
     const isShareCode = /^MT[A-Z0-9]{6}$/.test(normalizedCode);
+    const isAccessCode = isAccessCodeFormat(normalizedCode);
     if (isShareCode && app && typeof app.verifyShareCode === 'function') {
       this.setData({ isLoading: true });
       this.showMyLoading('验证分享码...');
@@ -666,7 +685,7 @@ Page({
       }, 320);
       return;
     }
-    const name = raw;
+    const name = isAccessCode ? normalizedCode : raw;
     if (this.data.inviteCodeInputInvalid) {
       referralPendingBind.clearPendingInviteCode();
     } else {
@@ -751,6 +770,7 @@ Page({
         name: 'verifyNickname',
         data: {
           nickname: name,
+          accessCode: isAccessCode ? normalizedCode : '',
           province: cachedLocation.province || '',
           city: cachedLocation.city || '',
           district: cachedLocation.district || '',
@@ -767,11 +787,15 @@ Page({
         const result = res.result || {};
 
         if (result.success) {
+          const storedName = result.nickname || name;
           if (wx.__mt_oldHideLoading) {
             wx.__mt_oldHideLoading();
           }
           wx.setStorageSync('has_permanent_auth', true);
-          wx.setStorageSync('user_nickname', name);
+          wx.setStorageSync('user_nickname', storedName);
+          if (result.accessCode || isAccessCode) {
+            wx.setStorageSync('user_access_code', result.accessCode || normalizedCode);
+          }
           wx.setStorageSync('has_seen_first_time_modal', true);
           wx.removeStorageSync('is_user_banned');
           this._bindReferralInviteAfterAuth().finally(() => {
@@ -2563,6 +2587,7 @@ Page({
     } else if (mode === 'suspiciousIgnored' && this.data.ignoredUsers.length === 0) {
       this.loadIgnoredUsers();
     } else if (mode === 'nickname') {
+      this.loadAccessCodeList();
       this.loadBlockedRegionsAdmin();
     }
     this._startSuspiciousAutoRefresh();
@@ -3532,90 +3557,149 @@ Page({
     const entering = this.data.adminViewMode !== 'nickname';
     this.setData({
       adminViewMode: entering ? 'nickname' : 'banned',
-      nicknameInput: '',
-      nicknameBypassLocation: false
+      accessCodeBypassLocation: false
     }, () => {
       if (entering) {
+        this.loadAccessCodeList();
         this.loadBlockedRegionsAdmin();
       }
     });
   },
 
-  // 🔴 昵称输入
-  onNicknameInput(e) {
+  toggleAccessCodeBypass(e) {
     this.setData({
-      nicknameInput: e.detail.value.trim()
+      accessCodeBypassLocation: !!(e && e.detail && e.detail.value)
     });
   },
 
-  // 🔴 切换放行开关
-  toggleNicknameBypass(e) {
-    this.setData({
-      nicknameBypassLocation: e.detail.value
+  _decorateAccessCodeList(list) {
+    return (Array.isArray(list) ? list : []).map((item) => {
+      const accessCode = extractPlainAccessCode(item.accessCode || item.nickname || '');
+      return {
+        ...item,
+        accessCode,
+        statusClass: item.bound ? 'used' : 'unused'
+      };
     });
   },
 
-  // 🔴 提交昵称到 valid_users
-  async submitNickname() {
-    const nickname = this.data.nicknameInput.trim();
-    const bypassLocation = this.data.nicknameBypassLocation;
-    
-    if (!nickname) {
-      this.showMyDialog({
-        title: '提示',
-        content: '请输入昵称',
-        showCancel: false
-      });
-      return;
-    }
-
-    if (this.data.isSubmittingNickname) {
-      return;
-    }
-
-    this.setData({ isSubmittingNickname: true });
-
+  async loadAccessCodeList() {
+    if (this.data.isLoadingAccessCodes) return;
+    this.setData({ isLoadingAccessCodes: true });
     try {
-      // 调用专门的云函数，直接写入 valid_users
+      const res = await wx.cloud.callFunction({
+        name: 'addNicknameToWhitelist',
+        data: { action: 'list' }
+      });
+      if (res.result && res.result.success) {
+        this.setData({
+          accessCodeList: this._decorateAccessCodeList(res.result.list)
+        });
+      } else {
+        this.showAutoToast('提示', (res.result && res.result.errMsg) || '加载口令列表失败');
+      }
+    } catch (err) {
+      console.error('[index] 加载口令列表失败:', err);
+      this.showAutoToast('提示', '加载口令列表失败');
+    } finally {
+      this.setData({ isLoadingAccessCodes: false });
+    }
+  },
+
+  async generateAccessCode() {
+    if (this.data.isGeneratingAccessCode) return;
+    this.setData({ isGeneratingAccessCode: true });
+    try {
       const res = await wx.cloud.callFunction({
         name: 'addNicknameToWhitelist',
         data: {
-          nickname: nickname,
-          bypassLocationCheck: bypassLocation // 传递放行开关状态
+          action: 'generate',
+          bypassLocationCheck: this.data.accessCodeBypassLocation
         }
       });
-
-      console.log('[index] 昵称录入结果:', res.result);
-
-      // 🔴 立即重置提交状态，不依赖对话框回调
-      this.setData({ isSubmittingNickname: false });
-
       if (res.result && res.result.success) {
-        // 录入成功
-        const message = res.result.message || `昵称 "${nickname}" 已同步到白名单${bypassLocation ? '（已开启地域放行）' : ''}`;
-        // 清空输入框和重置开关
-        this.setData({ 
-          nicknameInput: '',
-          nicknameBypassLocation: false
-        });
-        
-        this.showMyDialog({
-          title: '录入成功',
-          content: message,
-          showCancel: false
-        });
+        const code = extractPlainAccessCode(res.result.accessCode || res.result.nickname || '');
+        this.setData({ accessCodeBypassLocation: false });
+        await this.loadAccessCodeList();
+        if (code) {
+          wx.setClipboardData({
+            data: code,
+            success: () => {
+              this.showMyDialog({
+                title: '口令已生成',
+                content: `${res.result.message || '生成成功'}\n\n已复制到剪贴板：${code}`,
+                showCancel: false
+              });
+            },
+            fail: () => {
+              this.showMyDialog({
+                title: '口令已生成',
+                content: `${res.result.message || '生成成功'}\n\n口令：${code}`,
+                showCancel: false
+              });
+            }
+          });
+        } else {
+          this.showMyDialog({
+            title: '口令已生成',
+            content: res.result.message || '生成成功',
+            showCancel: false
+          });
+        }
       } else {
-        // 录入失败
-        const errMsg = res.result?.errMsg || '录入失败，请稍后重试';
-        this.showAutoToast('录入失败', errMsg);
+        this.showAutoToast('生成失败', (res.result && res.result.errMsg) || '请稍后重试');
       }
     } catch (err) {
-      console.error('[index] 昵称录入失败:', err);
-      // 🔴 确保错误时也重置状态
-      this.setData({ isSubmittingNickname: false });
-      
-      this.showAutoToast('录入失败', err.errMsg || '网络错误，请稍后重试');
+      console.error('[index] 生成口令失败:', err);
+      this.showAutoToast('生成失败', err.errMsg || '网络错误');
+    } finally {
+      this.setData({ isGeneratingAccessCode: false });
     }
+  },
+
+  copyAccessCode(e) {
+    const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const code = extractPlainAccessCode(dataset.code || dataset.nickname || '');
+    if (!code) return;
+    wx.setClipboardData({
+      data: code,
+      success: () => {
+        this.showAutoToast('已复制', code);
+      }
+    });
+  },
+
+  revokeAccessCode(e) {
+    const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const recordId = dataset.id || '';
+    const code = dataset.code || '';
+    this.showMyDialog({
+      title: '作废口令',
+      content: `确定作废口令「${code}」吗？作废后用户将无法使用该码登录。`,
+      showCancel: true,
+      confirmText: '作废',
+      cancelText: '取消',
+      success: async (res) => {
+        if (!res.confirm) return;
+        try {
+          this.showMyLoading('处理中...');
+          const result = await wx.cloud.callFunction({
+            name: 'addNicknameToWhitelist',
+            data: { action: 'revoke', recordId, accessCode: code }
+          });
+          this.hideMyLoading();
+          if (result.result && result.result.success) {
+            this.showAutoToast('成功', result.result.message || '已作废');
+            this.loadAccessCodeList();
+          } else {
+            this.showAutoToast('失败', (result.result && result.result.errMsg) || '作废失败');
+          }
+        } catch (err) {
+          this.hideMyLoading();
+          this.showAutoToast('失败', err.errMsg || '作废失败');
+        }
+      }
+    });
   },
 
   _syncBlockedCitiesDisplay(config) {
