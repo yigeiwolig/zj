@@ -20,6 +20,10 @@ const F2_FAULT_WRN_MAP = {
   2: {
     title: '连续关钥匙',
     content: '检测到关钥匙后多次自动收回（打开收回已启用）。请注意电瓶电量，避免长时间待机亏电。'
+  },
+  3: {
+    title: '翻开测距异常',
+    content: '正常翻开时绿灯常亮，测距应小于 8cm。若测距连续 8 秒仍不小于 8cm，则报此异常，请检查机械位置与测距窗口。'
   }
 };
 
@@ -472,9 +476,7 @@ function buildF3HeightSettingsUpdates(parsed, current) {
   const force = !!cur.force;
   const updates = {};
   if (parsed.dga !== null && parsed.dga !== undefined) {
-    console.log(`[回读DGA] parsed.dga=${parsed.dga} type=${typeof parsed.dga}`);
     const mm = Math.round(Number(parsed.dga));
-    console.log(`[回读DGA] mm=${mm} isValid=${isF3HeightMmValid(mm)}`);
     if (Number.isFinite(mm) && isF3HeightMmValid(mm)) {
       if (force || mm !== (cur.f3DangerMm || 0)) {
         updates.f3DangerMm = mm;
@@ -485,9 +487,7 @@ function buildF3HeightSettingsUpdates(parsed, current) {
     }
   }
   if (parsed.dgb !== null && parsed.dgb !== undefined) {
-    console.log(`[回读DGB] parsed.dgb=${parsed.dgb} type=${typeof parsed.dgb}`);
     const mm = Math.round(Number(parsed.dgb));
-    console.log(`[回读DGB] mm=${mm} isValid=${isF3HeightMmValid(mm)}`);
     if (Number.isFinite(mm) && isF3HeightMmValid(mm)) {
       if (force || mm !== (cur.f3BaseMm || 0)) {
         updates.f3BaseMm = mm;
@@ -505,7 +505,7 @@ function buildF3HeightSettingsUpdates(parsed, current) {
   }
   if (parsed.dgd === 0 || parsed.dgd === 1) {
     const blocked = parsed.dgd === 1;
-    if (blocked !== !!cur.f3DangerBlocked) {
+    if (force || blocked !== !!cur.f3DangerBlocked) {
       updates.f3DangerBlocked = blocked;
     }
   }
@@ -528,9 +528,11 @@ function buildF3HeightMonitorUpdates(parsed, current) {
           updates.f3HeightLive = true;
         }
       } else if (force || cur.f3HeightLive) {
-        updates.f3HeightMm = 0;
-        updates.f3HeightText = '无信号';
-        updates.f3HeightLive = false;
+        if (!cur.f3HeightConfigModeOn) {
+          updates.f3HeightMm = 0;
+          updates.f3HeightText = '无信号';
+          updates.f3HeightLive = false;
+        }
       }
     }
   } else if (force) {

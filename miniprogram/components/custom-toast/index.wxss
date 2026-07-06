@@ -201,6 +201,13 @@
   letter-spacing: 0.5rpx;
   animation: toastTextPop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
+.ct-toast--green {
+  border: 1rpx solid rgba(52, 199, 89, 0.22);
+  box-shadow: 0 12rpx 48rpx rgba(52, 199, 89, 0.12), 0 4rpx 16rpx rgba(0,0,0,0.06);
+}
+.ct-toast--green .ct-toast-text {
+  color: #248A3D;
+}
 
 @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 /* scaleIn 已移除，改用 dialogBoxPopIn */

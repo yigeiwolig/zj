@@ -1,69 +1,68 @@
-// patched by assistant
+﻿// patched by assistant
 // pages/scan/scan.js
 
 // ==========================================
-// 1. 定义 Base64 图标资源 (确保稳定显示)
+// 1. 瀹氫箟 Base64 鍥炬爣璧勬簮 (纭繚绋冲畾鏄剧ず)
 // ==========================================
 const iconLock = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cmVjdCB4PSIzIiB5PSIxMSIgd2lkdGg9IjE4IiBoZWlnaHQ9IjExIiByeD0iMiIgcnk9IjIiPjwvcmVjdD48cGF0aCBkPSJNNyAxMVY3YTUgNSAwIDAgMSAxMCAwdjQiPjwvcGF0aD48L3N2Zz4=';
 
-// 箭头 (打开角度)
+// 绠ご (鎵撳紑瑙掑害)
 const iconArrowUp = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTggMTUgMTIgOSA2IDE1Ii8+PC9zdmc+';
 
-// 翻开（牌面下放）
+// 缈诲紑锛堢墝闈笅鏀撅級
 const iconFlapOpen = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNNSA3aDE0Ii8+PHBhdGggZD0iTTggN2wyIDExaDRsMi0xMSIvPjxwYXRoIGQ9Ik0xMiAxOHY0Ii8+PC9zdmc+';
 
-// 收起（牌面收回贴合）
+// 鏀惰捣锛堢墝闈㈡敹鍥炶创鍚堬級
 const iconFlapFold = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaZWlnaHQ9IjI0IiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiPjxwYXRoIGQ9Ik01IDdoMTQiLz48cGF0aCBkPSJNMTIgNHY0Ii8+PHBhdGggZD0ibTkgNi41IDMgLTMgMyAzIi8+PHBhdGggZD0iTTggN2g4djEyaC04eiIvPjwvc3ZnPg==';
 
-// 校准 (水平线+箭头)
+// 鏍″噯 (姘村钩绾?绠ご)
 const iconCali = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxRDFEMUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMjEgMTJhOSA5IDAgMCAwLTktOSA5Ljc1IDkuNzUgMCAwIDAtNi43NCAyLjc0TDMgOCIvPjxwYXRoIGQ9Ik0zIDN2NWg1Ii8+PHBhdGggZD0iTTMgMTJhOSA5IDAgMCAwIDkgOSA5Ljc1IDkuNzUgMCAwIDAgNi43NC0yLjc0TDIxIDE2Ii8+PHBhdGggZD0iTTE2IDIxaDV2LTUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSIjMUQxRDFGIiBzdHJva2U9Im5vbmUiLz48L3N2Zz4=';
 
-// 设置 (简约齿轮)
+// 璁剧疆 (绠€绾﹂娇杞?
 const iconGear = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxRDFEMUYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTIuMjIgMkgxMS43OEEyIDIgMCAwIDAgOS43OCA0LjE4VjQuMzZBMiAyIDAgMCAxIDguNzggNi4wOUw4LjM1IDYuMzRBMiAyIDAgMCAxIDYuMzUgNi4zNEw2LjIgNi4yNkEyIDIgMCAwIDAgMy40NyA2Ljk5TDMuMjUgNy4zN0EyIDIgMCAwIDAgMy45OCAxMC4xTDQuMTMgMTAuMkEyIDIgMCAwIDEgNS4xMyAxMS45MlYxMi40M0EyIDIgMCAwIDEgNC4xMyAxNC4xNUwzLjk4IDE0LjI1QTIgMiAwIDAgMCAzLjI1IDE2Ljk4TDMuNDcgMTcuMzZBMiAyIDAgMCAwIDYuMiAxOC4wOUw2LjM1IDE4LjAxQTIgMiAwIDAgMSA4LjM1IDE4LjAxTDguNzggMTguMjZBMiAyIDAgMCAxIDkuNzggMTkuOThWMjAuMTZBMiAyIDAgMCAwIDExLjc4IDIySDEyLjIyQTIgMiAwIDAgMCAxNC4yMiAxOS44MlYxOS42NGEyIDIgMCAwIDEgMS0xLjczTDE1LjY1IDE3LjY2QTIgMiAwIDAgMSAxNy42NSAxNy42NkwxNy44IDE3Ljc0QTIgMiAwIDAgMCAyMC41MyAxNy4wMUwyMC43NSAxNi42M0EyIDIgMCAwIDAgMjAuMDIgMTMuOUwyMC43NSAxNi42M0EyIDIgMCAwIDAgMjAuMDIgMTMuOUwyMC4xMyAxMy44QTIgMiAwIDAgMSAxOS4xMyAxMi4wOFYxMS41N0EyIDIgMCAwIDEgMjAuMTMgOS44NUwyMC4yOCA5Ljc1QTIgMiAwIDAgMCAyMS4wMSA3LjAyTDIwLjc5IDYuNjRBMiAyIDAgMCAwIDE4LjA2IDUuOTFMMTcuOTEgNi4wMUEyIDIgMCAwIDEgMTUuOTEgNC4yOUwxNS40OCA0LjA0QTIgMiAwIDAgMSAxNC40OCAyLjMyVjIuMTRBMiAyIDAgMCAwIDEyLjIyIDJaIi8+PGNpcmNsZSBjeD0iMTIiIGN5PSIxMiIgcj0iMyIvPjwvc3ZnPg==';
 
-// 蓝牙小图标 (白色)
+// 钃濈墮灏忓浘鏍?(鐧借壊)
 const iconBtSmall = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg==';
 
-// 麦克风 (语音控制)
+// 楹﹀厠椋?(璇煶鎺у埗)
 const iconMic = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMTIgMmEzIDMgMCAwIDAtMyAzdjdhMyAzIDAgMCAwIDYgMFY1YTMzIDAgMCAwLTEyLTNaIi8+PHBhdGggZD0iTTE5IDEwdjJhNyA3IDAgMCAxLTE0IDB2LTIiLz48bGluZSB4MT0iMTIiIHgyPSIxMiIgeTE9IjE5IiB5Mj0iMjIiLz48L3N2Zz4=';
 
-// 重置图标 (圆形箭头)
+// 閲嶇疆鍥炬爣 (鍦嗗舰绠ご)
 const iconReset = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cGF0aCBkPSJNMyAxMkExMiAxMiAwIDAgMSAxNSA0LjA0VjFhMSAxIDAgMCAxIDEuNzA3LS43MDdsNCA0YTEgMSAwIDAgMSAwIDEuNDE0bC00IDRhMSAxIDAgMCAxLTEuNzA3LS43MDdWOC4wNEE5IDkgMCAwIDAgMyAxMkgzWiIvPjxwYXRoIGQ9Ik0yMSAxMkE5IDkgMCAwIDAgOSA4LjA0VjExYTEgMSAwIDAgMS0xLjcwNy43MDdsLTQtNGExIDEgMCAwIDEgMC0xLjQxNGw0LTRhMSAxIDAgMCAxIDEuNzA3LjcwN1Y0LjA0QTEyIDEyIDAgMCAxIDIxIDEySDIxWiIvPjwvc3ZnPg==';
 
-// 小齿轮图标 (用于高级设置)
+// 灏忛娇杞浘鏍?(鐢ㄤ簬楂樼骇璁剧疆)
 const iconGearSmall = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyLjUiLz48cGF0aCBkPSJNMTIuNzUgNS41YTEuNzUgMS43NSAwIDAgMSAxLjUgMHYxLjVhMS43NSAxLjc1IDAgMCAxLTEuNSAwdi0xLjVaIi8+PHBhdGggZD0iTTE4LjUgMTJhMS43NSAxLjc1IDAgMCAxLTEuNSAxLjV2MS41YTEuNzUgMS43NSAwIDAgMSAxLjUgMHYtMS41WiIvPjxwYXRoIGQ9Ik0xMS4yNSAxOC41YTEuNzUgMS43NSAwIDAgMSAxLjUgMHYxLjVhMS43NSAxLjc1IDAgMCAxLTEuNSAwdi0xLjVaIi8+PHBhdGggZD0iTTUuNSAxMmExLjc1IDEuNzUgMCAwIDEgMS41LTEuNVY5YTEuNzUgMS43NSAwIDAgMS0xLjUgMHYxLjVaIi8+PHBhdGggZD0iTTEyLjc1IDE4LjVhMS43NSAxLjc1IDAgMCAxIDEuNSAwdjEuNWExLjc1IDEuNzUgMCAwIDEtMS41IDB2LTEuNVoiLz48cGF0aCBkPSJNNS41IDEyYTEuNzUgMS43NSAwIDAgMSAxLjUgMS41VjE1YTEuNzUgMS43NSAwIDAgMS0xLjUgMHYtMS41WiIvPjxwYXRoIGQ9Ik0xOC41IDEyYTEuNzUgMS43NSAwIDAgMS0xLjUtMS41VjlhMS43NSAxLjc1IDAgMCAxIDEuNSAwdjEuNVoiLz48L3N2Zz4=';
 
-// 连接图标 (主页大胶囊用)
+// 杩炴帴鍥炬爣 (涓婚〉澶ц兌鍥婄敤)
 const iconConnect = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTUgN0gxN0MyMC4zMTM3IDcgMjMgOS42ODYyOSAyMyAxM0MyMyAxNi4zMTM3IDIwLjMxMzcgMTkgMTcgMTlIMTVNOCAxN0g2QzIuNjg2MjkgMTcgMCAxNC4zMTM3IDAgMTNDMCA5LjY4NjI5IDIuNjg2MjkgNyA2IDdIOE04IDEzSDE2IiBzdHJva2U9IiNGRkZGRkYiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48L3N2Zz4=';
 
-// 侧边图标 (折叠动画用)
+// 渚ц竟鍥炬爣 (鎶樺彔鍔ㄧ敾鐢?
 const iconSide = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgICA8IS0tIExlZnQgU3RpY2sgLS0+CiAgICA8cmVjdCB4PSI4NSIgeT0iMjAiIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMDAiIHJ4PSI2IiBmaWxsPSIjMUMxQzFFIiAvPgogICAgPCEtLSBSaWdodCBTdGljayAtLT4KICAgIDxyZWN0IHg9IjEwNSIgeT0iMjAiIHdpZHRoPSIxMiIgaGVpZ2h0PSIxMDAiIHJ4PSI2IiBmaWxsPSIjMUMxQzFFIiAvPgo8L3N2Zz4=';
 
 // ==========================================
-// 2. 设备模型资源 (F1/F2 Pro/Max)
+// 2. 璁惧妯″瀷璧勬簮 (F1/F2 Pro/Max)
 // ==========================================
 const iconF1Pro = '/images/mt-f1-pro.svg';
 const iconF1Max = '/images/mt-f1-max.svg';
 const iconF1ProMax = '/images/mt-f1-pro-max.svg';
 const iconF2Pro = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDMwIEgxOTAgQzE5NSAzMCAxOTUgMzUgMTk1IDM1IFY0OCBDMTk1IDUzIDE5MCA1MyAxOTAgNTMgSDEyMSBWNjkgSDEyMi41IEMxMjcuNSA2OSAxMjcuNSA3NCAxMjcuNSA3NCBWOTQgQzEyNy41IDk5IDEyMi41IDk5IDEyMi41IDk5IEg4Mi41IEM3Ny41IDk5IDc3LjUgOTQgNzcuNSA5NCBWNzQgQzc3LjUgNjkgODIuNSA2OSA4Mi41IDY5IEg4NCBWNTMgSDE1IEMxMCA1MyAxMCA0OCAxMCA0OCBWMzUgQzEwIDMwIDE1IDMwIDE1IDMwIFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHJlY3QgeD0iMzYiIHk9IjM3IiB3aWR0aD0iMjYiIGhlaWdodD0iOCIgcng9IjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzFDMUMxRSIgc3Ryb2tlLXdpZHRoPSIzIi8+PHJlY3QgeD0iMTQ1IiB5PSIzOCIgd2lkdGg9IjI1IiBoZWlnaHQ9IjgiIHJ4PSI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMyIvPjx0ZXh0IHg9IjEwMi41IiB5PSI3MiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjMUMxQzFFIj48dHNwYW4geD0iMTAyLjUiIGR5PSIwIj5NPC90c3Bhbj48dHNwYW4geD0iMTAyLjUiIGR5PSIxNiI+VDwvdHNwYW4+PC90ZXh0Pjwvc3ZnPg==';
 const iconF2Max = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAxNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDMwIEgxOTAgQzE5NSAzMCAxOTUgMzUgMTk1IDM1IFY0OCBDMTk1IDUzIDE5MCA1MyAxOTAgNTMgSDEyMSBWNjkgSDEyMi41IEMxMjcuNSA2OSAxMjcuNSA3NCAxMjcuNSA3NCBWOTQgQzEyNy41IDk5IDEyMi41IDk5IDEyMi41IDk5IEg4Mi41IEM3Ny41IDk5IDc3LjUgOTQgNzcuNSA5NCBWNzQgQzc3LjUgNjkgODIuNSA2OSA4Mi41IDY5IEg4NCBWNTMgSDE1IEMxMCA1MyAxMCA0OCAxMCA0OCBWMzUgQzEwIDMwIDE1IDMwIDE1IDMwIFoiIGZpbGw9IiMxQzFDMUUiLz48cmVjdCB4PSIzNiIgeT0iMzciIHdpZHRoPSIyNiIgaGVpZ2h0PSI4IiByeD0iNSIgZmlsbD0iI0ZGRkZGRiIvPjxyZWN0IHg9IjE0NSIgeT0iMzgiIHdpZHRoPSIyNSIgaGVpZ2h0PSI4IiByeD0iNCIgZmlsbD0iI0ZGRkZGRiIvPjx0ZXh0IHg9IjEwMi41IiB5PSI3MiIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXdlaWdodD0iOTAwIiBmb250LXNpemU9IjE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjRkZGRkZGIj48dHNwYW4geD0iMTAyLjUiIGR5PSIwIj5NPC90c3Bhbj48dHNwYW4geD0iMTAyLjUiIGR5PSIxNiI+VDwvdHNwYW4+PC90ZXh0Pjwvc3ZnPg==';
-// F2 MAX Long 图标（独立）
+// F2 MAX Long 鍥炬爣锛堢嫭绔嬶級
 const iconF2MaxLong = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTE1IDI5SDE5MEMxOTUgMjkgMTk1IDM0LjE0NjQgMTk1IDM0LjE0NjRWNDcuNTI2OUMxOTUgNTIuNjczMiAxOTAgNTIuNjczMiAxOTAgNTIuNjczMkgxMjFWMTEwLjVIMTIyLjVDMTMwLjg0NSAxMTAuNSAxMzAuODQ1IDExNy40NiAxMzAuODQ1IDExNy40NlYxMzcuNzI5QzEzMC44NDUgMTQ0LjUgMTIyLjUgMTQ0LjUgMTIyLjUgMTQ0LjVIODIuNUM3NC4xNTQ1IDE0NC41IDc0LjE1NDUgMTM3LjcyOSA3NC4xNTQ1IDEzNy43MjlWMTE3LjQ2Qzc0LjE1NDUgMTEwLjUgODIuNSAxMTAuNSA4Mi41IDExMC41VjUyLjY3MzJIMTVDMTAgNTIuNjczMiAxMCA0Ny41MjY5IDEwIDQ3LjUyNjlWMzQuMTQ2NEMxMCAyOSAxNSAyOSAxNSAyOVoiIGZpbGw9IiMxQzFDMUUiLz48cGF0aCBkPSJNNTYgMzdINDBDMzcuMjM4NiAzNyAzNSAzOC43OTA5IDM1IDQxQzM1IDQzLjIwOTEgMzcuMjM4NiA0NSA0MCA0NUg1NkM1OC43NjE0IDQ1IDYxIDQzLjIwOTEgNjEgNDFDNjEgMzguNzkwOSA1OC43NjE0IDM3IDU2IDM3WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTY1IDM3SDE0OUMxNDYuMjM5IDM3IDE0NCAzOC43OTA5IDE0NCA0MUMxNDQgNDMuMjA5MSAxNDYuMjM5IDQ1IDE0OSA0NUgxNjVDMTY3Ljc2MSA0NSAxNzAgNDMuMjA5MSAxNzAgNDFDMTcwIDM4Ljc5MDkgMTY3Ljc2MSAzNyAxNjUgMzdaIiBmaWxsPSJ3aGl0ZSIvPjxwYXRoIGQ9Ik04NCA4N0gxMjEiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48cGF0aCBkPSJNMTAyLjUgNjRDMTA0LjQzMyA2NCAxMDYgNjIuNDMzIDEwNiA2MC41QzEwNiA1OC41NjcgMTA0LjQzMyA1NyAxMDIuNSA1N0MxMDAuNTY3IDU3IDk5IDU4LjU2NyA5OSA2MC41Qzk5IDYyLjQzMyAxMDAuNTY3IDY0IDEwMi41IDY0WiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgODJDMTA0LjQzMyA4MiAxMDYgODAuNDMzIDEwNiA3OC41QzEwNiA3Ni41NjcgMTA0LjQzMyA3NSAxMDIuNSA3NUMxMDAuNTY3IDc1IDk5IDc2LjU2NyA5OSA3OC41Qzk5IDgwLjQzMyAxMDAuNTY3IDgyIDEwMi41IDgyWiIgZmlsbD0id2hpdGUiLz48cGF0aCBkPSJNMTAyLjUgMTAxQzEwNC40MzMgMTAxIDEwNiA5OS40MzMgMTA2IDk3LjVDMTA2IDk1LjU2NyAxMDQuNDMzIDk0IDEwMi41IDk0QzEwMC41NjcgOTQgOTkgOTUuNTY3IDk5IDk3LjVDOTkgOTkuNDMzIDEwMC41NjcgMTAxIDEwMi41IDEwMVoiIGZpbGw9IndoaXRlIi8+PHBhdGggZD0iTTkwLjMzOTggMTE5LjA5MUg5My4xODQyTDk2LjE4ODUgMTI2LjQySDk2LjMxNjNMOTkuMzIwNiAxMTkuMDkxSDEwMi4xNjVWMTMwSDk5LjkyNzhWMTIyLjlIOTkuODM3M0w5Ny4wMTQxIDEyOS45NDdIOTUuNDkwN0w5Mi42Njc1IDEyMi44NzNIOTIuNTc3VjEzMEg5MC4zMzk4VjExOS4wOTFaTTEwNy4xMjIgMTIwLjk5M1YxMTkuMDkxSDExNi4wODFWMTIwLjk5M0gxMTIuNzQxVjEzMEgxMTAuNDYxVjEyMC45OTNIMTA3LjEyMloiIGZpbGw9IndoaXRlIi8+PC9zdmc+';
-// F2 Ultra 图标（SVG 矢量，任意缩放清晰）
+// F2 Ultra 鍥炬爣锛圫VG 鐭㈤噺锛屼换鎰忕缉鏀炬竻鏅帮級
 const iconF2Ultra = '/images/mt-f2-ultra.svg';
-// F3 横版 MT 整机标：Max 实心 / Pro 线条（源文件 images/mt-f3-machine-*.svg，可直接替换为你的原 SVG）
-const iconF3Pro = '/images/mt-f3-machine-pro.svg';
+// F3 妯増 MT 鏁存満鏍囷細Max 瀹炲績 / Pro 绾挎潯锛堟簮鏂囦欢 images/mt-f3-machine-*.svg锛屽彲鐩存帴鏇挎崲涓轰綘鐨勫師 SVG锛?const iconF3Pro = '/images/mt-f3-machine-pro.svg';
 const iconF3Max = '/images/mt-f3-machine-max.svg';
 const iconCanLearn = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjE0MCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3QgeD0iMjAiIHk9IjMwIiB3aWR0aD0iMTYwIiBoZWlnaHQ9IjEwMCIgcng9IjE2IiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iNCIvPjx0ZXh0IHg9IjEwMCIgeT0iNzAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIzNiIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iIzFEMDFDRiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Q0FOPC90ZXh0Pjx0ZXh0IHg9IjEwMCIgeT0iMTA4IiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZTdiviIgZmlsbD0iIzZCNzI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+T0JEPC90ZXh0Pjwvc3ZnPg==';
 
-// 小幽灵图标（睁眼 - 开启隐蔽模式）
+// 灏忓菇鐏靛浘鏍囷紙鐫佺溂 - 寮€鍚殣钄芥ā寮忥級
 const iconGhostOpen = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMjAgMTFWMTlDMjAgMjAuNiAxOCAyMS41IDE3IDIwLjVMMTYgMTkuNUwxNCAyMS41QzEzLjIgMjIuMyAxMiAyMS44IDEyIDIwLjhWMjAuOEMxMiAyMS44IDEwLjggMjIuMyAxMCAyMS41TDggMTkuNUw3IDIwLjVDNiAyMS41IDQgMjAuNiA0IDE5VjExQzQgNi41OCA3LjU4IDMgMTIgM0MxNi40MiAzIDIwIDYuNTggMjAgMTFaIiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48Y2lyY2xlIGN4PSI5IiBjeT0iMTEiIHI9IjEuNSIgZmlsbD0iYmxhY2siLz48Y2lyY2xlIGN4PSIxNSIgY3k9IjExIiByPSIxLjUiIGZpbGw9ImJsYWNrIi8+PC9zdmc+';
 
-// 小幽灵图标（闭眼 - 退出隐蔽模式）
+// 灏忓菇鐏靛浘鏍囷紙闂溂 - 閫€鍑洪殣钄芥ā寮忥級
 const iconGhostClose = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMjAgMTFWMTlDMjAgMjAuNiAxOCAyMS41IDE3IDIwLjVMMTYgMTkuNUwxNCAyMS41QzEzLjIgMjIuMyAxMiAyMS44IDEyIDIwLjhWMjAuOEMxMiAyMS44IDEwLjggMjIuMyAxMCAyMS41TDggMTkuNUw3IDIwLjVDNiAyMS41IDQgMjAuNiA0IDE5VjExQzQgNi41OCA3LjU4IDMgMTIgM0MxNi40MiAzIDIwIDYuNTggMjAgMTFaIiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48bGluZSB4MT0iNy41IiB5MT0iMTEiIHgyPSIxMC41IiB5Mj0iMTEiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGxpbmUgeDE9IjEzLjUiIHkxPSIxMSIgeDI9IjE2LjUiIHkyPSIxMSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=';
 
 // ==========================================
-// 蓝牙连接工具类 (你提供的代码融合)
+// 钃濈墮杩炴帴宸ュ叿绫?(浣犳彁渚涚殑浠ｇ爜铻嶅悎)
 // ==========================================
 class BLEHelper {
   constructor(api = wx) {
@@ -75,7 +74,7 @@ class BLEHelper {
     this.openTimer = null;
     this.openCandidate = null;
     
-    // 设备信息
+    // 璁惧淇℃伅
     this.device = null;
     this.lastConnectedDevice = null;
     this._manualDisconnect = false;
@@ -84,7 +83,6 @@ class BLEHelper {
     this._disconnectNotified = false;
     this._closeSuppressedAt = {};
     this._connListenerSetup = false;
-    this._suppressDisconnectUntil = 0;
     this.serviceId = '';
     this.characteristicId = '';      
     this.characteristicId2 = '';     
@@ -92,11 +90,10 @@ class BLEHelper {
     this.characteristicId01 = '';    
     this.characteristicId02 = '';    
     
-    // 回调函数
+    // 鍥炶皟鍑芥暟
     this.onDeviceFound = null;       
-    this.onConnecting = null;        // 新增：连接中回调
-    this.onLinkEstablished = null;   // BLE 物理链路已建立（早于服务发现）
-    this.onConnected = null;
+    this.onConnecting = null;        // 鏂板锛氳繛鎺ヤ腑鍥炶皟
+    this.onLinkEstablished = null;   // BLE 鐗╃悊閾捐矾宸插缓绔嬶紙鏃╀簬鏈嶅姟鍙戠幇锛?    this.onConnected = null;
     this.onConnectFailed = null;         
     this.onDisconnected = null;      
     this.onDataReceived = null;      
@@ -105,30 +102,26 @@ class BLEHelper {
 
   initBluetoothAdapter() {
     return new Promise((resolve, reject) => {
-      // 先检查系统蓝牙是否开启
-      this.api.getBluetoothAdapterState({
+      // 鍏堟鏌ョ郴缁熻摑鐗欐槸鍚﹀紑鍚?      this.api.getBluetoothAdapterState({
         success: (res) => {
           if (!res.available) {
-            reject(new Error('系统蓝牙未开启，请先开启系统蓝牙'));
+            reject(new Error('绯荤粺钃濈墮鏈紑鍚紝璇峰厛寮€鍚郴缁熻摑鐗?));
             return;
           }
-          // 蓝牙已开启，初始化适配器
-          this.api.openBluetoothAdapter({
+          // 钃濈墮宸插紑鍚紝鍒濆鍖栭€傞厤鍣?          this.api.openBluetoothAdapter({
             success: (res) => {
               this.api.onBluetoothAdapterStateChange((res) => {
-                console.log('蓝牙适配器状态变化', res);
+                console.log('钃濈墮閫傞厤鍣ㄧ姸鎬佸彉鍖?, res);
               });
               resolve(res);
             },
             fail: (err) => {
-            // 如果用户拒绝蓝牙授权，提示去设置中开启
-            if (err && err.errMsg && err.errMsg.includes('auth deny')) {
-              // 🔴 使用回调方式，让Page层处理弹窗
-              if (this.onError) {
+            // 濡傛灉鐢ㄦ埛鎷掔粷钃濈墮鎺堟潈锛屾彁绀哄幓璁剧疆涓紑鍚?            if (err && err.errMsg && err.errMsg.includes('auth deny')) {
+              // 馃敶 浣跨敤鍥炶皟鏂瑰紡锛岃Page灞傚鐞嗗脊绐?              if (this.onError) {
                 this.onError({ 
                   type: 'auth_deny',
-                  message: '蓝牙权限被拒绝',
-                  detail: '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。'
+                  message: '钃濈墮鏉冮檺琚嫆缁?,
+                  detail: '璇峰湪绯荤粺璁剧疆涓紑鍚摑鐗欙紝骞跺厑璁稿皬绋嬪簭浣跨敤钃濈墮鍔熻兘銆?
               });
               }
             }
@@ -138,24 +131,23 @@ class BLEHelper {
           });
         },
         fail: (err) => {
-          // 如果getBluetoothAdapterState失败，直接尝试openBluetoothAdapter
-          // 这可能是因为适配器还未初始化
+          // 濡傛灉getBluetoothAdapterState澶辫触锛岀洿鎺ュ皾璇昽penBluetoothAdapter
+          // 杩欏彲鑳芥槸鍥犱负閫傞厤鍣ㄨ繕鏈垵濮嬪寲
           this.api.openBluetoothAdapter({
             success: (res) => {
               this.api.onBluetoothAdapterStateChange((res) => {
-                console.log('蓝牙适配器状态变化', res);
+                console.log('钃濈墮閫傞厤鍣ㄧ姸鎬佸彉鍖?, res);
               });
               resolve(res);
             },
             fail: (err) => {
-              // 如果是权限错误，提供更友好的提示
+              // 濡傛灉鏄潈闄愰敊璇紝鎻愪緵鏇村弸濂界殑鎻愮ず
               if (err.errMsg && err.errMsg.includes('auth deny')) {
-                // 🔴 使用回调方式，让Page层处理弹窗
-                if (this.onError) {
+                // 馃敶 浣跨敤鍥炶皟鏂瑰紡锛岃Page灞傚鐞嗗脊绐?                if (this.onError) {
                   this.onError({ 
                     type: 'auth_deny',
-                    message: '蓝牙功能不可用',
-                    detail: '请确保：\n1. 系统蓝牙已开启\n2. 已授权小程序使用蓝牙功能\n\n可在手机设置中检查权限'
+                    message: '钃濈墮鍔熻兘涓嶅彲鐢?,
+                    detail: '璇风‘淇濓細\n1. 绯荤粺钃濈墮宸插紑鍚痋n2. 宸叉巿鏉冨皬绋嬪簭浣跨敤钃濈墮鍔熻兘\n\n鍙湪鎵嬫満璁剧疆涓鏌ユ潈闄?
                 });
                 }
               }
@@ -212,23 +204,21 @@ class BLEHelper {
         this.onDeviceFound(this.bleList);
       }
 
-      // 自动连接逻辑：NB开头优先
-      if (!this.hasConnected && device.name && device.name.startsWith('NB')) {
+      // 鑷姩杩炴帴閫昏緫锛歂B寮€澶翠紭鍏?      if (!this.hasConnected && device.name && device.name.startsWith('NB')) {
         if (this.openTimer) {
           clearTimeout(this.openTimer);
           this.openTimer = null;
         }
         this.hasConnected = true;
-        // 设置连接中状态
-        if (this.onConnecting) this.onConnecting(device);
-        this.connectDevice(device); // 内部会stopScan
+        // 璁剧疆杩炴帴涓姸鎬?        if (this.onConnecting) this.onConnecting(device);
+        this.connectDevice(device); // 鍐呴儴浼歴topScan
         return;
       }
     });
   }
 
   connectDevice(device) {
-    // UI Loading 已经在 Page 层面处理了，这里只处理逻辑
+    // UI Loading 宸茬粡鍦?Page 灞傞潰澶勭悊浜嗭紝杩欓噷鍙鐞嗛€昏緫
     this.stopScan();
     
     return new Promise((resolve, reject) => {
@@ -242,7 +232,6 @@ class BLEHelper {
           }
           this.isScanning = false;
           this._ensureConnectionStateListener();
-          this._lastBleWriteOk = null;
           if (this.onLinkEstablished) this.onLinkEstablished(device);
 
           setTimeout(() => {
@@ -301,9 +290,6 @@ class BLEHelper {
         }
         return;
       }
-      if (this._suppressDisconnectUntil && Date.now() < this._suppressDisconnectUntil) {
-        return;
-      }
       if (this._bleStateDropTimer) return;
       const disconnectedDevice = this.device
         ? { ...this.device }
@@ -313,9 +299,6 @@ class BLEHelper {
         this._bleStateDropTimer = null;
         const initiatedByUs = this._disconnectIntentManual || this._manualDisconnect;
         if (initiatedByUs || this._closingConnection || this._isCloseSuppressed(deviceId)) {
-          return;
-        }
-        if (this._suppressDisconnectUntil && Date.now() < this._suppressDisconnectUntil) {
           return;
         }
         this.probeLinkAlive(deviceId).then((alive) => {
@@ -409,7 +392,7 @@ class BLEHelper {
   discoverServices() {
     return new Promise((resolve, reject) => {
       if (!this.device) {
-        reject(new Error('设备未连接'));
+        reject(new Error('璁惧鏈繛鎺?));
         return;
       }
       this.api.getBLEDeviceServices({
@@ -425,7 +408,7 @@ class BLEHelper {
               return;
             }
           }
-          reject(new Error('未找到 FFF0 蓝牙服务'));
+          resolve();
         },
         fail: reject
       });
@@ -435,7 +418,7 @@ class BLEHelper {
   discoverCharacteristics(serviceId) {
     return new Promise((resolve, reject) => {
       if (!this.device) {
-        reject(new Error('设备未连接'));
+        reject(new Error('璁惧鏈繛鎺?));
         return;
       }
       this.api.getBLEDeviceCharacteristics({
@@ -461,7 +444,7 @@ class BLEHelper {
   enableNotify() {
     return new Promise((resolve, reject) => {
       if (!this.device || !this.serviceId || !this.characteristicId) {
-        // 如果没有特征值，静默失败即可，不中断流程
+        // 濡傛灉娌℃湁鐗瑰緛鍊硷紝闈欓粯澶辫触鍗冲彲锛屼笉涓柇娴佺▼
         resolve(); 
         return;
       }
@@ -472,7 +455,7 @@ class BLEHelper {
         characteristicId: this.characteristicId,
         success: (res) => {
           this.api.onBLECharacteristicValueChange((res) => {
-             // 接收数据逻辑
+             // 鎺ユ敹鏁版嵁閫昏緫
              if (this.onDataReceived) this.onDataReceived(res.value);
           });
           resolve(res);
@@ -504,7 +487,7 @@ function isF2MaxModel(model) {
   return model.name === 'F2' && (model.type === 'Max' || isF2LongType(model.type));
 }
 
-/** F2 Max / Long（非 Ultra）：固件有状态包但无 Ultra 级回读校验，滑块仍应随点击/状态包更新 */
+/** F2 Max / Long锛堥潪 Ultra锛夛細鍥轰欢鏈夌姸鎬佸寘浣嗘棤 Ultra 绾у洖璇绘牎楠岋紝婊戝潡浠嶅簲闅忕偣鍑?鐘舵€佸寘鏇存柊 */
 function isF2UltraModel(model) {
   if (!model) return false;
   return model.name === 'F2' && model.type === 'Ultra';
@@ -514,7 +497,7 @@ function isF3MaxModel(model) {
   return !!(model && model.name === 'F3' && model.type === 'Max');
 }
 
-/** F1 Ultra / F2 Ultra / F3 Max：同款控制中心卡片（状态圆环、直控、出行模式等） */
+/** F1 Ultra / F2 Ultra / F3 Max锛氬悓娆炬帶鍒朵腑蹇冨崱鐗囷紙鐘舵€佸渾鐜€佺洿鎺с€佸嚭琛屾ā寮忕瓑锛?*/
 function isMtUltraCardModel(model) {
   return isF1UltraModel(model) || isF2UltraModel(model) || isF3MaxModel(model);
 }
@@ -526,7 +509,7 @@ function mtUltraCardLabel(model) {
   return '';
 }
 
-/** Pin2/Pin5 硬件实时监测：仅 F1 Ultra、F2 Ultra、F3 MAX */
+/** Pin2/Pin5 纭欢瀹炴椂鐩戞祴锛氫粎 F1 Ultra銆丗2 Ultra銆丗3 MAX */
 function isHwPinMonitorModel(model) {
   return isMtUltraCardModel(model);
 }
@@ -569,17 +552,17 @@ function resolveF2BleLinkedForUi(pageData) {
   return !!d.isConnected;
 }
 
-/** F1/F2 Ultra、F3 MAX（同款固件）及 F2 系：打开角度走自定义功能 / 完全打开 / 往上收 / 往下 */
+/** F1/F2 Ultra銆丗3 MAX锛堝悓娆惧浐浠讹級鍙?F2 绯伙細鎵撳紑瑙掑害璧拌嚜瀹氫箟鍔熻兘 / 瀹屽叏鎵撳紑 / 寰€涓婃敹 / 寰€涓?*/
 function usesF2StyleOpenAngleBle(model) {
   if (!model) return false;
   return isMtUltraCardModel(model) || model.name === 'F2';
 }
 
 function resolveOpenAngleBtnText(model) {
-  if (!model) return '90°';
-  if (isMtUltraCardModel(model)) return '90°';
-  if (model.name && model.name.includes('F1')) return '180°';
-  return '90°';
+  if (!model) return '90掳';
+  if (isMtUltraCardModel(model)) return '90掳';
+  if (model.name && model.name.includes('F1')) return '180掳';
+  return '90掳';
 }
 
 function openAngleInternalToDisplayDeg(model, internal) {
@@ -603,13 +586,13 @@ function openAngleStickRotateDeg(model, internal) {
 function openAnglePresetBleCommand(model, angle) {
   if (!model) return '';
   if (usesF2StyleOpenAngleBle(model)) {
-    if (angle === 90) return '自定义功能';
-    if (angle === 160 || angle === 180) return '完全打开';
+    if (angle === 90) return '鑷畾涔夊姛鑳?;
+    if (angle === 160 || angle === 180) return '瀹屽叏鎵撳紑';
     return '';
   }
   if (model.name === 'F1') {
-    if (angle === 90) return '90度';
-    if (angle === 180) return '180度';
+    if (angle === 90) return '90搴?;
+    if (angle === 180) return '180搴?;
   }
   return '';
 }
@@ -627,12 +610,12 @@ function openAngleSwipeMaxDeg(model, fallbackMax) {
 function openAngleSlideBleCommands(model) {
   if (usesF2StyleOpenAngleBle(model)) {
     if (isMtUltraCardModel(model)) {
-      return { increase: '往下', decrease: '往上收' };
+      return { increase: '寰€涓?, decrease: '寰€涓婃敹' };
     }
-    return { increase: '往上收', decrease: '往下' };
+    return { increase: '寰€涓婃敹', decrease: '寰€涓? };
   }
   if (model.name === 'F1') {
-    return { increase: '往上收', decrease: '往下放' };
+    return { increase: '寰€涓婃敹', decrease: '寰€涓嬫斁' };
   }
   return null;
 }
@@ -647,12 +630,11 @@ function isF2MaxDelayPowerModel(model) {
 }
 
 function isF2MaxStatusBleModel(model) {
-  // 状态包监听：F2 MAX 系故障/高级配置 + 需硬件监测的 Ultra / F3 MAX
+  // 鐘舵€佸寘鐩戝惉锛欶2 MAX 绯绘晠闅?楂樼骇閰嶇疆 + 闇€纭欢鐩戞祴鐨?Ultra / F3 MAX
   return isF2MaxSeriesModel(model) || isF1UltraModel(model) || isF3MaxModel(model);
 }
 
-const F2_DELAY_POWER_RISK_MINUTES = 240; // 超过 4 小时才提示可能亏电
-const F2_DELAY_POWER_RISK_SUFFIX = '　可能有亏电风险';
+const F2_DELAY_POWER_RISK_MINUTES = 240; // 瓒呰繃 4 灏忔椂鎵嶆彁绀哄彲鑳戒簭鐢?const F2_DELAY_POWER_RISK_SUFFIX = '銆€鍙兘鏈変簭鐢甸闄?;
 
 function buildF2DelayPowerOffOption(label, minutes) {
   const risk = minutes > F2_DELAY_POWER_RISK_MINUTES;
@@ -665,31 +647,31 @@ function buildF2DelayPowerOffOption(label, minutes) {
 }
 
 const F2_DELAY_POWER_OFF_OPTIONS = [
-  buildF2DelayPowerOffOption('关闭（关钥匙仅保持10秒）', 0),
-  buildF2DelayPowerOffOption('5分钟（系统默认）', 5),
-  buildF2DelayPowerOffOption('30分钟', 30),
-  buildF2DelayPowerOffOption('1小时', 60),
-  buildF2DelayPowerOffOption('2小时', 120),
-  buildF2DelayPowerOffOption('4小时', 240),
-  buildF2DelayPowerOffOption('12小时', 720),
-  buildF2DelayPowerOffOption('48小时', 2880)
+  buildF2DelayPowerOffOption('鍏抽棴锛堝叧閽ュ寵浠呬繚鎸?0绉掞級', 0),
+  buildF2DelayPowerOffOption('5鍒嗛挓锛堢郴缁熼粯璁わ級', 5),
+  buildF2DelayPowerOffOption('30鍒嗛挓', 30),
+  buildF2DelayPowerOffOption('1灏忔椂', 60),
+  buildF2DelayPowerOffOption('2灏忔椂', 120),
+  buildF2DelayPowerOffOption('4灏忔椂', 240),
+  buildF2DelayPowerOffOption('12灏忔椂', 720),
+  buildF2DelayPowerOffOption('48灏忔椂', 2880)
 ];
 
 const F2_ULTRA_FACTORY_RESET_STEPS = [
-  { text: '正在关闭堵转检测', data: '关闭堵转检测', sendTimes: 2, interval: 500, delayNext: 2000 },
-  { text: '正在关闭电机检测', data: '关闭电机检测', sendTimes: 2, interval: 500, delayNext: 2000 },
-  { text: '正在设置开机位置上翻', data: '开机下翻', sendTimes: 2, interval: 500, delayNext: 2000 },
-  { text: '正在设置关机位置收回', data: '打开收回', sendTimes: 2, interval: 500, delayNext: 2000 },
-  { text: '正在设置隐蔽模式允许按钮', data: '允许按钮退出', sendTimes: 2, interval: 500, delayNext: 2000 },
-  { text: '正在开启平滑模式', data: '开启平滑', sendTimes: 2, interval: 500, delayNext: 2000 },
-  { text: '正在关闭出行模式', data: '关闭出行', sendTimes: 2, interval: 500, delayNext: 2000 },
-  { text: '正在设置延时断电为关闭', data: '延时断电0', sendTimes: 2, interval: 500, delayNext: 2000 },
-  { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true, isFinal: true }
+  { text: '姝ｅ湪鍏抽棴鍫佃浆妫€娴?, data: '鍏抽棴鍫佃浆妫€娴?, sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '姝ｅ湪鍏抽棴鐢垫満妫€娴?, data: '鍏抽棴鐢垫満妫€娴?, sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '姝ｅ湪璁剧疆寮€鏈轰綅缃笂缈?, data: '寮€鏈轰笅缈?, sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '姝ｅ湪璁剧疆鍏虫満浣嶇疆鏀跺洖', data: '鎵撳紑鏀跺洖', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '姝ｅ湪璁剧疆闅愯斀妯″紡鍏佽鎸夐挳', data: '鍏佽鎸夐挳閫€鍑?, sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '姝ｅ湪寮€鍚钩婊戞ā寮?, data: '寮€鍚钩婊?, sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '姝ｅ湪鍏抽棴鍑鸿妯″紡', data: '鍏抽棴鍑鸿', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '姝ｅ湪璁剧疆寤舵椂鏂數涓哄叧闂?, data: '寤舵椂鏂數0', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '姝ｅ湪鑷姩璋冨钩锛岃鐢ㄦ墜杩涜闃绘尅', data: '鑷姩璋冨钩', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true, isFinal: true }
 ];
 
-/** F3 MAX 无平滑模式，出厂设置跳过「开启平滑」 */
+/** F3 MAX 鏃犲钩婊戞ā寮忥紝鍑哄巶璁剧疆璺宠繃銆屽紑鍚钩婊戙€?*/
 const F3_MAX_FACTORY_RESET_STEPS = F2_ULTRA_FACTORY_RESET_STEPS.filter(
-  (step) => step.data !== '开启平滑'
+  (step) => step.data !== '寮€鍚钩婊?
 );
 
 function f2DelayPowerOffIndexByMinutes(minutes) {
@@ -698,28 +680,28 @@ function f2DelayPowerOffIndexByMinutes(minutes) {
 }
 
 const F2_TRAVEL_HOLD_OPTIONS = [
-  { label: '1 分钟', minutes: 1 },
-  { label: '2 分钟', minutes: 2 },
-  { label: '3 分钟（默认）', minutes: 3 },
-  { label: '5 分钟', minutes: 5 },
-  { label: '7 分钟', minutes: 7 },
-  { label: '10 分钟', minutes: 10 },
-  { label: '15 分钟', minutes: 15 },
-  { label: '20 分钟', minutes: 20 },
-  { label: '30 分钟', minutes: 30 }
+  { label: '1 鍒嗛挓', minutes: 1 },
+  { label: '2 鍒嗛挓', minutes: 2 },
+  { label: '3 鍒嗛挓锛堥粯璁わ級', minutes: 3 },
+  { label: '5 鍒嗛挓', minutes: 5 },
+  { label: '7 鍒嗛挓', minutes: 7 },
+  { label: '10 鍒嗛挓', minutes: 10 },
+  { label: '15 鍒嗛挓', minutes: 15 },
+  { label: '20 鍒嗛挓', minutes: 20 },
+  { label: '30 鍒嗛挓', minutes: 30 }
 ];
 
 const F2_TRAVEL_DURATION_OPTIONS = [
-  { label: '3 小时', hours: 3 },
-  { label: '6 小时', hours: 6 },
-  { label: '12 小时（默认）', hours: 12 },
-  { label: '24 小时', hours: 24 },
-  { label: '48 小时', hours: 48 }
+  { label: '3 灏忔椂', hours: 3 },
+  { label: '6 灏忔椂', hours: 6 },
+  { label: '12 灏忔椂锛堥粯璁わ級', hours: 12 },
+  { label: '24 灏忔椂', hours: 24 },
+  { label: '48 灏忔椂', hours: 48 }
 ];
 
 const F2_TRAVEL_KEYOFF_OPTIONS = [
-  { label: '保持（关钥匙不动，开钥匙下翻）', retract: false, cmd: '出行钥匙保持' },
-  { label: '收回（关钥匙收起，开钥匙下翻）', retract: true, cmd: '出行钥匙收回' }
+  { label: '淇濇寔锛堝叧閽ュ寵涓嶅姩锛屽紑閽ュ寵涓嬬炕锛?, retract: false, cmd: '鍑鸿閽ュ寵淇濇寔' },
+  { label: '鏀跺洖锛堝叧閽ュ寵鏀惰捣锛屽紑閽ュ寵涓嬬炕锛?, retract: true, cmd: '鍑鸿閽ュ寵鏀跺洖' }
 ];
 
 function f2TravelKeyOffIndexByRetract(retract) {
@@ -737,19 +719,19 @@ function f2TravelDurationIndexByHours(hours) {
   return idx >= 0 ? idx : 2;
 }
 
-// 蓝牙写入队列：上一条写成功后再等 gap 才发下一条，避免串口粘包导致指令乱码
+// 钃濈墮鍐欏叆闃熷垪锛氫笂涓€鏉″啓鎴愬姛鍚庡啀绛?gap 鎵嶅彂涓嬩竴鏉★紝閬垮厤涓插彛绮樺寘瀵艰嚧鎸囦护涔辩爜
 const BLE_SEND_GAP_MS = 320;
 const BLE_ANGLE_STEP_GAP_MS = 300;
 const OPEN_ANGLE_TICKS_PER_GESTURE = 3;
 const OPEN_ANGLE_RAPID_SWIPE_WINDOW_MS = 2500;
-/** 预设点击后 UI 假同步时长（不读设备角度） */
+/** 棰勮鐐瑰嚮鍚?UI 鍋囧悓姝ユ椂闀匡紙涓嶈璁惧瑙掑害锛?*/
 const OPEN_ANGLE_FAKE_SYNC_MS = 750;
-/** 波轮跟手：手指 px → 轨道 px（1 ≈ 1:1，每 tickWidthPx 过 1 格） */
+/** 娉㈣疆璺熸墜锛氭墜鎸?px 鈫?杞ㄩ亾 px锛? 鈮?1:1锛屾瘡 tickWidthPx 杩?1 鏍硷級 */
 const OPEN_ANGLE_RULER_SENSITIVITY = 1;
-/** 同款 Ultra 固件：UI 同步上限 170°，拨轮可继续滑到 180° 发蓝牙 */
+/** 鍚屾 Ultra 鍥轰欢锛歎I 鍚屾涓婇檺 170掳锛屾嫧杞彲缁х画婊戝埌 180掳 鍙戣摑鐗?*/
 const OPEN_ANGLE_ULTRA_SYNC_MAX_DEG = 170;
 const OPEN_ANGLE_ULTRA_SWIPE_MAX_DEG = 180;
-/** 折叠舵机角（固件 item4）：0~180，默认 150 对应 foldGap=20 */
+/** 鎶樺彔鑸垫満瑙掞紙鍥轰欢 item4锛夛細0~180锛岄粯璁?150 瀵瑰簲 foldGap=20 */
 const FOLD_SERVO_ANGLE_DEFAULT = 150;
 const FOLD_SERVO_ANGLE_MIN = 0;
 const FOLD_SERVO_ANGLE_MAX = 180;
@@ -825,11 +807,10 @@ Page({
     connectIcon: iconConnect,
     editType: 'fold', 
 
-    // === 权限控制 ===
-    isAuthorized: false, // 密码验证一次后有效
-    isAdmin: false, // 管理员身份
-
-    // === 远程协助 ===
+    // === 鏉冮檺鎺у埗 ===
+    isAuthorized: false, // 瀵嗙爜楠岃瘉涓€娆″悗鏈夋晥
+    isAdmin: false, // 绠＄悊鍛樿韩浠?
+    // === 杩滅▼鍗忓姪 ===
     uiBleConnected: false,
     remoteAssistCardEnabled: true,
     remoteAssistPendingForCard: false,
@@ -852,19 +833,16 @@ Page({
     screenshotHourlyCount: 0,
     screenshotDailyCount: 0,
 
-    // === 弹窗控制 ===
+    // === 寮圭獥鎺у埗 ===
     showPasswordModal: false, 
     showTutorialModal: false, 
     showKeyModal: false,     
     showDisconnectTip: false,
-    showApproachTip: false,  // 新增：靠近车辆提示
-    
-    // 新增：蓝牙未开启提示弹窗
-    showBluetoothAlert: false,
-    bluetoothAlertClosing: false, // 蓝牙提示弹窗退出动画中
+    showApproachTip: false,  // 鏂板锛氶潬杩戣溅杈嗘彁绀?    
+    // 鏂板锛氳摑鐗欐湭寮€鍚彁绀哄脊绐?    showBluetoothAlert: false,
+    bluetoothAlertClosing: false, // 钃濈墮鎻愮ず寮圭獥閫€鍑哄姩鐢讳腑
 
-    // 管理员 SN 预登记弹窗
-    showAdminSnModal: false,
+    // 绠＄悊鍛?SN 棰勭櫥璁板脊绐?    showAdminSnModal: false,
     adminSnModalClosing: false,
     adminSnModalMode: '', // confirm_new | change_model
     adminSnModalSn: '',
@@ -873,90 +851,81 @@ Page({
     adminSnRegisterSubmitting: false,
     adminSnShowModelPicker: false,
     adminBindModelOptions: ADMIN_BIND_MODEL_OPTIONS,
-    /** 管理员本会话已绑定 SN（与当前卡片型号无关） */
+    /** 绠＄悊鍛樻湰浼氳瘽宸茬粦瀹?SN锛堜笌褰撳墠鍗＄墖鍨嬪彿鏃犲叧锛?*/
     adminRegisteredSn: '',
     adminRegisteredModel: '',
     currentConnectedRawSn: '',
-    /** 售后换机：待选工单列表与选中项 */
+    /** 鍞悗鎹㈡満锛氬緟閫夊伐鍗曞垪琛ㄤ笌閫変腑椤?*/
     showAdminRepairPicker: false,
     adminRepairPickerClosing: false,
     adminAwaitingRepairs: [],
     adminSelectedRepairId: '',
     adminSelectedRepair: null,
-    /** 蓝牙意外断开后自动重连 */
+    /** 钃濈墮鎰忓鏂紑鍚庤嚜鍔ㄩ噸杩?*/
     isBleAutoReconnecting: false,
     bleReconnectAttempt: 0,
-    /** CAN Learn 测试：灯带总灯珠数 */
+    /** CAN Learn 娴嬭瘯锛氱伅甯︽€荤伅鐝犳暟 */
     canLearnNumLeds: String(DEFAULT_NUM_LEDS),
     
-    // 新增：自动校准中弹窗
+    // 鏂板锛氳嚜鍔ㄦ牎鍑嗕腑寮圭獥
     showCalibratingModal: false,
-    calibratingModalClosing: false, // 校准弹窗退出动画中
-    calibratingBtnDisabled: true, // 校准弹窗按钮禁用状态
-
-    // 打开角度：快速连滑时提示蓝牙仍在发送
-    showOpenAngleSendingModal: false,
+    calibratingModalClosing: false, // 鏍″噯寮圭獥閫€鍑哄姩鐢讳腑
+    calibratingBtnDisabled: true, // 鏍″噯寮圭獥鎸夐挳绂佺敤鐘舵€?
+    // 鎵撳紑瑙掑害锛氬揩閫熻繛婊戞椂鎻愮ず钃濈墮浠嶅湪鍙戦€?    showOpenAngleSendingModal: false,
     openAngleSendingModalClosing: false,
     openAngleSendingBtnDisabled: true,
-    /** 打开角度：非阻塞提示条（仅 UI 提示，不挡操作） */
+    /** 鎵撳紑瑙掑害锛氶潪闃诲鎻愮ず鏉★紙浠?UI 鎻愮ず锛屼笉鎸℃搷浣滐級 */
     showOpenAngleSendHint: false,
     
-    // 弹窗退出动画状态
-    passwordModalClosing: false, // 密码弹窗退出动画中
-    tutorialModalClosing: false, // 教程弹窗退出动画中
-    keyModalClosing: false, // 钥匙弹窗退出动画中
+    // 寮圭獥閫€鍑哄姩鐢荤姸鎬?    passwordModalClosing: false, // 瀵嗙爜寮圭獥閫€鍑哄姩鐢讳腑
+    tutorialModalClosing: false, // 鏁欑▼寮圭獥閫€鍑哄姩鐢讳腑
+    keyModalClosing: false, // 閽ュ寵寮圭獥閫€鍑哄姩鐢讳腑
     
-    // 新增：请先连接蓝牙提示（小胶囊样式）
+    // 鏂板锛氳鍏堣繛鎺ヨ摑鐗欐彁绀猴紙灏忚兌鍥婃牱寮忥級
     showConnectBluetoothTip: false,
     
-    // 🔴 新增：OTA提示
+    // 馃敶 鏂板锛歄TA鎻愮ず
     showOtaTip: false,
     
-    // 新增：连接状态
-    isConnecting: false,      // 正在连接中
-    isNavigatingToOta: false, // 正在跳转到OTA页面（防止重复跳转）
+    // 鏂板锛氳繛鎺ョ姸鎬?    isConnecting: false,      // 姝ｅ湪杩炴帴涓?    isNavigatingToOta: false, // 姝ｅ湪璺宠浆鍒癘TA椤甸潰锛堥槻姝㈤噸澶嶈烦杞級
 
-    // 【新增】弹窗按钮锁定状态（防误触）
+    // 銆愭柊澧炪€戝脊绐楁寜閽攣瀹氱姸鎬侊紙闃茶瑙︼級
     modalBtnDisabled: false,
     
-    // 🔴 新增：所有弹窗的倒计时相关数据
-    passwordBtnLocked: true,
-    passwordBtnText: '确认 (2s)',
+    // 馃敶 鏂板锛氭墍鏈夊脊绐楃殑鍊掕鏃剁浉鍏虫暟鎹?    passwordBtnLocked: true,
+    passwordBtnText: '纭 (2s)',
     tutorialBtnLocked: true,
-    tutorialBtnText: '知道了 (2s)',
+    tutorialBtnText: '鐭ラ亾浜?(2s)',
     keyBtnLocked: true,
-    keyBtnText: '确认 (2s)',
+    keyBtnText: '纭 (2s)',
     angleHintBtnLocked: true,
-    angleHintBtnText: '知道了 (2s)',
+    angleHintBtnText: '鐭ラ亾浜?(2s)',
     
     passwordInput: '',        
     pendingEditType: '',      
 
-    // === 动画状态 (红环教程) ===
+    // === 鍔ㄧ敾鐘舵€?(绾㈢幆鏁欑▼) ===
     animLightOn: true,        
     animIsPressing: false,    
     animText: '',             
     tutorialTimer: null,
     
-    // === 折叠页引导状态 ===
-    isLightOn: true,          // 折叠页指示灯状态（true=红，false=黑）
-    showFoldInlineHint: false, // 🔴 折叠页上滑提示显示状态
-    foldHintOffset: 0,         // 🔴 折叠页提示偏移量（用于动画）
-    showFoldFineTuneHint: false, // 🔴 上滑演示结束后：调大/调小多击提示
+    // === 鎶樺彔椤靛紩瀵肩姸鎬?===
+    isLightOn: true,          // 鎶樺彔椤垫寚绀虹伅鐘舵€侊紙true=绾紝false=榛戯級
+    showFoldInlineHint: false, // 馃敶 鎶樺彔椤典笂婊戞彁绀烘樉绀虹姸鎬?    foldHintOffset: 0,         // 馃敶 鎶樺彔椤垫彁绀哄亸绉婚噺锛堢敤浜庡姩鐢伙級
+    showFoldFineTuneHint: false, // 馃敶 涓婃粦婕旂ず缁撴潫鍚庯細璋冨ぇ/璋冨皬澶氬嚮鎻愮ず
     
-    // === 打开角度页引导状态 ===
+    // === 鎵撳紑瑙掑害椤靛紩瀵肩姸鎬?===
     openAngleTutorialTimer: null,
-    openAngleAnimLightOn: false,    // 打开角度动画：指示灯状态（false=灰，true=红）
-    openAngleAnimIsPressing: false, // 打开角度动画：是否正在按下
-    openAngleAnimText: '点击车把按键\n使指示灯亮', // 打开角度动画：提示文字
-    openAngleLightOn: false,        // 打开角度页面：指示灯按钮状态（false=灰，true=红）      
+    openAngleAnimLightOn: false,    // 鎵撳紑瑙掑害鍔ㄧ敾锛氭寚绀虹伅鐘舵€侊紙false=鐏帮紝true=绾級
+    openAngleAnimIsPressing: false, // 鎵撳紑瑙掑害鍔ㄧ敾锛氭槸鍚︽鍦ㄦ寜涓?    openAngleAnimText: '鐐瑰嚮杞︽妸鎸夐敭\n浣挎寚绀虹伅浜?, // 鎵撳紑瑙掑害鍔ㄧ敾锛氭彁绀烘枃瀛?    openAngleLightOn: false,        // 鎵撳紑瑙掑害椤甸潰锛氭寚绀虹伅鎸夐挳鐘舵€侊紙false=鐏帮紝true=绾級      
 
-    // === 动画状态 (关钥匙) ===
+    // === 鍔ㄧ敾鐘舵€?(鍏抽挜鍖? ===
     keyAnimState: 'red',      // 'red' | 'grey'
-    keyLoopTimer: null,       // 关钥匙动画循环定时器
+    keyLoopTimer: null,       // 鍏抽挜鍖欏姩鐢诲惊鐜畾鏃跺櫒
 
     isConnected: false,
-    isScanning: false, // 是否正在扫描
+    isScanning: false, // 鏄惁姝ｅ湪鎵弿
     connectedDeviceName: '',
     touchStartX: 0,
     detailSwipeStartX: 0,
@@ -965,50 +934,35 @@ Page({
     detailOpenGuardUntil: 0,
     blockDetailTouch: false,
     
-    // 角度控制（旧旋转臂仍保留给折叠逻辑使用）
-    angleMode: '90', 
+    // 瑙掑害鎺у埗锛堟棫鏃嬭浆鑷備粛淇濈暀缁欐姌鍙犻€昏緫浣跨敤锛?    angleMode: '90', 
     angleRotation: 180, 
 
-    // 折叠间距（由 foldServoAngle 映射，与固件 item4 限位 0~180 对齐）
-    foldGap: 20,
+    // 鎶樺彔闂磋窛锛堢敱 foldServoAngle 鏄犲皠锛屼笌鍥轰欢 item4 闄愪綅 0~180 瀵归綈锛?    foldGap: 20,
     foldServoAngle: FOLD_SERVO_ANGLE_DEFAULT,
     
-    // 🔴 调整按钮滑动相关（折叠角度页）
-    adjustSlideOffset: 0,        // 滑块的垂直偏移量（px）
-    adjustSlideActive: false,    // 是否激活（滑动后显示归零）
-    adjustTouchStartY: 0,        // 触摸开始时的 Y 坐标
-    adjustHasMoved: false,       // 是否发生了滑动（用于区分点击和滑动）
-    adjustSnap: false,           // 手动模式：松手后回弹/贴合时，给一个顺滑过渡动画
-    foldDemoPlaying: false,      // 是否正在播放"自动上滑调整"演示（播放时禁用手动滑动）
-    isAdjustDemo: false,         // 调整按钮当前是否处在"演示动画"模式（有过渡），手动滑动时为 false
+    // 馃敶 璋冩暣鎸夐挳婊戝姩鐩稿叧锛堟姌鍙犺搴﹂〉锛?    adjustSlideOffset: 0,        // 婊戝潡鐨勫瀭鐩村亸绉婚噺锛坧x锛?    adjustSlideActive: false,    // 鏄惁婵€娲伙紙婊戝姩鍚庢樉绀哄綊闆讹級
+    adjustTouchStartY: 0,        // 瑙︽懜寮€濮嬫椂鐨?Y 鍧愭爣
+    adjustHasMoved: false,       // 鏄惁鍙戠敓浜嗘粦鍔紙鐢ㄤ簬鍖哄垎鐐瑰嚮鍜屾粦鍔級
+    adjustSnap: false,           // 鎵嬪姩妯″紡锛氭澗鎵嬪悗鍥炲脊/璐村悎鏃讹紝缁欎竴涓『婊戣繃娓″姩鐢?    foldDemoPlaying: false,      // 鏄惁姝ｅ湪鎾斁"鑷姩涓婃粦璋冩暣"婕旂ず锛堟挱鏀炬椂绂佺敤鎵嬪姩婊戝姩锛?    isAdjustDemo: false,         // 璋冩暣鎸夐挳褰撳墠鏄惁澶勫湪"婕旂ず鍔ㄧ敾"妯″紡锛堟湁杩囨浮锛夛紝鎵嬪姩婊戝姩鏃朵负 false
 
-    angleBtnText: '90°', // F1=180°，F2 系列 UI 显示 90°（内部仍 160）
+    angleBtnText: '90掳', // F1=180掳锛孎2 绯诲垪 UI 鏄剧ず 90掳锛堝唴閮ㄤ粛 160锛?
+    // 鎵撳紑瑙掑害锛氭爣灏?& 鏁板€兼樉绀虹浉鍏?    isCalibrated: false,          // 鏄惁宸查€氳繃 90/160(180) 鎸夐挳婵€娲绘牎鍑?    openAngleUiActive: false,     // 鏄惁宸茬偣棰勮/棣栨鎷ㄨ疆锛氭湭婵€娲绘椂娉㈣疆鍙姩銆佸彲鍙戣摑鐗欙紝妫嶅瓙/鏁板瓧涓嶆洿鏂?    statusText: '绛夊緟鍚屾',      // 鐘舵€佹枃瀛楋紙鎵撳紑瑙掑害涓?UI 鍋囧悓姝ワ紝涓嶈璁惧锛?    currentAngle: 0,              // 褰撳墠瑙掑害鏁板€?(0~maxAngle)
+    ticks: [],                    // 娉㈡氮灏哄埢搴︽暟缁?    activeIndex: 0,               // 褰撳墠楂樹寒鍒诲害绱㈠紩
+    translateX: 0,                // 娉㈡氮灏轰綅绉?(px)
+    transition: 'none',           // 娉㈡氮灏鸿繃娓″姩鐢?    lastEmitTime: 0,              // 娉㈡氮灏烘粦鍔ㄨ妭娴佹椂闂存埑
 
-    // 打开角度：标尺 & 数值显示相关
-    isCalibrated: false,          // 是否已通过 90/160(180) 按钮激活校准
-    openAngleUiActive: false,     // 是否已点预设/首次拨轮：未激活时波轮可动、可发蓝牙，棍子/数字不更新
-    statusText: '等待同步',      // 状态文字（打开角度为 UI 假同步，不读设备）
-    currentAngle: 0,              // 当前角度数值 (0~maxAngle)
-    ticks: [],                    // 波浪尺刻度数组
-    activeIndex: 0,               // 当前高亮刻度索引
-    translateX: 0,                // 波浪尺位移 (px)
-    transition: 'none',           // 波浪尺过渡动画
-    lastEmitTime: 0,              // 波浪尺滑动节流时间戳
+    // 鈽呪槄鈽?寮曞寮圭獥鐩稿叧鏁版嵁
+    hasShownF1Guide: false, // 涓撻棬鐢ㄤ簬璁板繂 F1 绯诲垪鏄惁宸茬粡寮圭獥杩?    showAngleHint: false,   // 鎺у埗寮圭獥鏄剧ず
 
-    // ★★★ 引导弹窗相关数据
-    hasShownF1Guide: false, // 专门用于记忆 F1 系列是否已经弹窗过
-    showAngleHint: false,   // 控制弹窗显示
+    // 銆愭柊澧炪€戞帶鍒跺叏鏂颁骇鍝佹彁绀哄脊绐?    showNewProductHint: false, // 鎺у埗寮圭獥鏄剧ず
+    newProductBtnLocked: true, // 鎸夐挳鏄惁閿佸畾
+    newProductBtnText: '鐭ラ亾浜?(2s)', // 鎸夐挳鏂囨
 
-    // 【新增】控制全新产品提示弹窗
-    showNewProductHint: false, // 控制弹窗显示
-    newProductBtnLocked: true, // 按钮是否锁定
-    newProductBtnText: '知道了 (2s)', // 按钮文案
-
-    // === 新增：高级设置相关数据 ===
-    showSettingsModal: false, // 控制高级设置弹窗
-    toastClass: '',           // 控制 Toast 动画
+    // === 鏂板锛氶珮绾ц缃浉鍏虫暟鎹?===
+    showSettingsModal: false, // 鎺у埗楂樼骇璁剧疆寮圭獥
+    toastClass: '',           // 鎺у埗 Toast 鍔ㄧ敾
     
-    // 图标数据绑定
+    // 鍥炬爣鏁版嵁缁戝畾
     icons: {
       lock: iconLock,
       arrowUp: iconArrowUp,
@@ -1026,15 +980,14 @@ Page({
 
     f2ControlPanelOpen: true,
     flapPanelState: 'unknown',
-    flapPanelStateText: '状态未知',
+    flapPanelStateText: '鐘舵€佹湭鐭?,
     flapMotionDir: '',
     flapGaugeSnap: false,
     showF2DemoModal: false,
     f2DemoRunning: false,
     f2DemoStatusText: '',
     
-    // 滑块状态（连接后由设备状态包覆盖）
-    settingState: {
+    // 婊戝潡鐘舵€侊紙杩炴帴鍚庣敱璁惧鐘舵€佸寘瑕嗙洊锛?    settingState: {
       faultDetect: 'left',
       selfRepair: 'left',
       powerOn: 'right',
@@ -1049,7 +1002,7 @@ Page({
 
     delayPowerOffOptions: F2_DELAY_POWER_OFF_OPTIONS,
     delayPowerOffIndex: 0,
-    delayPowerOffTip: '请根据电瓶容量选择',
+    delayPowerOffTip: '璇锋牴鎹數鐡跺閲忛€夋嫨',
     f2TravelModeOn: false,
     travelHoldOptions: F2_TRAVEL_HOLD_OPTIONS,
     travelDurationOptions: F2_TRAVEL_DURATION_OPTIONS,
@@ -1060,23 +1013,23 @@ Page({
     travelHoldMin: 3,
     travelDurationHours: 12,
     travelModeTip: buildTravelModeTip(3, 12, false),
-    f2TravelReadbackText: '读取中…',
-    f2DelayPowerReadbackText: '读取中…',
+    f2TravelReadbackText: '璇诲彇涓€?,
+    f2DelayPowerReadbackText: '璇诲彇涓€?,
     f2HwMonitorVisible: false,
     f2KeyOn: null,
     f2BtnPressed: null,
-    f2KeyStatusText: '—',
-    f2BtnStatusText: '—',
+    f2KeyStatusText: '鈥?,
+    f2BtnStatusText: '鈥?,
     f3HeightMonitorVisible: false,
     f3HeightMm: null,
-    f3HeightText: '—',
+    f3HeightText: '鈥?,
     f3HeightLive: false,
     f3DangerMm: 0,
     f3BaseMm: 0,
     f3DangerInput: '',
     f3BaseInput: '',
-    f3DangerReadback: '未设置',
-    f3BaseReadback: '未设置',
+    f3DangerReadback: '鏈缃?,
+    f3BaseReadback: '鏈缃?,
     f3HeightConfigModeOn: false,
     f3CalCountdown: 0,
     f3DangerBlocked: false,
@@ -1085,80 +1038,54 @@ Page({
     f3ShowCalOverlay: false,
     f3CalStep: '',
     f3CalBranch: '',
-    f3CalTitle: 'F3 自动校准',
+    f3CalTitle: 'F3 鑷姩鏍″噯',
     f3CalDesc: '',
     f3CalTargetLabel: '',
     f3CalLiveText: '',
-    f3CalTargetText: '',
-    f3CalWheelHint: '',
-    f3CalLimitHint: '',
     f3CalMedianText: '',
     f3CalResultText: '',
     f3CalStatusText: '',
     f3CalShowHoldModal: false,
-    f3CalShowVolatilityModal: false,
     f3CalTranslateX: 0,
     f3CalRulerTransition: 'none',
     f3CalTicks: [],
     f3CalPadTicks: [],
-    f3CalStepNo: 0,
-    f3CalStepTotal: 6,
-    f3CalPreflightClosing: false,
-    f3CalWriteDangerStatus: 'pending',
-    f3CalWriteBaseStatus: 'pending',
-    f3CalWriteDangerMm: '',
-    f3CalWriteBaseMm: '',
-    f3CalWriteOk: false,
-    f3CalWriteResultTitle: '',
-    f3CalWriteResultSub: '',
-    f3HeightWriteModalVisible: false,
-    f3HeightWriteModalPhase: '',
-    f3HeightWriteModalLabel: '',
-    f3HeightWriteModalMm: '',
-    f3HeightWriteModalHint: '',
     ...buildF2ServoSpeedUi(100),
     f2SpeedSliderWidth: 0,
     f2SpeedSliderLeft: 0,
     
-    // === 指示灯确认弹窗（调整按钮用）===
-    showIndicatorCheckModal: false,      // 是否显示指示灯检查弹窗
-    indicatorCheckModalClosing: false,   // 弹窗关闭动画状态
-    pendingSendData: null,               // 待发送的数据 { sendText, type }
-    hasShownSettingsIndicatorModal: false, // 🔴 标记是否已经显示过高级设置的指示灯弹窗（每次打开高级设置重置）
-    
-    // === 隐蔽模式相关 ===
-    showStealthTutorial: false, // 是否显示隐蔽模式教学
-    stealthTutorialMode: 'enter', // 教学模式：'enter'=进入, 'exit'=退出
-    
-    // === 出厂设置相关 ===
-    showFactoryResetModal: false, // 是否显示出厂设置弹窗
-    factoryResetStep: 0, // 当前步骤：0=打开收回, 1=开启自检, 2=开机上翻, 3=自动调平
+    // === 鎸囩ず鐏‘璁ゅ脊绐楋紙璋冩暣鎸夐挳鐢級===
+    showIndicatorCheckModal: false,      // 鏄惁鏄剧ず鎸囩ず鐏鏌ュ脊绐?    indicatorCheckModalClosing: false,   // 寮圭獥鍏抽棴鍔ㄧ敾鐘舵€?    pendingSendData: null,               // 寰呭彂閫佺殑鏁版嵁 { sendText, type }
+    hasShownSettingsIndicatorModal: false, // 馃敶 鏍囪鏄惁宸茬粡鏄剧ず杩囬珮绾ц缃殑鎸囩ず鐏脊绐楋紙姣忔鎵撳紑楂樼骇璁剧疆閲嶇疆锛?    
+    // === 闅愯斀妯″紡鐩稿叧 ===
+    showStealthTutorial: false, // 鏄惁鏄剧ず闅愯斀妯″紡鏁欏
+    stealthTutorialMode: 'enter', // 鏁欏妯″紡锛?enter'=杩涘叆, 'exit'=閫€鍑?    
+    // === 鍑哄巶璁剧疆鐩稿叧 ===
+    showFactoryResetModal: false, // 鏄惁鏄剧ず鍑哄巶璁剧疆寮圭獥
+    factoryResetStep: 0, // 褰撳墠姝ラ锛?=鎵撳紑鏀跺洖, 1=寮€鍚嚜妫€, 2=寮€鏈轰笂缈? 3=鑷姩璋冨钩
     factoryResetSteps: [
-      { text: '正在打开自动收回', data: '打开收回', sendTimes: 2, interval: 500, delayNext: 2000 },
-      { text: '正在开启自检', data: '开启自检', sendTimes: 2, interval: 500, delayNext: 2000 },
-      { text: '正在打开开机牌上翻', data: '开机上翻', sendTimes: 2, interval: 500, delayNext: 2000 },
-      { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true }
+      { text: '姝ｅ湪鎵撳紑鑷姩鏀跺洖', data: '鎵撳紑鏀跺洖', sendTimes: 2, interval: 500, delayNext: 2000 },
+      { text: '姝ｅ湪寮€鍚嚜妫€', data: '寮€鍚嚜妫€', sendTimes: 2, interval: 500, delayNext: 2000 },
+      { text: '姝ｅ湪鎵撳紑寮€鏈虹墝涓婄炕', data: '寮€鏈轰笂缈?, sendTimes: 2, interval: 500, delayNext: 2000 },
+      { text: '姝ｅ湪鑷姩璋冨钩锛岃鐢ㄦ墜杩涜闃绘尅', data: '鑷姩璋冨钩', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true }
     ],
-    stealthAnimPressing: false, // 按钮是否按下
-    stealthAnimLight: false,    // 灯光状态（用于闪烁）
-    stealthAnimText: '请在车把上\n长按按键 3 秒', // 提示文字
-    stealthAnimTextColor: 'black', // 文字颜色
-    stealthAnimTextScale: 1, // 文字缩放（用于动画）
-    stealthTutorialBtnDisabled: true, // 按钮是否禁用
-    stealthTutorialTimer: null, // 动画定时器
-    stealthBlinkInterval: null, // 闪烁定时器
-    stealthTextBlinkInterval: null, // 文字闪烁定时器（用于退出模式后5次）
+    stealthAnimPressing: false, // 鎸夐挳鏄惁鎸変笅
+    stealthAnimLight: false,    // 鐏厜鐘舵€侊紙鐢ㄤ簬闂儊锛?    stealthAnimText: '璇峰湪杞︽妸涓奬n闀挎寜鎸夐敭 3 绉?, // 鎻愮ず鏂囧瓧
+    stealthAnimTextColor: 'black', // 鏂囧瓧棰滆壊
+    stealthAnimTextScale: 1, // 鏂囧瓧缂╂斁锛堢敤浜庡姩鐢伙級
+    stealthTutorialBtnDisabled: true, // 鎸夐挳鏄惁绂佺敤
+    stealthTutorialTimer: null, // 鍔ㄧ敾瀹氭椂鍣?    stealthBlinkInterval: null, // 闂儊瀹氭椂鍣?    stealthTextBlinkInterval: null, // 鏂囧瓧闂儊瀹氭椂鍣紙鐢ㄤ簬閫€鍑烘ā寮忓悗5娆★級
   },
 
   onLoad(options) {
-    // 🔴 计算导航栏高度（适配所有机型）
+    // 馃敶 璁＄畻瀵艰埅鏍忛珮搴︼紙閫傞厤鎵€鏈夋満鍨嬶級
     this.calcNavBarInfo();
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('scan');
     }
     
-    // 初始化当前模型（支持从 products 兜底恢复到指定卡片）
+    // 鍒濆鍖栧綋鍓嶆ā鍨嬶紙鏀寔浠?products 鍏滃簳鎭㈠鍒版寚瀹氬崱鐗囷級
     this._scanPerfDebug = false;
     this._scanPerf = {
       moveEvents: 0,
@@ -1179,8 +1106,7 @@ Page({
       canLearnNumLeds: String(loadStoredNumLeds())
     });
     this.setData({ currentModel });
-    // 确保首屏状态：active/next/prev，且不循环
-    this.updateCardStatus(restoreIndex);
+    // 纭繚棣栧睆鐘舵€侊細active/next/prev锛屼笖涓嶅惊鐜?    this.updateCardStatus(restoreIndex);
     if (this._scanPerfDebug) {
       console.log('[scan-perf] onLoad init done', {
         restoreIndex,
@@ -1192,7 +1118,7 @@ Page({
     this.initScreenshotProtection();
     this._registerF2VoiceBridge();
     
-    // 重置跳转标记
+    // 閲嶇疆璺宠浆鏍囪
     this.setData({ isNavigatingToOta: false });
     
     this.ble.onConnecting = (device) => {
@@ -1208,8 +1134,7 @@ Page({
       const rawName = device.name || device.localName || '';
       const numMatch = rawName.replace(/[^0-9]/g, '');
       const finalName = numMatch ? `MT-ID:${numMatch}` : rawName;
-      // 物理链路已建立，但特征值尚未发现完毕，保持「正在连接」
-      this.setData({
+      // 鐗╃悊閾捐矾宸插缓绔嬶紝浣嗙壒寰佸€煎皻鏈彂鐜板畬姣曪紝淇濇寔銆屾鍦ㄨ繛鎺ャ€?      this.setData({
         isConnecting: true,
         isScanning: false,
         connectedDeviceName: finalName || this.data.connectedDeviceName
@@ -1225,14 +1150,15 @@ Page({
       this._bleReconnectStoppedByUser = false;
       this._clearBleReconnectTimers();
 
-      // 记录本次连接对应的机型卡片（避免滑走卡片后状态包被错误过滤）
-      this._bleSessionModel = this._bleStatusTargetModel();
+      // 鐗瑰緛鍊?notify 宸插氨缁紝椤诲湪鏍￠獙浜戝嚱鏁?OTA 涔嬪墠鎸備笂鐩戝惉锛屽惁鍒欓鍖呯姸鎬佷細涓㈠け
+      if (isF2MaxStatusBleModel(this.data.currentModel)) {
+        this._setupF2FaultBleListener();
+      }
 
       const numMatch = rawName.replace(/[^0-9]/g, '');
       const finalName = numMatch ? `MT-ID:${numMatch}` : rawName;
 
-      // 系统 BLE 已连通：先更新 UI，再挂 notify 回调（须 isConnected/GATT 就绪）
-      this._applyBleLinkUi({
+      // 绯荤粺 BLE 宸茶繛閫氾細鍏堟洿鏂?UI锛岄伩鍏嶄簯鍑芥暟/OTA 鏍￠獙鏈熼棿涓€鐩村崱鍦ㄣ€屾鍦ㄨ繛鎺ャ€?      this._applyBleLinkUi({
         isConnected: true,
         isScanning: false,
         isConnecting: false,
@@ -1241,7 +1167,6 @@ Page({
         connectedDeviceName: finalName,
         currentConnectedRawSn: normalizedSn || ''
       }, () => {
-        this._ensureF2StatusBleListener(true);
         this._scheduleRemoteStatePush();
         this._bleConnectGraceUntil = Date.now() + 8000;
         this._bleConnProbeFailStreak = 0;
@@ -1271,7 +1196,7 @@ Page({
         const hasOtaRecord = await this.checkOtaConnection(device.deviceId);
 
         if (!hasOtaRecord) {
-          console.log('❌ [onConnected] 设备未进行OTA升级，断开连接');
+          console.log('鉂?[onConnected] 璁惧鏈繘琛孫TA鍗囩骇锛屾柇寮€杩炴帴');
           this.ble.disconnect(true);
           this._applyBleLinkUi({
             isConnected: false,
@@ -1290,7 +1215,7 @@ Page({
         this._publishBleToVoiceBridge(true);
         this._flushPendingBleIntent();
       } catch (err) {
-        console.error('❌ [onConnected] 连接后校验失败', err);
+        console.error('鉂?[onConnected] 杩炴帴鍚庢牎楠屽け璐?, err);
         this.ble.disconnect(true);
         this._applyBleLinkUi({
           isConnected: false,
@@ -1298,7 +1223,7 @@ Page({
           isConnecting: false,
           isBleAutoReconnecting: false
         });
-        this._showCustomToast('连接校验失败，请重试', 'none', 2200);
+        this._showCustomToast('杩炴帴鏍￠獙澶辫触锛岃閲嶈瘯', 'none', 2200);
       }
     };
     this.ble.onConnectFailed = (err, device, opts) => {
@@ -1317,16 +1242,16 @@ Page({
     this.ble.onError = (err) => {
       this.setData({ isScanning: false, isConnecting: false });
       
-      // 🔴 处理蓝牙权限错误，使用自定义弹窗
+      // 馃敶 澶勭悊钃濈墮鏉冮檺閿欒锛屼娇鐢ㄨ嚜瀹氫箟寮圭獥
       if (err && err.type === 'auth_deny') {
         this._showCustomModal({
-          title: err.message || '蓝牙权限被拒绝',
-          content: err.detail || '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。',
+          title: err.message || '钃濈墮鏉冮檺琚嫆缁?,
+          content: err.detail || '璇峰湪绯荤粺璁剧疆涓紑鍚摑鐗欙紝骞跺厑璁稿皬绋嬪簭浣跨敤钃濈墮鍔熻兘銆?,
           showCancel: false,
-          confirmText: '知道了'
+          confirmText: '鐭ラ亾浜?
         });
       }
-      // 可以在这里做必要的错误上报或静默处理
+      // 鍙互鍦ㄨ繖閲屽仛蹇呰鐨勯敊璇笂鎶ユ垨闈欓粯澶勭悊
     };
     this.ble.onDisconnected = (meta) => {
       this._stopBleLinkWatch();
@@ -1354,41 +1279,37 @@ Page({
     this._bleSendDraining = false;
     this._openAngleFullSwipeTimes = [];
 
-    // 计算 px 比例 (CSS bar宽度6px + 间距14px = 20px)
-    // 🔴 获取状态栏高度（已在 onLoad 中设置过，这里无需重复声明 winInfo）
-    // 直接复用 onLoad 中写入的 statusBarHeight，避免重复声明变量
-    // const winInfo2 = wx.getWindowInfo();
+    // 璁＄畻 px 姣斾緥 (CSS bar瀹藉害6px + 闂磋窛14px = 20px)
+    // 馃敶 鑾峰彇鐘舵€佹爮楂樺害锛堝凡鍦?onLoad 涓缃繃锛岃繖閲屾棤闇€閲嶅澹版槑 winInfo锛?    // 鐩存帴澶嶇敤 onLoad 涓啓鍏ョ殑 statusBarHeight锛岄伩鍏嶉噸澶嶅０鏄庡彉閲?    // const winInfo2 = wx.getWindowInfo();
     // this.setData({ statusBarHeight: winInfo2.statusBarHeight || 44 });
     
     const sys = wx.getSystemInfoSync();
-    // 注意：CSS中使用的是px单位，所以直接计算px
-    this.tickWidthPx = 20; // 每个刻度总宽度20px
+    // 娉ㄦ剰锛欳SS涓娇鐢ㄧ殑鏄痯x鍗曚綅锛屾墍浠ョ洿鎺ヨ绠梡x
+    this.tickWidthPx = 20; // 姣忎釜鍒诲害鎬诲搴?0px
 
-    // 初始化位置 (根据当前机型)
+    // 鍒濆鍖栦綅缃?(鏍规嵁褰撳墠鏈哄瀷)
     const isF1Legacy = currentModel.name.includes('F1') && !isMtUltraCardModel(currentModel);
     this.maxAngle = isF1Legacy ? 180 : 170;
 
-    // 生成刻度数据
+    // 鐢熸垚鍒诲害鏁版嵁
     const count = (this.maxAngle - 0) / 2 + 1;
     const ticks = new Array(Math.floor(count)).fill(0);
     this.setData({ ticks });
 
-    // 强制更新一次视图到 0度
-    this.updateRuler(0, false);
+    // 寮哄埗鏇存柊涓€娆¤鍥惧埌 0搴?    this.updateRuler(0, false);
     
-    // 🔴 管理员检查延后到首帧后，避免首屏进入卡顿
+    // 馃敶 绠＄悊鍛樻鏌ュ欢鍚庡埌棣栧抚鍚庯紝閬垮厤棣栧睆杩涘叆鍗￠】
     setTimeout(() => {
       this.checkAdminPrivilege();
       this._refreshRemoteAssistCardFlags();
     }, 80);
   },
 
-  // ================== 管理员权限检查 ==================
+  // ================== 绠＄悊鍛樻潈闄愭鏌?==================
   async checkAdminPrivilege() {
     const ADMIN_CACHE_KEY = '__scan_admin_privilege_cache__';
-    const ADMIN_CACHE_TTL = 10 * 60 * 1000; // 10分钟缓存，减少反复进页请求
-
-    // 先用本地缓存秒回填，避免首屏等待云端查询
+    const ADMIN_CACHE_TTL = 10 * 60 * 1000; // 10鍒嗛挓缂撳瓨锛屽噺灏戝弽澶嶈繘椤佃姹?
+    // 鍏堢敤鏈湴缂撳瓨绉掑洖濉紝閬垮厤棣栧睆绛夊緟浜戠鏌ヨ
     try {
       const cache = wx.getStorageSync(ADMIN_CACHE_KEY);
       if (cache && typeof cache.isAdmin === 'boolean' && cache.ts && (Date.now() - cache.ts < ADMIN_CACHE_TTL)) {
@@ -1411,8 +1332,7 @@ Page({
       const myOpenid = res.result.openid;
       const db = wx.cloud.database();
       let adminCheck = await db.collection('guanliyuan').where({ openid: myOpenid }).get();
-      // 如果集合里并没有手动保存 openid 字段，则使用系统字段 _openid 再查一次
-      if (adminCheck.data.length === 0) {
+      // 濡傛灉闆嗗悎閲屽苟娌℃湁鎵嬪姩淇濆瓨 openid 瀛楁锛屽垯浣跨敤绯荤粺瀛楁 _openid 鍐嶆煡涓€娆?      if (adminCheck.data.length === 0) {
         adminCheck = await db.collection('guanliyuan').where({ _openid: myOpenid }).get();
       }
       if (adminCheck.data.length > 0) {
@@ -1425,23 +1345,22 @@ Page({
         try {
           wx.setStorageSync(ADMIN_CACHE_KEY, { isAdmin: true, ts: Date.now() });
         } catch (e) {}
-        console.log('[scan.js] 身份验证成功：合法管理员');
+        console.log('[scan.js] 韬唤楠岃瘉鎴愬姛锛氬悎娉曠鐞嗗憳');
       } else {
         this.setData({ isAdmin: false });
         try {
           wx.setStorageSync(ADMIN_CACHE_KEY, { isAdmin: false, ts: Date.now() });
         } catch (e) {}
-        console.log('[scan.js] 未在管理员白名单中');
+        console.log('[scan.js] 鏈湪绠＄悊鍛樼櫧鍚嶅崟涓?);
       }
     } catch (err) {
-      console.error('[scan.js] 权限检查失败', err);
-      // 请求失败时不强制改为 false，优先维持当前态，避免网络抖动导致权限闪烁
+      console.error('[scan.js] 鏉冮檺妫€鏌ュけ璐?, err);
+      // 璇锋眰澶辫触鏃朵笉寮哄埗鏀逛负 false锛屼紭鍏堢淮鎸佸綋鍓嶆€侊紝閬垮厤缃戠粶鎶栧姩瀵艰嚧鏉冮檺闂儊
     }
   },
 
   onShow() {
-    // 🔴 修复：从 OTA 页面返回后，按需关闭不应该显示的弹窗并恢复页面状态
-    // 只重置当前为 true 的状态，减少首帧 setData 负载
+    // 馃敶 淇锛氫粠 OTA 椤甸潰杩斿洖鍚庯紝鎸夐渶鍏抽棴涓嶅簲璇ユ樉绀虹殑寮圭獥骞舵仮澶嶉〉闈㈢姸鎬?    // 鍙噸缃綋鍓嶄负 true 鐨勭姸鎬侊紝鍑忓皯棣栧抚 setData 璐熻浇
     const resetPatch = {};
     const closeFlags = [
       'showPasswordModal',
@@ -1467,7 +1386,7 @@ Page({
       'calibratingModalClosing',
       'openAngleSendingModalClosing',
       'bluetoothAlertClosing',
-      // 兜底：防止 detail-touch-guard 偶发残留导致整页无法触摸
+      // 鍏滃簳锛氶槻姝?detail-touch-guard 鍋跺彂娈嬬暀瀵艰嚧鏁撮〉鏃犳硶瑙︽懜
       'blockDetailTouch',
       'locked'
     ];
@@ -1478,20 +1397,18 @@ Page({
       this.setData(resetPatch);
     }
     
-    // 确保页面处于正常状态（不是编辑模式，除非用户正在编辑）
-    // 如果当前在编辑模式，保持编辑模式；否则确保是主模式
-    if (this.data.detailMode === 'edit' && !this.data.currentModel) {
-      // 如果编辑模式但没有当前模型，可能是状态异常，重置为主模式
+    // 纭繚椤甸潰澶勪簬姝ｅ父鐘舵€侊紙涓嶆槸缂栬緫妯″紡锛岄櫎闈炵敤鎴锋鍦ㄧ紪杈戯級
+    // 濡傛灉褰撳墠鍦ㄧ紪杈戞ā寮忥紝淇濇寔缂栬緫妯″紡锛涘惁鍒欑‘淇濇槸涓绘ā寮?    if (this.data.detailMode === 'edit' && !this.data.currentModel) {
+      // 濡傛灉缂栬緫妯″紡浣嗘病鏈夊綋鍓嶆ā鍨嬶紝鍙兘鏄姸鎬佸紓甯革紝閲嶇疆涓轰富妯″紡
       this.setData({ detailMode: 'main' });
     }
     
-    // 🔴 如果高级设置弹窗是打开的，重新显示提示 Toast
+    // 馃敶 濡傛灉楂樼骇璁剧疆寮圭獥鏄墦寮€鐨勶紝閲嶆柊鏄剧ず鎻愮ず Toast
     if (this.data.showSettingsModal) {
       this.showToast();
     }
     
-    // 🔴 把非首屏关键任务延后，避免“点进控制中心卡一下”
-    setTimeout(() => {
+    // 馃敶 鎶婇潪棣栧睆鍏抽敭浠诲姟寤跺悗锛岄伩鍏嶁€滅偣杩涙帶鍒朵腑蹇冨崱涓€涓嬧€?    setTimeout(() => {
       const app = getApp();
       if (app && app.startQiangliCheck) {
         app.startQiangliCheck();
@@ -1509,12 +1426,9 @@ Page({
       }
     }, 120);
 
-    if (this.data.isConnected && !isF2MaxStatusBleModel(this._bleStatusTargetModel())) {
+    if (this.data.isConnected && !isF2MaxStatusBleModel(this.data.currentModel)) {
       this._tickBleLinkWatch();
       if (!this._bleLinkWatchTimer) this._startBleLinkWatch();
-    }
-    if (this._isBleLinked()) {
-      this._ensureF2StatusBleListener();
     }
 
     this._resumeRemoteAssistPollers();
@@ -1524,7 +1438,7 @@ Page({
       this._pollRemoteAssistPending();
     }
 
-    console.log('✅ [onShow] 页面状态已恢复');
+    console.log('鉁?[onShow] 椤甸潰鐘舵€佸凡鎭㈠');
   },
 
   initScreenshotProtection() {
@@ -1536,18 +1450,18 @@ Page({
       if (wx.setVisualEffectOnCapture) {
         wx.setVisualEffectOnCapture({
           visualEffect: 'hidden',
-          success: () => console.log('[scan] 🛡️ setVisualEffectOnCapture 已开启')
+          success: () => console.log('[scan] 馃洝锔?setVisualEffectOnCapture 宸插紑鍚?)
         });
       }
     } catch (e) {
-      console.warn('[scan] setVisualEffectOnCapture 不可用:', e);
+      console.warn('[scan] setVisualEffectOnCapture 涓嶅彲鐢?', e);
     }
 
     try {
       this._onCaptureScreenHandler = () => this.handleIntercept('screenshot');
       wx.onUserCaptureScreen(this._onCaptureScreenHandler);
     } catch (e) {
-      console.warn('[scan] onUserCaptureScreen 不可用:', e);
+      console.warn('[scan] onUserCaptureScreen 涓嶅彲鐢?', e);
     }
 
     try {
@@ -1556,7 +1470,7 @@ Page({
         wx.onUserScreenRecord(this._onScreenRecordHandler);
       }
     } catch (e) {
-      console.warn('[scan] onUserScreenRecord 不可用:', e);
+      console.warn('[scan] onUserScreenRecord 涓嶅彲鐢?', e);
     }
   },
 
@@ -1612,9 +1526,9 @@ Page({
           dailyCount: stats.dailyCount
         }
       });
-      console.log('[scan] 已上报截图风险待审核队列', stats);
+      console.log('[scan] 宸蹭笂鎶ユ埅鍥鹃闄╁緟瀹℃牳闃熷垪', stats);
     } catch (e) {
-      console.warn('[scan] 上报截图风险失败:', e);
+      console.warn('[scan] 涓婃姤鎴浘椋庨櫓澶辫触:', e);
     }
   },
 
@@ -1633,7 +1547,7 @@ Page({
         phoneModel: sysInfo.model || ''
       }
     }).catch((err) => {
-      console.error('[scan] 封禁云函数调用失败:', err);
+      console.error('[scan] 灏佺浜戝嚱鏁拌皟鐢ㄥけ璐?', err);
     });
     wx.reLaunch({ url: `/pages/blocked/blocked?type=${type === 'record' ? 'record' : 'screenshot'}` });
   },
@@ -1647,15 +1561,15 @@ Page({
     }
 
     const stats = this._recordScreenshotEvent();
-    // 截图发生即上报可疑队列，供管理员在“可疑人员处理”里手动无视/封禁
+    // 鎴浘鍙戠敓鍗充笂鎶ュ彲鐤戦槦鍒楋紝渚涚鐞嗗憳鍦ㄢ€滃彲鐤戜汉鍛樺鐞嗏€濋噷鎵嬪姩鏃犺/灏佺
     await this._reportScreenshotRisk(stats);
-    // 1小时内前2次允许，第3次起直接封禁
+    // 1灏忔椂鍐呭墠2娆″厑璁革紝绗?娆¤捣鐩存帴灏佺
     if (stats.hourlyCount > 2) {
       await this._banForCapture('screenshot');
       return;
     }
 
-    // 日累计信息仍更新在队列中，便于管理员判断风险程度
+    // 鏃ョ疮璁′俊鎭粛鏇存柊鍦ㄩ槦鍒椾腑锛屼究浜庣鐞嗗憳鍒ゆ柇椋庨櫓绋嬪害
     if (stats.dailyCount >= 3) return;
   },
 
@@ -1663,7 +1577,7 @@ Page({
     this._stopRemoteAssistPollers();
     this._stopF2DemoMode(false);
     this._clearF3CalTimer();
-    // 兜底：若详情主层被系统手势带走，记录恢复信息给 products onShow 使用
+    // 鍏滃簳锛氳嫢璇︽儏涓诲眰琚郴缁熸墜鍔垮甫璧帮紝璁板綍鎭㈠淇℃伅缁?products onShow 浣跨敤
     try {
       if (this.data.showDetail && this.data.detailMode === 'main') {
         wx.setStorageSync('__scan_recover_payload__', {
@@ -1673,8 +1587,7 @@ Page({
       }
     } catch (e) {}
 
-    // 🔴 停止定时检查
-    const app = getApp();
+    // 馃敶 鍋滄瀹氭椂妫€鏌?    const app = getApp();
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
     }
@@ -1687,22 +1600,19 @@ Page({
 
   onUnload() {
     this._clearF3CalTimer();
-    // 🔴 停止定时检查
-    const app = getApp();
+    // 馃敶 鍋滄瀹氭椂妫€鏌?    const app = getApp();
     if (app && app.stopQiangliCheck) {
       app.stopQiangliCheck();
     }
     
-    // 停止所有动画循环
-    this.stopTutorialLoop();
+    // 鍋滄鎵€鏈夊姩鐢诲惊鐜?    this.stopTutorialLoop();
     this.stopOpenAngleTutorialLoop();
     this.stopStealthAnim();
     if (this._detailBlockTimer) {
       clearTimeout(this._detailBlockTimer);
       this._detailBlockTimer = null;
     }
-    // 释放弹窗延迟定时器
-    if (this.modalDelayTimer) clearTimeout(this.modalDelayTimer);
+    // 閲婃斁寮圭獥寤惰繜瀹氭椂鍣?    if (this.modalDelayTimer) clearTimeout(this.modalDelayTimer);
     if (this._foldFineTuneHintTimer) {
       clearTimeout(this._foldFineTuneHintTimer);
       this._foldFineTuneHintTimer = null;
@@ -1723,7 +1633,7 @@ Page({
   preventBubble() { return; },
 
   // ===============================================
-  // 远程协助
+  // 杩滅▼鍗忓姪
   // ===============================================
   _getRemoteAssistModel() {
     if (this.data.showDetail && this.data.currentModel) {
@@ -1761,7 +1671,7 @@ Page({
       !!this.data.remoteAssistUserAccepted;
   },
 
-  /** 远协上报用：避免链路探测误报导致云端 bleConnected 闪断 */
+  /** 杩滃崗涓婃姤鐢細閬垮厤閾捐矾鎺㈡祴璇姤瀵艰嚧浜戠 bleConnected 闂柇 */
   _getRemoteAssistPushBleConnected() {
     if (this._isBleLinked()) {
       this._remoteAssistBlePushTrueAt = Date.now();
@@ -1775,7 +1685,7 @@ Page({
     return false;
   },
 
-  /** 技师端展示用：连续多次读到 false 才显示断开 */
+  /** 鎶€甯堢灞曠ず鐢細杩炵画澶氭璇诲埌 false 鎵嶆樉绀烘柇寮€ */
   _resolveAdminRemoteBleConnected(session) {
     const raw = !!(session && session.bleConnected);
     if (raw) {
@@ -1797,12 +1707,12 @@ Page({
 
   _remoteAssistLogLabel(status) {
     const map = {
-      sending: '发送中',
-      ok: '已送达',
-      fail: '送达失败',
-      enqueue_fail: '入队失败',
-      coalesced: '已合并',
-      timeout: '未收到回传'
+      sending: '鍙戦€佷腑',
+      ok: '宸查€佽揪',
+      fail: '閫佽揪澶辫触',
+      enqueue_fail: '鍏ラ槦澶辫触',
+      coalesced: '宸插悎骞?,
+      timeout: '鏈敹鍒板洖浼?
     };
     return map[status] || status;
   },
@@ -1823,7 +1733,7 @@ Page({
 
   _remoteAssistLogCmdMatch(logCmd, rawCmd) {
     if (!logCmd || !rawCmd) return false;
-    const base = String(logCmd).split(' ×')[0].trim();
+    const base = String(logCmd).split(' 脳')[0].trim();
     return base === rawCmd || logCmd === rawCmd;
   },
 
@@ -1903,8 +1813,7 @@ Page({
 
   _isBleLinked() {
     if (this.data.isConnected) return true;
-    // 兜底：胶囊已显示连接且 GATT 就绪时，避免 UI/逻辑标志短暂不同步
-    const ble = this.ble;
+    // 鍏滃簳锛氳兌鍥婂凡鏄剧ず杩炴帴涓?GATT 灏辩华鏃讹紝閬垮厤 UI/閫昏緫鏍囧織鐭殏涓嶅悓姝?    const ble = this.ble;
     const liveId = ble && ble.device && ble.device.deviceId;
     if (liveId && liveId === this._activeBleDeviceId && ble.serviceId && this._getBleWriteCharacteristicId()) {
       return true;
@@ -1912,8 +1821,7 @@ Page({
     return false;
   },
 
-  // 是否允许点击控制区、进入子页面等（管理员未连蓝牙也可操作 UI）
-  _canControlDevice() {
+  // 鏄惁鍏佽鐐瑰嚮鎺у埗鍖恒€佽繘鍏ュ瓙椤甸潰绛夛紙绠＄悊鍛樻湭杩炶摑鐗欎篃鍙搷浣?UI锛?  _canControlDevice() {
     if (this.data.isAdmin) return true;
     if (this._isRemoteAssistAdminActive()) return true;
     return this._isBleLinked();
@@ -2053,8 +1961,7 @@ Page({
       const productKey = saved.remoteAssistSessionProductKey || session.productKey || '';
       const userAccepted = !!saved.remoteAssistUserAccepted;
 
-      // 用户端：仅恢复「已同意且进行中」的会话，避免未点击就弹出远协界面
-      if (saved.remoteAssistRole === 'user') {
+      // 鐢ㄦ埛绔細浠呮仮澶嶃€屽凡鍚屾剰涓旇繘琛屼腑銆嶇殑浼氳瘽锛岄伩鍏嶆湭鐐瑰嚮灏卞脊鍑鸿繙鍗忕晫闈?      if (saved.remoteAssistRole === 'user') {
         if (!(session.status === 'active' && userAccepted)) {
           try { wx.removeStorageSync(REMOTE_ASSIST_STORAGE_KEY); } catch (e) { /* ignore */ }
           return;
@@ -2089,7 +1996,7 @@ Page({
         }
       });
     } catch (e) {
-      console.warn('[远协] 恢复会话失败', e);
+      console.warn('[杩滃崗] 鎭㈠浼氳瘽澶辫触', e);
     }
   },
 
@@ -2117,7 +2024,7 @@ Page({
         return;
       }
       if (!this._isBleWriteReady()) {
-        console.warn('[远协] 用户端蓝牙未就绪，无法发送:', cmd,
+        console.warn('[杩滃崗] 鐢ㄦ埛绔摑鐗欐湭灏辩华锛屾棤娉曞彂閫?', cmd,
           'isConnected=', this.data.isConnected,
           'device=', !!(this.ble && this.ble.device),
           'char=', !!(this.ble && (this.ble.characteristicId2 || this.ble.characteristicId)));
@@ -2128,7 +2035,7 @@ Page({
       for (let i = 0; i < times; i++) {
         this._enqueueBleSend(cmd, gap);
       }
-      if ((cmd === '打开' || cmd === '关闭') && isMtUltraCardModel(this.data.currentModel)) {
+      if ((cmd === '鎵撳紑' || cmd === '鍏抽棴') && isMtUltraCardModel(this.data.currentModel)) {
         this._setFlapPanelStateOptimistic(cmd);
       }
       this._waitBleSendQueueIdle(12000).then((ok) => {
@@ -2202,8 +2109,7 @@ Page({
     const ui = isAdminAssist ? false : connected;
     const patch = {};
     if (ui !== this.data.uiBleConnected) patch.uiBleConnected = ui;
-    // 已稳定连接时，强制清除重连/扫描 UI，避免与「已连接」叠在一起
-    if (connected) {
+    // 宸茬ǔ瀹氳繛鎺ユ椂锛屽己鍒舵竻闄ら噸杩?鎵弿 UI锛岄伩鍏嶄笌銆屽凡杩炴帴銆嶅彔鍦ㄤ竴璧?    if (connected) {
       if (this.data.isBleAutoReconnecting) patch.isBleAutoReconnecting = false;
       if (this.data.isScanning) patch.isScanning = false;
       if (this.data.isConnecting) patch.isConnecting = false;
@@ -2217,7 +2123,7 @@ Page({
 
   _applyBleLinkUi(patch, callback) {
     const merged = { ...patch };
-    const model = this._bleStatusTargetModel();
+    const model = this.data.currentModel;
     if (merged.isConnected !== undefined && isF2MaxStatusBleModel(model)) {
       Object.assign(merged, this._resetF2HwMonitorState(!!merged.isConnected, model));
     }
@@ -2231,9 +2137,6 @@ Page({
     }
     this.setData(merged, () => {
       this._syncUiBleConnected();
-      if (merged.isConnected) {
-        this._ensureF2StatusBleListener(true);
-      }
       if (callback) callback();
     });
   },
@@ -2255,9 +2158,9 @@ Page({
   _formatRemoteAssistSessionLabel(session) {
     if (!session) return '';
     const sn = session.deviceSn ||
-      (session.deviceState && session.deviceState.connectedDeviceName) || '未知设备';
-    const ble = session.bleConnected ? '已连蓝牙' : '未连蓝牙';
-    return `${sn} · ${ble}`;
+      (session.deviceState && session.deviceState.connectedDeviceName) || '鏈煡璁惧';
+    const ble = session.bleConnected ? '宸茶繛钃濈墮' : '鏈繛钃濈墮';
+    return `${sn} 路 ${ble}`;
   },
 
   _stopRemoteAssistPollers() {
@@ -2346,8 +2249,8 @@ Page({
         this.data.remoteAssistSessionProductKey === productKey) {
       if (this.data.remoteAssistSessionStatus === 'pending') {
         wx.showModal({
-          title: '取消远协',
-          content: '确定取消远程协助请求吗？',
+          title: '鍙栨秷杩滃崗',
+          content: '纭畾鍙栨秷杩滅▼鍗忓姪璇锋眰鍚楋紵',
           success: async (res) => {
             if (res.confirm) await this._endRemoteAssistSession('cancel');
           }
@@ -2357,7 +2260,7 @@ Page({
           this.setData({ remoteAssistConsentVisible: true });
           return;
         }
-        this._showCustomToast('协助进行中，可点下方结束', 'none', 2000);
+        this._showCustomToast('鍗忓姪杩涜涓紝鍙偣涓嬫柟缁撴潫', 'none', 2000);
       }
       return;
     }
@@ -2389,11 +2292,11 @@ Page({
       this._saveRemoteAssistLocal();
       wx.setKeepScreenOn({ keepScreenOn: true });
       this._startRemoteAssistUserPoll();
-      this._showCustomToast('已发起远程协助', 'success', 1800);
+      this._showCustomToast('宸插彂璧疯繙绋嬪崗鍔?, 'success', 1800);
     } catch (err) {
-      let msg = err.message || '发起失败';
+      let msg = err.message || '鍙戣捣澶辫触';
       if (msg.includes('FUNCTION_NOT_FOUND')) {
-        msg = '远协功能暂未开放(云函数未部署)';
+        msg = '杩滃崗鍔熻兘鏆傛湭寮€鏀?浜戝嚱鏁版湭閮ㄧ讲)';
       } else if (msg.length > 30) {
         msg = msg.substring(0, 30) + '...';
       }
@@ -2404,12 +2307,12 @@ Page({
   async onAdminRemoteAssistTap() {
     if (!this.data.isAdmin) return;
     if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) {
-      this._showCustomToast('已在远协中', 'none', 2000);
+      this._showCustomToast('宸插湪杩滃崗涓?, 'none', 2000);
       return;
     }
     const sessions = this.data.remoteAssistPendingSessions || [];
     if (!sessions.length) {
-      this._showCustomToast('暂无远协请求', 'none', 2000);
+      this._showCustomToast('鏆傛棤杩滃崗璇锋眰', 'none', 2000);
       await this._pollRemoteAssistPending();
       return;
     }
@@ -2438,7 +2341,7 @@ Page({
       const r = await callRemoteAssist({ action: 'accept', sessionId });
       this._enterRemoteAssistAdmin(r.session);
     } catch (err) {
-      this._showCustomToast(err.message || '接入失败', 'none', 2200);
+      this._showCustomToast(err.message || '鎺ュ叆澶辫触', 'none', 2200);
       this._pollRemoteAssistPending();
     }
   },
@@ -2544,7 +2447,7 @@ Page({
         return;
       }
 
-      // 技师已接入但用户尚未同意：只更新状态，不自动弹全屏确认
+      // 鎶€甯堝凡鎺ュ叆浣嗙敤鎴峰皻鏈悓鎰忥細鍙洿鏂扮姸鎬侊紝涓嶈嚜鍔ㄥ脊鍏ㄥ睆纭
       if (session.status === 'active' && !this.data.remoteAssistUserAccepted) {
         const wasPending = this.data.remoteAssistSessionStatus === 'pending';
         const patch = {};
@@ -2594,7 +2497,7 @@ Page({
               });
               acked = true;
             } catch (e) {
-              console.warn('[远协] ackCommand 失败', i + 1, e);
+              console.warn('[杩滃崗] ackCommand 澶辫触', i + 1, e);
               if (i < 2) await new Promise((r) => setTimeout(r, 180));
             }
           }
@@ -2609,7 +2512,7 @@ Page({
                 deviceState: collectDeviceState(this)
               });
             } catch (e) {
-              console.warn('[远协] pushState 回传执行结果失败', e);
+              console.warn('[杩滃崗] pushState 鍥炰紶鎵ц缁撴灉澶辫触', e);
             }
           }
         }
@@ -2620,7 +2523,7 @@ Page({
         await this._pushRemoteDeviceState(false);
       }
     } catch (e) {
-      console.warn('[远协] 用户端轮询失败', e);
+      console.warn('[杩滃崗] 鐢ㄦ埛绔疆璇㈠け璐?, e);
     } finally {
       this._remoteAssistUserPollBusy = false;
     }
@@ -2651,7 +2554,7 @@ Page({
         }
         if (!liveSession || liveSession.status === 'ended') {
           this._clearRemoteAssistLocal('ended');
-          this._showCustomToast('远协已结束', 'none', 2000);
+          this._showCustomToast('杩滃崗宸茬粨鏉?, 'none', 2000);
           return;
         }
         session = liveSession;
@@ -2677,7 +2580,7 @@ Page({
         this._syncUiBleConnected();
       });
     } catch (e) {
-      console.warn('[远协] 技师端轮询失败', e);
+      console.warn('[杩滃崗] 鎶€甯堢杞澶辫触', e);
     } finally {
       this._remoteAssistAdminPollBusy = false;
     }
@@ -2726,7 +2629,7 @@ Page({
         }
       });
     } catch (e) {
-      console.warn('[远协] pushState 失败', e);
+      console.warn('[杩滃崗] pushState 澶辫触', e);
     }
   },
 
@@ -2747,7 +2650,7 @@ Page({
     this._lastRemoteEnqueueMs = now;
 
     const pendingId = `pending_${now}`;
-    const cmdLabel = finalTimes > 1 ? `${text} ×${finalTimes}` : text;
+    const cmdLabel = finalTimes > 1 ? `${text} 脳${finalTimes}` : text;
     this._pushRemoteAssistDebugLog({
       id: pendingId,
       time: this._formatRemoteAssistLogTime(now),
@@ -2775,14 +2678,14 @@ Page({
       } else {
         this._patchRemoteAssistDebugLog(pendingId, { id: commandId });
       }
-      console.log('[远协] 指令已入队:', text, finalTimes, safeInterval);
+      console.log('[杩滃崗] 鎸囦护宸插叆闃?', text, finalTimes, safeInterval);
     } catch (err) {
-      console.warn('[远协] 入队失败', err);
+      console.warn('[杩滃崗] 鍏ラ槦澶辫触', err);
       this._patchRemoteAssistDebugLog(pendingId, {
         status: 'enqueue_fail',
         label: this._remoteAssistLogLabel('enqueue_fail')
       });
-      this._showCustomToast(err.message || '远协发送失败', 'none', 2200);
+      this._showCustomToast(err.message || '杩滃崗鍙戦€佸け璐?, 'none', 2200);
     }
   },
 
@@ -2797,7 +2700,7 @@ Page({
     }, () => {
       this._saveRemoteAssistLocal();
       wx.setKeepScreenOn({ keepScreenOn: true });
-      this._showCustomToast('已同意远程协助', 'success', 1500);
+      this._showCustomToast('宸插悓鎰忚繙绋嬪崗鍔?, 'success', 1500);
       if (!sessionId) return;
       callRemoteAssist({
         action: 'pushState',
@@ -2810,7 +2713,7 @@ Page({
           bleWriteReady: this._isBleWriteReady()
         }
       }).catch((e) => {
-        console.warn('[远协] 同步用户同意状态失败', e);
+        console.warn('[杩滃崗] 鍚屾鐢ㄦ埛鍚屾剰鐘舵€佸け璐?, e);
       });
       this._pushRemoteDeviceState(true);
     });
@@ -2824,15 +2727,15 @@ Page({
     if (this._endingRemoteAssist) return;
     this._endingRemoteAssist = true;
     const sessionId = this.data.remoteAssistSessionId;
-    // 先关本地遮罩，避免云函数失败时用户被困住
+    // 鍏堝叧鏈湴閬僵锛岄伩鍏嶄簯鍑芥暟澶辫触鏃剁敤鎴疯鍥颁綇
     this._clearRemoteAssistLocal('end');
     this._endingRemoteAssist = false;
     if (!sessionId) return;
     try {
       await callRemoteAssist({ action: 'end', sessionId });
     } catch (e) {
-      console.warn('[远协] 结束会话云端失败，本地已退出', e);
-      this._showCustomToast('已结束协助', 'none', 1800);
+      console.warn('[杩滃崗] 缁撴潫浼氳瘽浜戠澶辫触锛屾湰鍦板凡閫€鍑?, e);
+      this._showCustomToast('宸茬粨鏉熷崗鍔?, 'none', 1800);
     }
   },
 
@@ -2847,7 +2750,7 @@ Page({
     try {
       await callRemoteAssist({ action: act, sessionId });
     } catch (e) {
-      console.warn('[远协] 结束会话云端失败，本地已退出', e);
+      console.warn('[杩滃崗] 缁撴潫浼氳瘽浜戠澶辫触锛屾湰鍦板凡閫€鍑?, e);
     }
   },
 
@@ -2881,44 +2784,38 @@ Page({
   },
 
   // ===============================================
-  // 隐蔽模式教学逻辑
+  // 闅愯斀妯″紡鏁欏閫昏緫
   // ===============================================
   
-  // 1. 点击入口：显示教学弹窗（进入模式）
-  openStealthTutorial() {
+  // 1. 鐐瑰嚮鍏ュ彛锛氭樉绀烘暀瀛﹀脊绐楋紙杩涘叆妯″紡锛?  openStealthTutorial() {
     this.openStealthTutorialWithMode('enter');
   },
 
-  // 1-1. 显示退出隐蔽模式教学弹窗
-  openExitStealthTutorial() {
+  // 1-1. 鏄剧ず閫€鍑洪殣钄芥ā寮忔暀瀛﹀脊绐?  openExitStealthTutorial() {
     this.openStealthTutorialWithMode('exit');
   },
 
-  // 1-2. 通用打开教学弹窗函数
+  // 1-2. 閫氱敤鎵撳紑鏁欏寮圭獥鍑芥暟
   openStealthTutorialWithMode(mode) {
-    // 防止“点击进入控制台”后出现点击透传，误打开教学弹窗
+    // 闃叉鈥滅偣鍑昏繘鍏ユ帶鍒跺彴鈥濆悗鍑虹幇鐐瑰嚮閫忎紶锛岃鎵撳紑鏁欏寮圭獥
     if (Date.now() < (this._controlTapLockUntil || this.data.detailOpenGuardUntil || 0)) return;
     const isEnter = mode === 'enter';
-    // 步骤1：第一帧（初始状态）
+    // 姝ラ1锛氱涓€甯э紙鍒濆鐘舵€侊級
     this.setData({ 
       showStealthTutorial: true,
       stealthTutorialMode: mode,
-      stealthAnimPressing: false,  // 按钮：未按下
-      stealthAnimLight: false,     // 灯光：红色（不亮）
-      stealthAnimText: isEnter ? '请在车把上\n长按按键 3 秒' : '长按车把按钮\n8 秒',
-      stealthAnimTextColor: 'black', // 文字颜色：黑色
-      stealthAnimTextScale: 1, // 文字缩放：正常
-      stealthTutorialBtnDisabled: true // 按钮禁用
+      stealthAnimPressing: false,  // 鎸夐挳锛氭湭鎸変笅
+      stealthAnimLight: false,     // 鐏厜锛氱孩鑹诧紙涓嶄寒锛?      stealthAnimText: isEnter ? '璇峰湪杞︽妸涓奬n闀挎寜鎸夐敭 3 绉? : '闀挎寜杞︽妸鎸夐挳\n8 绉?,
+      stealthAnimTextColor: 'black', // 鏂囧瓧棰滆壊锛氶粦鑹?      stealthAnimTextScale: 1, // 鏂囧瓧缂╂斁锛氭甯?      stealthTutorialBtnDisabled: true // 鎸夐挳绂佺敤
     });
     
-    // 第一帧停留时间：进入模式5秒，退出模式2秒
-    const firstFrameDuration = isEnter ? 5000 : 2000;
+    // 绗竴甯у仠鐣欐椂闂达細杩涘叆妯″紡5绉掞紝閫€鍑烘ā寮?绉?    const firstFrameDuration = isEnter ? 5000 : 2000;
     setTimeout(() => {
       this.step2_ButtonPress();
     }, firstFrameDuration);
   },
 
-  // 2. 关闭教学弹窗
+  // 2. 鍏抽棴鏁欏寮圭獥
   closeStealthTutorial() {
     this.stopStealthAnim();
     this.setData({ 
@@ -2926,7 +2823,7 @@ Page({
       stealthTutorialMode: 'enter',
       stealthAnimPressing: false,
       stealthAnimLight: false,
-      stealthAnimText: '请在车把上\n长按按键 3 秒',
+      stealthAnimText: '璇峰湪杞︽妸涓奬n闀挎寜鎸夐敭 3 绉?,
       stealthAnimTextColor: 'black',
       stealthAnimTextScale: 1,
       stealthTutorialBtnDisabled: true
@@ -2934,20 +2831,17 @@ Page({
   },
 
   // ===============================================
-  // 🔴 出厂设置功能（F1 MAX / F2 PRO / F2 MAX 系列）
-  // ===============================================
+  // 馃敶 鍑哄巶璁剧疆鍔熻兘锛團1 MAX / F2 PRO / F2 MAX 绯诲垪锛?  // ===============================================
   handleFactoryReset() {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
-    console.log('🔧 [管理员] 点击出厂设置按钮');
+    console.log('馃敡 [绠＄悊鍛榏 鐐瑰嚮鍑哄巶璁剧疆鎸夐挳');
     
-    // 检查是否为管理员
-    if (!this.data.isAdmin) {
-      this._showCustomToast('需要管理员权限', 'none', 2000);
+    // 妫€鏌ユ槸鍚︿负绠＄悊鍛?    if (!this.data.isAdmin) {
+      this._showCustomToast('闇€瑕佺鐞嗗憳鏉冮檺', 'none', 2000);
       return;
     }
     
-    // 检查是否为支持出厂设置的机型
-    const currentModel = this.data.currentModel || {};
+    // 妫€鏌ユ槸鍚︿负鏀寔鍑哄巶璁剧疆鐨勬満鍨?    const currentModel = this.data.currentModel || {};
     const name = currentModel.name || '';
     const type = currentModel.type || '';
 
@@ -2959,19 +2853,17 @@ Page({
     const isSupported = isMtUltra || isF2MaxSeries || isF2ProSeries || isF1Max || isF1Pro;
     
     if (!isSupported) {
-      this._showCustomToast('仅支持 F1/F2/F3 已列出的出厂设置机型', 'none', 2000);
+      this._showCustomToast('浠呮敮鎸?F1/F2/F3 宸插垪鍑虹殑鍑哄巶璁剧疆鏈哄瀷', 'none', 2000);
       return;
     }
     
-    // 震动反馈
+    // 闇囧姩鍙嶉
     wx.vibrateShort({ type: 'light' });
     
-    // 开始出厂设置流程
-    this.startFactoryReset();
+    // 寮€濮嬪嚭鍘傝缃祦绋?    this.startFactoryReset();
   },
 
-  // 开始出厂设置流程
-  startFactoryReset() {
+  // 寮€濮嬪嚭鍘傝缃祦绋?  startFactoryReset() {
     const currentModel = this.data.currentModel || {};
     const name = currentModel.name || '';
     const type = currentModel.type || '';
@@ -2988,50 +2880,48 @@ Page({
     } else if (isMtUltraCardModel(currentModel)) {
       steps = F2_ULTRA_FACTORY_RESET_STEPS.slice();
     } else if (isF2MaxSeries) {
-      // F2 MAX / Long：原来的四步流程（最后一步带自动调平动画 + 确认键）
-      // 全程自动播放，用户只在最后一步点击确认结束
-      steps = [
-        { text: '正在打开自动收回', data: '打开收回', sendTimes: 2, interval: 500, delayNext: 2000 },
-        { text: '正在开启自检', data: '开启自检', sendTimes: 2, interval: 500, delayNext: 2000 },
-        { text: '正在打开开机牌上翻', data: '开机上翻', sendTimes: 2, interval: 500, delayNext: 2000 },
-        { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true, isFinal: true }
+      // F2 MAX / Long锛氬師鏉ョ殑鍥涙娴佺▼锛堟渶鍚庝竴姝ュ甫鑷姩璋冨钩鍔ㄧ敾 + 纭閿級
+      // 鍏ㄧ▼鑷姩鎾斁锛岀敤鎴峰彧鍦ㄦ渶鍚庝竴姝ョ偣鍑荤‘璁ょ粨鏉?      steps = [
+        { text: '姝ｅ湪鎵撳紑鑷姩鏀跺洖', data: '鎵撳紑鏀跺洖', sendTimes: 2, interval: 500, delayNext: 2000 },
+        { text: '姝ｅ湪寮€鍚嚜妫€', data: '寮€鍚嚜妫€', sendTimes: 2, interval: 500, delayNext: 2000 },
+        { text: '姝ｅ湪鎵撳紑寮€鏈虹墝涓婄炕', data: '寮€鏈轰笂缈?, sendTimes: 2, interval: 500, delayNext: 2000 },
+        { text: '姝ｅ湪鑷姩璋冨钩锛岃鐢ㄦ墜杩涜闃绘尅', data: '鑷姩璋冨钩', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true, isFinal: true }
       ];
     } else if (isF1Max) {
-      // F1 MAX：
-      // 在“初始化角度（折叠点归零）”之前，先设置“关机位置=收回”（发送“打开收回”）
-      // 之后再进入原有初始化流程，第一步仍需用户点击确认
+      // F1 MAX锛?      // 鍦ㄢ€滃垵濮嬪寲瑙掑害锛堟姌鍙犵偣褰掗浂锛夆€濅箣鍓嶏紝鍏堣缃€滃叧鏈轰綅缃?鏀跺洖鈥濓紙鍙戦€佲€滄墦寮€鏀跺洖鈥濓級
+      // 涔嬪悗鍐嶈繘鍏ュ師鏈夊垵濮嬪寲娴佺▼锛岀涓€姝ヤ粛闇€鐢ㄦ埛鐐瑰嚮纭
       steps = [
         {
-          text: '正在设置关机位置为收回',
-          data: '打开收回',
+          text: '姝ｅ湪璁剧疆鍏虫満浣嶇疆涓烘敹鍥?,
+          data: '鎵撳紑鏀跺洖',
           sendTimes: 2,
           interval: 500,
           delayNext: 2000
         },
         {
-          text: '初始化角度中',
-          data: '初始化角度',
+          text: '鍒濆鍖栬搴︿腑',
+          data: '鍒濆鍖栬搴?,
           sendTimes: 2,
           interval: 500,
-          delayNext: 0,          // 等待用户点击确认
+          delayNext: 0,          // 绛夊緟鐢ㄦ埛鐐瑰嚮纭
           showConfirm: true
         },
         {
-          text: '请长按按钮3秒',
+          text: '璇烽暱鎸夋寜閽?绉?,
           data: null,
           sendTimes: 0,
           interval: 0,
           delayNext: 3000
         },
         {
-          text: '断开细红线',
+          text: '鏂紑缁嗙孩绾?,
           data: null,
           sendTimes: 0,
           interval: 0,
           delayNext: 3000
         },
         {
-          text: '请观察主板是不是还继续亮灯',
+          text: '璇疯瀵熶富鏉挎槸涓嶆槸杩樼户缁寒鐏?,
           data: null,
           sendTimes: 0,
           interval: 0,
@@ -3040,34 +2930,32 @@ Page({
         }
       ];
     } else if (isF2ProSeries) {
-      // F2 PRO：
-      // 文案拆成多句，每句单独显示 3 秒，
-      // 第一步发送“初始化角度”，并且需要用户点击“确认”后才进入下一步
-      steps = [
+      // F2 PRO锛?      // 鏂囨鎷嗘垚澶氬彞锛屾瘡鍙ュ崟鐙樉绀?3 绉掞紝
+      // 绗竴姝ュ彂閫佲€滃垵濮嬪寲瑙掑害鈥濓紝骞朵笖闇€瑕佺敤鎴风偣鍑烩€滅‘璁も€濆悗鎵嶈繘鍏ヤ笅涓€姝?      steps = [
         { 
-          text: '初始化角度中',
-          data: '初始化角度',
+          text: '鍒濆鍖栬搴︿腑',
+          data: '鍒濆鍖栬搴?,
           sendTimes: 2,
           interval: 500,
-          delayNext: 0,          // 🔴 不自动跳到下一步，等待用户点击确认
-          showConfirm: true      // 初始化角度阶段也需要确认键
+          delayNext: 0,          // 馃敶 涓嶈嚜鍔ㄨ烦鍒颁笅涓€姝ワ紝绛夊緟鐢ㄦ埛鐐瑰嚮纭
+          showConfirm: true      // 鍒濆鍖栬搴﹂樁娈典篃闇€瑕佺‘璁ら敭
         },
         { 
-          text: '请长按按钮3秒',
+          text: '璇烽暱鎸夋寜閽?绉?,
           data: null,
           sendTimes: 0,
           interval: 0,
           delayNext: 3000
         },
         { 
-          text: '断开细红线',
+          text: '鏂紑缁嗙孩绾?,
           data: null,
           sendTimes: 0,
           interval: 0,
           delayNext: 3000
         },
         { 
-          text: '请观察主板是不是还继续亮灯',
+          text: '璇疯瀵熶富鏉挎槸涓嶆槸杩樼户缁寒鐏?,
           data: null,
           sendTimes: 0,
           interval: 0,
@@ -3076,11 +2964,10 @@ Page({
         }
       ];
     } else if (isF1Pro) {
-      // F1 PRO：只发送一次“初始化角度”，并立即显示带确认键
-      steps = [
+      // F1 PRO锛氬彧鍙戦€佷竴娆♀€滃垵濮嬪寲瑙掑害鈥濓紝骞剁珛鍗虫樉绀哄甫纭閿?      steps = [
         {
-          text: '初始化角度中',
-          data: '初始化角度',
+          text: '鍒濆鍖栬搴︿腑',
+          data: '鍒濆鍖栬搴?,
           sendTimes: 2,
           interval: 500,
           delayNext: 0,
@@ -3088,38 +2975,33 @@ Page({
         }
       ];
     } else {
-      // 兜底：使用默认步骤（不太可能走到这里）
-      steps = this.data.factoryResetSteps || [];
+      // 鍏滃簳锛氫娇鐢ㄩ粯璁ゆ楠わ紙涓嶅お鍙兘璧板埌杩欓噷锛?      steps = this.data.factoryResetSteps || [];
     }
 
-    // 重置步骤并显示弹窗
-    this.setData({
+    // 閲嶇疆姝ラ骞舵樉绀哄脊绐?    this.setData({
       showFactoryResetModal: true,
       factoryResetStep: 0,
       factoryResetSteps: steps
     });
 
-    // 执行所有步骤
-    this.executeFactoryResetStep(0);
+    // 鎵ц鎵€鏈夋楠?    this.executeFactoryResetStep(0);
   },
 
-  // 执行出厂设置步骤
+  // 鎵ц鍑哄巶璁剧疆姝ラ
   executeFactoryResetStep(stepIndex) {
-    // 如果用户已经手动中断（关闭弹窗），不再继续后续步骤
-    if (!this.data.showFactoryResetModal) {
-      console.log('⏹ [出厂设置] 弹窗已关闭，中断后续步骤');
+    // 濡傛灉鐢ㄦ埛宸茬粡鎵嬪姩涓柇锛堝叧闂脊绐楋級锛屼笉鍐嶇户缁悗缁楠?    if (!this.data.showFactoryResetModal) {
+      console.log('鈴?[鍑哄巶璁剧疆] 寮圭獥宸插叧闂紝涓柇鍚庣画姝ラ');
       return;
     }
     const steps = this.data.factoryResetSteps || [];
     if (stepIndex >= steps.length) {
-      // 所有步骤完成，保持弹窗显示，等待用户点击确认
-      console.log('✅ [出厂设置] 所有步骤完成');
+      // 鎵€鏈夋楠ゅ畬鎴愶紝淇濇寔寮圭獥鏄剧ず锛岀瓑寰呯敤鎴风偣鍑荤‘璁?      console.log('鉁?[鍑哄巶璁剧疆] 鎵€鏈夋楠ゅ畬鎴?);
       return;
     }
 
     const step = steps[stepIndex] || {};
     
-    // 更新当前步骤
+    // 鏇存柊褰撳墠姝ラ
     this.setData({
       factoryResetStep: stepIndex
     });
@@ -3134,158 +3016,137 @@ Page({
     const delayNext = step.delayNext != null ? step.delayNext : 2000;
 
     if (data) {
-      console.log(`📤 [出厂设置] 步骤 ${stepIndex + 1}: ${data}（连续${sendTimes}次，间隔${interval}ms）`);
+      console.log(`馃摛 [鍑哄巶璁剧疆] 姝ラ ${stepIndex + 1}: ${data}锛堣繛缁?{sendTimes}娆★紝闂撮殧${interval}ms锛塦);
       this.sendDataMultiple(data, sendTimes, interval);
     } else {
-      console.log(`ℹ️ [出厂设置] 步骤 ${stepIndex + 1}: 仅提示，无需发送数据`);
+      console.log(`鈩癸笍 [鍑哄巶璁剧疆] 姝ラ ${stepIndex + 1}: 浠呮彁绀猴紝鏃犻渶鍙戦€佹暟鎹甡);
     }
 
-    // 如果是 F1 MAX / F2 PRO 系列的第一步（需要确认），或标记为 isFinal 的步骤：
-    // 不自动进入下一步，等待用户点击“确认”
-    if (step.showConfirm || step.isFinal || delayNext <= 0 || stepIndex >= steps.length - 1) {
-      console.log('ℹ️ [出厂设置] 当前步骤等待用户确认或已是最后一步');
+    // 濡傛灉鏄?F1 MAX / F2 PRO 绯诲垪鐨勭涓€姝ワ紙闇€瑕佺‘璁わ級锛屾垨鏍囪涓?isFinal 鐨勬楠わ細
+    // 涓嶈嚜鍔ㄨ繘鍏ヤ笅涓€姝ワ紝绛夊緟鐢ㄦ埛鐐瑰嚮鈥滅‘璁も€?    if (step.showConfirm || step.isFinal || delayNext <= 0 || stepIndex >= steps.length - 1) {
+      console.log('鈩癸笍 [鍑哄巶璁剧疆] 褰撳墠姝ラ绛夊緟鐢ㄦ埛纭鎴栧凡鏄渶鍚庝竴姝?);
       return;
     }
 
-    // 其他步骤：延迟后自动执行下一步
-    setTimeout(() => {
+    // 鍏朵粬姝ラ锛氬欢杩熷悗鑷姩鎵ц涓嬩竴姝?    setTimeout(() => {
       this.executeFactoryResetStep(stepIndex + 1);
     }, delayNext);
   },
 
-  // 确认出厂设置完成
+  // 纭鍑哄巶璁剧疆瀹屾垚
   confirmFactoryReset() {
     const steps = this.data.factoryResetSteps || [];
     const currentIndex = this.data.factoryResetStep || 0;
     const currentStep = steps[currentIndex] || {};
 
-    // 如果是最终步骤（isFinal），点击确认关闭弹窗
+    // 濡傛灉鏄渶缁堟楠わ紙isFinal锛夛紝鐐瑰嚮纭鍏抽棴寮圭獥
     if (currentStep.isFinal || currentIndex >= steps.length - 1) {
       this.setData({
         showFactoryResetModal: false,
         factoryResetStep: 0
       });
-      console.log('✅ [出厂设置] 用户确认完成，关闭弹窗');
+      console.log('鉁?[鍑哄巶璁剧疆] 鐢ㄦ埛纭瀹屾垚锛屽叧闂脊绐?);
       return;
     }
 
-    // 其他带确认键的步骤（例如：初始化角度中）：
-    // 点击确认后进入下一步
-    const nextIndex = currentIndex + 1;
-    console.log(`ℹ️ [出厂设置] 用户确认步骤 ${currentIndex + 1}，进入步骤 ${nextIndex + 1}`);
+    // 鍏朵粬甯︾‘璁ら敭鐨勬楠わ紙渚嬪锛氬垵濮嬪寲瑙掑害涓級锛?    // 鐐瑰嚮纭鍚庤繘鍏ヤ笅涓€姝?    const nextIndex = currentIndex + 1;
+    console.log(`鈩癸笍 [鍑哄巶璁剧疆] 鐢ㄦ埛纭姝ラ ${currentIndex + 1}锛岃繘鍏ユ楠?${nextIndex + 1}`);
     this.executeFactoryResetStep(nextIndex);
   },
 
-  // 🔴 新增：用户主动中断出厂设置（右上角 X）
-  cancelFactoryReset() {
-    console.log('⏹ [出厂设置] 用户点击关闭，立即中断所有步骤');
+  // 馃敶 鏂板锛氱敤鎴蜂富鍔ㄤ腑鏂嚭鍘傝缃紙鍙充笂瑙?X锛?  cancelFactoryReset() {
+    console.log('鈴?[鍑哄巶璁剧疆] 鐢ㄦ埛鐐瑰嚮鍏抽棴锛岀珛鍗充腑鏂墍鏈夋楠?);
     this.setData({
       showFactoryResetModal: false,
       factoryResetStep: 0
     });
-    // 不需要额外清理定时器：executeFactoryResetStep 会在下次检查到 showFactoryResetModal=false 后自动停止
-  },
+    // 涓嶉渶瑕侀澶栨竻鐞嗗畾鏃跺櫒锛歟xecuteFactoryResetStep 浼氬湪涓嬫妫€鏌ュ埌 showFactoryResetModal=false 鍚庤嚜鍔ㄥ仠姝?  },
 
-  // 步骤2：按钮按下
-  step2_ButtonPress() {
+  // 姝ラ2锛氭寜閽寜涓?  step2_ButtonPress() {
     this.stopStealthAnim();
     
     const isEnter = this.data.stealthTutorialMode === 'enter';
-    const pressDuration = isEnter ? 3000 : 8000; // 进入3秒，退出8秒
-    const pressText = isEnter ? '长按按钮3秒' : '长按车把按钮8秒';
+    const pressDuration = isEnter ? 3000 : 8000; // 杩涘叆3绉掞紝閫€鍑?绉?    const pressText = isEnter ? '闀挎寜鎸夐挳3绉? : '闀挎寜杞︽妸鎸夐挳8绉?;
     
     this.setData({
-      stealthAnimPressing: true,  // 按钮：按下
-      stealthAnimLight: true,     // 灯光：红色（亮）
+      stealthAnimPressing: true,  // 鎸夐挳锛氭寜涓?      stealthAnimLight: true,     // 鐏厜锛氱孩鑹诧紙浜級
       stealthAnimText: pressText
     });
     
-    // 根据模式使用不同的时间后进入步骤4（闪烁）
+    // 鏍规嵁妯″紡浣跨敤涓嶅悓鐨勬椂闂村悗杩涘叆姝ラ4锛堥棯鐑侊級
     this.stealthTutorialTimer = setTimeout(() => {
       this.step4_StartBlinking();
     }, pressDuration);
   },
 
-  // 步骤4：灯闪烁
+  // 姝ラ4锛氱伅闂儊
   step4_StartBlinking() {
     const isEnter = this.data.stealthTutorialMode === 'enter';
-    const blinkTimes = isEnter ? 3 : 5; // 进入闪烁3次，退出闪烁5次
-    const totalBlinks = blinkTimes * 2; // 每次闪烁需要2次切换（亮→灭）
-    const blinkInterval = isEnter ? 200 : 500; // 进入0.2秒，退出0.5秒
-    const halfPoint = isEnter ? 3 : 5; // 闪烁一半的点：进入3次切换，退出5次切换
-    
-    // 按钮回到第一帧状态，设置闪烁文字
+    const blinkTimes = isEnter ? 3 : 5; // 杩涘叆闂儊3娆★紝閫€鍑洪棯鐑?娆?    const totalBlinks = blinkTimes * 2; // 姣忔闂儊闇€瑕?娆″垏鎹紙浜啋鐏級
+    const blinkInterval = isEnter ? 200 : 500; // 杩涘叆0.2绉掞紝閫€鍑?.5绉?    const halfPoint = isEnter ? 3 : 5; // 闂儊涓€鍗婄殑鐐癸細杩涘叆3娆″垏鎹紝閫€鍑?娆″垏鎹?    
+    // 鎸夐挳鍥炲埌绗竴甯х姸鎬侊紝璁剧疆闂儊鏂囧瓧
     this.setData({
-      stealthAnimPressing: false, // 按钮：未按下（回到第一帧）
-      stealthAnimLight: false,     // 灯光：红色（不亮）
-      stealthAnimText: `按钮闪烁${blinkTimes}次`
+      stealthAnimPressing: false, // 鎸夐挳锛氭湭鎸変笅锛堝洖鍒扮涓€甯э級
+      stealthAnimLight: false,     // 鐏厜锛氱孩鑹诧紙涓嶄寒锛?      stealthAnimText: `鎸夐挳闂儊${blinkTimes}娆
     });
     
     let blinkCount = 0;
     
-    // 灯光闪烁定时器（一直保持0.5秒间隔）
+    // 鐏厜闂儊瀹氭椂鍣紙涓€鐩翠繚鎸?.5绉掗棿闅旓級
     this.stealthBlinkInterval = setInterval(() => {
       blinkCount++;
       
-      // 切换灯光状态
-      this.setData({ 
+      // 鍒囨崲鐏厜鐘舵€?      this.setData({ 
         stealthAnimLight: !this.data.stealthAnimLight 
       });
       
-      // 退出模式：闪烁一半时，文字改成红色"请松开手指！！"，并开始文字闪烁
-      if (!isEnter && blinkCount === halfPoint) {
+      // 閫€鍑烘ā寮忥細闂儊涓€鍗婃椂锛屾枃瀛楁敼鎴愮孩鑹?璇锋澗寮€鎵嬫寚锛侊紒"锛屽苟寮€濮嬫枃瀛楅棯鐑?      if (!isEnter && blinkCount === halfPoint) {
         this.setData({
-          stealthAnimText: '请松开手指！！',
+          stealthAnimText: '璇锋澗寮€鎵嬫寚锛侊紒',
           stealthAnimTextColor: 'red'
         });
-        // 开始文字闪烁（爆闪，0.1秒间隔）
+        // 寮€濮嬫枃瀛楅棯鐑侊紙鐖嗛棯锛?.1绉掗棿闅旓級
         this.stealthTextBlinkInterval = setInterval(() => {
           this.setData({
             stealthAnimTextColor: this.data.stealthAnimTextColor === 'red' ? 'transparent' : 'red'
           });
-        }, 100); // 文字闪烁间隔0.1秒
-      }
+        }, 100); // 鏂囧瓧闂儊闂撮殧0.1绉?      }
       
-      // 闪烁完成后
-      if (blinkCount >= totalBlinks) {
+      // 闂儊瀹屾垚鍚?      if (blinkCount >= totalBlinks) {
         clearInterval(this.stealthBlinkInterval);
         this.stealthBlinkInterval = null;
-        // 停止文字闪烁
+        // 鍋滄鏂囧瓧闂儊
         if (this.stealthTextBlinkInterval) {
           clearInterval(this.stealthTextBlinkInterval);
           this.stealthTextBlinkInterval = null;
         }
-        // 恢复文字颜色为红色
-        if (!isEnter) {
+        // 鎭㈠鏂囧瓧棰滆壊涓虹孩鑹?        if (!isEnter) {
           this.setData({
             stealthAnimTextColor: 'red'
           });
         }
-        // 步骤5：闪烁完成
-        this.step5_Complete();
+        // 姝ラ5锛氶棯鐑佸畬鎴?        this.step5_Complete();
       }
     }, blinkInterval);
   },
 
-  // 步骤5：闪烁完成
-  step5_Complete() {
+  // 姝ラ5锛氶棯鐑佸畬鎴?  step5_Complete() {
     const isEnter = this.data.stealthTutorialMode === 'enter';
     
     this.setData({
-      stealthAnimPressing: false, // 按钮：未按下
-      stealthAnimLight: false,    // 灯光：红色（不亮）
-      stealthAnimText: isEnter ? '已进入隐蔽模式' : '此时退出',
-      stealthAnimTextColor: 'black', // 保持黑色
-      stealthAnimTextScale: 1 // 正常大小
+      stealthAnimPressing: false, // 鎸夐挳锛氭湭鎸変笅
+      stealthAnimLight: false,    // 鐏厜锛氱孩鑹诧紙涓嶄寒锛?      stealthAnimText: isEnter ? '宸茶繘鍏ラ殣钄芥ā寮? : '姝ゆ椂閫€鍑?,
+      stealthAnimTextColor: 'black', // 淇濇寔榛戣壊
+      stealthAnimTextScale: 1 // 姝ｅ父澶у皬
     });
     
     if (isEnter) {
-      // 进入模式：3秒后进入步骤6（警告）
+      // 杩涘叆妯″紡锛?绉掑悗杩涘叆姝ラ6锛堣鍛婏級
       this.stealthTutorialTimer = setTimeout(() => {
         this.step6_Warning();
       }, 3000);
     } else {
-      // 退出模式：4秒后直接启用按钮
+      // 閫€鍑烘ā寮忥細4绉掑悗鐩存帴鍚敤鎸夐挳
       this.stealthTutorialTimer = setTimeout(() => {
         this.setData({
           stealthTutorialBtnDisabled: false
@@ -3294,46 +3155,41 @@ Page({
     }
   },
 
-  // 步骤6：警告提示（红色文字，放大缩小2次）
+  // 姝ラ6锛氳鍛婃彁绀猴紙绾㈣壊鏂囧瓧锛屾斁澶х缉灏?娆★級
   step6_Warning() {
-    // 更新文字为警告，颜色改为红色
+    // 鏇存柊鏂囧瓧涓鸿鍛婏紝棰滆壊鏀逛负绾㈣壊
     this.setData({
-      stealthAnimText: '请注意\n不能开启该模式长时间停放！！',
+      stealthAnimText: '璇锋敞鎰廫n涓嶈兘寮€鍚妯″紡闀挎椂闂村仠鏀撅紒锛?,
       stealthAnimTextColor: 'red'
     });
     
-    // 放大缩小动画（2次）
+    // 鏀惧ぇ缂╁皬鍔ㄧ敾锛?娆★級
     let scaleCount = 0;
     const animateScale = () => {
-      // 放大到1.2倍
-      this.setData({ stealthAnimTextScale: 1.2 });
+      // 鏀惧ぇ鍒?.2鍊?      this.setData({ stealthAnimTextScale: 1.2 });
       
       setTimeout(() => {
-        // 缩小回1倍
-        this.setData({ stealthAnimTextScale: 1 });
+        // 缂╁皬鍥?鍊?        this.setData({ stealthAnimTextScale: 1 });
         scaleCount++;
         
         if (scaleCount < 2) {
-          // 如果还没完成2次，继续下一次
-          setTimeout(() => {
+          // 濡傛灉杩樻病瀹屾垚2娆★紝缁х画涓嬩竴娆?          setTimeout(() => {
             animateScale();
-          }, 300); // 间隔300ms
+          }, 300); // 闂撮殧300ms
         } else {
-          // 动画完成，启用按钮
-          this.setData({
+          // 鍔ㄧ敾瀹屾垚锛屽惎鐢ㄦ寜閽?          this.setData({
             stealthTutorialBtnDisabled: false
           });
         }
-      }, 300); // 放大持续时间300ms
+      }, 300); // 鏀惧ぇ鎸佺画鏃堕棿300ms
     };
     
-    // 开始第一次动画
-    setTimeout(() => {
+    // 寮€濮嬬涓€娆″姩鐢?    setTimeout(() => {
       animateScale();
     }, 200);
   },
 
-  // 停止动画
+  // 鍋滄鍔ㄧ敾
   stopStealthAnim() {
     if (this.stealthTutorialTimer) {
       clearTimeout(this.stealthTutorialTimer);
@@ -3350,16 +3206,16 @@ Page({
   },
 
   // ===============================================
-  // 【新增】弹窗防误触核心逻辑
+  // 銆愭柊澧炪€戝脊绐楅槻璇Е鏍稿績閫昏緫
   // ===============================================
   setModalDelay() {
-    // 1. 立即锁定
+    // 1. 绔嬪嵆閿佸畾
     this.setData({ modalBtnDisabled: true });
     
-    // 2. 清除旧定时器 (防止频繁触发冲突)
+    // 2. 娓呴櫎鏃у畾鏃跺櫒 (闃叉棰戠箒瑙﹀彂鍐茬獊)
     if (this.modalDelayTimer) clearTimeout(this.modalDelayTimer);
 
-    // 3. 1.5 秒后解锁
+    // 3. 1.5 绉掑悗瑙ｉ攣
     this.modalDelayTimer = setTimeout(() => {
       this.setData({ modalBtnDisabled: false });
     }, 1500);
@@ -3420,7 +3276,7 @@ Page({
       null;
     const productModel = this.scanModelToProductModel(model);
     if (!productModel) {
-      console.warn('[scan] 无法解析产品型号，跳过绑定弹窗', model);
+      console.warn('[scan] 鏃犳硶瑙ｆ瀽浜у搧鍨嬪彿锛岃烦杩囩粦瀹氬脊绐?, model);
       return;
     }
 
@@ -3483,17 +3339,17 @@ Page({
     this.closeAdminSnModal();
   },
 
-  /** 已绑定其他型号时：沿用原绑定，不随当前卡片改型号 */
+  /** 宸茬粦瀹氬叾浠栧瀷鍙锋椂锛氭部鐢ㄥ師缁戝畾锛屼笉闅忓綋鍓嶅崱鐗囨敼鍨嬪彿 */
   confirmAdminSnKeepBinding() {
     if (this.data.adminSnRegisterSubmitting) return;
     const sn = this.data.currentConnectedRawSn || this.data.adminSnModalSn;
     const model = this.data.adminSnModalExistingModel || this.data.adminRegisteredModel;
     if (sn) this._markAdminDeviceRegistered(sn, model);
     this.closeAdminSnModal();
-    this._showCustomToast(`已沿用 ${model || '原'} 绑定`, 'none', 2000);
+    this._showCustomToast(`宸叉部鐢?${model || '鍘?} 缁戝畾`, 'none', 2000);
   },
 
-  /** 型号不一致：切换为当前卡片型号 */
+  /** 鍨嬪彿涓嶄竴鑷达細鍒囨崲涓哄綋鍓嶅崱鐗囧瀷鍙?*/
   confirmAdminSnSwitchBinding() {
     if (this.data.adminSnRegisterSubmitting) return;
     const target = this.data.adminSnModalTargetModel;
@@ -3532,8 +3388,7 @@ Page({
     const sn = currentConnectedRawSn || adminSnModalSn;
     if (!sn || !productModel) return;
 
-    // 已选售后工单：走换机 SN 替换（继承质保，旧机报废）
-    if (adminSelectedRepairId) {
+    // 宸查€夊敭鍚庡伐鍗曪細璧版崲鏈?SN 鏇挎崲锛堢户鎵胯川淇濓紝鏃ф満鎶ュ簾锛?    if (adminSelectedRepairId) {
       await this._completeDeviceReplacementIfNeeded(sn, productModel);
       return;
     }
@@ -3556,15 +3411,15 @@ Page({
       const r = res.result || {};
       if (r.success) {
         this._markAdminDeviceRegistered(sn, productModel);
-        this._showCustomToast(r.msg || '绑定成功', 'success', 2000);
+        this._showCustomToast(r.msg || '缁戝畾鎴愬姛', 'success', 2000);
         this.closeAdminSnModal();
       } else {
-        this._showCustomToast(r.msg || '操作失败', 'none', 2500);
+        this._showCustomToast(r.msg || '鎿嶄綔澶辫触', 'none', 2500);
         this.setData({ adminSnRegisterSubmitting: false });
       }
     } catch (err) {
       console.error('[scan] adminRegisterSn register failed', err);
-      this._showCustomToast('网络异常，请重试', 'none', 2500);
+      this._showCustomToast('缃戠粶寮傚父锛岃閲嶈瘯', 'none', 2500);
       this.setData({ adminSnRegisterSubmitting: false });
     }
   },
@@ -3579,27 +3434,26 @@ Page({
   },
 
   // ===============================================
-  // 蓝牙连接交互 (修改版)
+  // 钃濈墮杩炴帴浜や簰 (淇敼鐗?
   // ===============================================
   async handleConnect() {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
 
-    // 自动重连中：点击胶囊 → 停止重连并立即进入手动扫描（无需再点第二次）
+    // 鑷姩閲嶈繛涓細鐐瑰嚮鑳跺泭 鈫?鍋滄閲嶈繛骞剁珛鍗宠繘鍏ユ墜鍔ㄦ壂鎻忥紙鏃犻渶鍐嶇偣绗簩娆★級
     if (this.data.isBleAutoReconnecting) {
       this.stopBleAutoReconnect(false, true);
     }
 
-    // 防止重复点击：如果已连接、正在连接、正在跳转到OTA页面，则直接返回
+    // 闃叉閲嶅鐐瑰嚮锛氬鏋滃凡杩炴帴銆佹鍦ㄨ繛鎺ャ€佹鍦ㄨ烦杞埌OTA椤甸潰锛屽垯鐩存帴杩斿洖
     if (this.data.remoteAssistCapsuleActive) {
-      this._showCustomToast('远协中，请通过上方结束远协', 'none', 2000);
+      this._showCustomToast('杩滃崗涓紝璇烽€氳繃涓婃柟缁撴潫杩滃崗', 'none', 2000);
       return;
     }
     if (this.data.isConnected || this.data.isConnecting || this.data.isNavigatingToOta) {
       return;
     }
 
-    // 用户主动连接：扫描期间不自动重连上一台设备，避免换机后仍卡在「正在重连」
-    this._bleReconnectStoppedByUser = true;
+    // 鐢ㄦ埛涓诲姩杩炴帴锛氭壂鎻忔湡闂翠笉鑷姩閲嶈繛涓婁竴鍙拌澶囷紝閬垮厤鎹㈡満鍚庝粛鍗″湪銆屾鍦ㄩ噸杩炪€?    this._bleReconnectStoppedByUser = true;
     this._clearBleReconnectTimers();
     this._startBleScanSession();
   },
@@ -3612,7 +3466,7 @@ Page({
 
     const isAutoReconnect = !!this.data.isBleAutoReconnecting;
 
-    // 自动重连时跳过「靠近车辆」提示，立即扫描
+    // 鑷姩閲嶈繛鏃惰烦杩囥€岄潬杩戣溅杈嗐€嶆彁绀猴紝绔嬪嵆鎵弿
     if (!isAutoReconnect) {
       this.setData({ showApproachTip: true });
       setTimeout(() => { this.setData({ showApproachTip: false }); }, 2000);
@@ -3620,8 +3474,7 @@ Page({
 
     this.setData({ isScanning: true, isConnecting: false });
 
-    // 3. 初始化蓝牙适配器
-    this.ble.initBluetoothAdapter()
+    // 3. 鍒濆鍖栬摑鐗欓€傞厤鍣?    this.ble.initBluetoothAdapter()
       .then(() => { 
         this.ble.startScan(); 
         
@@ -3640,7 +3493,7 @@ Page({
         }, isAutoReconnect ? 8000 : 15000);
       })
       .catch((err) => {
-        console.error("蓝牙初始化失败", err);
+        console.error("钃濈墮鍒濆鍖栧け璐?, err);
         
         this.setData({ 
           isScanning: false,
@@ -3665,7 +3518,7 @@ Page({
       bleReconnectAttempt: 0
     });
     if (showTip) {
-      this._showCustomToast('已停止重连', 'none', 1500);
+      this._showCustomToast('宸插仠姝㈤噸杩?, 'none', 1500);
     }
   },
 
@@ -3756,7 +3609,7 @@ Page({
       });
       const r = res.result || {};
       if (r.success && r.ok === false) {
-        this._showCustomToast(r.msg || '该设备不可用', 'none', 2800);
+        this._showCustomToast(r.msg || '璇ヨ澶囦笉鍙敤', 'none', 2800);
         return false;
       }
       return true;
@@ -3823,7 +3676,7 @@ Page({
   confirmAdminRepairPick() {
     const { adminSelectedRepairId, adminSelectedRepair } = this.data;
     if (!adminSelectedRepairId || !adminSelectedRepair) {
-      this._showCustomToast('请选择售后工单', 'none', 2000);
+      this._showCustomToast('璇烽€夋嫨鍞悗宸ュ崟', 'none', 2000);
       return;
     }
     const pendingSn = this._pendingAdminSnAfterRepair;
@@ -3867,16 +3720,16 @@ Page({
           adminSelectedRepairId: '',
           adminSelectedRepair: null
         });
-        this._showCustomToast(r.msg || '换机完成，用户 SN 已更新', 'success', 2500);
+        this._showCustomToast(r.msg || '鎹㈡満瀹屾垚锛岀敤鎴?SN 宸叉洿鏂?, 'success', 2500);
         this.closeAdminSnModal();
         return true;
       }
-      this._showCustomToast(r.msg || '换机失败', 'none', 2800);
+      this._showCustomToast(r.msg || '鎹㈡満澶辫触', 'none', 2800);
       this.setData({ adminSnRegisterSubmitting: false });
       return false;
     } catch (err) {
       console.error('[scan] complete replacement failed', err);
-      this._showCustomToast('换机失败，请重试', 'none', 2500);
+      this._showCustomToast('鎹㈡満澶辫触锛岃閲嶈瘯', 'none', 2500);
       this.setData({ adminSnRegisterSubmitting: false });
       return false;
     }
@@ -3898,10 +3751,9 @@ Page({
     }
   },
 
-  // 新增：关闭蓝牙提示弹窗（带收缩退出动画）
+  // 鏂板锛氬叧闂摑鐗欐彁绀哄脊绐楋紙甯︽敹缂╅€€鍑哄姩鐢伙級
   closeBluetoothAlert() {
-    if (this.data.modalBtnDisabled) return; // 防误触：还在锁定中
-    this.setData({ bluetoothAlertClosing: true });
+    if (this.data.modalBtnDisabled) return; // 闃茶瑙︼細杩樺湪閿佸畾涓?    this.setData({ bluetoothAlertClosing: true });
     setTimeout(() => {
       this.setData({ 
         showBluetoothAlert: false,
@@ -3911,7 +3763,7 @@ Page({
   },
 
 
-  // 监听断开 (F2 仅靠微信 onBLEConnectionStateChange，不做主动轮询避免舵机运转时误判断连)
+  // 鐩戝惉鏂紑 (F2 浠呴潬寰俊 onBLEConnectionStateChange锛屼笉鍋氫富鍔ㄨ疆璇㈤伩鍏嶈埖鏈鸿繍杞椂璇垽鏂繛)
   _startBleLinkWatch() {
     this._stopBleLinkWatch();
     this._f2LastBleRxAt = Date.now();
@@ -3941,7 +3793,7 @@ Page({
     const deviceId = ble && ble.device && ble.device.deviceId;
     if (!deviceId) return;
 
-    // 刚连上数秒内不做主动探测，避免 GATT/连接态 API 误报导致重连风暴
+    // 鍒氳繛涓婃暟绉掑唴涓嶅仛涓诲姩鎺㈡祴锛岄伩鍏?GATT/杩炴帴鎬?API 璇姤瀵艰嚧閲嶈繛椋庢毚
     if (Date.now() < (this._bleConnectGraceUntil || 0)) return;
 
     this._bleLinkWatchTick = (this._bleLinkWatchTick || 0) + 1;
@@ -3964,16 +3816,14 @@ Page({
             }
           },
           fail: () => {
-            // API 失败不等于断连
-          }
+            // API 澶辫触涓嶇瓑浜庢柇杩?          }
         });
       }
     }
 
     if (slowWatch) return;
 
-    // F2 状态包由固件心跳上报；不再用 getBLEDeviceServices 探测，极易误判断连
-    if (isF2MaxStatusBleModel(this.data.currentModel)) {
+    // F2 鐘舵€佸寘鐢卞浐浠跺績璺充笂鎶ワ紱涓嶅啀鐢?getBLEDeviceServices 鎺㈡祴锛屾瀬鏄撹鍒ゆ柇杩?    if (isF2MaxStatusBleModel(this.data.currentModel)) {
       this._bleGattProbeFailStreak = 0;
       return;
     }
@@ -4000,29 +3850,7 @@ Page({
     }
   },
 
-  _isF3HeightCfgBusy() {
-    return !!(
-      this.data.f3HeightConfigModeOn
-      || this._f3HeightBleTxActive
-      || this._f3HeightWritePending
-      || Date.now() < (this._f3HeightSendLockUntil || 0)
-    );
-  },
-
-  _bumpF3HeightBleGrace(ms) {
-    const until = Date.now() + (ms || 20000);
-    this._f3HeightBleGraceUntil = Math.max(this._f3HeightBleGraceUntil || 0, until);
-    if (this.ble) this.ble._suppressDisconnectUntil = this._f3HeightBleGraceUntil;
-  },
-
-  _isF3HeightBleGraceActive() {
-    return Date.now() < (this._f3HeightBleGraceUntil || 0);
-  },
-
   _handleBleLinkLost(source) {
-    if (this._isF3HeightCfgBusy() || this._isF3HeightBleGraceActive()) {
-      return;
-    }
     if (this._bleLinkLostPending) return;
     if (this.ble && this.ble._closingConnection) return;
     if (!this.data.isConnected && !(this.ble && this.ble.device)) return;
@@ -4089,22 +3917,6 @@ Page({
 
   onBleDisconnected(meta) {
     const info = meta || {};
-    if (!info._f3GraceRecheck && (this._isF3HeightCfgBusy() || this._isF3HeightBleGraceActive()) && info.unexpected) {
-      const src = String(info.source || '');
-      if (src === 'state_change' || src.indexOf('link_lost') >= 0) {
-        const dev = info.device;
-        const deviceId = dev && dev.deviceId;
-        if (deviceId && this.ble && typeof this.ble.probeLinkAlive === 'function') {
-          setTimeout(() => {
-            this.ble.probeLinkAlive(deviceId).then((alive) => {
-              if (alive) return;
-              this.onBleDisconnected({ ...info, _f3GraceRecheck: true });
-            });
-          }, 1800);
-          return;
-        }
-      }
-    }
     if (this._isStaleBleDisconnect(info)) {
       console.log('[BLE] ignore stale disconnect', info.device && info.device.deviceId);
       return;
@@ -4118,7 +3930,6 @@ Page({
     if (info.device) this._lastBleDevice = info.device;
     this._activeBleDeviceId = '';
 
-    this._bleSessionModel = null;
     this._publishBleToVoiceBridge(false);
     this._teardownF2FaultBleListener();
     this._clearBleSendQueue();
@@ -4151,92 +3962,81 @@ Page({
     });
   },
 
-  // 🔴 检查指定设备是否有OTA连接记录（根据设备ID判断）
-  async checkOtaConnection(deviceId) {
+  // 馃敶 妫€鏌ユ寚瀹氳澶囨槸鍚︽湁OTA杩炴帴璁板綍锛堟牴鎹澶嘔D鍒ゆ柇锛?  async checkOtaConnection(deviceId) {
     try {
-      // 🔴 管理员跳过 OTA 检查，直接放行
+      // 馃敶 绠＄悊鍛樿烦杩?OTA 妫€鏌ワ紝鐩存帴鏀捐
       if (this.data.isAdmin) {
-        console.log('🔍 [checkOtaConnection] 管理员模式，跳过 OTA 校验');
+        console.log('馃攳 [checkOtaConnection] 绠＄悊鍛樻ā寮忥紝璺宠繃 OTA 鏍￠獙');
         return true;
       }
       
-      // F2 LONG / F3 MAX：工程机与量产固件均跳过 OTA 门禁（避免连上即断、完全无状态）
-      const cur = this._bleStatusTargetModel() || this.data.currentModel || {};
+      // 瀵逛簬 F2 LONG 绯诲垪璁惧锛團2 Max Long锛夛紝鏃犻渶寮哄埗OTA锛岀洿鎺ユ斁琛?      const cur = this.data.currentModel || {};
       const isF2Long = cur.name === 'F2' && cur.type && cur.type.indexOf('Long') !== -1;
-      const isF3Max = isF3MaxModel(cur);
       if (isF2Long) {
-        console.log('🔍 [checkOtaConnection] 当前为 F2 LONG 系列，跳过 OTA 校验');
-        return true;
-      }
-      if (isF3Max) {
-        console.log('🔍 [checkOtaConnection] 当前为 F3 MAX，跳过 OTA 校验');
+        console.log('馃攳 [checkOtaConnection] 褰撳墠涓?F2 LONG 绯诲垪锛岃烦杩?OTA 鏍￠獙');
         return true;
       }
       
       if (!deviceId) {
-        console.warn('⚠️ [checkOtaConnection] 设备ID不存在');
+        console.warn('鈿狅笍 [checkOtaConnection] 璁惧ID涓嶅瓨鍦?);
         return false;
       }
       
-      console.log('🔍 [checkOtaConnection] 检查设备ID:', deviceId);
+      console.log('馃攳 [checkOtaConnection] 妫€鏌ヨ澶嘔D:', deviceId);
       
-      // 查询云端数据库：查找该设备是否有OTA记录
+      // 鏌ヨ浜戠鏁版嵁搴擄細鏌ユ壘璇ヨ澶囨槸鍚︽湁OTA璁板綍
       const db = wx.cloud.database();
       const res = await db.collection('ota_connections')
         .where({ deviceId: deviceId })
         .get();
       
-      console.log('🔍 [checkOtaConnection] 查询结果:', {
+      console.log('馃攳 [checkOtaConnection] 鏌ヨ缁撴灉:', {
         deviceId: deviceId,
         count: res.data.length,
         records: res.data
       });
       
-      // 如果有记录，返回true；否则返回false
+      // 濡傛灉鏈夎褰曪紝杩斿洖true锛涘惁鍒欒繑鍥瀎alse
       const hasRecord = res.data.length > 0;
-      console.log('🔍 [checkOtaConnection] 设备是否有OTA记录:', hasRecord);
+      console.log('馃攳 [checkOtaConnection] 璁惧鏄惁鏈塐TA璁板綍:', hasRecord);
       return hasRecord;
     } catch (err) {
-      console.error('❌ [checkOtaConnection] 检查失败:', err);
-      // 如果查询失败，为了安全起见，返回false拒绝连接
+      console.error('鉂?[checkOtaConnection] 妫€鏌ュけ璐?', err);
+      // 濡傛灉鏌ヨ澶辫触锛屼负浜嗗畨鍏ㄨ捣瑙侊紝杩斿洖false鎷掔粷杩炴帴
       return false;
     }
   },
 
-  // 🔴 显示需要OTA升级的提示（使用toast样式）
-  showOtaRequiredTip() {
-    // 如果已经在跳转中，直接返回，防止重复跳转
+  // 馃敶 鏄剧ず闇€瑕丱TA鍗囩骇鐨勬彁绀猴紙浣跨敤toast鏍峰紡锛?  showOtaRequiredTip() {
+    // 濡傛灉宸茬粡鍦ㄨ烦杞腑锛岀洿鎺ヨ繑鍥烇紝闃叉閲嶅璺宠浆
     if (this.data.isNavigatingToOta) {
       return;
     }
     
-    // 设置跳转标记，防止重复点击
-    this.setData({ isNavigatingToOta: true });
+    // 璁剧疆璺宠浆鏍囪锛岄槻姝㈤噸澶嶇偣鍑?    this.setData({ isNavigatingToOta: true });
     
-    // 显示提示（使用toast样式）
-    this.setData({ showOtaTip: true });
+    // 鏄剧ず鎻愮ず锛堜娇鐢╰oast鏍峰紡锛?    this.setData({ showOtaTip: true });
     
-    // 2.5秒后自动跳转到OTA页面
+    // 2.5绉掑悗鑷姩璺宠浆鍒癘TA椤甸潰
     setTimeout(() => {
       this.setData({ showOtaTip: false });
       wx.navigateTo({ 
         url: '/package-biz/pages/ota/ota',
         success: () => {
-          // 跳转成功后，重置标记（在页面返回时会重新设置）
-          console.log('✅ 已跳转到OTA页面');
+          // 璺宠浆鎴愬姛鍚庯紝閲嶇疆鏍囪锛堝湪椤甸潰杩斿洖鏃朵細閲嶆柊璁剧疆锛?          console.log('鉁?宸茶烦杞埌OTA椤甸潰');
         },
         fail: (err) => {
-          console.error('跳转失败:', err);
-          // 跳转失败时重置标记，允许重试
+          console.error('璺宠浆澶辫触:', err);
+          // 璺宠浆澶辫触鏃堕噸缃爣璁帮紝鍏佽閲嶈瘯
           this.setData({ isNavigatingToOta: false });
-          this._showCustomToast('请先进行OTA升级', 'none');
+          this._showCustomToast('璇峰厛杩涜OTA鍗囩骇', 'none');
         }
       });
     }, 2500);
   },
 
   // ===============================================
-  // 页面交互
+  // 椤甸潰浜や簰
   // ===============================================
   onTouchStartMain(e) {
     if (this._isRemoteAssistUserLocked()) return;
@@ -4428,7 +4228,6 @@ Page({
     };
 
     const affected = new Set([prevCurrent, prevCurrent - 1, prevCurrent + 1, safeCurrent, safeCurrent - 1, safeCurrent + 1]);
-    const nextModel = this.data.models[safeCurrent] || this.data.currentModel;
     const patch = {
       currentIndex: safeCurrent,
       modelDragOffset: 0,
@@ -4442,12 +4241,6 @@ Page({
       nextCardOpacity: 0.9,
       prevCardOpacity: 0.9
     };
-    if (nextModel && !this.data.showDetail) {
-      patch.currentModel = nextModel;
-    }
-    if (this.data.isConnected && nextModel) {
-      Object.assign(patch, this._resetF2HwMonitorState(true, nextModel));
-    }
     affected.forEach((idx) => {
       if (idx < 0 || idx >= total) return;
       patch[`models[${idx}].status`] = getStatus(idx, safeCurrent);
@@ -4461,7 +4254,6 @@ Page({
           setDataCostMs: Date.now() - updateStart
         });
       }
-      this._ensureF2StatusBleListener();
       this._refreshRemoteAssistCardFlags();
       this._recalcRemoteAssistPendingForCard();
       if (typeof done === 'function') done(safeCurrent);
@@ -4485,7 +4277,7 @@ Page({
     const t = e.touches[0];
     const dx = t.clientX - this.data.detailSwipeStartX;
     const dy = t.clientY - this.data.detailSwipeStartY;
-    // 垂直滑动明显时，取消本次返回手势，避免与页面内部交互冲突
+    // 鍨傜洿婊戝姩鏄庢樉鏃讹紝鍙栨秷鏈杩斿洖鎵嬪娍锛岄伩鍏嶄笌椤甸潰鍐呴儴浜や簰鍐茬獊
     if (Math.abs(dy) > 40 && Math.abs(dy) > Math.abs(dx)) {
       this.setData({ detailSwipeTracking: false });
     }
@@ -4501,10 +4293,9 @@ Page({
     const startX = this.data.detailSwipeStartX;
     const dx = t.clientX - this.data.detailSwipeStartX;
     const dy = t.clientY - this.data.detailSwipeStartY;
-    // 左边缘优先：从屏幕最左侧轻扫时，降低触发阈值，更贴近系统返回手势
-    const isEdgeSwipe = startX <= 28;
+    // 宸﹁竟缂樹紭鍏堬細浠庡睆骞曟渶宸︿晶杞绘壂鏃讹紝闄嶄綆瑙﹀彂闃堝€硷紝鏇磋创杩戠郴缁熻繑鍥炴墜鍔?    const isEdgeSwipe = startX <= 28;
     const threshold = isEdgeSwipe ? 40 : 70;
-    // 详情层支持左右横滑返回图二（你习惯左滑也可触发）
+    // 璇︽儏灞傛敮鎸佸乏鍙虫í婊戣繑鍥炲浘浜岋紙浣犱範鎯乏婊戜篃鍙Е鍙戯級
     if (Math.abs(dx) > threshold && Math.abs(dy) < 50) {
       this._closeDetailAnimated();
     }
@@ -4518,7 +4309,7 @@ Page({
     }
   },
 
-  _openDetailAnimated(patch = {}, afterOpen) {
+  _openDetailAnimated(patch = {}) {
     const guardMs = 480;
     this._detailClosing = false;
     this._controlTapLockUntil = Date.now() + guardMs;
@@ -4540,7 +4331,7 @@ Page({
             ...(this.data.isConnected
               ? this._resetF2HwMonitorState(true, patch.currentModel)
               : {
-                  f3HeightText: '请先连接蓝牙',
+                  f3HeightText: '璇峰厛杩炴帴钃濈墮',
                   f3HeightLive: false
                 })
           }
@@ -4560,9 +4351,6 @@ Page({
     }, guardMs);
     this._refreshRemoteAssistCardFlags();
     if (this.data.isAdmin) this._startRemoteAssistPendingPoll();
-    if (typeof afterOpen === 'function') {
-      setTimeout(afterOpen, guardMs + 40);
-    }
   },
 
   _closeDetailAnimated(extraPatch = {}) {
@@ -4594,20 +4382,13 @@ Page({
       return;
     }
     this.updateCardStatus(index);
-    if (this.data.isConnected && isF2MaxStatusBleModel(currentModel)) {
-      this._bleSessionModel = currentModel;
-    }
     this._openDetailAnimated({
       currentModel,
       angleBtnText: resolveOpenAngleBtnText(currentModel)
-    }, () => {
-      if (this.data.isConnected) {
-        this._ensureF2StatusBleListener(true);
-      }
     });
   },
 
-  // 🔴 计算导航栏高度（标准方法，适配所有机型）
+  // 馃敶 璁＄畻瀵艰埅鏍忛珮搴︼紙鏍囧噯鏂规硶锛岄€傞厤鎵€鏈夋満鍨嬶級
   calcNavBarInfo() {
     try {
       const menuButton = wx.getMenuButtonBoundingClientRect();
@@ -4617,14 +4398,13 @@ Page({
       const navBarHeight = (gap * 2) + menuButton.height;
       this.setData({ statusBarHeight, navBarHeight });
     } catch (e) {
-      // 降级方案：使用默认值
-      this.setData({ statusBarHeight: 44, navBarHeight: 44 });
+      // 闄嶇骇鏂规锛氫娇鐢ㄩ粯璁ゅ€?      this.setData({ statusBarHeight: 44, navBarHeight: 44 });
     }
   },
 
   goBack() {
     if (this._isRemoteAssistUserLocked()) {
-      this._showCustomToast('远协进行中，请先结束协助', 'none', 2000);
+      this._showCustomToast('杩滃崗杩涜涓紝璇峰厛缁撴潫鍗忓姪', 'none', 2000);
       return;
     }
     if (this.data.showDetail) {
@@ -4632,8 +4412,7 @@ Page({
         this.setData({ detailMode: 'main' });
       } else {
         this._closeDetailAnimated();
-        // 断开连接可选
-        // if (this.data.isConnected) this.ble.disconnect(); 
+        // 鏂紑杩炴帴鍙€?        // if (this.data.isConnected) this.ble.disconnect(); 
       }
     } else {
       const pageBack = require('../../../utils/pageBack.js');
@@ -4647,15 +4426,14 @@ Page({
   },
 
   // ===============================================
-  // 进入编辑模式 (入口分发)
+  // 杩涘叆缂栬緫妯″紡 (鍏ュ彛鍒嗗彂)
   // ===============================================
   enterEdit(e) {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
-    // 未连接且非远协技师时不可进入编辑
+    // 鏈繛鎺ヤ笖闈炶繙鍗忔妧甯堟椂涓嶅彲杩涘叆缂栬緫
     if (!this._canControlDevice()) {
-      // 显示"请先连接蓝牙"小胶囊提示
-      this.setData({ showConnectBluetoothTip: true });
-      // 2秒后自动隐藏
+      // 鏄剧ず"璇峰厛杩炴帴钃濈墮"灏忚兌鍥婃彁绀?      this.setData({ showConnectBluetoothTip: true });
+      // 2绉掑悗鑷姩闅愯棌
       setTimeout(() => {
         this.setData({ showConnectBluetoothTip: false });
       }, 2000);
@@ -4666,26 +4444,25 @@ Page({
     this.setData({ pendingEditType: type });
 
     if (type === 'fold') {
-      // 管理员无需输入密码，直接放行（并顺带标记授权，避免后续重复判断）
-      if (this.data.isAdmin) {
+      // 绠＄悊鍛樻棤闇€杈撳叆瀵嗙爜锛岀洿鎺ユ斁琛岋紙骞堕『甯︽爣璁版巿鏉冿紝閬垮厤鍚庣画閲嶅鍒ゆ柇锛?      if (this.data.isAdmin) {
         if (!this.data.isAuthorized) {
           this.setData({ isAuthorized: true });
         }
         this.showTutorial('fold');
       } else if (!this.data.isAuthorized) {
-        // 普通用户：密码 -> 教程 -> 界面
+        // 鏅€氱敤鎴凤細瀵嗙爜 -> 鏁欑▼ -> 鐣岄潰
         this.openPasswordModal();
       } else {
         this.showTutorial('fold');
       }
     } else if (type === 'open') {
-      // 打开角度：直接初始化（避免重复 setData 触发双重层切换导致闪屏）
+      // 鎵撳紑瑙掑害锛氱洿鎺ュ垵濮嬪寲锛堥伩鍏嶉噸澶?setData 瑙﹀彂鍙岄噸灞傚垏鎹㈠鑷撮棯灞忥級
       this.initOpenMode();
     }
   },
 
   showTutorial(type) {
-    // 如果密码弹窗还在显示，先关闭它（带退出动画）
+    // 濡傛灉瀵嗙爜寮圭獥杩樺湪鏄剧ず锛屽厛鍏抽棴瀹冿紙甯﹂€€鍑哄姩鐢伙級
     if (this.data.showPasswordModal) {
       this.setData({ passwordModalClosing: true });
       setTimeout(() => {
@@ -4707,21 +4484,20 @@ Page({
   },
 
   // ===============================================
-  // 密码逻辑
+  // 瀵嗙爜閫昏緫
   // ===============================================
   onPasswordInput(e) {
     this.setData({ passwordInput: e.detail.value });
   },
 
   confirmPassword() {
-    if (this.data.passwordBtnLocked) return; // 🔴 倒计时锁定中
+    if (this.data.passwordBtnLocked) return; // 馃敶 鍊掕鏃堕攣瀹氫腑
 
     if (this.data.passwordInput === '1234') {
       this.setData({ 
-        isAuthorized: true, // 授权成功，下次不用密码
-        passwordModalClosing: true 
+        isAuthorized: true, // 鎺堟潈鎴愬姛锛屼笅娆′笉鐢ㄥ瘑鐮?        passwordModalClosing: true 
       });
-      // 密码正确后，等待退出动画完成再进入折叠教程
+      // 瀵嗙爜姝ｇ‘鍚庯紝绛夊緟閫€鍑哄姩鐢诲畬鎴愬啀杩涘叆鎶樺彔鏁欑▼
       setTimeout(() => {
         this.setData({ 
           showPasswordModal: false,
@@ -4730,7 +4506,7 @@ Page({
         this.showTutorial('fold');
       }, 420);
     } else {
-      this._showCustomToast('密码错误', 'none');
+      this._showCustomToast('瀵嗙爜閿欒', 'none');
       this.setData({ passwordInput: '' });
     }
   },
@@ -4746,7 +4522,7 @@ Page({
   },
 
   // ===============================================
-  // 教程动画循环 (红环)
+  // 鏁欑▼鍔ㄧ敾寰幆 (绾㈢幆)
   // ===============================================
   startTutorialLoop(type) {
     this.stopTutorialLoop();
@@ -4754,28 +4530,26 @@ Page({
     let startState, endState;
 
     if (type === 'fold') {
-      // 折叠：灯亮 -> 按下 -> 灯灭
-      startState = { light: true, text: '点击车把按键\n使指示灯灭' };
-      endState = { light: false, text: '指示灯灭' };
+      // 鎶樺彔锛氱伅浜?-> 鎸変笅 -> 鐏伃
+      startState = { light: true, text: '鐐瑰嚮杞︽妸鎸夐敭\n浣挎寚绀虹伅鐏? };
+      endState = { light: false, text: '鎸囩ず鐏伃' };
     } else {
-      // 打开：灯灭 -> 按下 -> 灯亮
-      startState = { light: false, text: '点击车把按键\n使指示灯亮' };
-      endState = { light: true, text: '指示灯亮' };
+      // 鎵撳紑锛氱伅鐏?-> 鎸変笅 -> 鐏寒
+      startState = { light: false, text: '鐐瑰嚮杞︽妸鎸夐敭\n浣挎寚绀虹伅浜? };
+      endState = { light: true, text: '鎸囩ず鐏寒' };
     }
 
-    // 第一帧
-    this.setData({
+    // 绗竴甯?    this.setData({
       animLightOn: startState.light,
       animIsPressing: false,
       animText: startState.text
     });
 
     const loop = () => {
-      // 1. 等待1秒
-      const timer1 = setTimeout(() => {
-        this.setData({ animIsPressing: true }); // 模拟按下
+      // 1. 绛夊緟1绉?      const timer1 = setTimeout(() => {
+        this.setData({ animIsPressing: true }); // 妯℃嫙鎸変笅
 
-        // 2. 按下0.3秒后变化
+        // 2. 鎸変笅0.3绉掑悗鍙樺寲
         const timer2 = setTimeout(() => {
           this.setData({
             animLightOn: endState.light,
@@ -4783,15 +4557,13 @@ Page({
             animIsPressing: false
           });
 
-          // 3. 保持结果 2秒
-          const timer3 = setTimeout(() => {
-            // 重置
+          // 3. 淇濇寔缁撴灉 2绉?          const timer3 = setTimeout(() => {
+            // 閲嶇疆
             this.setData({
               animLightOn: startState.light,
               animText: startState.text
             });
-            // 4. 重置后等待1秒循环
-            const timer4 = setTimeout(loop, 1000);
+            // 4. 閲嶇疆鍚庣瓑寰?绉掑惊鐜?            const timer4 = setTimeout(loop, 1000);
             this.data.tutorialTimer = timer4;
           }, 2000);
           this.data.tutorialTimer = timer3;
@@ -4813,9 +4585,9 @@ Page({
     }
   },
 
-  // 教程确认按钮（带收缩退出动画）
+  // 鏁欑▼纭鎸夐挳锛堝甫鏀剁缉閫€鍑哄姩鐢伙級
   finishTutorial() {
-    if (this.data.tutorialBtnLocked) return; // 🔴 倒计时锁定中
+    if (this.data.tutorialBtnLocked) return; // 馃敶 鍊掕鏃堕攣瀹氫腑
 
     this.stopTutorialLoop();
     const type = this.data.pendingEditType || 'fold';
@@ -4828,24 +4600,23 @@ Page({
         tutorialModalClosing: false
       });
 
-      // 🔴 如果是折叠模式，启动上滑提示动画
+      // 馃敶 濡傛灉鏄姌鍙犳ā寮忥紝鍚姩涓婃粦鎻愮ず鍔ㄧ敾
       if (type === 'fold') {
         this.initFoldMode();
         this.startFoldInlineHint();
       }
     }, 420);
 
-    // 教程结束后，如果是"打开角度"，初始化新的刻度模式
+    // 鏁欑▼缁撴潫鍚庯紝濡傛灉鏄?鎵撳紑瑙掑害"锛屽垵濮嬪寲鏂扮殑鍒诲害妯″紡
     if (type === 'open') {
       this.initOpenMode();
     }
   },
 
   // ===============================================
-  // 完成设置 & 关钥匙动画
+  // 瀹屾垚璁剧疆 & 鍏抽挜鍖欏姩鐢?  // ===============================================
   // ===============================================
-  // ===============================================
-  // 完成设置 & 关钥匙动画 (修改：循环播放)
+  // 瀹屾垚璁剧疆 & 鍏抽挜鍖欏姩鐢?(淇敼锛氬惊鐜挱鏀?
   // ===============================================
   exitEdit() {
     this.stopOpenAngleTutorialLoop();
@@ -4853,7 +4624,7 @@ Page({
       clearTimeout(this._foldFineTuneHintTimer);
       this._foldFineTuneHintTimer = null;
     }
-    // 打开角度场景：直接退出编辑，避免“关钥匙倒计时弹窗”导致卡住感
+    // 鎵撳紑瑙掑害鍦烘櫙锛氱洿鎺ラ€€鍑虹紪杈戯紝閬垮厤鈥滃叧閽ュ寵鍊掕鏃跺脊绐椻€濆鑷村崱浣忔劅
     if (this.data.editType === 'open') {
       if (this.data.keyLoopTimer) {
         clearTimeout(this.data.keyLoopTimer);
@@ -4874,39 +4645,35 @@ Page({
       return;
     }
 
-    // 折叠场景保持原有流程：完成设置 -> 关钥匙提示
-    this.setData({ showKeyModal: true, showFoldFineTuneHint: false });
+    // 鎶樺彔鍦烘櫙淇濇寔鍘熸湁娴佺▼锛氬畬鎴愯缃?-> 鍏抽挜鍖欐彁绀?    this.setData({ showKeyModal: true, showFoldFineTuneHint: false });
     this.startKeyAnimLoop();
     this.startKeyCountdown();
   },
 
   startKeyAnimLoop() {
-    // 清除旧定时器
+    // 娓呴櫎鏃у畾鏃跺櫒
     if (this.data.keyLoopTimer) clearTimeout(this.data.keyLoopTimer);
 
     const loop = () => {
-      // 1. 关钥匙 (红 -> 灰)
+      // 1. 鍏抽挜鍖?(绾?-> 鐏?
       this.setData({ keyAnimState: 'red' });
       
-      // 1秒后变灰
+      // 1绉掑悗鍙樼伆
       this.data.keyLoopTimer = setTimeout(() => {
         this.setData({ keyAnimState: 'grey' });
         
-        // 再过1秒，重置为红，开始下一次循环
-        this.data.keyLoopTimer = setTimeout(() => {
+        // 鍐嶈繃1绉掞紝閲嶇疆涓虹孩锛屽紑濮嬩笅涓€娆″惊鐜?        this.data.keyLoopTimer = setTimeout(() => {
           loop();
-        }, 1500); // 灰状态停留1.5秒
-        
-      }, 1000); // 红状态停留1秒
-    };
+        }, 1500); // 鐏扮姸鎬佸仠鐣?.5绉?        
+      }, 1000); // 绾㈢姸鎬佸仠鐣?绉?    };
 
     loop();
   },
 
   confirmKeyOff() {
-    if (this.data.keyBtnLocked) return; // 🔴 倒计时锁定中
+    if (this.data.keyBtnLocked) return; // 馃敶 鍊掕鏃堕攣瀹氫腑
 
-    // 停止循环
+    // 鍋滄寰幆
     if (this.data.keyLoopTimer) clearTimeout(this.data.keyLoopTimer);
     this.setData({ keyModalClosing: true });
     setTimeout(() => {
@@ -4950,12 +4717,6 @@ Page({
         Math.min(FOLD_SERVO_ANGLE_MAX, ang)
       );
     }
-    if (parsed.itm === 1) {
-      this._lastBleOpenServoAngle = Math.max(
-        FOLD_SERVO_ANGLE_MIN,
-        Math.min(FOLD_SERVO_ANGLE_MAX, ang)
-      );
-    }
 
     if (this.data.editType === 'fold' && (parsed.itm === 0 || this._foldAdjustActive)) {
       const foldAng = this._lastBleFoldServoAngle;
@@ -4966,12 +4727,12 @@ Page({
   },
 
   // ===============================================
-  // 打开角度：新刻度 & 棍子控制逻辑
+  // 鎵撳紑瑙掑害锛氭柊鍒诲害 & 妫嶅瓙鎺у埗閫昏緫
   // ===============================================
 
-  // 初始化打开角度模式
+  // 鍒濆鍖栨墦寮€瑙掑害妯″紡
   // ===============================================
-  // 初始化打开角度模式 (强制每次都弹窗)
+  // 鍒濆鍖栨墦寮€瑙掑害妯″紡 (寮哄埗姣忔閮藉脊绐?
   // ===============================================
   initOpenMode() {
     const model = this.data.currentModel || {};
@@ -4983,20 +4744,18 @@ Page({
     this.maxAngle = isF1Legacy ? 180 : 170;
     const swipeMaxDeg = openAngleSwipeMaxDeg(model, this.maxAngle);
     const statusText = (isMtUltra || model.name === 'F2')
-      ? '点击90度或30度同步画面'
-      : (isF1Legacy ? '点击180度或90度同步画面' : '点击预设角度同步画面');
+      ? '鐐瑰嚮90搴︽垨30搴﹀悓姝ョ敾闈?
+      : (isF1Legacy ? '鐐瑰嚮180搴︽垨90搴﹀悓姝ョ敾闈? : '鐐瑰嚮棰勮瑙掑害鍚屾鐢婚潰');
     
-    // 生成刻度数据
+    // 鐢熸垚鍒诲害鏁版嵁
     const count = (swipeMaxDeg - 0) / 2 + 1;
     const ticks = new Array(Math.floor(count)).fill(0);
     
-    // 🔴 修复：一次性设置所有状态，并确保 transition 为 'none'，防止残留动画
-    // 这样棍子会立即显示为 0 度（水平状态），不会有从之前状态跳转的动画
+    // 馃敶 淇锛氫竴娆℃€ц缃墍鏈夌姸鎬侊紝骞剁‘淇?transition 涓?'none'锛岄槻姝㈡畫鐣欏姩鐢?    // 杩欐牱妫嶅瓙浼氱珛鍗虫樉绀轰负 0 搴︼紙姘村钩鐘舵€侊級锛屼笉浼氭湁浠庝箣鍓嶇姸鎬佽烦杞殑鍔ㄧ敾
     this.setData({
       detailMode: 'edit',
       editType: 'open',
-      // 清理折叠页提示/滑块残留状态，避免切到打开角度时短暂露出上一页元素
-      showFoldInlineHint: false,
+      // 娓呯悊鎶樺彔椤垫彁绀?婊戝潡娈嬬暀鐘舵€侊紝閬垮厤鍒囧埌鎵撳紑瑙掑害鏃剁煭鏆傞湶鍑轰笂涓€椤靛厓绱?      showFoldInlineHint: false,
       showFoldFineTuneHint: false,
       foldHintOffset: 0,
       adjustSlideOffset: 0,
@@ -5007,43 +4766,41 @@ Page({
       statusText,
       openAngleUiActive: false,
       currentAngle: 0,
-      angleMode: '', // 保持为空，让棍子显示为 0 度（水平状态）
+      angleMode: '', // 淇濇寔涓虹┖锛岃妫嶅瓙鏄剧ず涓?0 搴︼紙姘村钩鐘舵€侊級
       angleRotation: 180, 
       activeIndex: 0,
       translateX: 0,
-      transition: 'none' // 🔴 关键：禁用动画，防止残留的 transition 导致闪烁
+      transition: 'none' // 馃敶 鍏抽敭锛氱鐢ㄥ姩鐢伙紝闃叉娈嬬暀鐨?transition 瀵艰嚧闂儊
     });
     this._openAngleFullSwipeTimes = [];
     this._clearOpenAngleBleState();
     
-    // 修改：F1 系列 & F2 MAX 系列【每次】进入都弹出打开角度引导弹窗
+    // 淇敼锛欶1 绯诲垪 & F2 MAX 绯诲垪銆愭瘡娆°€戣繘鍏ラ兘寮瑰嚭鎵撳紑瑙掑害寮曞寮圭獥
     if (isF1Legacy || isF2MaxSeries || isMtUltra) {
        this.setData({ showAngleHint: true });
        this.startOpenAngleTutorialLoop();
-       // 🔴 启动倒计时
-       this.startAngleHintCountdown();
+       // 馃敶 鍚姩鍊掕鏃?       this.startAngleHintCountdown();
     } else {
        this.setData({ showAngleHint: false });
     }
   },
 
   // ===============================================
-  // 切换预设角度 (F2 点击160跳转，但能滑到170)
+  // 鍒囨崲棰勮瑙掑害 (F2 鐐瑰嚮160璺宠浆锛屼絾鑳芥粦鍒?70)
   // ===============================================
   switchAngle(e) {
     if (!this._canControlDevice()) {
-      this._showCustomToast('未连接蓝牙', 'none', 2000);
+      this._showCustomToast('鏈繛鎺ヨ摑鐗?, 'none', 2000);
       return;
     }
     
     const angle = parseInt(e.currentTarget.dataset.angle);
     
-    // 默认目标就是点击的角度
-    let targetDeg = angle;
+    // 榛樿鐩爣灏辨槸鐐瑰嚮鐨勮搴?    let targetDeg = angle;
 
-    // 特殊逻辑：如果是 F2机型 (maxAngle=170)，点击的是 160 按钮
-    // 此时目标是 160，而不是 maxAngle(170)
-    // 已经在 wxml 传参 data-angle="160" 了，所以这里直接用 angle 即可
+    // 鐗规畩閫昏緫锛氬鏋滄槸 F2鏈哄瀷 (maxAngle=170)锛岀偣鍑荤殑鏄?160 鎸夐挳
+    // 姝ゆ椂鐩爣鏄?160锛岃€屼笉鏄?maxAngle(170)
+    // 宸茬粡鍦?wxml 浼犲弬 data-angle="160" 浜嗭紝鎵€浠ヨ繖閲岀洿鎺ョ敤 angle 鍗冲彲
 
     if (this._openAngleFakeSyncTimer) {
       clearTimeout(this._openAngleFakeSyncTimer);
@@ -5056,27 +4813,27 @@ Page({
     this.setData({
       angleMode: angle.toString(),
       openAngleUiActive: true,
-      statusText: '同步中…'
+      statusText: '鍚屾涓€?
     }, () => {
       const presetCmd = openAnglePresetBleCommand(currentModel, angle);
       if (presetCmd && this._canControlDevice()) {
         if (usesF2StyleOpenAngleBle(currentModel)) {
-          console.log(`📤 [蓝牙] 打开角度预设 ${angle}° → "${presetCmd}" x2`);
+          console.log(`馃摛 [钃濈墮] 鎵撳紑瑙掑害棰勮 ${angle}掳 鈫?"${presetCmd}" x2`);
           this._commitBleCommandAfterUi({
             sendText: presetCmd,
             times: 2,
             interval: 500,
             verify: null,
-            label: '打开角度'
+            label: '鎵撳紑瑙掑害'
           });
         } else {
-          console.log(`📤 [蓝牙] 打开角度预设 ${angle}° → "${presetCmd}"`);
+          console.log(`馃摛 [钃濈墮] 鎵撳紑瑙掑害棰勮 ${angle}掳 鈫?"${presetCmd}"`);
           this._commitBleCommandAfterUi({
             sendText: presetCmd,
             times: 1,
             interval: 300,
             verify: null,
-            label: '打开角度'
+            label: '鎵撳紑瑙掑害'
           });
         }
       }
@@ -5086,14 +4843,14 @@ Page({
     this._openAngleFakeSyncTimer = setTimeout(() => {
       this._openAngleFakeSyncTimer = null;
       if (this.data.editType === 'open' && this.data.openAngleUiActive) {
-        this.setData({ statusText: '已同步' });
+        this.setData({ statusText: '宸插悓姝? });
       }
     }, OPEN_ANGLE_FAKE_SYNC_MS);
     wx.vibrateShort({ type: 'light' });
   },
 
   // ===============================================
-  // 更新标尺与视图 (修复 Bug：确保传递正确角度给按钮逻辑)
+  // 鏇存柊鏍囧昂涓庤鍥?(淇 Bug锛氱‘淇濅紶閫掓纭搴︾粰鎸夐挳閫昏緫)
   // ===============================================
   updateRuler(deg, animate) {
     const syncMax = openAngleSyncMaxDeg(this.data.currentModel, this.maxAngle);
@@ -5105,8 +4862,7 @@ Page({
     const trans = this._indexToOpenAngleTranslate(index);
     this._rulerTranslateX = trans;
 
-    // 棍子视觉：F2 按 UI 显示角度算夹角（90° 预设 → 两棍夹角 90°）
-    const visualRot = openAngleStickRotateDeg(this.data.currentModel, deg);
+    // 妫嶅瓙瑙嗚锛欶2 鎸?UI 鏄剧ず瑙掑害绠楀す瑙掞紙90掳 棰勮 鈫?涓ゆ澶硅 90掳锛?    const visualRot = openAngleStickRotateDeg(this.data.currentModel, deg);
 
     this.setData({
       currentAngle: deg,
@@ -5116,13 +4872,13 @@ Page({
       angleRotation: visualRot
     });
     
-    // 关键修复：将当前的真实角度 (deg) 传给按钮判断逻辑
-    // 之前可能传了 visualRot 导致逻辑反了
+    // 鍏抽敭淇锛氬皢褰撳墠鐨勭湡瀹炶搴?(deg) 浼犵粰鎸夐挳鍒ゆ柇閫昏緫
+    // 涔嬪墠鍙兘浼犱簡 visualRot 瀵艰嚧閫昏緫鍙嶄簡
     this.updateAngleText(deg);
   },
 
   // ===============================================
-  // 触摸交互核心修复 (物理驱动动画)
+  // 瑙︽懜浜や簰鏍稿績淇 (鐗╃悊椹卞姩鍔ㄧ敾)
   // ===============================================
 
   _openAngleSyncMaxIndex() {
@@ -5175,8 +4931,7 @@ Page({
   },
 
   // ===============================================
-  // 触摸开始
-  // ===============================================
+  // 瑙︽懜寮€濮?  // ===============================================
   onTouchStart(e) {
     this._rulerTouchActive = true;
     const touchX = e.touches[0].clientX;
@@ -5191,9 +4946,8 @@ Page({
   },
 
   // ===============================================
-  // 触摸移动：每过 1 格发 1 条蓝牙；UI 同步跟手
-  // 从右往左拨 = 角度增大 → 往上收；从左往右拨 = 角度减小 → 往下
-  // ===============================================
+  // 瑙︽懜绉诲姩锛氭瘡杩?1 鏍煎彂 1 鏉¤摑鐗欙紱UI 鍚屾璺熸墜
+  // 浠庡彸寰€宸︽嫧 = 瑙掑害澧炲ぇ 鈫?寰€涓婃敹锛涗粠宸﹀線鍙虫嫧 = 瑙掑害鍑忓皬 鈫?寰€涓?  // ===============================================
   onTouchMove(e) {
     if (!e.touches || !e.touches.length) return;
     const touchX = e.touches[0].clientX;
@@ -5225,7 +4979,7 @@ Page({
       if (isOpenMode && slideCmds && canSend) {
         const step = Math.abs(swipeIndex - prevSwipeIndex);
         const cmd = swipeIndex > prevSwipeIndex ? slideCmds.increase : slideCmds.decrease;
-        console.log(`📤 [蓝牙] 打开角度 ${step} 格 → "${cmd}" x${step}`);
+        console.log(`馃摛 [钃濈墮] 鎵撳紑瑙掑害 ${step} 鏍?鈫?"${cmd}" x${step}`);
         this._enqueueBleSendBurst(cmd, step, BLE_ANGLE_STEP_GAP_MS);
 
         if (!this.data.openAngleUiActive) {
@@ -5236,7 +4990,7 @@ Page({
           const syncIdx = Math.min(swipeIndex, this._openAngleSyncMaxIndex());
           this.setData({
             openAngleUiActive: true,
-            statusText: '调节中',
+            statusText: '璋冭妭涓?,
             currentAngle: syncIdx * 2,
             activeIndex: syncIdx
           });
@@ -5287,7 +5041,7 @@ Page({
         angleRotation: openAngleStickRotateDeg(this.data.currentModel, syncDeg)
       });
       this.updateAngleText(syncDeg);
-      // Ultra 等机型：超过 UI 同步上限仍保留波轮位置，仅棍子/数字停在 170°
+      // Ultra 绛夋満鍨嬶細瓒呰繃 UI 鍚屾涓婇檺浠嶄繚鐣欐尝杞綅缃紝浠呮瀛?鏁板瓧鍋滃湪 170掳
       if (swipeIdx <= this._openAngleSyncMaxIndex()) {
         const trans = this._indexToOpenAngleTranslate(swipeIdx, 'swipe');
         this._rulerTranslateX = trans;
@@ -5296,7 +5050,7 @@ Page({
         }
       }
     } else {
-      // 未点预设：松手后波轮停在当前格，不回弹到 0
+      // 鏈偣棰勮锛氭澗鎵嬪悗娉㈣疆鍋滃湪褰撳墠鏍硷紝涓嶅洖寮瑰埌 0
       const trans = this._indexToOpenAngleTranslate(swipeIdx, 'swipe');
       this._rulerTranslateX = trans;
       if (trans !== this.data.translateX) {
@@ -5356,8 +5110,6 @@ Page({
     this._f3HeightCharTimers = [];
   },
 
-  _f3HeightLog() {},
-
   _f3WaitBleQueueIdle(maxWaitMs) {
     const maxWait = maxWaitMs || 15000;
     const deadline = Date.now() + maxWait;
@@ -5377,43 +5129,41 @@ Page({
     });
   },
 
-  /** 逐字符入队发送：靠 BLE 队列本身排序+等待写入结果，而不是 setTimeout，
-   * 这样 _clearBleSendQueue 才能真正打断，不会和下一条命令的字符交叉。 */
+  /** 閫愬瓧绗﹀叆闃熷彂閫侊細闈?BLE 闃熷垪鏈韩鎺掑簭+绛夊緟鍐欏叆缁撴灉锛岃€屼笉鏄?setTimeout锛?   * 杩欐牱 _clearBleSendQueue 鎵嶈兘鐪熸鎵撴柇锛屼笉浼氬拰涓嬩竴鏉″懡浠ょ殑瀛楃浜ゅ弶銆?*/
   _f3EnqueueHeightCmdChars(cmd) {
     const text = String(cmd || '').replace(/#$/, '') + '#';
     const parts = text.split('');
     this._f3HeightBleTxActive = true;
-    this._bumpF3HeightBleGrace(parts.length * 280 + 8000);
-    parts.forEach((ch, idx) => this._enqueueBleSend(ch, 280, { f3HeightChar: true, f3HeightIdx: idx, f3HeightTotal: parts.length }));
+    parts.forEach((ch) => this._enqueueBleSend(ch, 280));
+    console.log(`[_f3EnqueueHeightCmdChars] 閫愬瓧绗﹀叆闃?${parts.length} 涓? ${text}`);
   },
 
-  /** 带自动重试的高度写入：BLE 偶发丢字符时，固件校验和会拒绝错误数据，
-   * 这里检测不到确认回读就自动重发，而不是让用户自己发现失败再手动点。 */
+  /** 甯﹁嚜鍔ㄩ噸璇曠殑楂樺害鍐欏叆锛欱LE 鍋跺彂涓㈠瓧绗︽椂锛屽浐浠舵牎楠屽拰浼氭嫆缁濋敊璇暟鎹紝
+   * 杩欓噷妫€娴嬩笉鍒扮‘璁ゅ洖璇诲氨鑷姩閲嶅彂锛岃€屼笉鏄鐢ㄦ埛鑷繁鍙戠幇澶辫触鍐嶆墜鍔ㄧ偣銆?*/
   _f3SubmitHeightMmRetrying(kind, units, options) {
     const opts = options || {};
     const maxAttempts = opts.maxAttempts || 4;
     const ackTimeout = opts.ackTimeout || 6000;
-    const label = kind === 'danger' ? '危险高度' : '检测高度';
+    const label = kind === 'danger' ? '鍗遍櫓楂樺害' : '妫€娴嬮珮搴?;
     const seq = (this._f3HeightWriteSeq || 0) + 1;
     this._f3HeightWriteSeq = seq;
     let attempt = 0;
-    this._f3HeightLog('重试写入开始', { kind, units, maxAttempts, seq });
 
     const trySend = () => {
       if (this._f3HeightWriteSeq !== seq) return;
       attempt++;
-      this._f3HeightLog(`第${attempt}次发送`, { kind, units, maxAttempts });
+      console.log(`[${label}] 绗?{attempt}/${maxAttempts}娆″彂閫?${units}mm`);
       if (attempt === 1 && !opts.quiet) {
-        this._showCustomToast(`正在写入${label} ${units} mm…`, 'none', 1500);
+        this._showCustomToast(`姝ｅ湪鍐欏叆${label} ${units} mm鈥, 'none', 1500);
       }
       const ok = this._f3SubmitHeightMm(kind, units, {
         silent: true,
         ackTimeout,
         onAck: () => {
           if (this._f3HeightWriteSeq !== seq) return;
-          console.log(`[${label}] 第${attempt}次确认成功`);
+          console.log(`[${label}] 绗?{attempt}娆＄‘璁ゆ垚鍔焋);
           if (!opts.quiet) {
-            this._showCustomToast(`${label}已写入 ${units} mm`, 'none', 1800);
+            this._showCustomToast(`${label}宸插啓鍏?${units} mm`, 'none', 1800);
             wx.vibrateShort({ type: 'light' });
           }
           if (typeof opts.onDone === 'function') opts.onDone(true);
@@ -5421,21 +5171,11 @@ Page({
         onFail: () => {
           if (this._f3HeightWriteSeq !== seq) return;
           if (attempt < maxAttempts) {
-            console.warn(`[${label}] 第${attempt}次未确认，准备重试`);
-            const retry = () => {
-              if (this._f3HeightWriteSeq !== seq) return;
-              trySend();
-            };
-            if (this._f3CalWritingHeights && this._f3LastStatusF3c !== 1) {
-              this._f3EnsureHeightConfigModeForWrite({ quiet: true, clearQueue: false, timeoutMs: 12000 })
-                .then(() => setTimeout(retry, 800))
-                .catch(() => setTimeout(retry, 1200));
-            } else {
-              setTimeout(retry, 1200);
-            }
+            console.warn(`[${label}] 绗?{attempt}娆℃湭纭锛屽噯澶囬噸璇昤);
+            setTimeout(trySend, 1200);
           } else {
-            console.error(`[${label}] 重试${maxAttempts}次仍未确认`);
-            if (!opts.quiet) this._showCustomToast(`${label}写入失败，请重新点写入`, 'none', 2600);
+            console.error(`[${label}] 閲嶈瘯${maxAttempts}娆′粛鏈‘璁);
+            if (!opts.quiet) this._showCustomToast(`${label}鍐欏叆澶辫触锛岃閲嶆柊鐐瑰啓鍏, 'none', 2600);
             if (typeof opts.onDone === 'function') opts.onDone(false);
           }
         }
@@ -5444,7 +5184,7 @@ Page({
         if (attempt < maxAttempts) {
           setTimeout(trySend, 1200);
         } else if (!opts.quiet) {
-          this._showCustomToast(`${label}发送失败`, 'none', 2000);
+          this._showCustomToast(`${label}鍙戦€佸け璐, 'none', 2000);
           if (typeof opts.onDone === 'function') opts.onDone(false);
         }
       }
@@ -5468,11 +5208,11 @@ Page({
   },
 
   // ===============================================
-  // 3. 微调逻辑 (核心修正)
+  // 3. 寰皟閫昏緫 (鏍稿績淇)
   // ===============================================
   handleAdjust(e) {
     if (!this._canControlDevice()) {
-      this._showCustomToast('未连接蓝牙', 'none', 2000);
+      this._showCustomToast('鏈繛鎺ヨ摑鐗?, 'none', 2000);
       return;
     }
     
@@ -5481,24 +5221,23 @@ Page({
 
     wx.vibrateShort({ type: 'light' });
 
-    // --- A. 折叠模式 (保持不变) ---
+    // --- A. 鎶樺彔妯″紡 (淇濇寔涓嶅彉) ---
     if (editType === 'fold' || e.currentTarget.dataset.mode === 'fold') {
       let foldAng = this.data.foldServoAngle;
       if (!Number.isFinite(foldAng)) foldAng = FOLD_SERVO_ANGLE_DEFAULT;
 
-      // 🔴 F1/F2 PRO/MAX：折叠模式时发送对应数据
-      const currentModel = this.data.currentModel;
+      // 馃敶 F1/F2 PRO/MAX锛氭姌鍙犳ā寮忔椂鍙戦€佸搴旀暟鎹?      const currentModel = this.data.currentModel;
       const isF1 = currentModel && currentModel.name && currentModel.name.includes('F1');
       const isF2 = currentModel && currentModel.name && currentModel.name.includes('F2');
-      const isFoldBleModel = isF2MaxLikeControl(currentModel);
+      const isF1OrF2 = isF1 || isF2;
       
-      // 调试日志
-      console.log('🔍 [调试] 折叠模式按钮:', {
+      // 璋冭瘯鏃ュ織
+      console.log('馃攳 [璋冭瘯] 鎶樺彔妯″紡鎸夐挳:', {
         action,
         editType,
         isF1,
         isF2,
-        isFoldBleModel,
+        isF1OrF2,
         isConnected: this.data.isConnected,
         modelName: currentModel?.name
       });
@@ -5508,85 +5247,84 @@ Page({
       } else if (action === 'right' || action === 'fine-tune-down') {
         if (foldAng < FOLD_SERVO_ANGLE_MAX) foldAng++;
       } else if (action === 'adjust') {
-        // 🔴 调整按钮：发送"调整折叠角度"
-        console.log('🔍 [调试] 调整按钮被点击', {
+        // 馃敶 璋冩暣鎸夐挳锛氬彂閫?璋冩暣鎶樺彔瑙掑害"
+        console.log('馃攳 [璋冭瘯] 璋冩暣鎸夐挳琚偣鍑?, {
           isF1,
           isF2,
-          isFoldBleModel,
+          isF1OrF2,
           isConnected: this.data.isConnected,
           modelName: currentModel?.name
         });
-        if (isFoldBleModel) {
-          if (this._shouldSkipIndicatorModal() || isMtUltraCardModel(currentModel)) {
-            console.log('📤 [蓝牙] 发送"调整折叠角度"');
+        if (isF1OrF2) {
+          if (this._shouldSkipIndicatorModal()) {
+            console.log('馃摛 [杩滃崗] 鍙戦€?璋冩暣鎶樺彔瑙掑害"');
             this._foldAdjustActive = true;
-            this.sendDataMultiple('调整折叠角度', 1, 300);
+            this.sendDataMultiple('璋冩暣鎶樺彔瑙掑害', 1, 300);
           } else if (this._canControlDevice()) {
             this.setData({
               showIndicatorCheckModal: true,
               indicatorCheckModalClosing: false,
               pendingSendData: {
                 type: 'adjust',
-                sendText: '调整折叠角度'
+                sendText: '璋冩暣鎶樺彔瑙掑害'
               }
             });
-            console.log('🔍 [蓝牙] 准备发送"调整折叠角度"，等待用户确认');
+            console.log('馃攳 [钃濈墮] 鍑嗗鍙戦€?璋冩暣鎶樺彔瑙掑害"锛岀瓑寰呯敤鎴风‘璁?);
           } else {
-            console.log('❌ [蓝牙] 未连接，无法发送"调整折叠角度"');
-            this._showCustomToast('蓝牙未连接', 'none', 2000);
+            console.log('鉂?[钃濈墮] 鏈繛鎺ワ紝鏃犳硶鍙戦€?璋冩暣鎶樺彔瑙掑害"');
+            this._showCustomToast('钃濈墮鏈繛鎺?, 'none', 2000);
           }
         } else {
-          console.log('❌ [调试] 不是 F1/F2 机型，不发送');
-          this._showCustomToast('当前机型不支持', 'none', 2000);
+          console.log('鉂?[璋冭瘯] 涓嶆槸 F1/F2 鏈哄瀷锛屼笉鍙戦€?);
+          this._showCustomToast('褰撳墠鏈哄瀷涓嶆敮鎸?, 'none', 2000);
         }
       } else if (action === 'zero') {
         foldAng = FOLD_SERVO_ANGLE_DEFAULT;
-        // 🔴 归零按钮：发送"初始化角度"
-        console.log('🔍 [调试] 归零按钮被点击', {
+        // 馃敶 褰掗浂鎸夐挳锛氬彂閫?鍒濆鍖栬搴?
+        console.log('馃攳 [璋冭瘯] 褰掗浂鎸夐挳琚偣鍑?, {
           isF1,
           isF2,
-          isFoldBleModel,
+          isF1OrF2,
           isConnected: this.data.isConnected,
           isAdmin: this.data.isAdmin,
           modelName: currentModel?.name
         });
-        if (isFoldBleModel) {
+        if (isF1OrF2) {
           if (this._canControlDevice()) {
-            console.log('📤 [蓝牙] 发送"初始化角度"（连续2次，间隔0.5秒）');
-            this.sendDataMultiple('初始化角度', 2, 500);
+            // 馃敶 鎸変綘鐨勮姹傦細褰掗浂涔熷彂閫?2 娆★紝闂撮殧 0.5 绉?            console.log('馃摛 [钃濈墮] 鍙戦€?鍒濆鍖栬搴?锛堣繛缁?娆★紝闂撮殧0.5绉掞級');
+            this.sendDataMultiple('鍒濆鍖栬搴?, 2, 500);
           } else {
-            console.log('❌ [蓝牙] 未连接，无法发送"初始化角度"');
-            this._showCustomToast('蓝牙未连接', 'none', 2000);
+            console.log('鉂?[钃濈墮] 鏈繛鎺ワ紝鏃犳硶鍙戦€?鍒濆鍖栬搴?');
+            this._showCustomToast('钃濈墮鏈繛鎺?, 'none', 2000);
           }
         } else {
-          console.log('❌ [调试] 不是 F1/F2 机型，不发送');
-          this._showCustomToast('当前机型不支持', 'none', 2000);
+          console.log('鉂?[璋冭瘯] 涓嶆槸 F1/F2 鏈哄瀷锛屼笉鍙戦€?);
+          this._showCustomToast('褰撳墠鏈哄瀷涓嶆敮鎸?, 'none', 2000);
         }
-        // 🔴 点击归零后，重置滑动状态（带 snap 回弹动画）
-        this.resetAdjustSlider(false);
+        // 馃敶 鐐瑰嚮褰掗浂鍚庯紝閲嶇疆婊戝姩鐘舵€侊紙甯?snap 鍥炲脊鍔ㄧ敾锛?        this.resetAdjustSlider(false);
       }
 
       const gap = foldGapFromServoAngle(foldAng);
       const isFineTune = action === 'left' || action === 'fine-tune-up'
         || action === 'right' || action === 'fine-tune-down';
 
-      if (isFineTune && isFoldBleModel && this._canControlDevice()) {
-        const sendText = (action === 'left' || action === 'fine-tune-up') ? '调大' : '调小';
+      if (isFineTune && isF1OrF2 && this._canControlDevice()) {
+        const sendText = (action === 'left' || action === 'fine-tune-up') ? '璋冨ぇ' : '璋冨皬';
         this.setData({ foldServoAngle: foldAng, foldGap: gap }, () => {
           const sendTune = () => {
-            console.log(`📤 [蓝牙] 发送"${sendText}"`);
+            console.log(`馃摛 [钃濈墮] 鍙戦€?${sendText}"`);
             this._commitBleCommandAfterUi({
               sendText,
               times: 1,
               interval: 200,
               verify: null,
-              label: '折叠微调'
+              label: '鎶樺彔寰皟'
             });
           };
           if (!this._foldAdjustActive) {
             this._foldAdjustActive = true;
-            console.log('📤 [蓝牙] 折叠微调：先发「调整折叠角度」');
-            this.sendDataMultiple('调整折叠角度', 1, 200);
+            console.log('馃摛 [钃濈墮] 鎶樺彔寰皟锛氬厛鍙戙€岃皟鏁存姌鍙犺搴︺€?);
+            this.sendDataMultiple('璋冩暣鎶樺彔瑙掑害', 1, 200);
             setTimeout(sendTune, 280);
           } else {
             sendTune();
@@ -5599,36 +5337,34 @@ Page({
       return;
     }
 
-    // --- B. 打开模式 (90~270 左侧区域) ---
+    // --- B. 鎵撳紑妯″紡 (90~270 宸︿晶鍖哄煙) ---
     let currentRot = this.data.angleRotation;
     let newRot = currentRot;
     const degStep = 3; 
 
-    // 左键: 增加角度 (往左/上抬) -> 逐渐靠近 180 (90度预设)
+    // 宸﹂敭: 澧炲姞瑙掑害 (寰€宸?涓婃姮) -> 閫愭笎闈犺繎 180 (90搴﹂璁?
     if (action === 'fine-tune-down') {
       newRot += degStep;
     } 
-    // 右键: 减小角度 (往右/下放) -> 逐渐靠近 90 (180度预设)
+    // 鍙抽敭: 鍑忓皬瑙掑害 (寰€鍙?涓嬫斁) -> 閫愭笎闈犺繎 90 (180搴﹂璁?
     else if (action === 'fine-tune-up') {
       newRot -= degStep;
     }
 
-    // 范围限制
+    // 鑼冨洿闄愬埗
     if (newRot < 90) newRot = 90;
     if (newRot > 270) newRot = 270;
 
-    // 将 CSS 旋转角度转换为实际角度
-    const actualAngle = 180 - newRot;
+    // 灏?CSS 鏃嬭浆瑙掑害杞崲涓哄疄闄呰搴?    const actualAngle = 180 - newRot;
 
     this.setData({ angleRotation: newRot });
     
-    // 关键：每次微调都检查一次角度，决定哪个按钮亮
-    // 传入实际角度，而不是 CSS 旋转角度
+    // 鍏抽敭锛氭瘡娆″井璋冮兘妫€鏌ヤ竴娆¤搴︼紝鍐冲畾鍝釜鎸夐挳浜?    // 浼犲叆瀹為檯瑙掑害锛岃€屼笉鏄?CSS 鏃嬭浆瑙掑害
     this.updateAngleText(actualAngle); 
   },
 
   // ===============================================
-  // 实时更新按钮状态 (修改：只有刚好90/180/160才亮)
+  // 瀹炴椂鏇存柊鎸夐挳鐘舵€?(淇敼锛氬彧鏈夊垰濂?0/180/160鎵嶄寒)
   // ===============================================
   updateAngleText(currentAngle) {
     if (!this.data.openAngleUiActive) return;
@@ -5655,30 +5391,28 @@ Page({
   },
 
 
-  // 关闭第一个提示（180度提示）
+  // 鍏抽棴绗竴涓彁绀猴紙180搴︽彁绀猴級
   dismissHint() {
-    if (this.data.angleHintBtnLocked) return; // 🔴 倒计时锁定中
+    if (this.data.angleHintBtnLocked) return; // 馃敶 鍊掕鏃堕攣瀹氫腑
     this.stopOpenAngleTutorialLoop();
     this.setData({ showAngleHint: false }); 
 
     // ==========================================
-    // 【接力逻辑】如果机型是 F1PRO/MAX，紧接着显示第二个弹窗
-    // 🔴 修改：只弹一次，使用本地存储记录
+    // 銆愭帴鍔涢€昏緫銆戝鏋滄満鍨嬫槸 F1PRO/MAX锛岀揣鎺ョ潃鏄剧ず绗簩涓脊绐?    // 馃敶 淇敼锛氬彧寮逛竴娆★紝浣跨敤鏈湴瀛樺偍璁板綍
     // ==========================================
     const currentModel = this.data.currentModel;
     const currentName = currentModel.name || '';
     const currentType = currentModel.type || '';
     
-    // 判断是否包含 F1PRO 或 F1MAX (转大写比较更稳妥)
+    // 鍒ゆ柇鏄惁鍖呭惈 F1PRO 鎴?F1MAX (杞ぇ鍐欐瘮杈冩洿绋冲Ε)
     const nameUpper = currentName.toUpperCase();
     const typeUpper = currentType.toUpperCase();
     
     if (nameUpper.includes('F1') && (typeUpper.includes('PRO') || typeUpper.includes('MAX'))) {
-      // 🔴 检查本地存储，如果已经弹过就不弹了
+      // 馃敶 妫€鏌ユ湰鍦板瓨鍌紝濡傛灉宸茬粡寮硅繃灏变笉寮逛簡
       const hasShown = wx.getStorageSync('hasShownNewProductHint_F1');
       if (!hasShown) {
-        // 延迟 200ms 让第一个弹窗消失动画播完，再弹第二个
-        setTimeout(() => {
+        // 寤惰繜 200ms 璁╃涓€涓脊绐楁秷澶卞姩鐢绘挱瀹岋紝鍐嶅脊绗簩涓?        setTimeout(() => {
           this.openNewProductHint();
         }, 200);
       }
@@ -5686,28 +5420,25 @@ Page({
   },
 
   // ===============================================
-  // 打开角度教程动画循环（灰色 -> 点击 -> 红色亮起）
-  // ===============================================
+  // 鎵撳紑瑙掑害鏁欑▼鍔ㄧ敾寰幆锛堢伆鑹?-> 鐐瑰嚮 -> 绾㈣壊浜捣锛?  // ===============================================
   startOpenAngleTutorialLoop() {
     this.stopOpenAngleTutorialLoop();
 
-    // 打开角度：灰色 -> 按下 -> 红色亮起
-    const startState = { light: false, text: '点击车把按键\n使指示灯亮' };
-    const endState = { light: true, text: '指示灯亮' };
+    // 鎵撳紑瑙掑害锛氱伆鑹?-> 鎸変笅 -> 绾㈣壊浜捣
+    const startState = { light: false, text: '鐐瑰嚮杞︽妸鎸夐敭\n浣挎寚绀虹伅浜? };
+    const endState = { light: true, text: '鎸囩ず鐏寒' };
 
-    // 第一帧：灰色状态
-    this.setData({
+    // 绗竴甯э細鐏拌壊鐘舵€?    this.setData({
       openAngleAnimLightOn: startState.light,
       openAngleAnimIsPressing: false,
       openAngleAnimText: startState.text
     });
 
     const loop = () => {
-      // 1. 等待1秒
-      const timer1 = setTimeout(() => {
-        this.setData({ openAngleAnimIsPressing: true }); // 模拟按下
+      // 1. 绛夊緟1绉?      const timer1 = setTimeout(() => {
+        this.setData({ openAngleAnimIsPressing: true }); // 妯℃嫙鎸変笅
 
-        // 2. 按下0.3秒后变化
+        // 2. 鎸変笅0.3绉掑悗鍙樺寲
         const timer2 = setTimeout(() => {
           this.setData({
             openAngleAnimLightOn: endState.light,
@@ -5715,15 +5446,13 @@ Page({
             openAngleAnimIsPressing: false
           });
 
-          // 3. 保持结果 2秒
-          const timer3 = setTimeout(() => {
-            // 重置
+          // 3. 淇濇寔缁撴灉 2绉?          const timer3 = setTimeout(() => {
+            // 閲嶇疆
             this.setData({
               openAngleAnimLightOn: startState.light,
               openAngleAnimText: startState.text
             });
-            // 4. 重置后等待1秒循环
-            const timer4 = setTimeout(loop, 1000);
+            // 4. 閲嶇疆鍚庣瓑寰?绉掑惊鐜?            const timer4 = setTimeout(loop, 1000);
             this.data.openAngleTutorialTimer = timer4;
           }, 2000);
           this.data.openAngleTutorialTimer = timer3;
@@ -5746,25 +5475,22 @@ Page({
   },
 
   // ===============================================
-  // 打开角度页面：切换指示灯状态
-  // ===============================================
+  // 鎵撳紑瑙掑害椤甸潰锛氬垏鎹㈡寚绀虹伅鐘舵€?  // ===============================================
   toggleOpenAngleLight() {
-    // 停止动画循环，避免干扰用户操作
-    this.stopOpenAngleTutorialLoop();
+    // 鍋滄鍔ㄧ敾寰幆锛岄伩鍏嶅共鎵扮敤鎴锋搷浣?    this.stopOpenAngleTutorialLoop();
     
     const newState = !this.data.openAngleLightOn;
     this.setData({
       openAngleLightOn: newState,
-      // 同时更新动画状态，确保视觉一致
-      openAngleAnimLightOn: newState,
-      openAngleAnimText: newState ? '指示灯已亮' : '点击使指示灯亮'
+      // 鍚屾椂鏇存柊鍔ㄧ敾鐘舵€侊紝纭繚瑙嗚涓€鑷?      openAngleAnimLightOn: newState,
+      openAngleAnimText: newState ? '鎸囩ず鐏凡浜? : '鐐瑰嚮浣挎寚绀虹伅浜?
     });
-    // 添加震动反馈
+    // 娣诲姞闇囧姩鍙嶉
     wx.vibrateShort({ type: 'light' });
   },
 
   // ===============================================
-  // 🔴 自动校准功能
+  // 馃敶 鑷姩鏍″噯鍔熻兘
   // ===============================================
   handleAutoCalibrate() {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
@@ -5789,12 +5515,12 @@ Page({
     if (!isF2 && !isMtUltra) return;
 
     if (!this._isBleWriteReady()) {
-      this._showCustomToast('蓝牙未就绪，请稍候再试', 'none', 2000);
+      this._showCustomToast('钃濈墮鏈氨缁紝璇风◢鍊欏啀璇?, 'none', 2000);
       return;
     }
 
-    console.log('📤 [蓝牙] 发送"自动调平"');
-    this.sendDataMultiple('自动调平', 2, 500);
+    console.log('馃摛 [钃濈墮] 鍙戦€?鑷姩璋冨钩"');
+    this.sendDataMultiple('鑷姩璋冨钩', 2, 500);
 
     this.setData({
       showCalibratingModal: true,
@@ -5806,9 +5532,9 @@ Page({
     }, 3000);
   },
   
-  // 🔴 关闭校准弹窗（带收缩退出动画）
+  // 馃敶 鍏抽棴鏍″噯寮圭獥锛堝甫鏀剁缉閫€鍑哄姩鐢伙級
   closeCalibratingModal() {
-    // 如果按钮禁用，不允许关闭
+    // 濡傛灉鎸夐挳绂佺敤锛屼笉鍏佽鍏抽棴
     if (this.data.calibratingBtnDisabled) {
       return;
     }
@@ -5818,13 +5544,11 @@ Page({
       this.setData({ 
         showCalibratingModal: false,
         calibratingModalClosing: false,
-        calibratingBtnDisabled: true // 重置按钮状态
-      });
+        calibratingBtnDisabled: true // 閲嶇疆鎸夐挳鐘舵€?      });
     }, 420);
   },
   
-  // 🔴 阻止背景滚动（空函数，用于 catchtouchmove）
-  preventMove() {
+  // 馃敶 闃绘鑳屾櫙婊氬姩锛堢┖鍑芥暟锛岀敤浜?catchtouchmove锛?  preventMove() {
     return false;
   },
   noop() {},
@@ -5843,29 +5567,28 @@ Page({
 
 
   // ===============================================
-  // 新增：高级设置交互逻辑
+  // 鏂板锛氶珮绾ц缃氦浜掗€昏緫
   // ===============================================
 
-  // F2 ULTRA 蓝牙远程控制 + 语音页桥接
-  _registerF2VoiceBridge() {
+  // F2 ULTRA 钃濈墮杩滅▼鎺у埗 + 璇煶椤垫ˉ鎺?  _registerF2VoiceBridge() {
     f2VoiceBridge.registerBridge({
       sendCommand: (cmd) => {
         if (!this._canControlDevice()) return;
         const model = this.data.currentModel;
         const afterSend = () => {
           if (!this._isBleLinked()) return;
-          const verify = isMtUltraCardModel(model) && (cmd === '打开' || cmd === '关闭')
+          const verify = isMtUltraCardModel(model) && (cmd === '鎵撳紑' || cmd === '鍏抽棴')
             ? { type: 'flap', cmd }
             : null;
           this._commitBleCommandAfterUi({
             sendText: cmd,
-            times: (cmd === '打开' || cmd === '关闭') ? 1 : 2,
+            times: (cmd === '鎵撳紑' || cmd === '鍏抽棴') ? 1 : 2,
             interval: 500,
             verify,
-            label: '语音控制'
+            label: '璇煶鎺у埗'
           });
         };
-        if (cmd === '打开' || cmd === '关闭') {
+        if (cmd === '鎵撳紑' || cmd === '鍏抽棴') {
           this._setFlapPanelStateOptimistic(cmd, afterSend);
         } else {
           afterSend();
@@ -5934,15 +5657,15 @@ Page({
       return;
     }
     const done = typeof afterUiReady === 'function' ? afterUiReady : null;
-    if (cmd === '打开') {
-      this._setFlapPanelData({ flapPanelState: 'moving', flapPanelStateText: '打开中', flapMotionDir: 'open' }, () => {
-        this._publishFlapToVoiceBridge('moving', '打开中');
+    if (cmd === '鎵撳紑') {
+      this._setFlapPanelData({ flapPanelState: 'moving', flapPanelStateText: '鎵撳紑涓?, flapMotionDir: 'open' }, () => {
+        this._publishFlapToVoiceBridge('moving', '鎵撳紑涓?);
         this._f2MotionGraceUntil = Date.now() + 12000;
         if (done) done();
       });
-    } else if (cmd === '关闭') {
-      this._setFlapPanelData({ flapPanelState: 'moving', flapPanelStateText: '收回中', flapMotionDir: 'close' }, () => {
-        this._publishFlapToVoiceBridge('moving', '收回中');
+    } else if (cmd === '鍏抽棴') {
+      this._setFlapPanelData({ flapPanelState: 'moving', flapPanelStateText: '鏀跺洖涓?, flapMotionDir: 'close' }, () => {
+        this._publishFlapToVoiceBridge('moving', '鏀跺洖涓?);
         this._f2MotionGraceUntil = Date.now() + 12000;
         if (done) done();
       });
@@ -5954,15 +5677,15 @@ Page({
   _resetFlapPanelState() {
     this.setData({
       flapPanelState: 'unknown',
-      flapPanelStateText: '状态未知'
+      flapPanelStateText: '鐘舵€佹湭鐭?
     });
-    this._publishFlapToVoiceBridge('unknown', '状态未知');
+    this._publishFlapToVoiceBridge('unknown', '鐘舵€佹湭鐭?);
   },
 
   handleVoiceControl() {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
     if (this._f2DemoActive) {
-      this._showCustomToast('演示进行中，请先停止', 'none', 1800);
+      this._showCustomToast('婕旂ず杩涜涓紝璇峰厛鍋滄', 'none', 1800);
       return;
     }
 
@@ -5993,7 +5716,7 @@ Page({
   handleF2RemoteControl(e) {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
     if (this._f2DemoActive) {
-      this._showCustomToast('演示进行中，请先停止', 'none', 1800);
+      this._showCustomToast('婕旂ず杩涜涓紝璇峰厛鍋滄', 'none', 1800);
       return;
     }
     const cmd = e.currentTarget.dataset.cmd;
@@ -6009,44 +5732,36 @@ Page({
       return;
     }
     if (this._isRemoteAssistAdminActive() && !this.data.remoteSessionBleConnected) {
-      this._showCustomToast('用户蓝牙未连接，无法控制', 'none', 2200);
+      this._showCustomToast('鐢ㄦ埛钃濈墮鏈繛鎺ワ紝鏃犳硶鎺у埗', 'none', 2200);
       return;
     }
-    if ((cmd === '打开' || cmd === '关闭') && this.data.flapPanelState === 'stealth') {
-      this._showCustomToast('隐蔽模式中，请先退出', 'none', 2000);
+    if ((cmd === '鎵撳紑' || cmd === '鍏抽棴') && this.data.flapPanelState === 'stealth') {
+      this._showCustomToast('闅愯斀妯″紡涓紝璇峰厛閫€鍑?, 'none', 2000);
       return;
     }
-    if (cmd === '打开' && isF3MaxModel(model) && this.data.f3DangerBlocked) {
-      this._showCustomToast('距地面过近，禁止翻开', 'none', 2200);
+    if (cmd === '鎵撳紑' && isF3MaxModel(model) && this.data.f3DangerBlocked) {
+      this._showCustomToast('璺濆湴闈㈣繃杩戯紝绂佹缈诲紑', 'none', 2200);
       return;
     }
 
-    console.log(`📤 [蓝牙] F2 远程控制发送"${cmd}"`);
-    const runControl = () => {
-      const flapTimes = isF3MaxModel(model) ? 3 : 2;
-      const afterSend = () => {
-        const verify = isMtUltraCardModel(model) && (cmd === '打开' || cmd === '关闭')
-          ? { type: 'flap', cmd }
-          : null;
-        this._commitBleCommandAfterUi({
-          sendText: cmd,
-          times: flapTimes,
-          interval: 500,
-          verify,
-          label: '远程控制'
-        });
-        wx.vibrateShort({ type: 'light' });
-      };
-      if (!this._isRemoteAssistAdminActive() && (cmd === '打开' || cmd === '关闭')) {
-        this._setFlapPanelStateOptimistic(cmd, afterSend);
-      } else {
-        afterSend();
-      }
+    console.log(`馃摛 [钃濈墮] F2 杩滅▼鎺у埗鍙戦€?${cmd}"`);
+    const afterSend = () => {
+      const verify = isMtUltraCardModel(model) && (cmd === '鎵撳紑' || cmd === '鍏抽棴')
+        ? { type: 'flap', cmd }
+        : null;
+      this._commitBleCommandAfterUi({
+        sendText: cmd,
+        times: 1,
+        interval: 500,
+        verify,
+        label: '杩滅▼鎺у埗'
+      });
+      wx.vibrateShort({ type: 'light' });
     };
-    if (isF3MaxModel(model) && (cmd === '打开' || cmd === '关闭')) {
-      this._f3EnsureFlapControlReady(runControl);
+    if (!this._isRemoteAssistAdminActive() && (cmd === '鎵撳紑' || cmd === '鍏抽棴')) {
+      this._setFlapPanelStateOptimistic(cmd, afterSend);
     } else {
-      runControl();
+      afterSend();
     }
   },
 
@@ -6075,12 +5790,12 @@ Page({
     this._f2DemoAwaitStable = null;
     this.setData({
       f2DemoRunning: true,
-      f2DemoStatusText: '演示进行中，翻板将自动循环开关…'
+      f2DemoStatusText: '婕旂ず杩涜涓紝缈绘澘灏嗚嚜鍔ㄥ惊鐜紑鍏斥€?
     });
     const state = this.data.flapPanelState;
-    const firstCmd = state === 'open' ? '关闭' : '打开';
+    const firstCmd = state === 'open' ? '鍏抽棴' : '鎵撳紑';
     this._sendF2DemoCommand(firstCmd);
-    const target = firstCmd === '打开' ? 'open' : 'closed';
+    const target = firstCmd === '鎵撳紑' ? 'open' : 'closed';
     if (state === target) {
       this._onF2DemoFlapStable(state);
     }
@@ -6100,8 +5815,8 @@ Page({
       f2DemoStatusText: ''
     });
     if (homeFold && wasActive && this.data.isConnected && isMtUltraCardModel(this.data.currentModel)) {
-      this._setFlapPanelStateOptimistic('关闭');
-      this.sendDataMultiple('关闭', 2, 500);
+      this._setFlapPanelStateOptimistic('鍏抽棴');
+      this.sendDataMultiple('鍏抽棴', 2, 500);
       wx.vibrateShort({ type: 'light' });
     }
   },
@@ -6109,18 +5824,18 @@ Page({
   _sendF2DemoCommand(cmd) {
     if (!this._f2DemoActive) return;
     if (!this._isBleLinked() && !this.data.isAdmin) return;
-    this._f2DemoAwaitStable = cmd === '打开' ? 'open' : 'closed';
+    this._f2DemoAwaitStable = cmd === '鎵撳紑' ? 'open' : 'closed';
     this._setFlapPanelStateOptimistic(cmd);
     if (this._isBleLinked()) {
       this.sendDataMultiple(cmd, 2, 500);
     } else if (this.data.isAdmin) {
       setTimeout(() => {
         if (!this._f2DemoActive) return;
-        this._onF2DemoFlapStable(cmd === '打开' ? 'open' : 'closed');
+        this._onF2DemoFlapStable(cmd === '鎵撳紑' ? 'open' : 'closed');
       }, 1200);
     }
     this.setData({
-      f2DemoStatusText: cmd === '打开' ? '正在打开…' : '正在关闭…'
+      f2DemoStatusText: cmd === '鎵撳紑' ? '姝ｅ湪鎵撳紑鈥? : '姝ｅ湪鍏抽棴鈥?
     });
   },
 
@@ -6132,7 +5847,7 @@ Page({
     }
     if (state !== 'open' && state !== 'closed') return;
     if (!this._f2DemoAwaitStable || state !== this._f2DemoAwaitStable) return;
-    const nextCmd = state === 'open' ? '关闭' : '打开';
+    const nextCmd = state === 'open' ? '鍏抽棴' : '鎵撳紑';
     this._f2DemoAwaitStable = null;
     this._sendF2DemoCommand(nextCmd);
   },
@@ -6216,13 +5931,13 @@ Page({
       return;
     }
 
-    console.log(`📤 [蓝牙] F2 调速 ${speed}%`);
+    console.log(`馃摛 [钃濈墮] F2 璋冮€?${speed}%`);
     this._commitBleCommandAfterUi({
-      sendText: `调速${speed}`,
+      sendText: `璋冮€?{speed}`,
       times: 2,
       interval: 400,
       verify: { type: 'speed', value: speed },
-      label: '调速'
+      label: '璋冮€?
     });
     wx.vibrateShort({ type: 'light' });
   },
@@ -6248,241 +5963,10 @@ Page({
       clearTimeout(this._f3CalRestoreTimer);
       this._f3CalRestoreTimer = null;
     }
-    this._f3CalAfterRestoreCallback = null;
     this._f3CalSampling = false;
     this._f3CalReadings = [];
     this._f3CalLastSamplePushAt = 0;
     this._f3CalWritingHeights = false;
-    this._f3CalClearFlapCloseWait();
-  },
-
-  _f3CalIsFlapClosed() {
-    return this.data.flapPanelState === 'closed';
-  },
-
-  _f3CalClearFlapCloseWait() {
-    this._f3CalAwaitFlapClose = false;
-    if (this._f3CalFlapCloseTimeout) {
-      clearTimeout(this._f3CalFlapCloseTimeout);
-      this._f3CalFlapCloseTimeout = null;
-    }
-    if (this.data.f3CalPreflightClosing) {
-      this.setData({ f3CalPreflightClosing: false, f3CalStatusText: '' });
-    }
-  },
-
-  _f3CalOnFlapClosedForCal() {
-    if (!this._f3CalAwaitFlapClose) return;
-    this._f3CalClearFlapCloseWait();
-    if (this.data.f3ShowCalOverlay && this.data.f3CalStep === 'preflight') {
-      this._f3CalEnterSample1();
-    }
-  },
-
-  _f3CalEnsureFlapClosedThen(onReady) {
-    if (typeof onReady !== 'function') return;
-    if (!this._isBleLinked()) {
-      this._showCustomToast('请先连接蓝牙', 'none', 2000);
-      return;
-    }
-    const state = this.data.flapPanelState;
-    if (state === 'stealth') {
-      this._showCustomToast('隐蔽模式中，请先退出', 'none', 2200);
-      return;
-    }
-    if (state === 'fault') {
-      this._showCustomToast('牌照架故障，请先排除后再校准', 'none', 2500);
-      return;
-    }
-    if (this._f3CalIsFlapClosed()) {
-      onReady();
-      return;
-    }
-    if (this._f3CalAwaitFlapClose) return;
-
-    this._f3CalAwaitFlapClose = true;
-    this.setData({
-      f3CalPreflightClosing: true,
-      f3CalStatusText: '正在归位…'
-    });
-
-    if (isF3MaxModel(this.data.currentModel)) {
-      // 配置模式下「关闭」常被钥匙/模式拦截；F3FR 与点 × 取消时相同，直接折回 item4
-      this._setFlapPanelData({
-        flapPanelState: 'moving',
-        flapPanelStateText: '归位中',
-        flapMotionDir: 'close'
-      });
-      this._f3CalSendFoldCmd('R');
-      if (state === 'open') {
-        this._setFlapPanelStateOptimistic('关闭', () => {
-          this._commitBleCommandAfterUi({
-            sendText: '关闭',
-            times: 2,
-            interval: 500,
-            verify: { type: 'flap', cmd: '关闭' },
-            label: '自动校准'
-          });
-        });
-      }
-    } else {
-      const alreadyClosing = state === 'moving' && this.data.flapMotionDir === 'close';
-      if (!alreadyClosing) {
-        this._setFlapPanelStateOptimistic('关闭', () => {
-          this._commitBleCommandAfterUi({
-            sendText: '关闭',
-            times: 1,
-            interval: 500,
-            verify: { type: 'flap', cmd: '关闭' },
-            label: '自动校准'
-          });
-          wx.vibrateShort({ type: 'light' });
-        });
-      }
-    }
-
-    if (this._f3CalFlapCloseTimeout) clearTimeout(this._f3CalFlapCloseTimeout);
-    this._f3CalFlapCloseTimeout = setTimeout(() => {
-      if (!this._f3CalAwaitFlapClose) return;
-      this._f3CalClearFlapCloseWait();
-      this._showCustomToast('牌照架未收回，请手动关闭后重试', 'none', 3000);
-    }, 15000);
-  },
-
-  _f3CalActiveBranch() {
-    return this._f3CalBranch || this.data.f3CalBranch || 'A';
-  },
-
-  _f3CalStepNavDefs(branch) {
-    const b = branch || this._f3CalActiveBranch();
-    const common = [
-      { id: 'preflight', label: '准备确认', no: 1 },
-      { id: 'sample1', label: '首次检测', no: 2 }
-    ];
-    if (b === 'B') {
-      return common.concat([
-        { id: 'wheel', label: '波轮微调', no: 3 },
-        { id: 'compress', label: '按压压缩', no: 3 },
-        { id: 'restoring', label: '恢复折叠', no: 4 },
-        { id: 'sample2', label: '二次采集', no: 4 },
-        { id: 'done', label: '标定完成', no: 5 }
-      ]);
-    }
-    return common.concat([
-      { id: 'wheel', label: '波轮微调', no: 3 },
-      { id: 'cardboard', label: '放置纸板', no: 3 },
-      { id: 'hold', label: '纸板标定', no: 4 },
-      { id: 'restoring', label: '恢复折叠', no: 4 },
-      { id: 'sample2', label: '二次采集', no: 5 },
-      { id: 'done', label: '标定完成', no: 6 }
-    ]);
-  },
-
-  _f3CalStepTotalCount(branch) {
-    const b = branch || this._f3CalActiveBranch();
-    return b === 'B' ? 5 : 6;
-  },
-
-  _f3CalResolveStepNo(stepId, branch) {
-    const b = branch || this._f3CalActiveBranch();
-    if (stepId === 'preflight') return 1;
-    if (stepId === 'sample1') return 2;
-    if (b === 'B') {
-      if (stepId === 'wheel' || stepId === 'compress') return 3;
-      if (stepId === 'restoring' || stepId === 'sample2') return 4;
-      if (stepId === 'done' || stepId === 'writing' || stepId === 'writeResult') return 5;
-      return 0;
-    }
-    if (stepId === 'wheel' || stepId === 'cardboard') return 3;
-    if (stepId === 'hold' || stepId === 'restoring') return 4;
-    if (stepId === 'sample2') return 5;
-    if (stepId === 'done' || stepId === 'writing' || stepId === 'writeResult') return 6;
-    return 0;
-  },
-
-  _f3CalStepMeta(stepId, branch) {
-    const b = branch || this._f3CalActiveBranch();
-    const list = this._f3CalStepNavDefs(b);
-    const hit = list.find((s) => s.id === stepId);
-    const no = hit ? hit.no : this._f3CalResolveStepNo(stepId, b);
-    return {
-      no,
-      label: hit ? hit.label : '',
-      total: this._f3CalStepTotalCount(b)
-    };
-  },
-
-  _f3CalRefreshStepNavList(activeStepId) {
-    this._f3CalSyncStepMeta(activeStepId);
-  },
-
-  _f3CalStepMetaPatch(stepId, patch, branch) {
-    if (!stepId || !patch) return patch;
-    const meta = this._f3CalStepMeta(stepId, branch);
-    patch.f3CalStepNo = meta.no;
-    patch.f3CalStepTotal = meta.total;
-    return patch;
-  },
-
-  _f3CalSyncStepMeta(stepId) {
-    if (!stepId) return;
-    const branch = this._f3CalActiveBranch();
-    const displayId = stepId === 'hold' ? 'hold' : stepId;
-    const meta = this._f3CalStepMeta(displayId, branch);
-    this.setData({
-      f3CalStepNo: meta.no,
-      f3CalStepTotal: meta.total
-    });
-  },
-
-  _F3_CAL_VOLATILITY_MAX_MM: 50,
-
-  _f3CalMean(readings) {
-    const arr = (readings || []).filter((n) => Number.isFinite(n) && n > 0);
-    if (!arr.length) return 0;
-    const sum = arr.reduce((a, b) => a + b, 0);
-    return Math.round(sum / arr.length);
-  },
-
-  _f3CalMapStepForBranch(stepId, branch) {
-    if (branch === 'A') {
-      if (stepId === 'compress') return 'cardboard';
-      return stepId;
-    }
-    if (stepId === 'cardboard' || stepId === 'hold') return 'compress';
-    return stepId;
-  },
-
-  _f3CalSwitchBranch(branch) {
-    this._f3CalBranch = branch;
-    const cur = this.data.f3CalShowHoldModal ? 'hold' : this.data.f3CalStep;
-    const mapped = this._f3CalMapStepForBranch(cur, branch);
-    const patch = { f3CalBranch: branch, f3CalShowHoldModal: false };
-    if (mapped === 'wheel') {
-      this._f3CalEnterWheelStep(branch);
-    } else if (mapped === 'cardboard' || mapped === 'compress') {
-      this._f3CalEnterBranchGuideStep(branch);
-    } else if (mapped === 'sample2') {
-      const desc = branch === 'A'
-        ? '请保持纸板水平，不要移动或晃动。'
-        : '请保持按压或载人状态，不要松开。';
-      Object.assign(patch, this._f3CalStepMetaPatch('sample2', {
-        f3CalStep: 'sample2',
-        f3CalTitle: '采集标定数据',
-        f3CalDesc: desc,
-        f3CalStatusText: '5 秒内取最小值作为危险高度'
-      }, branch));
-    } else {
-      this._f3CalStepMetaPatch(mapped, patch, branch);
-    }
-    this.setData(patch);
-    this._f3CalRefreshStepNavList(mapped);
-  },
-
-  _f3CalRange(readings) {
-    const arr = (readings || []).filter((n) => Number.isFinite(n) && n > 0);
-    if (arr.length < 2) return 0;
-    return Math.max(...arr) - Math.min(...arr);
   },
 
   _f3CalMedian(readings) {
@@ -6495,7 +5979,7 @@ Page({
       : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
   },
 
-  /** 去掉明显偏低的脏点（如 HGT:67 混入 HGT:670），再取最小值 */
+  /** 鍘绘帀鏄庢樉鍋忎綆鐨勮剰鐐癸紙濡?HGT:67 娣峰叆 HGT:670锛夛紝鍐嶅彇鏈€灏忓€?*/
   _f3CalMin(readings) {
     const arr = (readings || []).filter((n) => Number.isFinite(n) && n > 0);
     if (!arr.length) return 0;
@@ -6508,7 +5992,7 @@ Page({
 
   _f3CalFormatLive(units) {
     const n = Math.round(Number(units));
-    if (!Number.isFinite(n) || n <= 0) return '—';
+    if (!Number.isFinite(n) || n <= 0) return '鈥?;
     return this._f3FormatHeightMm(n) || `${n} mm`;
   },
 
@@ -6527,8 +6011,8 @@ Page({
     const step = this.data.f3CalStep;
     if (step === 'sample2') {
       patch.f3CalMedianText = this._f3CalFormatLive(this._f3CalMin(this._f3CalReadings));
-    } else if (step === 'sample1' && this._f3CalReadings.length >= 1) {
-      patch.f3CalMedianText = this._f3CalFormatLive(this._f3CalMean(this._f3CalReadings));
+    } else if (this._f3CalReadings.length >= 3) {
+      patch.f3CalMedianText = this._f3CalFormatLive(this._f3CalMedian(this._f3CalReadings));
     }
     this.setData(patch);
   },
@@ -6552,7 +6036,7 @@ Page({
       this._enqueueBleSendBurst(cmd, n, 120);
       return;
     }
-    // F3FR 是幂等操作（重复执行结果一样），发两遍提高到达率，抵御偶发丢包
+    // F3FR 鏄箓绛夋搷浣滐紙閲嶅鎵ц缁撴灉涓€鏍凤級锛屽彂涓ら亶鎻愰珮鍒拌揪鐜囷紝鎶靛尽鍋跺彂涓㈠寘
     if (tag === 'R') {
       this._enqueueBleSend('F3FR#', 250);
       this._enqueueBleSend('F3FR#', 250);
@@ -6564,24 +6048,23 @@ Page({
     if (this.data.f3CalStep !== 'wheel') return;
     const dir = e.currentTarget.dataset.dir;
     if (dir !== 'up' && dir !== 'down') return;
-    const delta = dir === 'up' ? 1 : -1;
-    this._f3CalApplyRulerIndex((this._f3CalRulerIndex || 0) + delta, true);
+    this._f3CalSendFoldCmd(dir === 'up' ? 'U' : 'D', 1);
+    wx.vibrateShort({ type: 'light' });
   },
 
   _f3CalStartSample(stepAfter, onDone) {
     this._f3CalSampling = true;
     this._f3CalReadings = [];
     this._f3CalLastSamplePushAt = 0;
-    const durationSec = 5;
-    let left = durationSec;
+    let left = 5;
     const initMm = Math.round(Number(this.data.f3HeightMm)) || 0;
-    const initLive = initMm > 0 ? this._f3CalFormatLive(initMm) : '—';
+    const initLive = initMm > 0 ? this._f3CalFormatLive(initMm) : '鈥?;
     this.setData({
       f3CalStep: stepAfter === 'sample1' ? 'sample1' : 'sample2',
       f3CalCountdown: left,
       f3CalLiveText: initLive,
       f3CalMedianText: '',
-      f3CalStatusText: stepAfter === 'sample1' ? '正在检测基准高度…' : '正在采集标定数据…'
+      f3CalStatusText: stepAfter === 'sample1' ? '姝ｅ湪妫€娴嬪熀鍑嗛珮搴︹€? : '姝ｅ湪閲囬泦鏍囧畾鏁版嵁鈥?
     });
     if (initMm > 0) this._f3CalPushReading(initMm);
     if (this._f3CalLiveTimer) clearInterval(this._f3CalLiveTimer);
@@ -6606,10 +6089,9 @@ Page({
       }
       this._f3CalSampling = false;
       const readings = this._f3CalReadings.slice();
-      const mean = this._f3CalMean(readings);
+      const median = this._f3CalMedian(readings);
       const minimum = this._f3CalMin(readings);
-      const range = this._f3CalRange(readings);
-      if (typeof onDone === 'function') onDone({ mean, minimum, readings, range });
+      if (typeof onDone === 'function') onDone({ median, minimum, readings });
     }, 1000);
   },
 
@@ -6620,91 +6102,33 @@ Page({
     this.setData({
       f3ShowCalOverlay: false,
       f3CalShowHoldModal: false,
-      f3CalShowVolatilityModal: false,
-      f3CalStepNo: 0,
-      f3CalStepTotal: 6,
       f3CalStep: '',
       f3CalBranch: '',
-      f3CalTitle: '自动标定',
+      f3CalTitle: '鑷姩鏍囧畾',
       f3CalDesc: '',
       f3CalTargetLabel: '',
       f3CalLiveText: '',
-      f3CalTargetText: '',
-      f3CalWheelHint: '',
-      f3CalLimitHint: '',
       f3CalMedianText: '',
       f3CalResultText: '',
       f3CalStatusText: '',
-      f3CalCountdown: 0,
-      f3CalPreflightClosing: false
+      f3CalCountdown: 0
     });
   },
 
-  /** 标定结束：保持向导遮罩，填入高度并维持测高配置模式 */
-  _f3CalPrepareHeightWriteUi(safeMmText, dangerMmText) {
+  /** 鏍囧畾缁撴潫锛氬叧鎺夐伄缃┿€佹墦寮€楂樼骇璁剧疆銆佸～鍏ラ珮搴︼紝淇濇寔娴嬮珮閰嶇疆妯″紡 */
+  _f3CalReleaseForManualWrite(safeMmText, dangerMmText) {
+    this._clearF3CalTimer();
+    this._f3CalBranch = '';
+    this._f3CalH0Units = 0;
     this.setData({
+      f3ShowCalOverlay: false,
+      f3CalShowHoldModal: false,
+      f3CalStep: '',
+      f3CalResultText: '',
+      f3CalStatusText: '',
       f3BaseInput: safeMmText ? String(safeMmText) : this.data.f3BaseInput,
       f3DangerInput: dangerMmText ? String(dangerMmText) : this.data.f3DangerInput,
-      f3HeightConfigModeOn: true
-    });
-  },
-
-  /** 写入前确保固件处于测高配置模式（标定中 F3FR/关闭会退出，须自动重发 M1#） */
-  _f3EnsureHeightConfigModeForWrite(options) {
-    const opts = options || {};
-    return new Promise((resolve, reject) => {
-      if (!this._canControlDevice() || !this._isBleLinked()) {
-        reject(new Error('ble not ready'));
-        return;
-      }
-      const timeoutMs = opts.timeoutMs != null ? opts.timeoutMs : 15000;
-      const settleMs = opts.readyMs != null ? opts.readyMs : 500;
-      const maxM1Attempts = opts.maxM1Attempts != null ? opts.maxM1Attempts : 8;
-      const deadline = Date.now() + timeoutMs;
-      let m1Attempts = 0;
-      let lastM1At = 0;
-
-      this._f3HeightCfgLocalUntil = Date.now() + (opts.holdMs || 120000);
-      this.setData({ f3HeightConfigModeOn: true });
-      this._bumpF3HeightBleGrace(90000);
-
-      const sendM1 = () => {
-        if (m1Attempts >= maxM1Attempts) return;
-        m1Attempts++;
-        if (opts.clearQueue !== false && m1Attempts === 1) {
-          this._f3CancelHeightCharTimers();
-          this._clearBleSendQueue();
-        }
-        lastM1At = Date.now();
-        this._f3LastStatusF3c = null;
-        this.sendData('M1#', 1000);
-        if (m1Attempts <= 2) {
-          setTimeout(() => this.sendData('M1#', 1000), 700);
-        }
-      };
-
-      sendM1();
-
-      const tick = () => {
-        if (!this._isBleLinked()) {
-          reject(new Error('ble lost'));
-          return;
-        }
-        if (this._f3LastStatusF3c === 1) {
-          this._f3CfgReadyAt = Date.now() + settleMs;
-          setTimeout(resolve, settleMs);
-          return;
-        }
-        if (Date.now() >= deadline) {
-          reject(new Error('cfg mode timeout'));
-          return;
-        }
-        if (m1Attempts < maxM1Attempts && Date.now() - lastM1At >= 2000) {
-          sendM1();
-        }
-        setTimeout(tick, 200);
-      };
-      setTimeout(tick, 300);
+      showSettingsModal: true
     });
   },
 
@@ -6713,192 +6137,43 @@ Page({
     if (toastText) this._showCustomToast(toastText, 'none', 2500);
   },
 
-  _F3_CAL_RULER_VISUAL_PERIOD: 91,
-
-  _f3CalWheelTickCount() {
-    return this._F3_CAL_RULER_VISUAL_PERIOD || 91;
-  },
-
-  _f3CalPrepareWheelRulerState(branch) {
-    const limits = this._f3CalInitWheelLimits();
-    let startAng = Math.round(Number(this._f3CalFoldLimit)) || FOLD_SERVO_ANGLE_DEFAULT;
-    if (limits.minA <= limits.maxA) {
-      startAng = Math.max(limits.minA, Math.min(limits.maxA, startAng));
-    }
-    this._f3CalPreviewStartAngle = startAng;
-    this._f3CalPreviewAngle = startAng;
-    this._f3CalRulerIndex = 0;
-    this._f3CalRulerLastIndex = 0;
-    return {
-      limits,
-      tickCount: this._f3CalWheelTickCount(),
-      translateX: 0
-    };
-  },
-
-  _f3CalRulerIndexToTranslate(index) {
-    const tick = this.tickWidthPx || 20;
-    return -Math.round(Number(index) || 0) * tick;
-  },
-
-  _f3CalIndexFromTranslate(trans) {
-    const tick = this.tickWidthPx || 20;
-    return Math.round(-(Number(trans) || 0) / tick);
-  },
-
-  _f3CalRulerIndexBounds() {
-    const start = this._f3CalPreviewStartAngle ?? FOLD_SERVO_ANGLE_DEFAULT;
-    const minAng = this._f3CalPreviewMinAngle();
-    const maxAng = this._f3CalPreviewMaxAngle();
-    if (minAng > maxAng) return { minIndex: 0, maxIndex: 0 };
-    return {
-      minIndex: start - maxAng,
-      maxIndex: start - minAng
-    };
-  },
-
-  _f3CalClampRulerTranslate(trans) {
-    const tick = this.tickWidthPx || 20;
-    const { minIndex, maxIndex } = this._f3CalRulerIndexBounds();
-    const minT = -(maxIndex * tick);
-    const maxT = -(minIndex * tick);
-    if (trans < minT) return minT;
-    if (trans > maxT) return maxT;
-    return trans;
-  },
-
-  _f3CalSnapRulerToIndex(index) {
-    const clamped = this._f3CalClampRulerIndex(index);
-    return {
-      index: clamped,
-      translateX: this._f3CalRulerIndexToTranslate(clamped)
-    };
-  },
-
-  _f3CalSendRulerIndexDelta(prev, next) {
-    if (next === prev) return;
-    const step = Math.abs(next - prev);
-    const tag = next > prev ? 'U' : 'D';
-    this._f3CalSendFoldCmd(tag, step);
-    wx.vibrateShort({ type: 'light' });
-    this._f3CalRulerLastIndex = next;
-    this._f3CalRulerIndex = next;
-    this._f3CalPreviewAngle = this._f3CalAngleFromRulerIndex(next);
-  },
-
-  _f3CalInitWheelLimits() {
-    const fold = Math.max(
-      FOLD_SERVO_ANGLE_MIN,
-      Math.min(
-        FOLD_SERVO_ANGLE_MAX,
-        Math.round(Number(this.data.foldServoAngle)) || FOLD_SERVO_ANGLE_DEFAULT
-      )
-    );
-    let open = this._lastBleOpenServoAngle;
-    if (open == null || !Number.isFinite(open)) {
-      open = Math.round(Number(this.data.currentAngle)) || 0;
-    }
-    open = Math.max(FOLD_SERVO_ANGLE_MIN, Math.min(FOLD_SERVO_ANGLE_MAX, open));
-    this._f3CalFoldLimit = fold;
-    this._f3CalOpenLimit = open;
-    const minA = open + 1;
-    const maxA = fold - 1;
-    const limitHint = minA <= maxA
-      ? `范围 ${minA}°–${maxA}°`
-      : '打开点与折叠点过近';
-    return { minA, maxA, limitHint, fold, open };
-  },
-
-  _f3CalPreviewMinAngle() {
-    const open = this._f3CalOpenLimit ?? 0;
-    const fold = this._f3CalFoldLimit ?? FOLD_SERVO_ANGLE_DEFAULT;
-    if (open >= fold) return FOLD_SERVO_ANGLE_MAX;
-    return open + 1;
-  },
-
-  _f3CalPreviewMaxAngle() {
-    const open = this._f3CalOpenLimit ?? 0;
-    const fold = this._f3CalFoldLimit ?? FOLD_SERVO_ANGLE_DEFAULT;
-    if (open >= fold) return FOLD_SERVO_ANGLE_MIN;
-    return fold - 1;
-  },
-
-  _f3CalAngleFromRulerIndex(index) {
-    const start = this._f3CalPreviewStartAngle ?? this._f3CalFoldLimit ?? FOLD_SERVO_ANGLE_DEFAULT;
-    return start - (Number(index) || 0);
-  },
-
-  _f3CalClampRulerIndex(index) {
-    const minA = this._f3CalPreviewMinAngle();
-    const maxA = this._f3CalPreviewMaxAngle();
-    if (minA > maxA) return this._f3CalRulerIndex || 0;
-    const ang = this._f3CalAngleFromRulerIndex(index);
-    if (ang < minA) return (this._f3CalPreviewStartAngle || 0) - minA;
-    if (ang > maxA) return (this._f3CalPreviewStartAngle || 0) - maxA;
-    return index;
-  },
-
-  _f3CalSyncWheelAngleUi(index) {
-    const ang = this._f3CalAngleFromRulerIndex(index);
-    this._f3CalPreviewAngle = ang;
-    return {
-      f3CalTranslateX: this._f3CalRulerIndexToTranslate(index),
-      f3CalRulerTransition: 'none'
-    };
-  },
-
   _f3CalEnterWheelStep(branch) {
     const isA = branch === 'A';
     this._f3CalBranch = branch;
-    const prep = this._f3CalPrepareWheelRulerState(branch);
-    const h0Text = this._f3CalFormatLive(this._f3CalH0Units);
-    const liveMm = Math.round(Number(this.data.f3HeightMm)) || 0;
-    const liveText = liveMm > 0 ? this._f3CalFormatLive(liveMm) : '—';
-    const wheelHint = isA
-      ? '让牌照底部的点位尽可能地靠近于轮胎，找出最小间距'
-      : '按压后尾或载人，让牌照尽量靠近轮胎，找出最小间距';
-    this.setData(this._f3CalStepMetaPatch('wheel', {
+    this._f3CalRulerLastIndex = 0;
+    this.setData({
       f3CalStep: 'wheel',
       f3CalBranch: branch,
-      f3CalTitle: '波轮微调',
-      f3CalDesc: '',
-      f3CalStatusText: '',
-      f3CalLiveText: liveText,
-      f3CalTargetText: h0Text,
-      f3CalWheelHint: wheelHint,
-      f3CalLimitHint: prep.limits.limitHint,
-      f3CalTicks: new Array(prep.tickCount).fill(0),
-      f3CalPadTicks: new Array(50).fill(0),
-      f3CalTranslateX: prep.translateX,
+      f3CalTitle: isA ? '鍒嗘敮 A锛氱焊鏉挎爣瀹? : '鍒嗘敮 B锛氭寜鍘嬫爣瀹?,
+      f3CalDesc: isA
+        ? `棣栨璇绘暟 ${this._f3CalFormatLive(this._f3CalH0Units)}锛堜綆浜?400 mm锛夈€傛粦鍔ㄦ尝杞垨鐐规寜閽井璋冪煭灏俱€俙
+        : `棣栨璇绘暟 ${this._f3CalFormatLive(this._f3CalH0Units)}锛堜笉浣庝簬 400 mm锛夈€傛粦鍔ㄦ尝杞垨鐐规寜閽井璋冪煭灏俱€俙,
+      f3CalStatusText: '鐐硅皟澶?璋冨皬鍚庣煭灏惧簲绔嬪埢寰姩锛涘畬鎴愬悗鐐广€屾垜宸茬粡鍑嗗濂戒簡銆?,
+      f3CalTicks: new Array(46).fill(0),
+      f3CalPadTicks: new Array(20).fill(0),
+      f3CalTranslateX: 0,
       f3CalRulerTransition: 'none'
-    }, branch));
-    this._f3CalSyncStepMeta('wheel');
+    });
   },
 
-  _f3CalApplyRulerIndex(newIndex, sendBle) {
-    const clamped = this._f3CalClampRulerIndex(newIndex);
-    const prev = this._f3CalRulerLastIndex || 0;
-    const patch = this._f3CalSyncWheelAngleUi(clamped);
-    if (clamped === prev) {
-      this.setData(patch);
-      return;
-    }
-    if (sendBle) {
-      this._f3CalSendRulerIndexDelta(prev, clamped);
-    } else {
-      this._f3CalRulerLastIndex = clamped;
-      this._f3CalRulerIndex = clamped;
-      this._f3CalPreviewAngle = this._f3CalAngleFromRulerIndex(clamped);
-    }
-    this.setData(patch);
+  _f3CalClampRulerTranslate(trans) {
+    const maxIdx = 25;
+    const minT = -(maxIdx * (this.tickWidthPx || 20));
+    if (trans > 0) return 0;
+    if (trans < minT) return minT;
+    return trans;
+  },
+
+  _f3CalIndexFromTranslate(trans) {
+    return Math.round(-(trans || 0) / (this.tickWidthPx || 20));
   },
 
   onF3CalRulerTouchStart(e) {
     if (this.data.f3CalStep !== 'wheel') return;
-    this._f3CalRulerTouchActive = true;
     const touchX = e.touches[0].clientX;
     this._f3CalTouchStartX = touchX;
-    this._f3CalTouchStartIndex = this._f3CalRulerLastIndex || 0;
+    this._f3CalStartTranslateX = this.data.f3CalTranslateX || 0;
+    this._f3CalRulerLastIndex = this._f3CalIndexFromTranslate(this._f3CalStartTranslateX);
   },
 
   onF3CalRulerTouchMove(e) {
@@ -6907,299 +6182,150 @@ Page({
       this.onF3CalRulerTouchStart(e);
       return;
     }
-    if (!this.data.f3CalTicks || !this.data.f3CalTicks.length) {
-      const tickCount = this._f3CalWheelTickCount();
-      this.setData({
-        f3CalTicks: new Array(tickCount).fill(0),
-        f3CalPadTicks: new Array(50).fill(0)
-      });
-    }
-    const tick = this.tickWidthPx || 20;
     const diff = (e.touches[0].clientX - this._f3CalTouchStartX) * OPEN_ANGLE_RULER_SENSITIVITY;
-    const indexDelta = Math.round(-diff / tick);
-    const snapped = this._f3CalSnapRulerToIndex((this._f3CalTouchStartIndex || 0) + indexDelta);
-    this.setData({
-      f3CalTranslateX: snapped.translateX,
-      f3CalRulerTransition: 'none'
-    });
+    const newTrans = this._f3CalClampRulerTranslate(this._f3CalStartTranslateX + diff);
+    this.setData({ f3CalTranslateX: newTrans, f3CalRulerTransition: 'none' });
+    const idx = this._f3CalIndexFromTranslate(newTrans);
     const prev = this._f3CalRulerLastIndex;
-    if (snapped.index !== prev) {
-      this._f3CalSendRulerIndexDelta(prev, snapped.index);
+    if (idx !== prev) {
+      const step = Math.abs(idx - prev);
+      const tag = idx > prev ? 'U' : 'D';
+      this._f3CalSendFoldCmd(tag, step);
+      this._f3CalRulerLastIndex = idx;
+      wx.vibrateShort({ type: 'light' });
     }
   },
 
   onF3CalRulerTouchEnd() {
-    const snapped = this._f3CalSnapRulerToIndex(this._f3CalRulerLastIndex || 0);
-    this.setData({
-      f3CalTranslateX: snapped.translateX,
-      f3CalRulerTransition: 'none'
-    });
-    this._f3CalRulerTouchActive = false;
     this._f3CalTouchStartX = null;
-    this._f3CalTouchStartIndex = null;
+    this._f3CalStartTranslateX = null;
   },
 
   _f3CalAfterSample1(result) {
-    const mean = result && typeof result === 'object' ? result.mean : result;
-    const range = result && typeof result === 'object' ? result.range : 0;
-    if (!mean) {
-      this._f3CalAbortWithToast('未采到有效高度，请检查传感器后重试');
+    const median = result && typeof result === 'object' ? result.median : result;
+    if (!median) {
+      this._f3CalAbortWithToast('鏈噰鍒版湁鏁堥珮搴︼紝璇锋鏌ヤ紶鎰熷櫒鍚庨噸璇?);
       return;
     }
-    const maxJump = this._F3_CAL_VOLATILITY_MAX_MM || 50;
-    if (range > maxJump) {
+    this._f3CalH0Units = median;
+    const branch = median < 400 ? 'A' : 'B';
+    this._f3CalEnterWheelStep(branch);
+  },
+
+  _f3CalAfterRestore() {
+    const branch = this._f3CalBranch;
+    if (branch === 'A') {
       this.setData({
-        f3CalShowVolatilityModal: true,
-        f3CalStatusText: `数据波动 ${range} mm，超过 ${maxJump} mm 上限`
+        f3CalStep: 'cardboard',
+        f3CalTitle: '鏀剧疆绾告澘',
+        f3CalDesc: '璇峰皢绾告澘鎴栧钩鏉挎斁鍦ㄧ墝鐨勬渶涓嬫部锛屼笌鐗屼繚鎸佹按骞冲榻愶紝澶ц嚧浼颁竴涓嬭窛绂诲嵆鍙€?,
+        f3CalStatusText: '鎽嗗ソ鍚庣偣鍑讳笅鏂规寜閽?
       });
       return;
     }
-    this._f3CalH0Units = mean;
-    const branch = mean < 400 ? 'A' : 'B';
-    this._f3CalEnterWheelStep(branch);
-    this._f3CalSyncStepMeta('wheel');
-  },
-
-  onF3CalVolatilityDismiss() {
-    if (!this.data.f3CalShowVolatilityModal) return;
-    this.setData({ f3CalShowVolatilityModal: false });
-    this._f3CalSyncStepMeta('sample1');
-  },
-
-  onF3CalVolatilityRetry() {
-    if (!this.data.f3CalShowVolatilityModal) return;
-    this.setData({ f3CalShowVolatilityModal: false });
-    this._f3CalEnterSample1();
-  },
-
-  _f3CalEnterBranchGuideStep(branch) {
-    const b = branch || this._f3CalActiveBranch();
-    if (b === 'A') {
-      this.setData(this._f3CalStepMetaPatch('cardboard', {
-        f3CalStep: 'cardboard',
-        f3CalBranch: 'A',
-        f3CalTitle: '放置纸板',
-        f3CalDesc: '',
-        f3CalStatusText: ''
-      }, b));
-      this._f3CalSyncStepMeta('cardboard');
-      return;
-    }
-    this.setData(this._f3CalStepMetaPatch('compress', {
+    this.setData({
       f3CalStep: 'compress',
-      f3CalBranch: 'B',
-      f3CalTitle: '按压压缩',
-      f3CalDesc: '',
-      f3CalStatusText: ''
-    }, b));
-    this._f3CalSyncStepMeta('compress');
-  },
-
-  _f3CalEnterRestorePhase(onDone) {
-    this._f3CalAfterRestoreCallback = typeof onDone === 'function' ? onDone : null;
-    this.setData(this._f3CalStepMetaPatch('restoring', {
-      f3CalStep: 'restoring',
-      f3CalTitle: '恢复折叠角',
-      f3CalStatusText: '短尾正在回到正常角度（item4）…'
-    }));
-    this._f3CalSyncStepMeta('restoring');
-    this._f3CalSendFoldCmd('R');
-    if (this._f3CalRestoreTimer) clearTimeout(this._f3CalRestoreTimer);
-    this._f3CalRestoreTimer = setTimeout(() => {
-      this._f3CalRestoreTimer = null;
-      if (this._f3CalAfterRestoreCallback) {
-        const fn = this._f3CalAfterRestoreCallback;
-        this._f3CalAfterRestoreCallback = null;
-        fn();
-      }
-    }, 2200);
-  },
-
-  _f3CalAfterRestoreToSample() {
-    const branch = this._f3CalActiveBranch();
-    const desc = branch === 'A'
-      ? '请保持纸板水平，不要移动或晃动。'
-      : '请保持按压或载人状态，不要松开。';
-    this.setData(this._f3CalStepMetaPatch('sample2', {
-      f3CalStep: 'sample2',
-      f3CalTitle: '采集标定数据',
-      f3CalDesc: desc,
-      f3CalStatusText: '5 秒内取最小值作为危险高度'
-    }));
-    this._f3CalSyncStepMeta('sample2');
-    this._f3CalStartSample('sample2', (result) => this._f3CalFinishWithSample(result));
+      f3CalTitle: '鎸夊帇鍘嬬缉',
+      f3CalDesc: '璇锋寜鍘嬪悗灏撅紝鎴栬浇浜鸿杞儙鍘嬩笅閬块渿锛屾ā鎷熷彲鑳芥墦鍒拌疆鑳庣殑楂樺害銆?,
+      f3CalStatusText: '鍑嗗濂藉悗鐐瑰嚮銆屽紑濮嬮噰闆嗐€?
+    });
   },
 
   _f3CalFinishWithSample(result) {
     const dangerUnits = Math.round(Number(result && typeof result === 'object' ? result.minimum : result));
     const baseUnits = Math.round(Number(this._f3CalH0Units));
     if (!dangerUnits || dangerUnits < 10) {
-      this._f3CalAbortWithToast('未采到有效高度，请重试');
+      this._f3CalAbortWithToast('鏈噰鍒版湁鏁堥珮搴︼紝璇烽噸璇?);
       return;
     }
     const dangerMmText = this._f3FormatMmInput(dangerUnits);
     const safeMmText = baseUnits > 0 ? this._f3FormatMmInput(baseUnits) : '';
+    this.setData({
+      f3CalStep: 'done',
+      f3CalTitle: '鏍囧畾瀹屾垚',
+      f3CalResultText: safeMmText
+        ? `瀹夊叏 ${safeMmText} mm 路 鍗遍櫓 ${dangerMmText} mm`
+        : `鍗遍櫓楂樺害 ${dangerMmText} mm`,
+      f3CalStatusText: '姝ｅ湪鍐欏叆璁惧鈥?,
+      f3BaseInput: safeMmText || this.data.f3BaseInput,
+      f3DangerInput: dangerMmText
+    });
     this._f3CalCommitHeightWrites(baseUnits, dangerUnits, safeMmText, dangerMmText);
   },
 
-  /** 自动标定：在向导内写入 DA/TB，逐条回读校验 */
+  /** 鑷姩鏍囧畾锛氬厛鍏冲脊绐椼€佸紑璁剧疆锛屽啀涓庢墜鍔ㄥ啓鍏ュ畬鍏ㄧ浉鍚屽湴鍙?DA/TB */
   _f3CalCommitHeightWrites(baseUnits, dangerUnits, safeMmText, dangerMmText) {
+    console.log(`[鑷姩鏍囧畾] 鍐欏叆 base=${baseUnits}mm danger=${dangerUnits}mm`);
     this._f3CancelHeightCharTimers();
     this._clearBleSendQueue();
-    this._f3CalPrepareHeightWriteUi(safeMmText, dangerMmText);
-    this._f3CalWritingHeights = true;
-
-    const dangerMm = dangerMmText || this._f3FormatMmInput(dangerUnits);
-    const baseMm = safeMmText || (baseUnits > 0 ? this._f3FormatMmInput(baseUnits) : '');
-    const hasBase = baseUnits > 0;
-
-    this.setData(this._f3CalStepMetaPatch('writing', {
-      f3CalStep: 'writing',
-      f3CalTitle: '写入设备',
-      f3CalDesc: '',
-      f3CalResultText: '',
-      f3CalStatusText: '',
-      f3CalWriteDangerMm: dangerMm ? `${dangerMm} mm` : '',
-      f3CalWriteBaseMm: baseMm ? `${baseMm} mm` : '',
-      f3CalWriteDangerStatus: 'pending',
-      f3CalWriteBaseStatus: hasBase ? 'pending' : 'skip'
-    }));
-    this._f3CalSyncStepMeta('writing');
-
-    const finishResult = (allOk) => {
-      this._f3CalWritingHeights = false;
-      if (allOk) {
-        setTimeout(() => this._f3SetHeightConfigMode(false, { clearQueue: false }), 500);
-      }
-      this.setData(this._f3CalStepMetaPatch('writeResult', {
-        f3CalStep: 'writeResult',
-        f3CalTitle: allOk ? '写入完成' : '写入失败',
-        f3CalWriteOk: allOk,
-        f3CalWriteResultTitle: allOk ? '标定数据已写入设备' : '部分数据未能写入',
-        f3CalWriteResultSub: allOk
-          ? (hasBase ? `危险 ${dangerMm} mm · 检测 ${baseMm} mm` : `危险高度 ${dangerMm} mm`)
-          : '写入失败，请保持蓝牙连接后重试自动校准'
-      }));
-      this._f3CalSyncStepMeta('writeResult');
-    };
+    this._f3CalReleaseForManualWrite(safeMmText, dangerMmText);
+    this._showCustomToast('鏍囧畾瀹屾垚锛屾鍦ㄥ悗鍙板啓鍏ヨ澶団€?, 'none', 2200);
 
     const run = async () => {
       await this._f3WaitBleQueueIdle(6000);
-      try {
-        await this._f3EnsureHeightConfigModeForWrite({ quiet: true, calAuto: true, timeoutMs: 18000 });
-      } catch (e) {
-        console.error('[自动标定] 进入配置模式失败', e);
-        finishResult(false);
-        return;
-      }
-      await this._f3WaitBleQueueIdle(4000);
-
-      let dangerOk = false;
-      let baseOk = !hasBase;
+      await new Promise((r) => setTimeout(r, 2000));
 
       try {
-        this.setData({ f3CalWriteDangerStatus: 'writing' });
+        console.log(`[鑷姩鏍囧畾] 鍐?danger ${dangerUnits}`);
         await this._f3HeightWriteWithAck('danger', dangerUnits);
-        this.setData({ f3CalWriteDangerStatus: 'ok' });
-        dangerOk = true;
-      } catch (e) {
-        this.setData({ f3CalWriteDangerStatus: 'fail' });
-      }
-
-      if (hasBase && dangerOk) {
         await this._f3WaitBleQueueIdle(8000);
-        await new Promise((r) => setTimeout(r, 3000));
-        try {
-          this.setData({ f3CalWriteBaseStatus: 'writing' });
-          await this._f3HeightWriteWithAck('base', baseUnits);
-          this.setData({ f3CalWriteBaseStatus: 'ok' });
-          baseOk = true;
-        } catch (e) {
-          this.setData({ f3CalWriteBaseStatus: 'fail' });
-          baseOk = false;
-        }
-      }
+        await new Promise((r) => setTimeout(r, 5000));
 
-      finishResult(dangerOk && baseOk);
+        if (baseUnits > 0) {
+          console.log(`[鑷姩鏍囧畾] 鍐?base ${baseUnits}`);
+          await this._f3HeightWriteWithAck('base', baseUnits);
+          await this._f3WaitBleQueueIdle(5000);
+        }
+
+        this._showCustomToast('鏍囧畾鏁版嵁宸插啓鍏ヨ澶?, 'none', 2000);
+        setTimeout(() => {
+          this._f3SetHeightConfigMode(false, { clearQueue: false });
+        }, 1500);
+      } catch (e) {
+        console.error('[鑷姩鏍囧畾] 鍐欏叆鏈畬鎴?, e);
+        this._showCustomToast('鑷姩鍐欏叆鏈畬鎴愶紝璇风偣銆屽啓鍏ャ€嶆寜閽?, 'none', 3500);
+      }
     };
 
-    setTimeout(() => {
-      run().catch((err) => {
-        console.error('[自动标定] 写入异常', err);
-        this.setData({
-          f3CalWriteDangerStatus: this.data.f3CalWriteDangerStatus === 'ok' ? 'ok' : 'fail',
-          f3CalWriteBaseStatus: hasBase
-            ? (this.data.f3CalWriteBaseStatus === 'ok' ? 'ok' : 'fail')
-            : 'skip'
-        });
-        finishResult(false);
-      });
-    }, 800);
-  },
-
-  _f3CalEnterSample1() {
-    this._f3CalSyncStepMeta('sample1');
-    this.setData(this._f3CalStepMetaPatch('sample1', {
-      f3CalStep: 'sample1',
-      f3CalTitle: '首次检测',
-      f3CalDesc: '请保持车辆不动，正在进行基准高度检测。',
-      f3CalTargetLabel: 'A 危险高度',
-      f3CalStatusText: '5 秒内取平均值作为判断依据'
-    }));
-    this._f3CalStartSample('sample1', (result) => this._f3CalAfterSample1(result));
+    setTimeout(() => run().catch((err) => {
+      console.error('[鑷姩鏍囧畾] 寮傚父', err);
+      this._showCustomToast('璇峰湪楂樼骇璁剧疆閲屾墜鍔ㄧ偣鍐欏叆', 'none', 3500);
+    }), 800);
   },
 
   _f3CalStartWizard() {
-    if (!this._canControlDevice()) {
-      this._showCustomToast('无操作权限', 'none', 2000);
-      return;
-    }
-    if (!this._isBleLinked()) {
-      this._showCustomToast('请先连接蓝牙', 'none', 2000);
+    if (!this._canControlDevice() || !this._isBleLinked()) {
+      this._showCustomToast('璇峰厛杩炴帴钃濈墮', 'none', 2000);
       return;
     }
     this._clearF3CalTimer();
     this._f3CalBranch = '';
     this._f3CalH0Units = 0;
-    this.setData(this._f3CalStepMetaPatch('preflight', {
+    this.setData({
       f3ShowCalOverlay: true,
       f3CalShowHoldModal: false,
-      f3CalShowVolatilityModal: false,
-      f3CalStep: 'preflight',
-      f3CalTitle: '准备校准',
-      f3CalDesc: '',
-      f3CalTargetLabel: '',
-      f3CalLiveText: '',
-      f3CalMedianText: '',
-      f3CalResultText: '',
-      f3CalStatusText: '',
-      f3CalCountdown: 0
-    }));
-  },
-
-  onF3CalPreflightConfirm() {
-    if (this.data.f3CalStep !== 'preflight') return;
-    if (this.data.f3CalPreflightClosing) return;
-    this._f3CalEnsureFlapClosedThen(() => this._f3CalEnterSample1());
+      f3CalStep: 'sample1',
+      f3CalTitle: 'F3 鑷姩鏍″噯 路 棣栨妫€娴?,
+      f3CalDesc: '璇峰皢杞﹁締鎵舵銆佺珯绋筹紝淇濇寔鐗岀収鏋跺叧闂€?,
+      f3CalTargetLabel: 'A 鍗遍櫓楂樺害',
+      f3CalStatusText: '5 绉掑唴鍙栦腑闂村€间綔涓哄垽鏂緷鎹?
+    });
+    this._f3CalStartSample('sample1', (result) => this._f3CalAfterSample1(result));
   },
 
   onF3StartAutoCal() {
     if (!isF3MaxModel(this.data.currentModel)) return;
-    if (!this._canControlDevice()) {
-      this._showCustomToast('请先连接蓝牙', 'none', 2000);
-      return;
-    }
-    if (!this._isBleLinked()) {
-      this._showCustomToast('请先连接蓝牙', 'none', 2000);
+    if (!this._canControlDevice() || !this._isBleLinked()) {
+      this._showCustomToast('璇峰厛杩炴帴钃濈墮', 'none', 2000);
       return;
     }
     const start = () => this._f3CalStartWizard();
-    this._f3EnsureHeightConfigModeForWrite({ quiet: true, holdMs: 600000, timeoutMs: 15000 })
-      .then(() => setTimeout(start, 400))
-      .catch((e) => {
-        console.error('[自动标定] 进入配置模式失败', e);
-        this._showCustomToast('无法进入测高配置模式，请重试', 'none', 2600);
-      });
+    if (!this.data.f3HeightConfigModeOn) {
+      this._f3SetHeightConfigMode(true);
+      setTimeout(start, 1600);
+      return;
+    }
+    start();
   },
 
   onF3CalCancel() {
@@ -7207,92 +6333,45 @@ Page({
     this._f3CalDismissWizard();
   },
 
-  onF3CalDoneClose() {
-    this._f3CalDismissWizard();
-  },
-
-  onF3CalWriteResultClose() {
-    this._f3CalDismissWizard();
-  },
-
-  _f3ShowHeightWriteModal(opts) {
-    const o = opts || {};
-    this.setData({
-      f3HeightWriteModalVisible: true,
-      f3HeightWriteModalPhase: o.phase || 'writing',
-      f3HeightWriteModalLabel: o.label || '',
-      f3HeightWriteModalMm: o.mm || '',
-      f3HeightWriteModalHint: o.hint || '正在写入并回读校验…'
-    });
-  },
-
-  _f3CloseHeightWriteModal() {
-    this.setData({ f3HeightWriteModalVisible: false });
-  },
-
-  onF3HeightWriteModalClose() {
-    this._f3CloseHeightWriteModal();
-  },
-
-  _f3ManualHeightWrite(kind, mm) {
-    const label = kind === 'danger' ? '危险高度' : '检测高度';
-    const mmText = this._f3FormatMmInput(mm);
-    this._f3ShowHeightWriteModal({
-      phase: 'writing',
-      label,
-      mm: `${mmText} mm`,
-      hint: '正在写入并回读校验…'
-    });
-    this._f3SubmitHeightMmRetrying(kind, mm, {
-      quiet: true,
-      onDone: (ok) => {
-        if (ok) {
-          this.setData({
-            f3HeightWriteModalPhase: 'success',
-            f3HeightWriteModalHint: '回读校验通过，数据已写入设备'
-          });
-          wx.vibrateShort({ type: 'light' });
-        } else {
-          this.setData({
-            f3HeightWriteModalPhase: 'fail',
-            f3HeightWriteModalHint: '设备未确认写入，请检查蓝牙后重试'
-          });
-        }
-      }
-    });
-  },
-
   onF3CalReady() {
     if (this.data.f3CalStep !== 'wheel') return;
-    this._f3CalEnterBranchGuideStep(this._f3CalActiveBranch());
+    this.setData({
+      f3CalStep: 'restoring',
+      f3CalTitle: '鎭㈠鎶樺彔瑙?,
+      f3CalStatusText: '鐭熬姝ｅ湪鍥炲埌姝ｅ父瑙掑害锛坕tem4锛夆€?
+    });
+    this._f3CalSendFoldCmd('R');
+    if (this._f3CalRestoreTimer) clearTimeout(this._f3CalRestoreTimer);
+    this._f3CalRestoreTimer = setTimeout(() => {
+      this._f3CalRestoreTimer = null;
+      this._f3CalAfterRestore();
+    }, 2200);
   },
 
   onF3CalCardboardKnow() {
     if (this.data.f3CalStep !== 'cardboard') return;
-    const holdMeta = this._f3CalStepMeta('hold');
-    this.setData({
-      f3CalShowHoldModal: true,
-      f3CalStepNo: holdMeta.no,
-      f3CalStepTotal: holdMeta.total
-    });
-  },
-
-  onF3CalHoldDismiss() {
-    if (!this.data.f3CalShowHoldModal) return;
-    const patch = { f3CalShowHoldModal: false };
-    this._f3CalStepMetaPatch('cardboard', patch);
-    this.setData(patch);
+    this.setData({ f3CalShowHoldModal: true });
   },
 
   onF3CalHoldConfirm() {
     if (!this.data.f3CalShowHoldModal) return;
-    this.setData({ f3CalShowHoldModal: false });
-    this._f3CalEnterRestorePhase(() => this._f3CalAfterRestoreToSample());
+    this.setData({
+      f3CalShowHoldModal: false,
+      f3CalTitle: '閲囬泦鏍囧畾鏁版嵁',
+      f3CalDesc: '璇蜂繚鎸佺焊鏉挎按骞筹紝涓嶈绉诲姩鎴栨檭鍔ㄣ€?,
+      f3CalStatusText: '5 绉掑唴鍙栨渶灏忓€间綔涓哄嵄闄╅珮搴?
+    });
+    this._f3CalStartSample('sample2', (result) => this._f3CalFinishWithSample(result));
   },
 
   onF3CalCompressStart() {
     if (this.data.f3CalStep !== 'compress') return;
-    this._f3CalEnterRestorePhase(() => this._f3CalAfterRestoreToSample());
+    this.setData({
+      f3CalTitle: '閲囬泦鏍囧畾鏁版嵁',
+      f3CalDesc: '璇蜂繚鎸佹寜鍘嬫垨杞戒汉鐘舵€侊紝涓嶈鏉惧紑銆?,
+      f3CalStatusText: '5 绉掑唴鍙栨渶灏忓€间綔涓哄嵄闄╅珮搴?
+    });
+    this._f3CalStartSample('sample2', (result) => this._f3CalFinishWithSample(result));
   },
 
   _parseF3HeightMmInput(raw) {
@@ -7305,8 +6384,8 @@ Page({
     return mm;
   },
 
-  /** 数字位之和 mod 100，2位补零。用于附加校验和，BLE 丢字符/串字符时几乎必然对不上，
-   * 固件校验失败会直接丢弃该条命令，不会误写成别的高度。 */
+  /** 鏁板瓧浣嶄箣鍜?mod 100锛?浣嶈ˉ闆躲€傜敤浜庨檮鍔犳牎楠屽拰锛孊LE 涓㈠瓧绗?涓插瓧绗︽椂鍑犱箮蹇呯劧瀵逛笉涓婏紝
+   * 鍥轰欢鏍￠獙澶辫触浼氱洿鎺ヤ涪寮冭鏉″懡浠わ紝涓嶄細璇啓鎴愬埆鐨勯珮搴︺€?*/
   _f3DigitChecksum(digits) {
     let sum = 0;
     for (let i = 0; i < digits.length; i++) {
@@ -7323,23 +6402,34 @@ Page({
     const mmText = String(mm);
     const checksum = this._f3DigitChecksum(mmText);
     const cmd = `${tag}${mmText}S${checksum}`;
+    console.log(`[楂樺害鍛戒护] ${kind} mm=${mm} cmd=${cmd}`);
     return cmd;
   },
 
   _f3SubmitHeightMm(kind, storageUnits, options) {
+    console.log(`[_f3SubmitHeightMm] 寮€濮? kind=${kind}, storageUnits=${storageUnits}, options=`, options);
     const units = Math.max(10, Math.min(3000, Math.round(Number(storageUnits))));
-    if (!Number.isFinite(units)) return false;
+    console.log(`[_f3SubmitHeightMm] units (clamped) = ${units}, isFinite=${Number.isFinite(units)}`);
+    if (!Number.isFinite(units)) {
+      console.error('[_f3SubmitHeightMm] 杩斿洖false: units涓嶆槸鏈夐檺鏁?);
+      return false;
+    }
     const mmText = this._f3FormatMmInput(units);
-    const label = kind === 'danger' ? '危险高度' : '检测高度';
+    console.log(`[_f3SubmitHeightMm] mmText=${mmText}`);
+    const label = kind === 'danger' ? '鍗遍櫓楂樺害' : '妫€娴嬮珮搴?;
     const cmd = this._f3HeightStorageCmd(kind, units);
-    if (!cmd) return false;
+    console.log(`[_f3SubmitHeightMm] cmd=${cmd}`);
+    if (!cmd) {
+      console.error('[_f3SubmitHeightMm] 杩斿洖false: _f3HeightStorageCmd杩斿洖绌?);
+      return false;
+    }
     const patch = kind === 'danger'
       ? { f3DangerInput: mmText }
       : { f3BaseInput: mmText };
     this.setData(patch);
-    const sendOpts = { ...(options || {}) };
-    if (this._f3CalWritingHeights) sendOpts.autoCfg = true;
-    return this._sendF3HeightBleCmd(cmd, label, kind, units, mmText, sendOpts);
+    const result = this._sendF3HeightBleCmd(cmd, label, kind, units, mmText, options);
+    console.log(`[_f3SubmitHeightMm] _sendF3HeightBleCmd杩斿洖: ${result}`);
+    return result;
   },
 
   _f3FormatHeightMm(mm) {
@@ -7358,38 +6448,21 @@ Page({
     const opts = options || {};
     if (!isF3MaxModel(this.data.currentModel)) return;
     if (!this._canControlDevice() || !this._isBleLinked()) {
-      if (!opts.silent) this._showCustomToast('请先连接蓝牙', 'none', 2000);
+      this._showCustomToast('璇峰厛杩炴帴钃濈墮', 'none', 2000);
       return;
     }
-    const cmd = on ? 'M1#' : 'M0#';
-    this._f3HeightLog(on ? '进入配置模式' : '退出配置模式', {
-      cmd,
-      uiOn: !!on,
-      f3cReadback: this.data.f3HeightConfigModeOn,
-      charId: this._getBleWriteCharacteristicId(),
-      queueLen: (this._bleSendQueue && this._bleSendQueue.length) || 0
-    });
     this.setData({ f3HeightConfigModeOn: !!on });
-    this._f3CfgReadyAt = on ? (Date.now() + 2000) : 0;
-    this._f3HeightCfgLocalUntil = on ? (Date.now() + 10000) : 0;
-    if (on) {
-      this._bumpF3HeightBleGrace(90000);
-    } else {
-      this._f3HeightBleGraceUntil = 0;
-      if (this.ble) this.ble._suppressDisconnectUntil = 0;
-    }
-
-    if (!on) {
+    this._f3CfgReadyAt = on ? (Date.now() + 1500) : 0;
+    
+    // 閫€鍑洪厤缃ā寮忔椂娓呴櫎鍙戦€侀攣瀹?    if (!on) {
       this._f3HeightSendLockUntil = 0;
-      this._f3HeightCfgLocalUntil = 0;
+      console.log('[_f3SetHeightConfigMode] 閫€鍑洪厤缃ā寮忥紝娓呴櫎鍙戦€侀攣瀹?);
     }
-
+    
     if (opts.clearQueue !== false) this._clearBleSendQueue();
     if (!on && this.data.f3ShowCalOverlay && !opts.keepCalOverlay) this._f3CalDismissWizard();
-    this.sendData(cmd, 1000);
-    if (!opts.silent) {
-      this._showCustomToast(on ? '已进入测高配置模式，请稍候再写入' : '已退出测高配置模式', 'none', 1800);
-    }
+    this.sendData(on ? 'M1#' : 'M0#', 1000);
+    this._showCustomToast(on ? '宸茶繘鍏ユ祴楂橀厤缃ā寮忥紝璇风◢鍊欏啀鍐欏叆' : '宸查€€鍑烘祴楂橀厤缃ā寮?, 'none', 1800);
   },
 
   onF3EnterHeightConfigMode() {
@@ -7401,41 +6474,36 @@ Page({
   },
 
   _sendF3HeightBleCmd(sendText, label, kind, expectedUnits, mmText, options) {
+    console.log(`[_sendF3HeightBleCmd] 寮€濮? sendText=${sendText}, label=${label}, kind=${kind}`);
     const opts = options || {};
-    this._f3HeightLog('写入开始', {
-      sendText, label, kind, expectedUnits, mmText,
-      uiCfgOn: this.data.f3HeightConfigModeOn,
-      cfgReadyIn: Math.max(0, (this._f3CfgReadyAt || 0) - Date.now()),
-      lockIn: Math.max(0, (this._f3HeightSendLockUntil || 0) - Date.now()),
-      charId: this._getBleWriteCharacteristicId()
-    });
     if (!this._canControlDevice() || !this._isBleLinked()) {
-      this._f3HeightLog('写入拒绝', '未连接蓝牙');
-      this._showCustomToast('请先连接蓝牙', 'none', 2000);
+      console.error('[_sendF3HeightBleCmd] 杩斿洖false: 鏈繛鎺ヨ摑鐗?);
+      this._showCustomToast('璇峰厛杩炴帴钃濈墮', 'none', 2000);
       return false;
     }
-    if (!this.data.f3HeightConfigModeOn && !opts.autoCfg && !this._f3CalWritingHeights) {
-      this._f3HeightLog('写入拒绝', 'UI未在配置模式');
-      this._showCustomToast('请先点「进入测高配置模式」', 'none', 2200);
+    if (!this.data.f3HeightConfigModeOn) {
+      console.error('[_sendF3HeightBleCmd] 杩斿洖false: 鏈繘鍏ラ厤缃ā寮?);
+      this._showCustomToast('璇峰厛鐐广€岃繘鍏ユ祴楂橀厤缃ā寮忋€?, 'none', 2200);
       return false;
     }
-    if (Date.now() < (this._f3CfgReadyAt || 0) && !opts.autoCfg && !this._f3CalWritingHeights) {
-      this._f3HeightLog('写入拒绝', { reason: '配置模式未就绪', waitMs: (this._f3CfgReadyAt || 0) - Date.now() });
-      this._showCustomToast('配置模式刚进入，请 1 秒后再点', 'none', 1800);
+    if (Date.now() < (this._f3CfgReadyAt || 0)) {
+      console.error('[_sendF3HeightBleCmd] 杩斿洖false: 閰嶇疆妯″紡鏈氨缁?);
+      this._showCustomToast('閰嶇疆妯″紡鍒氳繘鍏ワ紝璇?1 绉掑悗鍐嶇偣', 'none', 1800);
       return false;
     }
     if (Date.now() < (this._f3HeightSendLockUntil || 0)) {
-      this._f3HeightLog('写入拒绝', { reason: '发送锁定', waitMs: (this._f3HeightSendLockUntil || 0) - Date.now() });
-      this._showCustomToast('发送过快，请稍候', 'none', 1200);
+      console.error('[_sendF3HeightBleCmd] 杩斿洖false: 鍙戦€佽閿佸畾');
+      this._showCustomToast('鍙戦€佽繃蹇紝璇风◢鍊?, 'none', 1200);
       return false;
     }
     const cmd = String(sendText || '').replace(/#$/, '') + '#';
+    console.log(`[_sendF3HeightBleCmd] 鏈€缁堝懡浠? ${cmd}`);
     const units = Math.round(Number(expectedUnits));
     const displayMm = mmText || this._f3FormatMmInput(units);
     const charCount = cmd.length;
     const charSendMs = charCount * 280 + 1500;
     this._f3HeightSendLockUntil = Date.now() + charSendMs;
-    if (kind && Number.isFinite(units)) {
+      if (kind && Number.isFinite(units)) {
       this._f3HeightWritePending = {
         kind,
         units,
@@ -7443,24 +6511,26 @@ Page({
         onAck: typeof opts.onAck === 'function' ? opts.onAck : null,
         onFail: typeof opts.onFail === 'function' ? opts.onFail : null
       };
-      this._f3HeightLog('等待回读', this._f3HeightWritePending);
+      console.log('[_sendF3HeightBleCmd] 璁剧疆pending:', this._f3HeightWritePending);
       if (!opts.onAck) {
         const readback = formatF3HeightMm(units);
         const optimistic = kind === 'danger'
           ? { f3DangerMm: units, f3DangerReadback: readback }
           : { f3BaseMm: units, f3BaseReadback: readback };
         this.setData(optimistic);
+        console.log('[_sendF3HeightBleCmd] 涔愯鏇存柊UI:', optimistic);
       }
     }
-    this._f3HeightLog('发送命令', { cmd, displayMm, charCount, charSendMs });
+    console.log(`馃摛 [钃濈墮] ${label || '娴嬮珮閰嶇疆'} 鍙戦€併€?{cmd}銆?${displayMm} mm)`);
     this._f3CancelHeightCharTimers();
     this._clearBleSendQueue();
     this._f3EnqueueHeightCmdChars(cmd);
-
+    
     if (!opts.silent) {
-      this._showCustomToast(`已发送 ${displayMm} mm`, 'none', 1800);
+      this._showCustomToast(`宸插彂閫?${displayMm} mm`, 'none', 1800);
       wx.vibrateShort({ type: 'light' });
     }
+    console.log('[_sendF3HeightBleCmd] 杩斿洖true: 鍛戒护宸插畨鎺掑彂閫?);
     return true;
   },
 
@@ -7468,43 +6538,42 @@ Page({
     const raw = String(this.data.f3DangerInput || '').trim();
     const mm = this._parseF3HeightMmInput(raw);
     if (!Number.isFinite(mm) || mm < 10 || mm > 3000) {
-      this._showCustomToast('危险高度请输入 10–3000 mm', 'none', 2000);
+      this._showCustomToast('鍗遍櫓楂樺害璇疯緭鍏?10鈥?000 mm', 'none', 2000);
       return;
     }
-    this._f3ManualHeightWrite('danger', mm);
+    this._f3SubmitHeightMmRetrying('danger', mm);
   },
 
   onF3SendBaseHeight() {
     const raw = String(this.data.f3BaseInput || '').trim();
     const mm = this._parseF3HeightMmInput(raw);
     if (!Number.isFinite(mm) || mm < 10 || mm > 3000) {
-      this._showCustomToast('检测高度请输入 10–3000 mm', 'none', 2000);
+      this._showCustomToast('妫€娴嬮珮搴﹁杈撳叆 10鈥?000 mm', 'none', 2000);
       return;
     }
-    this._f3ManualHeightWrite('base', mm);
+    this._f3SubmitHeightMmRetrying('base', mm);
   },
 
-  // 打开设置弹窗
+  // 鎵撳紑璁剧疆寮圭獥
   openSettings() {
     if (Date.now() < (this._controlTapLockUntil || 0)) return;
-    // 🔴 检查蓝牙连接状态：未连接时不允许使用（管理员除外）
+    // 馃敶 妫€鏌ヨ摑鐗欒繛鎺ョ姸鎬侊細鏈繛鎺ユ椂涓嶅厑璁镐娇鐢紙绠＄悊鍛橀櫎澶栵級
     if (!this._canControlDevice()) {
-      // 显示"请先连接蓝牙"小胶囊提示
-      this.setData({ showConnectBluetoothTip: true });
-      // 2秒后自动隐藏
+      // 鏄剧ず"璇峰厛杩炴帴钃濈墮"灏忚兌鍥婃彁绀?      this.setData({ showConnectBluetoothTip: true });
+      // 2绉掑悗鑷姩闅愯棌
       setTimeout(() => {
         this.setData({ showConnectBluetoothTip: false });
       }, 2000);
       return;
     }
     
-    // 权限校验：只有 Max 机型可以打开
-    // F1 Max: 可以打开，但部分功能隐藏
-    // F2 Max: 可以打开，全功能
-    // F2 Max Long: 可以打开，全功能
+    // 鏉冮檺鏍￠獙锛氬彧鏈?Max 鏈哄瀷鍙互鎵撳紑
+    // F1 Max: 鍙互鎵撳紑锛屼絾閮ㄥ垎鍔熻兘闅愯棌
+    // F2 Max: 鍙互鎵撳紑锛屽叏鍔熻兘
+    // F2 Max Long: 鍙互鎵撳紑锛屽叏鍔熻兘
     const model = this.data.currentModel;
     if (!model || !isMaxControlLayoutType(model.type)) {
-      return; // Pro 机型点击无效
+      return; // Pro 鏈哄瀷鐐瑰嚮鏃犳晥
     }
 
     const storedMinutes = wx.getStorageSync('f2_delayPowerOffMinutes');
@@ -7520,8 +6589,7 @@ Page({
       }
     }
 
-    // 🔴 重置指示灯弹窗标记，每次打开高级设置都重置
-    const settingsPatch = {
+    // 馃敶 閲嶇疆鎸囩ず鐏脊绐楁爣璁帮紝姣忔鎵撳紑楂樼骇璁剧疆閮介噸缃?    const settingsPatch = {
       showSettingsModal: true,
       hasShownSettingsIndicatorModal: false,
       delayPowerOffIndex
@@ -7558,7 +6626,7 @@ Page({
 
   onDelayPowerOffChange(e) {
     if (this.data.f2TravelModeOn) {
-      this._showCustomToast('出行模式已开启，请先关闭出行模式', 'none', 2200);
+      this._showCustomToast('鍑鸿妯″紡宸插紑鍚紝璇峰厛鍏抽棴鍑鸿妯″紡', 'none', 2200);
       return;
     }
     const model = this.data.currentModel;
@@ -7573,17 +6641,17 @@ Page({
     const opt = this.data.delayPowerOffOptions[idx];
     if (!opt) return;
 
-    const sendText = `延时断电${opt.minutes}`;
+    const sendText = `寤舵椂鏂數${opt.minutes}`;
     wx.setStorageSync('f2_delayPowerOffIndex', idx);
     wx.setStorageSync('f2_delayPowerOffMinutes', opt.minutes);
     this.setData({ delayPowerOffIndex: idx }, () => {
-      console.log(`📤 [蓝牙] F2 ULTRA 设置延时断电: ${sendText}`);
+      console.log(`馃摛 [钃濈墮] F2 ULTRA 璁剧疆寤舵椂鏂數: ${sendText}`);
       this._commitBleCommandAfterUi({
         sendText,
         times: 1,
         interval: 500,
         verify: isMtUltraCardModel(model) ? { type: 'delayPower', minutes: opt.minutes } : null,
-        label: '延时断电'
+        label: '寤舵椂鏂數'
       });
     });
     wx.vibrateShort({ type: 'light' });
@@ -7600,7 +6668,7 @@ Page({
     const idx = Number(e.detail.value);
     const opt = this.data.travelHoldOptions[idx];
     if (!opt) return;
-    const sendText = `出行保持${opt.minutes}`;
+    const sendText = `鍑鸿淇濇寔${opt.minutes}`;
     const durH = this.data.travelDurationHours || 12;
     wx.setStorageSync('f2_travel_hold_min', opt.minutes);
     this.setData({
@@ -7613,7 +6681,7 @@ Page({
         times: 1,
         interval: 500,
         verify: null,
-        label: '出行保持'
+        label: '鍑鸿淇濇寔'
       });
     });
     wx.vibrateShort({ type: 'light' });
@@ -7630,7 +6698,7 @@ Page({
     const idx = Number(e.detail.value);
     const opt = this.data.travelDurationOptions[idx];
     if (!opt) return;
-    const sendText = `出行时长${opt.hours}`;
+    const sendText = `鍑鸿鏃堕暱${opt.hours}`;
     const holdMin = this.data.travelHoldMin || 3;
     wx.setStorageSync('f2_travel_duration_hours', opt.hours);
     this.setData({
@@ -7643,7 +6711,7 @@ Page({
         times: 1,
         interval: 500,
         verify: null,
-        label: '出行时长'
+        label: '鍑鸿鏃堕暱'
       });
     });
     wx.vibrateShort({ type: 'light' });
@@ -7672,7 +6740,7 @@ Page({
         times: 1,
         interval: 500,
         verify: null,
-        label: '出行关钥匙'
+        label: '鍑鸿鍏抽挜鍖?
       });
     });
     wx.vibrateShort({ type: 'light' });
@@ -7680,14 +6748,14 @@ Page({
 
   closeSettings() {
     this.setData({ showSettingsModal: false });
-    // 关闭时清除 Toast
+    // 鍏抽棴鏃舵竻闄?Toast
     this.setData({ toastClass: '' });
   },
 
-  // 🔴 新增：确认发送数据（指示灯确认弹窗）
+  // 馃敶 鏂板锛氱‘璁ゅ彂閫佹暟鎹紙鎸囩ず鐏‘璁ゅ脊绐楋級
   confirmSendData() {
     if (!this.data.pendingSendData) {
-      console.warn('⚠️ [蓝牙] 没有待发送的数据');
+      console.warn('鈿狅笍 [钃濈墮] 娌℃湁寰呭彂閫佺殑鏁版嵁');
       return;
     }
 
@@ -7695,14 +6763,13 @@ Page({
     const currentModel = this.data.currentModel;
     const isF2Ble = isF2MaxLikeControl(currentModel);
     
-    // 关闭弹窗
+    // 鍏抽棴寮圭獥
     this.setData({ 
       showIndicatorCheckModal: false,
       indicatorCheckModalClosing: true
     });
 
-    // 延迟一下再发送，让弹窗关闭动画完成
-    setTimeout(() => {
+    // 寤惰繜涓€涓嬪啀鍙戦€侊紝璁╁脊绐楀叧闂姩鐢诲畬鎴?    setTimeout(() => {
       this.setData({ 
         indicatorCheckModalClosing: false,
         pendingSendData: null
@@ -7715,7 +6782,7 @@ Page({
           times: 1,
           interval: 300,
           verify: null,
-          label: '折叠调整'
+          label: '鎶樺彔璋冩暣'
         });
       } else if (type === 'settings') {
         const modelName = label || (isMtUltraCardModel(currentModel)
@@ -7732,7 +6799,7 @@ Page({
             label: modelName
           });
         } else {
-          console.log(`📤 [蓝牙] ${modelName} 发送「${sendText}」（连续3次，间隔0.5秒）`);
+          console.log(`馃摛 [钃濈墮] ${modelName} 鍙戦€併€?{sendText}銆嶏紙杩炵画3娆★紝闂撮殧0.5绉掞級`);
           this.sendDataMultiple(sendText, 3, 500);
           wx.vibrateShort({ type: 'light' });
         }
@@ -7740,15 +6807,15 @@ Page({
     }, 300);
   },
 
-  // Toast 动画控制
+  // Toast 鍔ㄧ敾鎺у埗
   showToast() {
-    // 重置动画
+    // 閲嶇疆鍔ㄧ敾
     this.setData({ toastClass: '' }, () => {
       setTimeout(() => {
         this.setData({ toastClass: 'pop' });
       }, 300);
       
-      // 3.5秒后自动消失
+      // 3.5绉掑悗鑷姩娑堝け
       setTimeout(() => {
         this.setData({ toastClass: '' });
       }, 3800);
@@ -7756,7 +6823,7 @@ Page({
   },
 
   // ===============================================
-  // 修复：滑块点击逻辑 (点左去左，点右去右)
+  // 淇锛氭粦鍧楃偣鍑婚€昏緫 (鐐瑰乏鍘诲乏锛岀偣鍙冲幓鍙?
   // ===============================================
   handleMagClick(e) {
     const key = e.currentTarget.dataset.key;
@@ -7806,45 +6873,40 @@ Page({
     });
   },
 
-  // 【新增】打开全新产品提示 & 开始倒计时
-  openNewProductHint() {
+  // 銆愭柊澧炪€戞墦寮€鍏ㄦ柊浜у搧鎻愮ず & 寮€濮嬪€掕鏃?  openNewProductHint() {
     this.setData({ 
       showNewProductHint: true,
       newProductBtnLocked: true,
-      newProductBtnText: '知道了 (2s)'
+      newProductBtnText: '鐭ラ亾浜?(2s)'
     });
 
     let timeLeft = 2;
     const timer = setInterval(() => {
       timeLeft--;
       if (timeLeft > 0) {
-        this.setData({ newProductBtnText: `知道了 (${timeLeft}s)` });
+        this.setData({ newProductBtnText: `鐭ラ亾浜?(${timeLeft}s)` });
       } else {
         clearInterval(timer);
         this.setData({ 
           newProductBtnLocked: false,
-          newProductBtnText: '知道了'
+          newProductBtnText: '鐭ラ亾浜?
         });
       }
     }, 1000);
   },
 
-  // 【新增】关闭全新产品提示
-  closeNewProductHint() {
-    if (this.data.newProductBtnLocked) return; // 锁定中不可点
+  // 銆愭柊澧炪€戝叧闂叏鏂颁骇鍝佹彁绀?  closeNewProductHint() {
+    if (this.data.newProductBtnLocked) return; // 閿佸畾涓笉鍙偣
     this.setData({ showNewProductHint: false });
-    // 🔴 记录到本地存储，表示已经弹过，下次不再弹
+    // 馃敶 璁板綍鍒版湰鍦板瓨鍌紝琛ㄧず宸茬粡寮硅繃锛屼笅娆′笉鍐嶅脊
     wx.setStorageSync('hasShownNewProductHint_F1', true);
   },
 
   // ===============================================
-  // 🔴 所有弹窗的倒计时函数
-  // ===============================================
+  // 馃敶 鎵€鏈夊脊绐楃殑鍊掕鏃跺嚱鏁?  // ===============================================
 
-  // 密码弹窗倒计时
-  openPasswordModal() {
-    // 兜底：管理员不弹密码，直接进入教程
-    if (this.data.isAdmin) {
+  // 瀵嗙爜寮圭獥鍊掕鏃?  openPasswordModal() {
+    // 鍏滃簳锛氱鐞嗗憳涓嶅脊瀵嗙爜锛岀洿鎺ヨ繘鍏ユ暀绋?    if (this.data.isAdmin) {
       if (!this.data.isAuthorized) {
         this.setData({ isAuthorized: true });
       }
@@ -7856,93 +6918,89 @@ Page({
       showPasswordModal: true, 
       passwordInput: '',
       passwordBtnLocked: true,
-      passwordBtnText: '确认 (2s)'
+      passwordBtnText: '纭 (2s)'
     });
     
     let timeLeft = 2;
     const timer = setInterval(() => {
       timeLeft--;
       if (timeLeft > 0) {
-        this.setData({ passwordBtnText: `确认 (${timeLeft}s)` });
+        this.setData({ passwordBtnText: `纭 (${timeLeft}s)` });
       } else {
         clearInterval(timer);
         this.setData({ 
           passwordBtnLocked: false,
-          passwordBtnText: '确认'
+          passwordBtnText: '纭'
         });
       }
     }, 1000);
   },
 
-  // 教程弹窗倒计时
-  startTutorialCountdown() {
+  // 鏁欑▼寮圭獥鍊掕鏃?  startTutorialCountdown() {
     this.setData({ 
       tutorialBtnLocked: true,
-      tutorialBtnText: '知道了 (2s)'
+      tutorialBtnText: '鐭ラ亾浜?(2s)'
     });
     
     let timeLeft = 2;
     const timer = setInterval(() => {
       timeLeft--;
       if (timeLeft > 0) {
-        this.setData({ tutorialBtnText: `知道了 (${timeLeft}s)` });
+        this.setData({ tutorialBtnText: `鐭ラ亾浜?(${timeLeft}s)` });
       } else {
         clearInterval(timer);
         this.setData({ 
           tutorialBtnLocked: false,
-          tutorialBtnText: '知道了'
+          tutorialBtnText: '鐭ラ亾浜?
         });
       }
     }, 1000);
   },
 
-  // 关钥匙弹窗倒计时
-  startKeyCountdown() {
+  // 鍏抽挜鍖欏脊绐楀€掕鏃?  startKeyCountdown() {
     this.setData({ 
       keyBtnLocked: true,
-      keyBtnText: '确认 (2s)'
+      keyBtnText: '纭 (2s)'
     });
     
     let timeLeft = 2;
     const timer = setInterval(() => {
       timeLeft--;
       if (timeLeft > 0) {
-        this.setData({ keyBtnText: `确认 (${timeLeft}s)` });
+        this.setData({ keyBtnText: `纭 (${timeLeft}s)` });
       } else {
         clearInterval(timer);
         this.setData({ 
           keyBtnLocked: false,
-          keyBtnText: '确认'
+          keyBtnText: '纭'
         });
       }
     }, 1000);
   },
 
-  // 打开角度提示弹窗倒计时
-  startAngleHintCountdown() {
+  // 鎵撳紑瑙掑害鎻愮ず寮圭獥鍊掕鏃?  startAngleHintCountdown() {
     this.setData({ 
       angleHintBtnLocked: true,
-      angleHintBtnText: '知道了 (2s)'
+      angleHintBtnText: '鐭ラ亾浜?(2s)'
     });
     
     let timeLeft = 2;
     const timer = setInterval(() => {
       timeLeft--;
       if (timeLeft > 0) {
-        this.setData({ angleHintBtnText: `知道了 (${timeLeft}s)` });
+        this.setData({ angleHintBtnText: `鐭ラ亾浜?(${timeLeft}s)` });
       } else {
         clearInterval(timer);
         this.setData({ 
           angleHintBtnLocked: false,
-          angleHintBtnText: '知道了'
+          angleHintBtnText: '鐭ラ亾浜?
         });
       }
     }, 1000);
   },
 
   // ===============================================
-  // 🔴 折叠页上滑提示动画
-  // ===============================================
+  // 馃敶 鎶樺彔椤典笂婊戞彁绀哄姩鐢?  // ===============================================
   
   startFoldInlineHint() {
     if (this._foldFineTuneHintTimer) {
@@ -7950,44 +7008,37 @@ Page({
       this._foldFineTuneHintTimer = null;
     }
 
-    // 开始播放自动演示：提示 + 调整按钮自动上滑
-    // 播放期间只锁定"调整"这个滑块，页面其它区域仍可点击
-    this.setData({
+    // 寮€濮嬫挱鏀捐嚜鍔ㄦ紨绀猴細鎻愮ず + 璋冩暣鎸夐挳鑷姩涓婃粦
+    // 鎾斁鏈熼棿鍙攣瀹?璋冩暣"杩欎釜婊戝潡锛岄〉闈㈠叾瀹冨尯鍩熶粛鍙偣鍑?    this.setData({
       showFoldInlineHint: true,
       foldDemoPlaying: true,
-      isAdjustDemo: true,        // 开启演示模式 → 有过渡动画
-      adjustSlideOffset: 0,
+      isAdjustDemo: true,        // 寮€鍚紨绀烘ā寮?鈫?鏈夎繃娓″姩鐢?      adjustSlideOffset: 0,
       adjustSlideActive: false,
       foldHintOffset: 0,
       showFoldFineTuneHint: false
     });
 
-    // 1）短暂展示提示后立刻演示上滑（原 2s 偏久，改为约 0.65s）
-    setTimeout(() => {
-      // 2）让"调整"按钮自动上滑到锁定位置，露出下面的"归零"
+    // 1锛夌煭鏆傚睍绀烘彁绀哄悗绔嬪埢婕旂ず涓婃粦锛堝師 2s 鍋忎箙锛屾敼涓虹害 0.65s锛?    setTimeout(() => {
+      // 2锛夎"璋冩暣"鎸夐挳鑷姩涓婃粦鍒伴攣瀹氫綅缃紝闇插嚭涓嬮潰鐨?褰掗浂"
       this.setData({
-        adjustSlideOffset: -80,   // 与手动锁定高度一致，行程略短更顺畅
-        adjustSlideActive: true,
-        foldHintOffset: -50       // 提示条也一起往上提一些，让文字和箭头跟着"调整"走
-      });
+        adjustSlideOffset: -80,   // 涓庢墜鍔ㄩ攣瀹氶珮搴︿竴鑷达紝琛岀▼鐣ョ煭鏇撮『鐣?        adjustSlideActive: true,
+        foldHintOffset: -50       // 鎻愮ず鏉′篃涓€璧峰線涓婃彁涓€浜涳紝璁╂枃瀛楀拰绠ご璺熺潃"璋冩暣"璧?      });
 
-      // 3）再停留约 2.5 秒，然后按钮回到底部、提示淡出、解除锁定
-      setTimeout(() => {
-        // 先让按钮带动画落回到底部
+      // 3锛夊啀鍋滅暀绾?2.5 绉掞紝鐒跺悗鎸夐挳鍥炲埌搴曢儴銆佹彁绀烘贰鍑恒€佽В闄ら攣瀹?      setTimeout(() => {
+        // 鍏堣鎸夐挳甯﹀姩鐢昏惤鍥炲埌搴曢儴
         this.resetAdjustSlider(true);
 
-        // 同时淡出提示 & 关闭演示模式
+        // 鍚屾椂娣″嚭鎻愮ず & 鍏抽棴婕旂ず妯″紡
         this.setData({
           showFoldInlineHint: false,
           foldDemoPlaying: false,
           foldHintOffset: 0
         });
 
-        // 4）演示完全结束后再出现第二段提示（在「调整」按钮行上方），带入场动画
-        setTimeout(() => {
+        // 4锛夋紨绀哄畬鍏ㄧ粨鏉熷悗鍐嶅嚭鐜扮浜屾鎻愮ず锛堝湪銆岃皟鏁淬€嶆寜閽涓婃柟锛夛紝甯﹀叆鍦哄姩鐢?        setTimeout(() => {
           this.setData({ showFoldFineTuneHint: true });
 
-          // 5）补充提示显示 3 秒后自动消失
+          // 5锛夎ˉ鍏呮彁绀烘樉绀?3 绉掑悗鑷姩娑堝け
           this._foldFineTuneHintTimer = setTimeout(() => {
             this.setData({ showFoldFineTuneHint: false });
             this._foldFineTuneHintTimer = null;
@@ -7998,43 +7049,37 @@ Page({
   },
 
   // ===============================================
-  // 🔴 调整按钮滑动逻辑
+  // 馃敶 璋冩暣鎸夐挳婊戝姩閫昏緫
   // ===============================================
   
-  // 滑动开始
-  onAdjustSlideStart(e) {
-    // 只在折叠模式下生效
-    if (this.data.editType !== 'fold') return;
+  // 婊戝姩寮€濮?  onAdjustSlideStart(e) {
+    // 鍙湪鎶樺彔妯″紡涓嬬敓鏁?    if (this.data.editType !== 'fold') return;
 
     this.setData({
       adjustTouchStartY: e.touches[0].clientY,
-      adjustHasMoved: false // 标记是否发生了滑动
-    });
+      adjustHasMoved: false // 鏍囪鏄惁鍙戠敓浜嗘粦鍔?    });
   },
 
-  // 滑动移动
+  // 婊戝姩绉诲姩
   onAdjustSlideMove(e) {
-    // 只在折叠模式下生效
-    if (this.data.editType !== 'fold') return;
+    // 鍙湪鎶樺彔妯″紡涓嬬敓鏁?    if (this.data.editType !== 'fold') return;
 
     const currentY = e.touches[0].clientY;
     const startY = this.data.adjustTouchStartY;
     let moveY = currentY - startY;
 
-    // 标记已发生滑动（移动超过 5px 才算滑动）
-    if (Math.abs(moveY) > 5) {
+    // 鏍囪宸插彂鐢熸粦鍔紙绉诲姩瓒呰繃 5px 鎵嶇畻婊戝姩锛?    if (Math.abs(moveY) > 5) {
       this.setData({ adjustHasMoved: true });
     }
 
-    // 1. 只有往上滑才生效 (moveY < 0)
-    // 如果往下滑，强制归0
+    // 1. 鍙湁寰€涓婃粦鎵嶇敓鏁?(moveY < 0)
+    // 濡傛灉寰€涓嬫粦锛屽己鍒跺綊0
     if (moveY > 0) moveY = 0;
 
-    // 2. 限制最大上滑距离 (比如 120px)
+    // 2. 闄愬埗鏈€澶т笂婊戣窛绂?(姣斿 120px)
     if (moveY < -120) moveY = -120;
 
-    // 3. 激活阈值：滑过 -60px 就显示归零
-    const isActive = moveY < -60;
+    // 3. 婵€娲婚槇鍊硷細婊戣繃 -60px 灏辨樉绀哄綊闆?    const isActive = moveY < -60;
 
     this.setData({
       adjustSlideOffset: moveY,
@@ -8042,27 +7087,23 @@ Page({
     });
   },
 
-  // 滑动结束
+  // 婊戝姩缁撴潫
   onAdjustSlideEnd(e) {
-    // 只在折叠模式下生效
-    if (this.data.editType !== 'fold') return;
+    // 鍙湪鎶樺彔妯″紡涓嬬敓鏁?    if (this.data.editType !== 'fold') return;
     
     const currentOffset = this.data.adjustSlideOffset;
     const hasMoved = this.data.adjustHasMoved;
     
-    // 如果没滑动（只是点击），不处理，让点击事件触发
-    if (!hasMoved) {
+    // 濡傛灉娌℃粦鍔紙鍙槸鐐瑰嚮锛夛紝涓嶅鐞嗭紝璁╃偣鍑讳簨浠惰Е鍙?    if (!hasMoved) {
       this.setData({ adjustHasMoved: false });
       return;
     }
     
-    // 锁定阈值：松手时，如果滑过了 -60px，就停在空中显示归零
+    // 閿佸畾闃堝€硷細鏉炬墜鏃讹紝濡傛灉婊戣繃浜?-60px锛屽氨鍋滃湪绌轰腑鏄剧ず褰掗浂
     const lockThreshold = -60;
-    const lockPosition = -100; // 停在 -100px 的高度
-
+    const lockPosition = -100; // 鍋滃湪 -100px 鐨勯珮搴?
     if (currentOffset < lockThreshold) {
-      // 停住，显示归零（带 snap 动画）
-      this.setData({
+      // 鍋滀綇锛屾樉绀哄綊闆讹紙甯?snap 鍔ㄧ敾锛?      this.setData({
         adjustSnap: true,
         adjustSlideOffset: lockPosition,
         adjustSlideActive: true
@@ -8070,80 +7111,70 @@ Page({
 
       if (this._canControlDevice()) {
         this._foldAdjustActive = true;
-        console.log('📤 [蓝牙] 上滑调整：发送「调整折叠角度」');
-        this.sendDataMultiple('调整折叠角度', 1, 300);
+        console.log('馃摛 [钃濈墮] 涓婃粦璋冩暣锛氬彂閫併€岃皟鏁存姌鍙犺搴︺€?);
+        this.sendDataMultiple('璋冩暣鎶樺彔瑙掑害', 1, 300);
       }
       
-      // 动画结束后关闭 snap 类
-      setTimeout(() => {
+      // 鍔ㄧ敾缁撴潫鍚庡叧闂?snap 绫?      setTimeout(() => {
         this.setData({ adjustSnap: false });
       }, 200);
     } else {
-      // 没滑到位，弹回去（带 snap 动画）
-      this.setData({
+      // 娌℃粦鍒颁綅锛屽脊鍥炲幓锛堝甫 snap 鍔ㄧ敾锛?      this.setData({
         adjustSnap: true,
         adjustSlideOffset: 0,
         adjustSlideActive: false
       });
     
-      // 动画结束后关闭 snap 类
-    setTimeout(() => {
+      // 鍔ㄧ敾缁撴潫鍚庡叧闂?snap 绫?    setTimeout(() => {
       this.setData({ adjustSnap: false });
       }, 200);
     }
 
-    // 重置滑动标记
+    // 閲嶇疆婊戝姩鏍囪
     this.setData({ adjustHasMoved: false });
   },
 
-  // 🔴 调整按钮点击事件（当没有滑动时触发）
+  // 馃敶 璋冩暣鎸夐挳鐐瑰嚮浜嬩欢锛堝綋娌℃湁婊戝姩鏃惰Е鍙戯級
   onAdjustClick(e) {
-    // 只在折叠模式下生效
-    if (this.data.editType !== 'fold') return;
+    // 鍙湪鎶樺彔妯″紡涓嬬敓鏁?    if (this.data.editType !== 'fold') return;
     
-    // 如果发生了滑动，不触发点击
-    if (this.data.adjustHasMoved) {
+    // 濡傛灉鍙戠敓浜嗘粦鍔紝涓嶈Е鍙戠偣鍑?    if (this.data.adjustHasMoved) {
       return;
     }
     
-    // 🔴 直接调用 handleAdjust，发送"调整折叠角度"
+    // 馃敶 鐩存帴璋冪敤 handleAdjust锛屽彂閫?璋冩暣鎶樺彔瑙掑害"
     this.handleAdjust({ currentTarget: { dataset: { action: 'adjust', mode: 'fold' } } });
   },
 
-  // 重置滑动状态（点击归零后调用）
+  // 閲嶇疆婊戝姩鐘舵€侊紙鐐瑰嚮褰掗浂鍚庤皟鐢級
   resetAdjustSlider(fromDemo = false) {
     if (fromDemo) {
-      // 🔴 从演示模式回落：保持 isAdjustDemo 类，让动画平滑
-    this.setData({
+      // 馃敶 浠庢紨绀烘ā寮忓洖钀斤細淇濇寔 isAdjustDemo 绫伙紝璁╁姩鐢诲钩婊?    this.setData({
       adjustSlideOffset: 0,
       adjustSlideActive: false
     });
 
-      // 等动画结束后再关闭 demo class，避免中途卡顿
-      setTimeout(() => {
+      // 绛夊姩鐢荤粨鏉熷悗鍐嶅叧闂?demo class锛岄伩鍏嶄腑閫斿崱椤?      setTimeout(() => {
         this.setData({ isAdjustDemo: false });
       }, 300);
     } else {
-      // 🔴 从手动上滑/点击归零回落：启用 snap 类（快速回弹）
+      // 馃敶 浠庢墜鍔ㄤ笂婊?鐐瑰嚮褰掗浂鍥炶惤锛氬惎鐢?snap 绫伙紙蹇€熷洖寮癸級
     this.setData({
         adjustSnap: true,
       adjustSlideOffset: 0,
         adjustSlideActive: false
     });
 
-      // 动画结束后关闭 snap 类
-    setTimeout(() => {
+      // 鍔ㄧ敾缁撴潫鍚庡叧闂?snap 绫?    setTimeout(() => {
         this.setData({ adjustSnap: false });
-      }, 200); // snap 动画是 0.18s
+      }, 200); // snap 鍔ㄧ敾鏄?0.18s
     }
   },
 
   // ===============================================
-  // 蓝牙发送数据方法（基于你提供的逻辑）
-  // ===============================================
+  // 钃濈墮鍙戦€佹暟鎹柟娉曪紙鍩轰簬浣犳彁渚涚殑閫昏緫锛?  // ===============================================
   
-  // 字符串转ArrayBuffer（UTF-8编码）
-  stringToArrayBuffer(str) {
+  // 瀛楃涓茶浆ArrayBuffer锛圲TF-8缂栫爜锛?  stringToArrayBuffer(str) {
     const bytes = [];
     for (let i = 0; i < str.length; i++) {
       const charCode = str.charCodeAt(i);
@@ -8175,27 +7206,6 @@ Page({
     return ble.characteristicId2 || ble.characteristicId || '';
   },
 
-  /** F3 测高配置模式中固件会丢弃翻板/高级指令，发翻板前先 M0# 退出 */
-  _f3EnsureFlapControlReady(done) {
-    if (!isF3MaxModel(this.data.currentModel)) {
-      if (typeof done === 'function') done();
-      return;
-    }
-    if (!this.data.f3HeightConfigModeOn) {
-      if (typeof done === 'function') done();
-      return;
-    }
-    console.log('[F3] 翻板控制前退出测高配置模式 (M0#)');
-    this.setData({ f3HeightConfigModeOn: false });
-    this._f3CfgReadyAt = 0;
-    this._f3HeightCfgLocalUntil = 0;
-    this._clearBleSendQueue();
-    this._f3EnqueueHeightCmdChars('M0');
-    setTimeout(() => {
-      if (typeof done === 'function') done();
-    }, 1500);
-  },
-
   _isBleWriteReady() {
     const ble = this.ble;
     if (!ble || !ble.device || !ble.serviceId) return false;
@@ -8207,33 +7217,17 @@ Page({
     const ble = this.ble;
     const charId = this._getBleWriteCharacteristicId();
     if (!ble || !ble.device || !ble.serviceId || !charId) {
-      this._f3HeightLog('BLE写出跳过', { reason: '未就绪', charId });
       return Promise.resolve(false);
     }
-    const meta = this._bleSendMeta || null;
     return new Promise((resolve) => {
       wx.writeBLECharacteristicValue({
         deviceId: ble.device.deviceId,
         serviceId: ble.serviceId,
         characteristicId: charId,
         value: arrayBuffer,
-        success: () => {
-          if (meta && meta.f3HeightChar) {
-            this._f3HeightLog('BLE字写出OK', {
-              ch: meta.text,
-              idx: meta.f3HeightIdx,
-              total: meta.f3HeightTotal,
-              charId
-            });
-          }
-          resolve(true);
-        },
+        success: () => resolve(true),
         fail: (err) => {
-          this._f3HeightLog('BLE写出失败', {
-            errMsg: err && err.errMsg,
-            charId,
-            meta
-          });
+          console.log('鉂?[钃濈墮] 鍙戦€佸け璐?', err.errMsg);
           resolve(false);
         }
       });
@@ -8252,7 +7246,7 @@ Page({
     return { type: 'setting', key, targetVal };
   },
 
-  /** 校验等待期间，不让设备回读覆盖用户刚点的 UI */
+  /** 鏍￠獙绛夊緟鏈熼棿锛屼笉璁╄澶囧洖璇昏鐩栫敤鎴峰垰鐐圭殑 UI */
   _stripConflictingBleReadback(updates) {
     const verify = this._bleVerifyPending;
     const heightPending = this._f3HeightWritePending;
@@ -8260,33 +7254,20 @@ Page({
       const mmKey = heightPending.kind === 'danger' ? 'f3DangerMm' : 'f3BaseMm';
       const rbKey = heightPending.kind === 'danger' ? 'f3DangerReadback' : 'f3BaseReadback';
       const incoming = updates[mmKey];
-      this._f3HeightLog('回读校验', {
-        kind: heightPending.kind,
-        expect: heightPending.units,
-        incoming,
-        mmKey,
-        dga: updates.f3DangerMm,
-        dgb: updates.f3BaseMm,
-        leftMs: heightPending.expire - Date.now()
-      });
+      console.log(`[鍥炶鏍￠獙] kind=${heightPending.kind} expect=${heightPending.units} incoming=${incoming} mmKey=${mmKey}`);
       if (incoming !== undefined && incoming !== null && Math.round(Number(incoming)) === heightPending.units) {
-        this._f3HeightLog('回读成功', { kind: heightPending.kind, mm: heightPending.units });
+        console.log('[鍥炶鏍￠獙] 鉁?鍖归厤鎴愬姛');
         const onAck = heightPending.onAck;
         this._f3HeightWritePending = null;
         this._f3HeightSendLockUntil = 0;
         if (typeof onAck === 'function') onAck();
       } else if (incoming !== undefined) {
-        this._f3HeightLog('回读不匹配', { expect: heightPending.units, incoming });
+        console.log('[鍥炶鏍￠獙] 鉁?涓嶅尮閰嶏紝鍒犻櫎鍥炶');
         delete updates[mmKey];
         delete updates[rbKey];
       }
     } else if (heightPending && Date.now() >= heightPending.expire) {
-      this._f3HeightLog('回读超时', {
-        kind: heightPending.kind,
-        expect: heightPending.units,
-        uiDanger: this.data.f3DangerMm,
-        uiBase: this.data.f3BaseMm
-      });
+      console.log('[鍥炶鏍￠獙] 瓒呮椂');
       const onFail = heightPending.onFail;
       this._f3HeightWritePending = null;
       this._f3HeightSendLockUntil = 0;
@@ -8323,7 +7304,7 @@ Page({
     return updates;
   },
 
-  /** UI 已更新后再发 BLE；非 Ultra 无回读校验，Ultra 回读不一致会重发 */
+  /** UI 宸叉洿鏂板悗鍐嶅彂 BLE锛涢潪 Ultra 鏃犲洖璇绘牎楠岋紝Ultra 鍥炶涓嶄竴鑷翠細閲嶅彂 */
   _commitBleCommandAfterUi(intent) {
     if (!intent || !intent.sendText) return;
     this._pendingBleIntent = {
@@ -8342,7 +7323,7 @@ Page({
     const ultra = isMtUltraCardModel(this.data.currentModel);
     this._bleVerifyPending = ultra && intent.verify ? intent.verify : null;
     const { sendText, times, interval, label } = this._pendingBleIntent;
-    console.log(`📤 [蓝牙] ${label} 发送「${sendText}」×${times}`);
+    console.log(`馃摛 [钃濈墮] ${label} 鍙戦€併€?{sendText}銆嵜?{times}`);
     this.sendDataMultiple(sendText, times, interval);
   },
 
@@ -8350,7 +7331,7 @@ Page({
     const intent = this._pendingBleIntent;
     if (!intent || !intent.sendText) return;
     if (!this._canControlDevice()) return;
-    console.log('📤 [蓝牙] 重连后补发', intent.sendText);
+    console.log('馃摛 [钃濈墮] 閲嶈繛鍚庤ˉ鍙?, intent.sendText);
     this._bleVerifyRetryCount = 0;
     const ultra = isMtUltraCardModel(this.data.currentModel);
     this._bleVerifyPending = ultra && intent.verify ? intent.verify : null;
@@ -8370,7 +7351,7 @@ Page({
     this._bleVerifyRetryCount = retries + 1;
     const intent = this._pendingBleIntent;
     if (!intent || !this._canControlDevice()) return;
-    console.warn(`📤 [蓝牙] 回读不一致，重发(${this._bleVerifyRetryCount}/2)`, intent.sendText);
+    console.warn(`馃摛 [钃濈墮] 鍥炶涓嶄竴鑷达紝閲嶅彂(${this._bleVerifyRetryCount}/2)`, intent.sendText);
     setTimeout(() => {
       if (this._canControlDevice() && this._pendingBleIntent === intent) {
         this.sendDataMultiple(intent.sendText, intent.times || 3, intent.interval || 500);
@@ -8382,39 +7363,39 @@ Page({
     if (isF2Ble) {
       if (key === 'faultDetect') {
         if (isMtUltra) {
-          return targetVal === 'left' ? '开启堵转检测' : (targetVal === 'right' ? '关闭堵转检测' : '');
+          return targetVal === 'left' ? '寮€鍚牭杞娴? : (targetVal === 'right' ? '鍏抽棴鍫佃浆妫€娴? : '');
         }
-        return targetVal === 'left' ? '开启自检' : (targetVal === 'right' ? '关闭自检' : '');
+        return targetVal === 'left' ? '寮€鍚嚜妫€' : (targetVal === 'right' ? '鍏抽棴鑷' : '');
       }
       if (key === 'selfRepair' && isMtUltra) {
-        return targetVal === 'left' ? '开启电机检测' : (targetVal === 'right' ? '关闭电机检测' : '');
+        return targetVal === 'left' ? '寮€鍚數鏈烘娴? : (targetVal === 'right' ? '鍏抽棴鐢垫満妫€娴? : '');
       }
       if (key === 'powerOn') {
         if (isMtUltra) {
-          // 同款 Ultra 固件：UI 左=上翻/右=下翻，与固件指令左右对调
-          return targetVal === 'left' ? '开机下翻' : (targetVal === 'right' ? '开机上翻' : '');
+          // 鍚屾 Ultra 鍥轰欢锛歎I 宸?涓婄炕/鍙?涓嬬炕锛屼笌鍥轰欢鎸囦护宸﹀彸瀵硅皟
+          return targetVal === 'left' ? '寮€鏈轰笅缈? : (targetVal === 'right' ? '寮€鏈轰笂缈? : '');
         }
-        return targetVal === 'left' ? '开机上翻' : (targetVal === 'right' ? '开机下翻' : '');
+        return targetVal === 'left' ? '寮€鏈轰笂缈? : (targetVal === 'right' ? '寮€鏈轰笅缈? : '');
       }
       if (key === 'shutdown') {
-        return targetVal === 'left' ? '打开收回' : (targetVal === 'right' ? '关闭收回' : '');
+        return targetVal === 'left' ? '鎵撳紑鏀跺洖' : (targetVal === 'right' ? '鍏抽棴鏀跺洖' : '');
       }
       if (key === 'travelMode' && isMtUltra) {
-        return targetVal === 'left' ? '关闭出行' : (targetVal === 'right' ? '开启出行' : '');
+        return targetVal === 'left' ? '鍏抽棴鍑鸿' : (targetVal === 'right' ? '寮€鍚嚭琛? : '');
       }
       if (key === 'smoothMode' && isMtUltra) {
-        return targetVal === 'left' ? '开启平滑' : (targetVal === 'right' ? '关闭平滑' : '');
+        return targetVal === 'left' ? '寮€鍚钩婊? : (targetVal === 'right' ? '鍏抽棴骞虫粦' : '');
       }
       if (key === 'stealthBtnExit' && isMtUltra) {
-        return targetVal === 'left' ? '允许按钮退出' : (targetVal === 'right' ? '禁止按钮退出' : '');
+        return targetVal === 'left' ? '鍏佽鎸夐挳閫€鍑? : (targetVal === 'right' ? '绂佹鎸夐挳閫€鍑? : '');
       }
     }
     if (isF1Max) {
       if (key === 'powerOn') {
-        return targetVal === 'left' ? '开机上翻' : (targetVal === 'right' ? '开机下翻' : '');
+        return targetVal === 'left' ? '寮€鏈轰笂缈? : (targetVal === 'right' ? '寮€鏈轰笅缈? : '');
       }
       if (key === 'shutdown') {
-        return targetVal === 'left' ? '打开收回' : (targetVal === 'right' ? '关闭收回' : '');
+        return targetVal === 'left' ? '鎵撳紑鏀跺洖' : (targetVal === 'right' ? '鍏抽棴鏀跺洖' : '');
       }
     }
     return '';
@@ -8439,17 +7420,17 @@ Page({
     }
     const isUltra = isMtUltraCardModel(this.data.currentModel);
     if (!isUltra) {
-      console.log(`📤 [蓝牙] ${label || '高级设置'} 发送「${sendText}」（连续3次，间隔0.5秒）`);
+      console.log(`馃摛 [钃濈墮] ${label || '楂樼骇璁剧疆'} 鍙戦€併€?{sendText}銆嶏紙杩炵画3娆★紝闂撮殧0.5绉掞級`);
       this.sendDataMultiple(sendText, 3, 500);
       wx.vibrateShort({ type: 'light' });
       return;
     }
     this._commitBleCommandAfterUi({
       sendText,
-      times: 3,
+      times: 1,
       interval: 500,
       verify: this._buildSettingBleVerify(key, targetVal),
-      label: label || '高级设置'
+      label: label || '楂樼骇璁剧疆'
     });
   },
 
@@ -8461,14 +7442,10 @@ Page({
     this._onBleSendQueueIdle();
   },
 
-  _enqueueBleSend(text, gapAfterMs = BLE_SEND_GAP_MS, meta) {
+  _enqueueBleSend(text, gapAfterMs = BLE_SEND_GAP_MS) {
     if (!text) return;
-    const raw = String(text);
-    if (/^(M[01]|DA|TB)/.test(raw) || raw === '#' || (meta && meta.f3HeightChar)) {
-      this._f3HeightLog('入队', { text: raw, gapAfterMs, meta });
-    }
     if (!this._bleSendQueue) this._bleSendQueue = [];
-    this._bleSendQueue.push({ text: raw, gapAfterMs, meta: meta || null });
+    this._bleSendQueue.push({ text, gapAfterMs });
     this._drainBleSendQueue();
   },
 
@@ -8490,28 +7467,14 @@ Page({
         return;
       }
       if (!this._isBleWriteReady()) {
-        this._f3HeightLog('BLE队列暂停', { reason: '写入未就绪', left: (this._bleSendQueue && this._bleSendQueue.length) || 0 });
         this._bleSendDraining = false;
-        setTimeout(() => this._drainBleSendQueue(), 300);
         return;
       }
       const item = this._bleSendQueue.shift();
-      this._bleSendMeta = item.meta ? { ...item.meta, text: item.text } : { text: item.text };
       const arrayBuffer = this.stringToArrayBuffer(item.text);
-      if (this._f3HeightBleTxActive || (item.text && item.text.length <= 3)) {
-        this._f3HeightLog('BLE队列弹出', {
-          text: item.text,
-          left: this._bleSendQueue.length,
-          gap: item.gapAfterMs
-        });
-      }
       this.writeBleDataPromise(arrayBuffer).then((ok) => {
-        this._bleSendMeta = null;
         if (!ok) {
-          this._f3HeightLog('BLE队列重试', { text: item.text, left: this._bleSendQueue.length });
-          this._bleSendQueue.unshift(item);
           this._bleSendDraining = false;
-          setTimeout(() => this._drainBleSendQueue(), 400);
           return;
         }
         if (this._bleSendQueue.length) {
@@ -8527,34 +7490,30 @@ Page({
     runNext();
   },
 
-  // 核心发送方法
-  writeBleData(arrayBuffer) {
+  // 鏍稿績鍙戦€佹柟娉?  writeBleData(arrayBuffer) {
     if (!this._isBleWriteReady()) {
-      console.log('❌ [蓝牙] 设备未连接或写入特征值未找到');
+      console.log('鉂?[钃濈墮] 璁惧鏈繛鎺ユ垨鐗瑰緛鍊兼湭鎵惧埌');
       return false;
     }
     const ble = this.ble;
-    const charId = this._getBleWriteCharacteristicId();
     wx.writeBLECharacteristicValue({
       deviceId: ble.device.deviceId,
       serviceId: ble.serviceId,
-      characteristicId: charId,
+      characteristicId: this._getBleWriteCharacteristicId(),
       value: arrayBuffer,
       success: (res) => {
-        console.log('✅ [蓝牙] 发送成功', res.errMsg);
+        console.log('鉁?[钃濈墮] 鍙戦€佹垚鍔?', res.errMsg);
       },
       fail: (err) => {
-        console.log('❌ [蓝牙] 发送失败:', err.errMsg);
+        console.log('鉂?[钃濈墮] 鍙戦€佸け璐?', err.errMsg);
       }
     });
     return true;
   },
 
-  // 发送字符串数据（经队列串行写出，避免 BLE 连发粘包）
-  sendData(text, gapAfterMs) {
+  // 鍙戦€佸瓧绗︿覆鏁版嵁锛堢粡闃熷垪涓茶鍐欏嚭锛岄伩鍏?BLE 杩炲彂绮樺寘锛?  sendData(text, gapAfterMs) {
     if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) {
-      // 通过 _remoteAssistEnqueueCommand 中继发送
-      // 防止如果调用方自身已经有循环或重试，这里再排队会堆积
+      // 閫氳繃 _remoteAssistEnqueueCommand 涓户鍙戦€?      // 闃叉濡傛灉璋冪敤鏂硅嚜韬凡缁忔湁寰幆鎴栭噸璇曪紝杩欓噷鍐嶆帓闃熶細鍫嗙Н
       this._remoteAssistEnqueueCommand(text, 1, 0);
       return;
     }
@@ -8562,12 +7521,10 @@ Page({
     this._enqueueBleSend(text, gapAfterMs != null ? gapAfterMs : BLE_SEND_GAP_MS);
   },
 
-  // 连续发送多次（用于 Max 版本），同样走队列间隔发送
-  sendDataMultiple(text, times = 3, interval = 300) {
+  // 杩炵画鍙戦€佸娆★紙鐢ㄤ簬 Max 鐗堟湰锛夛紝鍚屾牱璧伴槦鍒楅棿闅斿彂閫?  sendDataMultiple(text, times = 3, interval = 300) {
     if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) {
-      // 避免 enqueueCommand 和 timeout 嵌套导致指令乘方爆炸
-      // 直接交给远协云端队列去循环发送
-      this._remoteAssistEnqueueCommand(text, times, interval);
+      // 閬垮厤 enqueueCommand 鍜?timeout 宓屽瀵艰嚧鎸囦护涔樻柟鐖嗙偢
+      // 鐩存帴浜ょ粰杩滃崗浜戠闃熷垪鍘诲惊鐜彂閫?      this._remoteAssistEnqueueCommand(text, times, interval);
       return;
     }
     if (!this._isBleLinked()) return;
@@ -8578,49 +7535,42 @@ Page({
   },
 
   // ===============================================
-  // 🔴 统一的自定义弹窗方法（替换所有 wx.showModal 和 wx.showToast）
-  // ===============================================
+  // 馃敶 缁熶竴鐨勮嚜瀹氫箟寮圭獥鏂规硶锛堟浛鎹㈡墍鏈?wx.showModal 鍜?wx.showToast锛?  // ===============================================
   
-  // 🔴 统一的自定义 Toast 方法（替换所有 wx.showToast）
-  _showCustomToast(title, icon = 'none', duration = 2000) {
-    // 尝试获取组件，最多重试3次
-    const tryShow = (attempt = 0) => {
+  // 馃敶 缁熶竴鐨勮嚜瀹氫箟 Toast 鏂规硶锛堟浛鎹㈡墍鏈?wx.showToast锛?  _showCustomToast(title, icon = 'none', duration = 2000) {
+    // 灏濊瘯鑾峰彇缁勪欢锛屾渶澶氶噸璇?娆?    const tryShow = (attempt = 0) => {
       const toast = this.selectComponent('#custom-toast');
       if (toast && toast.showToast) {
         toast.showToast({ title, icon, duration });
       } else if (attempt < 3) {
-        // 延迟重试
+        // 寤惰繜閲嶈瘯
         setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
       } else {
-        // 最终降级
-        console.warn('[scan] custom-toast 组件未找到，使用降级方案');
+        // 鏈€缁堥檷绾?        console.warn('[scan] custom-toast 缁勪欢鏈壘鍒帮紝浣跨敤闄嶇骇鏂规');
         wx.showToast({ title, icon, duration });
       }
     };
     tryShow();
   },
 
-  // 🔴 统一的自定义 Modal 方法（替换所有 wx.showModal）
-  _showCustomModal(options) {
-    // 尝试获取组件，最多重试3次
-    const tryShow = (attempt = 0) => {
+  // 馃敶 缁熶竴鐨勮嚜瀹氫箟 Modal 鏂规硶锛堟浛鎹㈡墍鏈?wx.showModal锛?  _showCustomModal(options) {
+    // 灏濊瘯鑾峰彇缁勪欢锛屾渶澶氶噸璇?娆?    const tryShow = (attempt = 0) => {
       const toast = this.selectComponent('#custom-toast');
       if (toast && toast.showModal) {
         toast.showModal({
-          title: options.title || '提示',
+          title: options.title || '鎻愮ず',
           content: options.content || '',
           showCancel: options.showCancel !== false,
-          confirmText: options.confirmText || '确定',
-          cancelText: options.cancelText || '取消',
+          confirmText: options.confirmText || '纭畾',
+          cancelText: options.cancelText || '鍙栨秷',
           titleClass: options.titleClass || '',
           success: options.success
         });
       } else if (attempt < 3) {
-        // 延迟重试
+        // 寤惰繜閲嶈瘯
         setTimeout(() => tryShow(attempt + 1), 100 * (attempt + 1));
       } else {
-        // 最终降级
-        console.warn('[scan] custom-toast 组件未找到，使用降级方案');
+        // 鏈€缁堥檷绾?        console.warn('[scan] custom-toast 缁勪欢鏈壘鍒帮紝浣跨敤闄嶇骇鏂规');
         wx.showModal(options);
       }
     };
@@ -8643,18 +7593,18 @@ Page({
       f2HwMonitorVisible: connected && isHwPinMonitorModel(m),
       f2KeyOn: null,
       f2BtnPressed: null,
-      f2KeyStatusText: '—',
-      f2BtnStatusText: '—',
-      f3HeightMonitorVisible: connected && isF3,
+      f2KeyStatusText: '鈥?,
+      f2BtnStatusText: '鈥?,
+      f3HeightMonitorVisible: isF3,
       f3HeightMm: null,
-      f3HeightText: connected ? '读取中…' : '请先连接蓝牙',
+      f3HeightText: connected ? '璇诲彇涓€? : '璇峰厛杩炴帴钃濈墮',
       f3HeightLive: false,
       f3DangerMm: 0,
       f3BaseMm: 0,
       f3DangerInput: '',
       f3BaseInput: '',
-      f3DangerReadback: connected ? '读取中…' : '未设置',
-      f3BaseReadback: connected ? '读取中…' : '未设置',
+      f3DangerReadback: connected ? '璇诲彇涓€? : '鏈缃?,
+      f3BaseReadback: connected ? '璇诲彇涓€? : '鏈缃?,
       f3CalCountdown: 0,
       f3PlateItm: null,
       f3DangerBlocked: false,
@@ -8662,15 +7612,14 @@ Page({
       f3ShowCalOverlay: false,
       f3CalStep: '',
       f3CalBranch: '',
-      f3CalTitle: '自动标定',
+      f3CalTitle: '鑷姩鏍囧畾',
       f3CalDesc: '',
       f3CalTargetLabel: '',
       f3CalLiveText: '',
       f3CalMedianText: '',
       f3CalResultText: '',
       f3CalStatusText: '',
-      f3CalShowHoldModal: false,
-      f3CalShowVolatilityModal: false
+      f3CalShowHoldModal: false
     };
   },
 
@@ -8706,51 +7655,6 @@ Page({
     } catch (ex) { /* ignore */ }
   },
 
-  _isBleGattReady() {
-    const ble = this.ble;
-    return !!(ble && ble.device && ble.device.deviceId && ble.serviceId && ble.characteristicId);
-  },
-
-  _bleStatusTargetModel() {
-    if (this._bleSessionModel && (this.data.isConnected || this._isBleLinked())) {
-      return this._bleSessionModel;
-    }
-    if (this.data.showDetail && this.data.currentModel) {
-      return this.data.currentModel;
-    }
-    const models = this.data.models || [];
-    const idx = Number(this.data.currentIndex);
-    if (Number.isFinite(idx) && models[idx]) {
-      return models[idx];
-    }
-    return this.data.currentModel;
-  },
-
-  _ensureF2StatusBleListener(forceUiPrime) {
-    if (!this.ble || !this._isBleGattReady()) return;
-    const model = this._bleStatusTargetModel();
-    if (!isF2MaxStatusBleModel(model)) {
-      if (this.ble.onDataReceived) {
-        this.ble.onDataReceived = null;
-      }
-      return;
-    }
-    const needBind = !this.ble.onDataReceived;
-    if (needBind) {
-      this._setupF2FaultBleListener();
-      return;
-    }
-    this._f2ForceStatusSyncPending = true;
-    this._f2AdvSyncPending = true;
-    if (forceUiPrime && (this.data.isConnected || this._isBleLinked())) {
-      this.setData({
-        f2TravelReadbackText: '读取中…',
-        f2DelayPowerReadbackText: '读取中…',
-        ...this._resetF2HwMonitorState(true, model)
-      });
-    }
-  },
-
   _setupF2FaultBleListener() {
     this._f2BleRxLine = '';
     this._f2LastFaultKey = '';
@@ -8760,11 +7664,11 @@ Page({
     if (!this.ble) return;
     this.ble.onDataReceived = (buffer) => this._onF2BleDataReceived(buffer);
     const connectPatch = {
-      f2TravelReadbackText: '读取中…',
-      f2DelayPowerReadbackText: '读取中…',
+      f2TravelReadbackText: '璇诲彇涓€?,
+      f2DelayPowerReadbackText: '璇诲彇涓€?,
       flapPanelState: 'unknown',
-      flapPanelStateText: '同步中…',
-      ...this._resetF2HwMonitorState(true, this._bleStatusTargetModel())
+      flapPanelStateText: '鍚屾涓€?,
+      ...this._resetF2HwMonitorState(true)
     };
     this.setData(connectPatch);
   },
@@ -8779,14 +7683,14 @@ Page({
     if (this.ble) this.ble.onDataReceived = null;
     this._resetFlapPanelState();
     this.setData({
-      f2TravelReadbackText: '读取中…',
-      f2DelayPowerReadbackText: '读取中…',
+      f2TravelReadbackText: '璇诲彇涓€?,
+      f2DelayPowerReadbackText: '璇诲彇涓€?,
       ...this._resetF2HwMonitorState(false)
     });
   },
 
   _onF2BleDataReceived(buffer) {
-    if (!buffer || !isF2MaxStatusBleModel(this._bleStatusTargetModel())) return;
+    if (!buffer || !isF2MaxStatusBleModel(this.data.currentModel)) return;
     this._f2LastBleRxAt = Date.now();
     this._f2BleRxLine += this._arrayBufferToUtf8(buffer);
     const parts = this._f2BleRxLine.split('\n');
@@ -8800,31 +7704,8 @@ Page({
 
   _handleF2BleStatusLine(line) {
     const trimmed = (line || '').trim();
-    if (trimmed.startsWith('RX:')) {
-      this._f3HeightLog('固件RX', trimmed.slice(3));
-      return;
-    }
-    if (trimmed.startsWith('OK:')) {
-      this._f3HeightLog('固件OK', trimmed.slice(3));
-      return;
-    }
-    if (trimmed.startsWith('ER:')) {
-      this._f3HeightLog('固件ER', trimmed.slice(3));
-      return;
-    }
     const parsed = parseF2StatusLine(trimmed);
     if (!parsed) return;
-    if (isF3MaxModel(this._bleStatusTargetModel()) &&
-        (this._f3HeightWritePending || this.data.f3HeightConfigModeOn)) {
-      this._f3HeightLog('状态包', {
-        f3c: parsed.f3c,
-        dga: parsed.dga,
-        dgb: parsed.dgb,
-        hgt: parsed.hgt,
-        pending: this._f3HeightWritePending,
-        uiCfgOn: this.data.f3HeightConfigModeOn
-      });
-    }
     const forcePopup = !!this._f2FaultConnectPending;
     if (forcePopup) this._f2FaultConnectPending = false;
 
@@ -8848,11 +7729,8 @@ Page({
   },
 
   _syncF2StatusFromPacket(parsed) {
-    const model = this._bleStatusTargetModel();
-    if (isF3MaxModel(model) && (parsed.f3c === 0 || parsed.f3c === 1)) {
-      this._f3LastStatusF3c = parsed.f3c;
-    }
-    if (!isF2MaxStatusBleModel(model)) return;
+    if (!isF2MaxStatusBleModel(this.data.currentModel)) return;
+    const model = this.data.currentModel;
     const isUltra = isMtUltraCardModel(model);
     const forceFull = !!this._f2ForceStatusSyncPending;
     const forceAdv = forceFull || !!this._f2AdvSyncPending;
@@ -8927,16 +7805,15 @@ Page({
     Object.assign(updates, buildF2HwMonitorUpdates(parsed, {
       f2KeyOn: this.data.f2KeyOn,
       f2BtnPressed: this.data.f2BtnPressed,
-      force: forceFull || forceAdv
+      force: forceFull
     }));
 
     Object.assign(updates, buildF3HeightMonitorUpdates(parsed, {
       f3HeightMm: this.data.f3HeightMm,
-      f3HeightConfigModeOn: this.data.f3HeightConfigModeOn,
       force: forceFull
     }));
 
-    if (this._f3CalSampling || this.data.f3CalStep === 'wheel') {
+    if (this._f3CalSampling) {
       let liveMm = null;
       if (updates.f3HeightMm != null) {
         liveMm = Math.round(Number(updates.f3HeightMm));
@@ -8957,39 +7834,18 @@ Page({
       force: forceFull || !!this._f3HeightWritePending
     }));
 
-    if (isF3MaxModel(model)) {
+    if (isF3MaxModel(this.data.currentModel)) {
       const itm = parsed.itm;
       if (itm === 0 || itm === 1 || itm === 2) {
         updates.f3PlateItm = itm;
       }
       updates.f3HeightConfigLocked = false;
-      if (parsed.f3c === 1) {
-        this._f3HeightCfgLocalUntil = 0;
-      } else if (
-        updates.f3HeightConfigModeOn === false
-        && (
-          (this._f3HeightCfgLocalUntil && Date.now() < this._f3HeightCfgLocalUntil
-            && this.data.f3HeightConfigModeOn)
-          || this._f3CalWritingHeights
-        )
-      ) {
-        delete updates.f3HeightConfigModeOn;
-      }
       if (itm === 1 || itm === 2) {
-        if (!this.data.f3HeightConfigModeOn) {
-          updates.f3HeightLive = false;
-        }
-      } else if (
-        itm === 0 &&
-        (parsed.hgt === null || parsed.hgt === undefined) &&
-        this.data.f3HeightMm == null
-      ) {
-        // HGT 约 1s 才随状态包上报一次，无 HGT 字段不代表失效，勿清已有读数
-        if (!this.data.f3HeightConfigModeOn) {
-          updates.f3HeightLive = false;
-        }
-        if (forceFull) {
-          updates.f3HeightText = '读取中…';
+        updates.f3HeightLive = false;
+      } else if (itm === 0 && (parsed.hgt === null || parsed.hgt === undefined)) {
+        updates.f3HeightLive = false;
+        if (forceFull || this.data.f3HeightMm == null) {
+          updates.f3HeightText = '璇诲彇涓€?;
         }
       }
       if (this.data.f3ShowCalOverlay && this._f3CalSampling) {
@@ -9012,7 +7868,7 @@ Page({
 
     this._trySyncAngleEditorsFromBle(parsed);
 
-    if (!isHwPinMonitorModel(model)) {
+    if (!isHwPinMonitorModel(this.data.currentModel)) {
       delete updates.f2KeyOn;
       delete updates.f2BtnPressed;
       delete updates.f2KeyStatusText;
@@ -9020,7 +7876,7 @@ Page({
       delete updates.f2HwMonitorVisible;
     }
 
-    if (!isF3MaxModel(model)) {
+    if (!isF3MaxModel(this.data.currentModel)) {
       delete updates.f3HeightMm;
       delete updates.f3HeightText;
       delete updates.f3HeightLive;
@@ -9059,7 +7915,6 @@ Page({
       this._patchFlapGaugeSnap(updates);
       const shouldReleaseGaugeSnap = !!updates.flapGaugeSnap;
       const f3CalJustFinished = !!updates._f3CalJustFinished;
-      const f3CalFlapJustClosed = this._f3CalAwaitFlapClose && updates.flapPanelState === 'closed';
       if (f3CalJustFinished) delete updates._f3CalJustFinished;
       this.setData(updates, () => {
         if (shouldReleaseGaugeSnap) this._releaseFlapGaugeSnap();
@@ -9068,7 +7923,6 @@ Page({
           this._clearF3CalTimer();
           this._showCustomToast(f3CalDismissToast.text, f3CalDismissToast.type || 'none', f3CalDismissToast.duration || 2000);
         }
-        if (f3CalFlapJustClosed) this._f3CalOnFlapClosedForCal();
       });
       if (isUltra && updates.flapPanelState !== undefined) {
         this._publishFlapToVoiceBridge(
@@ -9135,7 +7989,7 @@ Page({
       title: payload.title,
       content: payload.content,
       showCancel: false,
-      confirmText: '知道了',
+      confirmText: '鐭ラ亾浜?,
       titleClass: payload.kind === 'warn' ? 'warn' : (payload.kind === 'error' ? 'error' : (payload.kind === 'info' ? 'info' : '')),
       success: () => {
         if (payload.kind === 'error' && payload.errCode > 0) {

@@ -1,0 +1,1960 @@
+﻿diff --git a/miniprogram/package-app/pages/scan/scan.js b/miniprogram/package-app/pages/scan/scan.js
+index d0ac4f4..91213b3 100644
+--- a/miniprogram/package-app/pages/scan/scan.js
++++ b/miniprogram/package-app/pages/scan/scan.js
+@@ -87,6 +87,9 @@ class BLEHelper {
+     this.serviceId = '';
+     this.characteristicId = '';      
+     this.characteristicId2 = '';     
++    this.writeCharacteristicId = '';
++    this._writeNoResponse = false;
++    this._writeWithResponse = false;
+     this.serviceIdf0 = '';
+     this.characteristicId01 = '';    
+     this.characteristicId02 = '';    
+@@ -417,13 +420,58 @@ class BLEHelper {
+               return;
+             }
+           }
+-          resolve();
++          reject(new Error('鏈壘鍒?FFF0 钃濈墮鏈嶅姟'));
+         },
+         fail: reject
+       });
+     });
+   }
+ 
++  _applyDiscoveredCharacteristics(chars) {
++    const list = chars || [];
++    let notifyCand = null;
++    let writeCand = null;
++    list.forEach((char) => {
++      const charUuid = char.uuid.toUpperCase();
++      const props = char.properties || {};
++      const canNotify = !!(props.notify || props.indicate);
++      const canWrite = !!(props.write || props.writeNoResponse || props.writeWithoutResponse);
++      if (charUuid.includes('FF1') && canNotify) {
++        notifyCand = char;
++      } else if (charUuid.includes('FF1') && !notifyCand) {
++        notifyCand = char;
++      } else if (canNotify && !notifyCand) {
++        notifyCand = char;
++      }
++      if (charUuid.includes('FF2') && canWrite) {
++        writeCand = char;
++      }
++    });
++    if (!writeCand) {
++      writeCand = list.find((char) => {
++        const props = char.properties || {};
++        const canWrite = !!(props.write || props.writeNoResponse || props.writeWithoutResponse);
++        if (!canWrite) return false;
++        const u = char.uuid.toUpperCase();
++        if (u.includes('FF2')) return true;
++        return notifyCand ? char.uuid !== notifyCand.uuid : true;
++      }) || null;
++    }
++    if (notifyCand) this.characteristicId = notifyCand.uuid;
++    if (writeCand) {
++      this.characteristicId2 = writeCand.uuid;
++      this.writeCharacteristicId = writeCand.uuid;
++      const props = writeCand.properties || {};
++      this._writeNoResponse = !!(props.writeNoResponse || props.writeWithoutResponse);
++      this._writeWithResponse = !!props.write;
++    } else {
++      this.characteristicId2 = '';
++      this.writeCharacteristicId = '';
++      this._writeNoResponse = false;
++      this._writeWithResponse = false;
++    }
++  }
++
+   discoverCharacteristics(serviceId) {
+     return new Promise((resolve, reject) => {
+       if (!this.device) {
+@@ -434,12 +482,19 @@ class BLEHelper {
+         deviceId: this.device.deviceId,
+         serviceId: serviceId,
+         success: (res) => {
+-          res.characteristics.forEach(char => {
+-            const charUuid = char.uuid.toUpperCase();
+-            if (charUuid.includes('FF1')) this.characteristicId = char.uuid;
+-            if (charUuid.includes('FF2')) this.characteristicId2 = char.uuid;
+-          });
++          this._applyDiscoveredCharacteristics(res.characteristics);
+           if (serviceId === this.serviceId) {
++            if (!this.characteristicId) {
++              reject(new Error('鏈壘鍒?FF1 閫氱煡鐗瑰緛鍊?));
++              return;
++            }
++            if (!this.writeCharacteristicId) {
++              console.warn('[BLE] 鏈壘鍒板彲鍐欑壒寰佸€硷紙FF2锛夛紝灏忕▼搴忔棤娉曟帶鍒惰澶?);
++            } else {
++              console.log('[BLE] 鍐欏叆鐗瑰緛', this.writeCharacteristicId,
++                'write=', this._writeWithResponse,
++                'writeNoResponse=', this._writeNoResponse);
++            }
+             this.enableNotify().then(resolve).catch(reject);
+           } else {
+             resolve();
+@@ -1081,14 +1136,27 @@ Page({
+     f3CalDesc: '',
+     f3CalTargetLabel: '',
+     f3CalLiveText: '',
++    f3CalTargetText: '',
++    f3CalWheelHint: '',
++    f3CalLimitHint: '',
+     f3CalMedianText: '',
+     f3CalResultText: '',
+     f3CalStatusText: '',
+     f3CalShowHoldModal: false,
++    f3CalShowVolatilityModal: false,
+     f3CalTranslateX: 0,
+     f3CalRulerTransition: 'none',
+     f3CalTicks: [],
+     f3CalPadTicks: [],
++    f3CalAdminPreview: false,
++    f3CalAdminUiTune: false,
++    f3CalStepNavList: [],
++    f3CalStepNavIndex: 0,
++    f3CalStepNavLabel: '',
++    f3CalStepNavNo: 0,
++    f3CalStepNo: 0,
++    f3CalStepTotal: 6,
++    f3CalPreflightClosing: false,
+     ...buildF2ServoSpeedUi(100),
+     f2SpeedSliderWidth: 0,
+     f2SpeedSliderLeft: 0,
+@@ -1198,15 +1266,13 @@ Page({
+       this._bleReconnectStoppedByUser = false;
+       this._clearBleReconnectTimers();
+ 
+-      // 鐗瑰緛鍊?notify 宸插氨缁紝椤诲湪鏍￠獙浜戝嚱鏁?OTA 涔嬪墠鎸備笂鐩戝惉锛屽惁鍒欓鍖呯姸鎬佷細涓㈠け
+-      if (isF2MaxStatusBleModel(this.data.currentModel)) {
+-        this._setupF2FaultBleListener();
+-      }
++      // 璁板綍鏈杩炴帴瀵瑰簲鐨勬満鍨嬪崱鐗囷紙閬垮厤婊戣蛋鍗＄墖鍚庣姸鎬佸寘琚敊璇繃婊わ級
++      this._bleSessionModel = this._bleStatusTargetModel();
+ 
+       const numMatch = rawName.replace(/[^0-9]/g, '');
+       const finalName = numMatch ? `MT-ID:${numMatch}` : rawName;
+ 
+-      // 绯荤粺 BLE 宸茶繛閫氾細鍏堟洿鏂?UI锛岄伩鍏嶄簯鍑芥暟/OTA 鏍￠獙鏈熼棿涓€鐩村崱鍦ㄣ€屾鍦ㄨ繛鎺ャ€?+      // 绯荤粺 BLE 宸茶繛閫氾細鍏堟洿鏂?UI锛屽啀鎸?notify 鍥炶皟锛堥』 isConnected/GATT 灏辩华锛?       this._applyBleLinkUi({
+         isConnected: true,
+         isScanning: false,
+@@ -1216,6 +1282,7 @@ Page({
+         connectedDeviceName: finalName,
+         currentConnectedRawSn: normalizedSn || ''
+       }, () => {
++        this._ensureF2StatusBleListener(true);
+         this._scheduleRemoteStatePush();
+         this._bleConnectGraceUntil = Date.now() + 8000;
+         this._bleConnProbeFailStreak = 0;
+@@ -1483,10 +1550,13 @@ Page({
+       }
+     }, 120);
+ 
+-    if (this.data.isConnected && !isF2MaxStatusBleModel(this.data.currentModel)) {
++    if (this.data.isConnected && !isF2MaxStatusBleModel(this._bleStatusTargetModel())) {
+       this._tickBleLinkWatch();
+       if (!this._bleLinkWatchTimer) this._startBleLinkWatch();
+     }
++    if (this._isBleLinked()) {
++      this._ensureF2StatusBleListener();
++    }
+ 
+     this._resumeRemoteAssistPollers();
+     this._restoreRemoteAssistLocal();
+@@ -2188,7 +2258,7 @@ Page({
+ 
+   _applyBleLinkUi(patch, callback) {
+     const merged = { ...patch };
+-    const model = this.data.currentModel;
++    const model = this._bleStatusTargetModel();
+     if (merged.isConnected !== undefined && isF2MaxStatusBleModel(model)) {
+       Object.assign(merged, this._resetF2HwMonitorState(!!merged.isConnected, model));
+     }
+@@ -2202,6 +2272,9 @@ Page({
+     }
+     this.setData(merged, () => {
+       this._syncUiBleConnected();
++      if (merged.isConnected) {
++        this._ensureF2StatusBleListener(true);
++      }
+       if (callback) callback();
+     });
+   },
+@@ -4048,6 +4121,7 @@ Page({
+     if (info.device) this._lastBleDevice = info.device;
+     this._activeBleDeviceId = '';
+ 
++    this._bleSessionModel = null;
+     this._publishBleToVoiceBridge(false);
+     this._teardownF2FaultBleListener();
+     this._clearBleSendQueue();
+@@ -4089,13 +4163,18 @@ Page({
+         return true;
+       }
+       
+-      // 瀵逛簬 F2 LONG 绯诲垪璁惧锛團2 Max Long锛夛紝鏃犻渶寮哄埗OTA锛岀洿鎺ユ斁琛?-      const cur = this.data.currentModel || {};
++      // F2 LONG / F3 MAX锛氬伐绋嬫満涓庨噺浜у浐浠跺潎璺宠繃 OTA 闂ㄧ锛堥伩鍏嶈繛涓婂嵆鏂€佸畬鍏ㄦ棤鐘舵€侊級
++      const cur = this._bleStatusTargetModel() || this.data.currentModel || {};
+       const isF2Long = cur.name === 'F2' && cur.type && cur.type.indexOf('Long') !== -1;
++      const isF3Max = isF3MaxModel(cur);
+       if (isF2Long) {
+         console.log('馃攳 [checkOtaConnection] 褰撳墠涓?F2 LONG 绯诲垪锛岃烦杩?OTA 鏍￠獙');
+         return true;
+       }
++      if (isF3Max) {
++        console.log('馃攳 [checkOtaConnection] 褰撳墠涓?F3 MAX锛岃烦杩?OTA 鏍￠獙');
++        return true;
++      }
+       
+       if (!deviceId) {
+         console.warn('鈿狅笍 [checkOtaConnection] 璁惧ID涓嶅瓨鍦?);
+@@ -4352,6 +4431,7 @@ Page({
+     };
+ 
+     const affected = new Set([prevCurrent, prevCurrent - 1, prevCurrent + 1, safeCurrent, safeCurrent - 1, safeCurrent + 1]);
++    const nextModel = this.data.models[safeCurrent] || this.data.currentModel;
+     const patch = {
+       currentIndex: safeCurrent,
+       modelDragOffset: 0,
+@@ -4365,6 +4445,12 @@ Page({
+       nextCardOpacity: 0.9,
+       prevCardOpacity: 0.9
+     };
++    if (nextModel && !this.data.showDetail) {
++      patch.currentModel = nextModel;
++    }
++    if (this.data.isConnected && nextModel) {
++      Object.assign(patch, this._resetF2HwMonitorState(true, nextModel));
++    }
+     affected.forEach((idx) => {
+       if (idx < 0 || idx >= total) return;
+       patch[`models[${idx}].status`] = getStatus(idx, safeCurrent);
+@@ -4378,6 +4464,7 @@ Page({
+           setDataCostMs: Date.now() - updateStart
+         });
+       }
++      this._ensureF2StatusBleListener();
+       this._refreshRemoteAssistCardFlags();
+       this._recalcRemoteAssistPendingForCard();
+       if (typeof done === 'function') done(safeCurrent);
+@@ -4434,7 +4521,7 @@ Page({
+     }
+   },
+ 
+-  _openDetailAnimated(patch = {}) {
++  _openDetailAnimated(patch = {}, afterOpen) {
+     const guardMs = 480;
+     this._detailClosing = false;
+     this._controlTapLockUntil = Date.now() + guardMs;
+@@ -4476,6 +4563,9 @@ Page({
+     }, guardMs);
+     this._refreshRemoteAssistCardFlags();
+     if (this.data.isAdmin) this._startRemoteAssistPendingPoll();
++    if (typeof afterOpen === 'function') {
++      setTimeout(afterOpen, guardMs + 40);
++    }
+   },
+ 
+   _closeDetailAnimated(extraPatch = {}) {
+@@ -4507,9 +4597,16 @@ Page({
+       return;
+     }
+     this.updateCardStatus(index);
++    if (this.data.isConnected && isF2MaxStatusBleModel(currentModel)) {
++      this._bleSessionModel = currentModel;
++    }
+     this._openDetailAnimated({
+       currentModel,
+       angleBtnText: resolveOpenAngleBtnText(currentModel)
++    }, () => {
++      if (this.data.isConnected) {
++        this._ensureF2StatusBleListener(true);
++      }
+     });
+   },
+ 
+@@ -4856,6 +4953,12 @@ Page({
+         Math.min(FOLD_SERVO_ANGLE_MAX, ang)
+       );
+     }
++    if (parsed.itm === 1) {
++      this._lastBleOpenServoAngle = Math.max(
++        FOLD_SERVO_ANGLE_MIN,
++        Math.min(FOLD_SERVO_ANGLE_MAX, ang)
++      );
++    }
+ 
+     if (this.data.editType === 'fold' && (parsed.itm === 0 || this._foldAdjustActive)) {
+       const foldAng = this._lastBleFoldServoAngle;
+@@ -5241,6 +5344,10 @@ Page({
+   _onBleSendQueueIdle() {
+     if (this._f3HeightBleTxActive) {
+       this._f3HeightBleTxActive = false;
++      if (this._f3HeightWritePending) {
++        // 鍏ㄩ儴瀛楃鍙戝畬鍚庢墠鍏佽鍥炶纭锛岄伩鍏嶇敤鏃?DGA/DGB 璇垽銆屽凡鍐欏叆銆?+        this._f3HeightWritePending.txDoneAt = Date.now() + 500;
++      }
+       if (typeof this._f3HeightBleTxIdleCb === 'function') {
+         const cb = this._f3HeightBleTxIdleCb;
+         this._f3HeightBleTxIdleCb = null;
+@@ -5281,7 +5388,7 @@ Page({
+     const text = String(cmd || '').replace(/#$/, '') + '#';
+     const parts = text.split('');
+     this._f3HeightBleTxActive = true;
+-    parts.forEach((ch) => this._enqueueBleSend(ch, 280));
++    parts.forEach((ch) => this._enqueueBleSend(ch, 320));
+     console.log(`[_f3EnqueueHeightCmdChars] 閫愬瓧绗﹀叆闃?${parts.length} 涓? ${text}`);
+   },
+ 
+@@ -5377,7 +5484,7 @@ Page({
+       const currentModel = this.data.currentModel;
+       const isF1 = currentModel && currentModel.name && currentModel.name.includes('F1');
+       const isF2 = currentModel && currentModel.name && currentModel.name.includes('F2');
+-      const isF1OrF2 = isF1 || isF2;
++      const isFoldBleModel = isF2MaxLikeControl(currentModel);
+       
+       // 璋冭瘯鏃ュ織
+       console.log('馃攳 [璋冭瘯] 鎶樺彔妯″紡鎸夐挳:', {
+@@ -5385,7 +5492,7 @@ Page({
+         editType,
+         isF1,
+         isF2,
+-        isF1OrF2,
++        isFoldBleModel,
+         isConnected: this.data.isConnected,
+         modelName: currentModel?.name
+       });
+@@ -5399,13 +5506,13 @@ Page({
+         console.log('馃攳 [璋冭瘯] 璋冩暣鎸夐挳琚偣鍑?, {
+           isF1,
+           isF2,
+-          isF1OrF2,
++          isFoldBleModel,
+           isConnected: this.data.isConnected,
+           modelName: currentModel?.name
+         });
+-        if (isF1OrF2) {
+-          if (this._shouldSkipIndicatorModal()) {
+-            console.log('馃摛 [杩滃崗] 鍙戦€?璋冩暣鎶樺彔瑙掑害"');
++        if (isFoldBleModel) {
++          if (this._shouldSkipIndicatorModal() || isMtUltraCardModel(currentModel)) {
++            console.log('馃摛 [钃濈墮] 鍙戦€?璋冩暣鎶樺彔瑙掑害"');
+             this._foldAdjustActive = true;
+             this.sendDataMultiple('璋冩暣鎶樺彔瑙掑害', 1, 300);
+           } else if (this._canControlDevice()) {
+@@ -5432,12 +5539,12 @@ Page({
+         console.log('馃攳 [璋冭瘯] 褰掗浂鎸夐挳琚偣鍑?, {
+           isF1,
+           isF2,
+-          isF1OrF2,
++          isFoldBleModel,
+           isConnected: this.data.isConnected,
+           isAdmin: this.data.isAdmin,
+           modelName: currentModel?.name
+         });
+-        if (isF1OrF2) {
++        if (isFoldBleModel) {
+           if (this._canControlDevice()) {
+             // 馃敶 鎸変綘鐨勮姹傦細褰掗浂涔熷彂閫?2 娆★紝闂撮殧 0.5 绉?             console.log('馃摛 [钃濈墮] 鍙戦€?鍒濆鍖栬搴?锛堣繛缁?娆★紝闂撮殧0.5绉掞級');
+@@ -5458,7 +5565,7 @@ Page({
+       const isFineTune = action === 'left' || action === 'fine-tune-up'
+         || action === 'right' || action === 'fine-tune-down';
+ 
+-      if (isFineTune && isF1OrF2 && this._canControlDevice()) {
++      if (isFineTune && isFoldBleModel && this._canControlDevice()) {
+         const sendText = (action === 'left' || action === 'fine-tune-up') ? '璋冨ぇ' : '璋冨皬';
+         this.setData({ foldServoAngle: foldAng, foldGap: gap }, () => {
+           const sendTune = () => {
+@@ -5916,7 +6023,7 @@ Page({
+         : null;
+       this._commitBleCommandAfterUi({
+         sendText: cmd,
+-        times: 1,
++        times: 2,
+         interval: 500,
+         verify,
+         label: '杩滅▼鎺у埗'
+@@ -6128,10 +6235,462 @@ Page({
+       clearTimeout(this._f3CalRestoreTimer);
+       this._f3CalRestoreTimer = null;
+     }
++    this._f3CalAfterRestoreCallback = null;
+     this._f3CalSampling = false;
+     this._f3CalReadings = [];
+     this._f3CalLastSamplePushAt = 0;
+     this._f3CalWritingHeights = false;
++    this._f3CalClearFlapCloseWait();
++  },
++
++  _f3CalIsFlapClosed() {
++    return this.data.flapPanelState === 'closed';
++  },
++
++  _f3CalClearFlapCloseWait() {
++    this._f3CalAwaitFlapClose = false;
++    if (this._f3CalFlapCloseTimeout) {
++      clearTimeout(this._f3CalFlapCloseTimeout);
++      this._f3CalFlapCloseTimeout = null;
++    }
++    if (this.data.f3CalPreflightClosing) {
++      this.setData({ f3CalPreflightClosing: false, f3CalStatusText: '' });
++    }
++  },
++
++  _f3CalOnFlapClosedForCal() {
++    if (!this._f3CalAwaitFlapClose) return;
++    this._f3CalClearFlapCloseWait();
++    if (this.data.f3ShowCalOverlay && this.data.f3CalStep === 'preflight') {
++      this._f3CalEnterSample1();
++    }
++  },
++
++  _f3CalEnsureFlapClosedThen(onReady) {
++    if (typeof onReady !== 'function') return;
++    if (this._f3CalSkipBleActions()) {
++      onReady();
++      return;
++    }
++    if (!this._isBleLinked()) {
++      this._showCustomToast('璇峰厛杩炴帴钃濈墮', 'none', 2000);
++      return;
++    }
++    const state = this.data.flapPanelState;
++    if (state === 'stealth') {
++      this._showCustomToast('闅愯斀妯″紡涓紝璇峰厛閫€鍑?, 'none', 2200);
++      return;
++    }
++    if (state === 'fault') {
++      this._showCustomToast('鐗岀収鏋舵晠闅滐紝璇峰厛鎺掗櫎鍚庡啀鏍″噯', 'none', 2500);
++      return;
++    }
++    if (this._f3CalIsFlapClosed()) {
++      onReady();
++      return;
++    }
++    if (this._f3CalAwaitFlapClose) return;
++
++    this._f3CalAwaitFlapClose = true;
++    this.setData({
++      f3CalPreflightClosing: true,
++      f3CalStatusText: '姝ｅ湪鏀跺洖鐗岀収鏋垛€?
++    });
++
++    const alreadyClosing = state === 'moving' && this.data.flapMotionDir === 'close';
++    if (!alreadyClosing) {
++      this._setFlapPanelStateOptimistic('鍏抽棴', () => {
++        this._commitBleCommandAfterUi({
++          sendText: '鍏抽棴',
++          times: 1,
++          interval: 500,
++          verify: { type: 'flap', cmd: '鍏抽棴' },
++          label: '鑷姩鏍″噯'
++        });
++        wx.vibrateShort({ type: 'light' });
++      });
++    }
++
++    if (this._f3CalFlapCloseTimeout) clearTimeout(this._f3CalFlapCloseTimeout);
++    this._f3CalFlapCloseTimeout = setTimeout(() => {
++      if (!this._f3CalAwaitFlapClose) return;
++      this._f3CalClearFlapCloseWait();
++      this._showCustomToast('鐗岀収鏋舵湭鏀跺洖锛岃鎵嬪姩鍏抽棴鍚庨噸璇?, 'none', 3000);
++    }, 15000);
++  },
++
++  _f3CalActiveBranch() {
++    return this._f3CalBranch || this.data.f3CalBranch || 'A';
++  },
++
++  _f3CalStepNavDefs(branch) {
++    const b = branch || this._f3CalActiveBranch();
++    const common = [
++      { id: 'preflight', label: '鍑嗗纭', no: 1 },
++      { id: 'sample1', label: '棣栨妫€娴?, no: 2 }
++    ];
++    if (b === 'B') {
++      return common.concat([
++        { id: 'wheel', label: '娉㈣疆寰皟', no: 3 },
++        { id: 'compress', label: '鎸夊帇鍘嬬缉', no: 3 },
++        { id: 'restoring', label: '鎭㈠鎶樺彔', no: 4 },
++        { id: 'sample2', label: '浜屾閲囬泦', no: 4 },
++        { id: 'done', label: '鏍囧畾瀹屾垚', no: 5 }
++      ]);
++    }
++    return common.concat([
++      { id: 'wheel', label: '娉㈣疆寰皟', no: 3 },
++      { id: 'cardboard', label: '鏀剧疆绾告澘', no: 3 },
++      { id: 'hold', label: '绾告澘鏍囧畾', no: 4 },
++      { id: 'restoring', label: '鎭㈠鎶樺彔', no: 4 },
++      { id: 'sample2', label: '浜屾閲囬泦', no: 5 },
++      { id: 'done', label: '鏍囧畾瀹屾垚', no: 6 }
++    ]);
++  },
++
++  _f3CalStepTotalCount(branch) {
++    const b = branch || this._f3CalActiveBranch();
++    return b === 'B' ? 5 : 6;
++  },
++
++  _f3CalResolveStepNo(stepId, branch) {
++    const b = branch || this._f3CalActiveBranch();
++    if (stepId === 'preflight') return 1;
++    if (stepId === 'sample1') return 2;
++    if (b === 'B') {
++      if (stepId === 'wheel' || stepId === 'compress') return 3;
++      if (stepId === 'restoring' || stepId === 'sample2') return 4;
++      if (stepId === 'done') return 5;
++      return 0;
++    }
++    if (stepId === 'wheel' || stepId === 'cardboard') return 3;
++    if (stepId === 'hold' || stepId === 'restoring') return 4;
++    if (stepId === 'sample2') return 5;
++    if (stepId === 'done') return 6;
++    return 0;
++  },
++
++  _f3CalStepMeta(stepId, branch) {
++    const b = branch || this._f3CalActiveBranch();
++    const list = this._f3CalStepNavDefs(b);
++    const hit = list.find((s) => s.id === stepId);
++    const no = hit ? hit.no : this._f3CalResolveStepNo(stepId, b);
++    return {
++      no,
++      label: hit ? hit.label : '',
++      total: this._f3CalStepTotalCount(b)
++    };
++  },
++
++  _f3CalRefreshStepNavList(activeStepId) {
++    const branch = this._f3CalActiveBranch();
++    const list = this._f3CalStepNavDefs(branch);
++    const navId = activeStepId === 'hold' ? 'hold' : activeStepId;
++    const idx = Math.max(0, list.findIndex((s) => s.id === navId));
++    const hit = list[idx] || list[0];
++    const displayId = activeStepId === 'hold' ? 'hold' : activeStepId;
++    const meta = this._f3CalStepMeta(displayId, branch);
++    const patch = {
++      f3CalStepNavList: list,
++      f3CalStepNavIndex: idx,
++      f3CalStepNavLabel: hit ? hit.label : '',
++      f3CalStepNavNo: hit ? hit.no : meta.no,
++      f3CalStepNo: meta.no,
++      f3CalStepTotal: meta.total
++    };
++    this.setData(patch);
++  },
++
++  _f3CalStepMetaPatch(stepId, patch, branch) {
++    if (!stepId || !patch) return patch;
++    const meta = this._f3CalStepMeta(stepId, branch);
++    patch.f3CalStepNo = meta.no;
++    patch.f3CalStepTotal = meta.total;
++    return patch;
++  },
++
++  _f3CalIsAdminPreview() {
++    return !!(this.data.isAdmin && this.data.f3CalAdminPreview);
++  },
++
++  _f3CalSkipBleActions() {
++    return this._f3CalIsAdminPreview() || !!this.data.f3CalAdminUiTune;
++  },
++
++  _f3CalInitStepNav(stepId) {
++    const branch = this._f3CalActiveBranch();
++    const list = this._f3CalStepNavDefs(branch);
++    const idx = Math.max(0, list.findIndex((s) => s.id === stepId));
++    const hit = list[idx] || list[0];
++    const displayId = stepId === 'hold' ? 'hold' : stepId;
++    const meta = this._f3CalStepMeta(displayId, branch);
++    this.setData({
++      f3CalStepNavList: list,
++      f3CalStepNavIndex: idx,
++      f3CalStepNavLabel: hit ? hit.label : '',
++      f3CalStepNavNo: hit ? hit.no : 0,
++      f3CalStepNo: meta.no,
++      f3CalStepTotal: meta.total
++    });
++  },
++
++  _f3CalSyncStepMeta(stepId) {
++    if (!stepId) return;
++    const branch = this._f3CalActiveBranch();
++    const displayId = stepId === 'hold' ? 'hold' : stepId;
++    const meta = this._f3CalStepMeta(displayId, branch);
++    const patch = {
++      f3CalStepNo: meta.no,
++      f3CalStepTotal: meta.total
++    };
++    if (this.data.isAdmin) {
++      const list = this.data.f3CalStepNavList.length ? this.data.f3CalStepNavList : this._f3CalStepNavDefs(branch);
++      const idx = list.findIndex((s) => s.id === stepId);
++      if (idx >= 0) {
++        patch.f3CalStepNavIndex = idx;
++        patch.f3CalStepNavLabel = list[idx].label;
++        patch.f3CalStepNavNo = list[idx].no;
++      }
++    }
++    this.setData(patch);
++  },
++
++  _f3CalApplyAdminStep(stepId) {
++    this._clearF3CalTimer();
++    this._f3CalSampling = false;
++    if (!this._f3CalH0Units) this._f3CalH0Units = 350;
++    if (!this._f3CalBranch) this._f3CalBranch = 'A';
++    const h0 = this._f3CalH0Units || 350;
++    const danger = 280;
++    const live = this._f3CalFormatLive(h0);
++    const patch = { f3CalShowHoldModal: false, f3CalShowVolatilityModal: false };
++
++    switch (stepId) {
++      case 'preflight':
++        Object.assign(patch, {
++          f3CalStep: 'preflight',
++          f3CalTitle: '鍑嗗鏍″噯',
++          f3CalDesc: '',
++          f3CalLiveText: '',
++          f3CalMedianText: '',
++          f3CalCountdown: 0,
++          f3CalStatusText: '',
++          f3CalResultText: ''
++        });
++        break;
++      case 'sample1':
++        Object.assign(patch, {
++          f3CalStep: 'sample1',
++          f3CalTitle: '棣栨妫€娴?,
++          f3CalDesc: '璇蜂繚鎸佽溅杈嗕笉鍔紝姝ｅ湪杩涜鍩哄噯楂樺害妫€娴嬨€?,
++          f3CalCountdown: 5,
++          f3CalLiveText: live,
++          f3CalMedianText: this._f3CalFormatLive(Math.max(10, h0 - 2)),
++          f3CalStatusText: '5 绉掑唴鍙栧钩鍧囧€间綔涓哄垽鏂緷鎹?,
++          f3CalResultText: ''
++        });
++        break;
++      case 'wheel': {
++        const prep = this._f3CalPrepareWheelRulerState(this._f3CalBranch);
++        Object.assign(patch, {
++          f3CalStep: 'wheel',
++          f3CalBranch: this._f3CalBranch,
++          f3CalTitle: '娉㈣疆寰皟',
++          f3CalDesc: '',
++          f3CalLiveText: '鈥?,
++          f3CalTargetText: live,
++          f3CalWheelHint: this._f3CalBranch === 'A'
++            ? '璁╃墝鐓у簳閮ㄧ殑鐐逛綅灏藉彲鑳藉湴闈犺繎浜庤疆鑳庯紝鎵惧嚭鏈€灏忛棿璺?
++            : '鎸夊帇鍚庡熬鎴栬浇浜猴紝璁╃墝鐓у敖閲忛潬杩戣疆鑳庯紝鎵惧嚭鏈€灏忛棿璺?,
++          f3CalLimitHint: prep.limits.limitHint,
++          f3CalStatusText: '',
++          f3CalTicks: new Array(prep.tickCount).fill(0),
++          f3CalPadTicks: new Array(50).fill(0),
++          f3CalTranslateX: prep.translateX,
++          f3CalRulerTransition: 'none',
++          f3CalResultText: ''
++        });
++        break;
++      }
++      case 'restoring':
++        Object.assign(patch, {
++          f3CalStep: 'restoring',
++          f3CalTitle: '鎭㈠鎶樺彔瑙?,
++          f3CalDesc: '',
++          f3CalLiveText: live,
++          f3CalMedianText: '',
++          f3CalStatusText: '鐭熬姝ｅ湪鍥炲埌姝ｅ父瑙掑害锛坕tem4锛夆€?,
++          f3CalCountdown: 0,
++          f3CalResultText: ''
++        });
++        break;
++      case 'cardboard':
++        this._f3CalBranch = 'A';
++        Object.assign(patch, {
++          f3CalStep: 'cardboard',
++          f3CalBranch: 'A',
++          f3CalTitle: '鏀剧疆绾告澘',
++          f3CalDesc: '',
++          f3CalStatusText: '',
++          f3CalResultText: ''
++        });
++        break;
++      case 'compress':
++        this._f3CalBranch = 'B';
++        Object.assign(patch, {
++          f3CalStep: 'compress',
++          f3CalBranch: 'B',
++          f3CalTitle: '鎸夊帇鍘嬬缉',
++          f3CalDesc: '',
++          f3CalStatusText: '',
++          f3CalResultText: ''
++        });
++        break;
++      case 'hold':
++        Object.assign(patch, {
++          f3CalStep: 'cardboard',
++          f3CalTitle: '鏀剧疆绾告澘',
++          f3CalShowHoldModal: true,
++          f3CalResultText: ''
++        });
++        break;
++      case 'sample2':
++        Object.assign(patch, {
++          f3CalStep: 'sample2',
++          f3CalTitle: '閲囬泦鏍囧畾鏁版嵁',
++          f3CalDesc: '璇蜂繚鎸佺焊鏉挎按骞筹紝涓嶈绉诲姩鎴栨檭鍔ㄣ€?,
++          f3CalCountdown: 5,
++          f3CalLiveText: this._f3CalFormatLive(danger + 5),
++          f3CalMedianText: this._f3CalFormatLive(danger),
++          f3CalStatusText: '5 绉掑唴鍙栨渶灏忓€间綔涓哄嵄闄╅珮搴?,
++          f3CalResultText: ''
++        });
++        break;
++      case 'done':
++        Object.assign(patch, {
++          f3CalStep: 'done',
++          f3CalTitle: '鏍囧畾瀹屾垚',
++          f3CalDesc: '',
++          f3CalResultText: `瀹夊叏 ${h0} mm 路 鍗遍櫓 ${danger} mm`,
++          f3CalStatusText: this._f3CalSkipBleActions()
++            ? '绠＄悊鍛?UI 棰勮锛堟湭鍐欏叆璁惧锛?
++            : '姝ｅ湪鍐欏叆璁惧鈥?
++        });
++        break;
++      default:
++        return;
++    }
++    const displayStepId = stepId === 'hold' ? 'hold' : (patch.f3CalStep || stepId);
++    this._f3CalStepMetaPatch(displayStepId, patch, this._f3CalActiveBranch());
++    if (this.data.isAdmin) {
++      const list = this._f3CalStepNavDefs(this._f3CalActiveBranch());
++      const idx = list.findIndex((s) => s.id === stepId);
++      if (idx >= 0) {
++        patch.f3CalStepNavList = list;
++        patch.f3CalStepNavIndex = idx;
++        patch.f3CalStepNavLabel = list[idx].label;
++        patch.f3CalStepNavNo = list[idx].no;
++      }
++    }
++    this.setData(patch);
++  },
++
++  _f3CalJumpToStep(stepId, navIndex) {
++    if (!this.data.isAdmin) return;
++    const list = this._f3CalStepNavDefs(this._f3CalActiveBranch());
++    const idx = navIndex != null ? navIndex : Math.max(0, list.findIndex((s) => s.id === stepId));
++    if (idx < 0 || !list[idx]) return;
++    this._f3CalApplyAdminStep(list[idx].id);
++    this.setData({ f3CalAdminUiTune: true });
++  },
++
++  onF3CalStepNavPrev() {
++    const list = this.data.f3CalStepNavList;
++    if (!list.length) return;
++    if (this.data.f3CalShowHoldModal || this.data.f3CalShowVolatilityModal) {
++      this.setData({ f3CalShowHoldModal: false, f3CalShowVolatilityModal: false });
++    }
++    const idx = (this.data.f3CalStepNavIndex - 1 + list.length) % list.length;
++    this._f3CalJumpToStep(list[idx].id, idx);
++  },
++
++  onF3CalStepNavNext() {
++    const list = this.data.f3CalStepNavList;
++    if (!list.length) return;
++    if (this.data.f3CalShowHoldModal || this.data.f3CalShowVolatilityModal) {
++      this.setData({ f3CalShowHoldModal: false, f3CalShowVolatilityModal: false });
++    }
++    const idx = (this.data.f3CalStepNavIndex + 1) % list.length;
++    this._f3CalJumpToStep(list[idx].id, idx);
++  },
++
++  _f3CalMapStepForBranch(stepId, branch) {
++    if (branch === 'A') {
++      if (stepId === 'compress') return 'cardboard';
++      return stepId;
++    }
++    if (stepId === 'cardboard' || stepId === 'hold') return 'compress';
++    return stepId;
++  },
++
++  _f3CalSwitchBranch(branch) {
++    this._f3CalBranch = branch;
++    if (this._f3CalSkipBleActions()) {
++      this._f3CalH0Units = branch === 'A' ? 350 : 450;
++    }
++    const cur = this.data.f3CalShowHoldModal ? 'hold' : this.data.f3CalStep;
++    const mapped = this._f3CalMapStepForBranch(cur, branch);
++    if (this._f3CalSkipBleActions()) {
++      this.setData({ f3CalBranch: branch, f3CalShowHoldModal: false, f3CalShowVolatilityModal: false });
++      if (mapped === 'preflight' || !mapped) {
++        this._f3CalInitStepNav('preflight');
++        return;
++      }
++      this._f3CalApplyAdminStep(mapped);
++      return;
++    }
++    const patch = { f3CalBranch: branch, f3CalShowHoldModal: false };
++    if (mapped === 'wheel') {
++      this._f3CalEnterWheelStep(branch);
++    } else if (mapped === 'cardboard' || mapped === 'compress') {
++      this._f3CalEnterBranchGuideStep(branch);
++    } else if (mapped === 'sample2') {
++      const desc = branch === 'A'
++        ? '璇蜂繚鎸佺焊鏉挎按骞筹紝涓嶈绉诲姩鎴栨檭鍔ㄣ€?
++        : '璇蜂繚鎸佹寜鍘嬫垨杞戒汉鐘舵€侊紝涓嶈鏉惧紑銆?;
++      Object.assign(patch, this._f3CalStepMetaPatch('sample2', {
++        f3CalStep: 'sample2',
++        f3CalTitle: '閲囬泦鏍囧畾鏁版嵁',
++        f3CalDesc: desc,
++        f3CalStatusText: '5 绉掑唴鍙栨渶灏忓€间綔涓哄嵄闄╅珮搴?
++      }, branch));
++    } else {
++      this._f3CalStepMetaPatch(mapped, patch, branch);
++    }
++    this.setData(patch);
++    this._f3CalRefreshStepNavList(mapped);
++  },
++
++  onF3CalBranchToggle() {
++    if (!this.data.isAdmin) return;
++    if (!this.data.f3CalAdminPreview && !this.data.f3CalAdminUiTune) return;
++    const next = this._f3CalActiveBranch() === 'A' ? 'B' : 'A';
++    this._f3CalSwitchBranch(next);
++  },
++
++  _F3_CAL_VOLATILITY_MAX_MM: 50,
++
++  _f3CalMean(readings) {
++    const arr = (readings || []).filter((n) => Number.isFinite(n) && n > 0);
++    if (!arr.length) return 0;
++    const sum = arr.reduce((a, b) => a + b, 0);
++    return Math.round(sum / arr.length);
++  },
++
++  _f3CalRange(readings) {
++    const arr = (readings || []).filter((n) => Number.isFinite(n) && n > 0);
++    if (arr.length < 2) return 0;
++    return Math.max(...arr) - Math.min(...arr);
+   },
+ 
+   _f3CalMedian(readings) {
+@@ -6176,8 +6735,8 @@ Page({
+     const step = this.data.f3CalStep;
+     if (step === 'sample2') {
+       patch.f3CalMedianText = this._f3CalFormatLive(this._f3CalMin(this._f3CalReadings));
+-    } else if (this._f3CalReadings.length >= 3) {
+-      patch.f3CalMedianText = this._f3CalFormatLive(this._f3CalMedian(this._f3CalReadings));
++    } else if (step === 'sample1' && this._f3CalReadings.length >= 1) {
++      patch.f3CalMedianText = this._f3CalFormatLive(this._f3CalMean(this._f3CalReadings));
+     }
+     this.setData(patch);
+   },
+@@ -6194,7 +6753,7 @@ Page({
+ 
+   _f3CalSendFoldCmd(tag, times = 1) {
+     if (!this._isBleLinked()) return;
+-    if (this._f3CalWritingHeights) return;
++    if (this._f3CalWritingHeights || this._f3CalSkipBleActions()) return;
+     const n = Math.max(1, Number(times) || 1);
+     if (tag === 'U' || tag === 'D') {
+       const cmd = tag === 'U' ? 'F3FU#' : 'F3FD#';
+@@ -6213,15 +6772,21 @@ Page({
+     if (this.data.f3CalStep !== 'wheel') return;
+     const dir = e.currentTarget.dataset.dir;
+     if (dir !== 'up' && dir !== 'down') return;
+-    this._f3CalSendFoldCmd(dir === 'up' ? 'U' : 'D', 1);
+-    wx.vibrateShort({ type: 'light' });
++    const delta = dir === 'up' ? 1 : -1;
++    if (this._f3CalSkipBleActions()) {
++      wx.vibrateShort({ type: 'light' });
++      this._f3CalApplyRulerIndex((this._f3CalRulerIndex || 0) + delta, false);
++      return;
++    }
++    this._f3CalApplyRulerIndex((this._f3CalRulerIndex || 0) + delta, true);
+   },
+ 
+   _f3CalStartSample(stepAfter, onDone) {
+     this._f3CalSampling = true;
+     this._f3CalReadings = [];
+     this._f3CalLastSamplePushAt = 0;
+-    let left = 5;
++    const durationSec = 5;
++    let left = durationSec;
+     const initMm = Math.round(Number(this.data.f3HeightMm)) || 0;
+     const initLive = initMm > 0 ? this._f3CalFormatLive(initMm) : '鈥?;
+     this.setData({
+@@ -6254,9 +6819,10 @@ Page({
+       }
+       this._f3CalSampling = false;
+       const readings = this._f3CalReadings.slice();
+-      const median = this._f3CalMedian(readings);
++      const mean = this._f3CalMean(readings);
+       const minimum = this._f3CalMin(readings);
+-      if (typeof onDone === 'function') onDone({ median, minimum, readings });
++      const range = this._f3CalRange(readings);
++      if (typeof onDone === 'function') onDone({ mean, minimum, readings, range });
+     }, 1000);
+   },
+ 
+@@ -6267,16 +6833,29 @@ Page({
+     this.setData({
+       f3ShowCalOverlay: false,
+       f3CalShowHoldModal: false,
++      f3CalShowVolatilityModal: false,
++      f3CalAdminPreview: false,
++      f3CalAdminUiTune: false,
++      f3CalStepNavList: [],
++      f3CalStepNavIndex: 0,
++      f3CalStepNavLabel: '',
++      f3CalStepNavNo: 0,
++      f3CalStepNo: 0,
++      f3CalStepTotal: 6,
+       f3CalStep: '',
+       f3CalBranch: '',
+       f3CalTitle: '鑷姩鏍囧畾',
+       f3CalDesc: '',
+       f3CalTargetLabel: '',
+       f3CalLiveText: '',
++      f3CalTargetText: '',
++      f3CalWheelHint: '',
++      f3CalLimitHint: '',
+       f3CalMedianText: '',
+       f3CalResultText: '',
+       f3CalStatusText: '',
+-      f3CalCountdown: 0
++      f3CalCountdown: 0,
++      f3CalPreflightClosing: false
+     });
+   },
+ 
+@@ -6288,6 +6867,7 @@ Page({
+     this.setData({
+       f3ShowCalOverlay: false,
+       f3CalShowHoldModal: false,
++      f3CalShowVolatilityModal: false,
+       f3CalStep: '',
+       f3CalResultText: '',
+       f3CalStatusText: '',
+@@ -6302,43 +6882,194 @@ Page({
+     if (toastText) this._showCustomToast(toastText, 'none', 2500);
+   },
+ 
+-  _f3CalEnterWheelStep(branch) {
+-    const isA = branch === 'A';
+-    this._f3CalBranch = branch;
++  _F3_CAL_RULER_VISUAL_PERIOD: 91,
++
++  _f3CalWheelTickCount() {
++    return this._F3_CAL_RULER_VISUAL_PERIOD || 91;
++  },
++
++  _f3CalPrepareWheelRulerState(branch) {
++    const limits = this._f3CalInitWheelLimits();
++    let startAng = Math.round(Number(this._f3CalFoldLimit)) || FOLD_SERVO_ANGLE_DEFAULT;
++    if (limits.minA <= limits.maxA) {
++      startAng = Math.max(limits.minA, Math.min(limits.maxA, startAng));
++    }
++    this._f3CalPreviewStartAngle = startAng;
++    this._f3CalPreviewAngle = startAng;
++    this._f3CalRulerIndex = 0;
+     this._f3CalRulerLastIndex = 0;
+-    this.setData({
+-      f3CalStep: 'wheel',
+-      f3CalBranch: branch,
+-      f3CalTitle: isA ? '鍒嗘敮 A锛氱焊鏉挎爣瀹? : '鍒嗘敮 B锛氭寜鍘嬫爣瀹?,
+-      f3CalDesc: isA
+-        ? `棣栨璇绘暟 ${this._f3CalFormatLive(this._f3CalH0Units)}锛堜綆浜?400 mm锛夈€傛粦鍔ㄦ尝杞垨鐐规寜閽井璋冪煭灏俱€俙
+-        : `棣栨璇绘暟 ${this._f3CalFormatLive(this._f3CalH0Units)}锛堜笉浣庝簬 400 mm锛夈€傛粦鍔ㄦ尝杞垨鐐规寜閽井璋冪煭灏俱€俙,
+-      f3CalStatusText: '鐐硅皟澶?璋冨皬鍚庣煭灏惧簲绔嬪埢寰姩锛涘畬鎴愬悗鐐广€屾垜宸茬粡鍑嗗濂戒簡銆?,
+-      f3CalTicks: new Array(46).fill(0),
+-      f3CalPadTicks: new Array(20).fill(0),
+-      f3CalTranslateX: 0,
+-      f3CalRulerTransition: 'none'
+-    });
++    return {
++      limits,
++      tickCount: this._f3CalWheelTickCount(),
++      translateX: 0
++    };
++  },
++
++  _f3CalRulerIndexToTranslate(index) {
++    const tick = this.tickWidthPx || 20;
++    return -Math.round(Number(index) || 0) * tick;
++  },
++
++  _f3CalIndexFromTranslate(trans) {
++    const tick = this.tickWidthPx || 20;
++    return Math.round(-(Number(trans) || 0) / tick);
++  },
++
++  _f3CalRulerIndexBounds() {
++    const start = this._f3CalPreviewStartAngle ?? FOLD_SERVO_ANGLE_DEFAULT;
++    const minAng = this._f3CalPreviewMinAngle();
++    const maxAng = this._f3CalPreviewMaxAngle();
++    if (minAng > maxAng) return { minIndex: 0, maxIndex: 0 };
++    return {
++      minIndex: start - maxAng,
++      maxIndex: start - minAng
++    };
+   },
+ 
+   _f3CalClampRulerTranslate(trans) {
+-    const maxIdx = 25;
+-    const minT = -(maxIdx * (this.tickWidthPx || 20));
+-    if (trans > 0) return 0;
++    const tick = this.tickWidthPx || 20;
++    const { minIndex, maxIndex } = this._f3CalRulerIndexBounds();
++    const minT = -(maxIndex * tick);
++    const maxT = -(minIndex * tick);
+     if (trans < minT) return minT;
++    if (trans > maxT) return maxT;
+     return trans;
+   },
+ 
+-  _f3CalIndexFromTranslate(trans) {
+-    return Math.round(-(trans || 0) / (this.tickWidthPx || 20));
++  _f3CalSnapRulerToIndex(index) {
++    const clamped = this._f3CalClampRulerIndex(index);
++    return {
++      index: clamped,
++      translateX: this._f3CalRulerIndexToTranslate(clamped)
++    };
++  },
++
++  _f3CalSendRulerIndexDelta(prev, next) {
++    if (next === prev) return;
++    if (!this._f3CalSkipBleActions()) {
++      const step = Math.abs(next - prev);
++      const tag = next > prev ? 'U' : 'D';
++      this._f3CalSendFoldCmd(tag, step);
++    }
++    wx.vibrateShort({ type: 'light' });
++    this._f3CalRulerLastIndex = next;
++    this._f3CalRulerIndex = next;
++    this._f3CalPreviewAngle = this._f3CalAngleFromRulerIndex(next);
++  },
++
++  _f3CalInitWheelLimits() {
++    const fold = Math.max(
++      FOLD_SERVO_ANGLE_MIN,
++      Math.min(
++        FOLD_SERVO_ANGLE_MAX,
++        Math.round(Number(this.data.foldServoAngle)) || FOLD_SERVO_ANGLE_DEFAULT
++      )
++    );
++    let open = this._lastBleOpenServoAngle;
++    if (open == null || !Number.isFinite(open)) {
++      open = Math.round(Number(this.data.currentAngle)) || 0;
++    }
++    open = Math.max(FOLD_SERVO_ANGLE_MIN, Math.min(FOLD_SERVO_ANGLE_MAX, open));
++    this._f3CalFoldLimit = fold;
++    this._f3CalOpenLimit = open;
++    const minA = open + 1;
++    const maxA = fold - 1;
++    const limitHint = minA <= maxA
++      ? `鑼冨洿 ${minA}掳鈥?{maxA}掳`
++      : '鎵撳紑鐐逛笌鎶樺彔鐐硅繃杩?;
++    return { minA, maxA, limitHint, fold, open };
++  },
++
++  _f3CalPreviewMinAngle() {
++    const open = this._f3CalOpenLimit ?? 0;
++    const fold = this._f3CalFoldLimit ?? FOLD_SERVO_ANGLE_DEFAULT;
++    if (open >= fold) return FOLD_SERVO_ANGLE_MAX;
++    return open + 1;
++  },
++
++  _f3CalPreviewMaxAngle() {
++    const open = this._f3CalOpenLimit ?? 0;
++    const fold = this._f3CalFoldLimit ?? FOLD_SERVO_ANGLE_DEFAULT;
++    if (open >= fold) return FOLD_SERVO_ANGLE_MIN;
++    return fold - 1;
++  },
++
++  _f3CalAngleFromRulerIndex(index) {
++    const start = this._f3CalPreviewStartAngle ?? this._f3CalFoldLimit ?? FOLD_SERVO_ANGLE_DEFAULT;
++    return start - (Number(index) || 0);
++  },
++
++  _f3CalClampRulerIndex(index) {
++    const minA = this._f3CalPreviewMinAngle();
++    const maxA = this._f3CalPreviewMaxAngle();
++    if (minA > maxA) return this._f3CalRulerIndex || 0;
++    const ang = this._f3CalAngleFromRulerIndex(index);
++    if (ang < minA) return (this._f3CalPreviewStartAngle || 0) - minA;
++    if (ang > maxA) return (this._f3CalPreviewStartAngle || 0) - maxA;
++    return index;
++  },
++
++  _f3CalSyncWheelAngleUi(index) {
++    const ang = this._f3CalAngleFromRulerIndex(index);
++    this._f3CalPreviewAngle = ang;
++    return {
++      f3CalTranslateX: this._f3CalRulerIndexToTranslate(index),
++      f3CalRulerTransition: 'none'
++    };
++  },
++
++  _f3CalEnterWheelStep(branch) {
++    const isA = branch === 'A';
++    this._f3CalBranch = branch;
++    const prep = this._f3CalPrepareWheelRulerState(branch);
++    const h0Text = this._f3CalFormatLive(this._f3CalH0Units);
++    const liveMm = Math.round(Number(this.data.f3HeightMm)) || 0;
++    const liveText = liveMm > 0 ? this._f3CalFormatLive(liveMm) : '鈥?;
++    const wheelHint = isA
++      ? '璁╃墝鐓у簳閮ㄧ殑鐐逛綅灏藉彲鑳藉湴闈犺繎浜庤疆鑳庯紝鎵惧嚭鏈€灏忛棿璺?
++      : '鎸夊帇鍚庡熬鎴栬浇浜猴紝璁╃墝鐓у敖閲忛潬杩戣疆鑳庯紝鎵惧嚭鏈€灏忛棿璺?;
++    this.setData(this._f3CalStepMetaPatch('wheel', {
++      f3CalStep: 'wheel',
++      f3CalBranch: branch,
++      f3CalTitle: '娉㈣疆寰皟',
++      f3CalDesc: '',
++      f3CalStatusText: '',
++      f3CalLiveText: liveText,
++      f3CalTargetText: h0Text,
++      f3CalWheelHint: wheelHint,
++      f3CalLimitHint: prep.limits.limitHint,
++      f3CalTicks: new Array(prep.tickCount).fill(0),
++      f3CalPadTicks: new Array(50).fill(0),
++      f3CalTranslateX: prep.translateX,
++      f3CalRulerTransition: 'none'
++    }, branch));
++    this._f3CalSyncStepMeta('wheel');
++  },
++
++  _f3CalApplyRulerIndex(newIndex, sendBle) {
++    const clamped = this._f3CalClampRulerIndex(newIndex);
++    const prev = this._f3CalRulerLastIndex || 0;
++    const patch = this._f3CalSyncWheelAngleUi(clamped);
++    if (clamped === prev) {
++      this.setData(patch);
++      return;
++    }
++    if (sendBle) {
++      this._f3CalSendRulerIndexDelta(prev, clamped);
++    } else {
++      this._f3CalRulerLastIndex = clamped;
++      this._f3CalRulerIndex = clamped;
++      this._f3CalPreviewAngle = this._f3CalAngleFromRulerIndex(clamped);
++    }
++    this.setData(patch);
+   },
+ 
+   onF3CalRulerTouchStart(e) {
+     if (this.data.f3CalStep !== 'wheel') return;
++    this._f3CalRulerTouchActive = true;
+     const touchX = e.touches[0].clientX;
+     this._f3CalTouchStartX = touchX;
+-    this._f3CalStartTranslateX = this.data.f3CalTranslateX || 0;
+-    this._f3CalRulerLastIndex = this._f3CalIndexFromTranslate(this._f3CalStartTranslateX);
++    this._f3CalTouchStartIndex = this._f3CalRulerLastIndex || 0;
+   },
+ 
+   onF3CalRulerTouchMove(e) {
+@@ -6347,56 +7078,156 @@ Page({
+       this.onF3CalRulerTouchStart(e);
+       return;
+     }
++    if (!this.data.f3CalTicks || !this.data.f3CalTicks.length) {
++      const tickCount = this._f3CalWheelTickCount();
++      this.setData({
++        f3CalTicks: new Array(tickCount).fill(0),
++        f3CalPadTicks: new Array(50).fill(0)
++      });
++    }
++    const tick = this.tickWidthPx || 20;
+     const diff = (e.touches[0].clientX - this._f3CalTouchStartX) * OPEN_ANGLE_RULER_SENSITIVITY;
+-    const newTrans = this._f3CalClampRulerTranslate(this._f3CalStartTranslateX + diff);
+-    this.setData({ f3CalTranslateX: newTrans, f3CalRulerTransition: 'none' });
+-    const idx = this._f3CalIndexFromTranslate(newTrans);
++    const indexDelta = Math.round(-diff / tick);
++    const snapped = this._f3CalSnapRulerToIndex((this._f3CalTouchStartIndex || 0) + indexDelta);
++    this.setData({
++      f3CalTranslateX: snapped.translateX,
++      f3CalRulerTransition: 'none'
++    });
+     const prev = this._f3CalRulerLastIndex;
+-    if (idx !== prev) {
+-      const step = Math.abs(idx - prev);
+-      const tag = idx > prev ? 'U' : 'D';
+-      this._f3CalSendFoldCmd(tag, step);
+-      this._f3CalRulerLastIndex = idx;
+-      wx.vibrateShort({ type: 'light' });
++    if (snapped.index !== prev) {
++      if (this._f3CalSkipBleActions()) {
++        this._f3CalRulerLastIndex = snapped.index;
++        this._f3CalRulerIndex = snapped.index;
++        this._f3CalPreviewAngle = this._f3CalAngleFromRulerIndex(snapped.index);
++        wx.vibrateShort({ type: 'light' });
++      } else {
++        this._f3CalSendRulerIndexDelta(prev, snapped.index);
++      }
+     }
+   },
+ 
+   onF3CalRulerTouchEnd() {
++    const snapped = this._f3CalSnapRulerToIndex(this._f3CalRulerLastIndex || 0);
++    this.setData({
++      f3CalTranslateX: snapped.translateX,
++      f3CalRulerTransition: 'none'
++    });
++    this._f3CalRulerTouchActive = false;
+     this._f3CalTouchStartX = null;
+-    this._f3CalStartTranslateX = null;
++    this._f3CalTouchStartIndex = null;
+   },
+ 
+   _f3CalAfterSample1(result) {
+-    const median = result && typeof result === 'object' ? result.median : result;
+-    if (!median) {
++    const mean = result && typeof result === 'object' ? result.mean : result;
++    const range = result && typeof result === 'object' ? result.range : 0;
++    if (!mean) {
+       this._f3CalAbortWithToast('鏈噰鍒版湁鏁堥珮搴︼紝璇锋鏌ヤ紶鎰熷櫒鍚庨噸璇?);
+       return;
+     }
+-    this._f3CalH0Units = median;
+-    const branch = median < 400 ? 'A' : 'B';
++    const maxJump = this._F3_CAL_VOLATILITY_MAX_MM || 50;
++    if (range > maxJump) {
++      this.setData({
++        f3CalShowVolatilityModal: true,
++        f3CalStatusText: `鏁版嵁娉㈠姩 ${range} mm锛岃秴杩?${maxJump} mm 涓婇檺`
++      });
++      return;
++    }
++    this._f3CalH0Units = mean;
++    const branch = mean < 400 ? 'A' : 'B';
+     this._f3CalEnterWheelStep(branch);
++    if (this.data.isAdmin) {
++      this._f3CalRefreshStepNavList('wheel');
++    }
+   },
+ 
+-  _f3CalAfterRestore() {
+-    const branch = this._f3CalBranch;
+-    if (branch === 'A') {
+-      this.setData({
++  onF3CalVolatilityDismiss() {
++    if (!this.data.f3CalShowVolatilityModal) return;
++    this.setData({ f3CalShowVolatilityModal: false });
++    this._f3CalSyncStepMeta('sample1');
++  },
++
++  onF3CalVolatilityRetry() {
++    if (!this.data.f3CalShowVolatilityModal) return;
++    this.setData({ f3CalShowVolatilityModal: false });
++    this._f3CalEnterSample1();
++  },
++
++  _f3CalEnterBranchGuideStep(branch) {
++    const b = branch || this._f3CalActiveBranch();
++    if (b === 'A') {
++      this.setData(this._f3CalStepMetaPatch('cardboard', {
+         f3CalStep: 'cardboard',
++        f3CalBranch: 'A',
+         f3CalTitle: '鏀剧疆绾告澘',
+-        f3CalDesc: '璇峰皢绾告澘鎴栧钩鏉挎斁鍦ㄧ墝鐨勬渶涓嬫部锛屼笌鐗屼繚鎸佹按骞冲榻愶紝澶ц嚧浼颁竴涓嬭窛绂诲嵆鍙€?,
+-        f3CalStatusText: '鎽嗗ソ鍚庣偣鍑讳笅鏂规寜閽?
+-      });
++        f3CalDesc: '',
++        f3CalStatusText: ''
++      }, b));
++      this._f3CalSyncStepMeta('cardboard');
+       return;
+     }
+-    this.setData({
++    this.setData(this._f3CalStepMetaPatch('compress', {
+       f3CalStep: 'compress',
++      f3CalBranch: 'B',
+       f3CalTitle: '鎸夊帇鍘嬬缉',
+-      f3CalDesc: '璇锋寜鍘嬪悗灏撅紝鎴栬浇浜鸿杞儙鍘嬩笅閬块渿锛屾ā鎷熷彲鑳芥墦鍒拌疆鑳庣殑楂樺害銆?,
+-      f3CalStatusText: '鍑嗗濂藉悗鐐瑰嚮銆屽紑濮嬮噰闆嗐€?
+-    });
++      f3CalDesc: '',
++      f3CalStatusText: ''
++    }, b));
++    this._f3CalSyncStepMeta('compress');
++  },
++
++  _f3CalEnterRestorePhase(onDone) {
++    this._f3CalAfterRestoreCallback = typeof onDone === 'function' ? onDone : null;
++    if (this._f3CalSkipBleActions()) {
++      if (this._f3CalAfterRestoreCallback) {
++        const fn = this._f3CalAfterRestoreCallback;
++        this._f3CalAfterRestoreCallback = null;
++        fn();
++      }
++      return;
++    }
++    this.setData(this._f3CalStepMetaPatch('restoring', {
++      f3CalStep: 'restoring',
++      f3CalTitle: '鎭㈠鎶樺彔瑙?,
++      f3CalStatusText: '鐭熬姝ｅ湪鍥炲埌姝ｅ父瑙掑害锛坕tem4锛夆€?
++    }));
++    this._f3CalSyncStepMeta('restoring');
++    this._f3CalSendFoldCmd('R');
++    if (this._f3CalRestoreTimer) clearTimeout(this._f3CalRestoreTimer);
++    this._f3CalRestoreTimer = setTimeout(() => {
++      this._f3CalRestoreTimer = null;
++      if (this._f3CalAfterRestoreCallback) {
++        const fn = this._f3CalAfterRestoreCallback;
++        this._f3CalAfterRestoreCallback = null;
++        fn();
++      }
++    }, 2200);
++  },
++
++  _f3CalAfterRestoreToSample() {
++    if (this._f3CalSkipBleActions()) {
++      this._f3CalApplyAdminStep('sample2');
++      return;
++    }
++    const branch = this._f3CalActiveBranch();
++    const desc = branch === 'A'
++      ? '璇蜂繚鎸佺焊鏉挎按骞筹紝涓嶈绉诲姩鎴栨檭鍔ㄣ€?
++      : '璇蜂繚鎸佹寜鍘嬫垨杞戒汉鐘舵€侊紝涓嶈鏉惧紑銆?;
++    this.setData(this._f3CalStepMetaPatch('sample2', {
++      f3CalStep: 'sample2',
++      f3CalTitle: '閲囬泦鏍囧畾鏁版嵁',
++      f3CalDesc: desc,
++      f3CalStatusText: '5 绉掑唴鍙栨渶灏忓€间綔涓哄嵄闄╅珮搴?
++    }));
++    this._f3CalSyncStepMeta('sample2');
++    this._f3CalStartSample('sample2', (result) => this._f3CalFinishWithSample(result));
+   },
+ 
+   _f3CalFinishWithSample(result) {
++    if (this._f3CalSkipBleActions()) {
++      this._f3CalApplyAdminStep('done');
++      this._f3CalSyncStepMeta('done');
++      return;
++    }
+     const dangerUnits = Math.round(Number(result && typeof result === 'object' ? result.minimum : result));
+     const baseUnits = Math.round(Number(this._f3CalH0Units));
+     if (!dangerUnits || dangerUnits < 10) {
+@@ -6405,21 +7236,23 @@ Page({
+     }
+     const dangerMmText = this._f3FormatMmInput(dangerUnits);
+     const safeMmText = baseUnits > 0 ? this._f3FormatMmInput(baseUnits) : '';
+-    this.setData({
++    this.setData(this._f3CalStepMetaPatch('done', {
+       f3CalStep: 'done',
+       f3CalTitle: '鏍囧畾瀹屾垚',
++      f3CalDesc: '',
+       f3CalResultText: safeMmText
+         ? `瀹夊叏 ${safeMmText} mm 路 鍗遍櫓 ${dangerMmText} mm`
+         : `鍗遍櫓楂樺害 ${dangerMmText} mm`,
+       f3CalStatusText: '姝ｅ湪鍐欏叆璁惧鈥?,
+       f3BaseInput: safeMmText || this.data.f3BaseInput,
+       f3DangerInput: dangerMmText
+-    });
++    }));
+     this._f3CalCommitHeightWrites(baseUnits, dangerUnits, safeMmText, dangerMmText);
+   },
+ 
+   /** 鑷姩鏍囧畾锛氬厛鍏冲脊绐椼€佸紑璁剧疆锛屽啀涓庢墜鍔ㄥ啓鍏ュ畬鍏ㄧ浉鍚屽湴鍙?DA/TB */
+   _f3CalCommitHeightWrites(baseUnits, dangerUnits, safeMmText, dangerMmText) {
++    if (this._f3CalSkipBleActions()) return;
+     console.log(`[鑷姩鏍囧畾] 鍐欏叆 base=${baseUnits}mm danger=${dangerUnits}mm`);
+     this._f3CancelHeightCharTimers();
+     this._clearBleSendQueue();
+@@ -6458,33 +7291,90 @@ Page({
+     }), 800);
+   },
+ 
++  _f3CalEnterSample1() {
++    this._f3CalSyncStepMeta('sample1');
++    if (this._f3CalSkipBleActions()) {
++      this._f3CalApplyAdminStep('sample1');
++      return;
++    }
++    this.setData(this._f3CalStepMetaPatch('sample1', {
++      f3CalStep: 'sample1',
++      f3CalTitle: '棣栨妫€娴?,
++      f3CalDesc: '璇蜂繚鎸佽溅杈嗕笉鍔紝姝ｅ湪杩涜鍩哄噯楂樺害妫€娴嬨€?,
++      f3CalTargetLabel: 'A 鍗遍櫓楂樺害',
++      f3CalStatusText: '5 绉掑唴鍙栧钩鍧囧€间綔涓哄垽鏂緷鎹?
++    }));
++    this._f3CalStartSample('sample1', (result) => this._f3CalAfterSample1(result));
++  },
++
+   _f3CalStartWizard() {
+-    if (!this._canControlDevice() || !this._isBleLinked()) {
++    if (!this._canControlDevice()) {
++      this._showCustomToast('鏃犳搷浣滄潈闄?, 'none', 2000);
++      return;
++    }
++    const adminPreview = this.data.isAdmin && !this._isBleLinked();
++    if (!adminPreview && !this._isBleLinked()) {
+       this._showCustomToast('璇峰厛杩炴帴钃濈墮', 'none', 2000);
+       return;
+     }
+     this._clearF3CalTimer();
++    this._f3CalBranch = 'A';
++    this._f3CalH0Units = 350;
++
++    if (adminPreview) {
++      this.setData({
++        f3CalAdminPreview: true,
++        f3CalAdminUiTune: true,
++        f3ShowCalOverlay: true,
++        f3CalBranch: 'A'
++      });
++      this._f3CalInitStepNav('preflight');
++      this._f3CalApplyAdminStep('preflight');
++      return;
++    }
++
++    this.setData({ f3CalAdminPreview: false, f3CalAdminUiTune: false });
+     this._f3CalBranch = '';
+     this._f3CalH0Units = 0;
+-    this.setData({
++    if (this.data.isAdmin) this._f3CalInitStepNav('preflight');
++    this.setData(this._f3CalStepMetaPatch('preflight', {
+       f3ShowCalOverlay: true,
+       f3CalShowHoldModal: false,
+-      f3CalStep: 'sample1',
+-      f3CalTitle: 'F3 鑷姩鏍″噯 路 棣栨妫€娴?,
+-      f3CalDesc: '璇峰皢杞﹁締鎵舵銆佺珯绋筹紝淇濇寔鐗岀収鏋跺叧闂€?,
+-      f3CalTargetLabel: 'A 鍗遍櫓楂樺害',
+-      f3CalStatusText: '5 绉掑唴鍙栦腑闂村€间綔涓哄垽鏂緷鎹?
+-    });
+-    this._f3CalStartSample('sample1', (result) => this._f3CalAfterSample1(result));
++      f3CalShowVolatilityModal: false,
++      f3CalStep: 'preflight',
++      f3CalTitle: '鍑嗗鏍″噯',
++      f3CalDesc: '',
++      f3CalTargetLabel: '',
++      f3CalLiveText: '',
++      f3CalMedianText: '',
++      f3CalResultText: '',
++      f3CalStatusText: '',
++      f3CalCountdown: 0
++    }));
++  },
++
++  onF3CalPreflightConfirm() {
++    if (this.data.f3CalStep !== 'preflight') return;
++    if (this.data.f3CalPreflightClosing) return;
++    this._f3CalEnsureFlapClosedThen(() => this._f3CalEnterSample1());
+   },
+ 
+   onF3StartAutoCal() {
+     if (!isF3MaxModel(this.data.currentModel)) return;
+-    if (!this._canControlDevice() || !this._isBleLinked()) {
++    if (!this._canControlDevice()) {
+       this._showCustomToast('璇峰厛杩炴帴钃濈墮', 'none', 2000);
+       return;
+     }
++    const adminPreview = this.data.isAdmin && !this._isBleLinked();
+     const start = () => this._f3CalStartWizard();
++    if (adminPreview) {
++      start();
++      return;
++    }
++    if (!this._isBleLinked()) {
++      this._showCustomToast('璇峰厛杩炴帴钃濈墮', 'none', 2000);
++      return;
++    }
+     if (!this.data.f3HeightConfigModeOn) {
+       this._f3SetHeightConfigMode(true);
+       setTimeout(start, 1600);
+@@ -6494,49 +7384,73 @@ Page({
+   },
+ 
+   onF3CalCancel() {
+-    this._f3CalSendFoldCmd('R');
++    if (!this._f3CalSkipBleActions()) {
++      this._f3CalSendFoldCmd('R');
++    }
++    this._f3CalDismissWizard();
++  },
++
++  onF3CalDoneClose() {
+     this._f3CalDismissWizard();
+   },
+ 
+   onF3CalReady() {
+     if (this.data.f3CalStep !== 'wheel') return;
+-    this.setData({
+-      f3CalStep: 'restoring',
+-      f3CalTitle: '鎭㈠鎶樺彔瑙?,
+-      f3CalStatusText: '鐭熬姝ｅ湪鍥炲埌姝ｅ父瑙掑害锛坕tem4锛夆€?
+-    });
+-    this._f3CalSendFoldCmd('R');
+-    if (this._f3CalRestoreTimer) clearTimeout(this._f3CalRestoreTimer);
+-    this._f3CalRestoreTimer = setTimeout(() => {
+-      this._f3CalRestoreTimer = null;
+-      this._f3CalAfterRestore();
+-    }, 2200);
++    const branch = this._f3CalActiveBranch();
++    if (this._f3CalSkipBleActions()) {
++      this._f3CalJumpToStep(branch === 'A' ? 'cardboard' : 'compress');
++      return;
++    }
++    this._f3CalEnterBranchGuideStep(branch);
+   },
+ 
+   onF3CalCardboardKnow() {
+     if (this.data.f3CalStep !== 'cardboard') return;
+-    this.setData({ f3CalShowHoldModal: true });
++    if (this._f3CalSkipBleActions()) {
++      this._f3CalJumpToStep('hold');
++      return;
++    }
++    const holdMeta = this._f3CalStepMeta('hold');
++    this.setData({
++      f3CalShowHoldModal: true,
++      f3CalStepNo: holdMeta.no,
++      f3CalStepTotal: holdMeta.total
++    });
+   },
+ 
+-  onF3CalHoldConfirm() {
++  onF3CalHoldDismiss() {
+     if (!this.data.f3CalShowHoldModal) return;
+-    this.setData({
+-      f3CalShowHoldModal: false,
+-      f3CalTitle: '閲囬泦鏍囧畾鏁版嵁',
+-      f3CalDesc: '璇蜂繚鎸佺焊鏉挎按骞筹紝涓嶈绉诲姩鎴栨檭鍔ㄣ€?,
+-      f3CalStatusText: '5 绉掑唴鍙栨渶灏忓€间綔涓哄嵄闄╅珮搴?
+-    });
+-    this._f3CalStartSample('sample2', (result) => this._f3CalFinishWithSample(result));
++    const patch = { f3CalShowHoldModal: false };
++    if (this.data.isAdmin) {
++      const list = this.data.f3CalStepNavList;
++      const idx = list.findIndex((s) => s.id === 'cardboard');
++      if (idx >= 0) {
++        patch.f3CalStepNavIndex = idx;
++        patch.f3CalStepNavLabel = list[idx].label;
++        patch.f3CalStepNavNo = list[idx].no;
++      }
++    }
++    this._f3CalStepMetaPatch('cardboard', patch);
++    this.setData(patch);
++  },
++
++  onF3CalHoldConfirm() {
++    if (!this.data.f3CalShowHoldModal && !this._f3CalSkipBleActions()) return;
++    if (this._f3CalSkipBleActions()) {
++      this._f3CalJumpToStep('restoring');
++      return;
++    }
++    this.setData({ f3CalShowHoldModal: false });
++    this._f3CalEnterRestorePhase(() => this._f3CalAfterRestoreToSample());
+   },
+ 
+   onF3CalCompressStart() {
+     if (this.data.f3CalStep !== 'compress') return;
+-    this.setData({
+-      f3CalTitle: '閲囬泦鏍囧畾鏁版嵁',
+-      f3CalDesc: '璇蜂繚鎸佹寜鍘嬫垨杞戒汉鐘舵€侊紝涓嶈鏉惧紑銆?,
+-      f3CalStatusText: '5 绉掑唴鍙栨渶灏忓€间綔涓哄嵄闄╅珮搴?
+-    });
+-    this._f3CalStartSample('sample2', (result) => this._f3CalFinishWithSample(result));
++    if (this._f3CalSkipBleActions()) {
++      this._f3CalJumpToStep('restoring');
++      return;
++    }
++    this._f3CalEnterRestorePhase(() => this._f3CalAfterRestoreToSample());
+   },
+ 
+   _parseF3HeightMmInput(raw) {
+@@ -6667,12 +7581,14 @@ Page({
+     const units = Math.round(Number(expectedUnits));
+     const displayMm = mmText || this._f3FormatMmInput(units);
+     const charCount = cmd.length;
+-    const charSendMs = charCount * 280 + 1500;
++    const charSendMs = charCount * 320 + 2000;
+     this._f3HeightSendLockUntil = Date.now() + charSendMs;
+       if (kind && Number.isFinite(units)) {
+       this._f3HeightWritePending = {
+         kind,
+         units,
++        baselineMm: kind === 'danger' ? Math.round(Number(this.data.f3DangerMm) || 0) : Math.round(Number(this.data.f3BaseMm) || 0),
++        txDoneAt: 0,
+         expire: Date.now() + (opts.ackTimeout || 12000),
+         onAck: typeof opts.onAck === 'function' ? opts.onAck : null,
+         onFail: typeof opts.onFail === 'function' ? opts.onFail : null
+@@ -7408,7 +8324,17 @@ Page({
+   _getBleWriteCharacteristicId() {
+     const ble = this.ble;
+     if (!ble) return '';
+-    return ble.characteristicId2 || ble.characteristicId || '';
++    return ble.writeCharacteristicId || ble.characteristicId2 || '';
++  },
++
++  _bleWriteTypeCandidates() {
++    const ble = this.ble;
++    if (!ble) return ['writeNoResponse'];
++    const types = [];
++    if (ble._writeNoResponse) types.push('writeNoResponse');
++    if (ble._writeWithResponse) types.push('write');
++    if (!types.length) types.push('writeNoResponse', 'write');
++    return types;
+   },
+ 
+   _isBleWriteReady() {
+@@ -7424,19 +8350,26 @@ Page({
+     if (!ble || !ble.device || !ble.serviceId || !charId) {
+       return Promise.resolve(false);
+     }
+-    return new Promise((resolve) => {
+-      wx.writeBLECharacteristicValue({
+-        deviceId: ble.device.deviceId,
+-        serviceId: ble.serviceId,
+-        characteristicId: charId,
+-        value: arrayBuffer,
+-        success: () => resolve(true),
+-        fail: (err) => {
+-          console.log('鉂?[钃濈墮] 鍙戦€佸け璐?', err.errMsg);
+-          resolve(false);
+-        }
+-      });
+-    });
++    const types = this._bleWriteTypeCandidates();
++    const tryWrite = (idx) => {
++      if (idx >= types.length) return Promise.resolve(false);
++      const writeType = types[idx];
++      return new Promise((resolve) => {
++        wx.writeBLECharacteristicValue({
++          deviceId: ble.device.deviceId,
++          serviceId: ble.serviceId,
++          characteristicId: charId,
++          writeType,
++          value: arrayBuffer,
++          success: () => resolve(true),
++          fail: (err) => {
++            console.log(`鉂?[钃濈墮] 鍙戦€佸け璐?${writeType}):`, err.errMsg);
++            resolve(false);
++          }
++        });
++      }).then((ok) => (ok ? true : tryWrite(idx + 1)));
++    };
++    return tryWrite(0);
+   },
+ 
+   _buildSettingBleVerify(key, targetVal) {
+@@ -7453,21 +8386,36 @@ Page({
+ 
+   /** 鏍￠獙绛夊緟鏈熼棿锛屼笉璁╄澶囧洖璇昏鐩栫敤鎴峰垰鐐圭殑 UI */
+   _stripConflictingBleReadback(updates) {
+-    const verify = this._bleVerifyPending;
++    let verify = this._bleVerifyPending;
++    if (verify && this._bleVerifyPendingAt && Date.now() - this._bleVerifyPendingAt > 8000) {
++      this._bleVerifyPending = null;
++      this._bleVerifyPendingAt = 0;
++      verify = null;
++    }
+     const heightPending = this._f3HeightWritePending;
+     if (heightPending && updates && Date.now() < heightPending.expire) {
+       const mmKey = heightPending.kind === 'danger' ? 'f3DangerMm' : 'f3BaseMm';
+       const rbKey = heightPending.kind === 'danger' ? 'f3DangerReadback' : 'f3BaseReadback';
+       const incoming = updates[mmKey];
+-      console.log(`[鍥炶鏍￠獙] kind=${heightPending.kind} expect=${heightPending.units} incoming=${incoming} mmKey=${mmKey}`);
+-      if (incoming !== undefined && incoming !== null && Math.round(Number(incoming)) === heightPending.units) {
++      const txDoneAt = heightPending.txDoneAt || 0;
++      const txReady = txDoneAt > 0 && Date.now() >= txDoneAt;
++      const incomingMm = incoming !== undefined && incoming !== null ? Math.round(Number(incoming)) : NaN;
++      const valueMatch = Number.isFinite(incomingMm) && incomingMm === heightPending.units;
++      const valueChanged = Number.isFinite(incomingMm) && incomingMm !== heightPending.baselineMm;
++      const sameValueOk = txReady && (Date.now() >= txDoneAt + 1200);
++      console.log(`[鍥炶鏍￠獙] kind=${heightPending.kind} expect=${heightPending.units} baseline=${heightPending.baselineMm} incoming=${incomingMm} txReady=${txReady} changed=${valueChanged}`);
++      if (valueMatch && txReady && (valueChanged || sameValueOk)) {
+         console.log('[鍥炶鏍￠獙] 鉁?鍖归厤鎴愬姛');
+         const onAck = heightPending.onAck;
+         this._f3HeightWritePending = null;
+         this._f3HeightSendLockUntil = 0;
+         if (typeof onAck === 'function') onAck();
+       } else if (incoming !== undefined) {
+-        console.log('[鍥炶鏍￠獙] 鉁?涓嶅尮閰嶏紝鍒犻櫎鍥炶');
++        if (!txReady && valueMatch) {
++          console.log('[鍥炶鏍￠獙] 蹇界暐鍙戦€佸畬鎴愬墠鐨勬棫鍥炶');
++        } else {
++          console.log('[鍥炶鏍￠獙] 鉁?涓嶅尮閰嶏紝鍒犻櫎鍥炶');
++        }
+         delete updates[mmKey];
+         delete updates[rbKey];
+       }
+@@ -7527,6 +8475,7 @@ Page({
+     }
+     const ultra = isMtUltraCardModel(this.data.currentModel);
+     this._bleVerifyPending = ultra && intent.verify ? intent.verify : null;
++    this._bleVerifyPendingAt = this._bleVerifyPending ? Date.now() : 0;
+     const { sendText, times, interval, label } = this._pendingBleIntent;
+     console.log(`馃摛 [钃濈墮] ${label} 鍙戦€併€?{sendText}銆嵜?{times}`);
+     this.sendDataMultiple(sendText, times, interval);
+@@ -7544,10 +8493,11 @@ Page({
+   },
+ 
+   _checkBleVerifyFromReadback(parsed) {
+-    if (!isMtUltraCardModel(this.data.currentModel)) return;
++    if (!isMtUltraCardModel(this._bleStatusTargetModel())) return;
+     if (!this._bleVerifyPending || !parsed) return;
+     if (packetMatchesBleVerify(parsed, this._bleVerifyPending)) {
+       this._bleVerifyPending = null;
++      this._bleVerifyPendingAt = 0;
+       this._bleVerifyRetryCount = 0;
+       return;
+     }
+@@ -7649,8 +8599,10 @@ Page({
+ 
+   _enqueueBleSend(text, gapAfterMs = BLE_SEND_GAP_MS) {
+     if (!text) return;
++    const raw = String(text);
++    const payload = raw.length === 1 ? raw : raw.replace(/#$/, '') + '#';
+     if (!this._bleSendQueue) this._bleSendQueue = [];
+-    this._bleSendQueue.push({ text, gapAfterMs });
++    this._bleSendQueue.push({ text: payload, gapAfterMs });
+     this._drainBleSendQueue();
+   },
+ 
+@@ -7673,13 +8625,18 @@ Page({
+       }
+       if (!this._isBleWriteReady()) {
+         this._bleSendDraining = false;
++        if (this._bleSendQueue && this._bleSendQueue.length) {
++          setTimeout(() => this._drainBleSendQueue(), 300);
++        }
+         return;
+       }
+       const item = this._bleSendQueue.shift();
+       const arrayBuffer = this.stringToArrayBuffer(item.text);
+       this.writeBleDataPromise(arrayBuffer).then((ok) => {
+         if (!ok) {
++          this._bleSendQueue.unshift(item);
+           this._bleSendDraining = false;
++          setTimeout(() => this._drainBleSendQueue(), 400);
+           return;
+         }
+         if (this._bleSendQueue.length) {
+@@ -7698,21 +8655,11 @@ Page({
+   // 鏍稿績鍙戦€佹柟娉?   writeBleData(arrayBuffer) {
+     if (!this._isBleWriteReady()) {
+-      console.log('鉂?[钃濈墮] 璁惧鏈繛鎺ユ垨鐗瑰緛鍊兼湭鎵惧埌');
++      console.log('鉂?[钃濈墮] 璁惧鏈繛鎺ユ垨鍐欏叆鐗瑰緛鍊兼湭鎵惧埌');
+       return false;
+     }
+-    const ble = this.ble;
+-    wx.writeBLECharacteristicValue({
+-      deviceId: ble.device.deviceId,
+-      serviceId: ble.serviceId,
+-      characteristicId: this._getBleWriteCharacteristicId(),
+-      value: arrayBuffer,
+-      success: (res) => {
+-        console.log('鉁?[钃濈墮] 鍙戦€佹垚鍔?', res.errMsg);
+-      },
+-      fail: (err) => {
+-        console.log('鉂?[钃濈墮] 鍙戦€佸け璐?', err.errMsg);
+-      }
++    this.writeBleDataPromise(arrayBuffer).then((ok) => {
++      if (ok) console.log('鉁?[钃濈墮] 鍙戦€佹垚鍔?);
+     });
+     return true;
+   },
+@@ -7737,7 +8684,10 @@ Page({
+       this._remoteAssistEnqueueCommand(text, times, interval);
+       return;
+     }
+-    if (!this._isBleLinked()) return;
++    if (!this._isBleLinked()) {
++      this._showCustomToast('钃濈墮鏈繛鎺?, 'none', 2000);
++      return;
++    }
+     const gap = Math.max(interval, BLE_SEND_GAP_MS);
+     for (let i = 0; i < times; i++) {
+       this._enqueueBleSend(text, gap);
+@@ -7812,7 +8762,7 @@ Page({
+       f2BtnPressed: null,
+       f2KeyStatusText: '鈥?,
+       f2BtnStatusText: '鈥?,
+-      f3HeightMonitorVisible: isF3,
++      f3HeightMonitorVisible: connected && isF3,
+       f3HeightMm: null,
+       f3HeightText: connected ? '璇诲彇涓€? : '璇峰厛杩炴帴钃濈墮',
+       f3HeightLive: false,
+@@ -7836,7 +8786,8 @@ Page({
+       f3CalMedianText: '',
+       f3CalResultText: '',
+       f3CalStatusText: '',
+-      f3CalShowHoldModal: false
++      f3CalShowHoldModal: false,
++      f3CalShowVolatilityModal: false
+     };
+   },
+ 
+@@ -7872,6 +8823,51 @@ Page({
+     } catch (ex) { /* ignore */ }
+   },
+ 
++  _isBleGattReady() {
++    const ble = this.ble;
++    return !!(ble && ble.device && ble.device.deviceId && ble.serviceId && ble.characteristicId);
++  },
++
++  _bleStatusTargetModel() {
++    if (this._bleSessionModel && (this.data.isConnected || this._isBleLinked())) {
++      return this._bleSessionModel;
++    }
++    if (this.data.showDetail && this.data.currentModel) {
++      return this.data.currentModel;
++    }
++    const models = this.data.models || [];
++    const idx = Number(this.data.currentIndex);
++    if (Number.isFinite(idx) && models[idx]) {
++      return models[idx];
++    }
++    return this.data.currentModel;
++  },
++
++  _ensureF2StatusBleListener(forceUiPrime) {
++    if (!this.ble || !this._isBleGattReady()) return;
++    const model = this._bleStatusTargetModel();
++    if (!isF2MaxStatusBleModel(model)) {
++      if (this.ble.onDataReceived) {
++        this.ble.onDataReceived = null;
++      }
++      return;
++    }
++    const needBind = !this.ble.onDataReceived;
++    if (needBind) {
++      this._setupF2FaultBleListener();
++      return;
++    }
++    this._f2ForceStatusSyncPending = true;
++    this._f2AdvSyncPending = true;
++    if (forceUiPrime && (this.data.isConnected || this._isBleLinked())) {
++      this.setData({
++        f2TravelReadbackText: '璇诲彇涓€?,
++        f2DelayPowerReadbackText: '璇诲彇涓€?,
++        ...this._resetF2HwMonitorState(true, model)
++      });
++    }
++  },
++
+   _setupF2FaultBleListener() {
+     this._f2BleRxLine = '';
+     this._f2LastFaultKey = '';
+@@ -7885,7 +8881,7 @@ Page({
+       f2DelayPowerReadbackText: '璇诲彇涓€?,
+       flapPanelState: 'unknown',
+       flapPanelStateText: '鍚屾涓€?,
+-      ...this._resetF2HwMonitorState(true)
++      ...this._resetF2HwMonitorState(true, this._bleStatusTargetModel())
+     };
+     this.setData(connectPatch);
+   },
+@@ -7907,7 +8903,7 @@ Page({
+   },
+ 
+   _onF2BleDataReceived(buffer) {
+-    if (!buffer || !isF2MaxStatusBleModel(this.data.currentModel)) return;
++    if (!buffer || !isF2MaxStatusBleModel(this._bleStatusTargetModel())) return;
+     this._f2LastBleRxAt = Date.now();
+     this._f2BleRxLine += this._arrayBufferToUtf8(buffer);
+     const parts = this._f2BleRxLine.split('\n');
+@@ -7921,6 +8917,10 @@ Page({
+ 
+   _handleF2BleStatusLine(line) {
+     const trimmed = (line || '').trim();
++    if (trimmed.startsWith('RX:')) {
++      console.log('[鍥轰欢涓嬭鍥炴樉]', trimmed);
++      return;
++    }
+     const parsed = parseF2StatusLine(trimmed);
+     if (!parsed) return;
+     const forcePopup = !!this._f2FaultConnectPending;
+@@ -7946,8 +8946,8 @@ Page({
+   },
+ 
+   _syncF2StatusFromPacket(parsed) {
+-    if (!isF2MaxStatusBleModel(this.data.currentModel)) return;
+-    const model = this.data.currentModel;
++    const model = this._bleStatusTargetModel();
++    if (!isF2MaxStatusBleModel(model)) return;
+     const isUltra = isMtUltraCardModel(model);
+     const forceFull = !!this._f2ForceStatusSyncPending;
+     const forceAdv = forceFull || !!this._f2AdvSyncPending;
+@@ -8022,7 +9022,7 @@ Page({
+     Object.assign(updates, buildF2HwMonitorUpdates(parsed, {
+       f2KeyOn: this.data.f2KeyOn,
+       f2BtnPressed: this.data.f2BtnPressed,
+-      force: forceFull
++      force: forceFull || forceAdv
+     }));
+ 
+     Object.assign(updates, buildF3HeightMonitorUpdates(parsed, {
+@@ -8030,7 +9030,7 @@ Page({
+       force: forceFull
+     }));
+ 
+-    if (this._f3CalSampling) {
++    if (this._f3CalSampling || this.data.f3CalStep === 'wheel') {
+       let liveMm = null;
+       if (updates.f3HeightMm != null) {
+         liveMm = Math.round(Number(updates.f3HeightMm));
+@@ -8051,7 +9051,7 @@ Page({
+       force: forceFull || !!this._f3HeightWritePending
+     }));
+ 
+-    if (isF3MaxModel(this.data.currentModel)) {
++    if (isF3MaxModel(model)) {
+       const itm = parsed.itm;
+       if (itm === 0 || itm === 1 || itm === 2) {
+         updates.f3PlateItm = itm;
+@@ -8059,9 +9059,14 @@ Page({
+       updates.f3HeightConfigLocked = false;
+       if (itm === 1 || itm === 2) {
+         updates.f3HeightLive = false;
+-      } else if (itm === 0 && (parsed.hgt === null || parsed.hgt === undefined)) {
++      } else if (
++        itm === 0 &&
++        (parsed.hgt === null || parsed.hgt === undefined) &&
++        this.data.f3HeightMm == null
++      ) {
++        // HGT 绾?1s 鎵嶉殢鐘舵€佸寘涓婃姤涓€娆★紝鏃?HGT 瀛楁涓嶄唬琛ㄥけ鏁堬紝鍕挎竻宸叉湁璇绘暟
+         updates.f3HeightLive = false;
+-        if (forceFull || this.data.f3HeightMm == null) {
++        if (forceFull) {
+           updates.f3HeightText = '璇诲彇涓€?;
+         }
+       }
+@@ -8085,7 +9090,7 @@ Page({
+ 
+     this._trySyncAngleEditorsFromBle(parsed);
+ 
+-    if (!isHwPinMonitorModel(this.data.currentModel)) {
++    if (!isHwPinMonitorModel(model)) {
+       delete updates.f2KeyOn;
+       delete updates.f2BtnPressed;
+       delete updates.f2KeyStatusText;
+@@ -8093,7 +9098,7 @@ Page({
+       delete updates.f2HwMonitorVisible;
+     }
+ 
+-    if (!isF3MaxModel(this.data.currentModel)) {
++    if (!isF3MaxModel(model)) {
+       delete updates.f3HeightMm;
+       delete updates.f3HeightText;
+       delete updates.f3HeightLive;
+@@ -8132,6 +9137,7 @@ Page({
+       this._patchFlapGaugeSnap(updates);
+       const shouldReleaseGaugeSnap = !!updates.flapGaugeSnap;
+       const f3CalJustFinished = !!updates._f3CalJustFinished;
++      const f3CalFlapJustClosed = this._f3CalAwaitFlapClose && updates.flapPanelState === 'closed';
+       if (f3CalJustFinished) delete updates._f3CalJustFinished;
+       this.setData(updates, () => {
+         if (shouldReleaseGaugeSnap) this._releaseFlapGaugeSnap();
+@@ -8140,6 +9146,7 @@ Page({
+           this._clearF3CalTimer();
+           this._showCustomToast(f3CalDismissToast.text, f3CalDismissToast.type || 'none', f3CalDismissToast.duration || 2000);
+         }
++        if (f3CalFlapJustClosed) this._f3CalOnFlapClosedForCal();
+       });
+       if (isUltra && updates.flapPanelState !== undefined) {
+         this._publishFlapToVoiceBridge(

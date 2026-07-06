@@ -9,9 +9,10 @@
  * 烧录：ATmega328P（Nano 选 ATmega328P / Old Bootloader，勿选 168）
  * F2 MAX 源文件 firmware/f2-max-servo/f2_max_servo.ino 请勿修改；本文件为独立副本。
  *
- * 测高：绿灯未亮（未翻开、灯灭）时本地测距；翻开后绿灯亮不测。蓝牙 HGT 可慢。
+ * 测高：折叠(item=0)时测危险高度；翻开(item=1)绿灯亮时监测 TOF≥8cm 持续 8s 则红灯快闪报警。蓝牙 HGT 可慢。
  *
- * F3 MAX 无平滑模式。328P 闪存紧张，默认 F3_FLASH_TIGHT。
+ * F3_HEIGHT_CFG_USB_DBG=1：调试测高写 EEPROM（USB9600 日志，暂关 TOF/隐蔽/调平等省闪存）。
+ * 调好务必改回 0；Mixly 建议暂时禁用 VL53L0X 库再编译。
  */
 
 #define F3_MAX_BUILD 1
@@ -19,6 +20,37 @@
 #define F3_SENSOR_SERIAL 0 // 1=Mixly串口打印测高（约+200B，328P 易超限）
 #define F3_HEIGHT_ENABLE 1 // 0=完全关闭测高（排查卡死时先改 0 试）
 #define F3_BLE_CMD_DEBUG 0 // 1=USB串口9600打印蓝牙命令（+约1.5KB，328P超限勿开）
+#define F3_BLE_RX_SERIAL 0 // 1=蓝牙回显 RX:/OK:/ER:（+约200B，328P满时须0）
+#define F3_BLE_RX_USB_DEBUG 0 // 1=USB9600原始字节（328P易超限，勿开）
+#define F3_AUTOLEVEL_ENABLE 0 // 1=启用自动找平功能（约+800B，若超限可改0，代码保留）
+
+// ========== 测高调试：改 1 烧调试版（USB9600日志），调好改 0 烧正式版 ==========
+#define F3_HEIGHT_CFG_USB_DBG 0
+#if F3_HEIGHT_CFG_USB_DBG
+#define F3_HEIGHT_USB_DEBUG 1
+#define F3_DBG_STRIP_TOF 1        // 停 TOF（省闪存最大；Mixly 可暂时禁用 VL53L0X 库）
+#define F3_DBG_STRIP_STEALTH 1
+#define F3_DBG_STRIP_AUTO_LEVEL 1
+#define F3_DBG_STRIP_BTN5 1
+#define F3_DBG_STRIP_FOLD_FAULT 1
+#else
+#define F3_HEIGHT_USB_DEBUG 0
+#define F3_DBG_STRIP_TOF 0
+#define F3_DBG_STRIP_STEALTH 0
+#define F3_DBG_STRIP_AUTO_LEVEL 0
+#define F3_DBG_STRIP_BTN5 0
+#define F3_DBG_STRIP_FOLD_FAULT 0
+#endif
+
+#if F3_HEIGHT_USB_DEBUG
+#define F3USB_LN(s) do { Serial.println(F(s)); } while (0)
+#define F3USB_CMD(s) do { Serial.print(F(">")); Serial.println(s); } while (0)
+#define F3USB_U16(tag, v) do { Serial.print(F(tag)); Serial.println(v); } while (0)
+#else
+#define F3USB_LN(s) ((void)0)
+#define F3USB_CMD(s) ((void)0)
+#define F3USB_U16(tag, v) ((void)0)
+#endif
 
 // 328P：F3 用更小 Servo 库；F2 MAX 原版用 VarSpeedServo
 #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega328__) || defined(__AVR_ATmega328PB__)
@@ -49,24 +81,41 @@
 #define F2_MOTION_A0_DEBUG 1
 #define F2_KEY_SERIAL_DEBUG 1
 #endif
+#if F3_BLE_RX_USB_DEBUG
+#define F2_BLE_STATUS 0 // 临时腾出 328P 闪存给 USB RX 调试；调完改回关闭 USB 调试
+#else
 #define F2_BLE_STATUS 1
+#endif
 #endif
 
 #include <Wire.h>
+#if !F3_DBG_STRIP_TOF
 #include "VL53L0X.h"
-
-// ========== BLOCK: F3 TF200C 测高（VL53L0X）==========
+#endif
 const uint8_t F3_PIN_XSHUT = 4;
-const unsigned int F3_SENSOR_POLL_MS = 50;   // 本地读距（跟连续测距 ~80ms 对齐，机器侧要快）
+const unsigned int F3_SENSOR_POLL_MS = 50;   // 默认读距周期
+const unsigned int F3_SENSOR_POLL_OPEN_MS = 35; // 折叠态危险高度：略快轮询
+const uint16_t F3_FOLD_NEAR_MM = 80;         // 8cm；折叠到位 TOF 应 <8cm；翻开监测时 ≥8cm 持续 8s 报错
+const unsigned long F3_FOLD_CLOSE_TIMEOUT_MS = 8000UL;
+const unsigned long F3_FOLD_FAULT_BLINK_MS = 50UL;
 const unsigned long F3_HGT_BLE_MS = 1000UL; // 蓝牙 HGT 上报周期（可慢，减串口负载）
 const unsigned long F3_CFG_HGT_BLE_MS = 400UL; // 配置模式略快，标定实时高度跟手
 const uint16_t F3_HEIGHT_MM_MIN = 10;
 const uint16_t F3_HEIGHT_MM_MAX = 3000;
 const uint8_t F3_PIN_LED_GREEN = 10;
 const uint8_t F3_EEPROM_MAGIC_ADDR = 38;
+
+// LED 控制宏定义（用于开机/配置/隐蔽等场景）
+#if F3_MAX_BUILD
+#define BOOT_LED_ON()  do { digitalWrite(8, LOW); digitalWrite(F3_PIN_LED_GREEN, HIGH); } while(0)
+#define BOOT_LED_OFF() do { digitalWrite(F3_PIN_LED_GREEN, LOW); digitalWrite(8, LOW); } while(0)
+#else
+#define BOOT_LED_ON()  digitalWrite(8, HIGH)
+#define BOOT_LED_OFF() digitalWrite(8, LOW)
+#endif
 const uint8_t F3_EEPROM_MAGIC = 0xA7;
 
-#if !F3_FLASH_TIGHT
+#if !F3_FLASH_TIGHT && !F3_DBG_STRIP_TOF
 static void f3ConfigureLongRange() {
   f3Tof.setSignalRateLimit(0.1);
   f3Tof.setVcselPulsePeriod(VL53L0X::VcselPeriodPreRange, 18);
@@ -80,7 +129,9 @@ const uint8_t F3_EMA_NEW = 2;
 const uint8_t F3_EMA_OLD = 3;
 const uint16_t F3_SNAP_MM = 80;
 
+#if !F3_DBG_STRIP_TOF
 VL53L0X f3Tof;
+#endif
 uint8_t f3SensorOk = 0;
 uint8_t f3FailStreak = 0;
 uint16_t f3MedBuf[F3_MEDIAN_WIN];
@@ -105,6 +156,9 @@ static unsigned long f3AckBlinkMs = 0;
 static uint8_t f3AckGreenOn = 0;
 static uint8_t f3ForceStatusOnce = 0;
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+static unsigned long f3FoldCloseWatchMs = 0;
+static uint8_t f3FoldCloseWatchPending = 0;
+static uint8_t f3FoldCloseFault = 0;
 static uint8_t f3CalPreviewActive = 0;
 static int f3CalPreviewAngle = 0;
 #endif
@@ -123,6 +177,7 @@ extern volatile int item;
 extern volatile int accRetractOn;
 extern uint8_t openEaseActive;
 extern uint8_t foldAdjustActive;
+extern uint8_t servoPwmOff;
 bool pin2KeyOffStable();
 
 bool f3DangerLedActive();
@@ -170,6 +225,9 @@ static void f3SerialPrintHeight(uint16_t raw, uint16_t filt, uint8_t ok) {
 #endif
 
 static void f3RecoverSensor() {
+#if F3_DBG_STRIP_TOF
+  return;
+#else
   f3FailStreak = 0;
   f3SensorSkipUntil = millis() + 3000UL;
   digitalWrite(F3_PIN_XSHUT, LOW);
@@ -184,16 +242,23 @@ static void f3RecoverSensor() {
     f3SensorValid = 0;
     return;
   }
-  f3Tof.startContinuous(80);
+  f3Tof.startContinuous(50);
   f3MedCount = 0;
   f3HasFilt = 0;
   f3SensorValid = 0;
+#endif
 }
 
 static bool f3ReadSample(uint16_t &mm) {
+#if F3_DBG_STRIP_TOF
+  (void)mm;
+  return false;
+#else
+  pollBleSerial();
   wdt_reset();
   unsigned long t0 = millis();
   mm = f3Tof.readRangeContinuousMillimeters();
+  pollBleSerial();
   wdt_reset();
   if (millis() - t0 > 400UL || f3Tof.timeoutOccurred() || mm == 0 || mm == 65535) {
     if (++f3FailStreak >= 4) {
@@ -208,6 +273,7 @@ static bool f3ReadSample(uint16_t &mm) {
   }
   f3FailStreak = 0;
   return true;
+#endif
 }
 
 static uint16_t f3AbsDiff(uint16_t a, uint16_t b) {
@@ -250,7 +316,22 @@ static uint16_t f3FilterMm(uint16_t rawMm) {
   return (uint16_t)f3FiltMm;
 }
 
+static uint16_t f3DangerProbeMm() {
+  uint16_t probe = f3LastFiltMm;
+  if (f3LastRawMm > 0 && f3LastRawMm < probe) probe = f3LastRawMm;
+  if (f3MedCount > 0) {
+    uint16_t med = f3MedianOfBuffer();
+    if (med > 0 && med < probe) probe = med;
+  }
+  return probe;
+}
+
 void f3SensorInit() {
+#if F3_DBG_STRIP_TOF
+  f3SensorOk = 0;
+  F3USB_LN("DBG TOF off");
+  return;
+#endif
 #if !F3_HEIGHT_ENABLE
   f3SensorOk = 0;
   return;
@@ -274,31 +355,54 @@ void f3SensorInit() {
 #if !F3_FLASH_TIGHT
   f3ConfigureLongRange();
 #endif
-  f3Tof.startContinuous(80);
+  f3Tof.startContinuous(50);
   f3LastPollMs = millis();
 }
 
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+static bool f3FoldCloseWatchActive();
+static bool f3ServoMotionBusy();
+#endif
+
 void f3SensorRecoverTick() {
+#if F3_DBG_STRIP_TOF
+  return;
+#endif
 #if !F3_HEIGHT_ENABLE
   return;
 #endif
   if (!f3RecoverPending) return;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (f3ServoMotionBusy()) return;
+#endif
   if (!f3HeightMonitorActive()) return;
   f3RecoverPending = 0;
   f3RecoverSensor();
 }
 
 void f3SensorServiceTick() {
+#if F3_DBG_STRIP_TOF
+  return;
+#endif
 #if !F3_HEIGHT_ENABLE
   return;
 #endif
+  pollBleSerial();
   if (!f3SensorOk || !f3HeightMonitorActive()) {
-    if (item != 0 || flapMotionMoving() || openEaseActive) f3SensorValid = 0;
+    if (item != 0 && !f3FoldCloseWatchActive()) f3SensorValid = 0;
     return;
   }
   unsigned long now = millis();
   if (now < f3SensorSkipUntil) return;
-  if (now - f3LastPollMs < F3_SENSOR_POLL_MS) return;
+  unsigned int pollMs = F3_SENSOR_POLL_MS;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (item == 0 && !f3ServoMotionBusy()) pollMs = F3_SENSOR_POLL_OPEN_MS;
+  if (f3ServoMotionBusy()) {
+    pollMs = 180;
+    if (!servoPwmOff) return;
+  }
+#endif
+  if (now - f3LastPollMs < pollMs) return;
   f3LastPollMs = now;
 
   uint16_t raw = 0;
@@ -395,24 +499,30 @@ static bool f3HeightCfgModeActive() {
   return f3HeightCfgMode == 1;
 }
 
-/* 厘米整数解析（避免 atof 拉入 float 库，328P 约省 400B+） */
-static bool f3ParseHeightCmMm(const char *p, uint16_t &outMm) {
+/* 校验和保护的毫米解析：格式为 <数字位>S<2位校验和>，校验和=各数字之和 mod 100。
+ * BLE 丢字符/串字符时，数值和校验和很难同时凑巧一致，可有效防止把损坏数据当真值写入。 */
+static bool f3ParseHeightMm(const char *p, uint16_t &outMm) {
   if (!p || *p < '0' || *p > '9') return false;
-  uint16_t cm = 0;
+  uint16_t mm = 0;
+  uint16_t digitSum = 0;
   while (*p >= '0' && *p <= '9') {
-    cm = (uint16_t)(cm * 10 + (*p - '0'));
-    if (cm > 300) return false;
+    mm = (uint16_t)(mm * 10 + (*p - '0'));
+    digitSum = (uint16_t)(digitSum + (uint16_t)(*p - '0'));
+    if (mm > 3000) return false;
     p++;
   }
-  uint8_t dec = 0;
-  if (*p == '.') {
-    p++;
-    if (*p < '0' || *p > '9') return false;
-    dec = (uint8_t)(*p - '0');
-    p++;
-  }
-  if (*p != 0 || cm < 1) return false;
-  outMm = (uint16_t)(cm * 10 + dec);
+  if (*p != 'S') return false;
+  p++;
+  if (p[0] < '0' || p[0] > '9' || p[1] < '0' || p[1] > '9' || p[2] != 0) return false;
+  uint16_t chk = (uint16_t)((p[0] - '0') * 10 + (p[1] - '0'));
+  if (chk != (digitSum % 100)) return false;
+  if (mm < 10) return false;
+  outMm = mm;
+#if F3_BLE_CMD_DEBUG
+  Serial.print(F("[mm="));
+  Serial.print(outMm);
+  Serial.println(F("]"));
+#endif
   return outMm >= F3_HEIGHT_MM_MIN && outMm <= F3_HEIGHT_MM_MAX;
 }
 
@@ -480,13 +590,39 @@ static void f3SaveHeightAndAck(uint8_t which, uint16_t mm) {
   if (which == 1) f3SaveDangerMm(mm);
   else f3SaveBaseMm(mm);
 #if F3_BLE_CMD_DEBUG
-  f3DbgNum2(which == 1 ? F("DANGER SAVED mm cfg") : F("BASE SAVED mm cfg"), mm, f3HeightCfgMode);
-  f3DbgLine(F("GREEN ACK x2"));
+  Serial.print(which == 1 ? F("OK A]") : F("OK B]"));
+  Serial.println();
 #endif
   f3StartGreenAck();
   f3RequestStatusSend();
   sendStatusPacket();
+#if F3_HEIGHT_USB_DEBUG
+  F3USB_U16(which == 1 ? "SAV DGA=" : "SAV DGB=", mm);
+#endif
+#if F3_BLE_RX_SERIAL
+  f3BleRxOkLine(which == 1 ? F("OK:DA") : F("OK:TB"), mm);
+#endif
 }
+
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+static void f3LeaveHeightCfgForFlap() {
+  if (!f3HeightCfgModeActive()) return;
+  f3HeightCfgMode = 0;
+  foldAdjustActive = 0;
+  f3CalPreviewActive = 0;
+  f3CfgGraceUntil = millis() + 1500UL;
+  f3RequestStatusSend();
+  statusLedUpdate();
+}
+
+static void f3PrepareUserServoAngleCmd() {
+  f3LeaveHeightCfgForFlap();
+  if (f3CalPreviewActive) {
+    f3CalPreviewActive = 0;
+    f3RequestStatusSend();
+  }
+}
+#endif
 
 static bool f3TryShortHeightCmd(char *cmd) {
   if (cmd[0] == 'M' && cmd[1] == '1' && cmd[2] == 0) {
@@ -494,6 +630,10 @@ static bool f3TryShortHeightCmd(char *cmd) {
     f3CfgGraceUntil = 0;
     f3HeightCfgModeLedApply();
     drainBleRx();
+    F3USB_LN("HIT M1 CFG=1");
+#if F3_BLE_RX_SERIAL
+    f3BleRxSay(F("OK:CFG1"));
+#endif
     return true;
   }
   if (cmd[0] == 'M' && cmd[1] == '0' && cmd[2] == 0) {
@@ -505,14 +645,42 @@ static bool f3TryShortHeightCmd(char *cmd) {
     sendStatusPacket();
     f3TickDangerLed();
     statusLedUpdate();
+    F3USB_LN("HIT M0 CFG=0");
+#if F3_BLE_RX_SERIAL
+    f3BleRxSay(F("OK:CFG0"));
+#endif
     return true;
   }
   if ((cmd[0] == 'D' && cmd[1] == 'A' && cmd[2] >= '0' && cmd[2] <= '9')
       || (cmd[0] == 'T' && cmd[1] == 'B' && cmd[2] >= '0' && cmd[2] <= '9')) {
-    if (!f3HeightCfgModeActive()) return false;
-    if (strchr(cmd, ':') || strchr(cmd, '|')) return false;
+    if (!f3HeightCfgModeActive()) {
+      F3USB_LN("ER:CFG");
+#if F3_BLE_RX_SERIAL
+      f3BleRxSay(F("ER:CFG"));
+#endif
+      return false;
+    }
+    if (strchr(cmd, ':') || strchr(cmd, '|')) {
+      F3USB_LN("ER:CHR");
+#if F3_BLE_RX_SERIAL
+      f3BleRxSay(F("ER:CHR"));
+#endif
+      return false;
+    }
+#if F3_BLE_CMD_DEBUG
+    Serial.print(F("["));
+    Serial.print(cmd);
+    Serial.print(F("->"));
+#endif
     uint16_t mm = 0;
-    if (!f3ParseHeightCmMm(cmd + 2, mm)) return false;
+    if (!f3ParseHeightMm(cmd + 2, mm)) {
+      F3USB_LN("ER:SUM");
+#if F3_BLE_RX_SERIAL
+      f3BleRxSay(F("ER:SUM"));
+#endif
+      return false;
+    }
+    F3USB_U16(cmd[0] == 'D' ? "OK DA " : "OK TB ", mm);
     f3SaveHeightAndAck(cmd[0] == 'D' ? 1 : 2, mm);
     return true;
   }
@@ -539,8 +707,10 @@ bool f3DangerLedActive() {
   if ((long)(millis() - f3CfgGraceUntil) < 0) return false;
   if (!f3HeightMonitorActive()) return false;
   if (f3DangerMm == 0) return false;
-  if (!f3SensorValid || f3LastFiltMm == 0) return false;
-  return f3LastFiltMm <= f3DangerMm;
+  if (!f3SensorValid) return false;
+  uint16_t mm = f3DangerProbeMm();
+  if (mm == 0) return false;
+  return mm <= f3DangerMm;
 }
 
 bool f3OpenBlockedByDanger() {
@@ -556,6 +726,7 @@ void f3TickDangerLed() {
   if (nowDanger != lastDanger) {
     lastDanger = nowDanger;
     statusLedUpdate();
+    f3RequestStatusSend();
   }
 }
 
@@ -567,12 +738,20 @@ static void f3WriteLeds(uint8_t redOn, uint8_t greenOn) {
 
 void f3StatusLedUpdate() {
   if (item == 3) {
-    if (!faultIndicatorActive()) f3WriteLeds(0, 0);
+    if (!faultIndicatorActive() && !f3FoldCloseFault) f3WriteLeds(0, 1);
     return;
   }
+#if F3_HEIGHT_ENABLE
+  if (f3FoldCloseFault) return;
+#endif
   if (faultIndicatorActive()) return;
-  if (foldAdjustActive) {
+  if (f3AckBlinkHalfLeft != 0) return;
+  if (f3HeightCfgModeActive()) {
     f3WriteLeds(1, 0);
+    return;
+  }
+  if (foldAdjustActive) {
+    f3WriteLeds(0, 0);
     return;
   }
   if (pin2KeyOffStable()) {
@@ -581,7 +760,9 @@ void f3StatusLedUpdate() {
       return;
     }
   }
+  // 翻开 item=1 → 绿灯亮 + 8s TOF 监测；折叠 item=0 → 灯灭 + 危险高度（过低亮红灯）
   if (item == 1) {
+    if (f3FoldCloseFault) return;
     f3WriteLeds(0, 1);
     return;
   }
@@ -603,8 +784,6 @@ volatile int fullOpenAngle;
 volatile int customAngle;
 volatile int item4;
 volatile int accRetractOn;
-volatile unsigned long lastReceiveTime;
-volatile unsigned long timeout;
 volatile int y;
 volatile int selfCheckOn;
 volatile int p;
@@ -782,8 +961,24 @@ static void keyDbgKv(const __FlashStringHelper *, int, int = -9999) {}
 
 SoftwareSerial mySerial(6, 7);
 
-char rxBuf[RX_BUF_SIZE];
-uint8_t rxLen = 0;
+#if F3_BLE_RX_SERIAL
+static void f3BleRxEchoCmd(const char *cmd) {
+  if (!cmd || !cmd[0]) return;
+  mySerial.print(F("RX:"));
+  mySerial.println(cmd);
+}
+static void f3BleRxOkLine(const __FlashStringHelper *tag, uint16_t mm) {
+  mySerial.print(tag);
+  mySerial.println(mm);
+}
+static void f3BleRxSay(const __FlashStringHelper *line) {
+  mySerial.println(line);
+}
+#endif
+
+String bleRxStr = "";
+unsigned long lastBleRxTime = 0;
+const unsigned long bleRxTimeout = 100;
 int lastWrittenAngle = -1;
 int servoTrackItem = -1;
 int servoTrackAngle = -1;
@@ -794,7 +989,6 @@ uint8_t servoPwmOff = 1;
 uint8_t forceServoMove = 0;
 unsigned long servoPwmHoldUntil = 0;
 uint8_t autoLevelBusy = 0;
-uint8_t autoLevelDone = 0;
 static uint8_t reboundRetryClose = 0;
 
 int lastMotorA0 = -1;
@@ -802,6 +996,18 @@ unsigned long lastMotorSampleMs = 0;
 unsigned long bootSettleUntil = 0;
 unsigned long btnDetectStartMs = 0;
 unsigned long flapSettleUntil = 0;
+
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+static bool f3FoldCloseWatchActive() {
+  return f3FoldCloseWatchPending || f3FoldCloseWatchMs != 0;
+}
+
+static bool f3ServoMotionBusy() {
+  if (openEaseActive || forceServoMove) return true;
+  if (flapSettleUntil != 0 && (long)(millis() - flapSettleUntil) < 0) return true;
+  return false;
+}
+#endif
 
 bool tickMotionA0Realtime(bool forceSample);
 void debugPrintMotionA0(int a0);
@@ -1049,24 +1255,18 @@ void trimBuf(char *s) {
 
 void drainBleRx() {
   while (mySerial.available()) mySerial.read();
-  rxLen = 0;
-  rxBuf[0] = 0;
-  lastReceiveTime = 0;
+  bleRxStr = "";
+  lastBleRxTime = 0;
 }
 
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-static bool f3BleCmdValid(const char *cmd) {
-  if (!cmd || !cmd[0]) return false;
-  if (cmd[0] == 'M' && (cmd[1] == '1' || cmd[1] == '0') && cmd[2] == 0) return true;
-  if (cmd[0] == 'F' && cmd[1] == '3' && cmd[2] == 'F' && cmd[4] == 0) {
-    return cmd[3] == 'R' || cmd[3] == 'U' || cmd[3] == 'D';
-  }
-  return (cmd[0] == 'D' && cmd[1] == 'A' && cmd[2] >= '0' && cmd[2] <= '9')
-      || (cmd[0] == 'T' && cmd[1] == 'B' && cmd[2] >= '0' && cmd[2] <= '9');
-}
-
 static void f3BleDispatchCmd(char *cmd) {
   if (f3HeightCfgModeActive()) {
+    if (cmdIsP(cmd, CMD_ADJ_FOLD) || cmdIsP(cmd, CMD_ADJ_BIG) || cmdIsP(cmd, CMD_ADJ_SMALL)) {
+      f3PrepareUserServoAngleCmd();
+      handleBleCommand(cmd);
+      return;
+    }
     if (cmdIsP(cmd, CMD_ADJ_BIG)) {
       f3CalPreviewStep(-1);
       return;
@@ -1084,59 +1284,364 @@ static void f3BleDispatchCmd(char *cmd) {
 }
 #endif
 
+static void trimBleCmdStr(String &s) {
+  s.trim();
+  while (s.length() > 0) {
+    char c = s.charAt(s.length() - 1);
+    if (c == '#' || c == '\r' || c == '\n') {
+      s.remove(s.length() - 1);
+    } else {
+      break;
+    }
+  }
+  s.trim();
+}
+
+/* 收包窗口内或缓冲非空：禁止 BLE 状态 TX，避免 SoftwareSerial 发 ANG: 冲掉中文命令 */
+static bool bleSerialRxBusy() {
+  if (bleRxStr.length() > 0) return true;
+  if (lastBleRxTime > 0 && millis() - lastBleRxTime < bleRxTimeout + 50UL) return true;
+  return false;
+}
+
+static void dispatchBleRxCmd() {
+  trimBleCmdStr(bleRxStr);
+  if (bleRxStr.length() == 0) {
+    bleRxStr = "";
+    return;
+  }
+  
+  /* 过滤 ANG: 状态包自发自收 */
+  if (bleRxStr.startsWith("ANG:")) {
+    bleRxStr = "";
+    return;
+  }
+  
+  /* 直接用 String 处理中文命令 */
+  handleBleCommandStr(bleRxStr);
+  bleRxStr = "";
+}
+
+/* String 版本的命令处理 - 用于高级配置等中文命令 */
+void handleBleCommandStr(String cmdStr) {
+  cmdStr.trim();
+  if (cmdStr.length() == 0) return;
+
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  /* 测高配置命令还是用 char 数组 */
+  if (cmdStr[0] == 'M' || cmdStr[0] == 'D' || cmdStr[0] == 'T' || cmdStr[0] == 'F') {
+    char cmdBuf[RX_BUF_SIZE];
+    cmdStr.toCharArray(cmdBuf, RX_BUF_SIZE);
+    if (f3TryShortHeightCmd(cmdBuf)) return;
+  }
+#endif
+
+  /* 所有中文命令用 String 比较 */
+  
+  /* 故障已读 */
+  if (cmdStr == "故障已读") {
+    clearFaultFlags();
+    lastStatusSend = 0;
+    sendStatusPacket();
+    return;
+  }
+
+  /* 自动调平 */
+  if (cmdStr == "自动调平") {
+    runAutoLevel();
+    return;
+  }
+
+  /* 高级设置 EEPROM */
+  if (handleBlePersistSettingStr(cmdStr)) return;
+
+  if (isSelfCheckFaultLatched()) return;
+
+  /* 开启隐蔽 / 退出隐蔽 */
+  if (cmdStr == "开启隐蔽") {
+    if (item != 3) enterStealthMode();
+    return;
+  }
+  if (cmdStr == "退出隐蔽") {
+    if (item == 3) exitStealthMode();
+    return;
+  }
+
+  if (item == 3) return;
+
+  /* 自动调平中时阻止打开/关闭 */
+  if (autoLevelBusy) {
+    if (cmdStr == "打开" || cmdStr == "关闭") return;
+  }
+
+  /* 打开 / 关闭 */
+  if (cmdStr == "打开") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3LeaveHeightCfgForFlap();
+#endif
+    if (canUserFlapControl() && item != 1 && !f3OpenBlockedByDanger()) {
+      requestFlapOpen();
+    }
+    return;
+  }
+  if (cmdStr == "关闭") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3LeaveHeightCfgForFlap();
+#endif
+    if (canUserFlapControl()) {
+      requestFlapClose();
+    }
+    return;
+  }
+  
+  /* 往上收 / 往下 */
+  if (cmdStr == "往上收") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
+    if (item != 3) {
+      item = 1;
+      foldHoldActive = 0;
+      statusLedUpdate();
+    }
+    if (servo.read() > 180) bianlaing = 180;
+    else {
+      bianlaing += 2;
+      invalidateServoHold();
+      writeServo(bianlaing);
+    }
+    EEPROM.put(1, bianlaing);
+    lastStatusSend = 0;
+  } else if (cmdStr == "往下") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
+    if (item != 3) {
+      item = 1;
+      foldHoldActive = 0;
+      statusLedUpdate();
+    }
+    if (servo.read() < 0) bianlaing = 0;
+    else {
+      bianlaing -= 2;
+      invalidateServoHold();
+      writeServo(bianlaing);
+    }
+    EEPROM.put(1, bianlaing);
+    lastStatusSend = 0;
+  } else if (cmdStr == "完全打开") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
+    if (item != 3) {
+      item = 1;
+      foldHoldActive = 0;
+      statusLedUpdate();
+    }
+    bianlaing = fullOpenAngle;
+    invalidateServoHold();
+    writeServo(bianlaing);
+    EEPROM.put(1, bianlaing);
+    lastStatusSend = 0;
+  } else if (cmdStr == "自定义功能") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
+    if (item != 3) {
+      item = 1;
+      foldHoldActive = 0;
+      statusLedUpdate();
+    }
+    bianlaing = customAngle;
+    invalidateServoHold();
+    writeServo(bianlaing);
+    EEPROM.put(1, bianlaing);
+    lastStatusSend = 0;
+  } else if (cmdStr == "初始化角度") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
+    item4 = 150;
+    invalidateServoHold();
+    writeServoDirect(item4);
+    EEPROM.put(3, item4);
+    lastStatusSend = 0;
+    sendStatusPacket();
+  } else if (cmdStr == "调整折叠角度") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
+    foldAdjustActive = 1;
+    if (item != 3) {
+      moveServoToFoldAngle(item4);
+    }
+    statusLedUpdate();
+    lastStatusSend = 0;
+    sendStatusPacket();
+  } else if (cmdStr == "调大") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
+    if (!foldAdjustActive) foldAdjustActive = 1;
+    applyFoldAdjustStep(-1);
+  } else if (cmdStr == "调小") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
+    if (!foldAdjustActive) foldAdjustActive = 1;
+    applyFoldAdjustStep(1);
+  }
+}
+
+/* String 版本的高级配置处理 */
+static bool handleBlePersistSettingStr(String cmdStr) {
+  /* 允许按钮退出 / 禁止按钮退出 */
+  if (cmdStr == "允许按钮退出") {
+    stealthBtnExitOn = 1;
+    EEPROM.put(28, stealthBtnExitOn);
+    blinkPin8(2, 80, 80);
+    bleNotifySettingSaved();
+    return true;
+  }
+  if (cmdStr == "禁止按钮退出") {
+    stealthBtnExitOn = 0;
+    EEPROM.put(28, stealthBtnExitOn);
+    blinkPin8(2, 80, 80);
+    bleNotifySettingSaved();
+    return true;
+  }
+  
+  /* 延时断电{分钟} */
+  if (cmdStr.startsWith("延时断电")) {
+    int dpoMin = cmdStr.substring(12).toInt();
+    if (dpoMin > DELAY_PWR_MIN_MAX) dpoMin = DELAY_PWR_MIN_MAX;
+    delayPowerOffMin = dpoMin;
+    EEPROM.put(15, delayPowerOffMin);
+    blinkPin8(3, 100, 100);
+    bleNotifySettingSaved();
+    return true;
+  }
+  
+  /* 调速{百分比} */
+  if (cmdStr.startsWith("调速")) {
+    int spdPct = cmdStr.substring(6).toInt();
+    if (spdPct < SERVO_SPEED_MIN_PCT) spdPct = SERVO_SPEED_MIN_PCT;
+    if (spdPct > SERVO_SPEED_MAX_PCT) spdPct = SERVO_SPEED_MAX_PCT;
+    userServoSpeed = (uint8_t)spdPct;
+    EEPROM.put(25, userServoSpeed);
+    blinkPin8(2, 80, 80);
+    bleNotifySettingSaved();
+    return true;
+  }
+  
+  /* 打开收回 / 关闭收回 */
+  if (cmdStr == "打开收回") {
+    accRetractOn = 1;
+    eePutBlink(5, accRetractOn);
+    return true;
+  }
+  if (cmdStr == "关闭收回") {
+    accRetractOn = 0;
+    eePutBlink(5, accRetractOn);
+    return true;
+  }
+  
+  /* 开启自检 / 关闭自检 */
+  if (cmdStr == "开启自检") {
+    selfCheckOn = 1;
+    clearFaultFlags();
+    eePutBlink(7, selfCheckOn);
+    return true;
+  }
+  if (cmdStr == "关闭自检") {
+    selfCheckOn = 0;
+    clearFaultFlags();
+    singleExec = 0;
+    stuckCount = 0;
+    isRunning = 0;
+    clearOpenMonitor();
+    eePutBlink(7, selfCheckOn);
+    return true;
+  }
+  
+  /* 开机上翻 / 开机下翻 */
+  if (cmdStr == "开机上翻") {
+    blinkPin8(3, 100, 100);
+    powerOnFlip = 0;
+    EEPROM.put(9, 0);
+    bleNotifySettingSaved();
+    return true;
+  }
+  if (cmdStr == "开机下翻") {
+    blinkPin8(3, 100, 100);
+    powerOnFlip = 1;
+    EEPROM.put(9, 1);
+    bleNotifySettingSaved();
+    return true;
+  }
+  
+  /* 开启堵转检测 / 关闭堵转检测 */
+  if (cmdStr == "开启堵转检测") {
+    stallDetectOn = 1;
+    EEPROM.put(29, stallDetectOn);
+    blinkPin8(2, 80, 80);
+    bleNotifySettingSaved();
+    return true;
+  }
+  if (cmdStr == "关闭堵转检测") {
+    stallDetectOn = 0;
+    EEPROM.put(29, stallDetectOn);
+    blinkPin8(2, 80, 80);
+    bleNotifySettingSaved();
+    return true;
+  }
+  
+  return false;
+}
+
+/* 收包：完全复刻测试固件的简单逻辑 */
 void pollBleSerial() {
   while (mySerial.available()) {
-    int b = mySerial.read();
-    if (b < 0) break;
-    char c = (char)(b & 0xFF);
-    /* 须收 UTF-8 中文指令（调大/调小 等字节 >0x7E），不可只收 ASCII */
-    if (c < 0x20) continue;
+    char c = mySerial.read();
+    
+#if F3_BLE_RX_USB_DEBUG || F3_HEIGHT_USB_DEBUG
+    Serial.write((uint8_t)c);
+#endif
+    
     if (c == '\r' || c == '\n') {
-      if (rxLen > 0) lastReceiveTime = 0;
+      if (bleRxStr.length() > 0) lastBleRxTime = 0;
       continue;
     }
+
+    /* 遇到 # 立即处理（测高配置 M1#、DA#、TB# 依赖） */
     if (c == '#') {
-      if (rxLen < RX_BUF_SIZE - 1) rxBuf[rxLen++] = c;
-      rxBuf[rxLen] = 0;
-      rxLen = 0;
-      trimBuf(rxBuf);
-      if (rxBuf[0] != 0) {
-#if F3_BLE_CMD_DEBUG
-        f3DbgCmd(F("BLE RX"), rxBuf);
+      bleRxStr += c;
+      dispatchBleRxCmd();
+#if F3_BLE_RX_USB_DEBUG || F3_HEIGHT_USB_DEBUG
+      Serial.println();
 #endif
-        f3BleDispatchCmd(rxBuf);
-      }
-      rxBuf[0] = 0;
-      lastReceiveTime = 0;
       continue;
     }
-    if (rxLen >= RX_CMD_MAX) {
-      rxLen = 0;
-      rxBuf[0] = 0;
-    }
-    if (rxLen < RX_BUF_SIZE - 1) rxBuf[rxLen++] = c;
-    lastReceiveTime = millis();
+    
+    /* 所有字符都累加，不过滤！ */
+    bleRxStr += c;
+    lastBleRxTime = millis();
   }
-  if (rxLen > 0 && millis() - lastReceiveTime > timeout) {
+
+  /* 超时 100ms 后处理 */
+  if (bleRxStr.length() > 0 && millis() - lastBleRxTime > bleRxTimeout) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    /* 小程序 DA/TB 逐字间隔 280ms；在配置模式下如果是 D/T/M 开头，只等 # 不要超时 */
     if (f3HeightCfgModeActive()) {
-      rxBuf[rxLen] = 0;
-      rxLen = 0;
-      trimBuf(rxBuf);
-      if (rxBuf[0] != 0) f3BleDispatchCmd(rxBuf);
-      rxBuf[0] = 0;
-      return;
+      if (bleRxStr.length() > 0 && (bleRxStr[0] == 'D' || bleRxStr[0] == 'T' || bleRxStr[0] == 'M')) {
+        return;
+      }
     }
 #endif
-    rxBuf[rxLen] = 0;
-    rxLen = 0;
-    trimBuf(rxBuf);
-    if (rxBuf[0] == 0) return;
-#if F3_BLE_CMD_DEBUG
-    f3DbgCmd(F("BLE RX timeout"), rxBuf);
+    dispatchBleRxCmd();
+#if F3_BLE_RX_USB_DEBUG || F3_HEIGHT_USB_DEBUG
+    Serial.println();
 #endif
-    f3BleDispatchCmd(rxBuf);
-    rxBuf[0] = 0;
   }
 }
 
@@ -1150,7 +1655,11 @@ bool flapOpenMoving() {
 
 bool flapCloseMoving() {
   if (item != 0) return false;
-  return openEaseActive || flapSettleUntil != 0 || !servoAtAngle(item4);
+  if (openEaseActive || flapSettleUntil != 0) return true;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (f3SensorOk && (f3SensorValid || f3HasFilt) && f3TofSaysFoldNear()) return false;
+#endif
+  return !servoAtAngle(item4);
 }
 
 bool flapMotionMoving() {
@@ -1173,15 +1682,25 @@ bool openMotionActive() {
 bool f3HeightMonitorActive() {
   if (f3HeightCfgModeActive()) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    /* 预览调角时暂停 I2C 轮询，减轻与舵机动作的负载冲突 */
     if (f3CalPreviewActive) return false;
 #endif
     return true;
   }
-  if (item != 0 || autoLevelBusy) return false;
-  if (flapMotionMoving() || openEaseActive) return false;
-  if (faultIndicatorActive() || foldAdjustActive) return false;
-  return true;
+  if (autoLevelBusy) return false;
+  if (foldAdjustActive) return false;
+  if (item == 0) {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    if (f3ServoMotionBusy()) return false;
+#endif
+    return true;
+  }
+  if (item == 1) {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    return true;
+#endif
+    return false;
+  }
+  return false;
 }
 
 // F3 MAX 只保留堵转检测；未写入 EEPROM 时回退 selfCheckOn。
@@ -1207,6 +1726,95 @@ static bool keyOffRetractEligible() {
 }
 
 static int readServoAngleLive();
+
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+static bool f3TofSaysFoldNear() {
+#if F3_DBG_STRIP_TOF
+  return false;
+#else
+  if (!f3SensorOk) return false;
+  if (!f3SensorValid && !f3HasFilt) return false;
+  uint16_t mm = f3SensorValid ? f3LastFiltMm : (uint16_t)f3FiltMm;
+  if (mm == 0) return false;
+  return mm < F3_FOLD_NEAR_MM;
+#endif
+}
+
+/* 翻开测距异常：绿灯亮(item=1)时测距应 <8cm；≥8cm 视为未到位/异常 */
+static bool f3TofSaysFoldOpenFault() {
+#if F3_DBG_STRIP_TOF
+  return false;
+#else
+  if (!f3SensorOk) return false;
+  if (!f3SensorValid && !f3HasFilt) return false;
+  uint16_t mm = f3SensorValid ? f3LastFiltMm : (uint16_t)f3FiltMm;
+  if (mm == 0) return false;
+  return mm >= F3_FOLD_NEAR_MM;
+#endif
+}
+
+static void f3ClearFoldCloseWatch() {
+  f3FoldCloseWatchMs = 0;
+  f3FoldCloseWatchPending = 0;
+  if (f3FoldCloseFault) {
+    f3FoldCloseFault = 0;
+    statusLedUpdate();
+  }
+}
+
+static void f3ArmFoldCloseWatch() {
+  f3FoldCloseWatchMs = 0;
+  f3FoldCloseWatchPending = 1;
+  if (f3FoldCloseFault) {
+    f3FoldCloseFault = 0;
+    statusLedUpdate();
+  }
+}
+
+static void f3FoldCloseGoGreen() {
+  f3WriteLeds(0, 1);
+}
+
+static void f3TickFoldCloseWatch() {
+#if F3_DBG_STRIP_FOLD_FAULT
+  return;
+#endif
+  if (item != 1) {
+    f3FoldCloseWatchMs = 0;
+    f3FoldCloseWatchPending = 0;
+    return;
+  }
+  /* 翻开动作中不测距；到位后 <8cm=正常绿灯常亮，≥8cm 连续 8s 才报警 */
+  if (f3ServoMotionBusy()) {
+    f3FoldCloseWatchMs = 0;
+    return;
+  }
+  if (!f3TofSaysFoldOpenFault()) {
+    f3FoldCloseWatchMs = 0;
+    f3FoldCloseWatchPending = 0;
+    if (f3FoldCloseFault) {
+      f3FoldCloseFault = 0;
+      statusLedUpdate();
+    } else {
+      f3FoldCloseGoGreen();
+    }
+    return;
+  }
+  if (f3FoldCloseWatchMs == 0) {
+    f3FoldCloseWatchMs = millis();
+    f3FoldCloseWatchPending = 0;
+    return;
+  }
+  if (millis() - f3FoldCloseWatchMs >= F3_FOLD_CLOSE_TIMEOUT_MS) {
+    if (!f3FoldCloseFault) {
+      f3FoldCloseFault = 1;
+      digitalWrite(F3_PIN_LED_GREEN, LOW);
+      digitalWrite(8, LOW);
+      statusLedUpdate();
+    }
+  }
+}
+#endif
 
 static bool flapPhysicallyAtFold() {
   int live = readServoAngleLive();
@@ -1351,17 +1959,6 @@ bool sampleStallDuringOpen() {
   return tickMotionA0Realtime(true);
 }
 
-void selfCheckSampleMotor() {
-  if (inBootSettle() || autoLevelBusy) return;
-  if (!selfCheckMotionActive()) return;
-
-  unsigned long now = millis();
-  if (now - lastMotorSampleMs < stallSampleGapMs()) return;
-  lastMotorSampleMs = now;
-
-  lastMotorA0 = readMotorA0Burst();
-}
-
 bool inBootSettle() {
   return bootSettleUntil != 0 && millis() < bootSettleUntil;
 }
@@ -1412,7 +2009,7 @@ void delayWithBlePoll(unsigned long ms) {
   while ((long)(millis() - endAt) < 0) {
     pollBleSerial();
     unsigned long now = millis();
-    if (now - lastStatusInDelay >= 200UL) {
+    if (now - lastStatusInDelay >= 200UL && !bleSerialRxBusy()) {
       lastStatusInDelay = now;
       sendStatusPacket();
     }
@@ -1564,10 +2161,6 @@ bool canEnterStealthViaBtn5() {
   return isStealthEntryWindow();
 }
 
-bool pin9HoldActiveNow() {
-  return item == 3 || isKeyOffPin9HoldWindow();
-}
-
 // 2 号持续低电平超过 KEY_OFF_DEBOUNCE_MS 才视为真关钥匙
 bool pin2KeyOffStable() {
   bool high = digitalRead(2) == HIGH;
@@ -1699,6 +2292,10 @@ static void stealthAckBlink(uint8_t times) {
 }
 
 void enterStealthMode() {
+#if F3_DBG_STRIP_STEALTH
+  F3USB_LN("STEALTH off(dbg)");
+  return;
+#endif
   if (item == 3) return;
   reboundWaitUntil = 0;
   reboundAttempt = 0;
@@ -1750,6 +2347,10 @@ static void finishStealthSession(uint8_t autoPowerOff) {
 }
 
 void exitStealthMode() {
+#if F3_DBG_STRIP_STEALTH
+  F3USB_LN("STEALTH exit off(dbg)");
+  return;
+#endif
   digitalWrite(8, HIGH);
   stealthAckBlink(5);
   finishStealthSession(0);
@@ -1766,6 +2367,9 @@ static void stealthAutoPowerOff() {
 }
 
 void tickStealthMinute() {
+#if F3_DBG_STRIP_STEALTH
+  return;
+#endif
   if (item != 3 || !stealthActive) return;
   if (stealthMinuteMark == 0) stealthMinuteMark = millis();
   if (millis() - stealthMinuteMark < 60000UL) return;
@@ -1796,6 +2400,14 @@ void updatePin9Power() {
     digitalWrite(9, HIGH);
     return;
   }
+
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  // 测高配置：小程序逐字发 DA/TB，勿因延时断电拉低 Pin9 误判死机
+  if (f3HeightCfgModeActive()) {
+    digitalWrite(9, HIGH);
+    return;
+  }
+#endif
 
   if (isSelfCheckFaultLatched() && digitalRead(2) == LOW) {
     pin9HoldUntil = 0;
@@ -1846,6 +2458,10 @@ void updatePin9Power() {
 // Pin9 断电看门狗：补到期判定 + 到期后强制拉低（防主逻辑漏执行）
 void tickPin9PowerWatchdog() {
   if (inBootSettle()) return;
+
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (f3HeightCfgModeActive()) return;
+#endif
 
   if (item == 3 && stealthActive) {
     if (digitalRead(9) != HIGH) {
@@ -2208,17 +2824,17 @@ void updateServoOutput() {
   if (reboundWaitUntil > 0 && !forceServoMove) return;
   int target = (item == 1) ? bianlaing : item4;
 
+  if (foldAdjustActive && item == 0) {
+    tickFlapServoHold(target);
+    return;
+  }
+
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
   if (f3CalPreviewActive && item == 0) {
     tickFlapServoHold(f3CalPreviewAngle);
     return;
   }
 #endif
-
-  if (foldAdjustActive && item == 0) {
-    tickFlapServoHold(target);
-    return;
-  }
 
   tickFlapServoHold(target);
 }
@@ -2236,7 +2852,8 @@ void debugPrintMotionA0(int a0) {
  * BLOCK: Flap control — 翻开 / 折回
  * ============================================================================= */
 void requestFlapOpen(bool stallRetry) {
-  if (item == 1) return;
+  // 允许运动中打断：只有真正到位且不在运动中才返回
+  if (item == 1 && servoMoveCommitted(bianlaing) && !openEaseActive && !forceServoMove && flapSettleUntil == 0) return;
   if (!stallRetry && f3OpenBlockedByDanger()) return;
   if (!stallRetry && !canUserFlapControl()) return;
   if (item == 3 || autoLevelBusy) return;
@@ -2244,6 +2861,7 @@ void requestFlapOpen(bool stallRetry) {
   abortOpenMotion();
   reboundWaitUntil = 0;
   reboundRetryClose = 0;
+  flapSettleUntil = 0;
 
   foldAdjustActive = 0;
   int cur = readServoAngleLive();
@@ -2253,6 +2871,10 @@ void requestFlapOpen(bool stallRetry) {
   }
   item = 1;
   pin2SeenHighSinceBoot = 1;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  f3ArmFoldCloseWatch();
+  f3FoldCloseGoGreen();
+#endif
   statusLedUpdate();
   invalidateServoHold();
   foldHoldActive = 0;
@@ -2267,10 +2889,11 @@ void requestFlapOpen(bool stallRetry) {
 
 void requestFlapClose(bool userRequest) {
   if (userRequest && !canUserFlapControl()) return;
-  if (userRequest && item == 0 && !openEaseActive && servoMoveCommitted(item4)) return;
+  // 允许运动中打断：只有真正到位且不在运动中才返回
+  if (userRequest && item == 0 && servoMoveCommitted(item4) && !openEaseActive && !forceServoMove && flapSettleUntil == 0) return;
 
-  // 折回已在进行：忽略重复指令（小程序连发会重启平滑，末段速度变快）
-  if (userRequest && item == 0 && !servoMoveCommitted(item4)) {
+  // 折回已在进行且即将到位：忽略重复指令（小程序连发会重启平滑，末段速度变快）
+  if (userRequest && item == 0 && servoMoveCommitted(item4) && !forceServoMove && flapSettleUntil == 0) {
     if (servoTrackItem == 0 && servoTrackAngle == item4) {
       return;
     }
@@ -2285,12 +2908,18 @@ void requestFlapClose(bool userRequest) {
   } else if (motionCheckActive()) {
     restartBtnDetectWindow();
   }
+  flapSettleUntil = 0;
   foldToRetract();
 }
 
 void eePutBlink(int addr, int val) {
   EEPROM.put(addr, val);
   blinkPin8(3, 100, 100);
+  lastStatusSend = 0;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  f3ForceStatusOnce = 1;
+#endif
+  sendStatusPacket();
 }
 
 void resetOpenGuard() {
@@ -2318,8 +2947,6 @@ void beginOpenAttempt(bool preserveStallCount) {
 #endif
 }
 
-void faultAlarmLoop(uint8_t triple);
-
 void foldToRetract() {
   if (item == 3) return;
   abortOpenMotion();
@@ -2338,6 +2965,9 @@ void foldToRetract() {
     }
   }
   item = 0;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  f3ClearFoldCloseWatch();
+#endif
   statusLedUpdate();
   forceServoMove = 1;
   foldHoldActive = 0;
@@ -2358,6 +2988,9 @@ void retryFlapCloseMotion() {
     }
   }
   item = 0;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  f3ClearFoldCloseWatch();
+#endif
   statusLedUpdate();
   forceServoMove = 1;
   foldHoldActive = 0;
@@ -2372,6 +3005,9 @@ void retractForStall() {
   abortOpenMotion();
   stealthActive = 0;
   item = 0;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  f3ClearFoldCloseWatch();
+#endif
   forceServoMove = 1;
   foldHoldActive = 0;
   invalidateServoHold();
@@ -2497,22 +3133,6 @@ void clearPendingFaultReport() {
   EEPROM.put(23, (uint8_t)0);
 }
 
-void loadAutoLevelDoneFromEeprom() {
-  uint8_t v = 0;
-  EEPROM.get(27, v);
-  autoLevelDone = (v == 1) ? 1 : 0;
-}
-
-void saveAutoLevelDoneToEeprom() {
-  autoLevelDone = 1;
-  EEPROM.put(27, (uint8_t)1);
-}
-
-void clearAutoLevelDone() {
-  autoLevelDone = 0;
-  EEPROM.put(27, (uint8_t)0);
-}
-
 void clearFaultFlags() {
   reboundFaultLatched = 0;
   clearPendingFaultReport();
@@ -2528,6 +3148,9 @@ void writeServoFaultFastFold() {
   if (item == 3) return;
   abortOpenMotion();
   item = 0;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  f3ClearFoldCloseWatch();
+#endif
   foldHoldActive = 0;
   forceServoMove = 1;
   invalidateServoHold();
@@ -2628,11 +3251,13 @@ uint8_t getFaultErr() {
 
 uint8_t getFaultWrn() {
   if (reboundWaitUntil > 0) return 1;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE && !F3_DBG_STRIP_FOLD_FAULT
+  if (f3FoldCloseFault) return 3;
+#endif
   return 0;
 }
 
-static void printStatusLine(Stream &out, int ang, int accPin, int btnPin, uint8_t err, uint8_t wrn,
-                            bool extraPin9) {
+static void printStatusLine(Stream &out, int ang, int accPin, int btnPin, uint8_t err, uint8_t wrn) {
   out.print(F("ANG:"));
   out.print(ang);
   out.print(F("|ACC:"));
@@ -2683,35 +3308,27 @@ static void printStatusLine(Stream &out, int ang, int accPin, int btnPin, uint8_
     out.print(F("|MOT:"));
     out.print(item);
   }
-  if (extraPin9) {
-    unsigned long now = millis();
-    unsigned long left = 0;
-    if (pin9HoldUntil != 0 && now < pin9HoldUntil) left = pin9HoldUntil - now;
-    out.print(F("|P9H:"));
-    out.print(left);
-    out.print(F("|P9E:"));
-    out.print(pin9HoldExpired);
-  }
   out.println();
 }
 
 void sendStatusPacket() {
+  pollBleSerial();
+  if (bleSerialRxBusy()) return;
+
   uint8_t err = getFaultErr();
   uint8_t wrn = getFaultWrn();
   bool motion = flapMotionMoving() || openEaseActive;
   unsigned long now = millis();
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  if (f3HeightCfgModeActive()) {
-    if (!f3ForceStatusOnce) return;
-    f3ForceStatusOnce = 0;
-  }
-#endif
   // 心跳：至少每 400ms 发一包，避免串口 RX 噪声导致长期静默、小程序误判掉线
   bool heartbeat = (now - lastStatusSend >= 400UL);
-  if (!motion && err == 0 && wrn == 0 && !heartbeat) {
-    if (rxLen > 0) return;
-    if (now - lastReceiveTime < timeout + 20UL) return;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (f3HeightCfgModeActive()) {
+    /* 正在收 DA/TB/M 逐字命令时停发状态包，避免占满串口 */
+    if (bleRxStr.length() > 0 && (bleRxStr[0] == 'D' || bleRxStr[0] == 'T' || bleRxStr[0] == 'M')) return;
+    if (!f3ForceStatusOnce && !heartbeat) return;
+    if (f3ForceStatusOnce) f3ForceStatusOnce = 0;
   }
+#endif
   int accPin = digitalRead(2);
   int btnPin = digitalRead(5);
   static int lastAccPin = -1;
@@ -2721,12 +3338,15 @@ void sendStatusPacket() {
   int itmNow = statusItemForBle();
   uint8_t itmChanged = (itmNow != lastItmSent) ? 1 : 0;
   static uint16_t lastHgtSent = 0;
+  static uint8_t lastDgdSent = 255;
   uint8_t hgtChanged = 0;
+  uint8_t dgdNow = f3DangerLedActive() ? 1 : 0;
+  uint8_t dgdChanged = (dgdNow != lastDgdSent) ? 1 : 0;
   f3BleHgtThisPkt = 0;
   const unsigned long hgtBleMs = f3HeightCfgModeActive() ? F3_CFG_HGT_BLE_MS : F3_HGT_BLE_MS;
   if (f3HeightMonitorActive()) {
+    f3BleHgtThisPkt = 1;
     if (now - f3LastHgtBleMs >= hgtBleMs) {
-      f3BleHgtThisPkt = 1;
       hgtChanged = (f3SensorOk && f3SensorValid && f3LastFiltMm != lastHgtSent) ? 1 : 0;
       if (!hgtChanged && f3SensorOk && f3SensorValid && f3LastFiltMm > 0) hgtChanged = 1;
       f3LastHgtBleMs = now;
@@ -2736,7 +3356,7 @@ void sendStatusPacket() {
     lastHgtSent = 0;
   }
   unsigned long minGap = motion ? 350UL : 400UL;
-  if (!ioChanged && !itmChanged && !hgtChanged && !heartbeat && err == 0 && wrn == 0 &&
+  if (!ioChanged && !itmChanged && !hgtChanged && !dgdChanged && !heartbeat && err == 0 && wrn == 0 &&
       now - lastStatusSend < minGap) return;
   lastStatusSend = now;
   if (ioChanged) {
@@ -2744,6 +3364,7 @@ void sendStatusPacket() {
     lastBtnPin = btnPin;
   }
   lastItmSent = itmNow;
+  lastDgdSent = dgdNow;
   if (hgtChanged) lastHgtSent = f3LastFiltMm;
   int ang;
   if (item == 0 || item == 1) {
@@ -2751,8 +3372,8 @@ void sendStatusPacket() {
   } else {
     ang = item4;
   }
-  printStatusLine(mySerial, ang, accPin, btnPin, err, wrn, false);
-  for (uint8_t i = 0; i < 6; i++) pollBleSerial();
+  printStatusLine(mySerial, ang, accPin, btnPin, err, wrn);
+  for (uint8_t i = 0; i < 8; i++) pollBleSerial();
 }
 #else
 void sendStatusPacket() {}
@@ -2762,12 +3383,15 @@ void resetSelfCheckMonitor() {
   clearBtnDetectSamples();
 }
 
-void faultAlarmLoop(uint8_t triple) {
-  (void)triple;
-}
-
-// 故障报警：堵转确认后慢闪。
+// 故障报警：堵转慢闪；折叠超时红灯快闪。
 void tickFaultAlarm() {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (f3FoldCloseFault) {
+    digitalWrite(F3_PIN_LED_GREEN, LOW);
+    digitalWrite(8, (millis() / F3_FOLD_FAULT_BLINK_MS) % 2UL ? LOW : HIGH);
+    return;
+  }
+#endif
   if (!faultIndicatorActive()) return;
   unsigned long halfMs = FAULT_LED_BLINK_HALF_MS;
   if (reboundFaultLatched) {
@@ -2802,12 +3426,12 @@ static bool btn5PinDown() {
 static void btn5ToggleFlap() {
   if (item == 3 || autoLevelBusy) return;
   if (!canUserFlapControl()) return;
-  if (item == 0 && f3OpenBlockedByDanger()) return;
   lastStatusSend = 0;
   if (motionCheckActive()) {
     restartBtnDetectWindow();
   }
   if (item == 0) {
+    if (f3OpenBlockedByDanger()) return;
     requestFlapOpen();
   } else {
     requestFlapClose(true);
@@ -2845,6 +3469,9 @@ void btn5NoteStealthExited() {
 }
 
 void btn5ServiceTick() {
+#if F3_DBG_STRIP_BTN5
+  return;
+#endif
   unsigned long now = millis();
   bool down = btn5PinDown();
 
@@ -2926,12 +3553,6 @@ void loadJudgeValFromEeprom() {
   }
 }
 
-void saveJudgeValToEeprom() {
-  if (judgeVal < STALL_JUDGE_MIN) judgeVal = STALL_JUDGE_MIN;
-  if (judgeVal > STALL_JUDGE_MAX) judgeVal = STALL_JUDGE_MAX;
-  EEPROM.put(13, judgeVal);
-}
-
 // 自动调平日志（F3_FLASH_TIGHT 关闭以省闪存）
 #if F3_FLASH_TIGHT
 static inline void autoLevelLogLine(const __FlashStringHelper *) {}
@@ -3006,6 +3627,7 @@ static void keyDbgKv(const __FlashStringHelper *tag, int a, int b) {
 }
 #endif
 
+#if F3_AUTOLEVEL_ENABLE
 int autoScanStall(int from, int to, int thr) {
 #if !F3_FLASH_TIGHT
   mySerial.print(F("ALOG SCAN "));
@@ -3041,11 +3663,15 @@ int autoScanStall(int from, int to, int thr) {
 
 #if F3_FLASH_TIGHT
 void runAutoLevel() {
+#if F3_DBG_STRIP_AUTO_LEVEL
+  F3USB_LN("AUTO_LVL off(dbg)");
+  blinkPin8(1, 80, 80);
+  return;
+#endif
   if (autoLevelBusy) {
     blinkPin8(1, 80, 80);
     return;
   }
-  clearAutoLevelDone();
 
   if (item == 3) {
     stealthActive = 0;
@@ -3098,18 +3724,21 @@ void runAutoLevel() {
   writeServo(item4);
   waitServoReach(item4);
   blinkPin8(3, 100, 100);
-  saveAutoLevelDoneToEeprom();
   autoLevelBusy = 0;
   drainBleRx();
 }
 #else
 void runAutoLevel() {
+#if F3_DBG_STRIP_AUTO_LEVEL
+  F3USB_LN("AUTO_LVL off(dbg)");
+  blinkPin8(1, 80, 80);
+  return;
+#endif
   if (autoLevelBusy) {
     autoLevelLogLine(F("ALOG skip dup AUTO LEVEL"));
     blinkPin8(1, 80, 80);
     return;
   }
-  clearAutoLevelDone();
 
   if (item == 3) {
     stealthActive = 0;
@@ -3173,15 +3802,28 @@ void runAutoLevel() {
   waitServoReach(item4);
   blinkPin8(3, 100, 100);
   autoLevelLogLine(F("ALOG ===== AUTO LEVEL DONE ====="));
-  saveAutoLevelDoneToEeprom();
   autoLevelBusy = 0;
   drainBleRx();
 }
-#endif
+#endif // F3_FLASH_TIGHT
+
+#else // !F3_AUTOLEVEL_ENABLE
+
+void runAutoLevel() {
+  blinkPin8(3, 100, 100); // 提示功能未编译进固件
+}
+
+#endif // F3_AUTOLEVEL_ENABLE
 
 static void moveServoToFoldAngle(int angle);
 
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+static bool f3CalPreviewAngleAllowed(int ang) {
+  if (ang < 0 || ang > 180) return false;
+  if (item4 <= bianlaing) return false;
+  return ang > bianlaing && ang < item4;
+}
+
 static void f3CalPreviewStep(int delta) {
   if (item == 3) return;
   if (!f3CalPreviewActive) {
@@ -3189,11 +3831,14 @@ static void f3CalPreviewStep(int delta) {
     foldAdjustActive = 1;
     int cur = readServoAngleLive();
     if (cur < 0 || cur > 180) cur = item4;
+    if (!f3CalPreviewAngleAllowed(cur)) {
+      if (item4 > bianlaing + 1) cur = item4 - 1;
+      else return;
+    }
     f3CalPreviewAngle = cur;
   }
   int next = f3CalPreviewAngle + delta;
-  if (next < 0) next = 0;
-  if (next > 180) next = 180;
+  if (!f3CalPreviewAngleAllowed(next)) return;
   if (next == f3CalPreviewAngle) return;
   f3CalPreviewAngle = next;
   item = 0;
@@ -3244,126 +3889,77 @@ static void applyFoldAdjustStep(int delta) {
   sendStatusPacket();
 }
 
-void handleBleCommand(char *cmd) {
-  trimBuf(cmd);
-  if (cmd[0] == 0) return;
-#if F2_SERIAL_DEBUG
-  Serial.print(F("[CMD] "));
-  Serial.println(cmd);
-#endif
-
+static void bleNotifySettingSaved() {
+  lastStatusSend = 0;
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  if (f3TryShortHeightCmd(cmd)) return;
-  if (f3HeightCfgModeActive()) {
-#if F3_BLE_CMD_DEBUG
-    f3DbgCmd(F("CFG BLOCK"), cmd);
+  f3ForceStatusOnce = 1;
 #endif
-    return;
-  }
-#endif
+  sendStatusPacket();
+}
 
-  if (cmdIsP(cmd, CMD_FAULT_ACK)) {
-    clearFaultFlags();
-    lastStatusSend = 0;
-    sendStatusPacket();
-    return;
-  }
-
-  // 自动调平：允许重复执行；不受故障锁定/隐蔽模式拦截（与「点按无反应」修复相关）
-  if (cmdIsP(cmd, CMD_AUTO_LEVEL)) {
-    runAutoLevel();
-    return;
-  }
-
-  if (isSelfCheckFaultLatched()) return;
-
-  if (cmdIsP(cmd, CMD_STEALTH_ON)) {
-    if (item != 3) enterStealthMode();
-    return;
-  }
-  if (cmdIsP(cmd, CMD_STEALTH_OFF)) {
-    if (item == 3) exitStealthMode();
-    return;
-  }
-  if (cmdIsP(cmd, CMD_STEALTH_BTN_ON)) {
+static bool handleBlePersistSetting(char *cmd) {
+  String cmdStr = String(cmd);
+  cmdStr.trim();
+  
+  /* 允许按钮退出 / 禁止按钮退出 */
+  if (cmdStr == "允许按钮退出") {
     stealthBtnExitOn = 1;
     EEPROM.put(28, stealthBtnExitOn);
     blinkPin8(2, 80, 80);
-    lastStatusSend = 0;
-    sendStatusPacket();
-    return;
+    bleNotifySettingSaved();
+    return true;
   }
-  if (cmdIsP(cmd, CMD_STEALTH_BTN_OFF)) {
+  if (cmdStr == "禁止按钮退出") {
     stealthBtnExitOn = 0;
     EEPROM.put(28, stealthBtnExitOn);
     blinkPin8(2, 80, 80);
-    lastStatusSend = 0;
-    sendStatusPacket();
-    return;
+    bleNotifySettingSaved();
+    return true;
   }
-
-  {
-    int dpoMin = parseCmdSuffixInt(cmd, CMD_DELAY_PWR);
-    if (dpoMin >= 0) {
-      if (dpoMin > DELAY_PWR_MIN_MAX) dpoMin = DELAY_PWR_MIN_MAX;
-      delayPowerOffMin = dpoMin;
-      EEPROM.put(15, delayPowerOffMin);
-      blinkPin8(3, 100, 100);
-      return;
-    }
+  
+  /* 延时断电{分钟} */
+  if (cmdStr.startsWith("延时断电")) {
+    int dpoMin = cmdStr.substring(12).toInt();
+    if (dpoMin > DELAY_PWR_MIN_MAX) dpoMin = DELAY_PWR_MIN_MAX;
+    delayPowerOffMin = dpoMin;
+    EEPROM.put(15, delayPowerOffMin);
+    blinkPin8(3, 100, 100);
+    bleNotifySettingSaved();
+    return true;
   }
-
-  {
-    int spdPct = parseCmdSuffixInt(cmd, CMD_SPEED);
-    if (spdPct >= 0) {
-      if (spdPct < SERVO_SPEED_MIN_PCT) spdPct = SERVO_SPEED_MIN_PCT;
-      if (spdPct > SERVO_SPEED_MAX_PCT) spdPct = SERVO_SPEED_MAX_PCT;
-      userServoSpeed = (uint8_t)spdPct;
-      EEPROM.put(25, userServoSpeed);
-      blinkPin8(2, 80, 80);
-      lastStatusSend = 0;
-      sendStatusPacket();
-      return;
-    }
+  
+  /* 调速{百分比} */
+  if (cmdStr.startsWith("调速")) {
+    int spdPct = cmdStr.substring(6).toInt();
+    if (spdPct < SERVO_SPEED_MIN_PCT) spdPct = SERVO_SPEED_MIN_PCT;
+    if (spdPct > SERVO_SPEED_MAX_PCT) spdPct = SERVO_SPEED_MAX_PCT;
+    userServoSpeed = (uint8_t)spdPct;
+    EEPROM.put(25, userServoSpeed);
+    blinkPin8(2, 80, 80);
+    bleNotifySettingSaved();
+    return true;
   }
-
-  if (item == 3) return;
-
-  if (autoLevelBusy) {
-    if (cmdIsP(cmd, CMD_OPEN) || cmdIsP(cmd, CMD_CLOSE)) return;
-  }
-
-  if (cmdIsP(cmd, CMD_OPEN)) {
-    if (canUserFlapControl() && item != 1 && !f3OpenBlockedByDanger()) {
-      requestFlapOpen();
-    }
-    return;
-  }
-  if (cmdIsP(cmd, CMD_CLOSE)) {
-    if (canUserFlapControl()) {
-      requestFlapClose();
-    }
-    return;
-  }
-  if (cmdIsP(cmd, CMD_ACC_ON)) {
+  
+  /* 打开收回 / 关闭收回 */
+  if (cmdStr == "打开收回") {
     accRetractOn = 1;
     eePutBlink(5, accRetractOn);
-  } else if (cmdIsP(cmd, CMD_ACC_OFF)) {
+    return true;
+  }
+  if (cmdStr == "关闭收回") {
     accRetractOn = 0;
     eePutBlink(5, accRetractOn);
-  } else if (cmdIsP(cmd, CMD_CHECK_ON)) {
+    return true;
+  }
+  
+  /* 开启自检 / 关闭自检 */
+  if (cmdStr == "开启自检") {
     selfCheckOn = 1;
     clearFaultFlags();
     eePutBlink(7, selfCheckOn);
-  } else if (cmdIsP(cmd, CMD_PWR_UP)) {
-    blinkPin8(3, 100, 100);
-    powerOnFlip = 0;
-    EEPROM.put(9, 0);
-  } else if (cmdIsP(cmd, CMD_PWR_DN)) {
-    blinkPin8(3, 100, 100);
-    powerOnFlip = 1;
-    EEPROM.put(9, 1);
-  } else if (cmdIsP(cmd, CMD_CHECK_OFF)) {
+    return true;
+  }
+  if (cmdStr == "关闭自检") {
     selfCheckOn = 0;
     clearFaultFlags();
     singleExec = 0;
@@ -3371,21 +3967,117 @@ void handleBleCommand(char *cmd) {
     isRunning = 0;
     clearOpenMonitor();
     eePutBlink(7, selfCheckOn);
-  } else if (cmdIsP(cmd, CMD_STALL_CHK_ON)) {
+    return true;
+  }
+  
+  /* 开机上翻 / 开机下翻 */
+  if (cmdStr == "开机上翻") {
+    blinkPin8(3, 100, 100);
+    powerOnFlip = 0;
+    EEPROM.put(9, 0);
+    bleNotifySettingSaved();
+    return true;
+  }
+  if (cmdStr == "开机下翻") {
+    blinkPin8(3, 100, 100);
+    powerOnFlip = 1;
+    EEPROM.put(9, 1);
+    bleNotifySettingSaved();
+    return true;
+  }
+  
+  /* 开启堵转检测 / 关闭堵转检测 */
+  if (cmdStr == "开启堵转检测") {
     stallDetectOn = 1;
     EEPROM.put(29, stallDetectOn);
     blinkPin8(2, 80, 80);
-    lastStatusSend = 0;
-    sendStatusPacket();
-    return;
-  } else if (cmdIsP(cmd, CMD_STALL_CHK_OFF)) {
+    bleNotifySettingSaved();
+    return true;
+  }
+  if (cmdStr == "关闭堵转检测") {
     stallDetectOn = 0;
     EEPROM.put(29, stallDetectOn);
     blinkPin8(2, 80, 80);
+    bleNotifySettingSaved();
+    return true;
+  }
+  
+  return false;
+}
+
+void handleBleCommand(char *cmd) {
+  trimBuf(cmd);
+  if (cmd[0] == 0) return;
+
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (f3TryShortHeightCmd(cmd)) return;
+#endif
+
+  /* 所有中文命令改用 String 比较 */
+  String cmdStr = String(cmd);
+  cmdStr.trim();
+
+  /* 故障已读 */
+  if (cmdStr == "故障已读") {
+    clearFaultFlags();
     lastStatusSend = 0;
     sendStatusPacket();
     return;
-  } else if (cmdIsP(cmd, CMD_UP)) {
+  }
+
+  /* 自动调平：允许重复执行；不受故障锁定/隐蔽模式拦截 */
+  if (cmdStr == "自动调平") {
+    runAutoLevel();
+    return;
+  }
+
+  /* 高级设置 EEPROM：不受测高配置/自检故障/隐蔽模式拦截 */
+  if (handleBlePersistSetting(cmd)) return;
+
+  if (isSelfCheckFaultLatched()) return;
+
+  /* 开启隐蔽 / 退出隐蔽 */
+  if (cmdStr == "开启隐蔽") {
+    if (item != 3) enterStealthMode();
+    return;
+  }
+  if (cmdStr == "退出隐蔽") {
+    if (item == 3) exitStealthMode();
+    return;
+  }
+
+  if (item == 3) return;
+
+  /* 自动调平中时阻止打开/关闭 */
+  if (autoLevelBusy) {
+    if (cmdStr == "打开" || cmdStr == "关闭") return;
+  }
+
+  /* 打开 / 关闭 */
+  if (cmdStr == "打开") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3LeaveHeightCfgForFlap();
+#endif
+    if (canUserFlapControl() && item != 1 && !f3OpenBlockedByDanger()) {
+      requestFlapOpen();
+    }
+    return;
+  }
+  if (cmdStr == "关闭") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3LeaveHeightCfgForFlap();
+#endif
+    if (canUserFlapControl()) {
+      requestFlapClose();
+    }
+    return;
+  }
+  
+  /* 往上收 / 往下 */
+  if (cmdStr == "往上收") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
     if (item != 3) {
       item = 1;
       foldHoldActive = 0;
@@ -3399,7 +4091,10 @@ void handleBleCommand(char *cmd) {
     }
     EEPROM.put(1, bianlaing);
     lastStatusSend = 0;
-  } else if (cmdIsP(cmd, CMD_DOWN)) {
+  } else if (cmdStr == "往下") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
     if (item != 3) {
       item = 1;
       foldHoldActive = 0;
@@ -3413,7 +4108,10 @@ void handleBleCommand(char *cmd) {
     }
     EEPROM.put(1, bianlaing);
     lastStatusSend = 0;
-  } else if (cmdIsP(cmd, CMD_FULL_OPEN)) {
+  } else if (cmdStr == "完全打开") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
     if (item != 3) {
       item = 1;
       foldHoldActive = 0;
@@ -3424,7 +4122,10 @@ void handleBleCommand(char *cmd) {
     writeServo(bianlaing);
     EEPROM.put(1, bianlaing);
     lastStatusSend = 0;
-  } else if (cmdIsP(cmd, CMD_CUSTOM)) {
+  } else if (cmdStr == "自定义功能") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
     if (item != 3) {
       item = 1;
       foldHoldActive = 0;
@@ -3435,15 +4136,20 @@ void handleBleCommand(char *cmd) {
     writeServo(bianlaing);
     EEPROM.put(1, bianlaing);
     lastStatusSend = 0;
-  } else if (cmdIsP(cmd, CMD_INIT_ANGLE)) {
-    clearAutoLevelDone();
+  } else if (cmdStr == "初始化角度") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
     item4 = 150;
     invalidateServoHold();
     writeServoDirect(item4);
     EEPROM.put(3, item4);
     lastStatusSend = 0;
     sendStatusPacket();
-  } else if (cmdIsP(cmd, CMD_ADJ_FOLD)) {
+  } else if (cmdStr == "调整折叠角度") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
     foldAdjustActive = 1;
     if (item != 3) {
       moveServoToFoldAngle(item4);
@@ -3451,10 +4157,16 @@ void handleBleCommand(char *cmd) {
     statusLedUpdate();
     lastStatusSend = 0;
     sendStatusPacket();
-  } else if (cmdIsP(cmd, CMD_ADJ_BIG)) {
+  } else if (cmdStr == "调大") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
     if (!foldAdjustActive) foldAdjustActive = 1;
     applyFoldAdjustStep(-1);
-  } else if (cmdIsP(cmd, CMD_ADJ_SMALL)) {
+  } else if (cmdStr == "调小") {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3PrepareUserServoAngleCmd();
+#endif
     if (!foldAdjustActive) foldAdjustActive = 1;
     applyFoldAdjustStep(1);
   }
@@ -3756,8 +4468,14 @@ void setup() {
   MCUSR = 0;
   wdt_disable();
 
-#if F2_MOTION_A0_DEBUG || F2_KEY_SERIAL_DEBUG || F3_SENSOR_SERIAL || F3_BLE_CMD_DEBUG
+#if F2_MOTION_A0_DEBUG || F2_KEY_SERIAL_DEBUG || F3_SENSOR_SERIAL || F3_BLE_CMD_DEBUG || F3_BLE_RX_USB_DEBUG || F3_HEIGHT_USB_DEBUG
   Serial.begin(9600);
+#if F3_HEIGHT_USB_DEBUG
+  Serial.println(F("F3 HGT USB DBG 9600"));
+#endif
+#if F3_BLE_RX_USB_DEBUG
+  Serial.println(F("USB RX DEBUG: D6 raw bytes, BLE=115200"));
+#endif
 #if F3_BLE_CMD_DEBUG
   Serial.println(F("[F3] USB debug 9600 BLE=115200"));
 #endif
@@ -3769,8 +4487,6 @@ void setup() {
   customAngle = 110;
   item4 = 0;
   accRetractOn = 0;
-  lastReceiveTime = 0;
-  timeout = 500;
   y = 0;
   selfCheckOn = 0;
   p = 0;
@@ -3805,7 +4521,7 @@ void setup() {
   userServoSpeed = SERVO_SPEED_DEFAULT_PCT;
   stealthElapsedMin = 0;
   stealthMinuteMark = 0;
-  rxLen = 0;
+  bleRxStr = "";
 
   pinMode(8, OUTPUT);
   pinMode(F3_PIN_LED_GREEN, OUTPUT);
@@ -3860,7 +4576,6 @@ void setup() {
   reboundWaitUntil = 0;
   reboundRetryClose = 0;
   clearOpenMonitor();
-  loadAutoLevelDoneFromEeprom();
   EEPROM.get(28, stealthBtnExitOn);
   if (stealthBtnExitOn != 0 && stealthBtnExitOn != 1) {
     stealthBtnExitOn = 1;
@@ -3915,6 +4630,7 @@ void setup() {
 void loop() {
   watchdogFeed();
   pollBleSerial();
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
   if (f3HeightCfgModeActive()) {
     for (uint8_t i = 0; i < 4; i++) {
       pollBleSerial();
@@ -3939,14 +4655,17 @@ void loop() {
     watchdogFeed();
     return;
   }
-  f3SensorRecoverTick();
-  f3SensorServiceTick();
-  pollBleSerial();
+#endif
   btn5ServiceTick();
+  pollBleSerial();
   tickStealthKeyWindow();
   tickKeyOffServoIdlePwm();
   updatePin9Power();
   tickPin9PowerWatchdog();
+
+  f3SensorRecoverTick();
+  f3SensorServiceTick();
+  f3TickFoldCloseWatch();
 
   if (item == 3) {
     if (!servoPwmOff) servoStopHold();
@@ -3977,8 +4696,6 @@ void loop() {
 
   if (item == 0 || item == 1) {
     updateServoOutput();
-  } else if (item == 2) {
-    requestFlapClose(false);
   }
 
   tickAccRetractJudge();

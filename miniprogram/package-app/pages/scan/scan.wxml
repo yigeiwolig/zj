@@ -5,6 +5,22 @@
   <view class="f3-cal-overlay f3-cal-overlay--page" wx:if="{{f3ShowCalOverlay}}" catchtouchmove="noop" catchtap="noop">
     <include src="f3-cal-wizard.wxml" />
   </view>
+
+  <!-- F3 测高手动写入：小弹窗（回读校验，不依赖高级设置面板） -->
+  <view class="f3-height-write-mask" wx:if="{{f3HeightWriteModalVisible}}" catchtouchmove="noop" catchtap="noop">
+    <view class="f3-height-write-dialog" catchtap="noop">
+      <view class="f3-cal-loading-spin" wx:if="{{f3HeightWriteModalPhase === 'writing'}}"></view>
+      <view class="f3-cal-done-icon" wx:if="{{f3HeightWriteModalPhase === 'success'}}">✓</view>
+      <view class="f3-cal-done-icon f3-cal-done-icon--fail" wx:if="{{f3HeightWriteModalPhase === 'fail'}}">!</view>
+      <text class="f3-height-write-title" wx:if="{{f3HeightWriteModalPhase === 'writing'}}">写入中</text>
+      <text class="f3-height-write-title" wx:if="{{f3HeightWriteModalPhase === 'success'}}">写入成功</text>
+      <text class="f3-height-write-title" wx:if="{{f3HeightWriteModalPhase === 'fail'}}">写入失败</text>
+      <text class="f3-height-write-label" wx:if="{{f3HeightWriteModalLabel}}">{{f3HeightWriteModalLabel}}</text>
+      <text class="f3-height-write-mm" wx:if="{{f3HeightWriteModalMm}}">{{f3HeightWriteModalMm}}</text>
+      <text class="f3-height-write-hint">{{f3HeightWriteModalHint}}</text>
+      <view class="f3-cal-btn f3-cal-btn--primary f3-height-write-btn" wx:if="{{f3HeightWriteModalPhase !== 'writing'}}" catchtap="onF3HeightWriteModalClose">确定</view>
+    </view>
+  </view>
   
   <!-- 自定义导航栏 -->
   <view class="header" style="padding-top: {{statusBarHeight}}px;">
@@ -475,13 +491,13 @@
               </view>
             </view>
 
-            <!-- F3 MAX：绿灯未亮（未翻开）时实时测高 -->
+            <!-- F3 MAX：折叠（收起）时实时测危险高度 -->
             <view class="f3-height-strip" wx:if="{{f3HeightMonitorVisible}}">
               <view class="f3-height-chip {{f3HeightLive ? 'live' : 'wait'}}">
                 <view class="f3-height-chip-dot"></view>
                 <text class="f3-height-chip-label">翻板高度</text>
                 <text class="f3-height-chip-val">{{f3HeightText}}</text>
-                <text class="f3-height-chip-hint" wx:if="{{flapPanelState === 'open' || flapPanelState === 'moving'}}">绿灯态不测</text>
+                <text class="f3-height-chip-hint" wx:if="{{flapPanelState === 'open' || flapPanelState === 'moving'}}">打开不测</text>
               </view>
             </view>
 
@@ -929,38 +945,62 @@
           </view>
         </view>
 
-        <view class="f3-height-setting-card" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type)}}">
-          <view class="travel-mode-card-head">
-            <view class="travel-mode-card-title-wrap">
-              <text class="travel-mode-card-badge">F3</text>
-              <text class="travel-mode-card-title">测高配置</text>
+        <view class="f3-hcfg-card {{f3HeightConfigModeOn ? 'is-active' : ''}}" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type)}}">
+          <view class="f3-hcfg-head">
+            <view class="f3-hcfg-head-top">
+              <text class="f3-hcfg-title">测高配置</text>
+              <view class="f3-hcfg-status {{f3HeightConfigModeOn ? 'on' : ''}}">
+                <view class="f3-hcfg-status-dot"></view>
+                <text>{{f3HeightConfigModeOn ? '配置中' : '未进入'}}</text>
+              </view>
             </view>
-            <view class="travel-mode-card-status {{f3HeightConfigModeOn ? 'on' : ''}}">
-              <text>{{f3HeightConfigModeOn ? '配置模式中' : '未进入'}}</text>
-            </view>
-          </view>
-          <text class="travel-mode-card-desc">仅手动写入高度。自动标定请使用主页「自动校准」。写入前请先进入测高配置模式。</text>
-
-          <view class="f3-height-input-row">
-            <view class="f3-height-btn {{f3HeightConfigModeOn ? '' : 'f3-height-btn--accent'}}" catchtap="onF3EnterHeightConfigMode">进入测高配置模式</view>
-            <view class="f3-height-btn" catchtap="onF3ExitHeightConfigMode">退出测高配置模式</view>
+            <text class="f3-hcfg-sub">手动写入高度；自动标定请用主页「自动校准」</text>
           </view>
 
-          <view class="travel-picker-block">
-            <text class="travel-picker-label">A 危险高度</text>
-            <text class="f2-readback-inline">设备回读：{{f3DangerReadback}}</text>
-            <view class="f3-height-input-row">
-              <input class="f3-height-input" type="digit" value="{{f3DangerInput}}" bindinput="onF3DangerInput" placeholder="毫米，如 450" />
-              <view class="f3-height-btn" catchtap="onF3SendDangerHeight">写入</view>
-            </view>
+          <view
+            wx:if="{{!f3HeightConfigModeOn}}"
+            class="f3-hcfg-mode-btn"
+            catchtap="onF3EnterHeightConfigMode"
+          >
+            <text>进入测高配置模式</text>
+          </view>
+          <view
+            wx:else
+            class="f3-hcfg-mode-btn is-on"
+            catchtap="onF3ExitHeightConfigMode"
+          >
+            <text>退出测高配置模式</text>
           </view>
 
-          <view class="travel-picker-block">
-            <text class="travel-picker-label">B 检测高度</text>
-            <text class="f2-readback-inline">设备回读：{{f3BaseReadback}}</text>
-            <view class="f3-height-input-row">
-              <input class="f3-height-input" type="digit" value="{{f3BaseInput}}" bindinput="onF3BaseInput" placeholder="毫米，如 60" />
-              <view class="f3-height-btn" catchtap="onF3SendBaseHeight">写入</view>
+          <view class="f3-hcfg-fields">
+            <view class="f3-hcfg-field">
+              <view class="f3-hcfg-field-top">
+                <text class="f3-hcfg-field-tag">A</text>
+                <view class="f3-hcfg-field-meta">
+                  <text class="f3-hcfg-field-name">危险高度</text>
+                  <text class="f3-hcfg-field-read">{{f3DangerReadback}}</text>
+                </view>
+              </view>
+              <view class="f3-hcfg-field-row">
+                <input class="f3-hcfg-input" type="digit" value="{{f3DangerInput}}" bindinput="onF3DangerInput" placeholder="450" />
+                <text class="f3-hcfg-unit">mm</text>
+                <view class="f3-hcfg-write" catchtap="onF3SendDangerHeight">写入</view>
+              </view>
+            </view>
+
+            <view class="f3-hcfg-field">
+              <view class="f3-hcfg-field-top">
+                <text class="f3-hcfg-field-tag">B</text>
+                <view class="f3-hcfg-field-meta">
+                  <text class="f3-hcfg-field-name">检测高度</text>
+                  <text class="f3-hcfg-field-read">{{f3BaseReadback}}</text>
+                </view>
+              </view>
+              <view class="f3-hcfg-field-row">
+                <input class="f3-hcfg-input" type="digit" value="{{f3BaseInput}}" bindinput="onF3BaseInput" placeholder="60" />
+                <text class="f3-hcfg-unit">mm</text>
+                <view class="f3-hcfg-write" catchtap="onF3SendBaseHeight">写入</view>
+              </view>
             </view>
           </view>
         </view>
