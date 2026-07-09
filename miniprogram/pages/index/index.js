@@ -122,6 +122,9 @@ Page({
     isGeneratingAccessCode: false,
     isLoadingAccessCodes: false,
     accessCodeBypassLocation: false,
+    adminNicknameInput: '',
+    nicknameBypassLocation: false,
+    isSubmittingAdminNickname: false,
     blockedRegionValue: ['广东省', '广州市', '天河区'],
     blockedRegionText: '广东省 广州市 天河区',
     blockedWholeCity: false,
@@ -3570,6 +3573,52 @@ Page({
     this.setData({
       accessCodeBypassLocation: !!(e && e.detail && e.detail.value)
     });
+  },
+
+  onAdminNicknameInput(e) {
+    this.setData({
+      adminNicknameInput: (e.detail && e.detail.value) || ''
+    });
+  },
+
+  toggleNicknameBypassLocation(e) {
+    this.setData({
+      nicknameBypassLocation: !!(e && e.detail && e.detail.value)
+    });
+  },
+
+  async submitAdminNickname() {
+    const nickname = (this.data.adminNicknameInput || '').trim();
+    if (!nickname) {
+      this.showAutoToast('提示', '请输入昵称');
+      return;
+    }
+    if (this.data.isSubmittingAdminNickname) return;
+    this.setData({ isSubmittingAdminNickname: true });
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'addNicknameToWhitelist',
+        data: {
+          action: 'add_nickname',
+          nickname,
+          bypassLocationCheck: this.data.nicknameBypassLocation
+        }
+      });
+      if (res.result && res.result.success) {
+        this.setData({
+          adminNicknameInput: '',
+          nicknameBypassLocation: false
+        });
+        this.showAutoToast('成功', res.result.message || '昵称已录入');
+      } else {
+        this.showAutoToast('提示', (res.result && res.result.errMsg) || '录入失败');
+      }
+    } catch (err) {
+      console.error('[index] 录入昵称失败:', err);
+      this.showAutoToast('提示', '录入失败，请稍后重试');
+    } finally {
+      this.setData({ isSubmittingAdminNickname: false });
+    }
   },
 
   _decorateAccessCodeList(list) {

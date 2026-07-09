@@ -1,0 +1,383 @@
+/* 客服面板 — 独立命名空间，避免与 hub-page .card / .header 冲突 */
+
+.kf-container {
+  min-height: 100vh;
+  background-color: #F2F2F7;
+  padding: 60rpx 40rpx calc(180rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
+.kf-container--page {
+  padding-top: 20rpx;
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
+}
+
+.kf-header {
+  margin-bottom: 60rpx;
+  padding: 0 10rpx;
+}
+
+.kf-page-title {
+  display: block;
+  font-size: 68rpx;
+  font-weight: 800;
+  color: #000000;
+  letter-spacing: -2rpx;
+  line-height: 1.1;
+}
+
+.kf-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 40rpx;
+}
+
+.kf-card {
+  position: relative;
+  height: 360rpx;
+  border-radius: 64rpx;
+  padding: 60rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+  overflow: hidden;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.kf-card-hover {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+.kf-card--pre {
+  background: #1C1C1E;
+  color: #FFFFFF;
+  box-shadow: 0 40rpx 80rpx rgba(0, 0, 0, 0.15);
+}
+
+.kf-card--pre.kf-card--highlight {
+  box-shadow: 0 0 0 6rpx rgba(7, 193, 96, 0.5), 0 40rpx 80rpx rgba(0, 0, 0, 0.15);
+}
+
+.kf-card--after {
+  background: #FFFFFF;
+  color: #000000;
+  box-shadow: 0 10rpx 40rpx rgba(0, 0, 0, 0.04);
+}
+
+.kf-card--after.kf-card--highlight {
+  box-shadow: 0 0 0 6rpx rgba(0, 122, 255, 0.3), 0 10rpx 40rpx rgba(0, 0, 0, 0.04);
+}
+
+.kf-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 2;
+}
+
+.kf-card-title {
+  font-size: 44rpx;
+  font-weight: 800;
+  color: inherit;
+  letter-spacing: 1rpx;
+}
+
+.kf-card-desc {
+  font-size: 26rpx;
+  line-height: 1.5;
+  max-width: 65%;
+  z-index: 2;
+}
+
+.kf-card--pre .kf-card-desc {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.kf-card--after .kf-card-desc {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.kf-arrow {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background-size: 48rpx 48rpx;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.8;
+}
+
+.kf-card--pre .kf-arrow {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FFFFFF' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M12 5l7 7-7 7'/%3E%3C/svg%3E");
+}
+
+.kf-card--after .kf-arrow {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000000' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14M12 5l7 7-7 7'/%3E%3C/svg%3E");
+}
+
+.kf-bg-icon {
+  position: absolute;
+  right: -24rpx;
+  bottom: -24rpx;
+  width: 240rpx;
+  height: 240rpx;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: bottom right;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.kf-bg-icon--chat {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cmask id='m'%3E%3Crect width='120' height='120' fill='white'/%3E%3Ctext x='60' y='62' dy='.35em' fill='black' font-size='36' font-weight='900' font-family='Arial,sans-serif' text-anchor='middle'%3EMT%3C/text%3E%3C/mask%3E%3Cpath d='M20 30h80a12 12 0 0 1 12 12v40a12 12 0 0 1-12 12H40L20 106V94a12 12 0 0 1-12-12V42a12 12 0 0 1 12-12z' fill='%233A3A3C' mask='url(%23m)'/%3E%3C/svg%3E");
+}
+
+.kf-bg-icon--shield {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'%3E%3Cmask id='m'%3E%3Crect width='120' height='120' fill='white'/%3E%3Ctext x='60' y='56' dy='.35em' fill='black' font-size='36' font-weight='900' font-family='Arial,sans-serif' text-anchor='middle'%3EMT%3C/text%3E%3C/mask%3E%3Cpath d='M60 10L20 26v30c0 28 16 52 40 60 24-8 40-32 40-60V26L60 10z' fill='%23E5E5EA' mask='url(%23m)'/%3E%3C/svg%3E");
+}
+
+.kf-feedback {
+  margin-top: 80rpx;
+  padding: 0 10rpx;
+}
+
+.kf-feedback-toggle {
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 32rpx 36rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.02);
+}
+
+.kf-feedback-toggle-hover {
+  opacity: 0.9;
+  transform: scale(0.99);
+}
+
+.kf-feedback-toggle-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #1C1C1E;
+}
+
+.kf-feedback-toggle-arrow {
+  width: 32rpx;
+  height: 32rpx;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238E8E93' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  transition: transform 0.25s ease;
+}
+
+.kf-feedback-toggle.is-open .kf-feedback-toggle-arrow {
+  transform: rotate(180deg);
+}
+
+.kf-feedback-body {
+  margin-top: 20rpx;
+}
+
+.kf-feedback-stage {
+  position: relative;
+  min-height: 100rpx;
+}
+
+.kf-feedback-input-wrap {
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 30rpx;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.02);
+  transform-origin: top center;
+}
+
+.kf-feedback-input-wrap.is-tearing {
+  animation: kf-tear-off 0.6s cubic-bezier(0.33, 1, 0.68, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes kf-tear-off {
+  0% {
+    transform: translateY(0) rotate(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-60rpx) rotate(3deg) scale(0.9);
+    opacity: 0;
+  }
+}
+
+.kf-feedback-input {
+  width: 100%;
+  height: 180rpx;
+  font-size: 28rpx;
+  color: #000;
+  line-height: 1.5;
+}
+
+.kf-feedback-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid rgba(0,0,0,0.05);
+}
+
+.kf-feedback-count {
+  font-size: 24rpx;
+  color: #C4C4C6;
+}
+
+.kf-send-btn {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+  background: #1C1C1E;
+  padding: 12rpx 36rpx;
+  border-radius: 30rpx;
+  flex-shrink: 0;
+}
+
+.kf-feedback-success {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  font-size: 28rpx;
+  color: #34c759;
+  font-weight: 600;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.02);
+}
+
+.kf-panel-root {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.kf-admin-float {
+  position: absolute;
+  right: 40rpx;
+  top: 24rpx;
+  z-index: 200;
+  background: #fff;
+  border-radius: 999rpx;
+  padding: 16rpx 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.12);
+  pointer-events: auto;
+}
+
+.kf-admin-float--page {
+  right: 32rpx;
+}
+
+.kf-admin-entry {
+  flex-shrink: 0;
+  background: #fff;
+  border-radius: 999rpx;
+  padding: 16rpx 28rpx;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.kf-admin-entry-hover {
+  opacity: 0.85;
+  transform: scale(0.96);
+}
+
+.kf-admin-entry-text {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+  white-space: nowrap;
+}
+
+.kf-admin-badge {
+  min-width: 32rpx;
+  height: 32rpx;
+  line-height: 32rpx;
+  text-align: center;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 700;
+  padding: 0 8rpx;
+  border-radius: 999rpx;
+  box-sizing: border-box;
+}
+
+.kf-admin-list {
+  margin: -36rpx 0 48rpx;
+}
+
+.kf-admin-msg {
+  background: #fff;
+  border-radius: 32rpx;
+  padding: 32rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.02);
+}
+
+.kf-admin-msg-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.kf-admin-msg-name {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.kf-admin-msg-time {
+  font-size: 22rpx;
+  color: #8e8e93;
+}
+
+.kf-admin-msg-body {
+  font-size: 28rpx;
+  color: #3a3a3c;
+  line-height: 1.5;
+  margin-bottom: 24rpx;
+  word-break: break-all;
+}
+
+.kf-admin-msg-action {
+  display: inline-block;
+  background: #f2f2f7;
+  color: #636366;
+  font-size: 24rpx;
+  padding: 12rpx 28rpx;
+  border-radius: 999rpx;
+}
+
+.kf-admin-empty {
+  text-align: center;
+  padding: 40rpx;
+  color: #8e8e93;
+  font-size: 26rpx;
+}

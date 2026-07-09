@@ -9,12 +9,22 @@
  * 「可能要发送的小程序」气泡，用户必须自己点一下，卡片才会出现在聊天记录里。
  */
 
+const hubNav = require('./hubNav.js');
+
 const WEWORK_CORP_ID = 'wwc4146491f9b5d26f';
 
 /** 售前客服链接（企业微信 → 微信客服 → 对应账号 → 小程序接入） */
 const PRE_SALES_KF_URL = 'https://work.weixin.qq.com/kfid/kfc859b7d81a1a1e48f';
 
-const DEFAULT_FALLBACK_URL = '/package-biz/pages/call/call?from=shop&scene=pre';
+/**
+ * 售后客服链接（企业微信 → 微信客服 → 售后账号 → 小程序接入）
+ * 配置步骤与售前相同，换绑售后接待人员即可；留空则走备用联系页。
+ */
+const AFTER_SALES_KF_URL = 'https://work.weixin.qq.com/kfid/kfcaf201a5021dee20f';
+
+const CALL_PAGE = '/package-biz/pages/call/call';
+const DEFAULT_FALLBACK_URL = `${CALL_PAGE}?from=shop&scene=pre`;
+const AFTER_SALES_FALLBACK_URL = `${CALL_PAGE}?scene=after`;
 
 /** 无商品图时的客服气泡缩略图（须为 HTTPS 或本地包内路径） */
 const DEFAULT_KF_MESSAGE_IMG = '/images/qrcode.jpg';
@@ -115,7 +125,7 @@ function openWeworkKf(options = {}) {
 function openPreSalesKf(options = {}) {
   const series = options.series || null;
   const seriesName = series && series.name ? String(series.name).trim() : '';
-  const title = seriesName ? `【点此发送给客服】${seriesName}` : '【点此发送给客服】MT商城';
+  const title = seriesName ? `【售前】${seriesName}` : '【售前】MT商城咨询';
   const path = buildKfMessagePath(series);
   const sendMessageImg = resolveKfMessageImgSync(series);
 
@@ -126,15 +136,45 @@ function openPreSalesKf(options = {}) {
     path,
     sendMessageImg,
     showMessageCard: true,
+    fallbackUrl: DEFAULT_FALLBACK_URL,
     ...options
   });
+}
+
+function openAfterSalesKf(options = {}) {
+  const title = options.title || '【售后】维修 / 质保咨询';
+  const path = options.path || '/package-biz/pages/shouhou/shouhou.html';
+
+  openWeworkKf({
+    url: AFTER_SALES_KF_URL,
+    title,
+    path,
+    sendMessageImg: DEFAULT_KF_MESSAGE_IMG,
+    showMessageCard: true,
+    fallbackUrl: AFTER_SALES_FALLBACK_URL,
+    ...options
+  });
+}
+
+/** 底栏「客服」等：枢纽内横滑切到客服面板（与订单 Tab 一致） */
+function navigateToKfSelect(options = {}) {
+  hubNav.openKf(options);
+}
+
+function openKfPicker(options = {}) {
+  navigateToKfSelect(options);
 }
 
 module.exports = {
   WEWORK_CORP_ID,
   PRE_SALES_KF_URL,
+  AFTER_SALES_KF_URL,
   buildKfMessagePath,
   resolveKfMessageImgSync,
   openWeworkKf,
-  openPreSalesKf
+  openPreSalesKf,
+  openAfterSalesKf,
+  openKfPicker,
+  navigateToKfSelect,
+  CALL_PAGE
 };

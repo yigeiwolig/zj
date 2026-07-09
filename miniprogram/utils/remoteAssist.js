@@ -119,7 +119,6 @@ function buildStatePatch(deviceState, options = {}) {
       'foldGap',
       'currentAngle',
       'angleMode',
-      'openAngleUiActive',
       'angleBtnText',
       'f2ControlPanelOpen',
       'blockDetailTouch',

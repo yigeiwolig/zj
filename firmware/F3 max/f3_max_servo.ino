@@ -60,13 +60,13 @@
 
 #include <Wire.h>
 #include "VL53L0X.h"
-const uint8_t F3_PIN_XSHUT = 4;
+const uint8_t F3_SERVO_PIN = 4;
 const unsigned int F3_SENSOR_POLL_MS = 50;   // 默认读距周期
 const unsigned int F3_SENSOR_POLL_OPEN_MS = 35; // 折叠态危险高度：略快轮询
 const uint16_t F3_FOLD_NEAR_MM = 80;         // 8cm；折叠到位 TOF 应 <8cm；翻开监测时 ≥8cm 持续 8s 报错
 const unsigned long F3_FOLD_CLOSE_TIMEOUT_MS = 8000UL;
-const unsigned long F3_FOLD_FAULT_BLINK_MS = 50UL;
-const unsigned long F3_HGT_BLE_MS = 1000UL; // 蓝牙 HGT 上报周期（可慢，减串口负载）
+const unsigned long F3_FOLD_FAULT_BLINK_MS = 250UL; // 红绿交替半周期（堵转=纯红快闪）
+const unsigned long F3_HGT_BLE_MS = 250UL; // 蓝牙 HGT 上报周期
 const unsigned long F3_CFG_HGT_BLE_MS = 400UL; // 配置模式略快，标定实时高度跟手
 const uint16_t F3_HEIGHT_MM_MIN = 10;
 const uint16_t F3_HEIGHT_MM_MAX = 3000;
@@ -74,9 +74,36 @@ const uint8_t F3_PIN_LED_GREEN = 10;
 const uint8_t F3_EEPROM_MAGIC_ADDR = 38;
 const uint8_t F3_EEPROM_MAGIC = 0xA7;
 
+#if F3_MAX_BUILD
+const uint8_t F3_EE_PWR_LOCK = 15;
+const uint8_t F3_EE_HEIGHT_ON = 30;
+const uint8_t F3_EE_STEALTH_ON = 31;
+const uint8_t F3_FOLD_USER_DELTA = 10;   // 日常折叠 = 锁止位 item4 − 10°
+static uint8_t f3PowerOffLockOn = 0;
+static uint8_t stealthEntryBusy = 0;
+
+static void stealthPersistSave(uint8_t on) {
+  EEPROM.update(F3_EE_STEALTH_ON, on ? 1 : 0);
+}
+
+static uint8_t stealthPersistLoad() {
+  uint8_t v = 0;
+  EEPROM.get(F3_EE_STEALTH_ON, v);
+  if (v != 0 && v != 1) {
+    v = 0;
+    EEPROM.update(F3_EE_STEALTH_ON, 0);
+  }
+  return v;
+}
+
+static void stealthPersistClear() {
+  stealthPersistSave(0);
+}
+#endif
+
 #if !F3_FLASH_TIGHT
 static void f3ConfigureLongRange() {
-  f3Tof.setSignalRateLimit(0.1);
+  f3Tof.setSignalRateLimit(13); // 0.1 MCPS Q9.7
   f3Tof.setVcselPulsePeriod(VL53L0X::VcselPeriodPreRange, 18);
   f3Tof.setVcselPulsePeriod(VL53L0X::VcselPeriodFinalRange, 14);
   f3Tof.setMeasurementTimingBudget(33000);
@@ -87,13 +114,19 @@ const uint8_t F3_MEDIAN_WIN = 3;
 const uint8_t F3_EMA_NEW = 2;
 const uint8_t F3_EMA_OLD = 3;
 const uint16_t F3_SNAP_MM = 80;
+// 危险灯：边界附近要够钝，避免 TOF 抖动一闪一闪
+const uint8_t F3_DGD_ENTER_N = 3;          // 连续低于阈值才亮红灯
+const uint8_t F3_DGD_EXIT_N = 2;           // 连续高于（阈值+迟滞）才灭
+const uint16_t F3_DGD_EXIT_HYST_MM = 25;   // 退出迟滞 ~2.5cm，给一点缓冲
 
 VL53L0X f3Tof;
 uint8_t f3SensorOk = 0;
 uint8_t f3FailStreak = 0;
+#if !F3_FLASH_TIGHT
 uint16_t f3MedBuf[F3_MEDIAN_WIN];
 uint8_t f3MedIdx = 0;
 uint8_t f3MedCount = 0;
+#endif
 uint32_t f3FiltMm = 0;
 uint8_t f3HasFilt = 0;
 uint8_t f3SensorValid = 0;
@@ -108,13 +141,10 @@ uint16_t f3DangerMm = 0;
 uint16_t f3BaseMm = 0;
 static unsigned long f3CfgGraceUntil = 0;
 static uint8_t f3HeightCfgMode = 0;
-static uint8_t f3AckBlinkHalfLeft = 0;
-static unsigned long f3AckBlinkMs = 0;
-static uint8_t f3AckGreenOn = 0;
+static uint8_t f3HfCfg = 1;
 static uint8_t f3ForceStatusOnce = 0;
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
 static unsigned long f3FoldCloseWatchMs = 0;
-static uint8_t f3FoldCloseWatchPending = 0;
 static uint8_t f3FoldCloseFault = 0;
 static uint8_t f3CalPreviewActive = 0;
 static int f3CalPreviewAngle = 0;
@@ -139,12 +169,9 @@ extern uint8_t servoPwmOff;
 bool pin2KeyOffStable();
 
 bool f3DangerLedActive();
-bool f3OpenBlockedByDanger();
 void f3TickDangerLed();
 static bool f3HeightCfgModeActive();
 static void f3HeightCfgModeLedApply();
-static void f3StartGreenAck();
-static void f3TickAckBlink();
 static void f3RequestStatusSend();
 #if F3_BLE_CMD_DEBUG
 static void f3DbgLine(const __FlashStringHelper *tag);
@@ -163,6 +190,7 @@ static void f3CalFoldRestore();
 #if F3_MAX_BUILD
 static void f3WriteLeds(uint8_t redOn, uint8_t greenOn);
 void f3StatusLedUpdate();
+bool isKeyOffCountdownActive();
 #endif
 
 #if F3_SENSOR_SERIAL
@@ -182,25 +210,38 @@ static void f3SerialPrintHeight(uint16_t raw, uint16_t filt, uint8_t ok) {
 }
 #endif
 
+static uint8_t f3DgdLatch = 0;
+static uint8_t f3DgdSafeCnt = 0;
+static uint8_t f3DgdUnsafeCnt = 0;
+// 堵转锁存（后面完整定义）；测高侧只读，避免与危险灯抢指示
+extern volatile uint8_t reboundFaultLatched;
+extern volatile uint8_t pendingFaultReport;
+extern volatile int reboundAttempt;
+
 static void f3RecoverSensor() {
   f3FailStreak = 0;
-  f3SensorSkipUntil = millis() + 3000UL;
-  digitalWrite(F3_PIN_XSHUT, LOW);
-  wdt_reset();
-  delayWithBlePoll(20);
-  digitalWrite(F3_PIN_XSHUT, HIGH);
-  delayWithBlePoll(20);
   wdt_reset();
   f3Tof.setTimeout(150);
-  f3SensorOk = f3Tof.init() ? 1 : 0;
-  if (!f3SensorOk) {
+  if (!f3Tof.init()) {
+    f3SensorOk = 0;
     f3SensorValid = 0;
+    f3RecoverPending = 1;
+    f3SensorSkipUntil = millis() + 3000UL;
+    wdt_reset();
     return;
   }
+  wdt_reset();
   f3Tof.startContinuous(50);
+  f3SensorOk = 1;
+#if !F3_FLASH_TIGHT
   f3MedCount = 0;
+#endif
   f3HasFilt = 0;
   f3SensorValid = 0;
+  f3DgdLatch = 0;
+  f3DgdSafeCnt = 0;
+  f3DgdUnsafeCnt = 0;
+  f3SensorSkipUntil = millis() + 500UL;
 }
 
 static bool f3ReadSample(uint16_t &mm) {
@@ -211,13 +252,12 @@ static bool f3ReadSample(uint16_t &mm) {
   pollBleSerial();
   wdt_reset();
   if (millis() - t0 > 400UL || f3Tof.timeoutOccurred() || mm == 0 || mm == 65535) {
-    if (++f3FailStreak >= 4) {
+    if (++f3FailStreak >= 6) {
       f3RecoverPending = 1;
-      f3SensorOk = 0;
       f3SensorValid = 0;
-      f3SensorSkipUntil = millis() + 3000UL;
+      f3SensorSkipUntil = millis() + 1500UL;
     } else {
-      f3SensorSkipUntil = millis() + 800UL;
+      f3SensorSkipUntil = millis() + 400UL;
     }
     return false;
   }
@@ -225,27 +265,35 @@ static bool f3ReadSample(uint16_t &mm) {
   return true;
 }
 
+#if !F3_FLASH_TIGHT
 static uint16_t f3AbsDiff(uint16_t a, uint16_t b) {
   return (a > b) ? (a - b) : (b - a);
 }
 
 static uint16_t f3MedianOfBuffer() {
-  uint16_t tmp[F3_MEDIAN_WIN];
   uint8_t n = f3MedCount;
-  for (uint8_t i = 0; i < n; i++) tmp[i] = f3MedBuf[i];
-  for (uint8_t i = 1; i < n; i++) {
-    uint16_t key = tmp[i];
-    int8_t j = (int8_t)i - 1;
-    while (j >= 0 && tmp[j] > key) {
-      tmp[j + 1] = tmp[j];
-      j--;
-    }
-    tmp[j + 1] = key;
-  }
-  return tmp[n / 2];
+  if (n <= 1) return f3MedBuf[0];
+  uint16_t a = f3MedBuf[0], b = f3MedBuf[1];
+  if (n == 2) return (a > b) ? a : b;
+  uint16_t c = f3MedBuf[2];
+  if (a > b) { uint16_t t = a; a = b; b = t; }
+  if (b > c) { uint16_t t = b; b = c; c = t; }
+  if (a > b) { uint16_t t = a; a = b; b = t; }
+  return b;
 }
+#endif
 
 static uint16_t f3FilterMm(uint16_t rawMm) {
+#if F3_FLASH_TIGHT
+  // 紧闪存：单级 EMA，去掉中值窗口
+  if (!f3HasFilt) {
+    f3FiltMm = rawMm;
+    f3HasFilt = 1;
+    return rawMm;
+  }
+  f3FiltMm = (f3FiltMm * F3_EMA_OLD + (uint32_t)rawMm * F3_EMA_NEW) / (F3_EMA_OLD + F3_EMA_NEW);
+  return (uint16_t)f3FiltMm;
+#else
   f3MedBuf[f3MedIdx] = rawMm;
   f3MedIdx = (f3MedIdx + 1) % F3_MEDIAN_WIN;
   if (f3MedCount < F3_MEDIAN_WIN) f3MedCount++;
@@ -257,23 +305,76 @@ static uint16_t f3FilterMm(uint16_t rawMm) {
     return med;
   }
   uint16_t prev = (uint16_t)f3FiltMm;
-  if (f3AbsDiff(med, prev) > F3_SNAP_MM) {
+  if (med <= prev && f3AbsDiff(med, prev) > F3_SNAP_MM) {
     f3FiltMm = (prev + (uint32_t)med * 4) / 5;
   } else {
-    f3FiltMm = (f3FiltMm * F3_EMA_OLD + med * F3_EMA_NEW) / (F3_EMA_OLD + F3_EMA_NEW);
+    uint8_t emN = (med > prev) ? 4 : F3_EMA_NEW;
+    uint8_t emO = (med > prev) ? 1 : F3_EMA_OLD;
+    f3FiltMm = (f3FiltMm * emO + med * emN) / (emO + emN);
   }
   return (uint16_t)f3FiltMm;
+#endif
 }
 
-static uint16_t f3DangerProbeMm() {
-  uint16_t probe = f3LastFiltMm;
-  if (f3LastRawMm > 0 && f3LastRawMm < probe) probe = f3LastRawMm;
-  if (f3MedCount > 0) {
-    uint16_t med = f3MedianOfBuffer();
-    if (med > 0 && med < probe) probe = med;
+bool f3DangerLedActive() {
+  // 堵转优先：锁存期间测高危险灯不抢红灯
+  if (reboundFaultLatched || pendingFaultReport == 2) {
+    f3DgdLatch = f3DgdSafeCnt = f3DgdUnsafeCnt = 0;
+    return 0;
   }
-  return probe;
+  if (f3HeightCfgModeActive() || (long)(millis() - f3CfgGraceUntil) < 0) {
+    f3DgdLatch = f3DgdSafeCnt = f3DgdUnsafeCnt = 0;
+    return 0;
+  }
+  if (!f3HeightMonitorActive() || f3DangerMm == 0) {
+    f3DgdLatch = f3DgdSafeCnt = f3DgdUnsafeCnt = 0;
+    return 0;
+  }
+  // 短暂丢样：保持当前锁存，避免红灯跟着测距失败一闪一闪
+  if (!f3SensorValid) {
+    return f3DgdLatch;
+  }
+  if (!f3DgdLatch) {
+    // 仅用滤波值进危险：裸 raw 毛刺会误亮红灯
+    uint16_t probe = f3LastFiltMm;
+    if (probe && probe <= f3DangerMm) {
+      if (++f3DgdUnsafeCnt >= F3_DGD_ENTER_N) {
+        f3DgdLatch = 1;
+        f3DgdUnsafeCnt = 0;
+        f3DgdSafeCnt = 0;
+      }
+    } else f3DgdUnsafeCnt = 0;
+  } else {
+    // 退出：滤波须明显高于危险线+迟滞，才灭红灯
+    uint16_t mm = f3LastFiltMm;
+    if (mm > f3DangerMm + F3_DGD_EXIT_HYST_MM) {
+      if (++f3DgdSafeCnt >= F3_DGD_EXIT_N) {
+        f3DgdLatch = 0;
+        f3DgdSafeCnt = 0;
+        f3DgdUnsafeCnt = 0;
+      }
+    } else f3DgdSafeCnt = 0;
+  }
+  return f3DgdLatch;
 }
+
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+/** 翻开前用实时滤波高度复核，避免 DGD 锁存未清误拦 */
+static bool f3FlapOpenDangerBlocked() {
+  if (f3DangerMm == 0 || !f3HeightMonitorActive()) return false;
+  if (!f3SensorValid || !f3LastFiltMm) return f3DgdLatch != 0;
+  if (f3LastFiltMm <= f3DangerMm) {
+    f3DgdLatch = 1;
+    f3DgdUnsafeCnt = 0;
+    f3DgdSafeCnt = 0;
+    return true;
+  }
+  f3DgdLatch = 0;
+  f3DgdUnsafeCnt = 0;
+  f3DgdSafeCnt = 0;
+  return false;
+}
+#endif
 
 void f3SensorInit() {
 #if !F3_HEIGHT_ENABLE
@@ -282,14 +383,7 @@ void f3SensorInit() {
 #endif
   Wire.begin();
   Wire.setClock(100000);
-  pinMode(F3_PIN_XSHUT, OUTPUT);
-  digitalWrite(F3_PIN_XSHUT, LOW);
   wdt_reset();
-  delayWithBlePoll(20);
-  digitalWrite(F3_PIN_XSHUT, HIGH);
-  delayWithBlePoll(20);
-  wdt_reset();
-
   f3Tof.setTimeout(150);
   f3SensorOk = f3Tof.init() ? 1 : 0;
   if (!f3SensorOk) return;
@@ -313,10 +407,11 @@ void f3SensorRecoverTick() {
   return;
 #endif
   if (!f3RecoverPending) return;
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  if (f3ServoMotionBusy()) return;
-#endif
   if (!f3HeightMonitorActive()) return;
+  // 舵机运动中禁 I2C 恢复：大电流易卡死 Wire
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (f3ServoMotionBusy() || flapMotionMoving()) return;
+#endif
   f3RecoverPending = 0;
   f3RecoverSensor();
 }
@@ -326,19 +421,28 @@ void f3SensorServiceTick() {
   return;
 #endif
   pollBleSerial();
-  if (!f3SensorOk || !f3HeightMonitorActive()) {
+  // 堵转优先：锁存期间不做测高，避免红灯/报警冲突
+  if (reboundFaultLatched || pendingFaultReport == 2) return;
+  bool foldOpenWatch = (item == 1 && (f3HfCfg & 1));
+  if (!f3SensorOk) {
     if (item != 0 && !f3FoldCloseWatchActive()) f3SensorValid = 0;
     return;
   }
+  if (!f3HeightMonitorActive() && !foldOpenWatch) {
+    if (item != 0 && !f3FoldCloseWatchActive()) f3SensorValid = 0;
+    return;
+  }
+  // 连按翻板时舵机电流噪声会卡 I2C；翻开位 8cm 监测须持续读距
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  bool foldTof = (item <= 1 && (f3HfCfg & 1));
+  if ((f3ServoMotionBusy() || flapMotionMoving()) && !foldTof) return;
+#endif
   unsigned long now = millis();
   if (now < f3SensorSkipUntil) return;
   unsigned int pollMs = F3_SENSOR_POLL_MS;
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  if (item == 0 && !f3ServoMotionBusy()) pollMs = F3_SENSOR_POLL_OPEN_MS;
-  if (f3ServoMotionBusy()) {
-    pollMs = 180;
-    if (!servoPwmOff) return;
-  }
+  if (item == 0) pollMs = F3_SENSOR_POLL_OPEN_MS;
+  else if (item == 1 && (f3HfCfg & 1)) pollMs = F3_SENSOR_POLL_OPEN_MS;
 #endif
   if (now - f3LastPollMs < pollMs) return;
   f3LastPollMs = now;
@@ -395,6 +499,7 @@ void f3LoadHeightFromEeprom() {
     f3BaseMm = 0;
     EEPROM.put(36, f3BaseMm);
   }
+  f3HfCfg = EEPROM.read(F3_EE_HEIGHT_ON) & 1;
 }
 
 static void f3SaveDangerMm(uint16_t mm) {
@@ -496,29 +601,6 @@ static void f3RequestStatusSend() {
   lastStatusSend = 0;
 }
 
-static void f3StartGreenAck() {
-  f3AckBlinkHalfLeft = 4;
-  f3AckBlinkMs = 0;
-  f3AckGreenOn = 0;
-}
-
-static void f3TickAckBlink() {
-  if (f3AckBlinkHalfLeft == 0) return;
-  unsigned long now = millis();
-  if (f3AckBlinkMs != 0 && now - f3AckBlinkMs < 80UL) return;
-  f3AckBlinkMs = now;
-  f3AckGreenOn = f3AckGreenOn ? 0 : 1;
-#if F3_MAX_BUILD
-  digitalWrite(8, LOW);
-  digitalWrite(F3_PIN_LED_GREEN, f3AckGreenOn ? HIGH : LOW);
-#endif
-  f3AckBlinkHalfLeft--;
-  if (f3AckBlinkHalfLeft == 0) {
-    if (f3HeightCfgModeActive()) f3HeightCfgModeLedApply();
-    else statusLedUpdate();
-  }
-}
-
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
 static void f3SaveHeightAndAck(uint8_t which, uint16_t mm) {
   f3CfgGraceUntil = millis() + 1500UL;
@@ -530,7 +612,7 @@ static void f3SaveHeightAndAck(uint8_t which, uint16_t mm) {
   Serial.print(which == 1 ? F("OK A]") : F("OK B]"));
   Serial.println();
 #endif
-  f3StartGreenAck();
+  f3HeightCfgModeLedApply();
   f3RequestStatusSend();
   sendStatusPacket();
 #if F3_BLE_RX_SERIAL
@@ -556,6 +638,8 @@ static void f3PrepareUserServoAngleCmd() {
     f3RequestStatusSend();
   }
 }
+
+static void f3EnterAngleAdjustCmd();
 #endif
 
 static bool f3TryShortHeightCmd(char *cmd) {
@@ -563,7 +647,6 @@ static bool f3TryShortHeightCmd(char *cmd) {
     f3HeightCfgMode = 1;
     f3CfgGraceUntil = 0;
     f3HeightCfgModeLedApply();
-    drainBleRx();
 #if F3_BLE_RX_SERIAL
     f3BleRxSay(F("OK:CFG1"));
 #endif
@@ -630,24 +713,6 @@ static bool f3TryShortHeightCmd(char *cmd) {
 }
 #endif
 
-bool f3DangerLedActive() {
-  if (f3HeightCfgModeActive()) return false;
-  if ((long)(millis() - f3CfgGraceUntil) < 0) return false;
-  if (!f3HeightMonitorActive()) return false;
-  if (f3DangerMm == 0) return false;
-  if (!f3SensorValid) return false;
-  uint16_t mm = f3DangerProbeMm();
-  if (mm == 0) return false;
-  return mm <= f3DangerMm;
-}
-
-bool f3OpenBlockedByDanger() {
-#if !F3_HEIGHT_ENABLE
-  return false;
-#endif
-  return f3DangerLedActive();
-}
-
 void f3TickDangerLed() {
   static uint8_t lastDanger = 255;
   uint8_t nowDanger = f3DangerLedActive() ? 1 : 0;
@@ -665,30 +730,31 @@ static void f3WriteLeds(uint8_t redOn, uint8_t greenOn) {
 }
 
 void f3StatusLedUpdate() {
+  // 关钥匙 10 秒倒计时：红绿指示灯全部关闭（故障闪灯暂停）
+  if (isKeyOffCountdownActive()) {
+    f3WriteLeds(0, 0);
+    return;
+  }
+  // 堵转/遇阻重试：交给 tickFaultAlarm 闪灯，这里不改写
+  if (faultIndicatorActive() || reboundAttempt > 0) return;
   if (item == 3) {
-    if (!faultIndicatorActive() && !f3FoldCloseFault) f3WriteLeds(0, 0);
+    if (!f3FoldCloseFault) f3WriteLeds(0, 0);
+    return;
+  }
+  // 折叠角调整 / 测高标定：绿灯常亮（优先于折叠超时闪灯、ACK 闪烁）
+  if (foldAdjustActive || f3HeightCfgModeActive()) {
+    f3WriteLeds(0, 1);
     return;
   }
 #if F3_HEIGHT_ENABLE
   if (f3FoldCloseFault) return;
 #endif
-  if (faultIndicatorActive()) return;
-  if (f3AckBlinkHalfLeft != 0) return;
-  if (f3HeightCfgModeActive()) {
-    f3WriteLeds(0, 1);
-    return;
-  }
-  if (foldAdjustActive) {
-    f3WriteLeds(0, 1);
-    return;
-  }
   if (pin2KeyOffStable()) {
     if (accRetractOn != 1) {
       f3WriteLeds(0, 0);
       return;
     }
   }
-  // 翻开 item=1：测距<8cm 正常→绿灯常亮；≥8cm 连续 8s→翻开测距异常(WRN:3)
   if (item == 1) {
     if (f3FoldCloseFault) return;
     f3WriteLeds(0, 1);
@@ -706,7 +772,6 @@ void f3StatusLedUpdate() {
 #define RX_CMD_MAX 24
 
 volatile int item;
-volatile int judgeVal;
 volatile int bianlaing;
 volatile int fullOpenAngle;
 volatile int customAngle;
@@ -722,13 +787,10 @@ volatile unsigned long openStartMs;
 volatile unsigned long reboundWaitUntil;
 volatile unsigned long lastStatusSend;
 volatile unsigned long selfCheckStartMs;
-volatile int reboundStuckCount;
 volatile int reboundAttempt;
 volatile uint8_t reboundFaultLatched;
 volatile uint8_t pendingFaultReport;
-volatile unsigned long lastStallSampleMs;
 volatile uint8_t stealthActive;
-volatile int delayPowerOffMin;
 volatile uint8_t userServoSpeed;
 volatile unsigned long stealthWindowStart;
 volatile unsigned long pin9HoldUntil;
@@ -761,28 +823,15 @@ const int STEALTH_ACK_OFF_MS = 300;
 // Pin5 按下后固定 10 秒检测窗（再次按 Pin5 打断并重开）
 const unsigned long BTN_DETECT_WINDOW_MS = 10000UL;
 const unsigned long BTN_DETECT_SAMPLE_MS = 5UL;
-const int BTN_STALL_A0_THR = 860;
-const int BTN_STALL_RELEASE_A0_THR = 880;
-const int BTN_STALL_HITS_NEED = 10;
-const unsigned long MOTOR_MIN_RUN_BEFORE_STALL_MS = 600UL;
+const int BTN_STALL_A0_THR = 870;
+const int BTN_STALL_HITS_NEED = 2;
+const uint8_t BOOT_STALL_HITS_NEED = 3;
+const unsigned long MOTOR_MIN_RUN_BEFORE_STALL_MS = 250UL;
+const unsigned long BOOT_STALL_CYCLE_MS = 2000UL; // 堵转重试：item4-2 → item4-10 一轮至少 2s
 const unsigned long REBOUND_RETRY_WAIT_MS = 800UL;
-const int STALL_CURRENT_DEFAULT = 860;
-const unsigned long STALL_SAMPLE_GAP_MS = 12UL;
-const unsigned long STALL_REBOUND_SAMPLE_GAP_MS = 10UL;
 const unsigned long STALL_ARM_MS = 200UL;
-const int STALL_DETECT_A0 = 680;
-const int STALL_DETECT_RELEASE = 820;
-const int STALL_STUCK_NEED = 18;
-const int STALL_HIT_NEED = 4;
-const int STALL_REBOUND_HIT_NEED = 3;
-const int STALL_REBOUND_SENS_MARGIN = 60;
-const int STALL_REBOUND_HYST = 25;
-const int STALL_JUDGE_MIN = 300;
-const int STALL_JUDGE_MAX = 1023;
 const int AUTO_LEVEL_FOLD_THR = 900;
 const int AUTO_LEVEL_OPEN_THR = 900;
-const unsigned long OPEN_REBOUND_GRACE_MS = 500UL;
-// 主动堵转检测：最多 2 次「堵转→自动收回」；第 2 次收回后报警，不再重试打开
 const uint8_t STALL_REBOUND_MAX = 2;
 // 开机后数秒内禁止堵转反弹/自检故障，避免误触发来回抖
 const unsigned long BOOT_SETTLE_MS = 6000UL;
@@ -790,12 +839,9 @@ const unsigned long BOOT_SETTLE_MS = 6000UL;
 const unsigned long BOOT_PWR_SETTLE_MS = 800UL;
 const unsigned long BOOT_LED_LEAD_ON_MS = 400UL;
 const unsigned int BOOT_FOLD_SLOW_HALF_MS = 500;
-const unsigned long MOTION_DETECT_LED_HALF_MS = 300UL;
-const uint8_t FAULT_ACK_BLINK_TIMES = 6;
-/** 故障报警 Pin8：半周期 75ms → 约 6.7Hz 快速闪烁 */
-const unsigned long FAULT_LED_BLINK_HALF_MS = 75UL;
-// 到位后立即 detach，持续 PWM 会导致数字舵机微抖
-const unsigned long SERVO_PWM_HOLD_MS = 0UL;
+const unsigned long MOTION_DETECT_LED_HALF_MS = 120UL; // 堵转红灯半周期，约 4.2Hz
+// 到位后保持 PWM 再 detach，避免数字舵机收口抽搐
+const unsigned long SERVO_PWM_HOLD_MS = 150UL;
 
 const char CMD_OPEN[] PROGMEM = "\xE6\x89\x93\xE5\xBC\x80";
 const char CMD_CLOSE[] PROGMEM = "\xE5\x85\xB3\xE9\x97\xAD";
@@ -821,20 +867,15 @@ const char CMD_STEALTH_ON[] PROGMEM = "\xE5\xBC\x80\xE5\x90\xAF\xE9\x9A\x90\xE8\
 const char CMD_STEALTH_OFF[] PROGMEM = "\xE9\x80\x80\xE5\x87\xBA\xE9\x9A\x90\xE8\x94\xBD";
 const char CMD_STEALTH_BTN_ON[] PROGMEM = "\xE5\x85\x81\xE8\xAE\xB8\xE6\x8C\x89\xE9\x92\xAE\xE9\x80\x80\xE5\x87\xBA";
 const char CMD_STEALTH_BTN_OFF[] PROGMEM = "\xE7\xA6\x81\xE6\xAD\xA2\xE6\x8C\x89\xE9\x92\xAE\xE9\x80\x80\xE5\x87\xBA";
-const char CMD_DELAY_PWR[] PROGMEM = "\xE5\xBB\xB6\xE6\x97\xB6\xE6\x96\xAD\xE7\x94\xB5";
 const char CMD_SPEED[] PROGMEM = "\xE8\xB0\x83\xE9\x80\x9F";
 const uint8_t SERVO_SPEED_MIN_PCT = 10;
 const uint8_t SERVO_SPEED_MAX_PCT = 100;
 const uint8_t SERVO_SPEED_DEFAULT_PCT = 100;
-const int DELAY_PWR_MIN_MAX = 10080;
 
 void handleBleCommand(char *cmd);
 
 void foldToRetract();
-void retractForStall();
-void writeServoFaultFastFold();
 void triggerStallRebound();
-void triggerStallDuringClose();
 void requestFlapOpen(bool stallRetry = false);
 void requestFlapClose(bool userRequest = true);
 bool canUserFlapControl();
@@ -844,6 +885,7 @@ void tickStealthKeyWindow();
 void watchdogFeed();
 void watchdogBegin();
 void requestSoftwareReset();
+void bootMoveToFold();
 bool isKeyOffCountdownActive();
 void btn5ServiceTick();
 void btn5Init();
@@ -855,15 +897,13 @@ void enterStealthMode();
 void exitStealthMode();
 void clearOpenMonitor();
 void tickFaultAlarm();
-bool faultIndicatorActive();
-void enterFaultLockState(bool holdCurrentAngle = false);
+void enterFaultLockState();
 bool isSelfCheckFaultLatched();
 bool btnDetectWindowActive();
 void restartBtnDetectWindow();
 void finishBtnDetectWindow();
 void savePendingFaultReport(uint8_t errType);
 void clearBtnDetectSamples();
-void sendStatusPacket();
 
 #if F2_KEY_SERIAL_DEBUG
 static void keyDbgLine(const __FlashStringHelper *tag);
@@ -904,17 +944,29 @@ uint8_t servoPwmOff = 1;
 uint8_t forceServoMove = 0;
 unsigned long servoPwmHoldUntil = 0;
 uint8_t autoLevelBusy = 0;
-static uint8_t reboundRetryClose = 0;
+static uint8_t reboundRetryOpen = 0;
+static uint8_t keyOnRstMk __attribute__((section(".noinit")));
 
 int lastMotorA0 = -1;
 unsigned long lastMotorSampleMs = 0;
 unsigned long bootSettleUntil = 0;
+static uint8_t bootStallEn = 0;
+#define bootStallFinish() do { if (bootStallEn != 2) bootStallEn = 0; } while (0)
 unsigned long btnDetectStartMs = 0;
 unsigned long flapSettleUntil = 0;
+static unsigned long flapEaseNextMs = 0;
+static unsigned long stallIgnoreUntil = 0;
 
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
 static bool f3FoldCloseWatchActive() {
-  return f3FoldCloseWatchPending || f3FoldCloseWatchMs != 0;
+  return item == 1 && (f3HfCfg & 1);
+}
+
+/* 翻开 8cm 监测：仅缓动/settle 中暂停；forceServoMove 标志可能常亮不能挡监测 */
+static bool f3FoldOpenWatchMotionBusy() {
+  if (openEaseActive) return true;
+  if (flapSettleUntil != 0 && (long)(millis() - flapSettleUntil) < 0) return true;
+  return false;
 }
 
 static bool f3ServoMotionBusy() {
@@ -955,6 +1007,10 @@ void servoStopHold() {
   servoPwmOff = 1;
   servoPwmHoldUntil = 0;
   servoMotionOff();
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  pinMode(F3_SERVO_PIN, OUTPUT);
+  digitalWrite(F3_SERVO_PIN, HIGH);
+#endif
 }
 
 void servoCancelPwmHold() {
@@ -963,14 +1019,19 @@ void servoCancelPwmHold() {
 
 void servoSchedulePwmRelease() {
   if (servoPwmOff || item == 3) return;
-  servoStopHold();
+  servoPwmHoldUntil = millis() + SERVO_PWM_HOLD_MS;
 }
 
-// 运动结束：写最终角并立刻断开 PWM
+// 运动结束：保持目标角一小段时间再 detach，避免重复 write + 立刻 detach 抽搐
 void servoFinalizePosition(int angle) {
   if (angle < 0) angle = 0;
   if (angle > 180) angle = 180;
-  if (!servoPwmOff) {
+  lastWrittenAngle = angle;
+  servoTrackItem = item;
+  servoTrackAngle = angle;
+  if (servoPwmOff) return;
+  int live = servo.read();
+  if (live < 0 || live > 180 || abs(live - angle) > 2) {
 #if F2_VARSERVO
     servo.write(angle);
     servo.stop();
@@ -978,8 +1039,7 @@ void servoFinalizePosition(int angle) {
     servo.write(angle);
 #endif
   }
-  lastWrittenAngle = angle;
-  servoStopHold();
+  servoPwmHoldUntil = millis() + SERVO_PWM_HOLD_MS;
 }
 
 void servoPrepareMove() {
@@ -987,8 +1047,11 @@ void servoPrepareMove() {
   servoCancelPwmHold();
   servoMotionOn();
   if (servoPwmOff) {
-    servo.attach(4);
+    servo.attach(F3_SERVO_PIN);
     servoPwmOff = 0;
+    if (lastWrittenAngle >= 0 && lastWrittenAngle <= 180) {
+      servo.write(lastWrittenAngle);
+    }
   }
 }
 
@@ -1011,45 +1074,41 @@ void servoWriteEaseStep(int angle, uint8_t speed) {
   else servo.write(angle);
 #else
   (void)speed;
-  servo.write(angle);
+  int c = lastWrittenAngle;
+  if (c < 0 || userServoSpeed >= 100 || abs(c - angle) <= 2) {
+    openEaseActive = 0;
+    lastWrittenAngle = angle;
+    servo.write(angle);
+    return;
+  }
+  if ((long)(millis() - flapEaseNextMs) < 0) return;
+  c += (angle > c) ? 1 : -1;
+  lastWrittenAngle = c;
+  servo.write(c);
+  openEaseActive = (c != angle);
+  flapEaseNextMs = millis() + (120UL - userServoSpeed);
 #endif
 }
 
+#if F2_VARSERVO
 uint8_t getUserServoSpeedByte() {
   uint8_t p = userServoSpeed;
   if (p < SERVO_SPEED_MIN_PCT) p = SERVO_SPEED_MIN_PCT;
   if (p > SERVO_SPEED_MAX_PCT) p = SERVO_SPEED_MAX_PCT;
-#if F2_VARSERVO
   return (uint8_t)map(p, SERVO_SPEED_MIN_PCT, SERVO_SPEED_MAX_PCT, 35, 255);
-#else
-  return 255;
+}
 #endif
-}
-
-uint8_t scaleServoSpeed(uint8_t base) {
-  if (base == 0) return 0;
-  uint16_t scaled = (uint16_t)base * userServoSpeed / 100;
-  if (scaled < 20) scaled = 20;
-  if (scaled > 255) scaled = 255;
-  return (uint8_t)scaled;
-}
-
-unsigned int scaleMoveDelayMs(unsigned int ms) {
-  if (userServoSpeed >= 100) return ms;
-  unsigned long scaled = (unsigned long)ms * 100UL / userServoSpeed;
-  if (scaled > 60000UL) scaled = 60000UL;
-  return (unsigned int)scaled;
-}
 
 void updateServoOutput();
 int readServoAngle();
 void selfCheckTick();
+static int readServoAngleLive();
 
 static unsigned long flapMoveSettleMs(int fromAngle, int toAngle) {
   unsigned long ms = (unsigned long)abs(toAngle - fromAngle) * 28UL + 400UL;
   if (ms < 400UL) ms = 400UL;
   if (ms > 2500UL) ms = 2500UL;
-  return scaleMoveDelayMs((unsigned int)ms);
+  return ms;
 }
 
 void tickFlapServoHold(int target) {
@@ -1058,13 +1117,13 @@ void tickFlapServoHold(int target) {
   if (!forceServoMove && servoMoveCommitted(target) && servoPwmOff && flapSettleUntil == 0) {
     if (item == 0) {
       foldHoldActive = 1;
-      if (target == item4) {
-        finishBtnDetectWindow();
-        if (!reboundAttempt) {
-          reboundWaitUntil = 0;
-          reboundRetryClose = 0;
-        }
+      finishBtnDetectWindow();
+      if (!reboundAttempt) {
+        reboundWaitUntil = 0;
       }
+    } else if (item == 1 && target == bianlaing && reboundAttempt > 0) {
+      reboundAttempt = 0;
+      reboundRetryOpen = 0;
     }
     return;
   }
@@ -1074,11 +1133,13 @@ void tickFlapServoHold(int target) {
     servoPrepareMove();
     int start = readServoAngle();
     if (start < 0 || start > 180) {
-      start = (target == bianlaing) ? item4 : bianlaing;
-      if (start < 0 || start > 180) start = target;
+      if (lastWrittenAngle >= 0 && lastWrittenAngle <= 180) start = lastWrittenAngle;
+      else start = (target == bianlaing) ? item4 : target;
     }
-    servoWriteEaseStep(target, getUserServoSpeedByte());
     if (start >= 0 && start <= 180) lastWrittenAngle = start;
+    openEaseActive = (userServoSpeed < 100 && abs(start - target) > 2);
+    if (openEaseActive) flapEaseNextMs = millis();
+    else servoWriteEaseStep(target, 0);
     servoTrackItem = item;
     servoTrackAngle = target;
     flapSettleUntil = millis() + flapMoveSettleMs(start, target);
@@ -1090,20 +1151,38 @@ void tickFlapServoHold(int target) {
     if (servoTrackItem != item || servoTrackAngle != target) {
       flapSettleUntil = 0;
     } else {
-      if (selfCheckOn == 1 && btnDetectWindowActive()) {
+      if (stallCheckActive() && btnDetectWindowActive()) {
         tickMotionA0Realtime(true);
       }
-      return;
+      if (!servoPwmOff) {
+        int live = readServoAngleLive();
+        if (live >= 0 && abs(live - target) <= 3) {
+          flapSettleUntil = 0;
+        } else {
+          return;
+        }
+      } else {
+        flapSettleUntil = 0;
+      }
     }
   }
 
   flapSettleUntil = 0;
-  if (openEaseActive) return;
   if (servoPwmOff) {
-    if (item == 0) foldHoldActive = 1;
+    if (lastWrittenAngle >= 0 && abs(lastWrittenAngle - target) <= 3) {
+      servoTrackItem = item;
+      servoTrackAngle = target;
+      if (item == 0) {
+        foldHoldActive = 1;
+        finishBtnDetectWindow();
+      }
+    } else {
+      servoTrackAngle = -1;
+      forceServoMove = 1;
+    }
     return;
   }
-  if (servoPwmHoldUntil != 0) {
+  if (servoPwmHoldUntil != 0 && (long)(millis() - servoPwmHoldUntil) < 0) {
     if (item == 0) foldHoldActive = 1;
     return;
   }
@@ -1112,20 +1191,12 @@ void tickFlapServoHold(int target) {
   servoFinalizePosition(target);
   if (item == 0) {
     foldHoldActive = 1;
-    if (target == item4) {
-      finishBtnDetectWindow();
-      if (!reboundAttempt) {
-        reboundWaitUntil = 0;
-        reboundRetryClose = 0;
-      }
+    finishBtnDetectWindow();
+    if (!reboundAttempt) {
+      reboundWaitUntil = 0;
     }
   }
-  if (selfCheckOn == 1 && !reboundFaultLatched && !reboundAttempt) {
-    reboundAttempt = 0;
-    reboundWaitUntil = 0;
-    reboundRetryClose = 0;
-    lastStatusSend = 0;
-  }
+  if (selfCheckOn == 1 && !reboundFaultLatched && !reboundAttempt) lastStatusSend = 0;
 }
 
 // 数字舵机到位后需停 PWM，否则会持续保持信号导致抖动
@@ -1138,10 +1209,6 @@ void waitServoSettle(int target) {
   unsigned long deadline = millis() + moveMs;
   while (millis() < deadline) {
     watchdogFeed();
-    if (btnDetectWindowActive()) {
-      tickMotionA0Realtime(true);
-      if (isSelfCheckFaultLatched()) return;
-    }
     delayWithBlePoll(16);
     if (selfCheckOn == 1 && (item == 0 || item == 1)) {
       int live = readServoAngle();
@@ -1190,13 +1257,6 @@ void trimBuf(char *s) {
   if (start > 0) memmove(s, s + start, strlen(s + start) + 1);
 }
 
-void drainBleRx() {
-  while (mySerial.available()) mySerial.read();
-  rxLen = 0;
-  rxBuf[0] = 0;
-  lastReceiveTime = 0;
-}
-
 /* 收包窗口内或缓冲非空：禁止 BLE 状态 TX，避免 SoftwareSerial 发 ANG: 冲掉中文命令 */
 static bool bleSerialRxBusy() {
   if (rxLen > 0) return true;
@@ -1208,16 +1268,7 @@ static bool bleSerialRxBusy() {
 static void f3BleDispatchCmd(char *cmd) {
   if (f3HeightCfgModeActive()) {
     if (cmdIsP(cmd, CMD_ADJ_FOLD) || cmdIsP(cmd, CMD_ADJ_BIG) || cmdIsP(cmd, CMD_ADJ_SMALL)) {
-      f3PrepareUserServoAngleCmd();
       handleBleCommand(cmd);
-      return;
-    }
-    if (cmdIsP(cmd, CMD_ADJ_BIG)) {
-      f3CalPreviewStep(-1);
-      return;
-    }
-    if (cmdIsP(cmd, CMD_ADJ_SMALL)) {
-      f3CalPreviewStep(1);
       return;
     }
   }
@@ -1231,14 +1282,16 @@ static void f3BleDispatchCmd(char *cmd) {
 
 static void dispatchBleRxCmd() {
   trimBuf(rxBuf);
-  if (rxBuf[0] == 0) return;
-  if (rxBuf[0] == 'A' && rxBuf[1] == 'N' && rxBuf[2] == 'G' && rxBuf[3] == ':') return;
+  if (!rxBuf[0]) return;
+  uint8_t flapRx = cmdIsP(rxBuf, CMD_OPEN) || cmdIsP(rxBuf, CMD_CLOSE);
   f3BleDispatchCmd(rxBuf);
+  if (flapRx) lastReceiveTime = millis();
 }
 
-/* 收包：# 立即派发；超时兜底。与 f2_max_servo 一致，DA/TB/M1 依赖 # 结尾 */
 void pollBleSerial() {
-  while (mySerial.available()) {
+  uint8_t rxBudget = 40;
+  while (mySerial.available() && rxBudget--) {
+    wdt_reset();
     int b = mySerial.read();
     if (b < 0) break;
     char c = (char)(b & 0xFF);
@@ -1317,8 +1370,8 @@ void pollBleSerial() {
   }
 }
 
-bool sampleStallDuringOpen();
 bool tickMotionA0Realtime(bool forceSample);
+static int readServoAngleLive();
 
 bool flapOpenMoving() {
   if (item != 1) return false;
@@ -1329,9 +1382,18 @@ bool flapCloseMoving() {
   if (item != 0) return false;
   if (openEaseActive || flapSettleUntil != 0) return true;
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  if (f3SensorOk && (f3SensorValid || f3HasFilt) && f3TofSaysFoldNear()) return false;
+  if ((f3HfCfg & 1) && f3SensorOk && (f3SensorValid || f3HasFilt) && f3TofSaysFoldNear()) return false;
 #endif
+#if F3_MAX_BUILD
+  int foldT = foldAdjustActive ? (int)item4 : f3FoldMotionTarget();
+  if (!openEaseActive && flapSettleUntil == 0) {
+    int live = readServoAngleLive();
+    if (live >= 0 && abs(live - foldT) <= 3) return false;
+  }
+  return !servoAtAngle(foldT);
+#else
   return !servoAtAngle(item4);
+#endif
 }
 
 bool flapMotionMoving() {
@@ -1354,6 +1416,7 @@ bool f3HeightMonitorActive() {
 #endif
     return true;
   }
+  if (!(f3HfCfg & 1)) return false;
   if (autoLevelBusy) return false;
   if (foldAdjustActive) return false;
   if (item == 0) {
@@ -1378,11 +1441,19 @@ bool stallCheckActive() {
 }
 
 bool motionCheckActive() {
+  if (foldAdjustActive) return false;
   if (keyOffRetractBusy) return false;
-  return stallCheckActive();
+  if (foldHoldActive && servoPwmOff) return false;
+  if (!stallCheckActive()) return false;
+  // 调速非 100% 时为缓动步进，A0 特征与全速不同，不做堵转检测
+  if (userServoSpeed < SERVO_SPEED_MAX_PCT) return false;
+  return true;
 }
 
 static bool keyOffRetractEnabled() {
+#if F3_MAX_BUILD
+  if (f3PowerOffLockOn) return true;
+#endif
   return accRetractOn == 1;
 }
 
@@ -1392,6 +1463,24 @@ static bool keyOffRetractEligible() {
   if (item == 1) return true;
   return false;
 }
+
+#if F3_MAX_BUILD
+static int f3FoldUserTarget() {
+  int t = (int)item4 - (int)F3_FOLD_USER_DELTA;
+  return t < 0 ? 0 : t;
+}
+
+static int f3KeyOffFoldTarget() {
+  return f3PowerOffLockOn ? (int)item4 : f3FoldUserTarget();
+}
+
+static int f3FoldMotionTarget() {
+  // 断电锁死开启且钥匙已关：全程都以 item4 为目标（含本来已在 item4-10）
+  if (f3PowerOffLockOn && pin2KeyOffStable()) return (int)item4;
+  if (keyOffRetractBusy) return f3KeyOffFoldTarget();
+  return f3FoldUserTarget();
+}
+#endif
 
 static int readServoAngleLive();
 
@@ -1404,18 +1493,16 @@ static bool f3TofSaysFoldNear() {
   return mm < F3_FOLD_NEAR_MM;
 }
 
-/* 翻开测距异常：绿灯亮(item=1)时测距应 <8cm；≥8cm 视为未到位/异常 */
+/* 翻开测距异常：无读数/超量程/≥8cm 均视为未到位 */
 static bool f3TofSaysFoldOpenFault() {
-  if (!f3SensorOk) return false;
-  if (!f3SensorValid && !f3HasFilt) return false;
-  uint16_t mm = f3SensorValid ? f3LastFiltMm : (uint16_t)f3FiltMm;
-  if (mm == 0) return false;
-  return mm >= F3_FOLD_NEAR_MM;
+  if (!f3SensorOk) return true;
+  if (!f3SensorValid) return true;
+  if (f3LastFiltMm == 0) return true;
+  return f3LastFiltMm >= F3_FOLD_NEAR_MM;
 }
 
 static void f3ClearFoldCloseWatch() {
   f3FoldCloseWatchMs = 0;
-  f3FoldCloseWatchPending = 0;
   if (f3FoldCloseFault) {
     f3FoldCloseFault = 0;
     statusLedUpdate();
@@ -1424,60 +1511,75 @@ static void f3ClearFoldCloseWatch() {
 
 static void f3ArmFoldCloseWatch() {
   f3FoldCloseWatchMs = 0;
-  f3FoldCloseWatchPending = 1;
   if (f3FoldCloseFault) {
     f3FoldCloseFault = 0;
     statusLedUpdate();
   }
 }
 
-static void f3FoldCloseGoGreen() {
-  f3WriteLeds(0, 1);
-}
-
 static void f3TickFoldCloseWatch() {
-  if (item != 1) {
-    f3FoldCloseWatchMs = 0;
-    f3FoldCloseWatchPending = 0;
+  if (foldAdjustActive) return;
+  if (!(f3HfCfg & 1)) {
+    f3ClearFoldCloseWatch();
     return;
   }
-  /* 翻开动作中不测距；到位后 <8cm=正常绿灯常亮，≥8cm 连续 8s 才报警 */
-  if (f3ServoMotionBusy()) {
+  // 堵转优先：不再跑折叠 TOF 报警
+  if (reboundFaultLatched || pendingFaultReport == 2) {
+    f3FoldCloseWatchMs = 0;
+    if (f3FoldCloseFault) {
+      f3FoldCloseFault = 0;
+    }
+    return;
+  }
+  if (item != 1) {
     f3FoldCloseWatchMs = 0;
     return;
+  }
+  /* 翻开缓动/settle 中暂停采样；计时不清零（settle 抖动否则永远凑不满 8s） */
+  if (f3FoldOpenWatchMotionBusy()) {
+    return;
+  }
+  {
+    uint16_t raw = 0;
+    if (f3ReadSample(raw)) {
+      f3LastRawMm = raw;
+      f3LastFiltMm = f3FilterMm(raw);
+      f3HasFilt = 1;
+      f3SensorValid = 1;
+    } else {
+      f3SensorValid = 0;
+    }
   }
   if (!f3TofSaysFoldOpenFault()) {
     f3FoldCloseWatchMs = 0;
-    f3FoldCloseWatchPending = 0;
     if (f3FoldCloseFault) {
       f3FoldCloseFault = 0;
       statusLedUpdate();
-    } else {
-      f3FoldCloseGoGreen();
     }
     return;
   }
   if (f3FoldCloseWatchMs == 0) {
     f3FoldCloseWatchMs = millis();
-    f3FoldCloseWatchPending = 0;
     return;
   }
   if (millis() - f3FoldCloseWatchMs >= F3_FOLD_CLOSE_TIMEOUT_MS) {
     if (!f3FoldCloseFault) {
       f3FoldCloseFault = 1;
-      digitalWrite(F3_PIN_LED_GREEN, LOW);
-      digitalWrite(8, LOW);
-      statusLedUpdate();
+      f3ForceStatusOnce = 1;
+      lastStatusSend = 0;
+      tickFaultAlarm();
     }
   }
 }
 #endif
 
+#if !F3_MAX_BUILD
 static bool flapPhysicallyAtFold() {
   int live = readServoAngleLive();
   if (live < 0 || live > 180) return false;
   return abs(live - item4) <= 2;
 }
+#endif
 
 // 关机位置=收回且 2 号已关：收牌全程不做堵转/电机检测
 static void armKeyOffRetractSuppress() {
@@ -1487,8 +1589,6 @@ static void armKeyOffRetractSuppress() {
   clearOpenMonitor();
   reboundWaitUntil = 0;
   reboundAttempt = 0;
-  reboundRetryClose = 0;
-  reboundStuckCount = 0;
   stuckCount = 0;
 }
 
@@ -1498,8 +1598,10 @@ static void tickKeyOffRetractDone() {
     keyOffRetractBusy = 0;
     return;
   }
-  if (item == 0 && !openEaseActive && flapPhysicallyAtFold()) {
-    keyOffRetractBusy = 0;
+  if (item == 0 && !openEaseActive) {
+    if (abs(readServoAngleLive() - f3KeyOffFoldTarget()) <= 2) {
+      keyOffRetractBusy = 0;
+    }
   }
 }
 
@@ -1529,12 +1631,50 @@ void restartBtnDetectWindow() {
   clearBtnDetectSamples();
 }
 
+// 用户中途反向：2s 内不计堵转，避免 A0 尖峰误锁死
+static void armStallGraceAfterUserReverse() {
+  clearBtnDetectSamples();
+  reboundAttempt = 0;
+  reboundWaitUntil = 0;
+  reboundRetryOpen = 0;
+  stallIgnoreUntil = millis() + 800UL;
+}
+
 void finishBtnDetectWindow() {
   if (btnDetectStartMs == 0) return;
   btnDetectStartMs = 0;
   openStartMs = 0;
   clearBtnDetectSamples();
+  if (item == 0 && reboundWaitUntil == 0) {
+    reboundAttempt = 0;
+  }
 }
+
+// 打开/折叠角度微调：仅动舵机，不做堵转/测距/故障上报
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+static void f3EnterAngleAdjustCmd() {
+  f3PrepareUserServoAngleCmd();
+  foldAdjustActive = 1;
+  finishBtnDetectWindow();
+  armStallGraceAfterUserReverse();
+}
+
+static void f3BeginOpenAngleBleCmd() {
+  f3EnterAngleAdjustCmd();
+  if (item != 3) {
+    item = 1;
+    foldHoldActive = 0;
+    statusLedUpdate();
+  }
+}
+
+static void f3WriteBianlaingEeprom() {
+  invalidateServoHold();
+  writeServo(bianlaing);
+  EEPROM.put(1, bianlaing);
+  lastStatusSend = 0;
+}
+#endif
 
 // Pin5 十秒窗：只做堵转检测。
 bool tickMotionA0Realtime(bool forceSample) {
@@ -1545,6 +1685,8 @@ bool tickMotionA0Realtime(bool forceSample) {
   if (btnDetectStartMs == 0) return false;
 
   unsigned long now = millis();
+  if ((long)(now - stallIgnoreUntil) < 0) return false;
+
   unsigned long elapsed = now - btnDetectStartMs;
 
   if (elapsed > BTN_DETECT_WINDOW_MS) {
@@ -1552,6 +1694,7 @@ bool tickMotionA0Realtime(bool forceSample) {
     return false;
   }
 
+  // 与 F2 一致：检测窗内持续采样，不因 TOF/运动标志提前跳过
   if (elapsed < STALL_ARM_MS) return false;
 
   if (!forceSample && now - lastMotorSampleMs < BTN_DETECT_SAMPLE_MS) return false;
@@ -1572,9 +1715,8 @@ bool tickMotionA0Realtime(bool forceSample) {
 
   if (a0 < BTN_STALL_A0_THR) {
     stuckCount++;
-  } else if (a0 >= BTN_STALL_RELEASE_A0_THR) {
-    stuckCount = 0;
   }
+  // 不再因 A0 回升清零计数，累计满 BTN_STALL_HITS_NEED 即判堵转
 
   if (stuckCount >= BTN_STALL_HITS_NEED) {
     btnDetectStartMs = 0;
@@ -1584,17 +1726,12 @@ bool tickMotionA0Realtime(bool forceSample) {
     Serial.print(F("STALL a0="));
     Serial.println(a0);
 #endif
-    if (item == 1) triggerStallRebound();
-    else triggerStallDuringClose();
+    triggerStallRebound();
     return true;
   }
 
   debugPrintMotionA0(a0);
   return false;
-}
-
-bool sampleStallDuringOpen() {
-  return tickMotionA0Realtime(true);
 }
 
 bool inBootSettle() {
@@ -1612,13 +1749,9 @@ void delayWithBlePoll(unsigned long ms) {
       sendStatusPacket();
     }
     tickStealthKeyWindow();
-    btn5ServiceTick();
-    btn5ServiceTick();
     watchdogFeed();
     updatePin9Power();
-    if (!autoLevelBusy && btnDetectWindowActive()) {
-      tickMotionA0Realtime(true);
-    }
+    if (reboundFaultLatched) tickFaultAlarm();
   }
 }
 
@@ -1633,11 +1766,7 @@ void watchdogBegin() {
 
 // 关钥匙后 Pin9 须持续高电平至 pin9HoldUntil，期间 Pin2 抖动不得拉低 Pin9（否则整机断电）
 unsigned long keyOffHoldDurationMs() {
-  unsigned long ms = STEALTH_ENTRY_WINDOW_MS;
-  if (delayPowerOffMin > 0) {
-    ms += (unsigned long)delayPowerOffMin * 60000UL;
-  }
-  return ms;
+  return STEALTH_ENTRY_WINDOW_MS;
 }
 
 #if F2_SERIAL_DEBUG
@@ -1653,8 +1782,6 @@ void debugLogPin9(const __FlashStringHelper *tag, uint8_t pin9Out) {
   Serial.print(pin9Out);
   Serial.print(F(" holdMs="));
   Serial.print(left);
-  Serial.print(F(" dpoMin="));
-  Serial.print(delayPowerOffMin);
   Serial.print(F(" exp="));
   Serial.println(pin9HoldExpired);
 }
@@ -1715,6 +1842,8 @@ void requestSoftwareReset() {
   Serial.println(F("[RESET] key on during countdown"));
   Serial.flush();
 #endif
+  keyOnRstMk = 0xA5;
+  if (item == 3 && stealthActive) keyOnRstMk = 0xA7;
   pinMode(9, OUTPUT);
   digitalWrite(9, HIGH);
   cli();
@@ -1730,14 +1859,7 @@ bool isStealthEntryWindow() {
   return (millis() - stealthWindowStart) < STEALTH_ENTRY_WINDOW_MS;
 }
 
-// 10 秒之后的可配置延时断电阶段：按键无效
-bool isDelayPowerOffPhase() {
-  if (!isKeyOffPin9HoldWindow() || stealthWindowStart == 0) return false;
-  return (millis() - stealthWindowStart) >= STEALTH_ENTRY_WINDOW_MS;
-}
-
-// 关钥匙延时断电全程：禁止手动翻板；系统动作（关钥匙收回、堵转、开机）可 force 绕过
-// 2 号必须为高（钥匙开）：引脚掉线/关钥匙时 Pin5 与蓝牙翻板均无效
+// 关钥匙后前 10 秒：可长按进隐蔽（F3 无延时断电分钟）
 bool canUserFlapControl() {
   if (isSelfCheckFaultLatched()) return false;
   if (item == 3 || autoLevelBusy) return false;
@@ -1748,7 +1870,6 @@ bool canUserFlapControl() {
 bool canEnterStealthViaBtn5() {
   if (isSelfCheckFaultLatched()) return false;
   if (item == 3 || autoLevelBusy) return false;
-  if (isDelayPowerOffPhase()) return false;
   if (digitalRead(2) == HIGH) return true;
   return isStealthEntryWindow();
 }
@@ -1782,6 +1903,7 @@ static void tickKeyOffServoIdlePwm() {
   if (digitalRead(2) != LOW) return;
   if (keyOffRetractBusy) return;
   if (openEaseActive || flapMotionMoving()) return;
+  if (servoPwmHoldUntil != 0 && (long)(millis() - servoPwmHoldUntil) < 0) return;
   if (!servoPwmOff) {
     servoStopHold();
   }
@@ -1801,6 +1923,10 @@ void tickStealthKeyWindow() {
     }
     return;
   }
+
+#if F3_MAX_BUILD
+  if (stealthEntryBusy) return;
+#endif
 
   if (!pin2EdgeInit) {
     lastPin2High = pin2High;
@@ -1828,9 +1954,22 @@ void tickStealthKeyWindow() {
     if (pin2KeyOffStable() && !keyOffFoldHandled && keyOffRetractEligible()) {
       keyOffFoldHandled = true;
       if (!isSelfCheckFaultLatched()) {
-        if (keyOffRetractEnabled() && item != 0 && item != 3 && !autoLevelBusy) {
-          KDBG_L("KEY_OFF_RETRACT");
-          requestFlapClose(false);
+        if (keyOffRetractEnabled() && item != 3 && !autoLevelBusy
+#if F3_MAX_BUILD
+            && !stealthEntryBusy
+#endif
+            ) {
+          if (item != 0) {
+            KDBG_L("KEY_OFF_RETRACT");
+            requestFlapClose(false);
+          }
+#if F3_MAX_BUILD
+          else if (f3PowerOffLockOn && abs(readServoAngleLive() - (int)item4) > 2) {
+            // 已在日常折叠(item4-10)：断电锁死再推到锁止位 item4
+            KDBG_L("KEY_OFF_LOCK_TO_ITEM4");
+            requestFlapClose(false);
+          }
+#endif
         } else if (keyOffRetractEnabled() && item != 0 && item != 3 && autoLevelBusy) {
           KDBG_L("KEY_OFF_FOLD_PENDING");
           pendingKeyOffFold = 1;
@@ -1867,9 +2006,9 @@ void tickStealthKeyWindow() {
 }
 
 /* =============================================================================
- * BLOCK: Stealth mode — 隐蔽模式（进入后折回、Pin9 保持 3h；Pin2/蓝牙翻板无效）
+ * BLOCK: Stealth mode — 隐蔽模式（折回后 Pin9 拉低；EEPROM 记忆；重上电保持隐蔽且无 PWM，退出后恢复）
  * ============================================================================= */
-static void stealthFoldToItem4Blocking();
+static void stealthFoldToLockFast();
 static void finishStealthSession(uint8_t autoPowerOff);
 
 static void stealthAckBlink(uint8_t times) {
@@ -1898,29 +2037,36 @@ void enterStealthMode() {
   foldAdjustActive = 0;
   pendingKeyOffFold = 0;
   keyOffRetractBusy = 0;
+  stealthEntryBusy = 1;
 
   releasePin9KeyOffHold();
   digitalWrite(9, HIGH);
+
+  // 先折到锁止位 item4，再闪灯确认（避免闪灯期间关钥匙收回抢舵机）
+  stealthFoldToLockFast();
 
 #if F3_MAX_BUILD
   f3WriteLeds(0, 1);
 #else
   digitalWrite(8, HIGH);
 #endif
-  stealthAckBlink(3);
-
-  stealthFoldToItem4Blocking();
+  stealthAckBlink(2);
 
   item = 3;
   stealthActive = 1;
   stealthElapsedMin = 0;
   stealthMinuteMark = millis();
+  stealthEntryBusy = 0;
 
   invalidateServoHold();
   foldHoldActive = 1;
   openEaseActive = 0;
   forceServoMove = 0;
   servoStopHold();
+  servoMotionOff();
+#if F3_MAX_BUILD
+  stealthPersistSave(1);
+#endif
 #if F3_MAX_BUILD
   f3WriteLeds(0, 0);
 #else
@@ -1933,20 +2079,32 @@ void enterStealthMode() {
 }
 
 static void finishStealthSession(uint8_t autoPowerOff) {
+#if F3_MAX_BUILD
+  stealthPersistClear();
+#endif
   stealthActive = 0;
   item = 0;
   stealthElapsedMin = 0;
   stealthMinuteMark = 0;
   invalidateServoHold();
-  foldHoldActive = 1;
   forceServoMove = 0;
   releasePin9KeyOffHold();
   if (autoPowerOff && digitalRead(2) == LOW) {
     expirePin9KeyOffHold();
     digitalWrite(9, LOW);
+  } else {
+    digitalWrite(9, HIGH);
   }
   updatePin9Power();
   statusLedUpdate();
+  if (autoPowerOff) {
+    foldHoldActive = 1;
+  } else {
+    lastWrittenAngle = item4;
+    bootStallEn = userServoSpeed >= SERVO_SPEED_MAX_PCT;
+    bootMoveToFold();
+    bootStallFinish();
+  }
   btn5NoteStealthExited();
 }
 
@@ -1993,12 +2151,12 @@ void updatePin9Power() {
     return;
   }
 
-  // 隐蔽模式：Pin9 全程保持高电平，不受延时断电/关钥匙影响
+  // 隐蔽模式：Pin9 拉低（断电隐蔽）；重上电由 EEPROM 恢复后继续隐蔽循环
   if (item == 3 && stealthActive) {
     pin9HoldUntil = 0;
     pin9HoldExpired = 0;
     stealthWindowStart = 0;
-    digitalWrite(9, HIGH);
+    digitalWrite(9, LOW);
     return;
   }
 
@@ -2065,8 +2223,8 @@ void tickPin9PowerWatchdog() {
 #endif
 
   if (item == 3 && stealthActive) {
-    if (digitalRead(9) != HIGH) {
-      digitalWrite(9, HIGH);
+    if (digitalRead(9) != LOW) {
+      digitalWrite(9, LOW);
       KDBG_L("PIN9_WDT_STEALTH");
     }
     return;
@@ -2096,11 +2254,14 @@ void tickPin9PowerWatchdog() {
   }
 }
 
-// 打开收回：关钥匙期间确保折回到 item4；运动交给 updateServoOutput 平滑处理
+// 打开收回：关钥匙期间确保折回；运动交给 updateServoOutput 平滑处理
 void tickAccRetractJudge() {
   if (isSelfCheckFaultLatched()) return;
   if (inBootSettle()) return;
   if (item == 3) return;
+#if F3_MAX_BUILD
+  if (stealthEntryBusy) return;
+#endif
   if (!keyOffRetractEnabled()) return;
   if (!pin2KeyOffStable()) return;
   if (!keyOffRetractEligible()) return;
@@ -2111,9 +2272,20 @@ void tickAccRetractJudge() {
     requestFlapClose(false);
     return;
   }
+#if F3_MAX_BUILD
+  // 已在折叠态：断电锁死须再推到 item4（不要停在 item4-10）
+  if (item == 0) {
+    int goal = f3KeyOffFoldTarget();
+    int lv = readServoAngleLive();
+    if (lv < 0 || lv > 180 || abs(lv - goal) > 2) {
+      requestFlapClose(false);
+    }
+  }
+#else
   if (item == 0 && !flapPhysicallyAtFold()) {
     requestFlapClose(false);
   }
+#endif
 }
 
 int readServoAngle() {
@@ -2123,7 +2295,7 @@ int readServoAngle() {
   }
   if (lastWrittenAngle >= 0 && lastWrittenAngle <= 180) return lastWrittenAngle;
   int cur = servo.read();
-  if (cur < 0 || cur > 180) cur = 0;
+  if (cur < 0 || cur > 180) cur = item4;
   return cur;
 }
 
@@ -2140,8 +2312,8 @@ static int readServoAngleLive() {
  * BLOCK: Status LED (Pin8) — 翻开亮 / 折回灭；故障时由 tickFaultAlarm 闪烁
  * ============================================================================= */
 bool faultIndicatorActive() {
-  if (reboundFaultLatched) return true;
-  return pendingFaultReport == 2;
+  if (foldAdjustActive) return false;
+  return reboundFaultLatched || pendingFaultReport == 2;
 }
 
 void statusLedUpdate() {
@@ -2204,7 +2376,6 @@ static void waitServoReach(int angle) {
     if (forceServoMove || item != expectItem) break;
     if (item == 0 || item == 1) updateServoOutput();
     pollBleSerial();
-    btn5ServiceTick();
     watchdogFeed();
     tickStealthKeyWindow();
     updatePin9Power();
@@ -2212,49 +2383,86 @@ static void waitServoReach(int angle) {
   }
 }
 
-// 进入隐蔽前阻塞折回到 item4
-static void stealthFoldToItem4Blocking() {
-  if (item == 0 && flapPhysicallyAtFold()) {
-    lastWrittenAngle = item4;
-    servoTrackItem = 0;
-    servoTrackAngle = item4;
-    foldHoldActive = 1;
-    return;
+// 进入隐蔽：满速折到锁止位 item4，折完再切 item=3
+static void stealthFoldToLockFast() {
+  int target = item4;
+  if (target < 0) target = 0;
+  if (target > 180) target = 180;
+
+  int cur = readServoAngleLive();
+  if (cur < 0 || cur > 180) {
+    cur = lastWrittenAngle;
+    if (cur < 0 || cur > 180) {
+      cur = (item == 1) ? bianlaing : f3FoldUserTarget();
+    }
   }
 
   abortOpenMotion();
   reboundWaitUntil = 0;
-  reboundRetryClose = 0;
   foldAdjustActive = 0;
   item = 0;
   foldHoldActive = 0;
   forceServoMove = 1;
   invalidateServoHold();
   statusLedUpdate();
-
-  int cur = readServoAngleLive();
-  if (cur < 0 || cur > 180) {
-    cur = lastWrittenAngle;
-    if (cur < 0 || cur > 180) cur = bianlaing;
-  }
   lastWrittenAngle = cur;
 
-  writeServoDirect(item4);
-  waitServoReach(item4);
-  waitServoSettle(item4);
-  forceServoMove = 0;
+  if (abs(cur - target) <= 2) {
+    servoPrepareMove();
+#if F2_VARSERVO
+    servo.write(target, 255);
+#else
+    servo.write(target);
+#endif
+    servoFinalizePosition(target);
+    lastWrittenAngle = target;
+    servoTrackItem = 0;
+    servoTrackAngle = target;
+    foldHoldActive = 1;
+    forceServoMove = 0;
+    return;
+  }
+
+  unsigned long deadline = millis() + 12000UL;
+  unsigned long lastCmdMs = 0;
+  uint8_t stableHits = 0;
+
+  while ((long)(millis() - deadline) < 0 && !isSelfCheckFaultLatched()) {
+    unsigned long now = millis();
+    pollBleSerial();
+    watchdogFeed();
+    updatePin9Power();
+
+    int live = readServoAngleLive();
+    if (live >= 0 && abs(live - target) <= 3) {
+      if (++stableHits >= 5) break;
+    } else {
+      stableHits = 0;
+    }
+
+    if (lastCmdMs == 0 || (now - lastCmdMs) >= 80UL) {
+      lastCmdMs = now;
+      if (servoPwmOff) servoPrepareMove();
+#if F2_VARSERVO
+      servo.write(target, 255);
+#else
+      servo.write(target);
+#endif
+      servoTrackItem = 0;
+      servoTrackAngle = target;
+    }
+    delayWithBlePoll(16);
+  }
 
   if (!isSelfCheckFaultLatched()) {
-    servoFinalizePosition(item4);
-    lastWrittenAngle = item4;
-    servoTrackItem = 0;
-    servoTrackAngle = item4;
-    foldHoldActive = 1;
+    servoFinalizePosition(target);
   }
+  foldHoldActive = 1;
+  forceServoMove = 0;
 }
 
 bool servoAtAngle(int angle) {
-  return lastWrittenAngle >= 0 && lastWrittenAngle == angle;
+  return lastWrittenAngle >= 0 && abs(lastWrittenAngle - angle) <= 3;
 }
 
 bool servoMoveCommitted(int angle) {
@@ -2284,8 +2492,7 @@ void writeServo(int angle) {
         if (item != 1) return;
         delayWithBlePoll(20);
         pollBleSerial();
-        btn5ServiceTick();
-        if (sampleStallDuringOpen()) return;
+        if (tickMotionA0Realtime(true)) return;
       }
       if (item != 1) return;
       if (isSelfCheckFaultLatched()) return;
@@ -2320,11 +2527,15 @@ void updateServoOutput() {
   if (item != 0 && item != 1) return;
   if (isSelfCheckFaultLatched()) return;
   if (reboundWaitUntil > 0 && !forceServoMove) return;
-  int target = (item == 1) ? bianlaing : item4;
-
-  if (foldAdjustActive && item == 0) {
-    tickFlapServoHold(target);
-    return;
+  int target;
+  if (item == 1) {
+    target = bianlaing;
+  } else {
+#if F3_MAX_BUILD
+    target = f3FoldMotionTarget();
+#else
+    target = item4;
+#endif
   }
 
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
@@ -2334,6 +2545,15 @@ void updateServoOutput() {
   }
 #endif
 
+  if (foldAdjustActive && item == 0) {
+    tickFlapServoHold(item4);
+    return;
+  }
+
+  if (openEaseActive) {
+    servoWriteEaseStep(target, 0);
+    return;
+  }
   tickFlapServoHold(target);
 }
 
@@ -2350,13 +2570,18 @@ void debugPrintMotionA0(int a0) {
  * ============================================================================= */
 void requestFlapOpen(bool stallRetry) {
   if (item == 1 && !stallRetry && servoMoveCommitted(bianlaing)) return;
-  if (!stallRetry && f3OpenBlockedByDanger()) return;
+  if (!stallRetry && f3FlapOpenDangerBlocked()) return;
   if (!stallRetry && !canUserFlapControl()) return;
   if (item == 3 || autoLevelBusy) return;
 
+  // 中途反向：抑制 A0 尖峰误堵转
+  if (!stallRetry && (forceServoMove || openEaseActive || flapMotionMoving())) {
+    armStallGraceAfterUserReverse();
+  }
+
   abortOpenMotion();
   reboundWaitUntil = 0;
-  reboundRetryClose = 0;
+  if (!stallRetry) reboundRetryOpen = 0;
 
   foldAdjustActive = 0;
   int cur = readServoAngleLive();
@@ -2367,8 +2592,11 @@ void requestFlapOpen(bool stallRetry) {
   item = 1;
   pin2SeenHighSinceBoot = 1;
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  f3ArmFoldCloseWatch();
-  f3FoldCloseGoGreen();
+  if (f3HfCfg & 1) {
+    f3ArmFoldCloseWatch();
+  } else {
+    f3ClearFoldCloseWatch();
+  }
 #endif
   statusLedUpdate();
   invalidateServoHold();
@@ -2383,12 +2611,18 @@ void requestFlapOpen(bool stallRetry) {
 }
 
 void requestFlapClose(bool userRequest) {
-  if (userRequest && !canUserFlapControl()) return;
-  if (userRequest && item == 0 && !openEaseActive && servoMoveCommitted(item4)) return;
+  if (userRequest) {
+    if (item == 3 || autoLevelBusy) return;
+  }
+#if F3_MAX_BUILD
+  int userFoldT = f3FoldUserTarget();
+#else
+  int userFoldT = item4;
+#endif
+  if (userRequest && item == 0 && !openEaseActive && servoMoveCommitted(userFoldT)) return;
 
-  // 折回已在进行：忽略重复「关闭」（反向打断请发「打开」/再按 Pin5）
-  if (userRequest && item == 0 && !servoMoveCommitted(item4)) {
-    if (servoTrackItem == 0 && servoTrackAngle == item4) {
+  if (userRequest && item == 0 && !servoMoveCommitted(userFoldT)) {
+    if (servoTrackItem == 0 && servoTrackAngle == userFoldT) {
       return;
     }
   }
@@ -2396,18 +2630,27 @@ void requestFlapClose(bool userRequest) {
   if (!userRequest) {
     clearOpenMonitor();
     armKeyOffRetractSuppress();
-    if (item == 0 && !openEaseActive && servoMoveCommitted(item4) && flapPhysicallyAtFold()) {
+#if F3_MAX_BUILD
+    int foldGoal = f3KeyOffFoldTarget();
+#else
+    int foldGoal = item4;
+#endif
+    if (item == 0 && !openEaseActive && servoMoveCommitted(foldGoal) &&
+        abs(readServoAngleLive() - foldGoal) <= 2) {
       return;
     }
-  } else if (motionCheckActive()) {
-    restartBtnDetectWindow();
+  } else {
+    if (item == 1 || forceServoMove || openEaseActive || flapMotionMoving()) {
+      armStallGraceAfterUserReverse();
+    } else if (motionCheckActive()) {
+      restartBtnDetectWindow();
+    }
   }
   foldToRetract();
 }
 
 void eePutBlink(int addr, int val) {
   EEPROM.put(addr, val);
-  blinkPin8(3, 100, 100);
   lastStatusSend = 0;
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
   f3ForceStatusOnce = 1;
@@ -2417,8 +2660,6 @@ void eePutBlink(int addr, int val) {
 
 void resetOpenGuard() {
   openStartMs = millis();
-  reboundStuckCount = 0;
-  lastStallSampleMs = 0;
   lastMotorSampleMs = 0;
   stuckCount = 0;
   lastMotorA0 = -1;
@@ -2426,10 +2667,8 @@ void resetOpenGuard() {
 
 void beginOpenAttempt(bool preserveStallCount) {
   reboundWaitUntil = 0;
-  reboundRetryClose = 0;
   if (!preserveStallCount) {
-    reboundFaultLatched = 0;
-    EEPROM.put(24, (uint8_t)0);
+    // 不在此处清 reboundFaultLatched：堵转锁必须重启才解除
     reboundAttempt = 0;
   }
   resetOpenGuard();
@@ -2442,18 +2681,13 @@ void foldToRetract() {
   if (item == 3) return;
   abortOpenMotion();
   reboundWaitUntil = 0;
-  reboundAttempt = 0;
-  reboundStuckCount = 0;
-  lastStallSampleMs = 0;
+  if (!reboundRetryOpen) reboundAttempt = 0;
   stealthActive = 0;
   foldAdjustActive = 0;
   int cur = readServoAngleLive();
   if (cur < 0 || cur > 180) {
     cur = lastWrittenAngle;
-    if (cur < 0 || cur > 180) {
-      cur = bianlaing;
-      if (cur < 0 || cur > 180) cur = item4;
-    }
+    if (cur < 0 || cur > 180) cur = f3FoldMotionTarget();
   }
   item = 0;
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
@@ -2464,100 +2698,35 @@ void foldToRetract() {
   foldHoldActive = 0;
   invalidateServoHold();
   lastWrittenAngle = cur;
-  lastStatusSend = 0;
-}
-
-void retryFlapCloseMotion() {
-  if (item == 3) return;
-  foldAdjustActive = 0;
-  int cur = readServoAngleLive();
-  if (cur < 0 || cur > 180) {
-    cur = lastWrittenAngle;
-    if (cur < 0 || cur > 180) {
-      cur = bianlaing;
-      if (cur < 0 || cur > 180) cur = item4;
-    }
-  }
-  item = 0;
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  f3ClearFoldCloseWatch();
-#endif
-  statusLedUpdate();
-  forceServoMove = 1;
-  foldHoldActive = 0;
-  invalidateServoHold();
-  lastWrittenAngle = cur;
-  if (motionCheckActive()) restartBtnDetectWindow();
-  lastStatusSend = 0;
-}
-
-void retractForStall() {
-  if (item == 3) return;
-  abortOpenMotion();
-  stealthActive = 0;
-  item = 0;
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  f3ClearFoldCloseWatch();
-#endif
-  forceServoMove = 1;
-  foldHoldActive = 0;
-  invalidateServoHold();
   lastStatusSend = 0;
 }
 
 void triggerStallRebound() {
   if (reboundFaultLatched) return;
-
-  reboundRetryClose = 0;
-  reboundStuckCount = 0;
   stuckCount = 0;
-  lastStallSampleMs = 0;
-  stealthActive = 0;
-
-  uint8_t stallsHandled = reboundAttempt;
-
-  if (stallsHandled + 1 < STALL_REBOUND_MAX) {
-    writeServoFaultFastFold();
-    if (stallCheckActive()) blinkPin8Fault(10, 75, 75);
-    reboundAttempt = stallsHandled + 1;
-    reboundWaitUntil = millis() + REBOUND_RETRY_WAIT_MS;
-    lastStatusSend = 0;
-    sendStatusPacket();
-  } else {
+  if (item != 1) {
     reboundAttempt = STALL_REBOUND_MAX;
-    reboundWaitUntil = 0;
     reboundFaultLatched = 1;
     savePendingFaultReport(2);
     enterFaultLockState();
+    return;
   }
-}
-
-void triggerStallDuringClose() {
-  if (reboundFaultLatched) return;
-
-  reboundStuckCount = 0;
-  stuckCount = 0;
-  lastStallSampleMs = 0;
-  stealthActive = 0;
-
-  uint8_t stallsHandled = reboundAttempt;
-
-  if (stallsHandled + 1 < STALL_REBOUND_MAX) {
-    writeServoFaultFastFold();
-    if (stallCheckActive()) blinkPin8Fault(10, 75, 75);
-    reboundAttempt = stallsHandled + 1;
-    reboundRetryClose = 1;
-    reboundWaitUntil = millis() + REBOUND_RETRY_WAIT_MS;
-    lastStatusSend = 0;
-    sendStatusPacket();
-  } else {
+  if (reboundAttempt + 1 >= STALL_REBOUND_MAX) {
     reboundAttempt = STALL_REBOUND_MAX;
-    reboundWaitUntil = 0;
-    reboundRetryClose = 0;
     reboundFaultLatched = 1;
     savePendingFaultReport(2);
     enterFaultLockState();
+    return;
   }
+  reboundAttempt++;
+  abortOpenMotion();
+  clearOpenMonitor();
+  stallIgnoreUntil = millis() + 800UL;
+  reboundRetryOpen = 1;
+  foldToRetract();
+  reboundWaitUntil = millis() + REBOUND_RETRY_WAIT_MS;
+  statusLedUpdate();
+  lastStatusSend = 0;
 }
 
 void clearOpenMonitor() {
@@ -2567,13 +2736,9 @@ void clearOpenMonitor() {
 }
 
 void selfCheckTick() {
-  if (!flapMotionMoving()) {
-    if (item == 0 && servoMoveCommitted(item4)) {
-      finishBtnDetectWindow();
-    }
-    return;
+  if (btnDetectWindowActive()) {
+    tickMotionA0Realtime(false);
   }
-  tickMotionA0Realtime(false);
 }
 
 void tickReboundStateMachine() {
@@ -2582,7 +2747,6 @@ void tickReboundStateMachine() {
   if (!stallCheckActive()) {
     reboundWaitUntil = 0;
     reboundAttempt = 0;
-    reboundStuckCount = 0;
     return;
   }
   if (reboundFaultLatched) {
@@ -2591,18 +2755,9 @@ void tickReboundStateMachine() {
   if (reboundWaitUntil > 0) {
     if (millis() >= reboundWaitUntil) {
       reboundWaitUntil = 0;
-      reboundStuckCount = 0;
-      if (reboundRetryClose) {
-        reboundRetryClose = 0;
-        retryFlapCloseMotion();
-#if F2_SERIAL_DEBUG
-        Serial.println(F("RETRY CLOSE"));
-#endif
-      } else if (reboundAttempt > 0) {
+      if (reboundRetryOpen) {
+        reboundRetryOpen = 0;
         requestFlapOpen(true);
-#if F2_SERIAL_DEBUG
-        Serial.println(F("RETRY OPEN"));
-#endif
       }
     }
     return;
@@ -2631,129 +2786,43 @@ void clearPendingFaultReport() {
 }
 
 void clearFaultFlags() {
-  reboundFaultLatched = 0;
+  // 堵转锁存必须重启才清；故障已读只清上报位，灯继续闪
   clearPendingFaultReport();
 }
 
 bool isSelfCheckFaultLatched() {
-  if (reboundFaultLatched) return true;
-  return pendingFaultReport == 2;
+  return faultIndicatorActive();
 }
 
-// 故障锁定：全速收回（不走平滑），供堵转报错使用
-void writeServoFaultFastFold() {
-  if (item == 3) return;
-  abortOpenMotion();
-  item = 0;
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  f3ClearFoldCloseWatch();
-#endif
-  foldHoldActive = 0;
-  forceServoMove = 1;
-  invalidateServoHold();
-  servoPrepareMove();
-#if F2_VARSERVO
-  servo.write(item4, 255);
-#else
-  servo.write(item4);
-#endif
-  lastWrittenAngle = item4;
-  servoTrackItem = 0;
-  servoTrackAngle = item4;
-  unsigned long settleEnd = millis() + 1400UL;
-  while (millis() < settleEnd) {
-    delayWithBlePoll(20);
-    pollBleSerial();
-    watchdogFeed();
-    updatePin9Power();
-  }
-  servoFinalizePosition(item4);
-}
-
-// 闪灯结束后再次全速收到底并锁定 PWM
-static void faultFinalizeFoldDown() {
-  forceServoMove = 1;
-  invalidateServoHold();
-  servoPrepareMove();
-#if F2_VARSERVO
-  servo.write(item4, 255);
-#else
-  servo.write(item4);
-#endif
-  lastWrittenAngle = item4;
-  servoTrackItem = 0;
-  servoTrackAngle = item4;
-  foldHoldActive = 1;
-  forceServoMove = 0;
-  unsigned long settleEnd = millis() + 600UL;
-  while (millis() < settleEnd) {
-    delayWithBlePoll(20);
-    pollBleSerial();
-    watchdogFeed();
-    updatePin9Power();
-  }
-  servoFinalizePosition(item4);
-  foldHoldActive = 1;
-}
-
-// 堵转报错：默认快速收回。
-void enterFaultLockState(bool holdCurrentAngle) {
+// 堵转锁定：立刻断 PWM，指示灯由 tickFaultAlarm 一直闪直到重启
+void enterFaultLockState() {
   reboundWaitUntil = 0;
+  reboundRetryOpen = 0;
   stealthActive = 0;
+#if F3_MAX_BUILD
+  stealthPersistClear();
+#endif
   pendingKeyOffFold = 0;
-  pin9HoldUntil = 0;
-  pin9HoldExpired = 0;
-  if (digitalRead(2) == LOW) {
-    digitalWrite(9, LOW);
-  }
+  openEaseActive = 0;
+  forceServoMove = 0;
+  flapSettleUntil = 0;
   clearOpenMonitor();
-
-  if (holdCurrentAngle) {
-    abortOpenMotion();
-    int holdAng = readServoAngle();
-    if (holdAng < 0 || holdAng > 180) holdAng = bianlaing;
-    item = 1;
-    foldHoldActive = 0;
-    forceServoMove = 0;
-    lastWrittenAngle = holdAng;
-    servoTrackItem = 1;
-    servoTrackAngle = holdAng;
-    servoFinalizePosition(holdAng);
-  } else {
-    bool needFastFold = (item == 1 || openEaseActive || !servoAtAngle(item4));
-    if (needFastFold) {
-      writeServoFaultFastFold();
-    } else if (item == 0) {
-      servoFinalizePosition(item4);
-      foldHoldActive = 1;
-    }
-    faultFinalizeFoldDown();
-  }
-
-  blinkPin8Fault(FAULT_ACK_BLINK_TIMES, (int)FAULT_LED_BLINK_HALF_MS, (int)FAULT_LED_BLINK_HALF_MS);
-
+  abortOpenMotion();
+  invalidateServoHold();
+  foldHoldActive = 1;
+  servoStopHold();
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  f3FoldCloseFault = 0;
+  f3FoldCloseWatchMs = 0;
+  f3DgdLatch = f3DgdSafeCnt = f3DgdUnsafeCnt = 0;
+#endif
+  digitalWrite(F3_PIN_LED_GREEN, LOW);
+  statusLedUpdate();
   lastStatusSend = 0;
   sendStatusPacket();
-#if F2_SERIAL_DEBUG
-  Serial.print(F("FAULT LOCK s="));
-  Serial.println(reboundFaultLatched);
-#endif
 }
 
 #if F2_BLE_STATUS
-uint8_t getFaultErr() {
-  if (reboundFaultLatched || pendingFaultReport == 2) return 2;
-  return 0;
-}
-
-uint8_t getFaultWrn() {
-  if (reboundWaitUntil > 0) return 1;
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  if (f3FoldCloseFault) return 3;
-#endif
-  return 0;
-}
-
 static void printStatusLine(Stream &out, int ang, int accPin, int btnPin, uint8_t err, uint8_t wrn) {
   out.print(F("ANG:"));
   out.print(ang);
@@ -2763,32 +2832,34 @@ static void printStatusLine(Stream &out, int ang, int accPin, int btnPin, uint8_
   out.print(btnPin);
   out.print(F("|ITM:"));
   out.print(statusItemForBle());
+#if !F3_FLASH_TIGHT
   out.print(F("|SMO:"));
   out.print(0);
-  out.print(F("|CHK:"));
-  out.print(selfCheckOn);
+#endif
   out.print(F("|STD:"));
   out.print(stallCheckActive() ? 1 : 0);
   out.print(F("|RET:"));
   out.print(accRetractOn);
   out.print(F("|PWR:"));
   out.print(powerOnFlip);
-  out.print(F("|DPO:"));
-  out.print(delayPowerOffMin);
   out.print(F("|ERR:"));
   out.print(err);
   out.print(F("|WRN:"));
   out.print(wrn);
+#if !F3_FLASH_TIGHT
   out.print(F("|STM:"));
   if (item == 3 && stealthElapsedMin < STEALTH_AUTO_OFF_MIN) {
     out.print((uint16_t)(STEALTH_AUTO_OFF_MIN - stealthElapsedMin));
   } else {
     out.print(0);
   }
+#endif
+#if !F3_FLASH_TIGHT
   out.print(F("|STB:"));
   out.print(stealthBtnExitOn ? 1 : 0);
   out.print(F("|SPD:"));
   out.print(userServoSpeed);
+#endif
   if (f3HeightMonitorActive() && f3BleHgtThisPkt) {
     out.print(F("|HGT:"));
     out.print((f3SensorOk && f3SensorValid && f3LastFiltMm > 0) ? (unsigned int)f3LastFiltMm : 0U);
@@ -2801,10 +2872,24 @@ static void printStatusLine(Stream &out, int ang, int accPin, int btnPin, uint8_
   out.print(f3BaseMm);
   out.print(F("|DGD:"));
   out.print(f3DangerLedActive() ? 1 : 0);
+  out.print(F("|HF:"));
+  out.print(f3HfCfg);
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (item == 1 && (f3HfCfg & 1)) {
+    out.print(F("|F3W:"));
+    out.print(f3FoldCloseFault ? 2 : (f3FoldCloseWatchMs ? 1 : 0));
+  }
+#endif
   if (statusItemForBle() == 2 && (item == 0 || item == 1)) {
+#if !F3_FLASH_TIGHT
     out.print(F("|MOT:"));
     out.print(item);
+#endif
   }
+#if F3_MAX_BUILD
+  out.print(F("|POL:"));
+  out.print(f3PowerOffLockOn ? 1 : 0);
+#endif
   out.println();
 }
 
@@ -2812,8 +2897,15 @@ void sendStatusPacket() {
   pollBleSerial();
   if (bleSerialRxBusy()) return;
 
-  uint8_t err = getFaultErr();
-  uint8_t wrn = getFaultWrn();
+  uint8_t err = 0;
+  uint8_t wrn = 0;
+  if (!foldAdjustActive) {
+    if (reboundFaultLatched || pendingFaultReport == 2) err = 2;
+    if (reboundWaitUntil > 0) wrn = 1;
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    else if (f3FoldCloseFault) wrn = 3;
+#endif
+  }
   bool motion = flapMotionMoving() || openEaseActive;
   unsigned long now = millis();
   // 心跳：至少每 400ms 发一包，避免串口 RX 噪声导致长期静默、小程序误判掉线
@@ -2870,7 +2962,7 @@ void sendStatusPacket() {
     ang = item4;
   }
   printStatusLine(mySerial, ang, accPin, btnPin, err, wrn);
-  for (uint8_t i = 0; i < 8; i++) pollBleSerial();
+  pollBleSerial();
 }
 #else
 void sendStatusPacket() {}
@@ -2880,24 +2972,29 @@ void resetSelfCheckMonitor() {
   clearBtnDetectSamples();
 }
 
-// 故障报警：堵转慢闪；折叠超时红灯快闪。
+// 故障报警：堵转红灯快闪（绿灯灭）；折叠超时次之。倒计时期间强制灭灯。
 void tickFaultAlarm() {
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-  if (f3FoldCloseFault) {
+  if (isKeyOffCountdownActive()) {
+    digitalWrite(8, LOW);
     digitalWrite(F3_PIN_LED_GREEN, LOW);
-    digitalWrite(8, (millis() / F3_FOLD_FAULT_BLINK_MS) % 2UL ? LOW : HIGH);
+    return;
+  }
+  uint8_t latched = reboundFaultLatched || pendingFaultReport == 2;
+  if (latched || reboundAttempt > 0) {
+    digitalWrite(F3_PIN_LED_GREEN, LOW);
+    unsigned long t = latched ? (bootStallEn == 2 ? 25UL : MOTION_DETECT_LED_HALF_MS) : F3_FOLD_FAULT_BLINK_MS;
+    digitalWrite(8, (millis() / t) % 2UL ? HIGH : LOW);
+    return;
+  }
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (f3FoldCloseFault && !foldAdjustActive && !f3HeightCfgModeActive()) {
+    // 翻开测距异常：红绿交替慢闪（堵转=纯红快闪、绿灯灭）
+    bool phase = (millis() / F3_FOLD_FAULT_BLINK_MS) % 2UL;
+    digitalWrite(8, phase ? HIGH : LOW);
+    digitalWrite(F3_PIN_LED_GREEN, phase ? LOW : HIGH);
     return;
   }
 #endif
-  if (!faultIndicatorActive()) return;
-  unsigned long halfMs = FAULT_LED_BLINK_HALF_MS;
-  if (reboundFaultLatched) {
-    halfMs = MOTION_DETECT_LED_HALF_MS;
-  }
-#if F3_MAX_BUILD
-  digitalWrite(F3_PIN_LED_GREEN, LOW);
-#endif
-  digitalWrite(8, (millis() / halfMs) % 2UL ? LOW : HIGH);
 }
 
 /* =============================================================================
@@ -2906,6 +3003,7 @@ void tickFaultAlarm() {
 #define BTN5_PIN 5
 const unsigned long BTN5_ENTER_MS = 2000UL;
 const unsigned long BTN5_EXIT_MS = 8000UL;
+const unsigned long BTN5_SHORT_MIN_MS = 80UL;   // 短于此时长忽略，防误触
 const unsigned long BTN5_RELEASE_DEBOUNCE_MS = 25UL;
 
 static unsigned long btn5DownSince = 0;
@@ -2913,36 +3011,25 @@ static unsigned long btn5UpSince = 0;
 static unsigned long btn5ExitSince = 0;
 static uint8_t btn5EnterDone = 0;
 static uint8_t btn5SuppressExit = 0;
-static uint8_t btn5SkipReleaseToggle = 0;
 
 static bool btn5PinDown() {
   return digitalRead(BTN5_PIN) == LOW;
 }
 
+
 static void btn5ToggleFlap() {
-  if (item == 3 || autoLevelBusy) return;
+  if (item == 3 || autoLevelBusy || stealthEntryBusy) return;
   if (!canUserFlapControl()) return;
   lastStatusSend = 0;
-  if (motionCheckActive()) {
-    restartBtnDetectWindow();
-  }
   if (item == 0) {
-    if (f3OpenBlockedByDanger()) return;
+    if (f3FlapOpenDangerBlocked()) return;
     requestFlapOpen();
   } else {
     requestFlapClose(true);
   }
 }
 
-// 运动中按下即反向打断（不必等松开；与 F2 一致不做 800ms 连击节流）
-static void btn5TryMotionInterrupt() {
-  if (item != 0 && item != 1) return;
-  if (!flapMotionMoving()) return;
-  if (autoLevelBusy || !canUserFlapControl()) return;
-  btn5ToggleFlap();
-  btn5SkipReleaseToggle = 1;
-}
-
+// 短按松开才翻板；长按满 2s 进隐蔽（按下瞬间不动作，避免与长按冲突）
 static void btn5DoEnterStealth(unsigned long heldMs) {
   if (btn5EnterDone || autoLevelBusy || item == 3) return;
   if (!canEnterStealthViaBtn5()) return;
@@ -2968,7 +3055,6 @@ void btn5Init() {
   btn5ExitSince = 0;
   btn5EnterDone = 0;
   btn5SuppressExit = 0;
-  btn5SkipReleaseToggle = 0;
 }
 
 void btn5NoteStealthExited() {
@@ -3008,8 +3094,8 @@ void btn5ServiceTick() {
     return;
   }
 
-  // 10 秒后的延时断电阶段：按键无反应（前 10 秒仍可长按进隐蔽）
-  if (isDelayPowerOffPhase()) {
+  // 关钥匙 10 秒后 Pin9 断电：按键无反应（前 10 秒仍可长按进隐蔽）
+  if (digitalRead(2) == LOW && item != 3 && !isStealthEntryWindow()) {
     btn5DownSince = 0;
     btn5UpSince = 0;
     btn5ExitSince = 0;
@@ -3021,9 +3107,7 @@ void btn5ServiceTick() {
     if (btn5DownSince == 0) {
       btn5DownSince = now;
       btn5EnterDone = 0;
-      btn5SkipReleaseToggle = 0;
       lastStatusSend = 0;
-      btn5TryMotionInterrupt();
     } else if (!btn5EnterDone && (now - btn5DownSince) >= BTN5_ENTER_MS) {
       btn5DoEnterStealth(now - btn5DownSince);
     }
@@ -3041,22 +3125,13 @@ void btn5ServiceTick() {
   unsigned long held = now - btn5DownSince;
   if (!btn5EnterDone && held >= BTN5_ENTER_MS) {
     btn5DoEnterStealth(held);
-  } else if (!btn5EnterDone && !btn5SkipReleaseToggle) {
+  } else if (!btn5EnterDone && held >= BTN5_SHORT_MIN_MS && held < BTN5_ENTER_MS) {
     btn5ToggleFlap();
   }
 
   btn5DownSince = 0;
   btn5UpSince = 0;
   btn5EnterDone = 0;
-  btn5SkipReleaseToggle = 0;
-}
-
-void loadJudgeValFromEeprom() {
-  EEPROM.get(13, judgeVal);
-  if (judgeVal < STALL_JUDGE_MIN || judgeVal > STALL_JUDGE_MAX || judgeVal != STALL_CURRENT_DEFAULT) {
-    judgeVal = STALL_CURRENT_DEFAULT;
-    EEPROM.put(13, judgeVal);
-  }
 }
 
 // 自动调平日志（F3_FLASH_TIGHT 关闭以省闪存）
@@ -3128,6 +3203,7 @@ static void keyDbgKv(const __FlashStringHelper *tag, int a, int b) {
 }
 #endif
 
+#if !F3_FLASH_TIGHT
 int autoScanStall(int from, int to, int thr) {
 #if !F3_FLASH_TIGHT
   mySerial.print(F("ALOG SCAN "));
@@ -3166,8 +3242,9 @@ int autoScanStall(int from, int to, int thr) {
 #endif
   return to;
 }
+#endif
 
-#if F3_FLASH_TIGHT
+#if !F3_FLASH_TIGHT
 void runAutoLevel() {
   if (autoLevelBusy) {
     blinkPin8(1, 80, 80);
@@ -3175,6 +3252,9 @@ void runAutoLevel() {
   }
 
   if (item == 3) {
+#if F3_MAX_BUILD
+    stealthPersistClear();
+#endif
     stealthActive = 0;
     stealthElapsedMin = 0;
     stealthMinuteMark = 0;
@@ -3222,11 +3302,17 @@ void runAutoLevel() {
 
   invalidateServoHold();
   item = 0;
-  writeServo(item4);
-  waitServoReach(item4);
-  blinkPin8(3, 100, 100);
+  writeServo(f3FoldUserTarget());
+  waitServoReach(f3FoldUserTarget());
   autoLevelBusy = 0;
-  drainBleRx();
+}
+#else
+void runAutoLevel() {
+  if (autoLevelBusy) {
+    blinkPin8(1, 80, 80);
+    return;
+  }
+  blinkPin8(1, 80, 80);
 }
 #endif
 
@@ -3234,9 +3320,7 @@ static void moveServoToFoldAngle(int angle);
 
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
 static bool f3CalPreviewAngleAllowed(int ang) {
-  if (ang < 0 || ang > 180) return false;
-  if (item4 <= bianlaing) return false;
-  return ang > bianlaing && ang < item4;
+  return ang >= 0 && ang <= 180;
 }
 
 static void f3CalPreviewStep(int delta) {
@@ -3246,10 +3330,7 @@ static void f3CalPreviewStep(int delta) {
     foldAdjustActive = 1;
     int cur = readServoAngleLive();
     if (cur < 0 || cur > 180) cur = item4;
-    if (!f3CalPreviewAngleAllowed(cur)) {
-      if (item4 > bianlaing + 1) cur = item4 - 1;
-      else return;
-    }
+    if (!f3CalPreviewAngleAllowed(cur)) cur = item4;
     f3CalPreviewAngle = cur;
   }
   int next = f3CalPreviewAngle + delta;
@@ -3259,7 +3340,6 @@ static void f3CalPreviewStep(int delta) {
   item = 0;
   foldAdjustActive = 1;
   moveServoToFoldAngle(f3CalPreviewAngle);
-  delayWithBlePoll(300);
   lastStatusSend = 0;
 }
 
@@ -3288,7 +3368,11 @@ static void moveServoToFoldAngle(int angle) {
   int cur = readServoAngleLive();
   if (cur < 0 || cur > 180) {
     cur = lastWrittenAngle;
-    if (cur < 0 || cur > 180) cur = bianlaing;
+#if F3_MAX_BUILD
+    if (cur < 0 || cur > 180) cur = f3FoldMotionTarget();
+#else
+    if (cur < 0 || cur > 180) cur = item4;
+#endif
   }
   lastWrittenAngle = cur;
   writeServoDirect(angle);
@@ -3297,6 +3381,7 @@ static void moveServoToFoldAngle(int angle) {
 static void applyFoldAdjustStep(int delta) {
   int next = item4 + delta;
   if (next < 0 || next > 180) return;
+  if (next == item4) return;
   item4 = next;
   EEPROM.put(3, item4);
   moveServoToFoldAngle(item4);
@@ -3313,30 +3398,44 @@ static void bleNotifySettingSaved() {
 }
 
 static bool handleBlePersistSetting(char *cmd) {
+#if F3_MAX_BUILD
+  if (cmd[0] == 'H' && cmd[1] >= '0' && cmd[1] <= '1' && !cmd[2]) {
+    f3HfCfg = cmd[1] & 1;
+    EEPROM.update(F3_EE_HEIGHT_ON, f3HfCfg);
+    f3DgdLatch = 0;
+#if F3_HEIGHT_ENABLE
+    if (!f3HfCfg) {
+      f3ClearFoldCloseWatch();
+    } else if (item == 1) {
+      f3ArmFoldCloseWatch();
+    }
+#endif
+    statusLedUpdate();
+    bleNotifySettingSaved();
+    return true;
+  }
+  if (cmd[0] == 'P' && (cmd[1] == '1' || cmd[1] == '0') && cmd[2] == 0) {
+    f3PowerOffLockOn = cmd[1] == '1' ? 1 : 0;
+    EEPROM.put(F3_EE_PWR_LOCK, f3PowerOffLockOn);
+    if (f3PowerOffLockOn) {
+      accRetractOn = 1;
+      EEPROM.put(5, accRetractOn);
+    }
+    bleNotifySettingSaved();
+    return true;
+  }
+#endif
   if (cmdIsP(cmd, CMD_STEALTH_BTN_ON)) {
     stealthBtnExitOn = 1;
     EEPROM.put(28, stealthBtnExitOn);
-    blinkPin8(2, 80, 80);
     bleNotifySettingSaved();
     return true;
   }
   if (cmdIsP(cmd, CMD_STEALTH_BTN_OFF)) {
     stealthBtnExitOn = 0;
     EEPROM.put(28, stealthBtnExitOn);
-    blinkPin8(2, 80, 80);
     bleNotifySettingSaved();
     return true;
-  }
-  {
-    int dpoMin = parseCmdSuffixInt(cmd, CMD_DELAY_PWR);
-    if (dpoMin >= 0) {
-      if (dpoMin > DELAY_PWR_MIN_MAX) dpoMin = DELAY_PWR_MIN_MAX;
-      delayPowerOffMin = dpoMin;
-      EEPROM.put(15, delayPowerOffMin);
-      blinkPin8(3, 100, 100);
-      bleNotifySettingSaved();
-      return true;
-    }
   }
   {
     int spdPct = parseCmdSuffixInt(cmd, CMD_SPEED);
@@ -3345,7 +3444,6 @@ static bool handleBlePersistSetting(char *cmd) {
       if (spdPct > SERVO_SPEED_MAX_PCT) spdPct = SERVO_SPEED_MAX_PCT;
       userServoSpeed = (uint8_t)spdPct;
       EEPROM.put(25, userServoSpeed);
-      blinkPin8(2, 80, 80);
       bleNotifySettingSaved();
       return true;
     }
@@ -3375,14 +3473,12 @@ static bool handleBlePersistSetting(char *cmd) {
     return true;
   }
   if (cmdIsP(cmd, CMD_PWR_UP)) {
-    blinkPin8(3, 100, 100);
     powerOnFlip = 0;
     EEPROM.put(9, 0);
     bleNotifySettingSaved();
     return true;
   }
   if (cmdIsP(cmd, CMD_PWR_DN)) {
-    blinkPin8(3, 100, 100);
     powerOnFlip = 1;
     EEPROM.put(9, 1);
     bleNotifySettingSaved();
@@ -3391,14 +3487,12 @@ static bool handleBlePersistSetting(char *cmd) {
   if (cmdIsP(cmd, CMD_STALL_CHK_ON)) {
     stallDetectOn = 1;
     EEPROM.put(29, stallDetectOn);
-    blinkPin8(2, 80, 80);
     bleNotifySettingSaved();
     return true;
   }
   if (cmdIsP(cmd, CMD_STALL_CHK_OFF)) {
     stallDetectOn = 0;
     EEPROM.put(29, stallDetectOn);
-    blinkPin8(2, 80, 80);
     bleNotifySettingSaved();
     return true;
   }
@@ -3406,9 +3500,6 @@ static bool handleBlePersistSetting(char *cmd) {
 }
 
 void handleBleCommand(char *cmd) {
-  trimBuf(cmd);
-  if (cmd[0] == 0) return;
-
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
   if (f3TryShortHeightCmd(cmd)) return;
 #endif
@@ -3429,6 +3520,15 @@ void handleBleCommand(char *cmd) {
   // 高级设置 EEPROM：不受测高配置/自检故障/隐蔽模式拦截（小程序回读校验依赖 |PWR:|/|STD:|）
   if (handleBlePersistSetting(cmd)) return;
 
+  /* 收起优先：故障锁定时仍允许蓝牙远程收回 */
+  if (cmdIsP(cmd, CMD_CLOSE)) {
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+    f3LeaveHeightCfgForFlap();
+#endif
+    if (item != 3 && !autoLevelBusy) requestFlapClose();
+    return;
+  }
+
   if (isSelfCheckFaultLatched()) return;
 
   if (cmdIsP(cmd, CMD_STEALTH_ON)) {
@@ -3443,31 +3543,25 @@ void handleBleCommand(char *cmd) {
   if (item == 3) return;
 
   if (autoLevelBusy) {
-    if (cmdIsP(cmd, CMD_OPEN) || cmdIsP(cmd, CMD_CLOSE)) return;
+    if (cmdIsP(cmd, CMD_OPEN)) return;
   }
 
   if (cmdIsP(cmd, CMD_OPEN)) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
     f3LeaveHeightCfgForFlap();
 #endif
-    if (canUserFlapControl() && item != 1 && !f3OpenBlockedByDanger()) {
+    if (canUserFlapControl() && item != 1 && !f3FlapOpenDangerBlocked()) {
       requestFlapOpen();
-    }
-    return;
-  }
-  if (cmdIsP(cmd, CMD_CLOSE)) {
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3LeaveHeightCfgForFlap();
-#endif
-    if (canUserFlapControl()) {
-      requestFlapClose();
     }
     return;
   }
   if (cmdIsP(cmd, CMD_UP)) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3PrepareUserServoAngleCmd();
-#endif
+    f3BeginOpenAngleBleCmd();
+    if (servo.read() > 180) bianlaing = 180;
+    else bianlaing += 2;
+    f3WriteBianlaingEeprom();
+#else
     if (item != 3) {
       item = 1;
       foldHoldActive = 0;
@@ -3481,10 +3575,14 @@ void handleBleCommand(char *cmd) {
     }
     EEPROM.put(1, bianlaing);
     lastStatusSend = 0;
+#endif
   } else if (cmdIsP(cmd, CMD_DOWN)) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3PrepareUserServoAngleCmd();
-#endif
+    f3BeginOpenAngleBleCmd();
+    if (servo.read() < 0) bianlaing = 0;
+    else bianlaing -= 2;
+    f3WriteBianlaingEeprom();
+#else
     if (item != 3) {
       item = 1;
       foldHoldActive = 0;
@@ -3498,10 +3596,13 @@ void handleBleCommand(char *cmd) {
     }
     EEPROM.put(1, bianlaing);
     lastStatusSend = 0;
+#endif
   } else if (cmdIsP(cmd, CMD_FULL_OPEN)) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3PrepareUserServoAngleCmd();
-#endif
+    f3BeginOpenAngleBleCmd();
+    bianlaing = fullOpenAngle;
+    f3WriteBianlaingEeprom();
+#else
     if (item != 3) {
       item = 1;
       foldHoldActive = 0;
@@ -3512,10 +3613,13 @@ void handleBleCommand(char *cmd) {
     writeServo(bianlaing);
     EEPROM.put(1, bianlaing);
     lastStatusSend = 0;
+#endif
   } else if (cmdIsP(cmd, CMD_CUSTOM)) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3PrepareUserServoAngleCmd();
-#endif
+    f3BeginOpenAngleBleCmd();
+    bianlaing = customAngle;
+    f3WriteBianlaingEeprom();
+#else
     if (item != 3) {
       item = 1;
       foldHoldActive = 0;
@@ -3526,6 +3630,7 @@ void handleBleCommand(char *cmd) {
     writeServo(bianlaing);
     EEPROM.put(1, bianlaing);
     lastStatusSend = 0;
+#endif
   } else if (cmdIsP(cmd, CMD_INIT_ANGLE)) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
     f3PrepareUserServoAngleCmd();
@@ -3538,9 +3643,8 @@ void handleBleCommand(char *cmd) {
     sendStatusPacket();
   } else if (cmdIsP(cmd, CMD_ADJ_FOLD)) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3PrepareUserServoAngleCmd();
+    f3EnterAngleAdjustCmd();
 #endif
-    foldAdjustActive = 1;
     if (item != 3) {
       moveServoToFoldAngle(item4);
     }
@@ -3549,68 +3653,130 @@ void handleBleCommand(char *cmd) {
     sendStatusPacket();
   } else if (cmdIsP(cmd, CMD_ADJ_BIG)) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3PrepareUserServoAngleCmd();
+    f3EnterAngleAdjustCmd();
 #endif
-    if (!foldAdjustActive) foldAdjustActive = 1;
     applyFoldAdjustStep(-1);
+    statusLedUpdate();
   } else if (cmdIsP(cmd, CMD_ADJ_SMALL)) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3PrepareUserServoAngleCmd();
+    f3EnterAngleAdjustCmd();
 #endif
-    if (!foldAdjustActive) foldAdjustActive = 1;
     applyFoldAdjustStep(1);
+    statusLedUpdate();
   }
 }
 
-// 开机定位：须过最短行程时间且连续采样到位，避免 write 后 read 误报已到位
-static void waitBootServoReach(int target) {
-  int start = readServoAngleLive();
-  if (start < 0 || start > 180) start = lastWrittenAngle;
+static uint8_t bootDriveToAngle(int target) {
+  if (target < 0) target = 0;
+  else if (target > 180) target = 180;
+  int start = lastWrittenAngle;
+  if (start < 0 || start > 180) start = target;
+  unsigned long minMoveMs = (unsigned long)abs(target - start) * 28UL + 450UL;
+  if (minMoveMs < 900UL) minMoveMs = 900UL;
+  else if (minMoveMs > 1800UL) minMoveMs = 1800UL;
+  unsigned long moveStart = millis();
+  unsigned long lastCmdMs = 0, lastA0Ms = 0;
+  uint8_t stallHits = 0;
+  forceServoMove = 1;
+  if (servoPwmOff) servoPrepareMove();
+  servo.write(target);
+  lastWrittenAngle = target;
+  while ((millis() - moveStart) < minMoveMs) {
+    watchdogFeed();
+    updatePin9Power();
+    unsigned long now = millis();
+    if ((now - moveStart) >= MOTOR_MIN_RUN_BEFORE_STALL_MS &&
+        (lastA0Ms == 0 || now - lastA0Ms >= BTN_DETECT_SAMPLE_MS)) {
+      lastA0Ms = now;
+      if (readMotorA0() < BTN_STALL_A0_THR && ++stallHits >= BOOT_STALL_HITS_NEED) return 1;
+    }
+    if (lastCmdMs == 0 || now - lastCmdMs >= 60UL) {
+      lastCmdMs = now;
+      if (servoPwmOff) servoPrepareMove();
+      servo.write(target);
+    }
+    delayWithBlePoll(12);
+  }
+  return (stallHits >= BOOT_STALL_HITS_NEED);
+}
+
+static void bootStallRecoverLoop() {
+  reboundFaultLatched = 1;
+  savePendingFaultReport(2);
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  f3FoldCloseFault = 0;
+  f3DgdLatch = f3DgdSafeCnt = f3DgdUnsafeCnt = 0;
+#endif
+  int retreatT = (int)item4 - 2;
+  if (retreatT < 0) retreatT = 0;
+  int foldT = f3FoldUserTarget();
+
+  uint8_t nt = 0;
+  for (;;) {
+    unsigned long t0 = millis();
+    (void)bootDriveToAngle(retreatT);
+    if (!bootDriveToAngle(foldT)) {
+      reboundFaultLatched = 0;
+      clearPendingFaultReport();
+      foldHoldActive = 1;
+      servoFinalizePosition(foldT);
+      return;
+    }
+    unsigned long dt = millis() - t0;
+    if (dt < BOOT_STALL_CYCLE_MS) delayWithBlePoll(BOOT_STALL_CYCLE_MS - dt);
+    if (++nt >= 20) break;
+  }
+
+  bootStallEn = 2;
+  enterFaultLockState();
+}
+
+static int waitBootServoReach(int target) {
+  int start = lastWrittenAngle;
   if (start < 0 || start > 180) start = target;
 
-  unsigned long minMoveMs = (unsigned long)abs(target - start) * 28UL + 450UL;
-  if (minMoveMs < 450UL) minMoveMs = 450UL;
+  unsigned long minMoveMs = (unsigned long)abs(target - start) * 28UL + 800UL;
   if (minMoveMs > 6500UL) minMoveMs = 6500UL;
   unsigned long moveStart = millis();
-  unsigned long deadline = moveStart + minMoveMs + 5000UL;
+  unsigned long deadline = moveStart + minMoveMs + 3500UL;
   unsigned long lastCmdMs = 0;
-  uint8_t stableHits = 0;
+  unsigned long lastA0Ms = 0;
+  uint8_t stallHits = 0;
   forceServoMove = 1;
 
-  while ((long)(millis() - deadline) < 0 && !isSelfCheckFaultLatched()) {
+  while ((long)(millis() - deadline) < 0) {
     unsigned long now = millis();
     pollBleSerial();
-    btn5ServiceTick();
     watchdogFeed();
-    tickStealthKeyWindow();
     updatePin9Power();
 
-    bool pastMin = (now - moveStart) >= minMoveMs;
-    int live = readServoAngleLive();
-    if (pastMin && live >= 0 && abs(live - target) <= 3) {
-      if (++stableHits >= 5) {
-        lastWrittenAngle = live;
-        return;
+    if (bootStallEn && (now - moveStart) >= MOTOR_MIN_RUN_BEFORE_STALL_MS &&
+        (lastA0Ms == 0 || (now - lastA0Ms) >= BTN_DETECT_SAMPLE_MS)) {
+      lastA0Ms = now;
+      if (readMotorA0() < BTN_STALL_A0_THR && ++stallHits >= BOOT_STALL_HITS_NEED) {
+        bootStallRecoverLoop();
+        return lastWrittenAngle;
       }
-    } else {
-      stableHits = 0;
+    }
+
+    if ((now - moveStart) >= minMoveMs) {
+      if (bootStallEn && stallHits >= BOOT_STALL_HITS_NEED) {
+        bootStallRecoverLoop();
+        return lastWrittenAngle;
+      }
+      lastWrittenAngle = target;
+      return target;
     }
 
     if (lastCmdMs == 0 || (now - lastCmdMs) >= 80UL) {
       lastCmdMs = now;
-      if (servoPwmOff) {
-        servoPrepareMove();
-      }
-#if F2_VARSERVO
-      servo.write(target, 255);
-#else
+      if (servoPwmOff) servoPrepareMove();
       servo.write(target);
-#endif
-      servoTrackItem = item;
-      servoTrackAngle = target;
+      lastWrittenAngle = target;
     }
     delayWithBlePoll(16);
   }
+  return target;
 }
 
 // 开机定位：满速转到目标角并等物理到位后再断 PWM（避免未到位就进自检闪灯）
@@ -3621,7 +3787,6 @@ static void bootMoveToTarget(int target, uint8_t itemState) {
   abortOpenMotion();
   reboundWaitUntil = 0;
   reboundAttempt = 0;
-  reboundStuckCount = 0;
   foldHoldActive = (itemState == 0) ? 1 : 0;
   invalidateServoHold();
   openEaseActive = 0;
@@ -3629,25 +3794,17 @@ static void bootMoveToTarget(int target, uint8_t itemState) {
   servoPrepareMove();
   int start = readServoAngleLive();
   if (start < 0 || start > 180) {
-    start = (itemState == 1) ? item4 : bianlaing;
+    start = (itemState == 1) ? item4 : target;
   }
   lastWrittenAngle = start;
   forceServoMove = 1;
 
-#if F2_VARSERVO
-  servo.write(target, 255);
-#else
   servo.write(target);
-#endif
-  servoTrackItem = item;
-  servoTrackAngle = target;
-  waitBootServoReach(target);
+  target = waitBootServoReach(target);
   forceServoMove = 0;
   if (!isSelfCheckFaultLatched()) {
     servoFinalizePosition(target);
     lastWrittenAngle = target;
-    servoTrackItem = item;
-    servoTrackAngle = target;
   }
 }
 
@@ -3748,7 +3905,6 @@ static void bootFlapOpenForce() {
   KDBG_KV("BOOT_OPEN_START", bianlaing, item);
   abortOpenMotion();
   reboundWaitUntil = 0;
-  reboundRetryClose = 0;
   foldAdjustActive = 0;
 
   int cur = readServoAngleLive();
@@ -3765,9 +3921,7 @@ static void bootFlapOpenForce() {
   forceServoMove = 1;
 
   writeServoDirect(bianlaing);
-
-  waitServoReach(bianlaing);
-  waitServoSettle(bianlaing);
+  waitBootServoReach(bianlaing);
   forceServoMove = 0;
 
   if (!isSelfCheckFaultLatched()) {
@@ -3780,6 +3934,9 @@ static void bootFlapOpenForce() {
       lastWrittenAngle = bianlaing;
     }
   }
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if ((f3HfCfg & 1)) f3ArmFoldCloseWatch();
+#endif
   KDBG_KV("BOOT_OPEN_DONE", item, lastWrittenAngle);
 }
 
@@ -3800,10 +3957,13 @@ static void bootPowerOnOpenDown() {
   statusLedUpdate();
 }
 
-// 开机下翻：满速转到折叠位 item4 并等到位
+// 开机折回：不论当前在哪，先满速折向日常折叠位 item4-10
 void bootMoveToFold() {
-  stealthActive = 0;
+#if F3_MAX_BUILD
+  bootMoveToTarget(f3FoldUserTarget(), 0);
+#else
   bootMoveToTarget(item4, 0);
+#endif
 }
 
 void setup() {
@@ -3835,12 +3995,10 @@ void setup() {
   openStartMs = 0;
   reboundWaitUntil = 0;
   reboundAttempt = 0;
-  reboundStuckCount = 0;
   reboundFaultLatched = 0;
   pendingFaultReport = 0;
   lastStatusSend = 0;
   selfCheckStartMs = 0;
-  lastStallSampleMs = 0;
   stealthActive = 0;
   stealthWindowStart = 0;
   pin9HoldUntil = 0;
@@ -3854,7 +4012,6 @@ void setup() {
   pin2EdgeInit = 0;
   keyOffRetractIssued = 0;
   keyOffRetractBusy = 0;
-  delayPowerOffMin = 0;
   userServoSpeed = SERVO_SPEED_DEFAULT_PCT;
   stealthElapsedMin = 0;
   stealthMinuteMark = 0;
@@ -3863,6 +4020,8 @@ void setup() {
   pinMode(8, OUTPUT);
   pinMode(F3_PIN_LED_GREEN, OUTPUT);
   digitalWrite(F3_PIN_LED_GREEN, LOW);
+  pinMode(12, OUTPUT);
+  digitalWrite(12, LOW); // D12 工作灯：高电平亮（AO3402 低端）
 #if F3_HEIGHT_ENABLE
   f3LoadHeightFromEeprom();
 #endif
@@ -3894,12 +4053,15 @@ void setup() {
   EEPROM.get(5, accRetractOn);
   EEPROM.get(7, selfCheckOn);
   EEPROM.get(29, stallDetectOn);
-  loadJudgeValFromEeprom();
-  EEPROM.get(15, delayPowerOffMin);
-  if (delayPowerOffMin < 0 || delayPowerOffMin > DELAY_PWR_MIN_MAX) {
-    delayPowerOffMin = 0;
-    EEPROM.put(15, delayPowerOffMin);
+  // 未配置脏值默认开堵转
+  if (stallDetectOn > 1) {
+    stallDetectOn = 1;
+    EEPROM.put(29, stallDetectOn);
   }
+#if F3_MAX_BUILD
+  EEPROM.get(F3_EE_PWR_LOCK, f3PowerOffLockOn);
+  if (f3PowerOffLockOn > 1) f3PowerOffLockOn = 0;
+#endif
   EEPROM.get(25, userServoSpeed);
   if (userServoSpeed < SERVO_SPEED_MIN_PCT || userServoSpeed > SERVO_SPEED_MAX_PCT) {
     userServoSpeed = SERVO_SPEED_DEFAULT_PCT;
@@ -3911,7 +4073,6 @@ void setup() {
   reboundFaultLatched = 0;
   reboundAttempt = 0;
   reboundWaitUntil = 0;
-  reboundRetryClose = 0;
   clearOpenMonitor();
   EEPROM.get(28, stealthBtnExitOn);
   if (stealthBtnExitOn != 0 && stealthBtnExitOn != 1) {
@@ -3928,23 +4089,48 @@ void setup() {
   KDBG_KV("SETUP_ANG", bianlaing, item4);
   KDBG_KV("SETUP_PIN2", digitalRead(2), selfCheckOn);
 
+  uint8_t bootStealthRestore = 0;
+#if F3_MAX_BUILD
+  bootStealthRestore = stealthPersistLoad();
+#endif
+
   // 开机定位+自检期间屏蔽 2 号关钥匙收回（waitServoSettle 里会跑 tickStealthKeyWindow）
   bootSettleUntil = millis() + BOOT_SETTLE_MS + 16000UL;
   KDBG_L("BOOT_GUARD_ON");
+  watchdogBegin();
 
   // 上电先稳压 + 指示灯，再发开机目标角
   bootPwrSettleWait();
 
-  if (powerOnFlip == 0) {
-    // 折回（界面左）：不闪，直接折回
-    KDBG_L("BOOT_FOLD_START");
-    bootMoveToFold();
-    KDBG_KV("BOOT_FOLD_DONE", item, lastWrittenAngle);
+  if (bootStealthRestore) {
+    item = 3;
+    stealthActive = 1;
+    stealthElapsedMin = 0;
+    stealthMinuteMark = millis();
+    foldHoldActive = 1;
+    forceServoMove = 0;
+    openEaseActive = 0;
+    invalidateServoHold();
+    servoStopHold();
+    servoMotionOff();
+    servoPwmOff = 1;
+    bootStallEn = 0;
+    KDBG_L("BOOT_STEALTH_RESTORE");
   } else {
-    // 下翻（界面右）：慢闪 5 次 → 灯常亮 → 开机下翻展开
-    KDBG_L("BOOT_FOLD_PROMPT");
-    bootBlinkFoldBootPrompt();
-    bootPowerOnOpenDown();
+    {
+      uint8_t rk = keyOnRstMk;
+      uint8_t keyRst = (rk == 0xA5 || rk == 0xA7);
+      if (keyRst) keyOnRstMk = 0;
+      // 隐蔽退出软复位(0xA7)不开开机堵转；其余上电/开钥匙复位都开
+      bootStallEn = (!(keyRst && rk == 0xA7) && userServoSpeed >= SERVO_SPEED_MAX_PCT);
+      if (keyRst || powerOnFlip == 0) {
+        bootMoveToFold();
+      } else {
+        bootBlinkFoldBootPrompt();
+        bootPowerOnOpenDown();
+      }
+    }
+    bootStallFinish();
   }
 
   statusLedUpdate();
@@ -3958,10 +4144,16 @@ void setup() {
   btn5Init();
 
   f3SensorInit();
+#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
+  if (item == 1 && (f3HfCfg & 1)) f3ArmFoldCloseWatch();
+#endif
 
-  digitalWrite(9, HIGH);
+  if (bootStealthRestore) {
+    digitalWrite(9, LOW);
+  } else {
+    digitalWrite(9, HIGH);
+  }
   updatePin9Power();
-  watchdogBegin();
 }
 
 void loop() {
@@ -3973,8 +4165,7 @@ void loop() {
       pollBleSerial();
       if (!mySerial.available()) break;
     }
-    f3TickAckBlink();
-    if (f3AckBlinkHalfLeft == 0) f3HeightCfgModeLedApply();
+    f3HeightCfgModeLedApply();
     f3SensorRecoverTick();
     f3SensorServiceTick();
     updatePin9Power();
@@ -4009,8 +4200,8 @@ void loop() {
     tickStealthMinute();
     statusLedUpdate();
     tickFaultAlarm();
+    digitalWrite(12, LOW);
     sendStatusPacket();
-    btn5ServiceTick();
     return;
   }
 
@@ -4029,11 +4220,12 @@ void loop() {
   }
   statusLedUpdate();
   tickFaultAlarm();
-  btn5ServiceTick();
 
   if (item == 0 || item == 1) {
     updateServoOutput();
   }
+  // D12 工作灯：折叠(item=0)亮，翻开(item=1)灭，高电平导通
+  digitalWrite(12, (item == 0) ? HIGH : LOW);
 
   tickAccRetractJudge();
   tickKeyOffRetractDone();

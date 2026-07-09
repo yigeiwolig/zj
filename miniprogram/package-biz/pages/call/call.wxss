@@ -164,6 +164,12 @@ page {
 
 /* 原 title-header / h1 / p 系列样式已废弃，主标题统一放在导航 brand-title 中 */
 
+.card-desc--sub {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #aeaeb2;
+}
+
 .card-stack {
   width: 100%;
   flex: 1;
@@ -171,6 +177,18 @@ page {
   flex-direction: column;
   gap: 30rpx;
   justify-content: flex-start;
+}
+
+.bento-card--compact {
+  flex: 0 0 auto;
+  max-height: none;
+  min-height: 220rpx;
+  width: 100%;
+}
+
+.visual-area--compact {
+  flex: 0 0 auto;
+  min-height: 120rpx;
 }
 
 .bento-card {

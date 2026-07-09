@@ -7433,9 +7433,14 @@ Page({
             const diff = Math.ceil((exp - now) / 86400000);
             warrantyExpired = diff <= 0;
           }
+          const snPending = !!device.snPending || String(device.sn || '').startsWith('PENDING-FAULT-');
+          const displaySn = snPending
+            ? '待录入'
+            : (device.displaySn || ('MT' + (device.sn || '')));
           return {
           ...device,
-          displaySn: device.displaySn || ('MT' + (device.sn || '')),
+          displaySn,
+          snPending,
             productModel: device.productModel || device.name || '未知型号',  // 🔴 确保 productModel 有值
             warrantyExpired
           };

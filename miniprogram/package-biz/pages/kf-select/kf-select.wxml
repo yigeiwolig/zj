@@ -1,0 +1,102 @@
+<view class="page" style="padding-top: {{statusBarHeight + navBarHeight + 12}}px;">
+
+  <view class="nav-back-header" style="padding-top: {{statusBarHeight}}px;">
+    <view class="back-icon" catchtap="handleBack" style="top: {{statusBarHeight + 10}}px;">
+      <text class="back-arrow">‹</text>
+    </view>
+  </view>
+
+  <view
+    class="kf-admin-float kf-admin-float--page"
+    wx:if="{{isAdmin}}"
+    style="top: {{statusBarHeight + 12}}px;"
+    bindtap="toggleAdmin"
+    hover-class="kf-admin-entry-hover">
+    <text class="kf-admin-entry-text">查看留言</text>
+    <view class="kf-admin-badge" wx:if="{{adminMessages.length}}">{{adminMessages.length}}</view>
+  </view>
+
+  <view class="kf-container kf-container--page">
+    <view class="kf-header">
+      <text class="kf-page-title">联系客服</text>
+    </view>
+
+    <view class="kf-admin-list" wx:if="{{isAdmin && showAdminList}}">
+      <view class="kf-admin-msg" wx:for="{{adminMessages}}" wx:key="_id">
+        <view class="kf-admin-msg-head">
+          <text class="kf-admin-msg-name">{{item.nickName}}</text>
+          <text class="kf-admin-msg-time">{{item.timeText}}</text>
+        </view>
+        <view class="kf-admin-msg-body">{{item.content}}</view>
+        <view class="kf-admin-msg-action" bindtap="handleMarkRead" data-id="{{item._id}}">撕下已读</view>
+      </view>
+      <view class="kf-admin-empty" wx:if="{{!adminMessages.length}}">暂无新留言</view>
+    </view>
+
+    <view class="kf-hero">
+      <view
+        class="kf-card kf-card--pre {{highlightScene === 'pre' ? 'kf-card--highlight' : ''}}"
+        hover-class="kf-card-hover"
+        bindtap="handlePreSalesTap">
+        <view class="kf-card-head">
+          <text class="kf-card-title">售前咨询</text>
+          <view class="kf-arrow"></view>
+        </view>
+        <text class="kf-card-desc">选购、配置、优惠与发货咨询</text>
+        <view class="kf-bg-icon kf-bg-icon--chat"></view>
+      </view>
+
+      <view
+        class="kf-card kf-card--after {{highlightScene === 'after' ? 'kf-card--highlight' : ''}}"
+        hover-class="kf-card-hover"
+        bindtap="handleAfterSalesTap">
+        <view class="kf-card-head">
+          <text class="kf-card-title">售后服务</text>
+          <view class="kf-arrow"></view>
+        </view>
+        <text class="kf-card-desc">维修进度、技术支持与退换货</text>
+        <view class="kf-bg-icon kf-bg-icon--shield"></view>
+      </view>
+    </view>
+
+    <view class="kf-feedback">
+      <view
+        class="kf-feedback-toggle {{showFeedbackPanel ? 'is-open' : ''}}"
+        bindtap="toggleFeedback"
+        hover-class="kf-feedback-toggle-hover">
+        <text class="kf-feedback-toggle-title">投诉与反馈</text>
+        <view class="kf-feedback-toggle-arrow"></view>
+      </view>
+
+      <view class="kf-feedback-body" wx:if="{{showFeedbackPanel}}">
+        <view class="kf-feedback-stage">
+          <view
+            class="kf-feedback-input-wrap {{boardTearing ? 'is-tearing' : ''}}"
+            bindanimationend="onBoardTearEnd"
+            wx:if="{{!boardSentTip}}">
+            <textarea
+              class="kf-feedback-input"
+              placeholder="写下您的意见或建议..."
+              placeholder-style="color:#C4C4C6;"
+              value="{{boardContent}}"
+              bindinput="onBoardInput"
+              disabled="{{boardSending || boardTearing}}"
+              maxlength="200"
+              disable-default-padding
+            ></textarea>
+            <view class="kf-feedback-footer">
+              <text class="kf-feedback-count">{{boardContent.length || 0}}/200</text>
+              <view class="kf-send-btn" bindtap="handleBoardSend">{{boardSending ? '提交中' : '提交反馈'}}</view>
+            </view>
+          </view>
+
+          <view class="kf-feedback-success" wx:if="{{boardSentTip}}">
+            <text>反馈已提交，感谢支持</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+  </view>
+</view>
+<custom-toast id="custom-toast" />

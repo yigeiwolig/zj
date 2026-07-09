@@ -65,13 +65,17 @@ function parseF2StatusLine(line) {
     std: pick(/\|STD:(\d+)/),
     mwr: pick(/\|MWR:(\d+)/),
     mot: pick(/\|MOT:(\d+)/),
-    tkf: pick(/\|TKF:(\d+)/)
+    tkf: pick(/\|TKF:(\d+)/),
+    pol: pick(/\|POL:(\d+)/),
+    hf: pick(/\|HF:(\d+)/),
+    f3w: pick(/\|F3W:(\d+)/),
   };
 }
 
 function buildF2SettingStateFromPacket(parsed, currentState, options) {
   const force = !!(options && options.force);
   const isMtUltra = !!(options && options.isMtUltraCard);
+  const isF3Max = !!(options && options.isF3Max);
   const base = { ...(currentState || {}) };
   if (!parsed) return null;
   let changed = false;
@@ -143,28 +147,59 @@ function buildF2SettingStateFromPacket(parsed, currentState, options) {
     }
   }
 
+  if (isF3Max && (parsed.pol === 0 || parsed.pol === 1)) {
+    const v = parsed.pol === 1 ? 'left' : 'right';
+    if (force || base.powerOffLock !== v) {
+      base.powerOffLock = v;
+      changed = true;
+    }
+    if (parsed.pol === 1 && (force || base.shutdown !== 'left')) {
+      base.shutdown = 'left';
+      changed = true;
+    }
+  }
+
+  if (isF3Max && parsed.hf !== null && parsed.hf !== undefined) {
+    const vMon = (parsed.hf & 1) ? 'left' : 'right';
+    if (force || base.heightMon !== vMon) {
+      base.heightMon = vMon;
+      changed = true;
+    }
+  }
+
   if (!changed && !force) return null;
   return base;
 }
 
-/** F2 Ultra 回读校验：点击后期望的状态包字段 */
-function buildF2SettingVerifyExpectation(key, targetVal) {
+/** F2 / Ultra 回读校验：点击后期望的状态包字段 */
+function buildF2SettingVerifyExpectation(key, targetVal, options) {
   if (!key || !targetVal) return null;
+  const isMtUltra = !!(options && options.isMtUltra);
   switch (key) {
     case 'faultDetect':
-      return { std: targetVal === 'left' ? 1 : 0 };
+      if (isMtUltra) {
+        return { std: targetVal === 'left' ? 1 : 0 };
+      }
+      return { chk: targetVal === 'left' ? 1 : 0 };
     case 'selfRepair':
       return { mwr: targetVal === 'left' ? 1 : 0 };
     case 'shutdown':
       return { ret: targetVal === 'left' ? 1 : 0 };
     case 'powerOn':
-      return { pwr: targetVal === 'left' ? 1 : 0 };
+      if (isMtUltra) {
+        return { pwr: targetVal === 'left' ? 1 : 0 };
+      }
+      return { pwr: targetVal === 'left' ? 0 : 1 };
     case 'travelMode':
       return { trv: targetVal === 'right' ? 1 : 0 };
     case 'smoothMode':
       return { smo: targetVal === 'left' ? 1 : 0 };
     case 'stealthBtnExit':
       return { stb: targetVal === 'left' ? 1 : 0 };
+    case 'powerOffLock':
+      return { pol: targetVal === 'left' ? 1 : 0 };
+    case 'heightMon':
+      return { hfMon: targetVal === 'left' ? 1 : 0 };
     default:
       return null;
   }
@@ -173,9 +208,14 @@ function buildF2SettingVerifyExpectation(key, targetVal) {
 function packetMatchesBleVerify(parsed, verify) {
   if (!verify || !parsed) return true;
   if (verify.type === 'setting') {
-    const exp = buildF2SettingVerifyExpectation(verify.key, verify.targetVal);
+    const exp = buildF2SettingVerifyExpectation(verify.key, verify.targetVal, {
+      isMtUltra: !!verify.isMtUltra
+    });
     if (!exp) return true;
-    return Object.keys(exp).every((field) => parsed[field] === exp[field]);
+    return Object.keys(exp).every((field) => {
+      if (field === 'hfMon') return parsed.hf != null && (parsed.hf & 1) === exp.hfMon;
+      return parsed[field] === exp[field];
+    });
   }
   if (verify.type === 'speed') {
     return parsed.spd != null && parsed.spd === verify.value;
@@ -198,13 +238,15 @@ function buildF2AdvUiUpdates(parsed, ctx) {
   if (!parsed) return {};
   const force = !!(ctx && ctx.force);
   const isMtUltra = !!(ctx && ctx.isMtUltraCard);
+  const isF3Max = !!(ctx && ctx.isF3Max);
   const delayPowerOffOptions = (ctx && ctx.delayPowerOffOptions) || [];
   const current = (ctx && ctx.currentUi) || {};
   const updates = {};
 
   const settingState = buildF2SettingStateFromPacket(parsed, ctx && ctx.currentState, {
     force,
-    isMtUltraCard: isMtUltra
+    isMtUltraCard: isMtUltra,
+    isF3Max
   });
   if (settingState) {
     updates.settingState = settingState;
@@ -248,7 +290,7 @@ function buildF2AdvUiUpdates(parsed, ctx) {
   if (isMtUltra && travelOn && parsed.tsd !== null) {
     nextDelayIdx = delayPowerOffOptions.findIndex((o) => o.minutes === parsed.tsd);
     if (nextDelayIdx < 0) nextDelayIdx = 0;
-  } else if (isMtUltra && parsed.dpo !== null && !travelOn) {
+  } else if (isMtUltra && !isF3Max && parsed.dpo !== null && !travelOn) {
     nextDelayIdx = delayPowerOffOptions.findIndex((o) => o.minutes === parsed.dpo);
     if (nextDelayIdx < 0) nextDelayIdx = 0;
   }
@@ -256,13 +298,20 @@ function buildF2AdvUiUpdates(parsed, ctx) {
     updates.delayPowerOffIndex = nextDelayIdx;
   }
 
-  if (isMtUltra) {
+  if (isMtUltra && !isF3Max) {
     const readback = buildF2ReadbackTexts(parsed, delayPowerOffOptions);
     if (force || readback.f2TravelReadbackText !== current.f2TravelReadbackText) {
       updates.f2TravelReadbackText = readback.f2TravelReadbackText;
     }
     if (force || readback.f2DelayPowerReadbackText !== current.f2DelayPowerReadbackText) {
       updates.f2DelayPowerReadbackText = readback.f2DelayPowerReadbackText;
+    }
+  }
+
+  if (isF3Max && (parsed.pol === 0 || parsed.pol === 1)) {
+    const lockText = parsed.pol === 1 ? '已开启' : '已关闭';
+    if (force || lockText !== current.f3PowerOffLockReadbackText) {
+      updates.f3PowerOffLockReadbackText = lockText;
     }
   }
 
@@ -412,7 +461,7 @@ function buildFlapPanelStateFromItm(itm, stm, stb, mot) {
   return null;
 }
 
-/** 当前状态卡片：ERR 故障优先于 ITM 折叠/翻开 */
+/** 当前状态卡片：ERR 故障优先于 WRN 翻开测距，再 ITM 折叠/翻开 */
 function buildFlapPanelStateFromPacket(parsed) {
   if (!parsed) return null;
   const err = parsed.err || 0;
@@ -420,6 +469,13 @@ function buildFlapPanelStateFromPacket(parsed) {
     return {
       flapPanelState: 'fault',
       flapPanelStateText: F2_FAULT_ERR_MAP[err].title
+    };
+  }
+  const wrn = parsed.wrn || 0;
+  if (wrn === 3 && F2_FAULT_WRN_MAP[3]) {
+    return {
+      flapPanelState: 'fault',
+      flapPanelStateText: F2_FAULT_WRN_MAP[3].title
     };
   }
   if (parsed.itm === null || parsed.itm === undefined) return null;
@@ -518,6 +574,15 @@ function buildF3HeightMonitorUpdates(parsed, current) {
   const cur = current || {};
   const force = !!cur.force;
   const updates = {};
+  if (parsed.hf !== null && parsed.hf !== undefined && !(parsed.hf & 1)) {
+    if (force || cur.f3HeightLive) {
+      updates.f3HeightMm = 0;
+      updates.f3HeightText = '测高已关闭';
+      updates.f3HeightLive = false;
+      updates.f3DangerBlocked = false;
+    }
+    return updates;
+  }
   if (parsed.hgt !== null && parsed.hgt !== undefined) {
     const mm = Math.round(Number(parsed.hgt));
     if (Number.isFinite(mm)) {
@@ -530,7 +595,7 @@ function buildF3HeightMonitorUpdates(parsed, current) {
       } else if (force || cur.f3HeightLive) {
         if (!cur.f3HeightConfigModeOn) {
           updates.f3HeightMm = 0;
-          updates.f3HeightText = '无信号';
+          updates.f3HeightText = '传感器无数据';
           updates.f3HeightLive = false;
         }
       }
@@ -538,6 +603,24 @@ function buildF3HeightMonitorUpdates(parsed, current) {
   } else if (force) {
     updates.f3HeightText = cur.f3HeightMm != null ? cur.f3HeightText : '读取中…';
     updates.f3HeightLive = false;
+  }
+  const liveMm = updates.f3HeightMm != null
+    ? updates.f3HeightMm
+    : (cur.f3HeightMm != null ? cur.f3HeightMm : null);
+  const dangerMm = Math.round(Number(cur.f3DangerMm)) || 0;
+  if (dangerMm > 0 && liveMm != null && liveMm > 0) {
+    const blocked = liveMm <= dangerMm;
+    if (force || blocked !== !!cur.f3DangerBlocked) {
+      updates.f3DangerBlocked = blocked;
+    }
+  }
+  if (parsed.f3w === 0 || parsed.f3w === 1 || parsed.f3w === 2) {
+    const watchText = parsed.f3w === 1
+      ? '≥8cm 计时中…'
+      : (parsed.f3w === 2 ? '翻开测距异常' : '');
+    if (force || watchText !== (cur.f3FoldWatchText || '')) {
+      updates.f3FoldWatchText = watchText;
+    }
   }
   return updates;
 }

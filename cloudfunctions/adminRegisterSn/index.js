@@ -182,6 +182,67 @@ async function handleRegister(db, _, normalizedSn, productModel, deviceName, adm
   }
 }
 
+async function handleBindUserSn(db, _, normalizedSn, productModel, deviceName, adminOpenid, userOpenid) {
+  if (!normalizedSn || !userOpenid) {
+    return { success: false, msg: '参数不完整' }
+  }
+
+  const pendingRes = await db.collection('sn').where({
+    openid: userOpenid,
+    isActive: true,
+    snPending: true
+  }).limit(1).get()
+
+  if (!pendingRes.data.length) {
+    return { success: false, msg: '该用户没有待录入的故障设备' }
+  }
+
+  const pending = pendingRes.data[0]
+  const model = String(productModel || pending.productModel || '').trim()
+  if (!model) {
+    return { success: false, msg: '产品型号无效' }
+  }
+
+  const conflict = await findSnRecord(db, _, normalizedSn)
+  if (conflict && conflict._id !== pending._id) {
+    if (conflict.openid && conflict.openid !== userOpenid) {
+      return { success: false, msg: '该 SN 已被其他用户绑定' }
+    }
+    if (conflict.isActive && conflict.openid === userOpenid && !conflict.snPending) {
+      return { success: false, msg: '该 SN 已绑定到该用户' }
+    }
+    if (!conflict.openid) {
+      try {
+        await db.collection('sn').doc(conflict._id).remove()
+      } catch (e) {
+        console.warn('[adminRegisterSn] cleanup inactive SN failed', e)
+      }
+    }
+  }
+
+  await upsertPreRegister(db, _, normalizedSn, model, adminOpenid)
+  await db.collection('sn').doc(pending._id).update({
+    data: {
+      sn: normalizedSn,
+      name: deviceName || normalizedSn,
+      productModel: model,
+      snPending: false,
+      bindSource: 'fault_claim',
+      adminSnAssignedAt: db.serverDate(),
+      adminSnAssignedBy: adminOpenid,
+      lastBindTime: db.serverDate()
+    }
+  })
+
+  return {
+    success: true,
+    msg: 'SN 已同步到用户待录入设备',
+    sn: normalizedSn,
+    productModel: model,
+    userOpenid
+  }
+}
+
 exports.main = async (event) => {
   const db = cloud.database()
   const _ = db.command
@@ -199,6 +260,11 @@ exports.main = async (event) => {
 
     if (action === 'register' || action === 'update_model') {
       return await handleRegister(db, _, normalizedSn, productModel, deviceName, adminOpenid)
+    }
+
+    if (action === 'bind_user_sn') {
+      const userOpenid = String(event.userOpenid || '').trim()
+      return await handleBindUserSn(db, _, normalizedSn, productModel, deviceName, adminOpenid, userOpenid)
     }
 
     return { success: false, msg: '未知操作' }

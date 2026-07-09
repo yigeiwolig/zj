@@ -77,28 +77,9 @@ const uint8_t F3_EEPROM_MAGIC = 0xA7;
 #if F3_MAX_BUILD
 const uint8_t F3_EE_PWR_LOCK = 15;
 const uint8_t F3_EE_HEIGHT_ON = 30;
-const uint8_t F3_EE_STEALTH_ON = 31;
 const uint8_t F3_FOLD_USER_DELTA = 10;   // 日常折叠 = 锁止位 item4 − 10°
 static uint8_t f3PowerOffLockOn = 0;
 static uint8_t stealthEntryBusy = 0;
-
-static void stealthPersistSave(uint8_t on) {
-  EEPROM.update(F3_EE_STEALTH_ON, on ? 1 : 0);
-}
-
-static uint8_t stealthPersistLoad() {
-  uint8_t v = 0;
-  EEPROM.get(F3_EE_STEALTH_ON, v);
-  if (v != 0 && v != 1) {
-    v = 0;
-    EEPROM.update(F3_EE_STEALTH_ON, 0);
-  }
-  return v;
-}
-
-static void stealthPersistClear() {
-  stealthPersistSave(0);
-}
 #endif
 
 #if !F3_FLASH_TIGHT
@@ -357,24 +338,6 @@ bool f3DangerLedActive() {
   }
   return f3DgdLatch;
 }
-
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-/** 翻开前用实时滤波高度复核，避免 DGD 锁存未清误拦 */
-static bool f3FlapOpenDangerBlocked() {
-  if (f3DangerMm == 0 || !f3HeightMonitorActive()) return false;
-  if (!f3SensorValid || !f3LastFiltMm) return f3DgdLatch != 0;
-  if (f3LastFiltMm <= f3DangerMm) {
-    f3DgdLatch = 1;
-    f3DgdUnsafeCnt = 0;
-    f3DgdSafeCnt = 0;
-    return true;
-  }
-  f3DgdLatch = 0;
-  f3DgdUnsafeCnt = 0;
-  f3DgdSafeCnt = 0;
-  return false;
-}
-#endif
 
 void f3SensorInit() {
 #if !F3_HEIGHT_ENABLE
@@ -1975,7 +1938,7 @@ void tickStealthKeyWindow() {
 }
 
 /* =============================================================================
- * BLOCK: Stealth mode — 隐蔽模式（折回后 Pin9 拉低；EEPROM 记忆；重上电保持隐蔽且无 PWM，退出后恢复）
+ * BLOCK: Stealth mode — 隐蔽模式（进入后折回、Pin9 保持 3h；Pin2/蓝牙翻板无效）
  * ============================================================================= */
 static void stealthFoldToLockFast();
 static void finishStealthSession(uint8_t autoPowerOff);
@@ -2031,11 +1994,6 @@ void enterStealthMode() {
   foldHoldActive = 1;
   openEaseActive = 0;
   forceServoMove = 0;
-  servoStopHold();
-  servoMotionOff();
-#if F3_MAX_BUILD
-  stealthPersistSave(1);
-#endif
 #if F3_MAX_BUILD
   f3WriteLeds(0, 0);
 #else
@@ -2048,9 +2006,6 @@ void enterStealthMode() {
 }
 
 static void finishStealthSession(uint8_t autoPowerOff) {
-#if F3_MAX_BUILD
-  stealthPersistClear();
-#endif
   stealthActive = 0;
   item = 0;
   stealthElapsedMin = 0;
@@ -2062,8 +2017,6 @@ static void finishStealthSession(uint8_t autoPowerOff) {
   if (autoPowerOff && digitalRead(2) == LOW) {
     expirePin9KeyOffHold();
     digitalWrite(9, LOW);
-  } else {
-    digitalWrite(9, HIGH);
   }
   updatePin9Power();
   statusLedUpdate();
@@ -2118,12 +2071,12 @@ void updatePin9Power() {
     return;
   }
 
-  // 隐蔽模式：Pin9 拉低（断电隐蔽）；重上电由 EEPROM 恢复后继续隐蔽循环
+  // 隐蔽模式：Pin9 全程保持高电平，不受延时断电/关钥匙影响
   if (item == 3 && stealthActive) {
     pin9HoldUntil = 0;
     pin9HoldExpired = 0;
     stealthWindowStart = 0;
-    digitalWrite(9, LOW);
+    digitalWrite(9, HIGH);
     return;
   }
 
@@ -2190,8 +2143,8 @@ void tickPin9PowerWatchdog() {
 #endif
 
   if (item == 3 && stealthActive) {
-    if (digitalRead(9) != LOW) {
-      digitalWrite(9, LOW);
+    if (digitalRead(9) != HIGH) {
+      digitalWrite(9, HIGH);
       KDBG_L("PIN9_WDT_STEALTH");
     }
     return;
@@ -2537,7 +2490,7 @@ void debugPrintMotionA0(int a0) {
  * ============================================================================= */
 void requestFlapOpen(bool stallRetry) {
   if (item == 1 && !stallRetry && servoMoveCommitted(bianlaing)) return;
-  if (!stallRetry && f3FlapOpenDangerBlocked()) return;
+  if (!stallRetry && f3DangerLedActive()) return;
   if (!stallRetry && !canUserFlapControl()) return;
   if (item == 3 || autoLevelBusy) return;
 
@@ -2692,9 +2645,6 @@ void triggerStallRebound() {
   reboundAttempt = STALL_REBOUND_MAX;
   stuckCount = 0;
   stealthActive = 0;
-#if F3_MAX_BUILD
-  stealthPersistClear();
-#endif
   reboundFaultLatched = 1;
   savePendingFaultReport(2);
   enterFaultLockState();
@@ -2775,9 +2725,6 @@ void enterFaultLockState() {
   reboundWaitUntil = 0;
   reboundRetryClose = 0;
   stealthActive = 0;
-#if F3_MAX_BUILD
-  stealthPersistClear();
-#endif
   pendingKeyOffFold = 0;
   openEaseActive = 0;
   forceServoMove = 0;
@@ -2996,7 +2943,7 @@ static void btn5ToggleFlap() {
   if (!canUserFlapControl()) return;
   lastStatusSend = 0;
   if (item == 0) {
-    if (f3FlapOpenDangerBlocked()) return;
+    if (f3DangerLedActive()) return;
     requestFlapOpen();
   } else {
     requestFlapClose(true);
@@ -3177,7 +3124,6 @@ static void keyDbgKv(const __FlashStringHelper *tag, int a, int b) {
 }
 #endif
 
-#if !F3_FLASH_TIGHT
 int autoScanStall(int from, int to, int thr) {
 #if !F3_FLASH_TIGHT
   mySerial.print(F("ALOG SCAN "));
@@ -3216,9 +3162,8 @@ int autoScanStall(int from, int to, int thr) {
 #endif
   return to;
 }
-#endif
 
-#if !F3_FLASH_TIGHT
+#if F3_FLASH_TIGHT
 void runAutoLevel() {
   if (autoLevelBusy) {
     blinkPin8(1, 80, 80);
@@ -3226,9 +3171,6 @@ void runAutoLevel() {
   }
 
   if (item == 3) {
-#if F3_MAX_BUILD
-    stealthPersistClear();
-#endif
     stealthActive = 0;
     stealthElapsedMin = 0;
     stealthMinuteMark = 0;
@@ -3279,27 +3221,6 @@ void runAutoLevel() {
   writeServo(f3FoldUserTarget());
   waitServoReach(f3FoldUserTarget());
   autoLevelBusy = 0;
-}
-#else
-void runAutoLevel() {
-  if (autoLevelBusy) {
-    blinkPin8(1, 80, 80);
-    return;
-  }
-#if F3_MAX_BUILD
-  if (item == 3) {
-    stealthPersistClear();
-    stealthActive = 0;
-    stealthElapsedMin = 0;
-    stealthMinuteMark = 0;
-    item = 0;
-    foldHoldActive = 1;
-    btn5NoteStealthExited();
-    updatePin9Power();
-    statusLedUpdate();
-  }
-#endif
-  blinkPin8(1, 80, 80);
 }
 #endif
 
@@ -3520,7 +3441,7 @@ void handleBleCommand(char *cmd) {
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
     f3LeaveHeightCfgForFlap();
 #endif
-    if (canUserFlapControl() && item != 1 && !f3FlapOpenDangerBlocked()) {
+    if (canUserFlapControl() && item != 1 && !f3DangerLedActive()) {
       requestFlapOpen();
     }
     return;
@@ -4057,11 +3978,6 @@ void setup() {
   KDBG_KV("SETUP_ANG", bianlaing, item4);
   KDBG_KV("SETUP_PIN2", digitalRead(2), selfCheckOn);
 
-  uint8_t bootStealthRestore = 0;
-#if F3_MAX_BUILD
-  bootStealthRestore = stealthPersistLoad();
-#endif
-
   // 开机定位+自检期间屏蔽 2 号关钥匙收回（waitServoSettle 里会跑 tickStealthKeyWindow）
   bootSettleUntil = millis() + BOOT_SETTLE_MS + 16000UL;
   KDBG_L("BOOT_GUARD_ON");
@@ -4070,36 +3986,20 @@ void setup() {
   // 上电先稳压 + 指示灯，再发开机目标角
   bootPwrSettleWait();
 
-  if (bootStealthRestore) {
-    item = 3;
-    stealthActive = 1;
-    stealthElapsedMin = 0;
-    stealthMinuteMark = millis();
-    foldHoldActive = 1;
-    forceServoMove = 0;
-    openEaseActive = 0;
-    invalidateServoHold();
-    servoStopHold();
-    servoMotionOff();
-    servoPwmOff = 1;
-    bootStallEn = 0;
-    KDBG_L("BOOT_STEALTH_RESTORE");
-  } else {
-    {
-      uint8_t rk = keyOnRstMk;
-      uint8_t keyRst = (rk == 0xA5 || rk == 0xA7);
-      if (keyRst) keyOnRstMk = 0;
-      // 隐蔽退出软复位(0xA7)不开开机堵转；其余上电/开钥匙复位都开
-      bootStallEn = !(keyRst && rk == 0xA7) ? 1 : 0;
-      if (keyRst || powerOnFlip == 0) {
-        bootMoveToFold();
-      } else {
-        bootBlinkFoldBootPrompt();
-        bootPowerOnOpenDown();
-      }
+  {
+    uint8_t rk = keyOnRstMk;
+    uint8_t keyRst = (rk == 0xA5 || rk == 0xA7);
+    if (keyRst) keyOnRstMk = 0;
+    // 隐蔽退出软复位(0xA7)不开开机堵转；其余上电/开钥匙复位都开
+    bootStallEn = !(keyRst && rk == 0xA7) ? 1 : 0;
+    if (keyRst || powerOnFlip == 0) {
+      bootMoveToFold();
+    } else {
+      bootBlinkFoldBootPrompt();
+      bootPowerOnOpenDown();
     }
-    if (bootStallEn != 2) bootStallEn = 0;
   }
+  if (bootStallEn != 2) bootStallEn = 0;
 
   statusLedUpdate();
 
@@ -4113,11 +4013,7 @@ void setup() {
 
   f3SensorInit();
 
-  if (bootStealthRestore) {
-    digitalWrite(9, LOW);
-  } else {
-    digitalWrite(9, HIGH);
-  }
+  digitalWrite(9, HIGH);
   updatePin9Power();
 }
 

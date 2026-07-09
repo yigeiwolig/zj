@@ -282,9 +282,19 @@
     </view>
 
     <view class="hub-panel-slot">
+      <hub-kf-panel
+        id="hubKfPanel"
+        active="{{hubTabIndex === 3}}"
+        shell-status-bar-height="{{statusBarHeight}}"
+        shell-admin="{{isAuthorized}}"
+        highlight-scene="{{hubKfHighlightScene}}"
+      />
+    </view>
+
+    <view class="hub-panel-slot">
       <hub-profile-panel
         id="hubProfilePanel"
-        active="{{hubTabIndex === 3}}"
+        active="{{hubTabIndex === 4}}"
         shell-authorized="{{isAuthorized}}"
         shell-admin="{{hubShellIsAdmin}}"
         bind:switch="onHubTabSwitch"

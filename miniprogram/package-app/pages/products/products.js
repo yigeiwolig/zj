@@ -3,7 +3,6 @@ const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const hubNav = require('../../../utils/hubNav.js');
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const shareApp = require('../../../utils/shareApp.js');
-const weworkKf = require('../../../utils/weworkCustomerService.js');
 
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js');
 var qqmapsdk = new QQMapWX({
@@ -107,7 +106,9 @@ Page({
     hubPanelsAnim: false,
     hubShopMounted: false,
     hubOrdersMounted: true,
+    hubKfMounted: false,
     hubProfileMounted: true,
+    hubKfHighlightScene: '',
     hubShellIsAdmin: false,
     hubCartBadge: 0,
     showHubTabBar: true,
@@ -1121,23 +1122,27 @@ Page({
         hubTrackTranslatePct: 0,
         hubBottomBarIndex: 0,
         hubShopMounted: true,
-        hubTrackTranslatePct: 25,
+        hubTrackTranslatePct: hubNav.panelIndexToTranslatePct(1),
         showHubTabBar: false,
         hubSwiperDuration: 0
       });
     } else {
-      const hubTab = options && options.hubTab != null ? Number(options.hubTab) : NaN;
-      if (!Number.isNaN(hubTab) && hubTab >= 0 && hubTab <= 2) {
-        const panelIndex = hubTab === 0 ? 0 : hubTab + 1;
+      const panelIndex = hubNav.resolveHubTabParam(options && options.hubTab);
+      if (!Number.isNaN(panelIndex)) {
         const patch = {
           hubTabIndex: panelIndex,
-          hubTrackTranslatePct: panelIndex * 25,
+          hubTrackTranslatePct: hubNav.panelIndexToTranslatePct(panelIndex),
           hubBottomBarIndex: hubNav.panelIndexToBottomBarActive(panelIndex),
           hubSwiperDuration: 0,
           showHubTabBar: panelIndex !== 1
         };
-        if (hubTab === 1) patch.hubOrdersMounted = true;
-        if (hubTab === 2) patch.hubProfileMounted = true;
+        if (panelIndex === 2) patch.hubOrdersMounted = true;
+        if (panelIndex === 3) {
+          patch.hubKfMounted = true;
+          const scene = options && options.scene ? String(options.scene) : '';
+          if (scene === 'pre' || scene === 'after') patch.hubKfHighlightScene = scene;
+        }
+        if (panelIndex === 4) patch.hubProfileMounted = true;
         this.setData(patch);
       }
     }
@@ -2448,16 +2453,14 @@ Page({
       return;
     }
     
-    // 联系方式直接跳转
+    // 联系方式：备用合作联系页（官方微信 + 投诉建议）
     if (numId === 8) {
       this.rememberReturnFocus(numId);
-      wx.navigateTo({ 
+      wx.navigateTo({
         url: '/package-biz/pages/call/call',
         animationType: 'none',
-        success: function() {
-        },
         fail: (err) => {
-          this.showAutoToast('提示', '跳转失败: ' + JSON.stringify(err));
+          console.error('[products] 跳转联系方式页失败:', err);
         }
       });
       return;
@@ -2742,7 +2745,7 @@ Page({
 
   _syncHubPanelsAuth() {
     const authorized = !!this.data.isAuthorized;
-    ['#hubShopPanel', '#hubOrdersPanel', '#hubProfilePanel'].forEach((sel) => {
+    ['#hubShopPanel', '#hubOrdersPanel', '#hubKfPanel', '#hubProfilePanel'].forEach((sel) => {
       const panel = this.selectComponent(sel);
       if (panel && typeof panel.setData === 'function') {
         panel.setData({ isAuthorized: authorized, shellAuthorized: authorized });
@@ -2774,7 +2777,7 @@ Page({
       this._updateHubShopEmbedScrollHeight();
       return;
     }
-    const sel = tabIndex === 2 ? '#hubOrdersPanel' : tabIndex === 3 ? '#hubProfilePanel' : '';
+    const sel = tabIndex === 2 ? '#hubOrdersPanel' : tabIndex === 4 ? '#hubProfilePanel' : '';
     if (!sel) return;
     const panel = this.selectComponent(sel);
     if (!panel) return;
@@ -2785,7 +2788,7 @@ Page({
       }
       return;
     }
-    if (tabIndex === 3 && typeof panel.loadMyActivitiesPromise === 'function') {
+    if (tabIndex === 4 && typeof panel.loadMyActivitiesPromise === 'function') {
       panel.loadMyActivitiesPromise().catch(() => {});
       return;
     }
@@ -2819,7 +2822,7 @@ Page({
 
   _setHubTabIndex(idx) {
     if (idx == null) return;
-    const expectedPct = idx * 25;
+    const expectedPct = hubNav.panelIndexToTranslatePct(idx);
     const curPct = this.data.hubTrackTranslatePct || 0;
     if (idx === this.data.hubTabIndex && expectedPct === curPct) return;
     if (idx >= 2) {
@@ -2827,7 +2830,7 @@ Page({
     }
     const hubBottomBarIndex = hubNav.panelIndexToBottomBarActive(idx);
     const prevTrackPct = this.data.hubTrackTranslatePct || 0;
-    const hubTrackTranslatePct = idx * 25;
+    const hubTrackTranslatePct = hubNav.panelIndexToTranslatePct(idx);
     const trackMoves = prevTrackPct !== hubTrackTranslatePct;
     const contentPatch = {
       hubTabIndex: idx,
@@ -2844,7 +2847,8 @@ Page({
     }
     if (idx === 1) contentPatch.hubShopMounted = true;
     if (idx === 2) contentPatch.hubOrdersMounted = true;
-    if (idx === 3) contentPatch.hubProfileMounted = true;
+    if (idx === 3) contentPatch.hubKfMounted = true;
+    if (idx === 4) contentPatch.hubProfileMounted = true;
 
     const afterContent = () => {
       if (idx === 0 || idx === 1) {
@@ -2881,11 +2885,7 @@ Page({
   onHubTabSwitch(e) {
     const tab = e.detail && e.detail.tab;
     if (!tab) return;
-    if (tab === 'kf') {
-      weworkKf.openPreSalesKf();
-      return;
-    }
-    const map = { home: 0, orders: 2, profile: 3 };
+    const map = { home: 0, orders: 2, kf: 3, profile: 4 };
     const idx = map[tab];
     if (idx == null) return;
     this._setHubTabIndex(idx);

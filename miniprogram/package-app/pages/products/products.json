@@ -5,6 +5,7 @@
     "hub-segment-bar": "/components/hub-segment-bar/index",
     "shop-embed": "/package-app/components/shop-embed/index",
     "hub-orders-panel": "./hub-orders-panel",
+    "hub-kf-panel": "./hub-kf-panel",
     "hub-profile-panel": "./hub-profile-panel"
   },
   "navigationBarTitleText": "分类",

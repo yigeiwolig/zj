@@ -614,15 +614,15 @@
   </view>
 </view>
 
-<!-- 详情页右侧悬浮：售前客服（fixed 挂视口，避免嵌入枢纽时不显示） -->
-<button
+<!-- 详情页右侧悬浮：售前客服 -->
+<view
   class="shop-float-kf {{showFooterBar && !isModelCompareMode ? 'shop-float-kf--raised' : ''}}"
   wx:if="{{showDetail && !isModelCompareMode && !showOrderModal}}"
   hover-class="shop-float-kf--pressed"
   bindtap="openPreSalesCustomerService">
   <view class="shop-float-kf-icon" aria-hidden="true"></view>
-  <text class="shop-float-kf-text">售前</text>
-</button>
+  <text class="shop-float-kf-text">咨询</text>
+</view>
 
 <!-- ================= 4. 对比表格弹窗 (最终修正版) ================= -->
 <!-- 遮罩层 -->

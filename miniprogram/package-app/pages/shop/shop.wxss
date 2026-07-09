@@ -157,74 +157,58 @@ page {
 /* 商品详情：右侧悬浮售前客服 */
 .shop-float-kf {
   position: fixed;
-  right: 24rpx;
-  top: 56%;
+  right: 28rpx;
+  top: 58%;
   transform: translateY(-50%);
   z-index: 650;
-  width: 96rpx;
-  padding: 18rpx 0 14rpx;
+  width: 88rpx;
+  height: 88rpx;
+  padding: 0;
   margin: 0;
-  border: none;
-  border-radius: 48rpx;
+  border-radius: 50%;
   box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.98);
+  background: rgba(28, 28, 30, 0.94);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  box-shadow:
-    0 8rpx 28rpx rgba(0, 0, 0, 0.14),
-    0 0 0 1rpx rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10rpx 28rpx rgba(0, 0, 0, 0.22);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
+  gap: 2rpx;
   pointer-events: auto;
-  line-height: normal;
-  font-size: inherit;
-  transition: top 0.35s cubic-bezier(0.19, 1, 0.22, 1), transform 0.35s cubic-bezier(0.19, 1, 0.22, 1);
+  transition: top 0.35s cubic-bezier(0.19, 1, 0.22, 1), transform 0.35s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.2s ease;
 }
-.shop-float-kf::after {
-  display: none;
-}
+
 .shop-float-kf--raised {
   top: 50%;
-  transform: translateY(calc(-50% - 56rpx));
+  transform: translateY(calc(-50% - 64rpx));
 }
-.shop-float-kf:active,
+
 .shop-float-kf--pressed {
-  opacity: 0.82;
-  transform: translateY(-50%) scale(0.96);
+  opacity: 0.88;
+  transform: translateY(-50%) scale(0.94);
 }
-.shop-float-kf--raised:active,
+
 .shop-float-kf--raised.shop-float-kf--pressed {
-  transform: translateY(calc(-50% - 56rpx)) scale(0.96);
+  transform: translateY(calc(-50% - 64rpx)) scale(0.94);
 }
+
 .shop-float-kf-icon {
-  width: 36rpx;
+  width: 32rpx;
   height: 32rpx;
-  border: 3rpx solid #07c160;
-  border-radius: 10rpx;
-  box-sizing: border-box;
-  position: relative;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FFFFFF' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
-.shop-float-kf-icon::after {
-  content: '';
-  position: absolute;
-  left: 7rpx;
-  bottom: -9rpx;
-  width: 0;
-  height: 0;
-  border: 7rpx solid transparent;
-  border-top-color: #07c160;
-  border-left-width: 5rpx;
-  border-right-width: 5rpx;
-}
+
 .shop-float-kf-text {
-  font-size: 20rpx;
-  font-weight: 700;
-  color: #07c160;
+  font-size: 18rpx;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
   line-height: 1;
-  letter-spacing: 1rpx;
+  letter-spacing: 0;
 }
 
 /* ============ 通用组件 ============ */

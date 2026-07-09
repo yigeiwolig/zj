@@ -165,15 +165,80 @@ exports.main = async (event, context) => {
       // #region agent log
       sendDebugLog('cloudfunctions/adminAuditDevice/index.js:approve', '计算最终延保信息', { userOpenid, sn: applyData.sn, baseDays: days, pendingWarrantyDays, finalTotalDays, finalExpiryDate: finalExpiryDateStr, remainingDays }, 'E')
       // #endregion
+
+      const isFaultClaim = applyData.bindType === 'fault'
+      let targetSn = String(applyData.sn || '').trim()
+
+      if (isFaultClaim) {
+        const existingPending = await db.collection('sn').where({
+          openid: userOpenid,
+          isActive: true,
+          snPending: true
+        }).limit(1).get()
+
+        if (existingPending.data.length > 0) {
+          return { success: false, errMsg: '该用户已有待录入设备，请勿重复审核' }
+        }
+
+        targetSn = `PENDING-FAULT-${String(id).slice(-8).toUpperCase()}`
+
+        await db.collection('sn').add({
+          data: {
+            sn: targetSn,
+            name: applyData.productModel,
+            productModel: applyData.productModel,
+            firmware: firmwareVer,
+            expiryDate: finalExpiryDateStr,
+            totalDays: finalTotalDays,
+            remainingDays: remainingDays > 0 ? remainingDays : 0,
+            activations: 1,
+            hasExtra: false,
+            bindTime: finalDate instanceof Date ? finalDate.toISOString() : finalDate,
+            imgReceipt: applyData.imgReceipt,
+            isActive: true,
+            openid: userOpenid,
+            snPending: true,
+            bindSource: 'fault_claim',
+            faultClaimId: id,
+            createTime: db.serverDate()
+          }
+        })
+
+        await db.collection('my_read').doc(id).update({
+          data: { status: 'APPROVED', sn: targetSn }
+        })
+
+        if (userOpenid && pendingWarrantyDays > 0) {
+          const pendingRes = await db.collection('pending_warranty')
+            .where({ openid: userOpenid, status: 'pending' })
+            .get()
+          const recordIds = pendingRes.data.map(r => r._id)
+          for (const recordId of recordIds) {
+            await db.collection('pending_warranty').doc(recordId).update({
+              data: {
+                status: 'applied',
+                appliedAt: db.serverDate(),
+                appliedSn: targetSn
+              }
+            })
+          }
+        }
+
+        return { success: true, msg: '故障核验已通过，设备卡已创建' }
+      }
+
+      if (!targetSn) {
+        return { success: false, errMsg: '设备 SN 无效' }
+      }
       
       // 更新 sn 集合，确保设置 openid
       // 🔴 修复：先查询设备是否存在
       const deviceRes = await db.collection('sn').where({
-        sn: applyData.sn
+        sn: targetSn
       }).get()
       
       if (deviceRes.data.length === 0) {
-        console.error('[adminAuditDevice] 设备不存在，SN:', applyData.sn)
+        console.error('[adminAuditDevice] 设备不存在，SN:', targetSn)
         return { success: false, errMsg: '设备不存在，请检查SN是否正确' }
       }
       
@@ -199,10 +264,10 @@ exports.main = async (event, context) => {
         openid: userOpenid
       }
       
-      console.log('[adminAuditDevice] 准备更新设备，SN:', applyData.sn, 'openid:', userOpenid, 'updateData keys:', Object.keys(updateData))
+      console.log('[adminAuditDevice] 准备更新设备，SN:', targetSn, 'openid:', userOpenid, 'updateData keys:', Object.keys(updateData))
       
       const updateResult = await db.collection('sn').where({
-        sn: applyData.sn
+        sn: targetSn
       }).update({
         data: updateData
       })
@@ -211,14 +276,14 @@ exports.main = async (event, context) => {
       
       // 🔴 验证更新是否成功
       const verifyRes = await db.collection('sn').where({
-        sn: applyData.sn,
+        sn: targetSn,
         openid: userOpenid,
         isActive: true
       }).get()
       
       console.log('[adminAuditDevice] 验证更新结果，查询到的设备数量:', verifyRes.data.length)
       if (verifyRes.data.length === 0) {
-        console.error('[adminAuditDevice] 警告：更新后验证失败，设备可能未正确更新，SN:', applyData.sn, 'openid:', userOpenid)
+        console.error('[adminAuditDevice] 警告：更新后验证失败，设备可能未正确更新，SN:', targetSn, 'openid:', userOpenid)
       }
 
       // 更新申请单状态
@@ -239,7 +304,7 @@ exports.main = async (event, context) => {
             data: {
               status: 'applied',
               appliedAt: db.serverDate(),
-              appliedSn: applyData.sn
+              appliedSn: targetSn
             }
           })
         }

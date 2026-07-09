@@ -63,6 +63,7 @@ module.exports = function createMyPageConfig(hubView) {
     hasModalOpen: false, // 🔴 是否有弹窗打开（用于锁定页面滚动）
     bluetoothReady: false,
     showBindAuditForm: false, // 仅 NEED_AUDIT 时显示填表；预登记自动绑定不显示
+    showFaultBindForm: false, // 故障设备人工核验（无需蓝牙）
     modelOptions: PRODUCT_DETAIL_OPTIONS,
     modelIndex: null,
     buyDate: '',
@@ -4867,8 +4868,8 @@ module.exports = function createMyPageConfig(hubView) {
       confirmText: '联系客服',
       showCancel: true,
       success: (res) => {
-        if(res.confirm) {
-          // 可以在这里跳转客服
+        if (res.confirm) {
+          this.goToAfterSalesKf();
         }
       }
     });
@@ -4913,7 +4914,8 @@ module.exports = function createMyPageConfig(hubView) {
       imgChat: '',
       previewImgReceipt: '',
       previewImgChat: '',
-      showBindAuditForm: false
+      showBindAuditForm: false,
+      showFaultBindForm: false
     });
   },
   
@@ -5451,10 +5453,21 @@ module.exports = function createMyPageConfig(hubView) {
   normalizeDisplaySn(snValue) {
     const raw = String(snValue || '').trim().toUpperCase();
     if (!raw) return '';
+    if (raw.startsWith('PENDING-FAULT-')) return '待录入';
     if (raw.startsWith('MT-')) return raw;
     if (raw.startsWith('MT')) return `MT-${raw.slice(2).replace(/^-/, '')}`;
     if (raw.startsWith('NB')) return `MT-${raw.replace(/^NB-?/, '')}`;
     return `MT-${raw.replace(/^-/, '')}`;
+  },
+
+  formatDeviceSnDisplay(snValue, snPending) {
+    const raw = String(snValue || '').trim();
+    if (snPending || raw.startsWith('PENDING-FAULT-')) return '待录入';
+    return this.normalizeDisplaySn(raw);
+  },
+
+  isPendingFaultSn(snValue) {
+    return String(snValue || '').trim().toUpperCase().startsWith('PENDING-FAULT-');
   },
 
   // --- 核心业务：处理设备绑定 (连接成功后调用) ---
@@ -5557,7 +5570,10 @@ module.exports = function createMyPageConfig(hubView) {
           }
 
         } else {
-          const blockedConnect = result?.status === 'SCRAPPED' || result?.status === 'LOCKED_REPLACEMENT';
+          const blockedConnect = result?.status === 'SCRAPPED'
+            || result?.status === 'LOCKED_REPLACEMENT'
+            || result?.status === 'FAULT_PENDING_MISMATCH'
+            || result?.status === 'FAULT_PENDING_BLOCK';
           if (blockedConnect) {
             this.ble.disconnect();
           }
@@ -5571,7 +5587,7 @@ module.exports = function createMyPageConfig(hubView) {
             showBindAuditForm: false
           });
           if (blockedConnect) {
-            this.showAutoToast('无法连接', result?.msg || '该设备不可用');
+            this.showAutoToast('无法绑定', result?.msg || '该设备不可用', { preserveBindModal: true });
           }
         }
       },
@@ -5749,6 +5765,106 @@ module.exports = function createMyPageConfig(hubView) {
     });
   },
 
+  openFaultBindForm() {
+    if (!this.data.myOpenid) {
+      this.showAutoToast('提示', '请稍候，正在加载账户信息', { preserveBindModal: true });
+      return;
+    }
+    this._checkFaultBindEligibility().then((blocked) => {
+      if (blocked) return;
+      this.setData({
+        showFaultBindForm: true,
+        bindType: 'fault',
+        modelIndex: null,
+        buyDate: '',
+        imgReceipt: '',
+        imgChat: '',
+        previewImgReceipt: '',
+        previewImgChat: ''
+      });
+    });
+  },
+
+  closeFaultBindForm() {
+    this.setData({ showFaultBindForm: false, bindType: 'new' });
+  },
+
+  _checkFaultBindEligibility() {
+    return wx.cloud.callFunction({
+      name: 'submitFaultBind',
+      data: { action: 'check' }
+    }).then((res) => {
+      const result = res.result || {}
+      if (result.blocked) {
+        this.showMyDialog({
+          title: '无法提交',
+          content: result.msg || '暂时无法提交',
+          confirmText: '知道了'
+        })
+        return true
+      }
+      if (!result.success) {
+        this.showAutoToast('提示', result.msg || '校验失败，请稍后重试', { preserveBindModal: true })
+        return true
+      }
+      return false
+    }).catch((err) => {
+      console.error('[faultBind] eligibility check failed', err)
+      this.showAutoToast('提示', '校验失败，请稍后重试', { preserveBindModal: true })
+      return true
+    })
+  },
+
+  submitFaultAudit() {
+    if (this.data.modelIndex == null || this.data.modelIndex === '') {
+      this.showAutoToast('提示', '请选择型号', { preserveBindModal: true });
+      return;
+    }
+    if (!this.data.imgReceipt) {
+      this.showAutoToast('提示', '请上传购买截图', { preserveBindModal: true });
+      return;
+    }
+    if (!this.data.buyDate) {
+      this.showAutoToast('提示', '请选择购买日期', { preserveBindModal: true });
+      return;
+    }
+
+    this._checkFaultBindEligibility().then((blocked) => {
+      if (blocked) return;
+
+      this.showMyLoading('提交中...');
+
+      wx.cloud.callFunction({
+        name: 'submitFaultBind',
+        data: {
+          action: 'submit',
+          productModel: this.data.modelOptions[this.data.modelIndex],
+          buyDate: this.data.buyDate,
+          imgReceipt: this.data.imgReceipt
+        }
+      }).then((res) => {
+        this.hideMyLoading();
+        const result = res.result || {};
+        if (!result.success) {
+          this.showAutoToast('提交失败', result.msg || '请重试');
+          return;
+        }
+        this.showMyDialog({
+          title: '已提交',
+          content: '故障核验申请已提交，审核通过后将创建产品档案（序列号待录入），届时可发起报修。',
+          success: () => {
+            this.closeBindModal();
+            this.resetBluetoothState();
+          }
+        });
+      }).catch((err) => {
+        this.hideMyLoading();
+        console.error(err);
+        this.showAutoToast('提交失败', err.errMsg || '网络错误，请重试');
+      });
+    });
+  },
+
   changeBindType(e) {
     this.setData({ bindType: e.currentTarget.dataset.type });
   },
@@ -5760,8 +5876,10 @@ module.exports = function createMyPageConfig(hubView) {
   removeDevice(e) {
     const index = e.currentTarget.dataset.index;
     const device = this.data.deviceList[index];
-    
-    const normalizedSn = this.normalizeDisplaySn(device.sn);
+    const snForUnbind = device.snRaw || device.sn;
+    const normalizedSn = this.isPendingFaultSn(snForUnbind)
+      ? String(snForUnbind).trim()
+      : this.normalizeDisplaySn(snForUnbind);
 
     // 使用自定义弹窗替代 wx.showModal
     this.showMyDialog({
@@ -5834,7 +5952,7 @@ module.exports = function createMyPageConfig(hubView) {
     if (!tab) return;
     if (tab === 'kf') {
       const weworkKf = require('../../../utils/weworkCustomerService.js');
-      weworkKf.openPreSalesKf();
+      weworkKf.openKfPicker();
       return;
     }
     const hubNav = require('../../../utils/hubNav.js');
@@ -5880,29 +5998,32 @@ module.exports = function createMyPageConfig(hubView) {
       isActive: true               // 必须是审核通过的
     }).get().then(res => {
       const uniqueList = [];
+      const uniqueMap = new Map();
 
       res.data.forEach(item => {
-        // 如果这个 SN 还没出现过，才放进去
-        if (!uniqueMap.has(item.sn)) {
-          uniqueMap.set(item.sn, true);
-          
-          // 原有的计算逻辑
-          const now = new Date();
-          const exp = new Date(item.expiryDate);
-          const diff = Math.ceil((exp - now) / (86400000));
-          const isExpired = diff <= 0;
+        const snKey = String(item.sn || item._id || '');
+        if (!snKey || uniqueMap.has(snKey)) return;
+        uniqueMap.set(snKey, true);
 
-          uniqueList.push({
-            name: item.productModel || '未知型号',
-            sn: this.normalizeDisplaySn(item.sn),
-            days: diff > 0 ? diff : 0,
-            isExpired: isExpired, // 🔴 新增：是否过期
-            hasExtra: item.hasExtra,
-            expiryDate: item.expiryDate,
-            activations: item.activations,
-            firmware: item.firmware
-          });
-        }
+        const snPending = !!item.snPending || this.isPendingFaultSn(item.sn);
+        const now = new Date();
+        const exp = item.expiryDate ? new Date(item.expiryDate) : null;
+        const diff = exp ? Math.ceil((exp - now) / 86400000) : 0;
+        const isExpired = exp ? diff <= 0 : false;
+
+        uniqueList.push({
+          name: item.productModel || '未知型号',
+          sn: this.formatDeviceSnDisplay(item.sn, snPending),
+          snRaw: item.sn,
+          snPending,
+          days: diff > 0 ? diff : 0,
+          isExpired,
+          hasExtra: item.hasExtra,
+          hasReward: item.hasReward,
+          expiryDate: item.expiryDate || '--',
+          activations: item.activations || 0,
+          firmware: item.firmware || '--'
+        });
       });
       // ==========================
       
@@ -5980,7 +6101,9 @@ module.exports = function createMyPageConfig(hubView) {
           // ✅ [替换为自定义弹窗]
           this.showMyDialog({
             title: '审核完成',
-            content: '该设备已激活，数据已同步给用户。',
+            content: currentAuditItem.bindType === 'fault'
+              ? '故障核验已通过，用户设备卡已创建（序列号待录入）。'
+              : '该设备已激活，数据已同步给用户。',
             confirmText: '好的',
             success: () => {
               this.closeAuditModal(); // 关闭审核框
@@ -8387,18 +8510,19 @@ module.exports = function createMyPageConfig(hubView) {
     });
   },
 
-  // 跳转到联系在线客服
+  goToKfSelectHub() {
+    const weworkKf = require('../../../utils/weworkCustomerService.js');
+    weworkKf.navigateToKfSelect();
+  },
+
+  // 售后相关场景默认高亮售后入口
   goToCustomerService() {
-    wx.navigateTo({
-      url: '/package-biz/pages/call/call',
-      animationType: 'none',
-      success: () => {
-      },
-      fail: (err) => {
-        console.error('[my.js] 跳转到联系在线客服失败:', err);
-        this.showAutoToast('提示', '跳转失败，请稍后重试');
-      }
-    });
+    const weworkKf = require('../../../utils/weworkCustomerService.js');
+    weworkKf.navigateToKfSelect({ scene: 'after' });
+  },
+
+  goToAfterSalesKf() {
+    this.goToCustomerService();
   },
 
   // 🔴 「去购买配件」专用：只跳售后中心（shouhou）对应型号卡，绝不跳 shop

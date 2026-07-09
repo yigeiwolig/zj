@@ -2,8 +2,11 @@
 
 <view class="container">
 
-  <view class="f3-cal-overlay f3-cal-overlay--page" wx:if="{{f3ShowCalOverlay}}" catchtouchmove="noop" catchtap="noop">
-    <include src="f3-cal-wizard.wxml" />
+  <view class="f3-cal-overlay f3-cal-overlay--page" wx:if="{{f3ShowCalOverlay}}">
+    <view class="f3-cal-overlay-backdrop" catchtouchmove="noop" catchtap="noop"></view>
+    <view class="f3-cal-overlay-panel">
+      <include src="f3-cal-wizard.wxml" />
+    </view>
   </view>
 
   <!-- F3 测高手动写入：小弹窗（回读校验，不依赖高级设置面板） -->
@@ -18,7 +21,10 @@
       <text class="f3-height-write-label" wx:if="{{f3HeightWriteModalLabel}}">{{f3HeightWriteModalLabel}}</text>
       <text class="f3-height-write-mm" wx:if="{{f3HeightWriteModalMm}}">{{f3HeightWriteModalMm}}</text>
       <text class="f3-height-write-hint">{{f3HeightWriteModalHint}}</text>
-      <view class="f3-cal-btn f3-cal-btn--primary f3-height-write-btn" wx:if="{{f3HeightWriteModalPhase !== 'writing'}}" catchtap="onF3HeightWriteModalClose">确定</view>
+      <view class="f3-height-write-actions">
+        <view class="f3-cal-btn f3-height-write-cancel" wx:if="{{f3HeightWriteModalPhase === 'writing'}}" catchtap="onF3HeightWriteModalClose">取消</view>
+        <view class="f3-cal-btn f3-cal-btn--primary f3-height-write-btn" wx:if="{{f3HeightWriteModalPhase !== 'writing'}}" catchtap="onF3HeightWriteModalClose">确定</view>
+      </view>
     </view>
   </view>
   
@@ -172,6 +178,17 @@
   <!-- 打开角度：快速连滑时的非阻塞提示（不挡拨轮） -->
   <view class="open-angle-send-hint {{showOpenAngleSendHint ? 'show' : ''}}" wx:if="{{showOpenAngleSendHint}}">
     <text>指令发送中，可继续拨轮</text>
+  </view>
+
+  <!-- 高级设置：回读等待弹窗（3 秒内回读成功则不出现） -->
+  <view class="password-modal-mask {{settingSendingModalClosing ? 'closing' : ''}}" wx:if="{{showSettingSendingModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
+      <view class="calibrating-icon-wrap">
+        <view class="calibrating-spinner"></view>
+      </view>
+      <view class="pass-title">数据发送中</view>
+      <view class="pass-desc">正在等待设备确认，请稍候</view>
+    </view>
   </view>
 
 
@@ -463,10 +480,10 @@
                     </text>
                   </block>
                 </view>
-                <view class="telemetry-gauge telemetry-gauge--{{flapPanelState}}{{flapPanelState === 'moving' && flapMotionDir === 'close' ? ' telemetry-gauge--moving-close' : ''}}{{flapGaugeSnap ? ' telemetry-gauge--snap' : ''}}">
+                <view class="telemetry-gauge {{(flapGaugeSpinning || flapGaugeTransition) ? ('telemetry-gauge--spinning telemetry-gauge--spin-' + flapGaugeSpinDir) : ('telemetry-gauge--' + flapPanelState)}}">
                   <view class="gauge-bg"></view>
-                  <view class="gauge-bar"></view>
-                  <view class="orbit-container">
+                  <view class="gauge-bar gauge-rotor {{flapGaugeTransition ? 'gauge-rotor--ease' : ''}}" style="transform: rotate({{flapGaugeRotateDeg}}deg) translate3d(0,0,0);"></view>
+                  <view class="orbit-container gauge-rotor {{flapGaugeTransition ? 'gauge-rotor--ease' : ''}}" style="transform: rotate({{flapGaugeRotateDeg}}deg) translate3d(0,0,0);">
                     <view class="orbit-dot"></view>
                   </view>
                   <view class="gauge-center-lamp">
@@ -497,7 +514,8 @@
                 <view class="f3-height-chip-dot"></view>
                 <text class="f3-height-chip-label">翻板高度</text>
                 <text class="f3-height-chip-val">{{f3HeightText}}</text>
-                <text class="f3-height-chip-hint" wx:if="{{flapPanelState === 'open' || flapPanelState === 'moving'}}">打开不测</text>
+                <text class="f3-height-chip-hint" wx:if="{{f3FoldWatchText}}">{{f3FoldWatchText}}</text>
+                <text class="f3-height-chip-hint" wx:elif="{{flapPanelState === 'open' && !f3HeightLive}}">读取中…</text>
               </view>
             </view>
 
@@ -514,7 +532,7 @@
                     catchtap="handleF2RemoteControl"
                     data-cmd="关闭">收起</view>
                   <view
-                    class="segment-btn {{flapPanelState === 'open' ? 'active' : ''}} {{f3DangerBlocked ? 'is-disabled' : ''}}"
+                    class="segment-btn {{flapPanelState === 'open' ? 'active' : ''}} {{f3DangerBlocked ? 'segment-btn--muted' : ''}}"
                     catchtap="handleF2RemoteControl"
                     data-cmd="打开">翻开</view>
                 </view>
@@ -791,20 +809,15 @@
                 <!-- 旋转部分：(180 - clamp(...)) 确保 180度是竖直向下(I型) -->
                 <!-- 🔴 修复：使用 transition 数据覆盖 CSS 中的 transition，防止残留动画 -->
                 <view class="stick-common stick-rotating" 
-                      style="transform: rotate({{filters.openAngleVisualActive(openAngleUiActive, currentModel.name, currentModel.type) ? filters.openAngleStickRotate(currentModel.name, currentModel.type, currentAngle) : 0}}deg); transition: {{transition || 'none'}};">
+                      style="transform: rotate({{openAngleUiActive ? filters.openAngleStickRotate(currentModel.name, currentModel.type, currentAngle) : 0}}deg); transition: {{transition || 'none'}};">
                 </view>
              </view>
           </view>
 
           <!-- 3. 数值与提示 -->
           <view class="value-info-row">
-             <!-- 数值：激活后显示，限制在 0-180 -->
-             <text class="val-big-text">{{filters.openAngleVisualActive(openAngleUiActive, currentModel.name, currentModel.type) ? filters.openAngleDisplayDeg(currentModel.name, currentModel.type, currentAngle) : ''}}</text>
-             
-             <!-- 状态文案 -->
-             <text class="val-status-text {{openAngleUiActive ? (statusText === '同步中…' ? 'waiting' : 'success') : 'waiting'}}">
-               {{openAngleUiActive ? statusText : filters.openAngleSyncHint(currentModel.name, currentModel.type)}}
-             </text>
+             <text class="val-big-text">{{openAngleUiActive ? filters.openAngleDisplayDeg(currentModel.name, currentModel.type, currentAngle) : ''}}</text>
+             <text class="val-status-text">{{openAngleUiActive ? '滑动波轮微调角度' : '点击预设角度后棍子联动'}}</text>
           </view>
 
           <!-- ========================================== -->
@@ -907,7 +920,12 @@
             <view class="click-pad left" catchtap="handleMagClick" data-key="powerOn" data-val="left"></view>
             <view class="click-pad right" catchtap="handleMagClick" data-key="powerOn" data-val="right"></view>
             <view class="track-labels">
-              <text class="t-txt l">上翻</text><text class="t-txt r">下翻</text>
+              <block wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
+                <text class="t-txt l">下翻</text><text class="t-txt r">上翻</text>
+              </block>
+              <block wx:else>
+                <text class="t-txt l">上翻</text><text class="t-txt r">下翻</text>
+              </block>
             </view>
             <view class="mag-thumb"></view>
           </view>
@@ -918,6 +936,20 @@
             <view class="click-pad left" catchtap="handleMagClick" data-key="shutdown" data-val="left"></view>
             <view class="click-pad right" catchtap="handleMagClick" data-key="shutdown" data-val="right"></view>
             <view class="track-labels"><text class="t-txt l">收回</text><text class="t-txt r">保持</text></view>
+            <view class="mag-thumb"></view>
+          </view>
+        </view>
+
+        <view class="setting-row" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type)}}">
+          <view class="row-info row-info-wide">
+            <text class="label-main">断电锁死</text>
+            <text class="label-sub">POWER OFF LOCK（关钥匙折至 {{foldServoAngle}}° 锁止位）</text>
+          </view>
+          <text class="f2-readback-inline">设备回读：{{f3PowerOffLockReadbackText}}</text>
+          <view class="mag-track" data-key="powerOffLock" data-state="{{settingState.powerOffLock}}">
+            <view class="click-pad left" catchtap="handleMagClick" data-key="powerOffLock" data-val="left"></view>
+            <view class="click-pad right" catchtap="handleMagClick" data-key="powerOffLock" data-val="right"></view>
+            <view class="track-labels"><text class="t-txt l">开启</text><text class="t-txt r">关闭</text></view>
             <view class="mag-thumb"></view>
           </view>
         </view>
@@ -940,6 +972,19 @@
           <view class="mag-track" data-key="smoothMode" data-state="{{settingState.smoothMode}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="smoothMode" data-val="left"></view>
             <view class="click-pad right" catchtap="handleMagClick" data-key="smoothMode" data-val="right"></view>
+            <view class="track-labels"><text class="t-txt l">开启</text><text class="t-txt r">关闭</text></view>
+            <view class="mag-thumb"></view>
+          </view>
+        </view>
+
+        <view class="setting-row" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type)}}">
+          <view class="row-info row-info-wide">
+            <text class="label-main">高度检测</text>
+            <text class="label-sub">HEIGHT SENSOR（关闭后不测距、不拦翻开）</text>
+          </view>
+          <view class="mag-track" data-key="heightMon" data-state="{{settingState.heightMon}}">
+            <view class="click-pad left" catchtap="handleMagClick" data-key="heightMon" data-val="left"></view>
+            <view class="click-pad right" catchtap="handleMagClick" data-key="heightMon" data-val="right"></view>
             <view class="track-labels"><text class="t-txt l">开启</text><text class="t-txt r">关闭</text></view>
             <view class="mag-thumb"></view>
           </view>
@@ -1059,7 +1104,7 @@
           </view>
         </view>
 
-        <view class="setting-row setting-row-picker {{f2TravelModeOn ? 'setting-row-disabled' : ''}}" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
+        <view class="setting-row setting-row-picker {{f2TravelModeOn ? 'setting-row-disabled' : ''}}" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type) && !filters.isF3Max(currentModel.name, currentModel.type)}}">
           <view class="row-info row-info-wide">
             <text class="label-main">延时断电</text>
             <text class="label-sub">DELAY POWER OFF（10秒后可设）</text>
@@ -1150,6 +1195,40 @@
       <!-- 按钮：带倒计时 -->
       <view class="guide-close-btn {{newProductBtnLocked ? 'btn-locked' : ''}}" bindtap="closeNewProductHint">
         {{newProductBtnText}}
+      </view>
+    </view>
+  </view>
+
+  <!-- ======================= -->
+  <!-- 断电锁死开启引导（两步） -->
+  <!-- ======================= -->
+  <view class="password-modal-mask" wx:if="{{powerOffLockGuideStep > 0}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box power-off-lock-guide-box" catchtouchmove="noop" catchtap="noop">
+      <block wx:if="{{powerOffLockGuideStep === 1}}">
+        <view class="pass-title" style="margin-bottom: 32rpx;">断电锁死已开启</view>
+        <view class="power-off-lock-guide-desc">
+          <text>开启后，牌照架会折至锁止位。</text>
+          <text class="power-off-lock-guide-em">每次开车前，都需要先在车把处完成解锁</text>
+          <text>，方可正常使用。</text>
+        </view>
+      </block>
+      <block wx:elif="{{powerOffLockGuideStep === 2}}">
+        <view class="pass-title" style="margin-bottom: 40rpx;">如何判断未解锁</view>
+        <view class="indicator-anim-wrap" style="margin-bottom: 32rpx;">
+          <view class="indicator-outer blinking-fast">
+            <view class="indicator-inner">
+              <text class="indicator-text">MT</text>
+            </view>
+          </view>
+        </view>
+        <view class="power-off-lock-guide-desc power-off-lock-guide-desc--center">
+          <text>若每次</text>
+          <text class="power-off-lock-guide-em">点火开机时，车把指示灯疯狂闪烁</text>
+          <text>，表示仍处于断电锁死状态、尚未解锁。请先完成解锁后再发车。</text>
+        </view>
+      </block>
+      <view class="pass-btns" style="margin-top: 48rpx;">
+        <view class="p-btn confirm full-width" bindtap="onPowerOffLockGuideConfirm">我知道了</view>
       </view>
     </view>
   </view>
@@ -1325,6 +1404,15 @@ var isF2UltraModel = function(name, type) {
   return name === 'F2' && type === 'Ultra';
 }
 
+var isF1UltraModel = function(name, type) {
+  return name === 'F1' && isF1UltraType(type);
+}
+
+/** F1 / F2 Ultra：与 F2 Ultra 同款固件 UI（不含 F3 MAX） */
+var isF2UltraFirmware = function(name, type) {
+  return isF1UltraModel(name, type) || isF2UltraModel(name, type);
+}
+
 var isF1UltraType = function(type) {
   return type === 'Ultra' || type === 'ultra' || type === 'Pro Max';
 }
@@ -1339,11 +1427,6 @@ var isF3Max = function(name, type) {
   return name === 'F3' && type === 'Max';
 }
 
-var openAngleVisualActive = function(uiActive, name, type) {
-  return uiActive;
-}
-
-// F2 / 同款 Ultra 固件 UI：内部 90→30°、160→90°；蓝牙指令不变
 var openAnglePresetBtnText = function(name, type, angle) {
   if (isF1Series(name) && !isMtUltraCard(name, type)) {
     if (angle === 180) return '180°';
@@ -1356,17 +1439,14 @@ var openAnglePresetBtnText = function(name, type, angle) {
   return angle + '°';
 }
 
-var openAngleSyncHint = function(name, type) {
-  if (isMtUltraCard(name, type) || isF2OpenAngleSeries(name)) return '点击90度或30度同步画面';
-  if (isF1Series(name)) return '点击180度或90度同步画面';
-  return '点击预设角度同步画面';
-}
-
 var openAngleInternalToDisplayNum = function(name, type, internal) {
   var v = parseInt(internal);
   if (isNaN(v)) return 0;
+  if (isF3Max(name, type)) {
+    return clamp(v, 0, 90);
+  }
   if (isMtUltraCard(name, type)) {
-    return clamp(v, 0, 170);
+    return clamp(v, 0, 180);
   }
   if (isF1Series(name) || !isF2OpenAngleSeries(name)) {
     return clamp(v, 0, 180);
@@ -1391,9 +1471,9 @@ module.exports = {
   clamp: clamp,
   isF1Series: isF1Series,
   openAnglePresetBtnText: openAnglePresetBtnText,
-  openAngleSyncHint: openAngleSyncHint,
-  openAngleVisualActive: openAngleVisualActive,
   isF2UltraModel: isF2UltraModel,
+  isF1UltraModel: isF1UltraModel,
+  isF2UltraFirmware: isF2UltraFirmware,
   isMtUltraCard: isMtUltraCard,
   isF3Max: isF3Max,
   openAngleDisplayDeg: openAngleDisplayDeg,

@@ -1,0 +1,9 @@
+{
+  "name": "kfFeedback",
+  "version": "1.0.0",
+  "description": "客服留言板：用户提交 / 管理员查看",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest"
+  }
+}

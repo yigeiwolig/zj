@@ -124,7 +124,7 @@ class VL53L0X
     void writeMulti(uint8_t reg, uint8_t const * src, uint8_t count);
     void readMulti(uint8_t reg, uint8_t * dst, uint8_t count);
 
-    bool setSignalRateLimit(float limit_Mcps);
+    bool setSignalRateLimit(uint16_t limit_q97); // Q9.7 MCPS，避免软浮点
 #ifndef F3_VL53_LITE
     float getSignalRateLimit();
 

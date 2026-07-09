@@ -33,6 +33,7 @@
         "pages/paihang/paihang",
         "pages/shouhou/shouhou",
         "pages/call/call",
+        "pages/kf-select/kf-select",
         "pages/home/home",
         "pages/invest/invest"
       ]

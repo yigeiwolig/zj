@@ -39,7 +39,9 @@ cd "firmware\F3 max"
 | GND | GND |
 | SDA | A4 |
 | SCL | A5 |
-| XSHUT | D4 |
+| XSHUT | 可不接主板（模块板上接 VCC 即可） |
+
+固件顶部 `F3_XSHUT_ON_D4`：**0**=仅 SDA/SCL（默认）；**1**=XSHUT 另接 D4（与舵机共线，一般不推荐）。
 
 ## 与小程序通信
 

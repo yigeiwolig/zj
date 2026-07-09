@@ -173,7 +173,7 @@
         <text class="back-icon">←</text>
         <text class="back-text">返回</text>
       </view>
-      <text class="admin-title">{{adminViewMode === 'nickname' ? '口令管理' : (adminViewMode === 'suspicious' ? '可疑人员处理' : (adminViewMode === 'suspiciousIgnored' ? '无视人员追溯' : (adminViewMode === 'bannedIgnored' ? '无视人员追溯' : (adminViewMode === 'suspiciousBanned' ? '可疑手动封禁留存' : (manualBannedMode ? '手动封禁处理' : '封禁管理')))))}}</text>
+      <text class="admin-title">{{adminViewMode === 'nickname' ? '口令 / 昵称' : (adminViewMode === 'suspicious' ? '可疑人员处理' : (adminViewMode === 'suspiciousIgnored' ? '无视人员追溯' : (adminViewMode === 'bannedIgnored' ? '无视人员追溯' : (adminViewMode === 'suspiciousBanned' ? '可疑手动封禁留存' : (manualBannedMode ? '手动封禁处理' : '封禁管理')))))}}</text>
       <view class="header-capsule-spacer"></view>
     </view>
 
@@ -240,6 +240,40 @@
             </view>
           </view>
         </view>
+
+        <view class="admin-section-divider"></view>
+
+        <view class="admin-section-title">昵称录入</view>
+        <text class="admin-section-desc">直接录入闲鱼/抖音昵称到白名单，用户可用昵称登录（旧版方式，与 VK 口令并存）</text>
+
+        <input
+          type="text"
+          class="nickname-input"
+          placeholder="输入用户昵称"
+          value="{{adminNicknameInput}}"
+          bindinput="onAdminNicknameInput"
+          maxlength="32"
+        />
+
+        <view class="nickname-option">
+          <view class="option-info">
+            <text class="option-label">地域放行</text>
+            <text class="option-desc">该昵称用户不受地域拦截限制</text>
+          </view>
+          <switch
+            checked="{{nicknameBypassLocation}}"
+            bindchange="toggleNicknameBypassLocation"
+            color="#000"
+          />
+        </view>
+
+        <button
+          class="nickname-submit-btn"
+          bindtap="submitAdminNickname"
+          disabled="{{isSubmittingAdminNickname}}"
+        >
+          {{isSubmittingAdminNickname ? '提交中...' : '录入昵称'}}
+        </button>
 
         <view class="admin-section-divider"></view>
 
@@ -938,7 +972,7 @@
         <text class="tab-text">可疑人员处理</text>
       </view>
       <view class="tab-item {{adminViewMode === 'nickname' ? 'active' : ''}}" bindtap="switchAdminTab" data-mode="nickname">
-        <text class="tab-text">口令管理</text>
+        <text class="tab-text">口令/昵称</text>
       </view>
     </view>
   </view>

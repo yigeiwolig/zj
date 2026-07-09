@@ -428,11 +428,11 @@
         <view class="audit-card">
           <view class="audit-row">
             <text class="audit-model">{{item.productModel}}</text>
-            <text class="audit-sn">SN: {{item.sn}}</text>
+            <text class="audit-sn">SN: {{item.bindType == 'fault' ? '待录入' : item.sn}}</text>
           </view>
           <view class="audit-row">
             <text class="audit-date">用户填: {{item.buyDate}}</text>
-            <text class="audit-type">{{item.bindType == 'new' ? '全新' : '二手'}}</text>
+            <text class="audit-type">{{item.bindType == 'fault' ? '故障核验' : (item.bindType == 'new' ? '全新' : '二手')}}</text>
           </view>
           <view class="audit-imgs">
             <image src="{{item.imgReceipt}}" mode="aspectFill" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgReceipt}}" lazy-load="true" binderror="onMyAuditImageError" data-index="{{index}}" data-field="imgReceipt"></image>
@@ -931,13 +931,14 @@
     </view>
 
     <view class="section-label section-label--cn">我的设备</view>
-    <view class="device-card" wx:for="{{deviceList}}" wx:key="sn">
+    <view class="device-card" wx:for="{{deviceList}}" wx:key="snRaw">
       <view class="remove-icon" bindtap="removeDevice" data-index="{{index}}">✕</view>
       <view class="device-name">{{item.name}}</view>
+      <view class="fault-pending-tag" wx:if="{{item.snPending}}">序列号待录入</view>
       <view class="spec-list">
         <view class="spec-row">
           <text class="label">S/N 序列号</text>
-          <text class="value mono">{{item.sn}}</text>
+          <text class="value mono {{item.snPending ? 'sn-pending' : ''}}">{{item.sn}}</text>
         </view>
         <view class="spec-row">
           <text class="label">总剩余质保</text>
@@ -1161,7 +1162,7 @@
 
     <view class="profile-action-list">
       <view class="profile-action-btn" bindtap="goToRepairService">预约维修服务</view>
-      <view class="profile-action-btn profile-action-btn--primary" bindtap="goToCustomerService">联系在线客服</view>
+      <view class="profile-action-btn profile-action-btn--primary" bindtap="goToKfSelectHub">联系客服</view>
     </view>
     </view>
     </scroll-view>
@@ -1177,15 +1178,68 @@
       
       <!-- 1. 文案修改：绑定设备 -->
       <view class="modal-header">
-        <text>绑定设备</text>
+        <text>{{showFaultBindForm ? '故障核验' : '绑定设备'}}</text>
         <view class="close-modal" bindtap="closeBindModal">✕</view>
       </view>
 
       <scroll-view scroll-y="true" class="modal-scroll-area">
         
+        <!-- === 故障设备人工核验表单（无需蓝牙） === -->
+        <view class="fault-bind-form" wx:if="{{showFaultBindForm}}">
+          <view class="fault-bind-hero">
+            <view class="fault-bind-icon-ring">
+              <text class="fault-bind-icon">!</text>
+            </view>
+            <text class="fault-bind-headline">设备无法蓝牙连接</text>
+            <text class="fault-bind-subline">提交订单截图，审核通过后将创建产品档案</text>
+          </view>
+
+          <view class="fault-form-card">
+            <view class="fault-form-row">
+              <text class="fault-row-label">产品型号</text>
+              <picker class="fault-row-picker" bindchange="onModelChange" range="{{modelOptions}}" value="{{modelIndex}}">
+                <view class="fault-row-value {{modelIndex !== null ? '' : 'is-placeholder'}}">
+                  <text>{{modelOptions[modelIndex] || '请选择'}}</text>
+                  <text class="fault-row-chevron">›</text>
+                </view>
+              </picker>
+            </view>
+            <view class="fault-form-divider"></view>
+            <view class="fault-form-row">
+              <text class="fault-row-label">购买日期</text>
+              <picker class="fault-row-picker" mode="date" bindchange="onDateChange">
+                <view class="fault-row-value {{buyDate ? '' : 'is-placeholder'}}">
+                  <text>{{buyDate || '请选择'}}</text>
+                  <text class="fault-row-chevron">›</text>
+                </view>
+              </picker>
+            </view>
+          </view>
+
+          <view class="fault-upload-section">
+            <text class="fault-section-label">订单截图</text>
+            <view class="fault-upload-box" bindtap="chooseProofImage" data-type="receipt">
+              <block wx:if="{{previewImgReceipt}}">
+                <image src="{{previewImgReceipt}}" mode="aspectFill" class="fault-upload-preview" lazy-load="true" />
+                <view class="fault-upload-mask">点击更换</view>
+              </block>
+              <block wx:else>
+                <view class="fault-upload-empty">
+                  <text class="fault-upload-plus">+</text>
+                  <text class="fault-upload-tip">上传购买截图</text>
+                </view>
+              </block>
+            </view>
+          </view>
+
+          <view class="fault-bind-note">
+            <text>审核通过后序列号显示「待录入」，可正常发起报修</text>
+          </view>
+        </view>
+
         <!-- === 2. 蓝牙扫描按钮 (雷达) === -->
         <!-- 只有未连接时显示 -->
-        <view class="bt-scan-container" wx:if="{{!bluetoothReady}}">
+        <view class="bt-scan-container" wx:if="{{!bluetoothReady && !showFaultBindForm}}">
           <view class="radar-circle" bindtap="startConnect">
             <view class="radar-core">
               <!-- 👇👇👇【核心修改】换成图片 👇👇👇 -->
@@ -1198,6 +1252,12 @@
             <view class="radar-ring r3 {{isScanning?'anim':''}}"></view>
           </view>
           <text class="radar-tip">{{connectStatusText}}</text>
+        </view>
+
+        <!-- 故障设备入口 -->
+        <view class="fault-bind-bar" wx:if="{{!bluetoothReady && !showFaultBindForm}}" bindtap="openFaultBindForm">
+          <text class="fault-bind-bar-text">设备已故障，无法连接？</text>
+          <text class="fault-bind-bar-link">提交订单核验</text>
         </view>
 
         <!-- === 3. 连接成功后的状态条 === -->
@@ -1278,6 +1338,9 @@
       <!-- 🔴 强制显示：只要 bluetoothReady 为 true 就显示提交按钮 -->
       <view class="modal-footer" wx:if="{{bluetoothReady && showBindAuditForm}}">
         <button class="submit-btn" bindtap="submitAudit">提交上传审核</button>
+      </view>
+      <view class="modal-footer" wx:if="{{showFaultBindForm}}">
+        <button class="submit-btn fault-submit-btn" bindtap="submitFaultAudit">提交核验申请</button>
       </view>
 
     </view>

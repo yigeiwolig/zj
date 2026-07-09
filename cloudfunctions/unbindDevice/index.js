@@ -5,6 +5,7 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 function normalizeSn(input) {
   const raw = String(input || '').trim().toUpperCase()
   if (!raw) return ''
+  if (raw.startsWith('PENDING-FAULT-')) return raw
   if (raw.startsWith('MT-')) return raw
   if (raw.startsWith('MT')) return `MT-${raw.slice(2).replace(/^-/, '')}`
   if (raw.startsWith('NB')) return `MT-${raw.replace(/^NB-?/, '')}`
@@ -24,22 +25,29 @@ function snCandidates(normalizedSn) {
   return Array.from(set)
 }
 
+function isPendingFaultSn(sn) {
+  return String(sn || '').trim().toUpperCase().startsWith('PENDING-FAULT-')
+}
+
 exports.main = async (event, context) => {
   const db = cloud.database()
   const _ = db.command
   const wxContext = cloud.getWXContext()
   const myOpenid = wxContext.OPENID
-  const normalizedSn = normalizeSn(event.sn)
+  const rawSn = String(event.sn || '').trim()
+  const faultPending = isPendingFaultSn(rawSn)
+  const normalizedSn = faultPending ? rawSn.toUpperCase() : normalizeSn(event.sn)
 
   try {
     if (!normalizedSn) {
       return { success: false, msg: 'SN 无效' }
     }
-    const candidates = snCandidates(normalizedSn)
-    const res = await db.collection('sn').where({
-      sn: _.in(candidates),
-      openid: myOpenid
-    }).get()
+    const candidates = faultPending ? [normalizedSn] : snCandidates(normalizedSn)
+    const res = await db.collection('sn').where(
+      faultPending
+        ? { sn: normalizedSn, openid: myOpenid }
+        : { sn: _.in(candidates), openid: myOpenid }
+    ).get()
 
     if (res.data.length === 0) {
       return { success: false, msg: '无权操作或设备不存在' }
@@ -48,6 +56,17 @@ exports.main = async (event, context) => {
     const device = res.data[0]
 
     if (device.isActive) {
+      if (device.snPending || faultPending) {
+        await db.collection('sn').doc(device._id).update({
+          data: {
+            openid: '',
+            isActive: false,
+            snPending: false,
+            deviceStatus: 'unbound'
+          }
+        })
+        return { success: true, msg: '解绑成功，设备已移除' }
+      }
       await db.collection('sn').doc(device._id).update({
         data: {
           sn: normalizedSn,
@@ -64,78 +83,3 @@ exports.main = async (event, context) => {
     return { success: false, msg: err.message || err.errMsg || '解绑失败' }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

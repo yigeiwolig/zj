@@ -91,8 +91,7 @@ bool VL53L0X::init(bool io_2v8)
   // disable SIGNAL_RATE_MSRC (bit 1) and SIGNAL_RATE_PRE_RANGE (bit 4) limit checks
   writeReg(MSRC_CONFIG_CONTROL, readReg(MSRC_CONFIG_CONTROL) | 0x12);
 
-  // set final range signal rate limit to 0.25 MCPS (million counts per second)
-  setSignalRateLimit(0.25);
+  // 0.25 MCPS in Q9.7（避�?float 拉入软浮点，~1KB�?  writeReg16Bit(FINAL_RANGE_CONFIG_MIN_COUNT_RATE_RTN_LIMIT, 32);
 
   writeReg(SYSTEM_SEQUENCE_CONFIG, 0xFF);
 
@@ -409,13 +408,10 @@ void VL53L0X::readMulti(uint8_t reg, uint8_t * dst, uint8_t count)
 // Setting a lower limit increases the potential range of the sensor but also
 // seems to increase the likelihood of getting an inaccurate reading because of
 // unwanted reflections from objects other than the intended target.
-// Defaults to 0.25 MCPS as initialized by the ST API and this library.
-bool VL53L0X::setSignalRateLimit(float limit_Mcps)
+// limit_q97: Q9.7 MCPS (0.25=32, 0.1=13)
+bool VL53L0X::setSignalRateLimit(uint16_t limit_q97)
 {
-  if (limit_Mcps < 0 || limit_Mcps > 511.99) { return false; }
-
-  // Q9.7 fixed point format (9 integer bits, 7 fractional bits)
-  writeReg16Bit(FINAL_RANGE_CONFIG_MIN_COUNT_RATE_RTN_LIMIT, limit_Mcps * (1 << 7));
+  writeReg16Bit(FINAL_RANGE_CONFIG_MIN_COUNT_RATE_RTN_LIMIT, limit_q97);
   return true;
 }
 
@@ -825,16 +821,14 @@ void VL53L0X::stopContinuous()
 uint16_t VL53L0X::readRangeContinuousMillimeters()
 {
   startTimeout();
+  uint16_t spins = 0;
   while ((readReg(RESULT_INTERRUPT_STATUS) & 0x07) == 0)
   {
-    if (checkTimeoutExpired())
+    if (checkTimeoutExpired() || ++spins > 2000)
     {
       did_timeout = true;
       return 65535;
     }
-#if F3_VL53_LITE
-    wdt_reset();
-#endif
   }
 
   // assumptions: Linearity Corrective Gain is 1000 (default);
@@ -909,12 +903,10 @@ bool VL53L0X::getSpadInfo(uint8_t * count, bool * type_is_aperture)
   writeReg(0x94, 0x6b);
   writeReg(0x83, 0x00);
   startTimeout();
+  uint16_t spins = 0;
   while (readReg(0x83) == 0x00)
   {
-    if (checkTimeoutExpired()) { return false; }
-#if F3_VL53_LITE
-    wdt_reset();
-#endif
+    if (checkTimeoutExpired() || ++spins > 2000) { return false; }
   }
   writeReg(0x83, 0x01);
   tmp = readReg(0x92);

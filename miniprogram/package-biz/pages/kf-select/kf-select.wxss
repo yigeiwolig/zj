@@ -1,0 +1,49 @@
+@import '../../../styles/kf-panel.wxss';
+
+page {
+  background: #F2F2F7;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  height: 100%;
+}
+
+.page {
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.nav-back-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.back-icon {
+  position: absolute;
+  left: 32rpx;
+  width: 72rpx;
+  height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  z-index: 10001;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 2rpx 16rpx rgba(0, 0, 0, 0.06);
+}
+
+.back-icon:active {
+  transform: scale(0.94);
+  opacity: 0.85;
+}
+
+.back-arrow {
+  font-size: 44rpx;
+  font-weight: 300;
+  color: #1d1d1f;
+  line-height: 1;
+  margin-top: -4rpx;
+}

@@ -22,7 +22,7 @@ function buildHubMyPanel(hubView) {
     },
     dataPatch: {
       hubView,
-      hubTabIndex: hubView === 'orders' ? 2 : 3,
+      hubTabIndex: hubView === 'orders' ? 2 : 4,
       hubInShell: true,
       showHubTabBar: false,
       hubPageEnterAnim: false

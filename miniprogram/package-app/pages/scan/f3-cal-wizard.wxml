@@ -1,7 +1,7 @@
 <wxs src="./f3-cal.wxs" module="f3cal" />
 
 <view class="f3-cal-wrap">
-<view class="f3-cal-dialog {{f3CalStep === 'preflight' ? 'f3-cal-dialog--preflight' : ''}}">
+<view class="f3-cal-dialog {{f3CalStep === 'preflight' ? 'f3-cal-dialog--preflight' : ''}} {{f3CalStep === 'wheel' ? 'f3-cal-dialog--wheel' : ''}}">
   <view class="f3-cal-head" wx:if="{{f3CalStep !== 'preflight'}}">
     <view class="f3-cal-head-main">
       <text class="f3-cal-head-step" wx:if="{{f3CalStepNo}}">步骤 {{f3CalStepNo}} / {{f3CalStepTotal}}</text>
@@ -74,13 +74,30 @@
 
   <block wx:if="{{f3CalStep === 'wheel'}}">
     <view class="f3-cal-stage f3-cal-stage--wheel">
-      <view class="f3-cal-wheel-panel f3-cal-wheel-panel--solo">
-        <text class="f3-cal-wheel-metric-k">实时高度</text>
-        <view class="f3-cal-wheel-metric-v">
-          <text class="f3-cal-wheel-metric-num">{{f3cal.mmNum(f3CalLiveText)}}</text>
-          <text class="f3-cal-wheel-metric-unit" wx:if="{{f3CalLiveText && f3CalLiveText !== '—'}}">mm</text>
+      <view class="f3-cal-wheel-panel">
+        <view class="f3-cal-wheel-metric">
+          <text class="f3-cal-wheel-metric-k">实时高度</text>
+          <view class="f3-cal-wheel-metric-v">
+            <text class="f3-cal-wheel-metric-num">{{f3cal.mmNum(f3CalLiveText)}}</text>
+            <text class="f3-cal-wheel-metric-unit" wx:if="{{f3CalLiveText && f3CalLiveText !== '—'}}">mm</text>
+          </view>
+        </view>
+        <view class="f3-cal-wheel-metric-sep"></view>
+        <view class="f3-cal-wheel-metric">
+          <text class="f3-cal-wheel-metric-k">微调步数</text>
+          <view class="f3-cal-wheel-metric-v">
+            <text class="f3-cal-wheel-metric-num f3-cal-wheel-metric-num--ang">{{f3CalWheelSteps}}</text>
+          </view>
         </view>
       </view>
+
+      <view class="f3-cal-wheel-plate-stage">
+        <view class="f3-cal-wheel-plate-rail">
+          <view class="f3-cal-wheel-plate-stick" style="margin-left: {{f3CalFoldGap}}rpx;"></view>
+        </view>
+        <text class="f3-cal-wheel-plate-caption">滑动发送微调指令</text>
+      </view>
+
       <text class="f3-cal-wheel-hint" wx:if="{{f3CalWheelHint}}">{{f3CalWheelHint}}</text>
       <text class="f3-cal-wheel-foot" wx:if="{{f3CalTargetText}}">首次基准 {{f3CalTargetText}}</text>
 

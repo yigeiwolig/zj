@@ -1,0 +1,6 @@
+@import "../../../styles/kf-panel.wxss";
+
+.kf-panel-scroll {
+  height: 100%;
+  box-sizing: border-box;
+}
