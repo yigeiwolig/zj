@@ -1,20 +1,26 @@
 /* 首页：管理员入口放在分段栏下方，避开微信胶囊 */
+@import "../../../styles/hub-embed-portal.wxss";
+
 .hub-admin-entry-bar {
   flex-shrink: 0;
   padding: 4rpx 32rpx 16rpx;
   box-sizing: border-box;
   background: #f4f4f7;
+  display: flex;
+  align-items: stretch;
+  gap: 16rpx;
 }
 
 .hub-admin-entry-btn {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   min-height: 72rpx;
-  padding: 18rpx 32rpx;
+  padding: 18rpx 20rpx;
   border-radius: 999rpx;
   background: #fff;
   border: 1rpx solid #e5e5ea;
   color: #1d1d1f;
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 600;
   display: flex;
   align-items: center;
@@ -23,8 +29,229 @@
   box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
 }
 
+.hub-admin-entry-btn--secondary {
+  color: #007aff;
+  border-color: rgba(0, 122, 255, 0.28);
+  background: rgba(0, 122, 255, 0.06);
+}
+
 .hub-admin-entry-btn--pressed {
   transform: scale(0.98);
+  opacity: 0.88;
+}
+
+/* 首页「使用教程」入口：左侧固定，避开右上角微信胶囊 */
+.hub-home-guide-entry {
+  position: fixed;
+  left: 24rpx;
+  bottom: calc(168rpx + env(safe-area-inset-bottom));
+  z-index: 10050;
+  padding: 14rpx 28rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  border: 1rpx solid rgba(0, 122, 255, 0.28);
+  color: #007AFF;
+  font-size: 26rpx;
+  font-weight: 700;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.12);
+}
+
+/* ===== 首页功能引导 ===== */
+.home-guide-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 100000085 !important;
+  pointer-events: auto;
+}
+
+.home-guide-spot {
+  position: fixed;
+  border-radius: 28rpx;
+  border: 3rpx solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 6rpx rgba(0, 122, 255, 0.35), 0 0 24rpx 4rpx rgba(0, 122, 255, 0.55);
+  background: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  /* 步骤切换时高亮框平滑滑到下一处 */
+  transition: left 0.32s ease, top 0.32s ease, width 0.32s ease, height 0.32s ease;
+  animation: home-guide-spot-pulse 1.05s ease-in-out infinite;
+}
+
+@keyframes home-guide-spot-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 5rpx rgba(0, 122, 255, 0.35), 0 0 22rpx 4rpx rgba(0, 122, 255, 0.5);
+  }
+  50% {
+    transform: scale(1.015);
+    box-shadow: 0 0 0 12rpx rgba(0, 122, 255, 0.55), 0 0 40rpx 12rpx rgba(0, 122, 255, 0.85);
+  }
+}
+
+.home-guide-bubble {
+  position: fixed;
+  background: #FFFFFF;
+  border-radius: 28rpx;
+  padding: 32rpx 32rpx 28rpx;
+  box-shadow: 0 18rpx 44rpx rgba(0, 0, 0, 0.28);
+  box-sizing: border-box;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+.home-guide-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 18rpx solid transparent;
+  border-right: 18rpx solid transparent;
+  transform: translateX(-50%);
+}
+
+.home-guide-bubble--up .home-guide-arrow {
+  top: -18rpx;
+  border-bottom: 18rpx solid #FFFFFF;
+}
+
+.home-guide-bubble--down .home-guide-arrow {
+  bottom: -18rpx;
+  border-top: 18rpx solid #FFFFFF;
+}
+
+.home-guide-bubble--none .home-guide-arrow {
+  display: none;
+}
+
+.home-guide-step-tag {
+  display: inline-block;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #007AFF;
+  background: rgba(0, 122, 255, 0.1);
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  margin-bottom: 16rpx;
+}
+
+.home-guide-title {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #1D1D1F;
+  margin-bottom: 12rpx;
+}
+
+.home-guide-desc {
+  font-size: 26rpx;
+  color: #636366;
+  line-height: 1.6;
+  margin-bottom: 28rpx;
+}
+
+.home-guide-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.home-guide-skip {
+  flex-shrink: 0;
+  padding: 18rpx 20rpx;
+  font-size: 26rpx;
+  color: #8E8E93;
+}
+
+.home-guide-skip:active {
+  opacity: 0.7;
+}
+
+.home-guide-btn {
+  flex: 1;
+  height: 80rpx;
+  border-radius: 40rpx;
+  background: #007AFF;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-guide-btn:active {
+  opacity: 0.88;
+}
+
+.home-guide-intro-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 100000085 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx;
+  box-sizing: border-box;
+}
+
+.home-guide-intro-box {
+  width: 100%;
+  max-width: 620rpx;
+  background: #fff;
+  border-radius: 32rpx;
+  padding: 48rpx 40rpx 36rpx;
+  box-sizing: border-box;
+  box-shadow: 0 24rpx 60rpx rgba(0, 0, 0, 0.22);
+}
+
+.home-guide-intro-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #1D1D1F;
+  margin-bottom: 16rpx;
+  text-align: center;
+}
+
+.home-guide-intro-desc {
+  font-size: 28rpx;
+  color: #636366;
+  line-height: 1.55;
+  text-align: center;
+  margin-bottom: 40rpx;
+}
+
+.home-guide-intro-actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.home-guide-intro-btn {
+  flex: 1;
+  height: 84rpx;
+  border-radius: 42rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-guide-intro-btn--ghost {
+  background: #F2F2F7;
+  color: #1D1D1F;
+}
+
+.home-guide-intro-btn--primary {
+  background: #007AFF;
+  color: #fff;
+}
+
+.home-guide-intro-btn:active {
   opacity: 0.88;
 }
 

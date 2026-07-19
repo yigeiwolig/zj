@@ -110,6 +110,9 @@ Component(pageConfigToComponent(createShopPageConfig({ hubEmbed: true }), {
     },
     active(val) {
       if (!this._hubPanelAttached) return;
+      if (this.data.hubEmbedInProducts) {
+        this.setData({ hubPanelActive: !!val });
+      }
       if (!val) return;
       if (typeof this.onShow === 'function') {
         this.onShow();

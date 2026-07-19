@@ -3,8 +3,16 @@ const app = getApp();
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js');
 const referralPendingBind = require('../../utils/referralPendingBind.js');
 const { normalizeAccessCode, isAccessCodeFormat, extractPlainAccessCode } = require('../../utils/accessCode.js');
+const {
+  getDisplayIdentity,
+  saveLoginIdentityFromLoginResult,
+  restoreLoginIdentityFromRecord,
+  clearLoginIdentity
+} = require('../../utils/userIdentity.js');
 const shareApp = require('../../utils/shareApp.js');
 const { redirectToPcBlockedIfNeeded } = require('../../utils/runtimeEnv.js');
+const debugUserFlow = require('../../utils/debugUserFlow.js');
+const weworkKf = require('../../utils/weworkCustomerService.js');
 var qqmapsdk = new QQMapWX({
     key: 'WYWBZ-ZFY3G-WLKQV-QOD5M-2S6EJ-CSF7Z' // 你的Key
 });
@@ -100,6 +108,15 @@ Page({
     suspiciousSearchMatchCount: 0, // 当前关键词命中人数
     adminSuspiciousSearch: '', // 可疑人员搜索关键词
     adminSuspiciousSearchTrim: '', // 去空格后的关键词（供 WXML 判断）
+    suspiciousSortBy: 'time', // time | region | enter | pageVisits | stay
+    suspiciousSortLabel: '时间',
+    suspiciousSortOptions: [
+      { key: 'time', label: '时间' },
+      { key: 'region', label: '地区' },
+      { key: 'enter', label: '进入次数' },
+      { key: 'pageVisits', label: '页面访问' },
+      { key: 'stay', label: '停留时长' }
+    ],
     ignoredUsers: [], // 已无视人员留档
     ignoredDisplayList: [],
     ignoredSearchMatchCount: 0,
@@ -454,19 +471,14 @@ Page({
         .get();
 
       if (validUserRes.data && validUserRes.data.length > 0) {
-        // 找到了记录，自动获取昵称
         const userRecord = validUserRes.data[0];
-        const nickname = userRecord.nickname;
-        
-        if (nickname) {
-          // 保存昵称和授权状态到本地存储
-          wx.setStorageSync('user_nickname', nickname);
+        if (restoreLoginIdentityFromRecord(userRecord)) {
           wx.setStorageSync('has_permanent_auth', true);
-          // 云端已有昵称 = 已录入，不再展示抖音/闲鱼专属引导（并关掉可能因定时器已拉起的弹窗）
           wx.setStorageSync('has_seen_first_time_modal', true);
+          const displayName = getDisplayIdentity({ fallback: '' });
           this._hideNicknameUIWithAnimation({
             isAuthorized: true,
-            inputNickName: nickname,
+            inputNickName: displayName,
             showFirstTimeModal: false,
             firstTimeModalEnterReady: false,
             firstTimeModalClosing: false,
@@ -475,7 +487,7 @@ Page({
             xianyuWarningModalClosing: false
           });
           this._retryPendingReferralBindIfAuthed();
-          console.log('[index] 从 valid_users 自动恢复用户昵称:', nickname);
+          console.log('[index] 从 valid_users 自动恢复用户身份:', displayName);
           return;
         }
       }
@@ -496,7 +508,7 @@ Page({
   /** 仅清理本地残留授权，不重置本会话已展示的引导状态（避免弹窗重复弹出） */
   _clearStaleLocalAuthOnly() {
     wx.removeStorageSync('has_permanent_auth');
-    wx.removeStorageSync('user_nickname');
+    clearLoginIdentity();
   },
 
   /** 未录入用户：每次冷启动重置引导；勿在引导已展示/已关闭后再调用 */
@@ -790,15 +802,15 @@ Page({
         const result = res.result || {};
 
         if (result.success) {
-          const storedName = result.nickname || name;
           if (wx.__mt_oldHideLoading) {
             wx.__mt_oldHideLoading();
           }
           wx.setStorageSync('has_permanent_auth', true);
-          wx.setStorageSync('user_nickname', storedName);
-          if (result.accessCode || isAccessCode) {
-            wx.setStorageSync('user_access_code', result.accessCode || normalizedCode);
-          }
+          saveLoginIdentityFromLoginResult({
+            isAccessCodeLogin: isAccessCode,
+            nickname: result.nickname || name,
+            accessCode: result.accessCode || normalizedCode
+          });
           wx.setStorageSync('has_seen_first_time_modal', true);
           wx.removeStorageSync('is_user_banned');
           this._bindReferralInviteAfterAuth().finally(() => {
@@ -1201,7 +1213,7 @@ Page({
       const locData = pending.locData || {};
       if (!collectionName) return;
 
-      const nickName = wx.getStorageSync('user_nickname') || '未知用户';
+      const nickName = getDisplayIdentity({ fallback: '未知用户' });
       wx.cloud.callFunction({ name: 'login' })
         .then(loginRes => {
           const openid = loginRes?.result?.openid;
@@ -1508,7 +1520,7 @@ Page({
         if (hasGoldMedal) {
           console.log('[index] ✅ 金牌用户 (bypassLocationCheck=true)，特权放行！');
           
-          const nickName = wx.getStorageSync('user_nickname') || '未知用户';
+          const nickName = getDisplayIdentity({ fallback: '未知用户' });
           try {
             await db.collection('blocked_logs').add({
               data: {
@@ -1954,6 +1966,107 @@ Page({
     return (b.lastViewTs || b.ignoredAtTs || 0) - (a.lastViewTs || a.ignoredAtTs || 0);
   },
 
+  _getSuspiciousSortKey() {
+    const key = String(this.data.suspiciousSortBy || 'time').trim();
+    // visits：旧选项兼容为页面访问
+    if (key === 'visits') return 'pageVisits';
+    if (key === 'region' || key === 'enter' || key === 'pageVisits' || key === 'stay' || key === 'time') {
+      return key;
+    }
+    return 'time';
+  },
+
+  _stayMinutesOf(item) {
+    return Number((item && (item.totalStayMinutesText != null ? item.totalStayMinutesText : item.totalStayMinutes)) || 0) || 0;
+  },
+
+  _pageVisitCountOf(item) {
+    if (!item) return 0;
+    return Number(
+      item.sectionClicksTotal != null ? item.sectionClicksTotal : (item.pageVisitsCount || 0)
+    ) || 0;
+  },
+
+  _enterCountOf(item) {
+    return Number((item && item.enterCount) || 0) || 0;
+  },
+
+  _regionTextOf(item) {
+    const text = String((item && item.regionText) || '').trim();
+    return text && text !== '-' ? text : '';
+  },
+
+  _buildRegionCountMap(list) {
+    const map = {};
+    (Array.isArray(list) ? list : []).forEach((item) => {
+      const key = this._regionTextOf(item) || '__empty__';
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  },
+
+  _compareSuspiciousBySort(a, b, sortBy, regionCountMap) {
+    if (sortBy === 'stay') {
+      const stayDiff = this._stayMinutesOf(b) - this._stayMinutesOf(a);
+      if (stayDiff !== 0) return stayDiff;
+    } else if (sortBy === 'enter') {
+      // 进入次数：会话进入多→少；同次数再看页面访问、停留、时间
+      const enterDiff = this._enterCountOf(b) - this._enterCountOf(a);
+      if (enterDiff !== 0) return enterDiff;
+      const pageDiff = this._pageVisitCountOf(b) - this._pageVisitCountOf(a);
+      if (pageDiff !== 0) return pageDiff;
+      const stayDiff = this._stayMinutesOf(b) - this._stayMinutesOf(a);
+      if (stayDiff !== 0) return stayDiff;
+    } else if (sortBy === 'pageVisits') {
+      // 页面访问：访问次数多→少；同次数再看进入、停留、时间
+      const pageDiff = this._pageVisitCountOf(b) - this._pageVisitCountOf(a);
+      if (pageDiff !== 0) return pageDiff;
+      const enterDiff = this._enterCountOf(b) - this._enterCountOf(a);
+      if (enterDiff !== 0) return enterDiff;
+      const stayDiff = this._stayMinutesOf(b) - this._stayMinutesOf(a);
+      if (stayDiff !== 0) return stayDiff;
+    } else if (sortBy === 'region') {
+      const regionA = this._regionTextOf(a) || '__empty__';
+      const regionB = this._regionTextOf(b) || '__empty__';
+      const countDiff = Number((regionCountMap && regionCountMap[regionB]) || 0)
+        - Number((regionCountMap && regionCountMap[regionA]) || 0);
+      if (countDiff !== 0) return countDiff;
+      if (regionA !== regionB) return regionA < regionB ? -1 : 1;
+    } else {
+      // time：最近活跃在前
+      const timeDiff = Number((b && (b.lastViewTs || b.ignoredAtTs)) || 0)
+        - Number((a && (a.lastViewTs || a.ignoredAtTs)) || 0);
+      if (timeDiff !== 0) return timeDiff;
+    }
+    return this._compareAdminSuspicion(a, b);
+  },
+
+  _sortSuspiciousUsersList(list, sortBy) {
+    const key = sortBy || this._getSuspiciousSortKey();
+    const arr = (Array.isArray(list) ? list : []).slice();
+    const regionCountMap = key === 'region' ? this._buildRegionCountMap(arr) : null;
+    return arr.sort((a, b) => this._compareSuspiciousBySort(a, b, key, regionCountMap));
+  },
+
+  onSuspiciousSortChange(e) {
+    const key = String((e.currentTarget.dataset.key || '')).trim();
+    if (!key || key === this.data.suspiciousSortBy) return;
+    if (key !== 'time' && key !== 'region' && key !== 'enter' && key !== 'pageVisits' && key !== 'stay' && key !== 'visits') {
+      return;
+    }
+    const nextKey = key === 'visits' ? 'pageVisits' : key;
+    this.setData({ suspiciousSortBy: nextKey }, () => this._syncSuspiciousDisplayList());
+  },
+
+  _suspiciousSortLabel(sortBy) {
+    const key = sortBy || this._getSuspiciousSortKey();
+    if (key === 'region') return '地区';
+    if (key === 'enter') return '进入次数';
+    if (key === 'pageVisits' || key === 'visits') return '页面访问';
+    if (key === 'stay') return '停留时长';
+    return '时间';
+  },
+
   _sortAdminUsersBySuspicion(list) {
     return (Array.isArray(list) ? list : []).slice().sort((a, b) => this._compareAdminSuspicion(a, b));
   },
@@ -2060,31 +2173,36 @@ Page({
     const users = this._mapAdminDisplayList(this.data.suspiciousUsers);
     const kw = String(this.data.adminSuspiciousSearch || '').trim();
     const tokens = this._parseSuspiciousSearchTokens(kw);
+    const sortBy = this._getSuspiciousSortKey();
     let displayList;
     let matchCount;
     if (!tokens.length) {
-      displayList = this._sortAdminUsersBySuspicion(users);
+      displayList = this._sortSuspiciousUsersList(users, sortBy);
       matchCount = users.length;
     } else {
       const matched = this._filterSuspiciousUsers(users, kw);
       const matchKeys = new Set(matched.map((u) => u.rowKey).filter(Boolean));
+      const regionCountMap = sortBy === 'region' ? this._buildRegionCountMap(users) : null;
       displayList = users
         .map((u) => ({ ...u, _searchMatch: matchKeys.has(u.rowKey) }))
         .sort((a, b) => {
           const matchDiff = Number(b._searchMatch) - Number(a._searchMatch);
-          return matchDiff !== 0 ? matchDiff : this._compareAdminSuspicion(a, b);
+          return matchDiff !== 0
+            ? matchDiff
+            : this._compareSuspiciousBySort(a, b, sortBy, regionCountMap);
         });
       matchCount = matched.length;
     }
     this.setData({
       suspiciousDisplayList: displayList,
       suspiciousSearchMatchCount: matchCount,
-      adminSuspiciousSearchTrim: kw
+      adminSuspiciousSearchTrim: kw,
+      suspiciousSortLabel: this._suspiciousSortLabel(sortBy)
     });
   },
 
   _applySuspiciousUsersList(users) {
-    const list = this._sortAdminUsersBySuspicion(Array.isArray(users) ? users : []);
+    const list = this._sortSuspiciousUsersList(Array.isArray(users) ? users : []);
     this.setData({ suspiciousUsers: list }, () => this._syncSuspiciousDisplayList());
   },
 
@@ -3126,12 +3244,18 @@ Page({
   },
 
   /** @returns {boolean} 是否实际打开了闲鱼须知 */
-  _openXianyuWarningModalAnimated() {
-    if (this._xianyuWarningShownOnce) return false;
-    if (this.data.isAuthorized) return false;
-    if (this._xianyuWarningDismissedThisSession) return false;
-    if (this.data.showXianyuWarningModal || this.data.xianyuWarningModalClosing) return false;
-    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
+  _openXianyuWarningModalAnimated(force) {
+    const forced = !!force || debugUserFlow.shouldForceUserGuides();
+    if (!forced) {
+      if (this._xianyuWarningShownOnce) return false;
+      if (this.data.isAuthorized) return false;
+      if (this._xianyuWarningDismissedThisSession) return false;
+      if (this.data.showXianyuWarningModal || this.data.xianyuWarningModalClosing) return false;
+      if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
+    } else {
+      this._xianyuWarningDismissedThisSession = false;
+      this._xianyuWarningShownOnce = false;
+    }
     this._xianyuWarningShownOnce = true;
     this.setData({
       ...this._xianyuWarningModalPatch(false),
@@ -3151,28 +3275,78 @@ Page({
     if (!this.data.xianyuWarningActionReady) return;
     this._clearXianyuWarningActionCooldown();
     this._markXianyuWarningDismissed();
+
+    const debugOn = debugUserFlow.shouldForceUserGuides();
+    // 必须在用户点击的同一调用栈同步打开，否则企微会话/气泡可能失败
+    this._openPresalesKfForAccessCode({
+      onFail: () => {
+        wx.showToast({ title: '打开客服失败，请用复制微信号', icon: 'none', duration: 2500 });
+        this._openFirstTimeModalAnimated(debugOn);
+      }
+    });
+
+    this._finishXianyuWarningModal({ openNickname: true, debugOn });
+  },
+
+  /** 微信用户若已有口令：跳过客服，直接去填写 */
+  skipXianyuWarningToAccessCode() {
+    if (this.data.xianyuWarningModalClosing) return;
+    if (!this.data.xianyuWarningActionReady) return;
+    this._clearXianyuWarningActionCooldown();
+    this._markXianyuWarningDismissed();
+    this._finishXianyuWarningModal({
+      openNickname: true,
+      debugOn: debugUserFlow.shouldForceUserGuides()
+    });
+  },
+
+  _finishXianyuWarningModal({ openNickname, debugOn }) {
     this.setData({ xianyuWarningModalClosing: true });
     setTimeout(() => {
       this.setData({
         ...this._xianyuWarningModalPatch(true),
         xianyuWarningModalClosing: false
       });
-      if (!this.data.isAuthorized && !this.data.isAdmin) {
-        if (!this._openFirstTimeModalIfNeeded()) {
-          this._showNicknameUI();
-        }
+      // 打开备用加微信页时，勿再叠口令层
+      if (this.data.showFirstTimeModal || this.data.firstTimeModalClosing) return;
+      if (openNickname && (debugOn || (!this.data.isAuthorized && !this.data.isAdmin))) {
+        this._showNicknameUI();
       }
     }, 380);
   },
 
+  /** 闲鱼/抖音：打开企业微信售前客服领取访问口令 */
+  _openPresalesKfForAccessCode(options = {}) {
+    weworkKf.openPreSalesKf({
+      title: '【访问口令】闲鱼/抖音领取',
+      path: '/pages/index/index.html',
+      showMessageCard: true,
+      onFail: typeof options.onFail === 'function' ? options.onFail : undefined
+    });
+  },
+
+  openPresalesKfFromGuide() {
+    if (!this.data.firstTimeActionReady) return;
+    this._openPresalesKfForAccessCode({
+      onFail: () => {
+        wx.showToast({ title: '打开客服失败，请复制微信号添加', icon: 'none', duration: 2500 });
+      }
+    });
+  },
+
   /** @returns {boolean} 是否实际打开了首次引导 */
-  _openFirstTimeModalAnimated() {
-    // 防抖：本次进入 index 只允许弹一次，避免异步流程里重复触发
-    if (this._firstTimeModalShownOnce) return false;
-    if (this.data.isAuthorized) return false;
-    if (this._firstTimeGuideDismissedThisSession) return false;
-    if (this.data.showFirstTimeModal || this.data.firstTimeModalClosing) return false;
-    if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
+  _openFirstTimeModalAnimated(force) {
+    const forced = !!force || debugUserFlow.shouldForceUserGuides();
+    if (!forced) {
+      if (this._firstTimeModalShownOnce) return false;
+      if (this.data.isAuthorized) return false;
+      if (this._firstTimeGuideDismissedThisSession) return false;
+      if (this.data.showFirstTimeModal || this.data.firstTimeModalClosing) return false;
+      if (wx.getStorageSync('has_permanent_auth') && wx.getStorageSync('user_nickname')) return false;
+    } else {
+      this._firstTimeGuideDismissedThisSession = false;
+      this._firstTimeModalShownOnce = false;
+    }
     if (this._firstTimeModalEnterTimer) {
       clearTimeout(this._firstTimeModalEnterTimer);
       this._firstTimeModalEnterTimer = null;
@@ -3264,6 +3438,18 @@ Page({
     this._markDouyinXianyuGuideDismissed();
     this.setData({ firstTimeModalClosing: true });
     setTimeout(() => {
+      if (debugUserFlow.shouldForceUserGuides()) {
+        this.setData({
+          showFirstTimeModal: false,
+          firstTimeModalClosing: false,
+          firstTimeModalEnterReady: false,
+          showWechatQRCode: false,
+          isShowNicknameUI: false,
+          nicknameUiClosing: false
+        });
+        this._continueDebugUserFlowAfterIndexModals();
+        return;
+      }
       this.setData({
         showFirstTimeModal: false,
         firstTimeModalClosing: false,
@@ -3706,6 +3892,61 @@ Page({
     }
   },
 
+  /** 管理员：以普通用户视角重跑入场弹窗 → 主页新品/教程，并开放各页自动引导 */
+  startDebugUserFullFlow() {
+    if (!this.data.isAdmin) return;
+    wx.showModal({
+      title: '调试全流程',
+      content: '将清理各页教程状态，并以普通用户视角重跑：使用须知 → 加微信 → 进主页（新品+主页教程）。期间点客服/我的/维修中心/控制中心也会自动弹引导。约 45 分钟后自动结束。',
+      confirmText: '开始',
+      cancelText: '取消',
+      success: (res) => {
+        if (!res.confirm) return;
+        debugUserFlow.start();
+        this._xianyuWarningDismissedThisSession = false;
+        this._firstTimeGuideDismissedThisSession = false;
+        this._xianyuWarningShownOnce = false;
+        this._firstTimeModalShownOnce = false;
+        this.setData({
+          isShowNicknameUI: false,
+          nicknameUiClosing: false,
+          showFirstTimeModal: false,
+          firstTimeModalEnterReady: false,
+          firstTimeModalClosing: false,
+          showXianyuWarningModal: false,
+          xianyuWarningModalEnterReady: false,
+          xianyuWarningModalClosing: false
+        }, () => {
+          const ok = this._openXianyuWarningModalAnimated(true);
+          if (!ok) {
+            this._continueDebugUserFlowAfterIndexModals();
+            return;
+          }
+          // 调试模式：跳过须知倒计时
+          this._clearXianyuWarningActionCooldown();
+          this.setData({
+            xianyuWarningActionReady: true,
+            xianyuWarningActionCountdown: 0,
+            xianyuWarningProgress: 100
+          });
+        });
+      }
+    });
+  },
+
+  _continueDebugUserFlowAfterIndexModals() {
+    if (!debugUserFlow.isActive()) return;
+    try {
+      wx.setStorageSync('__products_new_arrival_from_index__', Date.now());
+    } catch (e) { /* ignore */ }
+    wx.showToast({ title: '进入主页调试', icon: 'none', duration: 1200 });
+    setTimeout(() => {
+      wx.reLaunch({
+        url: '/package-app/pages/products/products?debugUserFlow=1'
+      });
+    }, 280);
+  },
+
   copyAccessCode(e) {
     const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {};
     const code = extractPlainAccessCode(dataset.code || dataset.nickname || '');
@@ -3820,6 +4061,10 @@ Page({
       this.hideMyLoading();
       if (res.result && res.result.success) {
         this._syncBlockedCitiesDisplay(res.result.config);
+        try {
+          const appInst = getApp();
+          if (appInst && appInst.globalData) appInst.globalData.reviewPassMode = null;
+        } catch (e) { /* ignore */ }
         this.showAutoToast('成功', res.result.message || (isActive ? '已开启地域拦截' : '已关闭地域拦截'));
       } else {
         this.setData({ blockingRulesActive: !isActive });

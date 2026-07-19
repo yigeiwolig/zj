@@ -24,11 +24,13 @@
     <view class="kf-admin-list" wx:if="{{isAdmin && showAdminList}}">
       <view class="kf-admin-msg" wx:for="{{adminMessages}}" wx:key="_id">
         <view class="kf-admin-msg-head">
-          <text class="kf-admin-msg-name">{{item.nickName}}</text>
+          <text class="kf-admin-msg-name">{{item.userTypeLabel}}</text>
           <text class="kf-admin-msg-time">{{item.timeText}}</text>
         </view>
         <view class="kf-admin-msg-body">{{item.content}}</view>
-        <view class="kf-admin-msg-action" bindtap="handleMarkRead" data-id="{{item._id}}">撕下已读</view>
+        <view class="kf-admin-msg-actions">
+          <view class="kf-admin-msg-action kf-admin-msg-action--danger" bindtap="handleDelete" data-id="{{item._id}}">删除</view>
+        </view>
       </view>
       <view class="kf-admin-empty" wx:if="{{!adminMessages.length}}">暂无新留言</view>
     </view>
@@ -71,16 +73,26 @@
       <view class="kf-feedback-body" wx:if="{{showFeedbackPanel}}">
         <view class="kf-feedback-stage">
           <view
-            class="kf-feedback-input-wrap {{boardTearing ? 'is-tearing' : ''}}"
-            bindanimationend="onBoardTearEnd"
-            wx:if="{{!boardSentTip}}">
+            wx:if="{{boardFlying}}"
+            class="kf-feedback-input-wrap is-flying-up"
+            bindanimationend="onFlyUpEnd">
+            <view class="kf-feedback-frozen-text">{{boardFlyContent}}</view>
+            <view class="kf-feedback-footer">
+              <text class="kf-feedback-count">{{boardFlyContent.length || 0}}/200</text>
+              <view class="kf-send-btn kf-send-btn--ghost">提交反馈</view>
+            </view>
+          </view>
+          <view
+            wx:if="{{!boardFlying}}"
+            class="kf-feedback-input-wrap {{boardDropIn ? 'is-drop-in' : ''}}"
+            bindanimationend="onDropInEnd">
             <textarea
               class="kf-feedback-input"
               placeholder="写下您的意见或建议..."
               placeholder-style="color:#C4C4C6;"
               value="{{boardContent}}"
               bindinput="onBoardInput"
-              disabled="{{boardSending || boardTearing}}"
+              disabled="{{boardSending || boardFlying || boardDropIn}}"
               maxlength="200"
               disable-default-padding
             ></textarea>
@@ -88,10 +100,6 @@
               <text class="kf-feedback-count">{{boardContent.length || 0}}/200</text>
               <view class="kf-send-btn" bindtap="handleBoardSend">{{boardSending ? '提交中' : '提交反馈'}}</view>
             </view>
-          </view>
-
-          <view class="kf-feedback-success" wx:if="{{boardSentTip}}">
-            <text>反馈已提交，感谢支持</text>
           </view>
         </view>
       </view>

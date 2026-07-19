@@ -3,6 +3,11 @@ const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const { normalizeProductDetailModel } = require('../../../utils/productModels.js');
+const syncPartsHelper = require('../../../utils/syncPartsHelper.js');
+const { startGuideBtnCountdown, clearGuideBtnCountdown } = require('../../../utils/guideBtnCountdown.js');
+const { notifyAdminTodo } = require('../../../utils/wecomAdminTodo.js');
+const { withRepairProgressSubscribe } = require('../../../utils/subscribeMessage.js');
+const debugUserFlow = require('../../../utils/debugUserFlow.js');
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js'); 
 // 🔴 统一使用已验证可用的腾讯key，避免多key在不同环境权限不一致导致选择器异常
 const MAP_KEY = 'CFDBZ-B6K6N-B3EFF-SPDJ2-Y2MRZ-7UBH2';
@@ -21,12 +26,164 @@ var qqmapsdkDistrict = new QQMapWX({
 // 通用测试视频地址（可替换为你自己的云存储链接）
 const TEST_VIDEO_URL = "https://wxsnsdy.tc.qq.com/105/20210/snsdyvideodownload?filekey=30280201010421301f0201690402534804102ca905ce620b1241b726bc41dcff44e00204012882540400&bizid=1023&hy=SH&fileparam=302c020101042530230204136ffd93020457e3c4ff02024ef202031e8d7f02030f42400204045a320a0201000400";
 
+const SHOUHOU_GUIDE_SHOW_COUNT_KEY = 'mt_shouhou_guide_show_count_v1';
+/** 前 N 次自动弹出不可跳过 */
+const SHOUHOU_GUIDE_NO_SKIP_TIMES = 5;
+const SHOUHOU_FIRST_VISIT_GUIDE_DONE_KEY = 'mt_shouhou_first_visit_guide_done_v1'; // 旧键，不再用作永久跳过
+
+/** 进入维修中心：全员售后说明 */
+/** A 卡：全员进入维修中心时展示（对齐参考稿） */
+const SHOUHOU_AFTERSALE_NOTICE = {
+  badge: 'SYSTEMATIC ORDER',
+  title: '售后数字化与秩序化告知',
+  leadBefore: '告别低效的微信沟通。我们建立标准化系统是为了实现',
+  leadBold: '“一机一档”',
+  leadAfter: '的精准维护。秩序化，是为了让每一份诉求都有迹可循。',
+  items: [
+    {
+      title: '告别无序：不录系统不发货',
+      desc: '严禁口头约定。所有报修及配件申领必须在线提交，确保库存去向 100% 透明。'
+    },
+    {
+      title: '拒绝漏单：系统自动排序',
+      desc: '数字化流转取代人工记忆。按序处理，杜绝漏单、推诿及不必要的反复沟通。'
+    },
+    {
+      title: '公平保障：打击恶意占坑',
+      desc: '规则面前人人平等。系统化管理将有效拦截虚假申领，保障真实用户的售后时效。'
+    }
+  ],
+  btnText: '进入标准化报修系统',
+  slogan: 'OFFICIAL AFTER-SALES SERVICE'
+};
+
+/** B 卡：仅过保用户（已绑定可判定后）；报修处永不弹 A，主页过保也只弹 B */
+const SHOUHOU_EXPIRED_ROAST_NOTICE = {
+  badge: 'LIABILITY NOTICE',
+  title: '维保权责终结与有偿细则',
+  leadBefore: '免费质保是受时效约束的商业契约。',
+  leadBoldRed: '一旦过保，免费服务即刻终止',
+  leadAfter: '。后续维保将严格遵循市场化有偿原则，无一例外。',
+  items: [
+    {
+      title: '拒绝终身免费要求',
+      desc: '我们不承担产品的无限期维护义务。过保后的任何行为均需支付【配件成本+人工工时】。'
+    },
+    {
+      title: '谢绝一切形式的人工议价',
+      descBefore: '维修价格由系统刚性核销，人工无权改价。',
+      descBold: '不接受付费方案请勿报修',
+      descAfter: '，以免浪费双方时间。'
+    },
+    {
+      title: '严禁到付：未授权件拒收',
+      desc: '过保物流费需全额自理。未经系统授权寄出的到付件，仓库将一律原路拒收退回。'
+    }
+  ],
+  agreeTip: '* 确认报修即代表您已完整阅读并认可上述权责条款。',
+  btnText: '确认过保状态 · 申请维修',
+  slogan: 'MAINTENANCE BOUNDARY POLICY'
+};
+
+function buildAftersaleNoticePlainText() {
+  const n = SHOUHOU_AFTERSALE_NOTICE;
+  const lead = `${n.leadBefore || ''}${n.leadBold || ''}${n.leadAfter || ''}`;
+  const lines = (n.items || []).map((it) => `${it.title}\n${it.desc || ''}`).join('\n\n');
+  return `${n.title}\n${lead}\n\n${lines}`;
+}
+
+const SH_GUIDE_SERIES_TOUR = [
+  { anchor: '#shGuideSeriesF1', dwellMs: 1000, scrollToAnchor: true, scrollSettleMs: 520, seriesKey: 'f1' },
+  { anchor: '#shGuideSeriesF2', dwellMs: 1000, scrollToAnchor: true, scrollSettleMs: 480, seriesKey: 'f2' },
+  { anchor: '#shGuideSeriesF3', dwellMs: 1000, scrollToAnchor: true, scrollSettleMs: 980, seriesKey: 'f3' }
+];
+
+function buildShouhouGuideSteps() {
+  // 售后说明改为独立弹窗；教程从选型号开始，避免与说明卡叠弹
+  const steps = [
+    {
+      key: 'card',
+      anchor: '#shGuideMainSeries',
+      requiresDetail: false,
+      seriesTour: true,
+      dismissOnly: true,
+      btnText: '知道了',
+      spotPulse: false,
+      bubbleFixedBottom: true,
+      title: '选择您的产品型号',
+      desc: '上方为 F1 / F2 全系列，F3 系列在页面下方。请点选您的设备型号卡片，进入配件购买与维修服务。'
+    },
+    {
+      key: 'parts',
+      anchor: '#shGuidePartsSection',
+      requiresDetail: true,
+      serviceType: 'parts',
+      spotPulse: true,
+      bubbleFixedBottom: true,
+      title: '这里是售后配件清单',
+      desc: '下面列出的都是该型号可单独购买的售后配件，点击配件卡片即可勾选；需要几件就勾选几件，价格会显示在卡片上。'
+    },
+    {
+      key: 'buy',
+      anchor: '#shGuideFooterDock',
+      requiresDetail: true,
+      serviceType: 'parts',
+      title: '立即购买配件',
+      desc: '选好配件后，底部可「加入购物车」或「立即购买」，按提示填写收货信息并完成支付。'
+    },
+    {
+      key: 'repair_switch',
+      anchor: '#shGuideSvcSwitch',
+      requiresDetail: true,
+      serviceType: 'parts',
+      spotPulse: true,
+      title: '切换到「故障报修」',
+      desc: '如需上报维修，请先在这里从「购买配件」滑到「故障报修」。下一步会演示切换效果。'
+    },
+    {
+      key: 'repair',
+      anchor: '#shGuideRepairSection',
+      requiresDetail: true,
+      serviceType: 'repair',
+      title: '故障报修与维修上报',
+      desc: '切换到「故障报修」后，填写故障描述并上传故障视频或照片（二选一），便于工程师快速判断问题。'
+    },
+    {
+      key: 'submit',
+      anchor: '#shGuideFooterDock',
+      requiresDetail: true,
+      serviceType: 'repair',
+      title: '提交维修工单',
+      desc: '信息填写完成后，点击底部「提交维修工单」即可上报；审核通过后可在「我的」查看进度。'
+    },
+    {
+      key: 'bind',
+      anchor: '',
+      centerOnly: true,
+      requiresDetail: true,
+      serviceType: 'parts',
+      restorePartsAfter: true,
+      title: '绑定设备提示',
+      desc: '若尚未绑定设备，点击「故障报修」时会弹出提示。点「去绑定」可跳转「我的」完成设备绑定，绑定后即可正常提交工单并享受质保服务。'
+    }
+  ];
+  return steps.map((step, idx, arr) => ({
+    ...step,
+    tag: `第 ${idx + 1} 步`,
+    stepNo: idx + 1,
+    total: arr.length
+  }));
+}
+
 function buildShippingDisplay(method, fee, freeShipping) {
   const m = String(method || 'zto').toLowerCase();
   const f = Number(fee) || 0;
   const shippingMethodLabel = m === 'sf' ? '顺丰速运' : '中通快递';
   let shippingFeeText = '包邮';
-  if (!freeShipping) {
+  // 顺丰始终按地址计费，不走「故障报修包邮」
+  if (m === 'sf') {
+    shippingFeeText = f > 0 ? `运费 ¥${f}` : '运费待计算';
+  } else if (!freeShipping) {
     shippingFeeText = f > 0 ? `运费 ¥${f}` : '运费待计算';
   }
   return { shippingMethodLabel, shippingFeeText };
@@ -35,16 +192,19 @@ function buildShippingDisplay(method, fee, freeShipping) {
 const F2_STYLE_PARTS = ["固定牌支架", "固定车上支架", "电机", "固定电机螺丝", "固定支架螺丝", "固定支架软胶", "固定支架硬胶", "负侧边固定螺丝", "主板", "按钮", "连接线束", "固定支架胶垫", "主板外壳"];
 
 // 配件数据 - 按型号独立存储（标准明细名）
+// F1 PRO 基准配件列表（所有型号统一）
+const F1_PRO_PARTS = ["主板外壳", "下面板", "上面板", "合页", "合页螺丝", "90度连接件", "连杆", "摇臂", "摇臂螺丝", "电机", "固定电机件", "固定电机螺丝", "装牌螺丝包", "螺母", "主板", "按钮", "遥控", "链接线束", "锁止模块"];
+
 const DB_PARTS = {
-  'F1 PRO': ["主板外壳", "下面板", "上面板", "合页", "合页螺丝", "90度连接件", "连杆", "摇臂", "摇臂螺丝", "电机", "固定电机件", "固定电机螺丝", "装牌螺丝包", "螺母", "主板", "按钮", "遥控", "链接线束"],
-  'F1 MAX': F2_STYLE_PARTS.slice(),
-  'F1 ULTRA': F2_STYLE_PARTS.slice(),
-  'F2 PRO': F2_STYLE_PARTS.slice(),
-  'F2 MAX': F2_STYLE_PARTS.slice(),
-  'F2 ULTRA': F2_STYLE_PARTS.slice(),
-  'F2 Long': F2_STYLE_PARTS.slice(),
-  'F3 PRO': F2_STYLE_PARTS.slice(),
-  'F3 MAX': F2_STYLE_PARTS.slice()
+  'F1 PRO': F1_PRO_PARTS.slice(),
+  'F1 MAX': F1_PRO_PARTS.slice(),
+  'F1 ULTRA': F1_PRO_PARTS.slice(),
+  'F2 PRO': F1_PRO_PARTS.slice(),
+  'F2 MAX': F1_PRO_PARTS.slice(),
+  'F2 ULTRA': F1_PRO_PARTS.slice(),
+  'F2 Long': F1_PRO_PARTS.slice(),
+  'F3 PRO': F1_PRO_PARTS.slice(),
+  'F3 MAX': F1_PRO_PARTS.slice()
 };
 
 // 视频数据 - 按组同步（同组型号共享视频）
@@ -212,6 +372,11 @@ Page({
     repairTermsConfirmLabel: '确认并继续',
     repairTermsConfirmReady: false,
     repairTermsConfirmCountdown: 5,
+    // 过保用户：条款之后的收费说明
+    showExpiredFeeModal: false,
+    expiredFeeModalClosing: false,
+    expiredFeeConfirmReady: false,
+    expiredFeeConfirmCountdown: 5,
     autoToastClosing: false, // 自动提示退出动画中
 
     // 自定义视频预览弹窗
@@ -327,11 +492,52 @@ Page({
     shippingFee: 0,
     shippingMethodLabel: '中通快递',
     shippingFeeText: '包邮',
-    checkoutFreeShipping: false, // 仅「故障报修/申请售后」包邮
+    checkoutFreeShipping: false, // 故障报修选中通包邮；顺丰始终按地址收费
 
     // [新增] 自定义加载动画
     showLoadingAnimation: false,
-    loadingText: '加载中...'
+    loadingText: '加载中...',
+    repairSubmitting: false,
+
+    // 维修中心分步功能引导
+    showShUsageGuide: false,
+    shUsageGuideStep: 1,
+    shGuideStepTag: '',
+    shGuideTitle: '',
+    shGuideDesc: '',
+    shGuideBtnText: '下一步',
+    shGuideBtnLocked: true,
+    shGuideArrowDir: 'down',
+    shGuideBubbleStyle: '',
+    shGuideArrowStyle: '',
+    shGuideSpotStyle: '',
+    shGuideSpotPulse: false,
+    shGuideBubbleFixed: false,
+    shGuideShowBubble: true,
+    shGuideShowSpot: false,
+    shGuideMaskDim: true,
+    shHomeScrollTop: 0,
+    shHomeScrollAnim: true,
+    shGuideScrollIntoView: '',
+    shGuideShowSkip: false,
+
+    // 进入维修中心时的售后说明独立弹窗（教程之外也会弹出）
+    showAftersaleNoticeModal: false,
+    aftersaleNoticeClosing: false,
+    aftersaleNoticeBtnLocked: true,
+    aftersaleNoticeBtnText: SHOUHOU_AFTERSALE_NOTICE.btnText,
+    aftersaleOrderPolicy: SHOUHOU_AFTERSALE_NOTICE,
+
+    // 管理员调试：两张卡上下同时展示
+    showAftersaleNoticeDebugStack: false,
+    aftersaleNoticeDebugClosing: false,
+
+    // 仅过保用户：有偿服务细则
+    showExpiredRoastModal: false,
+    expiredRoastClosing: false,
+    expiredRoastBtnLocked: true,
+    expiredRoastBtnText: SHOUHOU_EXPIRED_ROAST_NOTICE.btnText,
+    expiredPaidPolicy: SHOUHOU_EXPIRED_ROAST_NOTICE
   },
 
   // 页面加载时初始化
@@ -403,7 +609,13 @@ Page({
     }
     // 从「我的-跳转教程」进入：仅切到教程页签，不自动解锁
     this._openTutorialTabFromQuery = !!(options && options.tutorial === '1');
+    // 绑定回流：直接打开故障报修（抑制主页 A，改由报修处弹 B）
+    this._openRepairTabFromQuery = !!(options && (options.serviceType === 'repair' || options.openRepair === '1'));
+    if (this._openRepairTabFromQuery) {
+      this._shouhouSkipAutoGuideFromQuery = true;
+    }
     if (modelToOpen) {
+      this._shouhouSkipAutoGuideFromQuery = true;
       const baseModel = modelToOpen.split(/\s*-\s*/)[0].trim();
       const normalizedBase = normalizeProductDetailModel(baseModel) || baseModel;
       const normalizedFull = normalizeProductDetailModel(modelToOpen) || modelToOpen;
@@ -423,8 +635,18 @@ Page({
           const name = self._openModelFromQuery;
           self._openModelFromQuery = null;
           self.enterModelByModelName(name);
+          if (self._openRepairTabFromQuery) {
+            self._openRepairTabFromQuery = false;
+            setTimeout(() => self._enterRepairAfterBindReturn(name), 300);
+          }
+        } else if (self._openRepairTabFromQuery) {
+          self._openRepairTabFromQuery = false;
+          self._enterRepairAfterBindReturn(self.data.currentModelName);
         }
       }, 50);
+    } else if (this._openRepairTabFromQuery) {
+      this._openRepairTabFromQuery = false;
+      setTimeout(() => this._enterRepairAfterBindReturn(this.data.currentModelName), 80);
     }
     
     // [新增] 加载省份列表（延迟加载，避免与其他API冲突）
@@ -1080,8 +1302,8 @@ Page({
       this.db = wx.cloud.database();
     }
     
-    // 检查管理员权限
-    this.checkAdminPrivilege();
+    // 检查管理员权限（须等完成后再决定是否弹教学，管理员免教）
+    this._adminPrivilegePromise = this.checkAdminPrivilege();
     
     // 缓存系统信息，避免拖拽时重复调用
     const winInfo = wx.getWindowInfo();
@@ -1100,8 +1322,10 @@ Page({
         this._openModelFromQuery = null;
         if (modelName && MODEL_TO_GROUP[modelName]) {
           this.enterModelByModelName(modelName);
+          return;
         }
       }
+      this._maybeShowShouhouUsageGuide();
     });
   },
 
@@ -1186,6 +1410,13 @@ Page({
     }
   },
 
+  _clearExpiredFeeConfirmTimer() {
+    if (this._expiredFeeCountdownTimer) {
+      clearInterval(this._expiredFeeCountdownTimer);
+      this._expiredFeeCountdownTimer = null;
+    }
+  },
+
   _startRepairTermsConfirmCountdown() {
     this._clearRepairTermsConfirmTimer();
     let left = Number(this.data.repairTermsConfirmCountdown) || 5;
@@ -1200,9 +1431,29 @@ Page({
     }, 1000);
   },
 
+  _startExpiredFeeConfirmCountdown() {
+    this._clearExpiredFeeConfirmTimer();
+    let left = 5;
+    this.setData({
+      expiredFeeConfirmReady: false,
+      expiredFeeConfirmCountdown: left
+    });
+    this._expiredFeeCountdownTimer = setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        this._clearExpiredFeeConfirmTimer();
+        this.setData({ expiredFeeConfirmReady: true, expiredFeeConfirmCountdown: 0 });
+        return;
+      }
+      this.setData({ expiredFeeConfirmCountdown: left });
+    }, 1000);
+  },
+
   closeRepairTermsModal() {
     this._clearRepairTermsConfirmTimer();
     this._repairTermsOnConfirm = null;
+    this._repairTermsAcked = false;
+    this._expiredFeeAcked = false;
     if (!this.data.showRepairTermsModal) return;
     this.setData({ repairTermsClosing: true });
     setTimeout(() => {
@@ -1215,22 +1466,116 @@ Page({
     }, 360);
   },
 
+  /** 不同意：关闭弹窗且不允许提交维修申请 */
+  onRepairTermsDisagree() {
+    this.closeRepairTermsModal();
+    this.showAutoToast('提示', '不同意条款将无法提交维修申请');
+  },
+
   onRepairTermsConfirm() {
     if (!this.data.repairTermsConfirmReady) return;
+    if (this._repairTermsConfirming) return;
+    this._repairTermsConfirming = true;
     const cb = this._repairTermsOnConfirm;
     this._repairTermsOnConfirm = null;
-    this._repairTermsAcked = true;
     this._clearRepairTermsConfirmTimer();
+
+    this._repairTermsAcked = true;
     this.setData({
       showRepairTermsModal: false,
       repairTermsClosing: false,
       repairTermsConfirmReady: false,
       repairTermsConfirmCountdown: 5
     });
+    const finish = () => {
+      try {
+        if (typeof cb === 'function') cb();
+      } finally {
+        setTimeout(() => {
+          this._repairTermsConfirming = false;
+        }, 600);
+      }
+    };
+    // 条款同意后：过保用户再弹收费说明（30 元手工费 + 配件费）
+    this._ensureRepairDevicesLoaded()
+      .then(() => this._maybeShowExpiredFeeThen(finish))
+      .catch(() => finish());
+  },
+
+  /** 当前报修设备是否过保 */
+  _isSelectedRepairDeviceExpired() {
+    const { myDevices, selectedDeviceIndex } = this.data;
+    if (!myDevices || !myDevices.length) return false;
+    let idx = selectedDeviceIndex;
+    if (idx === null || idx === undefined) {
+      if (myDevices.length === 1) idx = 0;
+      else return false; // 多设备未选时先不拦，提交前再判
+    }
+    const d = myDevices[Number(idx)];
+    if (!d) return false;
+    if (d.warrantyExpired === true) return true;
+    if (d.expiryDate) {
+      const diff = Math.ceil((new Date(d.expiryDate) - new Date()) / 86400000);
+      return diff <= 0;
+    }
+    return false;
+  },
+
+  _ensureRepairDevicesLoaded() {
+    const list = this.data.myDevices || [];
+    if (list.length > 0) return Promise.resolve(list);
+    return this.loadRepairDevices();
+  },
+
+  /** 过保收费说明：知道了后继续原流程 */
+  _maybeShowExpiredFeeThen(onContinue) {
+    const next = typeof onContinue === 'function' ? onContinue : () => {};
+    if (this._expiredFeeAcked || !this._isSelectedRepairDeviceExpired()) {
+      next();
+      return;
+    }
+    this._expiredFeeOnConfirm = next;
+    this.setData({
+      showExpiredFeeModal: true,
+      expiredFeeModalClosing: false,
+      expiredFeeConfirmReady: false,
+      expiredFeeConfirmCountdown: 5
+    }, () => {
+      this._startExpiredFeeConfirmCountdown();
+    });
+  },
+
+  closeExpiredFeeModal() {
+    this._clearExpiredFeeConfirmTimer();
+    this._expiredFeeOnConfirm = null;
+    if (!this.data.showExpiredFeeModal) return;
+    this.setData({ expiredFeeModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showExpiredFeeModal: false,
+        expiredFeeModalClosing: false,
+        expiredFeeConfirmReady: false,
+        expiredFeeConfirmCountdown: 5
+      });
+    }, 360);
+  },
+
+  onExpiredFeeConfirm() {
+    if (!this.data.expiredFeeConfirmReady) return;
+    this._clearExpiredFeeConfirmTimer();
+    this._expiredFeeAcked = true;
+    const cb = this._expiredFeeOnConfirm;
+    this._expiredFeeOnConfirm = null;
+    this.setData({
+      showExpiredFeeModal: false,
+      expiredFeeModalClosing: false,
+      expiredFeeConfirmReady: false,
+      expiredFeeConfirmCountdown: 5
+    });
     if (typeof cb === 'function') cb();
   },
 
-  /** 故障报修：运费与旧件寄回须知（专用弹窗 + 确认按钮倒计时） */
+  /** 故障报修：维修条款（确认并继续才可提交；不同意则无法申请；确认键需阅读满 5 秒） */
   _showRepairSubmitTermsDialog(onConfirm, options = {}) {
     this._clearRepairTermsConfirmTimer();
     this._repairTermsOnConfirm = onConfirm;
@@ -1241,8 +1586,9 @@ Page({
       repairTermsConfirmLabel: options.confirmText || '确认并继续',
       repairTermsConfirmReady: false,
       repairTermsConfirmCountdown: countdown
+    }, () => {
+      this._startRepairTermsConfirmCountdown();
     });
-    this._startRepairTermsConfirmCountdown();
   },
   _closeWithAnimation(showKey, closingKey, extraPatch = {}, duration = 360) {
     if (!this.data[showKey]) {
@@ -1369,7 +1715,7 @@ Page({
     if (toast && toast.hideLoading) toast.hideLoading();
   },
 
-  // 🔴 统一的自定义 Loading（只保留本页一套：转圈 + 文案 + 进度条，避免与 wx/custom-toast 叠在一起）
+  // 🔴 统一的自定义 Loading（白底小窗：文案 + 进度条）
   showMyLoading(title = '加载中...') {
     this._hideAllLoadingLayers();
     this.setData({
@@ -1380,9 +1726,28 @@ Page({
 
   hideMyLoading() {
     this._hideAllLoadingLayers();
+    this._repairSubmitting = false;
     this.setData({
-      showLoadingAnimation: false
+      showLoadingAnimation: false,
+      repairSubmitting: false
     });
+  },
+
+  /** 维修工单防连点：占用提交锁，已在提交中则返回 false */
+  _tryLockRepairSubmit() {
+    if (this._repairSubmitting || this.data.showLoadingAnimation) {
+      return false;
+    }
+    this._repairSubmitting = true;
+    this.setData({ repairSubmitting: true });
+    return true;
+  },
+
+  _unlockRepairSubmit() {
+    this._repairSubmitting = false;
+    if (this.data.repairSubmitting) {
+      this.setData({ repairSubmitting: false });
+    }
   },
   onDialogConfirm() {
     console.log('[onDialogConfirm] 用户点击了确定按钮');
@@ -1488,6 +1853,7 @@ Page({
 
   onUnload() {
     this._clearRepairTermsConfirmTimer();
+    this._clearExpiredFeeConfirmTimer();
     try {
       if (this._shouhouWindowResize && typeof wx.offWindowResize === 'function') {
         wx.offWindowResize(this._shouhouWindowResize);
@@ -1532,6 +1898,16 @@ Page({
       app.stopQiangliCheck();
     }
     
+    if (this._shUsageGuideStartTimer) {
+      clearTimeout(this._shUsageGuideStartTimer);
+      this._shUsageGuideStartTimer = null;
+    }
+    if (this._shGuideResumeTimer) {
+      clearTimeout(this._shGuideResumeTimer);
+      this._shGuideResumeTimer = null;
+    }
+    this._clearShGuideSeriesTourTimer();
+
     this._pageDestroyed = true;
     this._cancelPaymentVerification();
     this._teardownScreenshotProtection();
@@ -1635,6 +2011,7 @@ Page({
       } else if (this._autoUnlockFromQuery) {
         this._autoUnlockFromQuery = false;
       }
+      this._resumeShGuideAfterModelPick();
     });
   },
 
@@ -1643,7 +2020,9 @@ Page({
       this._forceCloseTutorialFullScreen();
     }
     this._repairTermsAcked = false;
+    this._expiredFeeAcked = false;
     this.closeRepairTermsModal();
+    this.closeExpiredFeeModal();
     this._resetPartsTableMode();
     // 直接返回选择界面，不需要管理员模式
     this.setData({ inDetail: false });
@@ -1788,6 +2167,7 @@ Page({
   },
 
   toggleService(e) {
+    if (this.data.showShUsageGuide) return;
     const type = e.currentTarget.dataset.type;
     if (type === this.data.serviceType) return;
     
@@ -1803,6 +2183,7 @@ Page({
       return;
     }
     this._repairTermsAcked = false;
+    this._expiredFeeAcked = false;
     this.setData({ serviceType: type }, () => this.reCalcFinalPrice());
   },
 
@@ -1820,8 +2201,15 @@ Page({
       confirmText: '去绑定',
       success: (res) => {
         if (res && res.confirm) {
+          const app = getApp();
+          if (app && app.globalData) {
+            app.globalData.fromRepairBind = {
+              model: String(this.data.currentModelName || '').trim(),
+              ts: Date.now()
+            };
+          }
           wx.navigateTo({
-            url: '/package-app/pages/profile/profile',
+            url: '/package-app/pages/products/products?hubTab=2&openBind=1',
             animationType: 'none',
             fail: () => {
               this._showCustomToast('跳转失败，请手动前往「我的」页面', 'none');
@@ -1830,6 +2218,30 @@ Page({
         }
       }
     });
+  },
+
+  /** 从绑定页回流：切到故障报修并刷新设备；此处只可能弹 B、永不弹 A */
+  _enterRepairAfterBindReturn(modelName) {
+    const name = String(modelName || this.data.currentModelName || '').trim();
+    const applyRepair = () => {
+      this.setData({ serviceType: 'repair' }, () => {
+        this.reCalcFinalPrice();
+        this.loadRepairDevices();
+        this.checkDeviceBeforeRepair({ fallbackToParts: false, allowSwitch: false });
+        // 去绑定（含控制中心蓝牙）回流：过保只在报修处弹 B
+        setTimeout(() => {
+          this._resolveEntryNoticeAndMaybeShow({ thenStartGuide: false, surface: 'repair' });
+        }, 280);
+      });
+    };
+    if (name && typeof this.enterModelByModelName === 'function') {
+      if (!this.data.inDetail || this.data.currentModelName !== name) {
+        this.enterModelByModelName(name);
+        setTimeout(applyRepair, 280);
+        return;
+      }
+    }
+    applyRepair();
   },
 
   // 🔴 检查设备绑定（在切换到故障报修时调用）
@@ -1970,7 +2382,10 @@ Page({
         
         // 没有未完成的寄回订单，正常切换
         if (allowSwitch && this.data.serviceType !== 'repair') {
-          this.setData({ serviceType: 'repair' });
+          this.setData({ serviceType: 'repair' }, () => {
+            // 从配件滑到报修：过保可补弹 B（主页已弹过 B 则跳过；永不弹 A）
+            this._resolveEntryNoticeAndMaybeShow({ thenStartGuide: false, surface: 'repair' });
+          });
         }
       })
       .catch(err => {
@@ -1982,13 +2397,17 @@ Page({
         }
         if (allowSwitch && this.data.serviceType !== 'repair') {
           // 检查失败也允许切换，避免阻塞用户
-          this.setData({ serviceType: 'repair' });
+          this.setData({ serviceType: 'repair' }, () => {
+            this._resolveEntryNoticeAndMaybeShow({ thenStartGuide: false, surface: 'repair' });
+          });
         }
       });
     } catch (err) {
       console.error('检查寄回订单失败:', err);
       if (allowSwitch && this.data.serviceType !== 'repair') {
-        this.setData({ serviceType: 'repair' });
+        this.setData({ serviceType: 'repair' }, () => {
+          this._resolveEntryNoticeAndMaybeShow({ thenStartGuide: false, surface: 'repair' });
+        });
       }
     }
   },
@@ -2419,6 +2838,19 @@ Page({
     return serialize(draft) !== serialize(original);
   },
 
+  // 同步配件数据（从 F1 PRO 云端完全复刻到所有型号：先删旧再写新）
+  syncPartsFromF1Pro() {
+    if (!this.data.isAdmin) {
+      wx.showToast({ title: '仅管理员可操作', icon: 'none' });
+      return;
+    }
+    syncPartsHelper.syncFromCloudWithConfirm().then((result) => {
+      if (result && result.success && this.data.currentModelName) {
+        this.loadParts(this.data.currentModelName);
+      }
+    }).catch(() => {});
+  },
+
   togglePartsTableMode() {
     if (!this.data.isAdmin) return;
     if (this.data.serviceType !== 'parts') return;
@@ -2639,6 +3071,12 @@ Page({
   handleLongPress(e) {
     if (!this.data.isAdmin) {
       console.log('[handleLongPress] 非管理员模式');
+      wx.showToast({ title: '仅管理员可拖拽', icon: 'none', duration: 1500 });
+      return;
+    }
+    
+    if (this.data.partsTableMode) {
+      wx.showToast({ title: '请切换到卡片模式', icon: 'none', duration: 1500 });
       return;
     }
     
@@ -4722,30 +5160,39 @@ Page({
     return '';
   },
 
-  // [新增] 计算含运费的总价（仅故障报修/申请售后包邮；购买配件等收运费）
+  // [新增] 计算含运费的总价
+  // 故障报修：中通包邮；顺丰仍按地址收费（省内13/省外22）
+  // 购买配件：中通/顺丰均按规则收费
   reCalcFinalPrice(cart = this.data.cart) {
     console.log('[shouhou] reCalcFinalPrice 开始计算，购物车数据:', cart);
     const goodsTotal = cart.reduce((sum, item) => sum + item.total, 0);
     const { shippingMethod } = this.data;
-    const freeShipping = this.data.serviceType === 'repair';
+    const isRepair = this.data.serviceType === 'repair';
     const province = this._resolveProvinceForShipping();
     let fee = 0;
 
-    if (!freeShipping) {
-      if (shippingMethod === 'zto') {
-        fee = this._ztoAccessoryShippingFee(province);
-      } else if (shippingMethod === 'sf') {
-        fee = this._provinceShippingFee(province);
-        if (!province && this.data.detailAddress && String(this.data.detailAddress).trim()) {
-          this.showAutoToast('提示', '无法从地址中识别省份，请检查「省市区」和详细地址是否填写完整');
-        }
+    if (shippingMethod === 'sf') {
+      // 顺丰：报修 / 购配件都要收运费（选顺丰＝用户自费升级运力）
+      fee = this._provinceShippingFee(province);
+      if (!province && this.data.detailAddress && String(this.data.detailAddress).trim()) {
+        this.showAutoToast('提示', '无法从地址中识别省份，请检查「省市区」和详细地址是否填写完整');
       }
+    } else if (shippingMethod === 'zto') {
+      if (!isRepair) {
+        fee = this._ztoAccessoryShippingFee(province);
+      }
+      // 故障报修 + 中通 = 包邮
     }
+
+    // 仅「故障报修 + 中通」视为包邮（用于中通卡片展示）；顺丰永不套此标记
+    const freeShipping = isRepair && shippingMethod === 'zto';
 
     console.log('[shouhou] 价格计算完成:', {
       goodsTotal,
       shippingMethod,
+      isRepair,
       freeShipping,
+      province,
       shippingFee: fee,
       finalTotalPrice: goodsTotal + fee
     });
@@ -4825,8 +5272,9 @@ Page({
     }
     
     const proceed = () => {
-      this.loadRepairDevices();
-      this._openOrderModal();
+      this._ensureRepairDevicesLoaded().then(() => {
+        this._maybeShowExpiredFeeThen(() => this._openOrderModal());
+      });
     };
     if (this._repairTermsAcked) {
       proceed();
@@ -4851,6 +5299,10 @@ Page({
 
     // 如果是故障报修模式，走故障报修提交逻辑
     if (serviceType === 'repair') {
+      // 提交中 / 条款弹窗打开时禁止再点，避免卡住感与双次提交
+      if (this._repairSubmitting || this.data.showLoadingAnimation || this.data.showRepairTermsModal) {
+        return;
+      }
       // 校验
       if (!repairDescription || repairDescription.trim() === '') {
         this.showAutoToast('提示', '请填写故障描述');
@@ -4906,12 +5358,28 @@ Page({
       if (detailAddress) addressParts.push(detailAddress);
       const address = addressParts.join(' ').trim();
 
-      const doSubmit = () => this.submitRepairTicket();
+      // 重新计算运费：顺丰需按地址计价，未出结果则拦截
+      this.reCalcFinalPrice();
+      const shipMethod = this.data.shippingMethod || 'zto';
+      const shipFee = Number(this.data.shippingFee) || 0;
+      if (shipMethod === 'sf' && shipFee <= 0) {
+        this.showAutoToast('提示', '请完善省市区地址以计算顺丰运费');
+        return;
+      }
+
+      const doSubmit = () => {
+        const run = () => {
+          if (!this._tryLockRepairSubmit()) return;
+          this.submitRepairTicket();
+        };
+        // 多设备场景：条款时可能尚未选设备，提交前再补一次过保收费说明
+        this._maybeShowExpiredFeeThen(run);
+      };
       if (this._repairTermsAcked) {
         doSubmit();
         return;
       }
-      this._showRepairSubmitTermsDialog(doSubmit, { confirmText: '确认提交' });
+      this._showRepairSubmitTermsDialog(doSubmit, { confirmText: '确认并继续' });
       return;
     }
 
@@ -7239,7 +7707,8 @@ Page({
     // 🔴 立即设置上传状态和加载动画，防止重复点击
     this.setData({ 
       isUploadingVideo: true,
-      showLoadingAnimation: true 
+      showLoadingAnimation: true,
+      loadingText: '上传中...'
     });
 
     // 上传视频到云存储并写入 shouhouvideo 集合（按型号独立）
@@ -7412,14 +7881,14 @@ Page({
   loadRepairDevices() {
     const db = wx.cloud.database();
 
-    wx.cloud.callFunction({ name: 'login' }).then(res => {
+    return wx.cloud.callFunction({ name: 'login' }).then(res => {
       const openid = res.result && res.result.openid;
       if (!openid) {
         console.warn('[loadRepairDevices] 未获取到 openid');
-        return;
+        return [];
       }
 
-      db.collection('sn').where({
+      return db.collection('sn').where({
         openid: openid,
         isActive: true
       }).get().then(devRes => {
@@ -7463,11 +7932,11 @@ Page({
             name: dev.name
           });
         });
-      }).catch(err => {
-        console.error('[loadRepairDevices] 查询设备失败:', err);
+        return devicesWithDisplaySn;
       });
     }).catch(err => {
-      console.error('[loadRepairDevices] 调用 login 云函数失败:', err);
+      console.error('[loadRepairDevices] 失败:', err);
+      return [];
     });
   },
 
@@ -7542,14 +8011,21 @@ Page({
     if (idx === null || idx === undefined) {
       idx = 0;
     }
-    this.setData({ selectedDeviceIndex: idx });
+    this.setData({ selectedDeviceIndex: idx }, () => {
+      this._expiredFeeAcked = false;
+      if (this._repairTermsAcked && this._isSelectedRepairDeviceExpired()) {
+        this._maybeShowExpiredFeeThen(() => {});
+      }
+    });
     this.closeDevicePicker();
   },
 
   // 监听设备选择
   onDeviceChange(e) {
     const index = Number(e.detail.value);
-    this.setData({ selectedDeviceIndex: index });
+    this.setData({ selectedDeviceIndex: index }, () => {
+      this._expiredFeeAcked = false;
+    });
   },
 
   // 联系信息折叠/展开
@@ -7595,23 +8071,14 @@ Page({
   // [新增] 提交维修工单
   submitRepairTicket() {
     console.log('[submitRepairTicket] ========== 开始提交维修工单 ==========');
-    const { 
-      currentModelName, repairDescription, videoFileName, tempVideoPath, tempImagePath,
-      orderInfo, // 复用收货信息
-      myDevices, selectedDeviceIndex
-    } = this.data;
-
-    console.log('[submitRepairTicket] 当前数据:', {
-      currentModelName,
-      repairDescription: repairDescription ? repairDescription.substring(0, 20) + '...' : '',
-      tempVideoPath: tempVideoPath ? '已设置' : '未设置',
-      tempImagePath: tempImagePath ? '已设置' : '未设置',
-      orderInfo,
-      detailAddress: this.data.detailAddress ? this.data.detailAddress.substring(0, 20) + '...' : ''
+    // 已上锁则继续；未上锁（内部直接调用）时再占锁
+    if (!this._repairSubmitting && !this._tryLockRepairSubmit()) {
+      return;
+    }
+    // 用户手势链路内先弹订阅授权（一次性模板，同意后方可后续推送）
+    withRepairProgressSubscribe(() => {
+      this.doSubmitRepairTicket();
     });
-
-    // 直接提交，不再检查（检查已在 toggleService 中完成）
-    this.doSubmitRepairTicket();
   },
 
   // 【新增】实际提交维修工单的方法（从 submitRepairTicket 中分离出来）
@@ -7627,20 +8094,24 @@ Page({
       selectedDeviceIndex
     } = this.data;
 
-    // 1. 校验
+    // 1. 校验（失败须解锁，否则按钮会一直无法点）
+    const failValidate = (msg) => {
+      this._unlockRepairSubmit();
+      this.showAutoToast('提示', msg);
+    };
     if (!repairDescription || repairDescription.trim() === '') {
       console.warn('[submitRepairTicket] 校验失败：故障描述为空');
-      this.showAutoToast('提示', '请填写故障描述');
+      failValidate('请填写故障描述');
       return;
     }
     if (!tempVideoPath && !tempImagePath) {
       console.warn('[submitRepairTicket] 校验失败：视频/图片均为空');
-      this.showAutoToast('提示', '请上传故障视频或照片');
+      failValidate('请上传故障视频或照片');
       return;
     }
     // 如果用户有绑定设备，则要求选择具体故障设备
     if (myDevices && myDevices.length > 0 && (selectedDeviceIndex === null || selectedDeviceIndex === undefined)) {
-      this.showAutoToast('提示', '请选择故障设备');
+      failValidate('请选择故障设备');
       return;
     }
     // 🔴 修改：检查省市区和详细地址
@@ -7648,27 +8119,65 @@ Page({
     
     if (!orderInfo.name || !orderInfo.phone) {
       console.warn('[submitRepairTicket] 校验失败：联系信息不完整');
-      this.showAutoToast('提示', '请完善联系信息');
+      failValidate('请完善联系信息');
       return;
     }
     
     if (!selectedProvince || !selectedCity) {
-      this.showAutoToast('提示', '请选择省市区');
+      failValidate('请选择省市区');
       return;
     }
     
     if (!detailAddress || !detailAddress.trim()) {
-      this.showAutoToast('提示', '请填写详细地址');
+      failValidate('请填写详细地址');
       return;
     }
     
     // 手机号格式验证
     if (!/^1[3-9]\d{9}$/.test(orderInfo.phone)) {
-      this.showAutoToast('提示', '请输入正确的11位手机号');
+      failValidate('请输入正确的11位手机号');
       return;
     }
+
+    // 未完结工单禁止二次申报（有设备 / 待录入都一样）
+    this.showMyLoading('提交中...');
+    wx.cloud.callFunction({
+      name: 'submitFaultBind',
+      data: { action: 'checkRepair' }
+    }).then((res) => {
+      const result = (res && res.result) || {};
+      if (result.blocked || result.success === false) {
+        this.hideMyLoading();
+        this._showCustomModal({
+          title: '无法重复申报',
+          content: result.msg || '您有未完结的售后工单，处理完成前无法再次提交。',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+        return;
+      }
+      this._continueSubmitRepairTicket();
+    }).catch((err) => {
+      console.error('[doSubmitRepairTicket] checkRepair failed', err);
+      this.hideMyLoading();
+      this.showAutoToast('提示', '校验失败，请稍后重试');
+    });
+  },
+
+  _continueSubmitRepairTicket() {
+    const { 
+      currentModelName,
+      repairDescription,
+      videoFileName,
+      tempVideoPath,
+      tempImagePath,
+      orderInfo,
+      myDevices,
+      selectedDeviceIndex
+    } = this.data;
     
     // 组装完整地址
+    const { selectedProvince, selectedCity, selectedDistrict, detailAddress } = this.data;
     const addressParts = [];
     if (selectedProvince) addressParts.push(selectedProvince);
     if (selectedCity) addressParts.push(selectedCity);
@@ -7677,12 +8186,12 @@ Page({
     const address = addressParts.join(' ').trim();
 
     console.log('[doSubmitRepairTicket] 所有校验通过，开始上传流程');
-    // 显示自定义加载动画（立即显示，确保在系统提示之前）
-    this.setData({ showLoadingAnimation: true });
+    this.showMyLoading('提交中...');
     
     // 使用很短的延迟确保动画已经渲染，然后再开始上传（避免微信原生提示覆盖）
     // 注意：如果微信系统提示仍然出现，可能需要使用其他上传方式
     setTimeout(() => {
+      this.setData({ loadingText: '上传素材中...' });
       const isVideo = !!tempVideoPath;
       const mediaPath = isVideo ? tempVideoPath : tempImagePath;
       const uploadTask = isVideo
@@ -7698,6 +8207,7 @@ Page({
           ? { videoFileID: fileID, imageFileID: '', mediaType: 'video' }
           : { videoFileID: '', imageFileID: fileID, mediaType: 'image' };
         console.log('[submitRepairTicket] 故障素材上传成功，URL:', fileID);
+        this.setData({ loadingText: '提交工单中...' });
         
         // 3. 写入数据库
         const db = wx.cloud.database();
@@ -7713,7 +8223,8 @@ Page({
         const finalContact = {
           ...orderInfo,
           address: finalAddress,
-          shippingMethod: this.data.shippingMethod || 'zto' // 让维修工单也记录快递方式
+          shippingMethod: this.data.shippingMethod || 'zto',
+          shippingFee: Number(this.data.shippingFee) || 0
         };
 
         // 选中的故障设备信息（如果有的话）
@@ -7774,7 +8285,8 @@ Page({
             },
             success: (addRes) => {
               console.log('[submitRepairTicket] 数据库写入成功（超时分支），_id:', addRes._id);
-              this.setData({ showLoadingAnimation: false });
+              notifyAdminTodo('repair_pending', repairModelName || '');
+              this.hideMyLoading();
               this.setData({ showOrderModal: false });
               setTimeout(() => {
                 this.showAutoToast('提交成功', '售后工程师将在后台查看您的视频并进行评估。');
@@ -7801,7 +8313,7 @@ Page({
               }, 300);
             },
             fail: addErr => {
-              this.setData({ showLoadingAnimation: false });
+              this.hideMyLoading();
               console.error('[submitRepairTicket] 数据库写入失败（超时分支）:', addErr);
               if (addErr.errCode === -502005 || addErr.errMsg.includes('collection not exists')) {
                 this.showAutoToast('提示', '数据库集合不存在，请联系管理员创建 shouhou_repair 集合');
@@ -7816,7 +8328,7 @@ Page({
         const doAddWithWarranty = (warrantyInfo) => {
           clearTimeout(deviceQueryTimeout);
           const writeTimeout = setTimeout(() => {
-            this.setData({ showLoadingAnimation: false });
+            this.hideMyLoading();
             this.showAutoToast('提交失败', '数据库操作超时，请检查网络后重试');
           }, 15000);
           db.collection('shouhou_repair').add({
@@ -7835,7 +8347,9 @@ Page({
             },
             success: (addRes) => {
               clearTimeout(writeTimeout);
-              this.setData({ showLoadingAnimation: false, showOrderModal: false });
+              notifyAdminTodo('repair_pending', repairModelName || '');
+              this.hideMyLoading();
+              this.setData({ showOrderModal: false });
               setTimeout(() => {
                 this.showAutoToast('提交成功', '售后工程师将在后台查看您的视频并进行评估。');
                 setTimeout(() => {
@@ -7850,7 +8364,7 @@ Page({
             },
             fail: (err) => {
               clearTimeout(writeTimeout);
-              this.setData({ showLoadingAnimation: false });
+              this.hideMyLoading();
               if (err.errCode === -502005 || err.errMsg?.includes('collection not exists')) {
                 this.showAutoToast('提示', '数据库集合不存在，请联系管理员创建 shouhou_repair 集合');
               } else {
@@ -7897,7 +8411,7 @@ Page({
           // 写入数据库（添加超时处理）
           const writeTimeout = setTimeout(() => {
             console.error('[submitRepairTicket] 数据库写入超时');
-            this.setData({ showLoadingAnimation: false });
+            this.hideMyLoading();
             this.showAutoToast('提交失败', '数据库操作超时，请检查网络后重试');
           }, 15000); // 15秒超时
           
@@ -7922,8 +8436,9 @@ Page({
             clearTimeout(writeTimeout);
             
             console.log('[submitRepairTicket] 数据库写入成功，_id:', addRes._id);
+            notifyAdminTodo('repair_pending', repairModelName || '');
             // 隐藏自定义加载动画
-            this.setData({ showLoadingAnimation: false });
+            this.hideMyLoading();
             
             // 先关闭订单弹窗，避免遮挡成功提示
             this.setData({ showOrderModal: false });
@@ -7965,7 +8480,7 @@ Page({
             clearTimeout(writeTimeout);
             
             // 隐藏自定义加载动画
-            this.setData({ showLoadingAnimation: false });
+            this.hideMyLoading();
             console.error('[submitRepairTicket] 数据库写入失败:', err);
             
             // 如果是集合不存在错误，提示用户（使用自定义弹窗）
@@ -7984,7 +8499,7 @@ Page({
           // 即使查询失败，也继续提交维修单（质保信息为空）
           const writeTimeout = setTimeout(() => {
             console.error('[submitRepairTicket] 数据库写入超时（catch分支）');
-            this.setData({ showLoadingAnimation: false });
+            this.hideMyLoading();
             this.showAutoToast('提交失败', '数据库操作超时，请检查网络后重试');
           }, 15000); // 15秒超时
           
@@ -8005,7 +8520,8 @@ Page({
               // 清除写入超时定时器
               clearTimeout(writeTimeout);
               
-              this.setData({ showLoadingAnimation: false });
+              notifyAdminTodo('repair_pending', repairModelName || '');
+              this.hideMyLoading();
               this.setData({ showOrderModal: false });
               setTimeout(() => {
                 this.showAutoToast('提交成功', '售后工程师将在后台查看您的视频并进行评估。');
@@ -8035,7 +8551,7 @@ Page({
               // 清除写入超时定时器
               clearTimeout(writeTimeout);
               
-              this.setData({ showLoadingAnimation: false });
+              this.hideMyLoading();
               console.error('[submitRepairTicket] 数据库写入失败（catch分支）:', addErr);
               if (addErr.errCode === -502005 || addErr.errMsg.includes('collection not exists')) {
                 this.showAutoToast('提示', '数据库集合不存在，请联系管理员创建 shouhou_repair 集合');
@@ -8047,7 +8563,7 @@ Page({
         });
       })
       .catch(err => {
-        this.setData({ showLoadingAnimation: false });
+        this.hideMyLoading();
         console.error('[submitRepairTicket] 视频上传失败:', err);
         this.showAutoToast('上传失败', (err && err.message) || (err && err.errMsg) || '视频上传失败，请检查网络后重试');
       });
@@ -8296,6 +8812,901 @@ Page({
         console.error('[shouhou] 跳转失败:', err);
         app.globalData._isJumpingToBlocked = false;
         wx.exitMiniProgram();
+      }
+    });
+  },
+
+  _shGuideBlockingModal() {
+    const d = this.data;
+    return !!(d.showModal || d.showVideoPreview || d.showRepairTermsModal || d.showExpiredFeeModal ||
+      d.showAftersaleNoticeModal || d.aftersaleNoticeClosing ||
+      d.showExpiredRoastModal || d.expiredRoastClosing ||
+      d.showAftersaleNoticeDebugStack || d.aftersaleNoticeDebugClosing ||
+      (d.dialog && d.dialog.show) || d.isTutorialVideoFullScreen || d.showLoadingAnimation);
+  },
+
+  /**
+   * 进页 / 报修回流弹卡决策：
+   * - 主页 surface=main：未过保弹 A；已过保只弹 B（不弹 A）
+   * - 报修处 surface=repair：永不弹 A；过保才弹 B
+   * - 主页自动进页时 thenStartGuide=true：先弹 A/B，用户点确认后才进入前 5 次教学引导
+   * - A、B 各最多弹一次（本页实例内）；先弹过 A 仍允许稍后在绑定回流时补弹 B
+   */
+  _maybeShowShouhouUsageGuide() {
+    if (this._shouhouSkipAutoGuideFromQuery) return;
+    // 带 serviceType=repair 直进时，交给报修回流逻辑弹 B，主页不抢弹 A/教学
+    if (this._openRepairTabFromQuery) return;
+    // 先 A/B，确认后再 _startShouhouUsageGuide（前 5 次教学）
+    this._resolveEntryNoticeAndMaybeShow({ thenStartGuide: true, surface: 'main' });
+  },
+
+  _resolveEntryNoticeAndMaybeShow({ thenStartGuide = false, surface = 'main' } = {}) {
+    const showGuideAfter = () => {
+      if (thenStartGuide) this._continueAfterEntryNotices(thenStartGuide);
+    };
+    if (this._entryNoticeResolving) return;
+    if (this.data.showAftersaleNoticeDebugStack) return;
+    if (this._shGuideBlockingModal()) return;
+    if (this.data.showShUsageGuide) return;
+
+    const isRepairSurface = surface === 'repair';
+    // 报修处：若 B 已弹过则结束；主页：A 或 B 任一已处理过保路径则不再弹 A
+    if (isRepairSurface && this._entryNoticeBShown) {
+      showGuideAfter();
+      return;
+    }
+    if (!isRepairSurface && (this._entryNoticeAShown || this._entryNoticeBShown)) {
+      showGuideAfter();
+      return;
+    }
+
+    this._entryNoticeResolving = true;
+    const afterAdmin = () => {
+      this._userHasExpiredBoundDevice()
+        .then((isExpired) => {
+          this._entryNoticeResolving = false;
+          if (this._shGuideBlockingModal() || this.data.showShUsageGuide) return;
+
+          if (isRepairSurface) {
+            // 报修处永不弹 A
+            if (isExpired && !this._entryNoticeBShown) {
+              this._showExpiredRoastModal({ thenStartGuide });
+              return;
+            }
+            showGuideAfter();
+            return;
+          }
+
+          // 主页：过保只弹 B；未过保弹 A
+          if (isExpired) {
+            if (!this._entryNoticeBShown) {
+              this._showExpiredRoastModal({ thenStartGuide });
+              return;
+            }
+            showGuideAfter();
+            return;
+          }
+          if (!this._entryNoticeAShown) {
+            this._showAftersaleNoticeModal({ thenStartGuide });
+            return;
+          }
+          showGuideAfter();
+        })
+        .catch(() => {
+          this._entryNoticeResolving = false;
+          if (isRepairSurface) {
+            showGuideAfter();
+            return;
+          }
+          if (!this._entryNoticeAShown && !this._entryNoticeBShown) {
+            this._showAftersaleNoticeModal({ thenStartGuide });
+            return;
+          }
+          showGuideAfter();
+        });
+    };
+    const p = this._adminPrivilegePromise;
+    if (p && typeof p.then === 'function') {
+      Promise.resolve(p).then(afterAdmin).catch(afterAdmin);
+      return;
+    }
+    afterAdmin();
+  },
+
+  /** 管理员调试：两张卡上下同时展示，方便对比文案 */
+  _showAftersaleNoticeDebugStack() {
+    if (this.data.showAftersaleNoticeDebugStack || this.data.aftersaleNoticeDebugClosing) return;
+    if (this.data.showAftersaleNoticeModal || this.data.showExpiredRoastModal) return;
+    if (this.data.showShUsageGuide) return;
+    this.setData({
+      showAftersaleNoticeDebugStack: true,
+      aftersaleNoticeDebugClosing: false,
+      aftersaleOrderPolicy: SHOUHOU_AFTERSALE_NOTICE,
+      expiredPaidPolicy: SHOUHOU_EXPIRED_ROAST_NOTICE,
+      aftersaleNoticeBtnLocked: true,
+      aftersaleNoticeBtnText: '关闭调试'
+    }, () => {
+      startGuideBtnCountdown(this, {
+        lockedKey: 'aftersaleNoticeBtnLocked',
+        textKey: 'aftersaleNoticeBtnText',
+        readyText: '关闭调试',
+        timerProp: '_aftersaleNoticeBtnTimer'
+      });
+    });
+  },
+
+  onAftersaleNoticeDebugClose() {
+    if (this.data.aftersaleNoticeBtnLocked) return;
+    if (!this.data.showAftersaleNoticeDebugStack || this.data.aftersaleNoticeDebugClosing) return;
+    clearGuideBtnCountdown(this, '_aftersaleNoticeBtnTimer');
+    this.setData({ aftersaleNoticeDebugClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showAftersaleNoticeDebugStack: false,
+        aftersaleNoticeDebugClosing: false
+      });
+    }, 280);
+  },
+
+  _deviceIsWarrantyExpired(device) {
+    if (!device) return false;
+    if (device.warrantyExpired === true) return true;
+    if (!device.expiryDate) return false;
+    const diff = Math.ceil((new Date(device.expiryDate) - new Date()) / 86400000);
+    return diff <= 0;
+  },
+
+  /** 当前账号是否有任意已绑定且过保的设备 */
+  _userHasExpiredBoundDevice() {
+    return this._ensureRepairDevicesLoaded()
+      .then((list) => (list || []).some((d) => this._deviceIsWarrantyExpired(d)))
+      .catch(() => false);
+  },
+
+  _showAftersaleNoticeModal({ thenStartGuide = false } = {}) {
+    if (this.data.showAftersaleNoticeDebugStack) return;
+    if (this.data.showAftersaleNoticeModal || this.data.aftersaleNoticeClosing) return;
+    if (this.data.showExpiredRoastModal || this.data.expiredRoastClosing) return;
+    if (this.data.showShUsageGuide) return;
+    this._entryNoticeAShown = true;
+    this._aftersaleNoticeThenGuide = thenStartGuide;
+    clearGuideBtnCountdown(this, '_aftersaleNoticeBtnTimer');
+    this.setData({
+      showAftersaleNoticeModal: true,
+      aftersaleNoticeClosing: false,
+      aftersaleNoticeBtnLocked: true,
+      aftersaleNoticeBtnText: SHOUHOU_AFTERSALE_NOTICE.btnText,
+      aftersaleOrderPolicy: SHOUHOU_AFTERSALE_NOTICE
+    }, () => {
+      startGuideBtnCountdown(this, {
+        lockedKey: 'aftersaleNoticeBtnLocked',
+        textKey: 'aftersaleNoticeBtnText',
+        readyText: SHOUHOU_AFTERSALE_NOTICE.btnText,
+        lockedText: (n) => `请稍候 (${n}s)`,
+        timerProp: '_aftersaleNoticeBtnTimer'
+      });
+    });
+  },
+
+  onAftersaleNoticeConfirm() {
+    if (this.data.showAftersaleNoticeDebugStack) {
+      this.onAftersaleNoticeDebugClose();
+      return;
+    }
+    if (this.data.aftersaleNoticeBtnLocked) return;
+    if (!this.data.showAftersaleNoticeModal || this.data.aftersaleNoticeClosing) return;
+    clearGuideBtnCountdown(this, '_aftersaleNoticeBtnTimer');
+    const thenGuide = this._aftersaleNoticeThenGuide;
+    this._aftersaleNoticeThenGuide = false;
+    this.setData({ aftersaleNoticeClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showAftersaleNoticeModal: false,
+        aftersaleNoticeClosing: false
+      }, () => {
+        // A 确认后：前 5 次教学引导在此刻才启动（不与 A 叠弹）
+        this._continueAfterEntryNotices(thenGuide);
+      });
+    }, 280);
+  },
+
+  _showExpiredRoastModal({ thenStartGuide = false } = {}) {
+    if (this.data.showExpiredRoastModal || this.data.expiredRoastClosing) return;
+    if (this.data.showShUsageGuide) return;
+    // 第一张若仍在关闭动画中，延后重试一次
+    if (this.data.showAftersaleNoticeModal || this.data.aftersaleNoticeClosing) {
+      setTimeout(() => this._showExpiredRoastModal({ thenStartGuide }), 160);
+      return;
+    }
+    this._entryNoticeBShown = true;
+    this._expiredRoastThenGuide = thenStartGuide;
+    clearGuideBtnCountdown(this, '_expiredRoastBtnTimer');
+    this.setData({
+      showExpiredRoastModal: true,
+      expiredRoastClosing: false,
+      expiredRoastBtnLocked: false,
+      expiredRoastBtnText: SHOUHOU_EXPIRED_ROAST_NOTICE.btnText,
+      expiredPaidPolicy: SHOUHOU_EXPIRED_ROAST_NOTICE
+    });
+  },
+
+  onExpiredRoastConfirm() {
+    if (this.data.expiredRoastBtnLocked) return;
+    if (!this.data.showExpiredRoastModal || this.data.expiredRoastClosing) return;
+    clearGuideBtnCountdown(this, '_expiredRoastBtnTimer');
+    const thenGuide = this._expiredRoastThenGuide;
+    this._expiredRoastThenGuide = false;
+    this.setData({ expiredRoastClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showExpiredRoastModal: false,
+        expiredRoastClosing: false
+      }, () => {
+        // B 确认后：同样再进教学引导（前 5 次）
+        this._continueAfterEntryNotices(thenGuide);
+      });
+    }, 280);
+  },
+
+  _continueAfterEntryNotices(thenGuide) {
+    if (!thenGuide) return;
+    const forceReplay = thenGuide === 'manual';
+    // 等 A/B 遮罩卸干净后再开教学，避免被 _shGuideBlockingModal 拦住后彻底不弹
+    const tryStart = (left) => {
+      if (this.data.showShUsageGuide) return;
+      if (this._shGuideBlockingModal()) {
+        if (left <= 0) return;
+        setTimeout(() => tryStart(left - 1), 120);
+        return;
+      }
+      this._startShouhouUsageGuide(forceReplay);
+    };
+    setTimeout(() => tryStart(8), 80);
+  },
+
+  _getShouhouGuideShowCount() {
+    try {
+      const n = parseInt(wx.getStorageSync(SHOUHOU_GUIDE_SHOW_COUNT_KEY), 10);
+      return Number.isFinite(n) && n > 0 ? n : 0;
+    } catch (e) {
+      return 0;
+    }
+  },
+
+  _bumpShouhouGuideShowCount() {
+    const next = this._getShouhouGuideShowCount() + 1;
+    try {
+      wx.setStorageSync(SHOUHOU_GUIDE_SHOW_COUNT_KEY, next);
+    } catch (e) { /* ignore */ }
+    return next;
+  },
+
+  /** 当前用户是否提交过任意维修/申报单（保留备用） */
+  _userHasAnyRepairRecord() {
+    return Promise.resolve()
+      .then(() => {
+        const cached = this.data.myOpenid || '';
+        if (cached) return cached;
+        return wx.cloud.callFunction({ name: 'login' }).then((res) => {
+          const openid = (res && res.result && res.result.openid) || '';
+          if (openid) this.setData({ myOpenid: openid });
+          return openid;
+        });
+      })
+      .then((openid) => {
+        if (!openid) return false;
+        const db = wx.cloud.database();
+        return db.collection('shouhou_repair')
+          .where({ _openid: openid })
+          .limit(1)
+          .get()
+          .then((res) => !!(res && res.data && res.data.length));
+      })
+      .catch(() => false);
+  },
+
+  openShouhouUsageTutorial() {
+    this._showAftersaleNoticeModal({ thenStartGuide: 'manual' });
+  },
+
+  _startShouhouUsageGuide(forceReplay) {
+    // 白名单管理员：不自动弹引导（手动入口本身也不对管理员展示）
+    if (!forceReplay && this.data.isAuthorized && !debugUserFlow.shouldForceUserGuides()) return;
+    if (this._shGuideBlockingModal()) return;
+    if (this.data.showShUsageGuide) return;
+    if (this._shUsageGuideStartTimer) {
+      clearTimeout(this._shUsageGuideStartTimer);
+      this._shUsageGuideStartTimer = null;
+    }
+    if (this._shGuideResumeTimer) {
+      clearTimeout(this._shGuideResumeTimer);
+      this._shGuideResumeTimer = null;
+    }
+    this._shGuideWaitingModelPick = false;
+    this._clearShGuideSeriesTourTimer();
+    this.setData({ shHomeScrollTop: 0 });
+    this._shUsageGuideForceReplay = !!forceReplay;
+
+    // 自动弹出：累计次数，前 5 次隐藏「跳过」；手动点「使用教程」始终可跳过
+    let showSkip = !!forceReplay;
+    if (!forceReplay) {
+      const next = this._bumpShouhouGuideShowCount();
+      showSkip = next > SHOUHOU_GUIDE_NO_SKIP_TIMES;
+    }
+    this.setData({ shGuideShowSkip: showSkip });
+    this._shGuideSteps = buildShouhouGuideSteps();
+    this._shUsageGuideStartTimer = setTimeout(() => {
+      this._shUsageGuideStartTimer = null;
+      if (this._shGuideBlockingModal()) return;
+      this._showShGuideStep(1);
+    }, forceReplay ? 320 : 720);
+  },
+
+  _prepareShGuideStep(step) {
+    return new Promise((resolve) => {
+      if (step.requiresDetail === false && this.data.inDetail) {
+        this.exitModel();
+        setTimeout(resolve, 420);
+        return;
+      }
+      if (step.requiresDetail && !this.data.inDetail) {
+        resolve();
+        return;
+      }
+      if (step.requiresDetail) {
+        this._applyShGuideDetailState(step, resolve);
+        return;
+      }
+      resolve();
+    });
+  },
+
+  _applyShGuideDetailState(step, resolve) {
+    const patch = { activeTab: 'order', partsTableMode: false };
+    const prevType = this.data.serviceType;
+    if (step.serviceType) patch.serviceType = step.serviceType;
+    this.setData(patch, () => {
+      const switchingToRepair = step.serviceType === 'repair' && prevType !== 'repair';
+      const switchingToParts = step.serviceType === 'parts' && prevType !== 'parts';
+      let delay = 200;
+      if (switchingToRepair) delay = 520;
+      else if (switchingToParts) delay = 420;
+      else if (step.serviceType === 'repair') delay = 300;
+      setTimeout(resolve, delay);
+    });
+  },
+
+  _showShGuideStep(stepIndex) {
+    const steps = this._shGuideSteps || [];
+    const step = steps[stepIndex - 1];
+    if (!step) return;
+    const isFirstShow = !this.data.showShUsageGuide;
+    const reveal = () => {
+      if (step.seriesTour) {
+        this._startShGuideSeriesTour(stepIndex, step);
+        return;
+      }
+      this._renderShGuideBubble(stepIndex, step, 0);
+    };
+    this._prepareShGuideStep(step).then(() => {
+      const prevStep = steps[stepIndex - 2];
+      const typeChanged = !!(prevStep && step.serviceType && prevStep.serviceType &&
+        prevStep.serviceType !== step.serviceType);
+      if (isFirstShow) {
+        reveal();
+        return;
+      }
+      this.setData({ showShUsageGuide: false, shGuideShowBubble: true }, () => {
+        setTimeout(reveal, typeChanged ? 160 : 80);
+      });
+    });
+  },
+
+  _clearShGuideSeriesTourTimer() {
+    if (this._shGuideSeriesTourTimer) {
+      clearTimeout(this._shGuideSeriesTourTimer);
+      this._shGuideSeriesTourTimer = null;
+    }
+  },
+
+  _setShHomeScrollTop(nextTop, done) {
+    const prev = Number(this.data.shHomeScrollTop) || 0;
+    const target = Math.max(0, Math.round(Number(nextTop) || 0));
+    const finish = () => {
+      if (typeof done === 'function') {
+        setTimeout(done, 520);
+      }
+    };
+    if (Math.abs(prev - target) < 1) {
+      this.setData({ shHomeScrollAnim: true, shHomeScrollTop: target }, finish);
+      return;
+    }
+    this.setData({ shHomeScrollAnim: true, shHomeScrollTop: prev + 0.01 }, () => {
+      wx.nextTick(() => {
+        this.setData({ shHomeScrollTop: target }, finish);
+      });
+    });
+  },
+
+  _shGuideNavBottomPx() {
+    const sb = Number(this.data.statusBarHeight) || 44;
+    const nb = Number(this.data.navBarHeight) || 44;
+    const adminExtra = this.data.isAuthorized ? 24 : 0;
+    return sb + 12 + nb + adminExtra + 10;
+  },
+
+  _scrollShHomeToAnchor(anchorSel, done) {
+    const viewId = String(anchorSel || '').replace(/^#/, '');
+    const query = wx.createSelectorQuery().in(this);
+    query.select('.sh-home-scroll').scrollOffset();
+    query.select('.sh-home-scroll').boundingClientRect();
+    query.select(anchorSel).boundingClientRect();
+    query.exec((res) => {
+      const scrollOff = res && res[0];
+      const svRect = res && res[1];
+      const anchorRect = res && res[2];
+      if (!anchorRect || !svRect || !svRect.height) {
+        if (viewId) {
+          this.setData({ shGuideScrollIntoView: viewId, shHomeScrollAnim: true }, () => {
+            setTimeout(() => {
+              this.setData({ shGuideScrollIntoView: '' });
+              if (typeof done === 'function') done();
+            }, 680);
+          });
+        } else if (typeof done === 'function') {
+          done();
+        }
+        return;
+      }
+      const currentTop = (scrollOff && scrollOff.scrollTop) || 0;
+      const gapPx = 8;
+      const targetTopY = svRect.top + gapPx;
+      let nextTop = currentTop + (anchorRect.top - targetTopY);
+      if (nextTop < 0) nextTop = 0;
+      this._setShHomeScrollTop(nextTop, done);
+    });
+  },
+
+  _measureShGuideBlockRect(anchorSel, done) {
+    const query = wx.createSelectorQuery().in(this);
+    query.select(anchorSel).boundingClientRect();
+    query.selectAll(`${anchorSel} .section-title, ${anchorSel} .card-grid, ${anchorSel} .card-grid-f2long, ${anchorSel} .f2-long-bar`).boundingClientRect();
+    query.exec((res) => {
+      const block = res && res[0];
+      const parts = (res && res[1]) || [];
+      const rects = [block, ...parts].filter((r) => r && r.width > 0 && r.height > 0);
+      if (!rects.length) {
+        if (typeof done === 'function') done(null);
+        return;
+      }
+      let left = Math.min(...rects.map((r) => r.left));
+      let top = Math.min(...rects.map((r) => r.top));
+      let right = Math.max(...rects.map((r) => r.left + r.width));
+      let bottom = Math.max(...rects.map((r) => r.top + r.height));
+      if (typeof done === 'function') {
+        done({
+          left,
+          top,
+          width: right - left,
+          height: bottom - top
+        });
+      }
+    });
+  },
+
+  _paintShGuideSpotByAnchor(anchorSel, pulse, done, clampStep) {
+    const applyRect = (rect) => {
+      if (!rect || !rect.width || !rect.height) {
+        if (typeof done === 'function') done(false);
+        return;
+      }
+      let win = null;
+      try {
+        win = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      } catch (e) {
+        win = wx.getSystemInfoSync();
+      }
+      const winW = (win && win.windowWidth) || 375;
+      const winH = (win && win.windowHeight) || 667;
+      const pxToRpx = 750 / winW;
+      const box = clampStep
+        ? this._clampShGuideSpotRect(rect, winW, winH, clampStep)
+        : rect;
+      const spotRect = box.width && box.height ? box : rect;
+      const spotPadPx = 8;
+      const spotLeft = (spotRect.left - spotPadPx) * pxToRpx;
+      const spotTop = (spotRect.top - spotPadPx) * pxToRpx;
+      const spotW = (spotRect.width + spotPadPx * 2) * pxToRpx;
+      const spotH = (spotRect.height + spotPadPx * 2) * pxToRpx;
+      this.setData({
+        showShUsageGuide: true,
+        shGuideShowSpot: true,
+        shGuideSpotPulse: !!pulse,
+        shGuideShowBubble: false,
+        shGuideMaskDim: false,
+        shGuideSpotStyle: `left:${spotLeft}rpx; top:${spotTop}rpx; width:${spotW}rpx; height:${spotH}rpx;`
+      }, () => {
+        if (typeof done === 'function') done(true);
+      });
+    };
+
+    if (clampStep && clampStep.key === 'series') {
+      this._measureShGuideBlockRect(anchorSel, applyRect);
+      return;
+    }
+
+    const query = wx.createSelectorQuery().in(this);
+    query.select(anchorSel).boundingClientRect();
+    query.exec((res) => {
+      applyRect(res && res[0]);
+    });
+  },
+
+  _startShGuideSeriesTour(stepIndex, step) {
+    this._clearShGuideSeriesTourTimer();
+    this.setData({
+      showShUsageGuide: true,
+      shUsageGuideStep: stepIndex,
+      shGuideStepTag: step.tag,
+      shGuideTitle: step.title,
+      shGuideDesc: step.desc,
+      shGuideShowBubble: false,
+      shGuideShowSpot: false,
+      shGuideSpotPulse: false,
+      shGuideBubbleFixed: false,
+      shGuideMaskDim: false,
+      shGuideSpotStyle: 'display:none;'
+    });
+
+    let tourIndex = 0;
+    const runNext = () => {
+      if (tourIndex >= SH_GUIDE_SERIES_TOUR.length) {
+        this._finishShGuideSeriesTour(stepIndex, step);
+        return;
+      }
+      const item = SH_GUIDE_SERIES_TOUR[tourIndex];
+      tourIndex += 1;
+      const paint = () => {
+        wx.nextTick(() => {
+          const clampStep = { key: 'series', seriesKey: item.seriesKey || '' };
+          this._paintShGuideSpotByAnchor(item.anchor, true, (ok) => {
+            if (!ok) {
+              runNext();
+              return;
+            }
+            this._shGuideSeriesTourTimer = setTimeout(runNext, item.dwellMs || 1000);
+          }, clampStep);
+        });
+      };
+      const hideSpotThen = (nextFn) => {
+        this.setData({
+          shGuideShowSpot: false,
+          shGuideSpotStyle: 'display:none;',
+          shGuideSpotPulse: false
+        }, () => {
+          if (typeof nextFn === 'function') nextFn();
+        });
+      };
+      const afterHidden = () => {
+        if (item.scrollToAnchor) {
+          this._scrollShHomeToAnchor(item.anchor, () => {
+            setTimeout(paint, item.scrollSettleMs || 780);
+          });
+          return;
+        }
+        if (item.scrollTop != null) {
+          this._setShHomeScrollTop(item.scrollTop, () => {
+            setTimeout(paint, item.scrollSettleMs || 520);
+          });
+          return;
+        }
+        setTimeout(paint, 120);
+      };
+      hideSpotThen(afterHidden);
+    };
+    runNext();
+  },
+
+  _finishShGuideSeriesTour(stepIndex, step) {
+    this._clearShGuideSeriesTourTimer();
+    const readyText = step.btnText || '知道了';
+    this.setData({
+      showShUsageGuide: true,
+      shUsageGuideStep: stepIndex,
+      shGuideStepTag: step.tag,
+      shGuideTitle: step.title,
+      shGuideDesc: step.desc,
+      shGuideBtnText: readyText,
+      shGuideBtnLocked: true,
+      shGuideShowSpot: false,
+      shGuideSpotPulse: false,
+      shGuideSpotStyle: 'display:none;',
+      shGuideShowBubble: true,
+      shGuideMaskDim: true,
+      shGuideBubbleFixed: false,
+      shGuideArrowDir: 'none',
+      shGuideBubbleStyle: 'left:50%; top:50%; transform:translate(-50%,-50%); width:520rpx;',
+      shGuideArrowStyle: 'display:none;'
+    }, () => this._armShGuideBtnLock(readyText));
+  },
+
+  _clampShGuideSpotRect(rect, winW, winH, step) {
+    let left = rect.left;
+    let top = rect.top;
+    let right = rect.left + rect.width;
+    let bottom = rect.top + rect.height;
+    if (step && step.key === 'card') {
+      const topInset = this._shGuideNavBottomPx();
+      const bubbleReserve = step.bubbleFixedBottom ? 300 : 48;
+      top = Math.max(top, topInset + 6);
+      bottom = Math.min(rect.top + rect.height, winH - bubbleReserve);
+    }
+    if (step && step.key === 'series') {
+      const left = Math.max(0, rect.left);
+      const top = rect.top;
+      const right = Math.min(winW, rect.left + rect.width);
+      const bottom = rect.top + rect.height;
+      return {
+        left,
+        top,
+        width: Math.max(0, right - left),
+        height: Math.max(0, bottom - top)
+      };
+    }
+    if (step && step.key === 'parts') {
+      const bubbleReservePx = 250;
+      const footerPx = 88;
+      const maxBottom = winH - bubbleReservePx - footerPx;
+      if (bottom > maxBottom) bottom = maxBottom;
+      const minH = Math.min(winH * 0.28, 220);
+      if (bottom - top < minH && maxBottom - top >= minH) {
+        bottom = top + minH;
+      }
+    }
+    left = Math.max(0, left);
+    top = Math.max(0, top);
+    right = Math.min(winW, right);
+    bottom = Math.min(winH, bottom);
+    return {
+      left,
+      top,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top)
+    };
+  },
+
+  _renderShGuideBubble(stepIndex, step, retryCount) {
+    const steps = this._shGuideSteps || [];
+    const retry = Number(retryCount) || 0;
+    const isLast = stepIndex >= steps.length;
+    const readyText = step.btnText || (isLast ? '知道了' : '下一步');
+    const contentPatch = {
+      showShUsageGuide: true,
+      shUsageGuideStep: stepIndex,
+      shGuideStepTag: step.tag,
+      shGuideTitle: step.title,
+      shGuideDesc: step.desc,
+      shGuideBtnText: readyText,
+      shGuideBtnLocked: true
+    };
+
+    if (step.centerOnly) {
+      const widthRpx = Number(step.bubbleWidthRpx) || 520;
+      this.setData({
+        ...contentPatch,
+        shGuideShowSpot: false,
+        shGuideSpotPulse: false,
+        shGuideBubbleFixed: false,
+        shGuideMaskDim: true,
+        shGuideArrowDir: 'none',
+        shGuideBubbleStyle: `left:50%; top:50%; transform:translate(-50%,-50%); width:${widthRpx}rpx;`,
+        shGuideArrowStyle: 'display:none;',
+        shGuideSpotStyle: 'display:none;'
+      }, () => this._armShGuideBtnLock(readyText));
+      return;
+    }
+
+    const targetSel = step.anchor;
+    const query = wx.createSelectorQuery().in(this);
+    query.select(targetSel).boundingClientRect();
+    if (step.bubbleFixedBottom) {
+      query.select('#shGuideFooterDock').boundingClientRect();
+    }
+    query.exec((res) => {
+      const rect = res && res[0];
+      const footerRect = step.bubbleFixedBottom ? (res && res[1]) : null;
+      if (!rect || !rect.width) {
+        if (retry < 4) {
+          setTimeout(() => {
+            this._renderShGuideBubble(stepIndex, step, retry + 1);
+          }, 200);
+          return;
+        }
+        this.setData({
+          ...contentPatch,
+          shGuideSpotPulse: false,
+          shGuideBubbleFixed: false,
+          shGuideMaskDim: true,
+          shGuideArrowDir: 'none',
+          shGuideBubbleStyle: 'left:50%; top:50%; transform:translate(-50%,-50%); width:520rpx;',
+          shGuideArrowStyle: 'display:none;',
+          shGuideSpotStyle: 'display:none;'
+        }, () => this._armShGuideBtnLock(readyText));
+        return;
+      }
+
+      let win = null;
+      try {
+        win = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      } catch (e) {
+        win = wx.getSystemInfoSync();
+      }
+      const winW = (win && win.windowWidth) || 375;
+      const winH = (win && win.windowHeight) || 667;
+      const pxToRpx = 750 / winW;
+
+      const spotRect = this._clampShGuideSpotRect(rect, winW, winH, step);
+      if (!spotRect.width || !spotRect.height) {
+        if (retry < 4) {
+          setTimeout(() => {
+            this._renderShGuideBubble(stepIndex, step, retry + 1);
+          }, 200);
+          return;
+        }
+      }
+      const box = spotRect.width && spotRect.height ? spotRect : rect;
+
+      const spotPadPx = 6;
+      const spotLeft = (box.left - spotPadPx) * pxToRpx;
+      const spotTop = (box.top - spotPadPx) * pxToRpx;
+      const spotW = (box.width + spotPadPx * 2) * pxToRpx;
+      const spotH = (box.height + spotPadPx * 2) * pxToRpx;
+      const shGuideSpotStyle = `left:${spotLeft}rpx; top:${spotTop}rpx; width:${spotW}rpx; height:${spotH}rpx;`;
+
+      const bubbleWidthRpx = 480;
+      const marginRpx = 24;
+      const centerXrpx = (box.left + box.width / 2) * pxToRpx;
+      let bubbleLeftRpx = centerXrpx - bubbleWidthRpx / 2;
+      if (bubbleLeftRpx < marginRpx) bubbleLeftRpx = marginRpx;
+      if (bubbleLeftRpx + bubbleWidthRpx > 750 - marginRpx) {
+        bubbleLeftRpx = 750 - marginRpx - bubbleWidthRpx;
+      }
+      const arrowLeftRpx = centerXrpx - bubbleLeftRpx;
+      const gapRpx = 22;
+
+      let bubbleStyle = '';
+      let arrowDir = 'none';
+      let bubbleFixed = false;
+      if (step.bubbleFixedBottom) {
+        bubbleFixed = true;
+        let bottomPx = 48;
+        if (footerRect && footerRect.top > 0) {
+          bottomPx = Math.max(16, winH - footerRect.top + 14);
+        }
+        bubbleStyle = `left:${marginRpx}rpx; right:${marginRpx}rpx; bottom:${bottomPx * pxToRpx}rpx; width:auto;`;
+        arrowDir = 'none';
+      } else {
+        const placeAbove = box.top > winH * 0.42;
+        arrowDir = 'down';
+        if (placeAbove) {
+          const bottomRpx = (winH - box.top) * pxToRpx + gapRpx;
+          bubbleStyle = `left:${bubbleLeftRpx}rpx; bottom:${bottomRpx}rpx; width:${bubbleWidthRpx}rpx;`;
+          arrowDir = 'down';
+        } else {
+          const topRpx = (box.top + box.height) * pxToRpx + gapRpx;
+          const maxTopRpx = (winH - 280) * pxToRpx;
+          const safeTopRpx = Math.min(topRpx, maxTopRpx);
+          bubbleStyle = `left:${bubbleLeftRpx}rpx; top:${safeTopRpx}rpx; width:${bubbleWidthRpx}rpx;`;
+          arrowDir = 'up';
+        }
+      }
+
+      this.setData({
+        ...contentPatch,
+        shGuideShowSpot: !step.centerOnly,
+        shGuideSpotPulse: !!step.spotPulse,
+        shGuideBubbleFixed: bubbleFixed,
+        shGuideShowBubble: true,
+        shGuideMaskDim: true,
+        shGuideArrowDir: arrowDir,
+        shGuideBubbleStyle: bubbleStyle,
+        shGuideArrowStyle: bubbleFixed ? 'display:none;' : `left:${arrowLeftRpx}rpx;`,
+        shGuideSpotStyle
+      }, () => this._armShGuideBtnLock(readyText));
+    });
+  },
+
+  _armShGuideBtnLock(readyText) {
+    startGuideBtnCountdown(this, {
+      lockedKey: 'shGuideBtnLocked',
+      textKey: 'shGuideBtnText',
+      readyText: readyText || '下一步',
+      timerProp: '_shGuideBtnTimer'
+    });
+  },
+
+  shUsageGuideNext() {
+    if (this.data.shGuideBtnLocked) return;
+    const steps = this._shGuideSteps || [];
+    const cur = this.data.shUsageGuideStep;
+    const step = steps[cur - 1];
+    if (step && step.dismissOnly) {
+      this.setData({ showShUsageGuide: false });
+      this._shGuideWaitingModelPick = true;
+      return;
+    }
+    if (cur < steps.length) {
+      this._showShGuideStep(cur + 1);
+      return;
+    }
+    this._finishShUsageGuideAndRestore();
+  },
+
+  _finishShUsageGuideAndRestore() {
+    const finish = () => this.closeShUsageGuide();
+    if (this.data.inDetail && this.data.serviceType === 'repair') {
+      this.setData({ serviceType: 'parts' }, () => {
+        if (typeof this.reCalcFinalPrice === 'function') this.reCalcFinalPrice();
+        finish();
+      });
+      return;
+    }
+    finish();
+  },
+
+  shUsageGuideSkip() {
+    if (!this.data.shGuideShowSkip) return;
+    this.closeShUsageGuide(true);
+  },
+
+  _resumeShGuideAfterModelPick() {
+    if (!this._shGuideWaitingModelPick || !this._shGuideSteps) return;
+    this._shGuideWaitingModelPick = false;
+    if (this._shGuideResumeTimer) {
+      clearTimeout(this._shGuideResumeTimer);
+    }
+    this._shGuideResumeTimer = setTimeout(() => {
+      this._shGuideResumeTimer = null;
+      if (this._shGuideBlockingModal() || !this.data.inDetail) return;
+      const steps = this._shGuideSteps || [];
+      const partsIdx = steps.findIndex((s) => s && s.key === 'parts');
+      // 选完型号后从「配件清单」继续（步骤序号为 1-based）
+      this._showShGuideStep(partsIdx >= 0 ? partsIdx + 1 : 3);
+    }, 480);
+  },
+
+  closeShUsageGuide(markDone = true) {
+    // 不再永久标记「已看完」；每次进售后中心仍会自动弹出
+    this._shUsageGuideForceReplay = false;
+    if (this._shUsageGuideStartTimer) {
+      clearTimeout(this._shUsageGuideStartTimer);
+      this._shUsageGuideStartTimer = null;
+    }
+    this._shGuideSteps = null;
+    this._shGuideWaitingModelPick = false;
+    if (this._shGuideResumeTimer) {
+      clearTimeout(this._shGuideResumeTimer);
+      this._shGuideResumeTimer = null;
+    }
+    this._clearShGuideSeriesTourTimer();
+    clearGuideBtnCountdown(this, '_shGuideBtnTimer');
+    const patch = {
+      showShUsageGuide: false,
+      shGuideSpotPulse: false,
+      shGuideBubbleFixed: false,
+      shGuideShowBubble: true,
+      shGuideShowSpot: false,
+      shGuideShowSkip: false,
+      shGuideMaskDim: true,
+      shHomeScrollTop: 0,
+      shGuideScrollIntoView: ''
+    };
+    if (this.data.inDetail && this.data.serviceType === 'repair') {
+      patch.serviceType = 'parts';
+    }
+    this.setData(patch, () => {
+      if (patch.serviceType === 'parts' && typeof this.reCalcFinalPrice === 'function') {
+        this.reCalcFinalPrice();
       }
     });
   },

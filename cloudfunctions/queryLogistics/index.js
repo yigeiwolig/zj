@@ -42,7 +42,7 @@ async function assertLogisticsAccess(trackingId, callerOpenid) {
     .limit(100)
     .get()
   for (const r of repairs.data || []) {
-    const ids = [r.returnTrackingId, r.trackingId].filter(Boolean)
+    const ids = [r.returnTrackingId, r.trackingId, r.spareTrackingId, r.expressNo, r.logisticsNo, r.shipSn, r.outboundTrackingId].filter(Boolean)
     if (ids.some((id) => String(id).trim().toUpperCase() === tn)) return
   }
 

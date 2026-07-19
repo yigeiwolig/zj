@@ -5,55 +5,74 @@
 <view class="home-view {{inDetail ? 'shrink' : ''}}">
   <!-- 自定义导航栏（进二级详情时隐藏，避免 z-index 压在侧滑层上挡标题） -->
   <view wx:if="{{!inDetail}}" class="header" style="padding-top: {{statusBarHeight}}px;">
-    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
+    <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 4}}px;">
         <text class="back-arrow">‹</text>
       </view>
     </view>
-  <view wx:if="{{!inDetail}}" class="nav-header" style="padding-top: {{statusBarHeight}}px; height: {{statusBarHeight + navBarHeight + 20}}px;">
-    <view class="brand-title" style="top: {{statusBarHeight + navBarHeight / 2}}px;">
-      <text>MT 维修中心</text>
-        <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
+  <view wx:if="{{!inDetail}}" class="nav-header" style="padding-top: {{statusBarHeight + 22}}px;">
+    <view class="sh-title-row sh-title-row--bar" style="min-height: {{navBarHeight + 28}}px;">
+      <view class="sh-title-side sh-title-side--left"></view>
+      <view class="sh-title-center">
+        <text class="sh-title-text">MT 维修中心</text>
+        <view wx:if="{{isAuthorized}}" class="admin-toggle-btn sh-admin-below-title {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
           {{isAdmin ? 'EXIT' : 'EDIT'}}
         </view>
+        <view wx:else class="sh-usage-guide-btn sh-usage-guide-btn--below-title" catchtap="openShouhouUsageTutorial">使用教程</view>
       </view>
+      <view class="sh-title-side sh-title-side--right"></view>
+    </view>
   </view>
-  
+
+  <scroll-view
+    class="sh-home-scroll"
+    scroll-y="{{true}}"
+    enhanced="{{true}}"
+    show-scrollbar="{{false}}"
+    scroll-top="{{shHomeScrollTop}}"
+    scroll-with-animation="{{shHomeScrollAnim}}"
+    scroll-into-view="{{shGuideScrollIntoView}}"
+  >
+  <view id="shGuideModelPicker" class="sh-guide-model-picker">
+  <view id="shGuideMainSeries" class="sh-guide-main-series">
   <!-- F1 系列 -->
+  <view id="shGuideSeriesF1" class="sh-guide-series-block">
   <view class="section-title">F1 系列</view>
   <view class="card-grid card-grid-triple">
     <view class="i-card i-card--compact style-white" bindtap="enterModel" data-name="F1 PRO" data-series="F1">
       <view class="card-top"><text class="badge">标准版</text></view>
-      <view class="card-btm"><view class="p-name">F1 PRO</view><view class="p-desc">日常优选</view></view>
+      <view class="card-btm"><view class="p-name">F1 PRO</view><view class="p-desc">日常优选</view><view class="p-price">¥288</view></view>
       <view class="circle-decor"></view>
     </view>
     <view class="i-card i-card--compact style-black" bindtap="enterModel" data-name="F1 MAX" data-series="F1">
       <view class="card-top"><text class="badge">高级版</text></view>
-      <view class="card-btm"><view class="p-name">F1 MAX</view><view class="p-desc">性能进阶</view></view>
+      <view class="card-btm"><view class="p-name">F1 MAX</view><view class="p-desc">性能进阶</view><view class="p-price">¥388</view></view>
       <view class="circle-decor"></view>
     </view>
     <view class="i-card i-card--compact style-ultra" bindtap="enterModel" data-name="F1 ULTRA" data-series="F1">
       <view class="card-top"><text class="badge badge--gold">旗舰款</text></view>
-      <view class="card-btm"><view class="p-name">F1 ULTRA</view><view class="p-desc">巅峰配置</view></view>
+      <view class="card-btm"><view class="p-name">F1 ULTRA</view><view class="p-desc">巅峰配置</view><view class="p-price">¥588</view></view>
       <view class="circle-decor"></view>
     </view>
   </view>
+  </view>
 
   <!-- F2 家族系列 -->
+  <view id="shGuideSeriesF2" class="sh-guide-series-block">
   <view class="section-title">F2 家族系列</view>
   <view class="card-grid card-grid-triple card-grid-triple--with-long">
     <view class="i-card i-card--compact style-white" bindtap="enterModel" data-name="F2 PRO" data-series="F2">
       <view class="card-top"><text class="badge">普通版</text></view>
-      <view class="card-btm"><view class="p-name">F2 PRO</view><view class="p-desc">日常优选</view></view>
+      <view class="card-btm"><view class="p-name">F2 PRO</view><view class="p-desc">日常优选</view><view class="p-price">¥488</view></view>
       <view class="circle-decor"></view>
     </view>
     <view class="i-card i-card--compact style-black" bindtap="enterModel" data-name="F2 MAX" data-series="F2">
       <view class="card-top"><text class="badge">高级版</text></view>
-      <view class="card-btm"><view class="p-name">F2 MAX</view><view class="p-desc">性能进阶</view></view>
+      <view class="card-btm"><view class="p-name">F2 MAX</view><view class="p-desc">性能进阶</view><view class="p-price">¥588</view></view>
       <view class="circle-decor"></view>
     </view>
     <view class="i-card i-card--compact style-ultra" bindtap="enterModel" data-name="F2 ULTRA" data-series="F2">
       <view class="card-top"><text class="badge badge--gold">旗舰款</text></view>
-      <view class="card-btm"><view class="p-name">F2 ULTRA</view><view class="p-desc">巅峰配置</view></view>
+      <view class="card-btm"><view class="p-name">F2 ULTRA</view><view class="p-desc">巅峰配置</view><view class="p-price">¥688</view></view>
       <view class="circle-decor"></view>
     </view>
   </view>
@@ -62,25 +81,32 @@
       <view class="f2-long-bar__main">
         <text class="f2-long-bar__tag">加长款</text>
         <text class="f2-long-bar__title">F2 Long</text>
+        <text class="f2-long-bar__price">¥588</text>
       </view>
       <text class="f2-long-bar__link">查看详情 ›</text>
     </view>
   </view>
+  </view>
+  </view>
 
   <!-- F3 系列 -->
+  <view id="shGuideSeriesF3" class="sh-guide-series-block">
   <view class="section-title">F3 系列</view>
   <view class="card-grid card-grid-double">
     <view class="i-card i-card--compact style-white" bindtap="enterModel" data-name="F3 PRO" data-series="F3">
       <view class="card-top"><text class="badge">标准版</text></view>
-      <view class="card-btm"><view class="p-name">F3 PRO</view><view class="p-desc">日常优选</view></view>
+      <view class="card-btm"><view class="p-name">F3 PRO</view><view class="p-desc">日常优选</view><view class="p-price">¥788</view></view>
       <view class="circle-decor"></view>
     </view>
     <view class="i-card i-card--compact style-black" bindtap="enterModel" data-name="F3 MAX" data-series="F3">
       <view class="card-top"><text class="badge">旗舰款</text></view>
-      <view class="card-btm"><view class="p-name">F3 MAX</view><view class="p-desc">巅峰配置</view></view>
+      <view class="card-btm"><view class="p-name">F3 MAX</view><view class="p-desc">巅峰配置</view><view class="p-price">¥888</view></view>
       <view class="circle-decor"></view>
     </view>
   </view>
+  </view>
+  </view>
+  </scroll-view>
 
   <!-- 管理员一键同步数据按钮 -->
   <view wx:if="{{isAdmin}}" class="sync-all-container" style="padding: 40rpx 40rpx 50px;">
@@ -118,17 +144,23 @@
     <view wx:if="{{activeTab === 'order'}}">
       
       <!-- 服务类型切换 -->
-      <view class="svc-switch">
+      <view class="svc-switch" id="shGuideSvcSwitch">
+        <view class="svc-switch-pill {{serviceType==='repair' ? 'svc-switch-pill--repair' : ''}}"></view>
         <view class="svc-item {{serviceType==='parts'?'selected':''}}" bindtap="toggleService" data-type="parts">购买配件</view>
         <view class="svc-item {{serviceType==='repair'?'selected':''}}" bindtap="toggleService" data-type="repair">故障报修</view>
       </view>
 
       <!-- A. 配件选择区 -->
-      <view wx:if="{{serviceType === 'parts'}}" class="parts-section {{partsTableMode ? 'parts-section--table-mode' : ''}}">
+      <view wx:if="{{serviceType === 'parts'}}" id="shGuidePartsSection" class="parts-section {{partsTableMode ? 'parts-section--table-mode' : ''}}">
         <view class="parts-section-header">
           <view class="section-label">配件清单</view>
-          <view wx:if="{{isAdmin}}" class="parts-table-mode-toggle {{partsTableMode ? 'on' : ''}}" catchtap="togglePartsTableMode">
-            {{partsTableMode ? '卡片模式' : '表格模式'}}
+          <view wx:if="{{isAdmin}}" class="admin-tools-row">
+            <view class="parts-table-mode-toggle {{partsTableMode ? 'on' : ''}}" catchtap="togglePartsTableMode">
+              {{partsTableMode ? '卡片模式' : '表格模式'}}
+            </view>
+            <view class="sync-parts-btn" catchtap="syncPartsFromF1Pro">
+              同步配件
+            </view>
           </view>
         </view>
 
@@ -174,8 +206,9 @@
           <block wx:for="{{currentPartsList}}" wx:key="listKey">
             <view class="part-tag-wrapper" 
                   data-index="{{index}}">
-<view class="part-tag {{item.selected ? 'active' : ''}} {{item.preselected ? 'preselected' : ''}} {{item.preselected && !item.selected ? 'preselected-unchecked' : ''}} {{isDragging && dragIndex === index ? 'dragging' : ''}}"
-                    bindtap="togglePart" 
+              <view class="part-tag {{item.selected ? 'active' : ''}} {{item.preselected ? 'preselected' : ''}} {{item.preselected && !item.selected ? 'preselected-unchecked' : ''}} {{isDragging && dragIndex === index ? 'dragging' : ''}}"
+                    bindtap="togglePart"
+                    bindlongpress="handleLongPress"
                     data-index="{{index}}"
                     style="{{isDragging && dragIndex === index ? 'position: fixed; left: ' + dragX + 'px; top: ' + dragY + 'px; width: ' + cardWidth + 'px; opacity: 0.9; z-index: 9999; transition: none;' : ''}}">
                 <text>{{item.name}}</text>
@@ -184,10 +217,7 @@
                 <!-- 管理员改价/改名/删除按钮 (右下角) -->
                 <view wx:if="{{isAdmin && !isDragging}}" class="admin-edit-price" catchtap="adminEditPartPrice" data-index="{{index}}">✎</view>
                 <!-- 管理员排序标识（左上角） -->
-                <view wx:if="{{isAdmin}}" class="sort-indicator"
-                      bindlongpress="{{!isDragging ? 'handleLongPress' : ''}}"
-                      data-index="{{index}}"
-                      catchtap="doNothing">☰</view>
+                <view wx:if="{{isAdmin}}" class="sort-indicator" catchtap="doNothing">☰</view>
               </view>
               <!-- 占位符（拖动时显示） -->
               <view wx:if="{{isDragging && dragIndex === index}}" class="part-tag-placeholder"></view>
@@ -202,7 +232,7 @@
       </view>
 
       <!-- B. 故障报修区 -->
-      <view wx:if="{{serviceType === 'repair'}}">
+      <view wx:if="{{serviceType === 'repair'}}" id="shGuideRepairSection">
         <view class="section-label">故障描述</view>
         <textarea class="input-area" placeholder="请详细描述故障现象..." style="height: 100px;" value="{{repairDescription}}" bindinput="handleRepairInput"></textarea>
         <view class="upload-box" bindtap="chooseVideo">
@@ -380,7 +410,7 @@
   </view>
 
   <!-- 底部栏 (根据 Service Type 变化) -->
-  <view class="bottom-dock" wx:if="{{activeTab === 'order' && !partsTableMode}}">
+  <view class="bottom-dock" id="shGuideFooterDock" wx:if="{{activeTab === 'order' && !partsTableMode}}">
     
     <!-- 情况A: 购买配件 (双按钮) -->
     <view class="footer-btn-group" wx:if="{{serviceType === 'parts'}}">
@@ -520,11 +550,10 @@
 </view>
 
 
-<!-- 全页加载（独立于 detail-view，压在确认工单之上） -->
+<!-- 加载小窗（与「我的」等同款：白底卡片 + 文案 + 进度条） -->
 <view class="sh-loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop" catchtap="noop">
   <view class="sh-loader" catchtouchmove="noop" catchtap="noop">
-    <view class="sh-loader-spinner" aria-hidden="true"></view>
-    <text class="sh-loader-label">{{loadingText}}</text>
+    <text class="sh-loader-label">{{loadingText || '加载中...'}}</text>
     <view class="sh-loading-bar" aria-hidden="true"></view>
   </view>
 </view>
@@ -750,23 +779,33 @@
       </view>
       <view class="shipping-box">
         <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
-          <view class="ship-name">中通快递</view>
+          <view class="ship-item-head">
+            <view class="ship-pick-badge ship-pick-badge--zto">
+              <text class="ship-pick-icon-text">中</text>
+            </view>
+            <view class="ship-name">中通快递</view>
+          </view>
           <view class="ship-price">
-            <block wx:if="{{checkoutFreeShipping}}">包邮</block>
+            <block wx:if="{{serviceType === 'repair'}}">包邮</block>
+            <block wx:elif="{{checkoutFreeShipping}}">包邮</block>
             <block wx:else>
-              <text wx:if="{{shippingFee > 0}}">¥{{shippingFee}}</text>
+              <text wx:if="{{shippingFee > 0 && shippingMethod=='zto'}}">¥{{shippingFee}}</text>
               <text wx:else>待计算</text>
               <text style="font-size:20rpx;color:#999;display:block;margin-top:4rpx;">省内12/省外15</text>
             </block>
           </view>
         </view>
-        <!-- 顺丰选项 -->
+        <!-- 顺丰选项：故障报修也不包邮，按地址计费 -->
         <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
-          <view class="ship-name">顺丰速运</view>
-          <!-- 顺丰运费根据地址动态计算：省内12元，省外23元；未选择时展示区间价 -->
+          <view class="ship-item-head">
+            <view class="ship-pick-badge ship-pick-badge--sf">
+              <text class="ship-pick-icon-text">SF</text>
+            </view>
+            <view class="ship-name">顺丰速运</view>
+          </view>
+          <!-- 顺丰运费根据地址动态计算：省内13元，省外22元；未选中时展示区间价 -->
           <view class="ship-price {{shippingMethod=='sf' ? '' : 'ship-price-range'}}">
-            <block wx:if="{{checkoutFreeShipping}}">包邮</block>
-            <block wx:elif="{{shippingMethod=='sf'}}">
+            <block wx:if="{{shippingMethod=='sf'}}">
               <text wx:if="{{shippingFee > 0}}">¥{{shippingFee}}</text>
               <text wx:else>待计算</text>
             </block>
@@ -839,9 +878,188 @@
 
   <!-- 底部单按钮 (立即支付/提交维修工单) -->
   <view class="checkout-footer-single">
-    <view class="btn-black full" bindtap="submitRealOrder">
+    <view
+      class="btn-black full {{(repairSubmitting || showLoadingAnimation) ? 'is-disabled' : ''}}"
+      catchtap="submitRealOrder">
       <text class="btn-main" wx:if="{{serviceType === 'parts'}}">立即支付 ¥{{isAdmin ? 0.01 : finalTotalPrice}}</text>
+      <text class="btn-main" wx:elif="{{repairSubmitting || showLoadingAnimation}}">提交中...</text>
+      <text class="btn-main" wx:elif="{{serviceType === 'repair' && shippingMethod == 'sf' && shippingFee > 0}}">提交维修工单 · 顺丰 ¥{{shippingFee}}</text>
       <text class="btn-main" wx:else>提交维修工单</text>
+    </view>
+    </view>
+  </view>
+
+<!-- 管理员调试：两张卡上下同时展示 -->
+<view class="repair-terms-mask aftersale-debug-mask {{aftersaleNoticeDebugClosing ? 'closing' : ''}}" wx:if="{{showAftersaleNoticeDebugStack || aftersaleNoticeDebugClosing}}" catchtouchmove="noop" catchtap="noop">
+  <scroll-view class="aftersale-debug-scroll" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}">
+    <view class="aftersale-debug-stack">
+      <view class="aftersale-debug-tag">调试 · A卡（全员）</view>
+      <view class="as-card card-blue aftersale-debug-card" catchtap="noop">
+        <view class="as-card-header">
+          <view class="as-status-tag tag-blue">{{aftersaleOrderPolicy.badge}}</view>
+          <view class="as-card-title">{{aftersaleOrderPolicy.title}}</view>
+        </view>
+        <view class="as-card-body">
+          <view class="as-lead-text">
+            <text>{{aftersaleOrderPolicy.leadBefore}}</text>
+            <text class="as-bold">{{aftersaleOrderPolicy.leadBold}}</text>
+            <text>{{aftersaleOrderPolicy.leadAfter}}</text>
+          </view>
+          <view class="as-order-box">
+            <view class="as-order-row" wx:for="{{aftersaleOrderPolicy.items}}" wx:key="title">
+              <view class="as-dot dot-blue"></view>
+              <view class="as-content">
+                <view class="as-item-title">{{item.title}}</view>
+                <view class="as-item-desc">{{item.desc}}</view>
+              </view>
+            </view>
+          </view>
+          <view class="as-btn btn-blue">{{aftersaleOrderPolicy.btnText}}</view>
+          <view class="as-footer-logo">{{aftersaleOrderPolicy.slogan}}</view>
+        </view>
+      </view>
+
+      <view class="aftersale-debug-tag aftersale-debug-tag--warn">调试 · B卡（仅过保）</view>
+      <view class="as-card card-black aftersale-debug-card" catchtap="noop">
+        <view class="as-card-header">
+          <view class="as-status-tag tag-orange">{{expiredPaidPolicy.badge}}</view>
+          <view class="as-card-title">{{expiredPaidPolicy.title}}</view>
+        </view>
+        <view class="as-card-body">
+          <view class="as-lead-text">
+            <text>{{expiredPaidPolicy.leadBefore}}</text>
+            <text class="as-bold-red">{{expiredPaidPolicy.leadBoldRed}}</text>
+            <text>{{expiredPaidPolicy.leadAfter}}</text>
+          </view>
+          <view class="as-order-box">
+            <view class="as-order-row" wx:for="{{expiredPaidPolicy.items}}" wx:key="title">
+              <view class="as-dot dot-orange"></view>
+              <view class="as-content">
+                <view class="as-item-title">{{item.title}}</view>
+                <view class="as-item-desc" wx:if="{{item.descBold}}">
+                  <text>{{item.descBefore}}</text>
+                  <text class="as-bold">{{item.descBold}}</text>
+                  <text>{{item.descAfter}}</text>
+                </view>
+                <view class="as-item-desc" wx:else>{{item.desc}}</view>
+              </view>
+            </view>
+          </view>
+          <view class="as-fine-print">{{expiredPaidPolicy.agreeTip}}</view>
+          <view class="as-btn btn-black">{{expiredPaidPolicy.btnText}}</view>
+          <view class="as-footer-logo">{{expiredPaidPolicy.slogan}}</view>
+        </view>
+      </view>
+
+      <view class="aftersale-debug-close-wrap">
+        <view
+          class="repair-terms-btn repair-terms-btn--confirm {{aftersaleNoticeBtnLocked ? 'is-disabled' : ''}}"
+          bindtap="onAftersaleNoticeDebugClose">
+          {{aftersaleNoticeBtnText}}
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>
+
+<!-- A卡：全员售后数字化告知 -->
+<view class="repair-terms-mask as-card-mask {{aftersaleNoticeClosing ? 'closing' : ''}}" wx:if="{{!showAftersaleNoticeDebugStack && (showAftersaleNoticeModal || aftersaleNoticeClosing)}}" catchtouchmove="noop" catchtap="noop">
+  <view class="as-card card-blue" catchtap="noop" catchtouchmove="noop">
+    <view class="as-card-header">
+      <view class="as-status-tag tag-blue">{{aftersaleOrderPolicy.badge}}</view>
+      <view class="as-card-title">{{aftersaleOrderPolicy.title}}</view>
+    </view>
+    <view class="as-card-body">
+      <view class="as-lead-text">
+        <text>{{aftersaleOrderPolicy.leadBefore}}</text>
+        <text class="as-bold">{{aftersaleOrderPolicy.leadBold}}</text>
+        <text>{{aftersaleOrderPolicy.leadAfter}}</text>
+      </view>
+      <view class="as-order-box">
+        <view class="as-order-row" wx:for="{{aftersaleOrderPolicy.items}}" wx:key="title">
+          <view class="as-dot dot-blue"></view>
+          <view class="as-content">
+            <view class="as-item-title">{{item.title}}</view>
+            <view class="as-item-desc">{{item.desc}}</view>
+          </view>
+        </view>
+      </view>
+      <view
+        class="as-btn btn-blue {{aftersaleNoticeBtnLocked ? 'is-disabled' : ''}}"
+        bindtap="onAftersaleNoticeConfirm">
+        {{aftersaleNoticeBtnText}}
+      </view>
+      <view class="as-footer-logo">{{aftersaleOrderPolicy.slogan}}</view>
+    </view>
+  </view>
+</view>
+
+<!-- B卡：仅过保 · 维保权责与有偿细则 -->
+<view class="repair-terms-mask as-card-mask {{expiredRoastClosing ? 'closing' : ''}}" wx:if="{{!showAftersaleNoticeDebugStack && (showExpiredRoastModal || expiredRoastClosing)}}" catchtouchmove="noop" catchtap="noop">
+  <view class="as-card card-black" catchtap="noop" catchtouchmove="noop">
+    <view class="as-card-header">
+      <view class="as-status-tag tag-orange">{{expiredPaidPolicy.badge}}</view>
+      <view class="as-card-title">{{expiredPaidPolicy.title}}</view>
+    </view>
+    <view class="as-card-body">
+      <view class="as-lead-text">
+        <text>{{expiredPaidPolicy.leadBefore}}</text>
+        <text class="as-bold-red">{{expiredPaidPolicy.leadBoldRed}}</text>
+        <text>{{expiredPaidPolicy.leadAfter}}</text>
+      </view>
+      <view class="as-order-box">
+        <view class="as-order-row" wx:for="{{expiredPaidPolicy.items}}" wx:key="title">
+          <view class="as-dot dot-orange"></view>
+          <view class="as-content">
+            <view class="as-item-title">{{item.title}}</view>
+            <view class="as-item-desc" wx:if="{{item.descBold}}">
+              <text>{{item.descBefore}}</text>
+              <text class="as-bold">{{item.descBold}}</text>
+              <text>{{item.descAfter}}</text>
+            </view>
+            <view class="as-item-desc" wx:else>{{item.desc}}</view>
+          </view>
+        </view>
+      </view>
+      <view class="as-fine-print">{{expiredPaidPolicy.agreeTip}}</view>
+      <view
+        class="as-btn btn-black {{expiredRoastBtnLocked ? 'is-disabled' : ''}}"
+        bindtap="onExpiredRoastConfirm">
+        {{expiredRoastBtnText}}
+      </view>
+      <view class="as-footer-logo">{{expiredPaidPolicy.slogan}}</view>
+    </view>
+  </view>
+</view>
+
+<!-- 过保收费说明：条款同意后，过保设备再弹一次 -->
+<view class="repair-terms-mask {{expiredFeeModalClosing ? 'closing' : ''}}" wx:if="{{showExpiredFeeModal || expiredFeeModalClosing}}" catchtouchmove="noop" catchtap="noop">
+  <view class="repair-terms-dialog expired-fee-dialog" catchtap="noop" catchtouchmove="noop">
+    <view class="repair-terms-header">
+      <text class="repair-terms-title">过保收费说明</text>
+      <text class="repair-terms-sub">您的设备质保已过期，维修将产生费用</text>
+    </view>
+    <view class="expired-fee-body">
+      <view class="expired-fee-card">
+        <text class="expired-fee-label">维修手工费</text>
+        <text class="expired-fee-price">¥30 起</text>
+      </view>
+      <view class="expired-fee-card">
+        <text class="expired-fee-label">配件费用</text>
+        <text class="expired-fee-price muted">按实际损坏配件另计</text>
+      </view>
+      <text class="expired-fee-tip">过保维修需收取至少 30 元维修手工费，并加上实际配件费用。确认后可继续提交申请，具体金额以售后评估为准。</text>
+    </view>
+    <view class="repair-terms-action">
+      <text class="repair-terms-countdown-tip" wx:if="{{!expiredFeeConfirmReady}}">请仔细阅读，{{expiredFeeConfirmCountdown}} 秒后可确认</text>
+      <view class="repair-terms-btns">
+        <view
+          class="repair-terms-btn repair-terms-btn--confirm {{expiredFeeConfirmReady ? '' : 'is-disabled'}}"
+          bindtap="onExpiredFeeConfirm">
+          <text wx:if="{{expiredFeeConfirmReady}}">我知道了</text>
+          <text wx:else>请阅读 ({{expiredFeeConfirmCountdown}}s)</text>
+        </view>
+      </view>
     </view>
   </view>
 </view>
@@ -866,15 +1084,15 @@
   </view>
 </view>
 
-<!-- 维修工单须知 -->
+<!-- 维修工单须知：同意后才可提交；不同意则不允许申请 -->
 <view class="repair-terms-mask {{repairTermsClosing ? 'closing' : ''}}" wx:if="{{showRepairTermsModal || repairTermsClosing}}" catchtouchmove="noop" catchtap="noop">
   <view class="repair-terms-dialog" catchtap="noop" catchtouchmove="noop">
     <view class="repair-terms-header">
-      <text class="repair-terms-title">维修工单须知</text>
-      <text class="repair-terms-sub">提交维修工单前，请阅读并确认以下约定</text>
+      <text class="repair-terms-title">维修服务条款</text>
+      <text class="repair-terms-sub">申请维修前请阅读并选择「确认并继续」或「不同意」</text>
     </view>
 
-    <view class="repair-terms-body">
+    <scroll-view class="repair-terms-body" scroll-y="{{true}}" enhanced="{{true}}" show-scrollbar="{{true}}">
       <view class="terms-timeline">
         <view class="terms-step">
           <view class="step-indicator">
@@ -882,7 +1100,7 @@
             <view class="step-line"></view>
           </view>
           <view class="step-content">
-            <text class="step-text">您寄回故障件或旧件时，运费由您自行承担。</text>
+            <text class="step-text">MT 向您寄出维修/故障更换配件时，<text class="repair-terms-hl">寄出运费由 MT 承担</text>。</text>
           </view>
         </view>
         <view class="terms-step">
@@ -891,7 +1109,7 @@
             <view class="step-line"></view>
           </view>
           <view class="step-content">
-            <text class="step-text">我司向您寄出维修配件时，寄出运费由我司承担。</text>
+            <text class="step-text">您需将故障配件寄回 MT 分析检查，<text class="repair-terms-hl">寄回运费由您自行承担</text>。</text>
           </view>
         </view>
         <view class="terms-step">
@@ -900,7 +1118,16 @@
             <view class="step-line"></view>
           </view>
           <view class="step-content">
-            <text class="step-text">若我司先向您寄出配件，请在收货后 30 日内，前往「我的」个人中心完成旧件寄回。</text>
+            <text class="step-text">请在故障描述中尽量写清楚：在什么情况下出现故障、可能原因是什么；也可随件附纸条说明，便于我们排查。</text>
+          </view>
+        </view>
+        <view class="terms-step">
+          <view class="step-indicator">
+            <view class="step-dot"></view>
+            <view class="step-line"></view>
+          </view>
+          <view class="step-content">
+            <text class="step-text">若收到 MT 寄出的配件后，<text class="repair-terms-hl-warn">30 天内未寄回故障配件</text>，将扣除该设备 <text class="repair-terms-hl-warn">半年（180 天）质保</text>（与设备绑定，不可单独拆分）。</text>
           </view>
         </view>
         <view class="terms-step">
@@ -908,16 +1135,16 @@
             <view class="step-dot"></view>
           </view>
           <view class="step-content">
-            <text class="step-text">逾期未寄回旧件，将扣除该设备 <text class="repair-terms-hl-warn">6 个月质保</text> 时长。</text>
+            <text class="step-text">选择「不同意」将无法提交维修申请；仅「确认并继续」后可继续申请维修服务。</text>
           </view>
         </view>
       </view>
-    </view>
+    </scroll-view>
 
     <view class="repair-terms-action">
-      <text class="repair-terms-countdown-tip" wx:if="{{!repairTermsConfirmReady}}">请阅读全文，{{repairTermsConfirmCountdown}} 秒后可确认</text>
+      <text class="repair-terms-countdown-tip" wx:if="{{!repairTermsConfirmReady}}">请仔细阅读，{{repairTermsConfirmCountdown}} 秒后可确认</text>
       <view class="repair-terms-btns">
-        <view class="repair-terms-btn repair-terms-btn--cancel" bindtap="closeRepairTermsModal">取消</view>
+        <view class="repair-terms-btn repair-terms-btn--cancel" bindtap="onRepairTermsDisagree">不同意</view>
         <view
           class="repair-terms-btn repair-terms-btn--confirm {{repairTermsConfirmReady ? '' : 'is-disabled'}}"
           bindtap="onRepairTermsConfirm">
@@ -1018,6 +1245,21 @@
     </cover-view>
     <cover-view class="cam-btn" style="width: 40px;"></cover-view>
   </cover-view>
+</view>
+
+<!-- 维修中心分步功能引导 -->
+<view class="sh-guide-mask {{shGuideMaskDim ? '' : 'sh-guide-mask--clear'}}" wx:if="{{showShUsageGuide}}" catchtouchmove="noop" catchtap="noop">
+  <view wx:if="{{shGuideShowSpot}}" class="sh-guide-spot {{shGuideSpotPulse ? 'sh-guide-spot--pulse' : ''}}" style="{{shGuideSpotStyle}}"></view>
+  <view wx:if="{{shGuideShowBubble}}" class="sh-guide-bubble sh-guide-bubble--{{shGuideArrowDir}} {{shGuideBubbleFixed ? 'sh-guide-bubble--fixed' : ''}}" style="{{shGuideBubbleStyle}}">
+    <view class="sh-guide-arrow" style="{{shGuideArrowStyle}}"></view>
+    <view class="sh-guide-step-tag">{{shGuideStepTag}}</view>
+    <view class="sh-guide-title">{{shGuideTitle}}</view>
+    <view class="sh-guide-desc">{{shGuideDesc}}</view>
+    <view class="sh-guide-actions">
+      <view class="sh-guide-skip" wx:if="{{shGuideShowSkip}}" catchtap="shUsageGuideSkip">跳过</view>
+      <view class="sh-guide-btn {{shGuideBtnLocked ? 'is-locked' : ''}}" bindtap="shUsageGuideNext">{{shGuideBtnText}}</view>
+    </view>
+  </view>
 </view>
 
 <!-- 全局自定义弹窗组件 -->

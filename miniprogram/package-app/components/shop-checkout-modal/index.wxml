@@ -47,7 +47,12 @@
         </view>
         <view class="shipping-box">
           <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
-            <view class="ship-name">中通快递</view>
+            <view class="ship-item-head">
+              <view class="ship-pick-badge ship-pick-badge--zto">
+                <text class="ship-pick-icon-text">中</text>
+              </view>
+              <view class="ship-name">中通快递</view>
+            </view>
             <view class="ship-price">
               <block wx:if="{{checkoutFreeShipping}}">包邮</block>
               <block wx:else>
@@ -57,7 +62,12 @@
             </view>
           </view>
           <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
-            <view class="ship-name">顺丰速运</view>
+            <view class="ship-item-head">
+              <view class="ship-pick-badge ship-pick-badge--sf">
+                <text class="ship-pick-icon-text">SF</text>
+              </view>
+              <view class="ship-name">顺丰速运</view>
+            </view>
             <view class="ship-price">
               <block wx:if="{{checkoutFreeShipping}}">包邮</block>
               <block wx:else>

@@ -376,7 +376,15 @@
       catchtap="{{isAdmin ? 'adminEditSeriesNameInDetail' : ''}}">
       {{currentSeries.name}}
     </view>
-    <view style="width:60rpx"></view>
+    <view
+      class="detail-nav-kf"
+      wx:if="{{!isModelCompareMode}}"
+      catchtap="openPreSalesCustomerService"
+      hover-class="detail-nav-kf--pressed"
+      aria-label="售前咨询">
+      <view class="detail-nav-kf-icon" aria-hidden="true"></view>
+      <text class="detail-nav-kf-text">客服</text>
+    </view>
   </view>
 
   <!-- 弹窗内容区（port 供底栏显隐测量，scroll-view 本身不宜做 query 锚点） -->
@@ -612,16 +620,6 @@
       <view class="btn-buy" bindtap="openCartOrder">立即购买</view>
     </view>
   </view>
-</view>
-
-<!-- 详情页右侧悬浮：售前客服 -->
-<view
-  class="shop-float-kf {{showFooterBar && !isModelCompareMode ? 'shop-float-kf--raised' : ''}}"
-  wx:if="{{showDetail && !isModelCompareMode && !showOrderModal}}"
-  hover-class="shop-float-kf--pressed"
-  bindtap="openPreSalesCustomerService">
-  <view class="shop-float-kf-icon" aria-hidden="true"></view>
-  <text class="shop-float-kf-text">咨询</text>
 </view>
 
 <!-- ================= 4. 对比表格弹窗 (最终修正版) ================= -->
@@ -860,7 +858,12 @@
       </view>
       <view class="shipping-box">
         <view class="ship-item {{shippingMethod=='zto'?'active':''}}" bindtap="changeShipping" data-method="zto">
-          <view class="ship-name">中通快递</view>
+          <view class="ship-item-head">
+            <view class="ship-pick-badge ship-pick-badge--zto">
+              <text class="ship-pick-icon-text">中</text>
+            </view>
+            <view class="ship-name">中通快递</view>
+          </view>
           <view class="ship-price">
             <block wx:if="{{checkoutFreeShipping}}">包邮</block>
             <block wx:else>
@@ -871,7 +874,12 @@
         </view>
         <!-- 顺丰选项 -->
         <view class="ship-item {{shippingMethod=='sf'?'active':''}}" bindtap="changeShipping" data-method="sf">
-          <view class="ship-name">顺丰速运</view>
+          <view class="ship-item-head">
+            <view class="ship-pick-badge ship-pick-badge--sf">
+              <text class="ship-pick-icon-text">SF</text>
+            </view>
+            <view class="ship-name">顺丰速运</view>
+          </view>
           <view class="ship-price">
             <block wx:if="{{checkoutFreeShipping}}">包邮</block>
             <block wx:else>
@@ -1008,13 +1016,81 @@
 </view>
 
 <!-- ================= 自定义弹窗（替换 wx.showModal，带收缩退出动画） ================= -->
-<view class="custom-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
-  <view class="custom-dialog-box" catchtouchmove="noop" bindtap="dismissTransientModals">
+<view class="custom-dialog-mask shop-guide-dialog-mask {{dialogClosing ? 'closing' : ''}}" wx:if="{{hubPanelActive && dialog.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="custom-dialog-box {{dialog.kind === 'shop-exchange' || dialog.kind === 'shop-budget' ? 'shop-guide-dialog' : ''}}" catchtouchmove="noop" catchtap="noop">
     <view class="cd-title">{{dialog.title}}</view>
-    <rich-text class="cd-content" nodes="{{dialog.content}}"></rich-text>
+
+    <block wx:if="{{dialog.kind === 'shop-exchange'}}">
+      <view class="shop-guide-body shop-guide-body--exchange">
+        <view class="shop-guide-upgrade-card">
+          <view class="shop-guide-model-col">
+            <text class="shop-guide-model-tag">已购机型</text>
+            <text class="shop-guide-model-name">F2 MAX</text>
+          </view>
+          <view class="shop-guide-upgrade-arrow" aria-hidden="true">→</view>
+          <view class="shop-guide-model-col shop-guide-model-col--target">
+            <text class="shop-guide-model-tag">可升级至</text>
+            <text class="shop-guide-model-name shop-guide-model-name--accent">F2 ULTRA</text>
+          </view>
+        </view>
+        <view class="shop-guide-fact-list">
+          <view class="shop-guide-fact">
+            <text class="shop-guide-fact-label">适用时间</text>
+            <text class="shop-guide-fact-value">自 2026 年 3 月起购买</text>
+          </view>
+          <view class="shop-guide-fact">
+            <text class="shop-guide-fact-label">升级方式</text>
+            <text class="shop-guide-fact-value">联系售前，补差价升级</text>
+          </view>
+          <view class="shop-guide-fact">
+            <text class="shop-guide-fact-label">质保说明</text>
+            <text class="shop-guide-fact-value">沿用原机质保，不重新起算</text>
+          </view>
+        </view>
+        <text class="shop-guide-footnote shop-guide-footnote--warn">除此以外其它型号不支持升级换新，仅可重新购买</text>
+      </view>
+    </block>
+
+    <block wx:elif="{{dialog.kind === 'shop-budget'}}">
+      <view class="shop-guide-body shop-guide-body--budget">
+        <text class="shop-guide-lead">按用途选配置，大致分四档：</text>
+        <view class="shop-guide-tier-list">
+          <view class="shop-guide-tier">
+            <text class="shop-guide-tier-name">基础款</text>
+            <text class="shop-guide-tier-desc">日常通勤</text>
+          </view>
+          <view class="shop-guide-tier">
+            <text class="shop-guide-tier-name">中配款</text>
+            <text class="shop-guide-tier-desc">长途旅行</text>
+          </view>
+          <view class="shop-guide-tier">
+            <text class="shop-guide-tier-name">高配款</text>
+            <text class="shop-guide-tier-desc">买后更省心无忧</text>
+          </view>
+          <view class="shop-guide-tier">
+            <text class="shop-guide-tier-name">顶配款</text>
+            <text class="shop-guide-tier-desc">更好体验、更方便用</text>
+          </view>
+        </view>
+        <view class="shop-guide-kf-hint">
+          <text class="shop-guide-kf-hint-title">拿不准？可联系客服咨询</text>
+          <text class="shop-guide-kf-hint-desc">告诉我们您的车型和使用需求，帮您推荐更合适的那一款</text>
+        </view>
+      </view>
+    </block>
+
+    <block wx:else>
+      <rich-text class="cd-content" nodes="{{dialog.content}}"></rich-text>
+    </block>
+
     <view class="cd-btn-row">
       <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText}}</view>
-      <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText}}</view>
+      <view wx:if="{{dialog.confirmLocked}}" class="cd-btn confirm cd-btn--locked">{{dialog.confirmBtnText}}</view>
+      <view
+        wx:else
+        class="cd-btn confirm"
+        bindtap="onDialogConfirm"
+      >{{dialog.confirmBtnText || dialog.confirmText}}</view>
     </view>
   </view>
 </view>
@@ -1132,6 +1208,22 @@
   </view>
 </view>
 
+</view>
+
+<!-- 主列表 / 详情页右侧悬浮：售前客服（挂 portal 根节点，勿放进 0×0 layer） -->
+<view
+  class="shop-float-kf {{hubEmbedInProducts ? 'shop-float-kf--hub-portal' : ''}} {{showDetail && showFooterBar && !isModelCompareMode ? 'shop-float-kf--raised' : ''}} {{!showDetail ? 'shop-float-kf--main' : ''}}"
+  wx:if="{{hubPanelActive && !dialog.show && !dialogClosing && !showOrderModal && !showAccDetail && (!showDetail || !isModelCompareMode)}}"
+  hover-class="shop-float-kf--pressed"
+  catchtap="openPreSalesCustomerService">
+  <view class="shop-float-kf-icon-wrap">
+    <view class="shop-float-kf-icon" aria-hidden="true"></view>
+    <view class="shop-float-kf-dot" aria-hidden="true"></view>
+  </view>
+  <view class="shop-float-kf-copy">
+    <text class="shop-float-kf-text">客服</text>
+    <text class="shop-float-kf-sub">售前咨询</text>
+  </view>
 </view>
 </root-portal>
 

@@ -2,6 +2,17 @@ const cloud = require('wx-server-sdk')
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 const db = cloud.database()
 
+async function softWecomAdminTodo(kind, oneLine) {
+  try {
+    await cloud.callFunction({
+      name: 'wecomNotify',
+      data: { action: 'notifyAdminTodo', kind, oneLine: oneLine || '' }
+    })
+  } catch (e) {
+    console.warn('[reportScreenshotRisk] wecomAdminTodo failed', e)
+  }
+}
+
 async function isGuanliyuan(openid) {
   if (!openid) return false
   let r = await db.collection('guanliyuan').where({ openid }).limit(1).get()
@@ -91,6 +102,10 @@ exports.main = async (event, context) => {
         updateTime: db.serverDate()
       }
     })
+    await softWecomAdminTodo(
+      'screenshot_risk',
+      `${page || '未知页'} · 1小时${hourlyCount}次 / 24小时${dailyCount}次`
+    )
     return { success: true, queued: true, created: true, hourlyCount, dailyCount }
   } catch (err) {
     console.error('[reportScreenshotRisk] failed:', err)

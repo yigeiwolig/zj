@@ -3,10 +3,10 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
-const API_VERSION = 'v2_sessions_fenxi_20260430';
+const API_VERSION = 'v2_sessions_fenxi_20260716';
 
 const ENTER_THRESHOLD = 3;
-const STAY_MINUTES_THRESHOLD = 10;
+const STAY_MINUTES_THRESHOLD = 30;
 
 function calcSuspicionScore(item) {
   if (!item) return 0;

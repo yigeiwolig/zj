@@ -62,6 +62,26 @@ const iconGhostOpen = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0
 // 小幽灵图标（闭眼 - 退出隐蔽模式）
 const iconGhostClose = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMjAgMTFWMTlDMjAgMjAuNiAxOCAyMS41IDE3IDIwLjVMMTYgMTkuNUwxNCAyMS41QzEzLjIgMjIuMyAxMiAyMS44IDEyIDIwLjhWMjAuOEMxMiAyMS44IDEwLjggMjIuMyAxMCAyMS41TDggMTkuNUw3IDIwLjVDNiAyMS41IDQgMjAuNiA0IDE5VjExQzQgNi41OCA3LjU4IDMgMTIgM0MxNi40MiAzIDIwIDYuNTggMjAgMTFaIiBmaWxsPSJ3aGl0ZSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz48bGluZSB4MT0iNy41IiB5MT0iMTEiIHgyPSIxMC41IiB5Mj0iMTEiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PGxpbmUgeDE9IjEzLjUiIHkxPSIxMSIgeDI9IjE2LjUiIHkyPSIxMSIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48L3N2Zz4=';
 
+/** 工厂调试机蓝牙名，禁止用户连接（见 utils/blockedDebugBle.js） */
+const {
+  isBlockedDebugBleDevice,
+  normalizeBleAdvertiseName: normalizeBlockedBleName
+} = require('../../../utils/blockedDebugBle.js');
+
+function normalizeBleAdvertiseName(name) {
+  return normalizeBlockedBleName(name);
+}
+
+function getBleDeviceAdvertiseName(device) {
+  if (!device) return '';
+  return device.name || device.localName || '';
+}
+
+function isConnectableMtBleDevice(device) {
+  const advName = getBleDeviceAdvertiseName(device);
+  return !!advName && advName.startsWith('NB') && !isBlockedDebugBleDevice(device);
+}
+
 // ==========================================
 // 蓝牙连接工具类 (你提供的代码融合)
 // ==========================================
@@ -98,9 +118,11 @@ class BLEHelper {
     this.onLinkEstablished = null;   // BLE 物理链路已建立（早于服务发现）
     this.onConnected = null;
     this.onConnectFailed = null;         
-    this.onDisconnected = null;      
+    this.onDisconnected = null;
+    this.onDebugDeviceBlocked = null;
     this.onDataReceived = null;      
-    this.onError = null;             
+    this.onError = null;
+    this._autoConnectDelayMs = 400;
   }
 
   initBluetoothAdapter() {
@@ -194,6 +216,35 @@ class BLEHelper {
       clearInterval(this.autoScanInterval);
       this.autoScanInterval = null;
     }
+    this._clearAutoConnectTimer();
+  }
+
+  _clearAutoConnectTimer() {
+    if (this.openTimer) {
+      clearTimeout(this.openTimer);
+      this.openTimer = null;
+    }
+  }
+
+  _pickAutoConnectCandidate() {
+    const allowed = (this.bleList || []).filter(isConnectableMtBleDevice);
+    if (!allowed.length) return null;
+    allowed.sort((a, b) => (b.RSSI || -999) - (a.RSSI || -999));
+    return allowed[0];
+  }
+
+  _scheduleAutoConnect() {
+    if (this.hasConnected) return;
+    this._clearAutoConnectTimer();
+    this.openTimer = setTimeout(() => {
+      this.openTimer = null;
+      if (this.hasConnected) return;
+      const candidate = this._pickAutoConnectCandidate();
+      if (!candidate) return;
+      this.hasConnected = true;
+      if (this.onConnecting) this.onConnecting(candidate);
+      this.connectDevice(candidate);
+    }, this._autoConnectDelayMs);
   }
 
   setupDeviceFoundListener() {
@@ -212,33 +263,111 @@ class BLEHelper {
         this.onDeviceFound(this.bleList);
       }
 
-      // 自动连接逻辑：NB开头优先
-      if (!this.hasConnected && device.name && device.name.startsWith('NB')) {
-        if (this.openTimer) {
-          clearTimeout(this.openTimer);
-          this.openTimer = null;
-        }
-        this.hasConnected = true;
-        // 设置连接中状态
-        if (this.onConnecting) this.onConnecting(device);
-        this.connectDevice(device); // 内部会stopScan
-        return;
+      // 自动连接：略作聚合，优先连非调试机（见 blockedDebugBle）
+      if (!this.hasConnected && isConnectableMtBleDevice(device)) {
+        this._scheduleAutoConnect();
       }
     });
   }
 
+  _withTimeout(promise, ms, tag) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(tag || 'timeout')), ms);
+      promise.then(
+        (v) => { clearTimeout(timer); resolve(v); },
+        (e) => { clearTimeout(timer); reject(e); }
+      );
+    });
+  }
+
+  /**
+   * 强制释放系统层 BLE 连接。
+   * 关键：连接卡死时系统层链路仍被微信占用，设备不再广播，
+   * 不 close 的话重新扫描永远扫不到，只能重启小程序。
+   */
+  _forceCloseConnection(deviceId) {
+    if (!deviceId) return;
+    this._suppressCloseForDevice(deviceId);
+    try {
+      this.api.closeBLEConnection({ deviceId, fail: () => {} });
+    } catch (e) { /* ignore */ }
+  }
+
+  _clearConnectWatchdog() {
+    if (this._connectWatchdogTimer) {
+      clearTimeout(this._connectWatchdogTimer);
+      this._connectWatchdogTimer = null;
+    }
+  }
+
+  cancelPendingConnect() {
+    const pendingId = this._pendingConnectDeviceId;
+    if (!pendingId) return false;
+    this._pendingConnectDeviceId = '';
+    this._clearConnectWatchdog();
+    this.hasConnected = false;
+    this._forceCloseConnection(pendingId);
+    return true;
+  }
+
   connectDevice(device) {
+    if (isBlockedDebugBleDevice(device)) {
+      this.hasConnected = false;
+      this._clearAutoConnectTimer();
+      if (this.onDebugDeviceBlocked) this.onDebugDeviceBlocked(device);
+      return Promise.reject(new Error('blocked_debug_device'));
+    }
     // UI Loading 已经在 Page 层面处理了，这里只处理逻辑
     this.stopScan();
-    
+    const deviceId = device.deviceId;
+    this._pendingConnectDeviceId = deviceId;
+
     return new Promise((resolve, reject) => {
+      let settled = false;
+
+      const succeed = () => {
+        if (settled) return;
+        settled = true;
+        this._clearConnectWatchdog();
+        this._pendingConnectDeviceId = '';
+        if (this.onConnected) this.onConnected(device);
+        resolve(device);
+      };
+
+      const fail = (err, opts) => {
+        if (settled) return;
+        settled = true;
+        this._clearConnectWatchdog();
+        this._pendingConnectDeviceId = '';
+        this.hasConnected = false;
+        if (this.device && this.device.deviceId === deviceId) this.device = null;
+        // 无论卡在哪一步都强制释放系统层连接，否则设备不广播、无法重连
+        this._forceCloseConnection(deviceId);
+        const manual = !!(opts && opts.manual);
+        if (this.onConnectFailed) this.onConnectFailed(err, device, { manual });
+        if (opts && opts.notifyError && this.onError) this.onError(err);
+        reject(err);
+      };
+
+      // 总兜底：部分机型 createBLEConnection 会 success/fail 都不回调
+      this._connectWatchdogTimer = setTimeout(() => {
+        console.warn('[BLE] connect watchdog timeout', deviceId);
+        fail(new Error('connect_timeout'));
+      }, 25000);
+
       this.api.createBLEConnection({
-        deviceId: device.deviceId,
+        deviceId,
+        timeout: 20000,
         success: (res) => {
+          if (settled) {
+            // 已按超时处理过，这里补一次 close 防止链路残留
+            this._forceCloseConnection(deviceId);
+            return;
+          }
           this.device = device;
           this.lastConnectedDevice = device;
-          if (device.deviceId && this._closeSuppressedAt) {
-            delete this._closeSuppressedAt[device.deviceId];
+          if (deviceId && this._closeSuppressedAt) {
+            delete this._closeSuppressedAt[deviceId];
           }
           this.isScanning = false;
           this._ensureConnectionStateListener();
@@ -246,23 +375,20 @@ class BLEHelper {
           if (this.onLinkEstablished) this.onLinkEstablished(device);
 
           setTimeout(() => {
-            this.discoverServices().then(() => {
-              if (this.onConnected) this.onConnected(device);
-              resolve(device);
+            if (settled) return;
+            this._withTimeout(this.discoverServices(), 12000, 'gatt_timeout').then(() => {
+              succeed();
             }).catch((err) => {
               console.warn('[BLE] discoverServices failed', err);
               const manual = !!this._manualDisconnect;
               this._manualDisconnect = false;
-              if (this.onConnectFailed) this.onConnectFailed(err, device, { manual });
-              reject(err);
+              fail(err, { manual });
             });
           }, 800);
         },
         fail: (err) => {
           this.isScanning = false;
-          if (this.onConnectFailed) this.onConnectFailed(err, device, { manual: false });
-          if (this.onError) this.onError(err);
-          reject(err);
+          fail(err, { notifyError: true });
         }
       });
     });
@@ -514,6 +640,32 @@ function isF3MaxModel(model) {
   return !!(model && model.name === 'F3' && model.type === 'Max');
 }
 
+function isF1MaxModel(model) {
+  return !!(model && model.name === 'F1' && model.type === 'Max');
+}
+
+/** F3 固件解析前会剥掉尾部 #；F2 Ultra / F1 Ultra 固件必须精确匹配「打开」「关闭」 */
+function flapBleUsesHashSuffix(model) {
+  return isF3MaxModel(model);
+}
+
+function flapBleWireText(model, cmd) {
+  const base = String(cmd || '').replace(/#$/, '');
+  if (!base) return '';
+  return flapBleUsesHashSuffix(model) ? `${base}#` : base;
+}
+
+function flapBleSendTimes(model, cmd) {
+  if (isF3MaxModel(model)) {
+    return cmd === '关闭' ? 5 : 3;
+  }
+  return 2;
+}
+
+function flapBleSendInterval(model) {
+  return isF3MaxModel(model) ? FLAP_BLE_SEND_GAP_MS : 500;
+}
+
 function isF2UltraFirmwareModel(model) {
   return isF1UltraModel(model) || isF2UltraModel(model);
 }
@@ -551,6 +703,21 @@ function isF2MaxSeriesModel(model) {
   return isF2MaxModel(model) || isF2UltraModel(model);
 }
 
+/** F2 自动校准：除 PRO 外（Max / Long / Ultra） */
+function isF2AutoCalibrateModel(model) {
+  if (!model || model.name !== 'F2') return false;
+  if (model.type === 'Pro') return false;
+  return model.type === 'Max' || isF2LongType(model.type) || model.type === 'Ultra';
+}
+
+/** 自动校准入口：F2(非PRO) + F1 Ultra + F3 MAX */
+function modelSupportsAutoCalibrate(model) {
+  if (!model) return false;
+  if (isF3MaxModel(model)) return true;
+  if (isF1UltraModel(model)) return true;
+  return isF2AutoCalibrateModel(model);
+}
+
 function buildF2StealthUiFlags(model, settingState, bleLinked) {
   if (!isMtUltraCardModel(model)) {
     return {
@@ -563,6 +730,21 @@ function buildF2StealthUiFlags(model, settingState, bleLinked) {
     f2StealthStatusVisible: linked,
     f2StealthBleControlVisible: linked
   };
+}
+
+function buildRemoteAssistAdminExtras(model, settingState, bleLinked) {
+  const linked = !!bleLinked;
+  const patch = {};
+  if (isMtUltraCardModel(model)) {
+    Object.assign(patch, buildF2StealthUiFlags(model, settingState || {}, linked));
+  }
+  if (isF3MaxModel(model)) {
+    patch.f3HeightMonitorVisible = linked;
+  }
+  if (isHwPinMonitorModel(model)) {
+    patch.f2HwMonitorVisible = linked;
+  }
+  return patch;
 }
 
 function resolveF2BleLinkedForUi(pageData) {
@@ -590,11 +772,10 @@ function openAngleInternalToDisplayDeg(model, internal) {
   const v = parseInt(internal, 10);
   if (isNaN(v)) return 0;
   if (!model || !usesF2StyleOpenAngleBle(model)) {
-    return Math.max(0, Math.min(180, v));
+    return Math.max(0, v);
   }
-  if (isMtUltraCardModel(model)) {
-    const cap = openAngleMaxDeg(model, 170);
-    return Math.max(0, Math.min(cap, v));
+  if (isF3MaxModel(model) || isMtUltraCardModel(model)) {
+    return Math.max(0, v);
   }
   if (v <= 90) return Math.round(v * 30 / 90);
   return Math.round(30 + (v - 90) * 60 / 70);
@@ -611,7 +792,8 @@ function openAnglePresetBleCommand(model, angle) {
     if (angle === 160 || angle === 180) return '完全打开';
     return '';
   }
-  if (model.name === 'F1') {
+  // F1 全系、F3 PRO：预设 90° / 180°
+  if (model.name === 'F1' || (model.name === 'F3' && !isF3MaxModel(model))) {
     if (angle === 90) return '90度';
     if (angle === 180) return '180度';
   }
@@ -624,14 +806,24 @@ function openAngleMaxDeg(model, fallbackMax) {
   return fallbackMax != null ? fallbackMax : 180;
 }
 
+function openAngleBleStepGapMs(model) {
+  return isF3MaxModel(model) ? F3_OPEN_ANGLE_BLE_STEP_GAP_MS : BLE_ANGLE_STEP_GAP_MS;
+}
+
 function openAngleSlideBleCommands(model) {
+  if (!model) return null;
   if (usesF2StyleOpenAngleBle(model)) {
+    // F3 MAX 与 F2 MAX 同款：左拨增大 UI 角度时发「往下」，右拨减小时发「往上收」
+    if (isF3MaxModel(model) || (model.name === 'F2' && !isMtUltraCardModel(model))) {
+      return { increase: '往上收', decrease: '往下' };
+    }
     if (isMtUltraCardModel(model)) {
       return { increase: '往下', decrease: '往上收' };
     }
     return { increase: '往上收', decrease: '往下' };
   }
-  if (model.name === 'F1') {
+  // F1 全系、F3 PRO：同款增量指令
+  if (model.name === 'F1' || model.name === 'F3') {
     return { increase: '往上收', decrease: '往下放' };
   }
   return null;
@@ -649,6 +841,290 @@ function isF2MaxDelayPowerModel(model) {
 function isF2MaxStatusBleModel(model) {
   // 状态包监听：F2 MAX 系 + F1/F2 Ultra / F3 MAX（F1 Ultra 与 F2 Ultra 同款）
   return isF2MaxSeriesModel(model) || isMtUltraCardModel(model);
+}
+
+/** 高级设置滑块是否支持状态包回读校验（仅 Ultra / F3 MAX；F2 MAX / Long 无回读） */
+function modelSupportsSettingBleVerify(model) {
+  return isMtUltraCardModel(model);
+}
+
+/** F1/F2 部分机型无状态回读：滑块初始居中，点击即发送 */
+function modelUsesSettingClickOnly(model) {
+  if (!model || isMtUltraCardModel(model)) return false;
+  const name = model.name || '';
+  const type = model.type || '';
+  if (name === 'F1' && (type === 'Pro' || type === 'Max')) return true;
+  if (name === 'F2' && (type === 'Pro' || type === 'Max' || isF2LongType(type))) return true;
+  return false;
+}
+
+/** Ultra / F3 MAX：高级设置切换成功后的提示文案 */
+function buildSettingChangeResultText(model, key, targetVal) {
+  if (!model || !key || !targetVal) return '设置已更新';
+  const isMtUltra = isMtUltraCardModel(model);
+  switch (key) {
+    case 'faultDetect':
+      if (isMtUltra) {
+        return targetVal === 'left' ? '堵转检测已开启' : '堵转检测已关闭';
+      }
+      return targetVal === 'left' ? '主动故障检测已开启' : '主动故障检测已关闭';
+    case 'selfRepair':
+      if (isMtUltra) {
+        return targetVal === 'left' ? '电机工作检测已开启' : '电机工作检测已关闭';
+      }
+      return targetVal === 'left' ? '故障自修复已执行' : '故障自修复已关闭';
+    case 'powerOn':
+      if (isMtUltra) {
+        return targetVal === 'left' ? '开机位置已设为下翻' : '开机位置已设为上翻';
+      }
+      return targetVal === 'left' ? '开机位置已设为上翻' : '开机位置已设为下翻';
+    case 'shutdown':
+      return targetVal === 'left' ? '关机位置已设为收回' : '关机位置已设为保持';
+    case 'travelMode':
+      return targetVal === 'right' ? '出行模式已开启' : '出行模式已关闭';
+    case 'smoothMode':
+      return targetVal === 'left' ? '平滑模式已开启' : '平滑模式已关闭';
+    case 'stealthBtnExit':
+      return targetVal === 'left' ? '隐蔽模式退出已允许按钮' : '隐蔽模式退出已设为仅小程序';
+    case 'powerOffLock':
+      return targetVal === 'left' ? '断电锁死已开启' : '断电锁死已关闭';
+    case 'heightMon':
+      return targetVal === 'left' ? '高度检测已开启' : '高度检测已关闭';
+    default:
+      return '设置已更新';
+  }
+}
+
+const NEUTRAL_SETTING_STATE = {
+  faultDetect: 'center',
+  selfRepair: 'center',
+  powerOn: 'center',
+  shutdown: 'center',
+  travelMode: 'center',
+  smoothMode: 'center',
+  stealthBtnExit: 'center',
+  powerOffLock: 'center',
+  heightMon: 'center'
+};
+
+function buildNeutralSettingState() {
+  return { ...NEUTRAL_SETTING_STATE };
+}
+
+function modelNeedsCalGuide(model) {
+  return modelSupportsAutoCalibrate(model);
+}
+
+function modelNeedsSettingsGuide(model) {
+  return modelNeedsCalGuide(model) || isF1MaxModel(model);
+}
+
+function modelHasStealthGuideButtons(model) {
+  if (!model) return false;
+  if (model.name === 'F1' && model.type === 'Pro') return false;
+  if (model.type !== 'Max' && model.type !== 'Long' && model.type !== 'Ultra') return true;
+  return model.type === 'Max' || model.type === 'Long' || model.type === 'Ultra';
+}
+
+function modelUsesDirectStealthControl(model) {
+  return isMtUltraCardModel(model);
+}
+
+function buildOnboardingGuideSteps(model) {
+  const steps = [
+    {
+      key: 'foldAngle',
+      anchor: '#foldAngleGuideAnchor',
+      title: '设置「折叠角度」',
+      desc: '这里用于调整设备收回后的折叠位置。为避免误操作，进入设置时需要管理员权限。'
+    },
+    {
+      key: 'openAngle',
+      anchor: '#openAngleGuideAnchor',
+      title: '设置「打开角度」',
+      desc: '这里用于调整设备展开后的角度，可根据实际安装位置进行设置。'
+    }
+  ];
+  if (modelNeedsCalGuide(model)) {
+    steps.push({
+      key: 'cal',
+      anchor: '#calGuideAnchor',
+      title: '先点击「自动校准」',
+      desc: '首次使用请先完成自动校准，让设备完成初始标定。',
+      scrollCenterRatio: 0.50
+    });
+  }
+  if (modelNeedsSettingsGuide(model)) {
+    steps.push(isF1MaxModel(model) ? {
+      key: 'settings',
+      anchor: '#settingsGuideAnchor',
+      title: '打开「高级设置」',
+      desc: '可在此按需调整设备参数。',
+      scrollCenterRatio: 0.50
+    } : {
+      key: 'settings',
+      anchor: '#settingsGuideAnchor',
+      title: '再打开「高级设置」',
+      desc: '校准完成后，可在高级设置中按需调整参数。',
+      scrollCenterRatio: 0.50
+    });
+  }
+  if (isMtUltraCardModel(model)) {
+    const ultraControlSteps = [
+      {
+        key: 'f2ControlPanel',
+        anchor: '#f2ControlPanelGuideAnchor',
+        title: '展开「控制」面板',
+        desc: '点击这里展开控制面板，可进行远程翻开、收起等操作。',
+        scrollCenterRatio: 0.50,
+        controlPanelOpen: false
+      },
+      {
+        key: 'f2Flap',
+        anchor: '#f2FlapControlGuideAnchor',
+        title: '「收起」与「翻开」',
+        desc: '连接蓝牙后，可在此远程控制牌照架收起或翻开。',
+        scrollCenterRatio: 0.50,
+        controlPanelOpen: true
+      },
+      {
+        key: 'f2Speed',
+        anchor: '#f2SpeedGuideAnchor',
+        title: '调节「运行速度」',
+        desc: '拖动滑块可调整翻板运行速度，数值越高动作越快。',
+        scrollCenterRatio: 0.50,
+        controlPanelOpen: true
+      },
+      {
+        key: 'f2Voice',
+        anchor: '#f2VoiceGuideAnchor',
+        title: '「语音控制」',
+        desc: '点击进入语音控制页，可通过语音指令远程操作设备。',
+        scrollCenterRatio: 0.50,
+        controlPanelOpen: true
+      }
+    ];
+    // 插在折叠/打开角度之后、自动校准之前
+    const calIdx = steps.findIndex((s) => s.key === 'cal');
+    if (calIdx >= 0) {
+      steps.splice(calIdx, 0, ...ultraControlSteps);
+    } else {
+      const settingsIdx = steps.findIndex((s) => s.key === 'settings');
+      if (settingsIdx >= 0) {
+        steps.splice(settingsIdx, 0, ...ultraControlSteps);
+      } else {
+        steps.push(...ultraControlSteps);
+      }
+    }
+  }
+  if (modelHasStealthGuideButtons(model)) {
+    const direct = modelUsesDirectStealthControl(model);
+    steps.push({
+      key: 'stealthEnter',
+      anchor: '#stealthEnterGuideAnchor',
+      title: '点击「开启隐蔽模式」',
+      desc: direct
+        ? '可直接点击按钮，通过蓝牙远程开启隐蔽模式。'
+        : '这里是教学入口，点击可查看如何在车把上开启隐蔽模式。',
+      scrollCenterRatio: 0.50
+    });
+    steps.push({
+      key: 'stealthExit',
+      anchor: '#stealthExitGuideAnchor',
+      title: '点击「退出隐蔽模式」',
+      desc: direct
+        ? '可直接点击按钮退出隐蔽模式，无需再到车把操作。'
+        : '这里是教学入口，点击可查看如何在车把上退出隐蔽模式。',
+      scrollCenterRatio: 0.50
+    });
+  }
+  if (isRemoteAssistProduct(scanModelToProductKey(model))) {
+    steps.push({
+      key: 'remoteAssist',
+      anchor: '#remoteAssistGuideAnchor',
+      title: '远程协助',
+      desc: '遇到不会设置或设备异常时，可以点这里请求技师远程接入。用户确认后，技师可协助查看状态并操作设备。'
+    });
+  }
+  return steps.map((step, idx) => ({
+    ...step,
+    tag: `第 ${idx + 1} 步`,
+    stepNo: idx + 1,
+    total: 0
+  })).map((step, _idx, arr) => ({ ...step, total: arr.length }));
+}
+
+function modelNeedsOnboardingGuide(model) {
+  return buildOnboardingGuideSteps(model).length > 0;
+}
+
+/** 控制中心：任意型号首次成功连接蓝牙后写入，之后不再自动弹教程（可手动点「教程」） */
+const SCAN_BLE_CONNECTED_ONCE_KEY = 'mt_scan_ble_connected_once_v1';
+/** @deprecated 仅 migrateLegacyOnboardingGuideFlags 兼容旧数据，不再用于控制自动教程 */
+const APP_FIRST_VISIT_GUIDE_DONE_KEY = 'mt_scan_first_visit_guide_done_v1';
+const LEGACY_ONBOARDING_GUIDE_KEY_PREFIX = 'hasShownOnboardingGuide_';
+
+function hasScanBleConnectedOnce() {
+  try {
+    return !!wx.getStorageSync(SCAN_BLE_CONNECTED_ONCE_KEY);
+  } catch (e) {
+    return false;
+  }
+}
+
+function markScanBleConnectedOnceStorage() {
+  try {
+    wx.setStorageSync(SCAN_BLE_CONNECTED_ONCE_KEY, true);
+  } catch (e) { /* ignore */ }
+}
+
+function migrateLegacyOnboardingGuideFlags() {
+  try {
+    if (wx.getStorageSync(APP_FIRST_VISIT_GUIDE_DONE_KEY)) return;
+    const info = wx.getStorageInfoSync();
+    const keys = (info && info.keys) || [];
+    if (keys.some((k) => String(k).indexOf(LEGACY_ONBOARDING_GUIDE_KEY_PREFIX) === 0)) {
+      wx.setStorageSync(APP_FIRST_VISIT_GUIDE_DONE_KEY, true);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function enrichScanCardModel(raw) {
+  const m = enrichScanGalleryModel(raw);
+  m.hasUsageGuide = !m.canLearn && modelNeedsOnboardingGuide(m);
+  return m;
+}
+
+function resolveMtUltraMagSettingSendText(key, targetVal, model) {
+  if (!key || !targetVal) return '';
+  if (key === 'faultDetect') {
+    return targetVal === 'left' ? '开启堵转检测' : (targetVal === 'right' ? '关闭堵转检测' : '');
+  }
+  if (key === 'selfRepair') {
+    return targetVal === 'left' ? '开启电机检测' : (targetVal === 'right' ? '关闭电机检测' : '');
+  }
+  if (key === 'powerOn') {
+    return targetVal === 'left' ? '开机下翻' : (targetVal === 'right' ? '开机上翻' : '');
+  }
+  if (key === 'shutdown') {
+    return targetVal === 'left' ? '打开收回' : (targetVal === 'right' ? '关闭收回' : '');
+  }
+  if (key === 'travelMode') {
+    return targetVal === 'left' ? '关闭出行' : (targetVal === 'right' ? '开启出行' : '');
+  }
+  if (key === 'smoothMode') {
+    return targetVal === 'left' ? '开启平滑' : (targetVal === 'right' ? '关闭平滑' : '');
+  }
+  if (key === 'stealthBtnExit') {
+    return targetVal === 'left' ? '允许按钮退出' : (targetVal === 'right' ? '禁止按钮退出' : '');
+  }
+  if (key === 'powerOffLock') {
+    return targetVal === 'left' ? 'P1' : (targetVal === 'right' ? 'P0' : '');
+  }
+  if (key === 'heightMon' && isF3MaxModel(model)) {
+    return targetVal === 'left' ? 'H1' : (targetVal === 'right' ? 'H0' : '');
+  }
+  return '';
 }
 
 const F2_DELAY_POWER_RISK_MINUTES = 240; // 超过 4 小时才提示可能亏电
@@ -741,30 +1217,46 @@ function f2TravelDurationIndexByHours(hours) {
 const BLE_SEND_GAP_MS = 320;
 /** 翻板打开/关闭：更短间隔、优先出队，提高点击响应 */
 const FLAP_BLE_SEND_GAP_MS = 200;
-const BLE_ANGLE_STEP_GAP_MS = 300;
+const BLE_ANGLE_STEP_GAP_MS = 380;
 /** 演示模式：到位后切换下一步前的等待 */
 const F2_DEMO_STEP_GAP_MS = 2000;
-/** 演示模式：未到位时慢速补发间隔（避免抖动） */
-const F2_DEMO_RESEND_INTERVAL_MS = 3500;
+/** 演示模式：未到位时补发间隔（缩短至2秒，提高远距离成功率） */
+const F2_DEMO_RESEND_INTERVAL_MS = 2000;
 /** 牌照仪表：关=-130° 开=45°；关→开顺时针，开→关逆时针 */
 const FLAP_GAUGE_CLOSED_DEG = -130;
 const FLAP_GAUGE_OPEN_DEG = 45;
-const FLAP_GAUGE_CYCLE_MS = 1000;
-const FLAP_GAUGE_MIN_LAPS = 1;
-const FLAP_GAUGE_SETTLE_MS = 520;
-const FLAP_GAUGE_TICK_MS = 16;
+const FLAP_GAUGE_CYCLE_MS = 900;
+/** 到位前至少转过的圈数（保证有可见的「转动中」过程） */
+const FLAP_GAUGE_MIN_LAPS = 0.75;
+const FLAP_GAUGE_TICK_MS = 32;
+const FLAP_GAUGE_EASE_MS = 520;
+const FLAP_GAUGE_SPIN_WATCHDOG_MS = 10000;
+
+function normDeg360(deg) {
+  let d = deg % 360;
+  if (d < 0) d += 360;
+  return d;
+}
 /** 高级设置：单次发送即可，避免 3 连发堆队导致灯迟闪、设置像“卡住后一起出去” */
 const SETTINGS_BLE_SEND_TIMES = 1;
 const SETTINGS_BLE_SEND_GAP_MS = 280;
 /** 高级设置：回读未成功前等待多久再显示「数据发送中」 */
 const SETTINGS_SENDING_MODAL_DELAY_MS = 3000;
+/** 高级设置：自发送起等待设备回读的最长时间，超时则关闭弹窗并视为发送失败 */
+const SETTINGS_BLE_VERIFY_TIMEOUT_MS = 6000;
+/** 远协调试日志：指令处于「发送中」超过该时间未回传则标为失败 */
+const REMOTE_ASSIST_CMD_TIMEOUT_MS = 6000;
+/** 波轮：单次手指手势 UI 与蓝牙最多 ±3 格（全系列统一；松手后可继续滑） */
 const OPEN_ANGLE_TICKS_PER_GESTURE = 3;
 const OPEN_ANGLE_RAPID_SWIPE_WINDOW_MS = 2500;
-/** 波轮每连续拨动最多发几格蓝牙，随后暂停等待发送 */
-const OPEN_ANGLE_BURST_MAX_TICKS = 3;
-const OPEN_ANGLE_BURST_COOLDOWN_MS = OPEN_ANGLE_BURST_MAX_TICKS * BLE_ANGLE_STEP_GAP_MS + BLE_SEND_GAP_MS;
-/** 波轮跟手：手指 px → 轨道 px（1 ≈ 1:1，每 tickWidthPx 过 1 格） */
+/** 波轮：手指移动多少 px 才算拨过 1 格（1 格 = 2°，对齐 tickWidthPx） */
 const OPEN_ANGLE_RULER_SENSITIVITY = 1;
+/**
+ * F3 MAX 打开角度步进间隔：
+ * F3 固件每条指令负载重，过快会丢包；略高于 F2 保证每格都发得出去。
+ * UI 仍由手指 1:1 驱动，不跟蓝牙回读。
+ */
+const F3_OPEN_ANGLE_BLE_STEP_GAP_MS = 320;
 /** 同款 Ultra 固件：打开角度上限 180° */
 const OPEN_ANGLE_ULTRA_MAX_DEG = 180;
 /** 折叠舵机角（固件 item4）：0~180，默认 150 对应 foldGap=20 */
@@ -772,7 +1264,7 @@ const FOLD_SERVO_ANGLE_DEFAULT = 150;
 const FOLD_SERVO_ANGLE_MIN = 0;
 const FOLD_SERVO_ANGLE_MAX = 180;
 const F3_MAX_FOLD_SERVO_ANGLE_MIN = 120;
-const F3_MAX_OPEN_ANGLE_MAX_DEG = 90;
+const F3_MAX_OPEN_ANGLE_MAX_DEG = 180;
 const FOLD_GAP_BASE = 20;
 const FOLD_GAP_PER_DEG = 2;
 
@@ -789,8 +1281,7 @@ function foldGapFromServoAngle(angle) {
 }
 
 
-const { PRODUCT_DETAIL_OPTIONS } = require('../../../utils/productModels.js');
-
+const { PRODUCT_DETAIL_OPTIONS, modelRequiresOtaGate, enrichScanGalleryModel } = require('../../../utils/productModels.js');
 const ADMIN_BIND_MODEL_OPTIONS = PRODUCT_DETAIL_OPTIONS;
 
 const {
@@ -801,6 +1292,53 @@ const {
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const { parseF2StatusLine, buildF2FaultModalPayload, buildF2AdvUiUpdates, buildF2FlapPanelUpdates, buildF2ConnectModalQueue, buildF2HwMonitorUpdates, buildF3HeightMonitorUpdates, buildF3HeightSettingsUpdates, packetMatchesBleVerify, F2_FAULT_ACK_CMD, buildTravelModeTip, formatF3HeightMm } = require('../../../utils/f2FaultReport.js');
 const f2VoiceBridge = require('../../../utils/f2VoiceBridge.js');
+const { startGuideBtnCountdown, clearGuideBtnCountdown, GUIDE_BTN_LOCK_SEC } = require('../../../utils/guideBtnCountdown.js');
+
+function enrichBindTarget(target) {
+  if (!target) return target;
+  if (target.targetType === 'fault_pending') {
+    return Object.assign({}, target, {
+      bindTypeLabel: '故障核验',
+      cardSummary: '设备卡 SN 待录入，确认后写入新机 SN',
+      actionTitle: '同步新机 SN 到设备卡',
+      explainLines: [
+        '新机 SN 写入用户设备卡，替换「待录入」',
+        '用户蓝牙损坏，无需连接即可报修',
+        '不走普通蓝牙绑定流程'
+      ],
+      confirmBtnText: '确认同步到设备卡'
+    });
+  }
+  if (target.targetType === 'replacement') {
+    const oldSn = String(target.oldSn || '').trim();
+    const isMotherboard = target.replacementKind === 'motherboard';
+    const explainLines = oldSn
+      ? [
+          isMotherboard ? '用户设备卡 SN 更新为当前新主板' : '用户设备卡 SN 更新为当前新机',
+          `旧 SN ${oldSn} 立即失效，旧主板连接会被断开`,
+          '用户需用新主板蓝牙重新连接'
+        ]
+      : [
+          isMotherboard ? '用户设备卡 SN 更新为当前新主板' : '用户设备卡 SN 更新为当前新机',
+          isMotherboard ? '主板更换状态标记为已完成' : '换机工单标记为已完成',
+          '用户需用新主板蓝牙重新连接'
+        ];
+    return Object.assign({}, target, {
+      bindTypeLabel: isMotherboard ? '更换主板' : '售后换机',
+      cardSummary: oldSn
+        ? `旧 SN ${oldSn} 更换为新主板`
+        : (isMotherboard ? '录入更换后的新主板 SN' : '完成换机，绑定新机 SN'),
+      actionTitle: isMotherboard ? '完成主板 SN 替换' : '完成换机绑定',
+      explainLines,
+      confirmBtnText: isMotherboard ? '确认替换主板 SN' : '确认完成换机'
+    });
+  }
+  return target;
+}
+
+function enrichBindTargets(list) {
+  return (list || []).map(enrichBindTarget);
+}
 const {
   scanModelToProductKey,
   productKeyToScanModel,
@@ -817,15 +1355,15 @@ const CARD_SWIPE_MS = 300;
 Page({
   data: {
     models: [
-      { id: 1, name: 'F1', type: 'Pro', tag: 'SERIES 1', icon: iconF1Pro, status: 'active' },
-      { id: 2, name: 'F1', type: 'Max', tag: 'SERIES 1', icon: iconF1Max, status: 'next' },
-      { id: 8, name: 'F1', type: 'Ultra', tag: 'SERIES 1', icon: iconF1ProMax, status: 'hidden' },
-      { id: 3, name: 'F2', type: 'Pro', tag: 'SERIES 2', icon: iconF2Pro, status: 'hidden' },
-      { id: 4, name: 'F2', type: 'Max', tag: 'SERIES 2', icon: iconF2Max, status: 'hidden' },
-      { id: 9, name: 'F2', type: 'Ultra', tag: 'SERIES 2', icon: iconF2Ultra, status: 'hidden' },
-      { id: 5, name: 'F2', type: 'Long', tag: 'SERIES 2', icon: iconF2MaxLong, status: 'hidden' },
-      { id: 6, name: 'F3', type: 'Pro', tag: 'SERIES 3', icon: iconF3Pro, status: 'hidden' },
-      { id: 7, name: 'F3', type: 'Max', tag: 'SERIES 3', icon: iconF3Max, status: 'hidden' },
+      enrichScanCardModel({ id: 1, name: 'F1', type: 'Pro', tag: 'SERIES 1', icon: iconF1Pro, status: 'active' }),
+      enrichScanCardModel({ id: 2, name: 'F1', type: 'Max', tag: 'SERIES 1', icon: iconF1Max, status: 'next' }),
+      enrichScanCardModel({ id: 8, name: 'F1', type: 'Ultra', tag: 'SERIES 1', icon: iconF1ProMax, status: 'hidden' }),
+      enrichScanCardModel({ id: 3, name: 'F2', type: 'Pro', tag: 'SERIES 2', icon: iconF2Pro, status: 'hidden' }),
+      enrichScanCardModel({ id: 4, name: 'F2', type: 'Max', tag: 'SERIES 2', icon: iconF2Max, status: 'hidden' }),
+      enrichScanCardModel({ id: 9, name: 'F2', type: 'Ultra', tag: 'SERIES 2', icon: iconF2Ultra, status: 'hidden' }),
+      enrichScanCardModel({ id: 5, name: 'F2', type: 'Long', tag: 'SERIES 2', icon: iconF2MaxLong, status: 'hidden' }),
+      enrichScanCardModel({ id: 6, name: 'F3', type: 'Pro', tag: 'SERIES 3', icon: iconF3Pro, status: 'hidden' }),
+      enrichScanCardModel({ id: 7, name: 'F3', type: 'Max', tag: 'SERIES 3', icon: iconF3Max, status: 'hidden' }),
       { id: 100, name: 'CAN', type: 'Learn', tag: 'OBD DEBUG', icon: iconCanLearn, status: 'hidden', canLearn: true },
     ],
     currentIndex: 0,
@@ -873,6 +1411,8 @@ Page({
     remoteAssistLastCmdAt: 0,
     remoteAssistDebugLogs: [],
     remoteAssistConsentVisible: false,
+    showRemoteAssistStayModal: false,
+    remoteAssistStayModalClosing: false,
 
     screenshotHourlyCount: 0,
     screenshotDailyCount: 0,
@@ -882,6 +1422,9 @@ Page({
     showTutorialModal: false, 
     showKeyModal: false,     
     showDisconnectTip: false,
+    showModelPickTip: false,
+    modelPickTipClosing: false,
+    modelPickGroups: [],
     showApproachTip: false,  // 新增：靠近车辆提示
     
     // 新增：蓝牙未开启提示弹窗
@@ -902,12 +1445,19 @@ Page({
     adminRegisteredSn: '',
     adminRegisteredModel: '',
     currentConnectedRawSn: '',
-    /** 售后换机：待选工单列表与选中项 */
+    /** 售后换机：待选工单列表与选中项（已并入统一绑定目标） */
     showAdminRepairPicker: false,
     adminRepairPickerClosing: false,
     adminAwaitingRepairs: [],
     adminSelectedRepairId: '',
     adminSelectedRepair: null,
+    /** 统一绑定目标：待换机 + 故障待录入 */
+    showAdminBindPicker: false,
+    adminBindPickerClosing: false,
+    adminBindPickerActive: false,
+    adminBindTargets: [],
+    adminSelectedBindTargetId: '',
+    adminSelectedBindTarget: null,
     /** 蓝牙意外断开后自动重连 */
     isBleAutoReconnecting: false,
     bleReconnectAttempt: 0,
@@ -950,13 +1500,13 @@ Page({
     
     // 🔴 新增：所有弹窗的倒计时相关数据
     passwordBtnLocked: true,
-    passwordBtnText: '确认 (2s)',
+    passwordBtnText: `确认 (${GUIDE_BTN_LOCK_SEC}s)`,
     tutorialBtnLocked: true,
-    tutorialBtnText: '知道了 (2s)',
+    tutorialBtnText: `知道了 (${GUIDE_BTN_LOCK_SEC}s)`,
     keyBtnLocked: true,
-    keyBtnText: '确认 (2s)',
+    keyBtnText: `确认 (${GUIDE_BTN_LOCK_SEC}s)`,
     angleHintBtnLocked: true,
-    angleHintBtnText: '知道了 (2s)',
+    angleHintBtnText: `知道了 (${GUIDE_BTN_LOCK_SEC}s)`,
     
     passwordInput: '',        
     pendingEditType: '',      
@@ -1030,10 +1580,27 @@ Page({
     // 【新增】控制全新产品提示弹窗
     showNewProductHint: false, // 控制弹窗显示
     newProductBtnLocked: true, // 按钮是否锁定
-    newProductBtnText: '知道了 (2s)', // 按钮文案
+    newProductBtnText: `知道了 (${GUIDE_BTN_LOCK_SEC}s)`, // 按钮文案
+
+    // F2 MAX / F2 ULTRA / F3 MAX 等新用户分步指引
+    showCalSettingsGuide: false,
+    calSettingsGuideStep: 1,
+    calGuideStepTag: '',
+    calGuideTitle: '',
+    calGuideDesc: '',
+    calGuideBtnText: '下一步',
+    calGuideBtnLocked: true,
+    powerOffLockGuideBtnText: '我知道了',
+    powerOffLockGuideBtnLocked: true,
+    calGuideArrowDir: 'down',
+    calGuideBubbleStyle: '',
+    calGuideArrowStyle: '',
+    calGuideSpotStyle: '',
+    mainControlScrollTop: 0,
 
     // === 新增：高级设置相关数据 ===
     showSettingsModal: false, // 控制高级设置弹窗
+    settingsModalCompact: true, // 非 Ultra/F3 MAX：弹窗随内容高度，不拉满屏
     toastClass: '',           // 控制 Toast 动画
     
     // 图标数据绑定
@@ -1191,9 +1758,64 @@ Page({
     stealthTextBlinkInterval: null, // 文字闪烁定时器（用于退出模式后5次）
   },
 
+  /** 进入控制中心：弹「按价格找型号」引导（普通用户仅首次；管理员每次都弹，便于查看效果） */
+  _maybeShowModelPickTip() {
+    setTimeout(() => {
+      // 已经进入详情页就不打扰
+      if (this.data.showDetail) return;
+      if (!this.data.isAdmin) {
+        try {
+          if (wx.getStorageSync('scan_model_pick_tip_seen_v1')) return;
+        } catch (e) { /* ignore */ }
+      }
+      // 按三大系列（+F2 Long）分块：图标认外观 → 价格认配置
+      const TYPE_BADGE = { Pro: '标准版', Max: '高级版', Ultra: '旗舰款', Long: '加长款' };
+      const groups = [];
+      const groupMap = {};
+      (this.data.models || []).forEach((m) => {
+        if (!m.priceDisplay || m.canLearn) return;
+        const isLong = m.name === 'F2' && m.type === 'Long';
+        const key = isLong ? 'F2 Long' : m.name;
+        if (!groupMap[key]) {
+          groupMap[key] = {
+            series: key,
+            title: isLong ? 'F2 Long' : `${m.name} 系列`,
+            badge: isLong ? '加长款' : '',
+            icon: m.icon || '',
+            items: []
+          };
+          groups.push(groupMap[key]);
+        }
+        groupMap[key].items.push({
+          type: m.type,
+          badge: TYPE_BADGE[m.type] || m.type,
+          priceDisplay: m.priceDisplay
+        });
+      });
+      this.setData({ showModelPickTip: true, modelPickGroups: groups });
+    }, 600);
+  },
+
+  closeModelPickTip() {
+    try {
+      wx.setStorageSync('scan_model_pick_tip_seen_v1', true);
+    } catch (e) { /* ignore */ }
+    this.setData({ modelPickTipClosing: true });
+    setTimeout(() => {
+      this.setData({ showModelPickTip: false, modelPickTipClosing: false });
+    }, 250);
+  },
+
+
   onLoad(options) {
+    migrateLegacyOnboardingGuideFlags();
     // 🔴 计算导航栏高度（适配所有机型）
     this.calcNavBarInfo();
+    const hasAdminBindWorkflow = !!(
+      options &&
+      (options.pendingSnUser || options.replacementRepairId)
+    );
+    if (!hasAdminBindWorkflow) this._maybeShowModelPickTip();
     const app = getApp();
     if (app && app.globalData && app.globalData.updatePageVisit) {
       app.globalData.updatePageVisit('scan');
@@ -1237,14 +1859,27 @@ Page({
     this.setData({ isNavigatingToOta: false });
     
     this.ble.onConnecting = (device) => {
+      if (isBlockedDebugBleDevice(device)) {
+        this._rejectBlockedDebugBleDevice(device, 'connecting');
+        return;
+      }
       if (device) this._lastBleDevice = device;
+      this._connectingStartedAt = Date.now();
       this.setData({
         isScanning: false,
         isConnecting: true
       });
     };
 
+    this.ble.onDebugDeviceBlocked = (device) => {
+      this._rejectBlockedDebugBleDevice(device, 'blocked');
+    };
+
     this.ble.onLinkEstablished = (device) => {
+      if (isBlockedDebugBleDevice(device)) {
+        this._rejectBlockedDebugBleDevice(device, 'link');
+        return;
+      }
       if (device) this._lastBleDevice = device;
       const rawName = device.name || device.localName || '';
       const numMatch = rawName.replace(/[^0-9]/g, '');
@@ -1259,6 +1894,10 @@ Page({
     };
 
     this.ble.onConnected = async (device) => {
+      if (isBlockedDebugBleDevice(device)) {
+        this._rejectBlockedDebugBleDevice(device, 'connected');
+        return;
+      }
       const rawName = device.name || device.localName || '';
       const normalizedSn = this.normalizeSnFromBluetoothName(rawName);
       this._lastBleDevice = device;
@@ -1325,11 +1964,12 @@ Page({
         }
 
         if (normalizedSn && this.data.isAdmin) {
-          await this._maybeShowAdminRepairPickerThenSn(normalizedSn);
+          await this._maybeShowAdminBindPickerThenSn(normalizedSn);
         }
 
         this._publishBleToVoiceBridge(true);
         this._flushPendingBleIntent();
+        this._markScanBleConnectedOnce();
       } catch (err) {
         console.error('❌ [onConnected] 连接后校验失败', err);
         this.ble.disconnect(true);
@@ -1345,7 +1985,18 @@ Page({
     this.ble.onConnectFailed = (err, device, opts) => {
       const manual = !!(opts && opts.manual);
       if (device) this._lastBleDevice = device;
+      const errMsg = String((err && err.message) || (err && err.errMsg) || '');
+      const isTimeout = errMsg.indexOf('connect_timeout') >= 0
+        || errMsg.indexOf('gatt_timeout') >= 0
+        || errMsg.indexOf('timeout') >= 0;
       const shouldReconnect = !manual && !this._bleReconnectStoppedByUser && this._lastBleDevice;
+      if (isTimeout && !manual) {
+        this._showCustomToast(
+          shouldReconnect ? '连接超时，正在重试…' : '连接超时，请点击重新连接',
+          'none',
+          2200
+        );
+      }
       this._applyBleLinkUi({
         isConnected: false,
         isScanning: false,
@@ -1401,7 +2052,6 @@ Page({
     // const winInfo2 = wx.getWindowInfo();
     // this.setData({ statusBarHeight: winInfo2.statusBarHeight || 44 });
     
-    const sys = wx.getSystemInfoSync();
     // 注意：CSS中使用的是px单位，所以直接计算px
     this.tickWidthPx = 20; // 每个刻度总宽度20px
 
@@ -1409,9 +2059,10 @@ Page({
     const isF1Legacy = currentModel.name.includes('F1') && !isMtUltraCardModel(currentModel);
     this.maxAngle = isF1Legacy ? 180 : 170;
 
-    // 生成刻度数据
+    // 生成刻度数据 (扩展到更多刻度，实现无限滑动视觉效果)
     const count = (this.maxAngle - 0) / 2 + 1;
-    const ticks = new Array(Math.floor(count)).fill(0);
+    const extendedCount = Math.max(count + 100, 200); // 至少200个刻度，支持无限滑动
+    const ticks = new Array(Math.floor(extendedCount)).fill(0);
     this.setData({ ticks });
 
     // 强制更新一次视图到 0度
@@ -1422,6 +2073,17 @@ Page({
       this.checkAdminPrivilege();
       this._refreshRemoteAssistCardFlags();
     }, 80);
+
+    if (options && options.pendingSnUser) {
+      this._pendingSnEntryUser = decodeURIComponent(options.pendingSnUser);
+      this._pendingSnEntryModel = options.pendingSnModel
+        ? decodeURIComponent(options.pendingSnModel)
+        : '';
+    }
+    if (options && options.replacementRepairId) {
+      this._pendingReplacementRepairId = decodeURIComponent(options.replacementRepairId);
+      this._autoStartReplacementBle = true;
+    }
   },
 
   // ================== 管理员权限检查 ==================
@@ -1438,10 +2100,12 @@ Page({
             if (cache.isAdmin) {
               this._refreshRemoteAssistCardFlags();
               this._startRemoteAssistPendingPoll();
+              this._tryPendingSnEntryHint();
             }
           });
         } else if (cache.isAdmin) {
           this._startRemoteAssistPendingPoll();
+          this._tryPendingSnEntryHint();
         }
         return;
       }
@@ -1460,6 +2124,7 @@ Page({
         this.setData({ isAdmin: true }, () => {
           this._refreshRemoteAssistCardFlags();
           this._startRemoteAssistPendingPoll();
+          this._tryPendingSnEntryHint();
         });
         screenshotExempt.markGuanliyuanCache(true);
         screenshotExempt.allowScreenCaptureIfExempt();
@@ -1565,7 +2230,16 @@ Page({
     this._restoreRemoteAssistLocal();
     this._ensureDetailLayerVisible();
     if (this.data.isAdmin) {
+      this._startRemoteAssistPendingPoll();
       this._pollRemoteAssistPending();
+    } else {
+      // 权限检查可能晚于 onShow，补一次轮询启动
+      setTimeout(() => {
+        if (this.data.isAdmin) {
+          this._startRemoteAssistPendingPoll();
+          this._pollRemoteAssistPending();
+        }
+      }, 350);
     }
 
     console.log('✅ [onShow] 页面状态已恢复');
@@ -1667,14 +2341,20 @@ Page({
     if (type === 'screenshot') {
       wx.setStorageSync('is_screenshot_banned', true);
     }
-    const sysInfo = wx.getSystemInfoSync();
+    let deviceInfo = '';
+    let phoneModel = '';
+    try {
+      const d = wx.getDeviceInfo ? wx.getDeviceInfo() : {};
+      deviceInfo = d.system || '';
+      phoneModel = d.model || '';
+    } catch (e) { /* ignore */ }
     wx.cloud.callFunction({
       name: 'banUserByScreenshot',
       data: {
         type,
         banPage: 'scan',
-        deviceInfo: sysInfo.system || '',
-        phoneModel: sysInfo.model || ''
+        deviceInfo,
+        phoneModel
       }
     }).catch((err) => {
       console.error('[scan] 封禁云函数调用失败:', err);
@@ -1732,6 +2412,7 @@ Page({
 
   onUnload() {
     this._stopFlapGaugeSpinLoop();
+    this._clearFlapGaugeEaseTimer();
     this._clearF3CalTimer();
     this._clearSettingSendingWatch();
     // 🔴 停止定时检查
@@ -1754,9 +2435,19 @@ Page({
       clearTimeout(this._foldFineTuneHintTimer);
       this._foldFineTuneHintTimer = null;
     }
+    if (this._calSettingsGuideTimer) {
+      clearInterval(this._calSettingsGuideTimer);
+      this._calSettingsGuideTimer = null;
+    }
+    if (this._calSettingsGuideStartTimer) {
+      clearTimeout(this._calSettingsGuideStartTimer);
+      this._calSettingsGuideStartTimer = null;
+    }
     if (this.ble) {
       this._stopBleLinkWatch();
       this.stopBleAutoReconnect(false, true);
+      // 先释放可能挂起的连接（此时 this.ble.device 还没赋值，disconnect 管不到它）
+      this.ble.cancelPendingConnect();
       this.ble.disconnect(true);
     }
     if (typeof this._teardownScreenshotProtection === 'function') {
@@ -1799,6 +2490,32 @@ Page({
     return this.data.remoteAssistRole === 'admin' &&
       !!this.data.remoteAssistSessionId &&
       this.data.remoteAssistSessionStatus === 'active';
+  },
+
+  /** 技师端远协：指令经云端转发到用户手机蓝牙 */
+  _isRemoteAssistAdminRelay() {
+    return this._isRemoteAssistAdminActive();
+  },
+
+  _guardRemoteAssistAdminRelay(showToast = true) {
+    if (!this._isRemoteAssistAdminRelay()) return false;
+    if (!this.data.remoteAssistUserAccepted) {
+      if (showToast) {
+        this._showCustomToast('等待用户接受远协', 'none', 2200);
+      }
+      return false;
+    }
+    if (this.data.remoteSessionBleConnected) return true;
+    if (showToast) {
+      this._showCustomToast('用户蓝牙未连接，无法控制', 'none', 2200);
+    }
+    return false;
+  },
+
+  _relayBleCommand(text, times = 1, interval = 0) {
+    if (!text || !this._guardRemoteAssistAdminRelay()) return false;
+    this._remoteAssistEnqueueCommand(text, times, interval);
+    return true;
   },
 
   _isRemoteAssistUserSessionActive() {
@@ -1849,7 +2566,7 @@ Page({
       fail: '送达失败',
       enqueue_fail: '入队失败',
       coalesced: '已合并',
-      timeout: '未收到回传'
+      timeout: '发送失败'
     };
     return map[status] || status;
   },
@@ -1914,7 +2631,7 @@ Page({
 
     logs = logs.map((l) => {
       if (l.status !== 'sending' || !l.enqueueAt) return l;
-      if (now - l.enqueueAt < 8000) return l;
+      if (now - l.enqueueAt < REMOTE_ASSIST_CMD_TIMEOUT_MS) return l;
       changed = true;
       return {
         ...l,
@@ -1957,6 +2674,14 @@ Page({
       return true;
     }
     return false;
+  },
+
+  /** 本机蓝牙或技师远协（用户端已连蓝牙）均可下发指令 */
+  _canSendBleCommand() {
+    if (this._isRemoteAssistAdminRelay()) {
+      return !!this.data.remoteSessionBleConnected;
+    }
+    return this._isBleLinked();
   },
 
   // 是否允许点击控制区、进入子页面等（管理员未连蓝牙也可操作 UI）
@@ -2043,7 +2768,9 @@ Page({
     const patch = { ...(detailPatch || {}), currentModel };
     this.updateCardStatus(safeCurrent, () => {
       if (!this.data.showDetail) {
-        this._openDetailAnimated(patch);
+        this._openDetailAnimated(patch, () => {
+          this._maybeShowCalSettingsGuide(currentModel);
+        });
         if (typeof done === 'function') {
           wx.nextTick(done);
         }
@@ -2051,6 +2778,7 @@ Page({
       }
       this._ensureDetailLayerVisible();
       this.setData(patch, () => {
+        this._maybeShowCalSettingsGuide(currentModel);
         if (typeof done === 'function') done();
       });
     });
@@ -2074,7 +2802,11 @@ Page({
     this._jumpToCardAndOpenDetail(targetIdx, {
       angleBtnText: resolveOpenAngleBtnText(currentModel),
       f2ControlPanelOpen: true,
-      ...buildF2StealthUiFlags(currentModel, this.data.settingState, bleLinked)
+      ...buildRemoteAssistAdminExtras(
+        currentModel,
+        this.data.settingState,
+        bleLinked
+      )
     });
   },
 
@@ -2140,6 +2872,48 @@ Page({
     }
   },
 
+  _dispatchRemoteAssistBleCmd(cmd, times, gapAfterMs) {
+    const text = String(cmd || '');
+    const base = text.replace(/#$/, '');
+    const gap = Math.max(Number(gapAfterMs) || 0, BLE_SEND_GAP_MS);
+    const n = Math.min(5, Math.max(1, Number(times) || 1));
+
+    if (/^(DA|TB)/i.test(base)) {
+      const full = `${base}#`;
+      const parts = full.split('');
+      this._f3HeightBleTxActive = true;
+      this._bumpF3HeightBleGrace(parts.length * 280 + 8000);
+      parts.forEach((ch, idx) => {
+        this._enqueueBleSend(ch, 280, {
+          f3HeightChar: true,
+          f3HeightIdx: idx,
+          f3HeightTotal: parts.length
+        });
+      });
+      return;
+    }
+    if (/^M[01]$/i.test(base)) {
+      for (let i = 0; i < n; i++) {
+        this._enqueueBleSend(`${base}#`, gapAfterMs != null ? gapAfterMs : 1000);
+      }
+      return;
+    }
+    const f3Fold = base.toUpperCase();
+    if (f3Fold === 'F3FR') {
+      this._enqueueBleSend('F3FR#', 250);
+      this._enqueueBleSend('F3FR#', 250);
+      return;
+    }
+    if (f3Fold === 'F3FU' || f3Fold === 'F3FD') {
+      const wire = f3Fold === 'F3FU' ? 'F3FU#' : 'F3FD#';
+      this._enqueueBleSendBurst(wire, n, 120);
+      return;
+    }
+    for (let i = 0; i < n; i++) {
+      this._enqueueBleSend(text, gap);
+    }
+  },
+
   _executeRemoteAssistCommands(cmds) {
     const list = cmds || [];
     if (!list.length) return Promise.resolve(true);
@@ -2172,11 +2946,10 @@ Page({
         return;
       }
       const gap = Math.max(interval > 0 ? interval : 300, BLE_SEND_GAP_MS);
-      for (let i = 0; i < times; i++) {
-        this._enqueueBleSend(cmd, gap);
-      }
-      if ((cmd === '打开' || cmd === '关闭') && isMtUltraCardModel(this.data.currentModel)) {
-        this._setFlapPanelStateOptimistic(cmd);
+      this._dispatchRemoteAssistBleCmd(cmd, times, gap);
+      const flapBase = String(cmd || '').replace(/#$/, '');
+      if ((flapBase === '打开' || flapBase === '关闭') && isMtUltraCardModel(this.data.currentModel)) {
+        this._setFlapPanelStateOptimistic(flapBase);
       }
       this._waitBleSendQueueIdle(12000).then((ok) => {
         if (ok) {
@@ -2307,7 +3080,23 @@ Page({
     return `${sn} · ${ble}`;
   },
 
-  _stopRemoteAssistPollers() {
+  _remoteAssistPendingSignature(sessions) {
+    return (sessions || []).map((s) => s._id || '').join(',');
+  },
+
+  _notifyRemoteAssistPendingArrival(prevCount, nextCount, prevSig, nextSig) {
+    if (!this.data.isAdmin) return;
+    if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) return;
+    if (nextCount <= 0) return;
+    if (nextCount > prevCount || (prevSig !== nextSig && nextCount >= prevCount && prevCount === 0)) {
+      const sessions = this.data.remoteAssistPendingSessions || [];
+      const first = sessions[0];
+      const modelHint = first && first.productKey ? ` · ${first.productKey}` : '';
+      this._showCustomToast(`有新的远协请求${modelHint}`, 'none', 2200);
+    }
+  },
+
+  _stopRemoteAssistSessionPollers() {
     this._remoteAssistUserPollActive = false;
     this._remoteAssistAdminPollActive = false;
     if (this._remoteAssistUserPollTimer) {
@@ -2318,13 +3107,17 @@ Page({
       clearTimeout(this._remoteAssistAdminPollTimer);
       this._remoteAssistAdminPollTimer = null;
     }
-    if (this._remoteAssistPendingPollTimer) {
-      clearInterval(this._remoteAssistPendingPollTimer);
-      this._remoteAssistPendingPollTimer = null;
-    }
     if (this._remoteStatePushTimer) {
       clearTimeout(this._remoteStatePushTimer);
       this._remoteStatePushTimer = null;
+    }
+  },
+
+  _stopRemoteAssistPollers() {
+    this._stopRemoteAssistSessionPollers();
+    if (this._remoteAssistPendingPollTimer) {
+      clearInterval(this._remoteAssistPendingPollTimer);
+      this._remoteAssistPendingPollTimer = null;
     }
   },
 
@@ -2341,11 +3134,12 @@ Page({
   },
 
   _startRemoteAssistPendingPoll() {
+    if (!this.data.isAdmin) return;
     if (this._remoteAssistPendingPollTimer) return;
     this._pollRemoteAssistPending();
     this._remoteAssistPendingPollTimer = setInterval(() => {
       this._pollRemoteAssistPending();
-    }, 2500);
+    }, 1500);
   },
 
   async _pollRemoteAssistPending() {
@@ -2362,12 +3156,13 @@ Page({
       const firstId = sessions[0] ? sessions[0]._id : '';
       const count = sessions.length;
       const cardPending = cardSessions.length > 0;
+      const nextSig = this._remoteAssistPendingSignature(sessions);
+      const prevCount = this.data.remoteAssistPendingCount || 0;
+      const prevSig = this._remoteAssistPendingSignature(this.data.remoteAssistPendingSessions);
       if (
-        count === (this.data.remoteAssistPendingCount || 0) &&
-        firstId === (this.data.remoteAssistPendingSessionId || '') &&
+        nextSig === prevSig &&
         cardPending === !!this.data.remoteAssistPendingForCard &&
-        cardSessions.length === (this.data.remoteAssistPendingForCurrentCard || 0) &&
-        count === (this.data.remoteAssistPendingSessions || []).length
+        cardSessions.length === (this.data.remoteAssistPendingForCurrentCard || 0)
       ) {
         return;
       }
@@ -2377,6 +3172,8 @@ Page({
         remoteAssistPendingSessionId: firstId,
         remoteAssistPendingSessions: sessions,
         remoteAssistPendingCount: count
+      }, () => {
+        this._notifyRemoteAssistPendingArrival(prevCount, count, prevSig, nextSig);
       });
     } catch (e) { /* ignore */ }
   },
@@ -2431,11 +3228,14 @@ Page({
         remoteAssistSessionStatus: status,
         remoteAssistSessionProductKey: productKey,
         remoteAssistUserAccepted: false,
-        remoteAssistConsentVisible: status === 'active'
+        remoteAssistConsentVisible: status === 'active',
+        showRemoteAssistStayModal: true,
+        remoteAssistStayModalClosing: false
       });
       this._saveRemoteAssistLocal();
       wx.setKeepScreenOn({ keepScreenOn: true });
       this._startRemoteAssistUserPoll();
+      if (typeof this.updateModalState === 'function') this.updateModalState();
       this._showCustomToast('已发起远程协助', 'success', 1800);
     } catch (err) {
       let msg = err.message || '发起失败';
@@ -2505,6 +3305,7 @@ Page({
       remoteAssistSessionId: session._id,
       remoteAssistSessionStatus: session.status || 'active',
       remoteAssistSessionProductKey: productKey,
+      remoteAssistUserAccepted: !!session.userAccepted,
       remoteAssistPendingForCard: false,
       remoteAssistPendingSessionId: '',
       remoteAssistPendingSessions: [],
@@ -2516,10 +3317,13 @@ Page({
       this._saveRemoteAssistLocal();
       this._applyRemoteDeviceState(session.deviceState);
       this._syncUiBleConnected();
+      if (!session.userAccepted) {
+        this._showCustomToast('已接入，等待用户接受', 'none', 2200);
+      }
       this._jumpToCardAndOpenDetail(targetIdx, {
         angleBtnText: resolveOpenAngleBtnText(currentModel),
         f2ControlPanelOpen: true,
-        ...buildF2StealthUiFlags(
+        ...buildRemoteAssistAdminExtras(
           currentModel,
           (session.deviceState && session.deviceState.settingState) || this.data.settingState,
           bleLinked
@@ -2601,6 +3405,8 @@ Page({
         }
         if (wasPending) {
           patch.remoteAssistConsentVisible = true;
+          patch.showRemoteAssistStayModal = false;
+          patch.remoteAssistStayModalClosing = false;
         }
         if (Object.keys(patch).length) {
           this.setData(patch);
@@ -2706,6 +3512,13 @@ Page({
       const patch = {
         remoteSessionBleConnected: this._resolveAdminRemoteBleConnected(session)
       };
+      const userAccepted = !!session.userAccepted;
+      if (userAccepted !== !!this.data.remoteAssistUserAccepted) {
+        patch.remoteAssistUserAccepted = userAccepted;
+        if (userAccepted) {
+          this._showCustomToast('用户已接受远协', 'success', 1800);
+        }
+      }
       if (session.deviceSn) patch.currentConnectedRawSn = session.deviceSn;
       const logPatch = this._syncRemoteAssistDebugLogsFromSession(session);
       if (logPatch) Object.assign(patch, logPatch);
@@ -2713,13 +3526,11 @@ Page({
         ? {}
         : this._buildRemoteStatePatch(session.deviceState, { forAdmin: true });
       const model = this.data.currentModel;
-      if (isF2MaxModel(model) || isMtUltraCardModel(model)) {
-        Object.assign(statePatch, buildF2StealthUiFlags(
-          model,
-          statePatch.settingState || this.data.settingState,
-          this._resolveAdminRemoteBleConnected(session)
-        ));
-      }
+      Object.assign(statePatch, buildRemoteAssistAdminExtras(
+        model,
+        statePatch.settingState || this.data.settingState,
+        this._resolveAdminRemoteBleConnected(session)
+      ));
       this._applyRemoteStatePatch({ ...patch, ...statePatch }, () => {
         this._syncUiBleConnected();
       });
@@ -2735,13 +3546,11 @@ Page({
     const patch = this._buildRemoteStatePatch(deviceState, { forAdmin });
     if (forAdmin) {
       const model = patch.currentModel || this.data.currentModel;
-      if (isF2MaxModel(model) || isMtUltraCardModel(model)) {
-        Object.assign(patch, buildF2StealthUiFlags(
-          model,
-          patch.settingState || this.data.settingState,
-          this.data.remoteSessionBleConnected
-        ));
-      }
+      Object.assign(patch, buildRemoteAssistAdminExtras(
+        model,
+        patch.settingState || this.data.settingState,
+        this.data.remoteSessionBleConnected
+      ));
     }
     this._applyRemoteStatePatch(patch);
   },
@@ -2900,7 +3709,7 @@ Page({
 
   _clearRemoteAssistLocal(reason) {
     const wasAdmin = this.data.remoteAssistRole === 'admin';
-    this._stopRemoteAssistPollers();
+    this._stopRemoteAssistSessionPollers();
     this._resetRemoteAssistDebugLogsMem();
     this._adminRemoteBleFalseStreak = 0;
     this._remoteAssistBlePushTrueAt = 0;
@@ -2915,12 +3724,17 @@ Page({
       remoteSessionBleConnected: false,
       remoteAssistCapsuleActive: false,
       remoteAssistConsentVisible: false,
+      showRemoteAssistStayModal: false,
+      remoteAssistStayModalClosing: false,
       remoteAssistLastCmdAt: 0,
       remoteAssistDebugLogs: [],
       uiBleConnected: false
     }, () => {
       this._syncUiBleConnected();
-      if (wasAdmin) this._pollRemoteAssistPending();
+      if (wasAdmin) {
+        this._startRemoteAssistPendingPoll();
+        this._pollRemoteAssistPending();
+      }
       if (reason === 'ended' && wasAdmin && this.data.showDetail) {
         this._closeDetailAnimated();
       }
@@ -3461,17 +4275,21 @@ Page({
   },
 
   async maybeShowAdminSnRegisterModal(normalizedSn) {
+    const target = this.data.adminSelectedBindTarget;
     const model =
       this.data.currentModel ||
       this.data.models[this.data.currentIndex] ||
       null;
-    const productModel = this.scanModelToProductModel(model);
+    const productModel =
+      (target && target.productModel) ||
+      this.scanModelToProductModel(model);
     if (!productModel) {
       console.warn('[scan] 无法解析产品型号，跳过绑定弹窗', model);
       return;
     }
 
-    if (this._adminSessionRegisteredSn && this._adminSessionRegisteredSn === normalizedSn) {
+    // 选了绑定用户时不能因「本会话已登记」静默跳过：录入用户 SN 和预登记是两回事
+    if (!target && this._adminSessionRegisteredSn && this._adminSessionRegisteredSn === normalizedSn) {
       return;
     }
 
@@ -3485,9 +4303,38 @@ Page({
         }
       });
       const r = res.result || {};
-      if (!r.success) return;
+      if (!r.success) {
+        if (target) this._showCustomToast(r.msg || '校验 SN 失败，请重试', 'none', 2500);
+        return;
+      }
 
       if (!r.showDialog) {
+        if (target) {
+          // 已选绑定用户：新机 SN 已预登记是正常情况，继续弹确认窗
+          if (r.reason === 'already_registered') {
+            this.setData({
+              showAdminSnModal: true,
+              adminSnModalClosing: false,
+              adminSnModalMode: 'confirm_new',
+              adminSnModalSn: r.sn || normalizedSn,
+              adminSnModalTargetModel: r.registeredModel || productModel,
+              adminSnModalExistingModel: '',
+              adminSnRegisterSubmitting: false,
+              adminSnShowModelPicker: false
+            });
+            return;
+          }
+          if (r.reason === 'user_bound') {
+            this._showCustomToast('该 SN 已绑定其他用户，请换一台新机', 'none', 3000);
+            return;
+          }
+          if (r.reason === 'pending_audit') {
+            this._showCustomToast('该 SN 正在审核中，请换一台新机', 'none', 3000);
+            return;
+          }
+          this._showCustomToast('该 SN 当前不可录入', 'none', 2500);
+          return;
+        }
         if (r.reason === 'already_registered' && r.sn) {
           this._markAdminDeviceRegistered(r.sn, r.registeredModel);
         }
@@ -3506,6 +4353,7 @@ Page({
       });
     } catch (err) {
       console.error('[scan] adminRegisterSn check failed', err);
+      if (target) this._showCustomToast('网络异常，请重新点击下一步', 'none', 2500);
     }
   },
 
@@ -3520,7 +4368,9 @@ Page({
         adminSnModalTargetModel: '',
         adminSnModalExistingModel: '',
         adminSnRegisterSubmitting: false,
-        adminSnShowModelPicker: false
+        adminSnShowModelPicker: false,
+        adminSelectedBindTargetId: '',
+        adminSelectedBindTarget: null
       });
     }, 420);
   },
@@ -3575,14 +4425,19 @@ Page({
 
   async _submitAdminSnRegister(productModel, isUpdate) {
     if (this.data.adminSnRegisterSubmitting) return;
-    const { adminSnModalSn, adminSnModalMode, currentConnectedRawSn, adminSelectedRepairId } = this.data;
+    const { adminSnModalSn, adminSnModalMode, currentConnectedRawSn, adminSelectedBindTarget } = this.data;
     const sn = currentConnectedRawSn || adminSnModalSn;
     if (!sn || !productModel) return;
 
-    // 已选售后工单：走换机 SN 替换（继承质保，旧机报废）
-    if (adminSelectedRepairId) {
-      await this._completeDeviceReplacementIfNeeded(sn, productModel);
-      return;
+    if (adminSelectedBindTarget) {
+      if (adminSelectedBindTarget.targetType === 'replacement') {
+        await this._completeDeviceReplacementIfNeeded(sn, productModel, adminSelectedBindTarget.repairId);
+        return;
+      }
+      if (adminSelectedBindTarget.targetType === 'fault_pending') {
+        await this._submitAdminFaultBindSn(sn, productModel, adminSelectedBindTarget.userOpenid);
+        return;
+      }
     }
 
     const needUpdate =
@@ -3616,6 +4471,54 @@ Page({
     }
   },
 
+  async _submitAdminFaultBindSn(sn, productModel, userOpenid) {
+    const target = this.data.adminSelectedBindTarget;
+    const oid = userOpenid || (target && target.userOpenid);
+    if (!oid) return;
+
+    this.setData({ adminSnRegisterSubmitting: true });
+    try {
+      const res = await wx.cloud.callFunction({
+        name: 'adminRegisterSn',
+        data: {
+          action: 'bind_user_sn',
+          sn,
+          productModel: productModel || (target && target.productModel),
+          deviceName: sn,
+          userOpenid: oid,
+          pendingDeviceId: (target && target.deviceId) || ''
+        }
+      });
+      const r = res.result || {};
+      if (r.success) {
+        this._markAdminDeviceRegistered(sn, r.productModel || productModel);
+        this.setData({
+          adminSelectedBindTargetId: '',
+          adminSelectedBindTarget: null
+        });
+        this.closeAdminSnModal();
+        this._showCustomModal({
+          title: '✅ 录入成功',
+          content: `SN：${sn}\n型号：${r.productModel || productModel || '—'}\n\n${r.msg || '已同步到用户设备卡'}`,
+          showCancel: false,
+          confirmText: '知道了'
+        });
+      } else {
+        this._showCustomModal({
+          title: '同步失败',
+          content: (r.msg || '未知错误') + '\n\n用户设备卡未变更，请重试。',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+        this.setData({ adminSnRegisterSubmitting: false });
+      }
+    } catch (err) {
+      console.error('[scan] adminRegisterSn bind_user_sn failed', err);
+      this._showCustomToast('网络异常，请重试', 'none', 2500);
+      this.setData({ adminSnRegisterSubmitting: false });
+    }
+  },
+
   onAdminSnSwitchDevice() {
     if (this.data.adminSnRegisterSubmitting) return;
     this.closeAdminSnModal();
@@ -3641,7 +4544,14 @@ Page({
       this._showCustomToast('远协中，请通过上方结束远协', 'none', 2000);
       return;
     }
-    if (this.data.isConnected || this.data.isConnecting || this.data.isNavigatingToOta) {
+    if (this.data.isConnecting) {
+      // 连接卡住时允许用户点胶囊取消重来（3 秒内视为正常连接过程，忽略点击）
+      if (Date.now() - (this._connectingStartedAt || 0) > 3000) {
+        this._cancelStuckConnect();
+      }
+      return;
+    }
+    if (this.data.isConnected || this.data.isNavigatingToOta) {
       return;
     }
 
@@ -3649,6 +4559,54 @@ Page({
     this._bleReconnectStoppedByUser = true;
     this._clearBleReconnectTimers();
     this._startBleScanSession();
+  },
+
+  // 连接长时间无响应时用户点胶囊触发：释放系统层连接并回到待连接状态
+  _cancelStuckConnect() {
+    console.warn('[BLE] user cancelled stuck connect');
+    this._bleReconnectStoppedByUser = true;
+    this._clearBleReconnectTimers();
+    if (this.ble) {
+      const cancelled = this.ble.cancelPendingConnect();
+      if (!cancelled) this.ble.disconnect(true);
+      this.ble.hasConnected = false;
+    }
+    this._stopBleLinkWatch();
+    this._applyBleLinkUi({
+      isConnected: false,
+      isConnecting: false,
+      isScanning: false,
+      isBleAutoReconnecting: false,
+      bleReconnectAttempt: 0
+    });
+    this._showCustomToast('已取消连接，可重新点击连接', 'none', 2000);
+  },
+
+  _rejectBlockedDebugBleDevice(device, source) {
+    const advName = getBleDeviceAdvertiseName(device);
+    console.warn('[BLE] reject blocked debug device', source, advName);
+    if (this.ble) {
+      this.ble.hasConnected = false;
+      this.ble._clearAutoConnectTimer();
+      this.ble.disconnect(true);
+    }
+    this._stopBleLinkWatch();
+    this._applyBleLinkUi({
+      isConnected: false,
+      isConnecting: false,
+      isScanning: false,
+      isBleAutoReconnecting: false
+    });
+    const now = Date.now();
+    if (!this._blockedDebugModalAt || (now - this._blockedDebugModalAt) > 1200) {
+      this._blockedDebugModalAt = now;
+      this._showCustomModal({
+        title: '无法连接',
+        content: '这是调试设备，不允许连接。',
+        showCancel: false,
+        confirmText: '知道了'
+      });
+    }
   },
 
   _startBleScanSession() {
@@ -3773,6 +4731,11 @@ Page({
 
   _attemptBleReconnect() {
     const dev = this._lastBleDevice;
+    if (isBlockedDebugBleDevice(dev)) {
+      this._rejectBlockedDebugBleDevice(dev, 'reconnect');
+      this._startBleScanSession();
+      return;
+    }
     this.ble.initBluetoothAdapter()
       .then(() => {
         if (this._bleReconnectStoppedByUser || this.data.isConnected) return;
@@ -3780,9 +4743,15 @@ Page({
           this._startBleScanSession();
           return;
         }
+        this._connectingStartedAt = Date.now();
         this.setData({ isConnecting: true, isScanning: false });
         return this.ble.connectDevice(dev).catch((err) => {
           console.warn('[BLE] direct reconnect connect failed', err);
+          if (err && err.message === 'blocked_debug_device') {
+            this._rejectBlockedDebugBleDevice(dev, 'reconnect_connect');
+            this._startBleScanSession();
+            return;
+          }
           this.setData({ isConnecting: false });
         });
       })
@@ -3813,87 +4782,196 @@ Page({
     }
   },
 
-  async _loadAwaitingReplacementRepairs() {
+  async _loadAdminBindTargets() {
     try {
       const res = await wx.cloud.callFunction({
-        name: 'deviceReplacement',
-        data: { action: 'listAwaiting' }
+        name: 'adminRegisterSn',
+        data: { action: 'list_bind_targets' }
       });
       const r = res.result || {};
-      if (r.success && Array.isArray(r.data)) return r.data;
+      if (r.success && Array.isArray(r.data)) return enrichBindTargets(r.data);
     } catch (err) {
-      console.warn('[scan] listAwaiting failed', err);
+      console.warn('[scan] list_bind_targets failed', err);
     }
     return [];
   },
 
-  async _maybeShowAdminRepairPickerThenSn(normalizedSn) {
-    const awaiting = await this._loadAwaitingReplacementRepairs();
-    if (awaiting.length > 0) {
+  _tryPendingSnEntryHint() {
+    const replacementRepairId = String(this._pendingReplacementRepairId || '').trim();
+    if (replacementRepairId && this.data.isAdmin) {
+      this._showCustomToast('请连接更换后的新主板，系统会解析 SN 并替换用户设备卡', 'none', 3200);
+      if (this._autoStartReplacementBle) {
+        this._autoStartReplacementBle = false;
+        setTimeout(() => {
+          if (!this.data.isConnected && !this.data.isConnecting) this.handleConnect();
+        }, 500);
+      }
+      return;
+    }
+    const userOpenid = this._pendingSnEntryUser;
+    if (!userOpenid || !this.data.isAdmin) return;
+    this._pendingSnEntryUser = '';
+    const model = this._pendingSnEntryModel || '';
+    this._pendingSnEntryModel = '';
+    this._highlightPendingSnUser = userOpenid;
+    const tip = model
+      ? `质保已审核。请连接 ${model} 新机，选择对应用户录入 SN`
+      : '质保已审核。请蓝牙连接新机，在绑定列表中选择用户录入 SN';
+    this._showCustomToast(tip, 'none', 3200);
+  },
+
+  async _maybeShowAdminBindPickerThenSn(normalizedSn) {
+    const targets = await this._loadAdminBindTargets();
+    if (targets.length > 0) {
+      const preselected = this._preselectPendingSnBindTarget(targets);
       this.setData({
-        showAdminRepairPicker: true,
-        adminRepairPickerClosing: false,
-        adminAwaitingRepairs: awaiting,
-        adminSelectedRepairId: '',
-        adminSelectedRepair: null
+        showAdminBindPicker: true,
+        adminBindPickerClosing: false,
+        adminBindPickerActive: false,
+        adminBindTargets: targets,
+        adminSelectedBindTargetId: preselected ? preselected._id : '',
+        adminSelectedBindTarget: preselected
       });
-      this._pendingAdminSnAfterRepair = normalizedSn;
+      wx.nextTick(() => {
+        setTimeout(() => {
+          if (this.data.showAdminBindPicker) {
+            this.setData({ adminBindPickerActive: true });
+          }
+        }, 30);
+      });
+      this._pendingAdminSnAfterBind = normalizedSn;
       return;
     }
     await this.maybeShowAdminSnRegisterModal(normalizedSn);
   },
 
-  closeAdminRepairPicker() {
-    this.setData({ adminRepairPickerClosing: true });
+  closeAdminBindPicker() {
+    this.setData({ adminBindPickerActive: false, adminBindPickerClosing: true });
     setTimeout(() => {
       this.setData({
-        showAdminRepairPicker: false,
-        adminRepairPickerClosing: false,
-        adminAwaitingRepairs: []
+        showAdminBindPicker: false,
+        adminBindPickerClosing: false,
+        adminBindTargets: []
       });
-      const pendingSn = this._pendingAdminSnAfterRepair;
-      this._pendingAdminSnAfterRepair = '';
+      const pendingSn = this._pendingAdminSnAfterBind;
+      this._pendingAdminSnAfterBind = '';
       if (pendingSn) this.maybeShowAdminSnRegisterModal(pendingSn);
-    }, 320);
+    }, 280);
   },
 
-  onPickAdminRepair(e) {
+  onPickAdminBindTarget(e) {
     const id = e.currentTarget.dataset.id;
-    const item = (this.data.adminAwaitingRepairs || []).find((r) => r._id === id);
+    const item = (this.data.adminBindTargets || []).find((row) => row._id === id);
     if (!item) return;
     this.setData({
-      adminSelectedRepairId: id,
-      adminSelectedRepair: item
+      adminSelectedBindTargetId: id,
+      adminSelectedBindTarget: enrichBindTarget(item)
     });
   },
 
-  confirmAdminRepairPick() {
-    const { adminSelectedRepairId, adminSelectedRepair } = this.data;
-    if (!adminSelectedRepairId || !adminSelectedRepair) {
-      this._showCustomToast('请选择售后工单', 'none', 2000);
+  _preselectPendingSnBindTarget(targets) {
+    const replacementRepairId = String(this._pendingReplacementRepairId || '').trim();
+    if (replacementRepairId && Array.isArray(targets) && targets.length) {
+      const replacement = targets.find((row) =>
+        row.targetType === 'replacement' &&
+        String(row.repairId || '').trim() === replacementRepairId
+      );
+      if (replacement) {
+        this._pendingReplacementRepairId = '';
+        return enrichBindTarget(replacement);
+      }
+    }
+    const openid = this._highlightPendingSnUser;
+    if (!openid || !Array.isArray(targets) || !targets.length) return null;
+    const hit = targets.find((row) => row.userOpenid === openid && row.targetType === 'fault_pending');
+    if (!hit) return null;
+    this._highlightPendingSnUser = '';
+    return enrichBindTarget(hit);
+  },
+
+  confirmAdminBindPick() {
+    const { adminSelectedBindTargetId, adminSelectedBindTarget } = this.data;
+    if (!adminSelectedBindTargetId || !adminSelectedBindTarget) {
+      this._showCustomToast('请先点选一个用户，再点下一步', 'none', 2000);
       return;
     }
-    const pendingSn = this._pendingAdminSnAfterRepair;
-    this._pendingAdminSnAfterRepair = '';
-    this.setData({
-      showAdminRepairPicker: false,
-      adminRepairPickerClosing: false
-    });
-    if (pendingSn) {
-      this.maybeShowAdminSnRegisterModal(pendingSn);
+    // 兜底当前已连设备 SN，避免 pending 值被其他路径清空后点下一步无反应
+    const pendingSn = this._pendingAdminSnAfterBind || this.data.currentConnectedRawSn || '';
+    this._pendingAdminSnAfterBind = '';
+    if (!pendingSn) {
+      this._showCustomToast('未获取到新机 SN，请重新蓝牙连接设备', 'none', 3000);
+      return;
     }
-  },
-
-  skipAdminRepairPick() {
     this.setData({
-      adminSelectedRepairId: '',
-      adminSelectedRepair: null
+      adminBindPickerActive: false,
+      adminBindPickerClosing: true
     });
-    this.closeAdminRepairPicker();
+    setTimeout(() => {
+      this.setData({
+        showAdminBindPicker: false,
+        adminBindPickerClosing: false
+      });
+      this.maybeShowAdminSnRegisterModal(pendingSn);
+    }, 280);
   },
 
-  async _completeDeviceReplacementIfNeeded(sn, productModel) {
-    const repairId = this.data.adminSelectedRepairId;
+  skipAdminBindPick() {
+    this.setData({
+      adminSelectedBindTargetId: '',
+      adminSelectedBindTarget: null
+    });
+    this.closeAdminBindPicker();
+  },
+
+  onAdminBindConfirmReselect() {
+    if (this.data.adminSnRegisterSubmitting) return;
+    const pendingSn = this.data.adminSnModalSn || this._pendingAdminSnAfterBind || '';
+    this.setData({
+      showAdminSnModal: false,
+      adminSnModalClosing: false,
+      adminSnRegisterSubmitting: false
+    });
+    if (!pendingSn) return;
+    this._pendingAdminSnAfterBind = pendingSn;
+    const targets = (this.data.adminBindTargets || []).length
+      ? this.data.adminBindTargets
+      : [];
+    if (!targets.length) {
+      this._loadAdminBindTargets().then((rows) => {
+        if (!rows.length) return;
+        this.setData({
+          showAdminBindPicker: true,
+          adminBindPickerClosing: false,
+          adminBindPickerActive: false,
+          adminBindTargets: rows
+        });
+        wx.nextTick(() => {
+          setTimeout(() => {
+            if (this.data.showAdminBindPicker) {
+              this.setData({ adminBindPickerActive: true });
+            }
+          }, 30);
+        });
+      });
+      return;
+    }
+    this.setData({
+      showAdminBindPicker: true,
+      adminBindPickerClosing: false,
+      adminBindPickerActive: false,
+      adminBindTargets: targets
+    });
+    wx.nextTick(() => {
+      setTimeout(() => {
+        if (this.data.showAdminBindPicker) {
+          this.setData({ adminBindPickerActive: true });
+        }
+      }, 30);
+    });
+  },
+
+  async _completeDeviceReplacementIfNeeded(sn, productModel, repairIdOverride) {
+    const repairId = repairIdOverride || this.data.adminSelectedRepairId;
     if (!repairId) return false;
 
     this.setData({ adminSnRegisterSubmitting: true });
@@ -3911,19 +4989,52 @@ Page({
       if (r.success) {
         this._markAdminDeviceRegistered(sn, r.productModel || productModel);
         this.setData({
+          adminSelectedBindTargetId: '',
+          adminSelectedBindTarget: null,
           adminSelectedRepairId: '',
           adminSelectedRepair: null
         });
-        this._showCustomToast(r.msg || '换机完成，用户 SN 已更新', 'success', 2500);
         this.closeAdminSnModal();
+        // 弹窗明确告知换机结果（含云端回读核对），避免 toast 一闪而过看不清
+        const lines = [];
+        const isMotherboard = r.replacementKind === 'motherboard';
+        if (r.oldSn) {
+          lines.push(
+            isMotherboard
+              ? `旧主板 SN：${r.oldSn}（已失效）`
+              : `旧 SN：${r.oldSn}（已报废）`
+          );
+        }
+        lines.push(`${isMotherboard ? '新主板' : '新设备'} SN：${r.newSn || sn}`);
+        if (r.productModel) lines.push(`型号：${r.productModel}`);
+        lines.push('');
+        lines.push(r.verifyDetail || (r.verified ? '已核对绑定成功' : '未能核对绑定状态，请手动检查'));
+        this._showCustomModal({
+          title: r.verified
+            ? (isMotherboard ? '✅ 主板更换成功' : '✅ 换机成功')
+            : (isMotherboard ? '⚠️ 主板更换完成（待核查）' : '⚠️ 换机完成（待核查）'),
+          content: lines.join('\n'),
+          showCancel: false,
+          confirmText: '知道了'
+        });
         return true;
       }
-      this._showCustomToast(r.msg || '换机失败', 'none', 2800);
+      this._showCustomModal({
+        title: '换机失败',
+        content: (r.msg || '未知错误') + '\n\n用户设备卡未变更，请处理后重试。',
+        showCancel: false,
+        confirmText: '知道了'
+      });
       this.setData({ adminSnRegisterSubmitting: false });
       return false;
     } catch (err) {
       console.error('[scan] complete replacement failed', err);
-      this._showCustomToast('换机失败，请重试', 'none', 2500);
+      this._showCustomModal({
+        title: '换机失败',
+        content: '网络异常，云函数未确认执行结果。\n请到「我的-配置回溯」或数据库确认该 SN 是否已绑定，再决定是否重试。',
+        showCancel: false,
+        confirmText: '知道了'
+      });
       this.setData({ adminSnRegisterSubmitting: false });
       return false;
     }
@@ -3953,6 +5064,17 @@ Page({
       this.setData({ 
         showBluetoothAlert: false,
         bluetoothAlertClosing: false
+      });
+    }, 420);
+  },
+
+  closeRemoteAssistStayModal() {
+    if (this.data.remoteAssistStayModalClosing) return;
+    this.setData({ remoteAssistStayModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showRemoteAssistStayModal: false,
+        remoteAssistStayModalClosing: false
       });
     }, 420);
   },
@@ -4207,16 +5329,10 @@ Page({
         return true;
       }
       
-      // F2 LONG / F3 MAX：工程机与量产固件均跳过 OTA 门禁（避免连上即断、完全无状态）
+      // 仅 F1 ULTRA / F2 ULTRA 需云端 OTA 记录；F3 全系列及其他型号直接放行
       const cur = this._bleStatusTargetModel() || this.data.currentModel || {};
-      const isF2Long = cur.name === 'F2' && cur.type && cur.type.indexOf('Long') !== -1;
-      const isF3Max = isF3MaxModel(cur);
-      if (isF2Long) {
-        console.log('🔍 [checkOtaConnection] 当前为 F2 LONG 系列，跳过 OTA 校验');
-        return true;
-      }
-      if (isF3Max) {
-        console.log('🔍 [checkOtaConnection] 当前为 F3 MAX，跳过 OTA 校验');
+      if (!modelRequiresOtaGate(cur)) {
+        console.log('🔍 [checkOtaConnection] 当前型号无需 OTA 校验:', cur.name, cur.type);
         return true;
       }
       
@@ -4657,13 +5773,19 @@ Page({
     if (this.data.isConnected && isF2MaxStatusBleModel(currentModel)) {
       this._bleSessionModel = currentModel;
     }
-    this._openDetailAnimated({
+    const detailPatch = {
       currentModel,
       angleBtnText: resolveOpenAngleBtnText(currentModel)
-    }, () => {
+    };
+    // 无回读机型：进入控制台即让高级配置滑块处于中间态
+    if (modelUsesSettingClickOnly(currentModel)) {
+      detailPatch.settingState = buildNeutralSettingState();
+    }
+    this._openDetailAnimated(detailPatch, () => {
       if (this.data.isConnected) {
         this._ensureF2StatusBleListener(true);
       }
+      this._maybeShowCalSettingsGuide(currentModel);
     });
   },
 
@@ -4689,6 +5811,11 @@ Page({
     }
     if (this.data.showDetail) {
       if (this.data.detailMode === 'edit') {
+        // 折叠角度：返回也必须走「重启车子」确认，不能静默退出
+        if (this._isFoldEditActive()) {
+          this.exitEdit();
+          return;
+        }
         this.setData({ detailMode: 'main' });
       } else {
         this._closeDetailAnimated();
@@ -4726,12 +5853,12 @@ Page({
     this.setData({ pendingEditType: type });
 
     if (type === 'fold') {
-      // 管理员无需输入密码，直接放行（并顺带标记授权，避免后续重复判断）
+      // 管理员：跳过密码与折叠教学，直接进编辑
       if (this.data.isAdmin) {
         if (!this.data.isAuthorized) {
           this.setData({ isAuthorized: true });
         }
-        this.showTutorial('fold');
+        this._enterFoldEditWithoutTutorial();
       } else if (!this.data.isAuthorized) {
         // 普通用户：密码 -> 教程 -> 界面
         this.openPasswordModal();
@@ -4744,7 +5871,30 @@ Page({
     }
   },
 
+  /** 管理员跳过折叠教学，直接进入折叠角度编辑 */
+  _enterFoldEditWithoutTutorial() {
+    this.stopTutorialLoop();
+    this.setData({
+      showTutorialModal: false,
+      tutorialModalClosing: false,
+      detailMode: 'edit',
+      editType: 'fold',
+      pendingEditType: 'fold'
+    });
+    this.initFoldMode();
+    this.startFoldInlineHint();
+  },
+
   showTutorial(type) {
+    // 管理员不弹任何进页教学
+    if (this.data.isAdmin) {
+      if (type === 'fold' || this.data.pendingEditType === 'fold') {
+        this._enterFoldEditWithoutTutorial();
+      } else if (type === 'open' || this.data.pendingEditType === 'open') {
+        this.initOpenMode();
+      }
+      return;
+    }
     // 如果密码弹窗还在显示，先关闭它（带退出动画）
     if (this.data.showPasswordModal) {
       this.setData({ passwordModalClosing: true });
@@ -4902,11 +6052,15 @@ Page({
   },
 
   // ===============================================
-  // 完成设置 & 关钥匙动画
+  // 完成设置 & 关钥匙动画（折叠角度：必须提示重启车子）
   // ===============================================
-  // ===============================================
-  // 完成设置 & 关钥匙动画 (修改：循环播放)
-  // ===============================================
+  _isFoldEditActive() {
+    return this.data.detailMode === 'edit' && (
+      this.data.editType === 'fold' ||
+      this.data.pendingEditType === 'fold'
+    );
+  },
+
   exitEdit() {
     this.stopOpenAngleTutorialLoop();
     if (this._foldFineTuneHintTimer) {
@@ -4914,7 +6068,7 @@ Page({
       this._foldFineTuneHintTimer = null;
     }
     // 打开角度场景：直接退出编辑，避免“关钥匙倒计时弹窗”导致卡住感
-    if (this.data.editType === 'open') {
+    if (this.data.editType === 'open' && !this._isFoldEditActive()) {
       if (this.data.keyLoopTimer) {
         clearTimeout(this.data.keyLoopTimer);
       }
@@ -4935,7 +6089,8 @@ Page({
       return;
     }
 
-    // 折叠场景保持原有流程：完成设置 -> 关钥匙提示
+    // 折叠角度（全部机型 / 管理员 / 远协）：完成设置必须确认重启车子
+    if (this.data.showKeyModal) return;
     this.setData({ showKeyModal: true, showFoldFineTuneHint: false });
     this.startKeyAnimLoop();
     this.startKeyCountdown();
@@ -4976,7 +6131,9 @@ Page({
       this.setData({ 
         showKeyModal: false, 
         detailMode: 'main',
-        keyModalClosing: false
+        keyModalClosing: false,
+        pendingEditType: '',
+        editType: 'fold'
       });
     }, 420);
   },
@@ -5010,7 +6167,6 @@ Page({
 
     const model = this.data.currentModel;
     const foldMin = foldServoAngleMinForModel(model);
-    const openMax = isF3MaxModel(model) ? F3_MAX_OPEN_ANGLE_MAX_DEG : FOLD_SERVO_ANGLE_MAX;
 
     if (parsed.itm === 0 || parsed.itm === 2) {
       this._lastBleFoldServoAngle = Math.max(
@@ -5018,13 +6174,7 @@ Page({
         Math.min(FOLD_SERVO_ANGLE_MAX, ang)
       );
     }
-    if (parsed.itm === 1) {
-      this._lastBleOpenServoAngle = Math.max(
-        0,
-        Math.min(openMax, ang)
-      );
-    }
-    // 折叠编辑页：不跟蓝牙状态/牌照开合改 UI，只由用户点调大调小/调整/归零更新
+    // 打开角度波轮：纯 UI，不跟蓝牙 ang 回读
   },
 
   // ===============================================
@@ -5045,9 +6195,13 @@ Page({
     this.maxAngle = isF1Legacy ? 180 : 170;
     const maxDeg = openAngleMaxDeg(model, this.maxAngle);
     
-    // 生成刻度数据
+    // 生成刻度数据 (扩展到更多刻度，实现无限滑动视觉效果)
     const count = (maxDeg - 0) / 2 + 1;
-    const ticks = new Array(Math.floor(count)).fill(0);
+    const extendedCount = Math.max(count + 100, 200); // 至少200个刻度，支持无限滑动
+    const ticks = new Array(Math.floor(extendedCount)).fill(0);
+
+    // 进页：棍子竖直不联动；波轮落在中间，左右都能拨（纯 UI，不回读）
+    const startUiDeg = Math.max(0, Math.min(maxDeg, 90));
     
     this.setData({
       detailMode: 'edit',
@@ -5061,9 +6215,9 @@ Page({
       foldDemoPlaying: false,
       ticks: ticks,
       openAngleUiActive: false,
-      currentAngle: 0,
+      currentAngle: startUiDeg,
       angleMode: '',
-      angleRotation: 180, 
+      angleRotation: 0,
       activeIndex: 0,
       translateX: 0,
       transition: 'none'
@@ -5071,13 +6225,19 @@ Page({
     this._openAngleFullSwipeTimes = [];
     this._clearOpenAngleBleState();
     this._clearDeferredFaultReports();
+
+    // 只摆波轮位置，不点亮棍子（openAngleUiActive=false → 棍子保持竖直）
+    this.updateRuler(startUiDeg, false);
+    this.setData({ openAngleUiActive: false, angleRotation: 0 });
     
-    if (isF1Legacy || isF2MaxSeries || isMtUltra) {
+    // 管理员不弹打开角度教学；普通用户仍引导
+    if (!this.data.isAdmin && (isF1Legacy || isF2MaxSeries || isMtUltra)) {
        this.setData({ showAngleHint: true });
        this.startOpenAngleTutorialLoop();
        this.startAngleHintCountdown();
     } else {
        this.setData({ showAngleHint: false });
+       this.stopOpenAngleTutorialLoop();
     }
   },
 
@@ -5085,8 +6245,7 @@ Page({
   // 切换预设角度 (F2 点击160跳转，但能滑到170)
   // ===============================================
   switchAngle(e) {
-    if (!this._canControlDevice()) {
-      this._showCustomToast('未连接蓝牙', 'none', 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
     
@@ -5096,7 +6255,7 @@ Page({
 
     this.setData({ angleMode: angle.toString(), openAngleUiActive: true }, () => {
       const presetCmd = openAnglePresetBleCommand(currentModel, angle);
-      if (presetCmd && this._canControlDevice()) {
+      if (presetCmd && this._ensureBleControlReady(false)) {
         if (usesF2StyleOpenAngleBle(currentModel)) {
           console.log(`📤 [蓝牙] 打开角度预设 ${angle}° → "${presetCmd}" x2`);
           this._commitBleCommandAfterUi({
@@ -5127,115 +6286,143 @@ Page({
   // 更新标尺与视图 (修复 Bug：确保传递正确角度给按钮逻辑)
   // ===============================================
   updateRuler(deg, animate) {
-    const max = openAngleMaxDeg(this.data.currentModel, this.maxAngle);
     if (deg < 0) deg = 0;
-    if (deg > max) deg = max;
 
     const index = this._clampOpenAngleIndex(Math.round(deg / 2));
     deg = index * 2;
     const trans = this._indexToOpenAngleTranslate(index);
     this._rulerTranslateX = trans;
 
-    const visualRot = openAngleStickRotateDeg(this.data.currentModel, deg);
-
-    this.setData({
-      currentAngle: deg,
-      activeIndex: index,
+    const uiActive = !!this.data.openAngleUiActive;
+    const patch = {
       translateX: trans,
-      transition: animate ? 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
-      angleRotation: visualRot
-    });
-    
-    this.updateAngleText(deg);
+      transition: animate ? 'transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none'
+    };
+    // 没点预设：只摆波轮，不改棍子/数字
+    if (uiActive) {
+      patch.currentAngle = deg;
+      patch.activeIndex = index;
+      patch.angleRotation = openAngleStickRotateDeg(this.data.currentModel, deg);
+    }
+    this.setData(patch);
+    if (uiActive) this.updateAngleText(deg);
   },
 
   // ===============================================
   // 触摸交互核心修复 (物理驱动动画)
   // ===============================================
 
-  _openAngleMaxIndex() {
-    const deg = openAngleMaxDeg(this.data.currentModel, this.maxAngle);
-    return Math.round(deg / 2);
-  },
-
   _clampOpenAngleIndex(idx) {
-    const maxIdx = this._openAngleMaxIndex();
     const n = Math.round(idx);
     if (n < 0) return 0;
-    if (n > maxIdx) return maxIdx;
-    return n;
+    const maxDeg = openAngleMaxDeg(this.data.currentModel, this.maxAngle != null ? this.maxAngle : 180);
+    const maxIdx = Math.floor(maxDeg / 2);
+    return n > maxIdx ? maxIdx : n;
   },
 
   _indexToOpenAngleTranslate(idx) {
-    return -(this._clampOpenAngleIndex(idx) * this.tickWidthPx);
+    // 视觉位移不强制吸到角度边界；写入已知角度位置时用 clamp 后的 index
+    return -(Math.round(Number(idx) || 0) * this.tickWidthPx);
   },
 
   _openAngleIndexFromTranslate(trans) {
     return Math.round(-(trans || 0) / this.tickWidthPx);
   },
 
+  /** 仅用于「把波轮吸回当前有效角度」；跟手拖动时不要用 */
   _clampOpenAngleTranslate(trans) {
-    return trans;
-  },
-
-  _tryOpenAngleBleTick(slideCmds, direction) {
-    const now = Date.now();
-    if (now < (this._openAngleBurstCooldownUntil || 0)) return false;
-    const sent = this._openAngleBurstSent || 0;
-    const cmd = direction === 'increase' ? slideCmds.increase : slideCmds.decrease;
-    this._enqueueBleSend(cmd, BLE_ANGLE_STEP_GAP_MS);
-    this._openAngleBurstSent = sent + 1;
-    const end = this._rulerGestureEndIndex != null ? this._rulerGestureEndIndex : 0;
-    this._rulerGestureEndIndex = direction === 'increase' ? end + 1 : end - 1;
-    if (this._openAngleBurstSent >= OPEN_ANGLE_BURST_MAX_TICKS) {
-      this._openAngleBurstSent = 0;
-      this._openAngleBurstCooldownUntil = now + OPEN_ANGLE_BURST_COOLDOWN_MS;
-    }
-    return true;
+    const idx = this._clampOpenAngleIndex(this._openAngleIndexFromTranslate(trans));
+    return this._indexToOpenAngleTranslate(idx);
   },
 
   _clearOpenAngleBleState() {
-    this._rulerBleAccumPx = 0;
-    this._lastMoveTranslateX = null;
-    this._openAngleBurstSent = 0;
-    this._openAngleBurstCooldownUntil = 0;
+    this._rulerLastTouchX = null;
+    this._rulerGestureMinIndex = null;
+    this._rulerGestureMaxIndex = null;
+    this._rulerGestureStartIndex = null;
+    this._rulerGestureEndIndex = null;
   },
 
   // ===============================================
-  // 触摸开始
+  // 触摸开始：记录起点；全系列单次手势最多 ±3 格
   // ===============================================
   onTouchStart(e) {
     this._rulerTouchActive = true;
     const touchX = e.touches[0].clientX;
-    this.touchStartX = touchX;
-    this.startTranslateX = this.data.translateX || 0;
-    this._rulerTranslateX = this.startTranslateX;
-    this._rulerBleAccumPx = 0;
-    this._lastMoveTranslateX = this.startTranslateX;
+    this._rulerLastTouchX = touchX;
+    this._rulerTranslateX = this.data.translateX || 0;
 
-    const startIndex = this._openAngleIndexFromTranslate(this.startTranslateX);
+    // 用手势起点的「视觉格」算 ±3，不要先吸到角度边界（否则顶到 0/180 就拨不动）
+    const startIndex = this._openAngleIndexFromTranslate(this._rulerTranslateX);
+    const tickLimit = OPEN_ANGLE_TICKS_PER_GESTURE;
     this.lastVibrateIndex = startIndex;
     this._rulerGestureStartIndex = startIndex;
     this._rulerGestureEndIndex = startIndex;
+    this._rulerGestureMinIndex = startIndex - tickLimit;
+    this._rulerGestureMaxIndex = startIndex + tickLimit;
+  },
+
+  /**
+   * 跨过的每一格：震动 + 发蓝牙。
+   * 未点预设：波轮能动、蓝牙照发；棍子/数字不同步。
+   * 到 0/180 后波轮仍可继续拨，蓝牙也继续按格发。
+   */
+  _stepOpenAngleTicksToward(targetIndex, opts) {
+    const from = this.lastVibrateIndex;
+    if (targetIndex === from) return;
+    const currentModel = (opts && opts.currentModel) || this.data.currentModel;
+    const canSend = !!(opts && opts.canSend);
+    const slideCmds = opts && opts.slideCmds;
+    const stepGap = (opts && opts.stepGap) != null ? opts.stepGap : BLE_ANGLE_STEP_GAP_MS;
+    const uiActive = !!this.data.openAngleUiActive;
+    const dir = targetIndex > from ? 1 : -1;
+    let i = from;
+    while (i !== targetIndex) {
+      i += dir;
+      wx.vibrateShort({ type: 'light' });
+      // 过 0/上限也继续发，不要因夹紧角度没变就停
+      if (slideCmds && canSend) {
+        const cmd = dir > 0 ? slideCmds.decrease : slideCmds.increase;
+        this._enqueueBleSendBurst(cmd, 1, stepGap);
+      }
+      if (uiActive) {
+        const displayAngle = this._clampOpenAngleIndex(i) * 2;
+        this.setData({
+          currentAngle: displayAngle,
+          activeIndex: this._clampOpenAngleIndex(i),
+          angleRotation: openAngleStickRotateDeg(currentModel, displayAngle)
+        });
+        this.updateAngleText(displayAngle);
+      }
+    }
+    this.lastVibrateIndex = targetIndex;
+    this._rulerGestureEndIndex = targetIndex;
   },
 
   // ===============================================
-  // 触摸移动：每过 1 格发 1 条蓝牙；UI 同步跟手
-  // 从右往左拨 = 角度增大 → 往上收；从左往右拨 = 角度减小 → 往下
+  // 触摸移动：波轮平移跟手指（可越过 0/上限）
+  // 右→左增大；左→右减小
   // ===============================================
   onTouchMove(e) {
     if (!e.touches || !e.touches.length) return;
     const touchX = e.touches[0].clientX;
-    if (this.touchStartX == null) {
+    if (this._rulerLastTouchX == null) {
       this.onTouchStart(e);
       return;
     }
 
-    const diff = (touchX - this.touchStartX) * OPEN_ANGLE_RULER_SENSITIVITY;
-    const newTranslateX = this._clampOpenAngleTranslate(this.startTranslateX + diff);
-    const prevTrans = this._lastMoveTranslateX != null ? this._lastMoveTranslateX : this.startTranslateX;
-    const deltaTrans = newTranslateX - prevTrans;
-    this._lastMoveTranslateX = newTranslateX;
+    const delta = (touchX - this._rulerLastTouchX) * OPEN_ANGLE_RULER_SENSITIVITY;
+    this._rulerLastTouchX = touchX;
+    if (Math.abs(delta) < 0.35) return;
+
+    // 波轮连续跟手：只限本手势 ±3 格，不按角度 0/上限锁死位移
+    let newTranslateX = this._rulerTranslateX + delta;
+    if (this._rulerGestureMinIndex != null && this._rulerGestureMaxIndex != null) {
+      const minTrans = -this._rulerGestureMaxIndex * this.tickWidthPx;
+      const maxTrans = -this._rulerGestureMinIndex * this.tickWidthPx;
+      if (newTranslateX < minTrans) newTranslateX = minTrans;
+      if (newTranslateX > maxTrans) newTranslateX = maxTrans;
+    }
     this._rulerTranslateX = newTranslateX;
 
     this.setData({
@@ -5243,47 +6430,66 @@ Page({
       transition: 'none'
     });
 
-    const swipeIndex = this._openAngleIndexFromTranslate(newTranslateX);
+    let visualIndex = this._openAngleIndexFromTranslate(newTranslateX);
+    if (this._rulerGestureMinIndex != null && this._rulerGestureMaxIndex != null) {
+      if (visualIndex < this._rulerGestureMinIndex) visualIndex = this._rulerGestureMinIndex;
+      if (visualIndex > this._rulerGestureMaxIndex) visualIndex = this._rulerGestureMaxIndex;
+    }
+
+    if (visualIndex === this.lastVibrateIndex) return;
+
+    const currentModel = this.data.currentModel;
     const isOpenMode = this.data.editType === 'open';
-    const slideCmds = isOpenMode ? openAngleSlideBleCommands(this.data.currentModel) : null;
-    const canSend = this._canControlDevice();
+    // 波轮拨完就发蓝牙；预设只锁棍子/数字 UI，不挡发送
+    const canSend = isOpenMode
+      && this._canSendBleCommand();
+    const slideCmds = isOpenMode ? openAngleSlideBleCommands(currentModel) : null;
+    const stepGap = openAngleBleStepGapMs(currentModel);
 
-    if (isOpenMode && slideCmds && canSend && deltaTrans !== 0) {
-      this._rulerBleAccumPx = (this._rulerBleAccumPx || 0) - deltaTrans;
-      while (this._rulerBleAccumPx >= this.tickWidthPx) {
-        if (!this._tryOpenAngleBleTick(slideCmds, 'increase')) break;
-        this._rulerBleAccumPx -= this.tickWidthPx;
-      }
-      while (this._rulerBleAccumPx <= -this.tickWidthPx) {
-        if (!this._tryOpenAngleBleTick(slideCmds, 'decrease')) break;
-        this._rulerBleAccumPx += this.tickWidthPx;
-      }
-    }
-
-    if (isOpenMode && swipeIndex !== this.lastVibrateIndex) {
-      wx.vibrateShort({ type: 'light' });
-      this.lastVibrateIndex = swipeIndex;
-    }
+    this._stepOpenAngleTicksToward(visualIndex, {
+      currentModel,
+      canSend,
+      slideCmds,
+      stepGap
+    });
   },
 
   onRulerTouchEnd() {
     this._rulerTouchActive = false;
     if (this.data.editType !== 'open') return;
-    this.touchStartX = null;
-    this._lastMoveTranslateX = null;
-    this._rulerBleAccumPx = 0;
+    this._rulerLastTouchX = null;
+    this._rulerGestureMinIndex = null;
+    this._rulerGestureMaxIndex = null;
     const startIndex = this._rulerGestureStartIndex;
     const endIndex = this._rulerGestureEndIndex != null
       ? this._rulerGestureEndIndex
       : this._openAngleIndexFromTranslate(this.data.translateX || 0);
+    // 松手吸到当前视觉整格；不要强制拉回 0/上限，方便接着往过界方向继续拨
+    const snappedVisual = Math.round(Number(endIndex) || 0);
+    const snapTrans = this._indexToOpenAngleTranslate(snappedVisual);
+    this._rulerTranslateX = snapTrans;
+    this.lastVibrateIndex = snappedVisual;
+    const patch = {
+      translateX: snapTrans,
+      transition: 'none'
+    };
+    if (this.data.openAngleUiActive) {
+      const displayAngle = this._clampOpenAngleIndex(snappedVisual) * 2;
+      patch.currentAngle = displayAngle;
+      patch.activeIndex = this._clampOpenAngleIndex(snappedVisual);
+      patch.angleRotation = openAngleStickRotateDeg(this.data.currentModel, displayAngle);
+    }
+    if (Math.abs((this.data.translateX || 0) - snapTrans) > 0.5 || this.data.openAngleUiActive) {
+      this.setData(patch);
+      if (this.data.openAngleUiActive) this.updateAngleText(patch.currentAngle);
+    }
     if (startIndex == null) return;
-    const tickMoved = Math.abs(endIndex - startIndex);
+    const tickMoved = Math.abs(snappedVisual - startIndex);
     if (tickMoved >= OPEN_ANGLE_TICKS_PER_GESTURE) {
       this._recordOpenAngleFullSwipe();
     }
     this._rulerGestureStartIndex = null;
     this._rulerGestureEndIndex = null;
-    this.lastVibrateIndex = this._openAngleIndexFromTranslate(this.data.translateX || 0);
   },
 
   _recordOpenAngleFullSwipe() {
@@ -5361,7 +6567,12 @@ Page({
   /** 逐字符入队发送：靠 BLE 队列本身排序+等待写入结果，而不是 setTimeout，
    * 这样 _clearBleSendQueue 才能真正打断，不会和下一条命令的字符交叉。 */
   _f3EnqueueHeightCmdChars(cmd) {
-    const text = String(cmd || '').replace(/#$/, '') + '#';
+    const raw = String(cmd || '').replace(/#$/, '');
+    if (this._isRemoteAssistAdminRelay()) {
+      this._relayBleCommand(raw, 1, 0);
+      return;
+    }
+    const text = `${raw}#`;
     const parts = text.split('');
     this._f3HeightBleTxActive = true;
     this._bumpF3HeightBleGrace(parts.length * 280 + 8000);
@@ -5474,92 +6685,43 @@ Page({
   },
 
   // ===============================================
-  // 3. 微调逻辑 (核心修正)
+  // 3. 微调逻辑（折叠角度：全机型可发，禁止再做机型白名单）
   // ===============================================
   handleAdjust(e) {
-    if (!this._canControlDevice()) {
-      this._showCustomToast('未连接蓝牙', 'none', 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
-    
-    const action = e.currentTarget.dataset.action; 
-    const editType = this.data.editType || (this.data.detailMode === 'edit' ? this.data.editType : 'open');
+
+    const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const action = ds.action;
+    const mode = ds.mode;
+    // 以 fold 页/按钮 mode 为准，避免 editType 偶发空值落到 open 分支
+    const isFold =
+      mode === 'fold' ||
+      this.data.editType === 'fold' ||
+      (this.data.detailMode === 'edit' && this.data.pendingEditType === 'fold');
 
     wx.vibrateShort({ type: 'light' });
 
-    // --- A. 折叠模式 (保持不变) ---
-    if (editType === 'fold' || e.currentTarget.dataset.mode === 'fold') {
+    // --- A. 折叠模式（F1 MAX / 全部机型同一路径）---
+    if (isFold) {
       let foldAng = this.data.foldServoAngle;
       if (!Number.isFinite(foldAng)) foldAng = FOLD_SERVO_ANGLE_DEFAULT;
-
-      // 🔴 F1/F2 PRO/MAX：折叠模式时发送对应数据
       const currentModel = this.data.currentModel;
-      const isF1 = currentModel && currentModel.name && currentModel.name.includes('F1');
-      const isF2 = currentModel && currentModel.name && currentModel.name.includes('F2');
-      const isFoldBleModel = isF2MaxLikeControl(currentModel);
-      
-      // 调试日志
-      console.log('🔍 [调试] 折叠模式按钮:', {
-        action,
-        editType,
-        isF1,
-        isF2,
-        isFoldBleModel,
-        isConnected: this.data.isConnected,
-        modelName: currentModel?.name
-      });
-      
+
       if (action === 'left' || action === 'fine-tune-up') {
         const foldMin = foldServoAngleMinForModel(currentModel);
         if (foldAng > foldMin) foldAng--;
       } else if (action === 'right' || action === 'fine-tune-down') {
         if (foldAng < FOLD_SERVO_ANGLE_MAX) foldAng++;
       } else if (action === 'adjust') {
-        // 🔴 调整按钮：发送"调整折叠角度"
-        console.log('🔍 [调试] 调整按钮被点击', {
-          isF1,
-          isF2,
-          isFoldBleModel,
-          isConnected: this.data.isConnected,
-          modelName: currentModel?.name
-        });
-        if (isFoldBleModel) {
-          if (this._canControlDevice()) {
-            console.log('📤 [蓝牙] 发送"调整折叠角度"');
-            this._foldAdjustActive = true;
-            this.sendDataMultiple('调整折叠角度', 1, 300);
-          } else {
-            console.log('❌ [蓝牙] 未连接，无法发送"调整折叠角度"');
-            this._showCustomToast('蓝牙未连接', 'none', 2000);
-          }
-        } else {
-          console.log('❌ [调试] 不是 F1/F2 机型，不发送');
-          this._showCustomToast('当前机型不支持', 'none', 2000);
-        }
+        this._foldAdjustActive = true;
+        console.log('📤 [折叠角度] 全机型发送「调整折叠角度」', currentModel && currentModel.name, currentModel && currentModel.type);
+        this.sendDataMultiple('调整折叠角度', 1, 300);
       } else if (action === 'zero') {
         foldAng = FOLD_SERVO_ANGLE_DEFAULT;
-        // 🔴 归零按钮：发送"初始化角度"
-        console.log('🔍 [调试] 归零按钮被点击', {
-          isF1,
-          isF2,
-          isFoldBleModel,
-          isConnected: this.data.isConnected,
-          isAdmin: this.data.isAdmin,
-          modelName: currentModel?.name
-        });
-        if (isFoldBleModel) {
-          if (this._canControlDevice()) {
-            console.log('📤 [蓝牙] 发送"初始化角度"（连续2次，间隔0.5秒）');
-            this.sendDataMultiple('初始化角度', 2, 500);
-          } else {
-            console.log('❌ [蓝牙] 未连接，无法发送"初始化角度"');
-            this._showCustomToast('蓝牙未连接', 'none', 2000);
-          }
-        } else {
-          console.log('❌ [调试] 不是 F1/F2 机型，不发送');
-          this._showCustomToast('当前机型不支持', 'none', 2000);
-        }
-        // 🔴 点击归零后，重置滑动状态（带 snap 回弹动画）
+        console.log('📤 [折叠角度] 全机型发送「初始化角度」');
+        this.sendDataMultiple('初始化角度', 2, 500);
         this.resetAdjustSlider(false);
       }
 
@@ -5567,11 +6729,10 @@ Page({
       const isFineTune = action === 'left' || action === 'fine-tune-up'
         || action === 'right' || action === 'fine-tune-down';
 
-      if (isFineTune && isFoldBleModel && this._canControlDevice()) {
+      if (isFineTune) {
         const sendText = (action === 'left' || action === 'fine-tune-up') ? '调大' : '调小';
         this.setData({ foldServoAngle: foldAng, foldGap: gap }, () => {
           const sendTune = () => {
-            console.log(`📤 [蓝牙] 发送"${sendText}"`);
             this._commitBleCommandAfterUi({
               sendText,
               times: 1,
@@ -5582,7 +6743,6 @@ Page({
           };
           if (!this._foldAdjustActive) {
             this._foldAdjustActive = true;
-            console.log('📤 [蓝牙] 折叠微调：先发「调整折叠角度」');
             this.sendDataMultiple('调整折叠角度', 1, 200);
             setTimeout(sendTune, 280);
           } else {
@@ -5599,12 +6759,12 @@ Page({
     // --- B. 打开模式 (90~270 左侧区域) ---
     let currentRot = this.data.angleRotation;
     let newRot = currentRot;
-    const degStep = 3; 
+    const degStep = 3;
 
     // 左键: 增加角度 (往左/上抬) -> 逐渐靠近 180 (90度预设)
     if (action === 'fine-tune-down') {
       newRot += degStep;
-    } 
+    }
     // 右键: 减小角度 (往右/下放) -> 逐渐靠近 90 (180度预设)
     else if (action === 'fine-tune-up') {
       newRot -= degStep;
@@ -5618,10 +6778,10 @@ Page({
     const actualAngle = 180 - newRot;
 
     this.setData({ angleRotation: newRot });
-    
+
     // 关键：每次微调都检查一次角度，决定哪个按钮亮
     // 传入实际角度，而不是 CSS 旋转角度
-    this.updateAngleText(actualAngle); 
+    this.updateAngleText(actualAngle);
   },
 
   // ===============================================
@@ -5760,6 +6920,19 @@ Page({
     wx.vibrateShort({ type: 'light' });
   },
 
+  /** 直连或远协：真正能发指令才返回 true（远协要求用户蓝牙已连） */
+  _ensureBleControlReady(showTip = true) {
+    if (this._isRemoteAssistAdminRelay()) {
+      return this._guardRemoteAssistAdminRelay(showTip);
+    }
+    if (this._canSendBleCommand()) return true;
+    if (showTip) {
+      this.setData({ showConnectBluetoothTip: true });
+      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+    }
+    return false;
+  },
+
   // ===============================================
   // 🔴 自动校准功能
   // ===============================================
@@ -5783,46 +6956,23 @@ Page({
       return;
     }
 
-    const isF2 = currentModel && currentModel.name && currentModel.name.includes('F2');
-    const isMtUltra = isMtUltraCardModel(currentModel);
-
-    if (!isF2 && !isMtUltra) {
-      this._showCustomToast('当前机型不支持自动校准', 'none', 2000);
+    // F2 除 PRO 外 + F1 Ultra + F3 MAX；F1 MAX 等无此能力
+    if (!modelSupportsAutoCalibrate(currentModel)) {
+      this._showCustomToast('该机型没有自动校准，请用折叠/打开角度调节', 'none', 2200);
       return;
     }
 
-    const launchF2AutoLevel = (attempt) => {
-      if (!this._isBleLinked()) {
-        this.setData({ showConnectBluetoothTip: true });
-        setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
-        return;
-      }
-      if (!this._isBleWriteReady()) {
-        if (attempt < 8) {
-          if (attempt === 0) {
-            this._showCustomToast('蓝牙连接中…', 'none', 1500);
-          }
-          setTimeout(() => launchF2AutoLevel(attempt + 1), 350);
-          return;
-        }
-        this._showCustomToast('蓝牙未就绪，请稍候再试', 'none', 2200);
-        return;
-      }
+    if (!this._ensureBleControlReady()) return;
 
-      console.log('📤 [蓝牙] 发送"自动调平"');
-      this.sendDataMultiple('自动调平', 2, 500);
-
-      this.setData({
-        showCalibratingModal: true,
-        calibratingBtnDisabled: true
-      });
-
-      setTimeout(() => {
-        this.setData({ calibratingBtnDisabled: false });
-      }, 3000);
-    };
-
-    launchF2AutoLevel(0);
+    console.log('📤 [蓝牙] 发送"自动调平"');
+    this.sendDataMultiple('自动调平', 2, 500);
+    this.setData({
+      showCalibratingModal: true,
+      calibratingBtnDisabled: true
+    });
+    setTimeout(() => {
+      this.setData({ calibratingBtnDisabled: false });
+    }, 3000);
   },
   
   // 🔴 关闭校准弹窗（带收缩退出动画）
@@ -5872,7 +7022,7 @@ Page({
         if (!this._canControlDevice()) return;
         const model = this.data.currentModel;
         const afterSend = () => {
-          if (!this._isBleLinked()) return;
+          if (!this._canSendBleCommand()) return;
           const verify = isMtUltraCardModel(model) && (cmd === '打开' || cmd === '关闭')
             ? { type: 'flap', cmd }
             : null;
@@ -5892,7 +7042,7 @@ Page({
         wx.vibrateShort({ type: 'light' });
       },
       canInteract: () => this._canControlDevice(),
-      isBleLinked: () => this._isBleLinked(),
+      isBleLinked: () => this._canSendBleCommand(),
       isAdmin: () => !!this.data.isAdmin,
       getFlapState: () => ({
         flapPanelState: this.data.flapPanelState,
@@ -5923,11 +7073,19 @@ Page({
     return dir === 'open' ? 1 : -1;
   },
 
+  _flapGaugeCurrentDeg() {
+    if (this._flapGaugeLastPaintDeg != null && !Number.isNaN(this._flapGaugeLastPaintDeg)) {
+      return this._flapGaugeLastPaintDeg;
+    }
+    const n = Number(this.data.flapGaugeRotateDeg);
+    return Number.isFinite(n) ? n : FLAP_GAUGE_CLOSED_DEG;
+  },
+
   _flapGaugeNearestRestDeg(current, targetState) {
     const rest = this._flapGaugeRestDeg(targetState);
     let best = rest;
     let bestDelta = Math.abs(rest - current);
-    for (let k = -2; k <= 2; k++) {
+    for (let k = -3; k <= 3; k++) {
       const candidate = rest + k * 360;
       const delta = Math.abs(candidate - current);
       if (delta < bestDelta) {
@@ -5938,10 +7096,131 @@ Page({
     return best;
   },
 
+  /** 只沿当前转向找下一个合相止位，绝不回拨（避免左下角“弹回去”） */
+  _flapGaugeForwardRestDeg(current, sign, targetState) {
+    const rest = this._flapGaugeRestDeg(targetState);
+    let best = null;
+    let bestDelta = Infinity;
+    for (let k = -6; k <= 6; k++) {
+      const candidate = rest + k * 360;
+      const delta = (candidate - current) * sign;
+      if (delta >= -0.5 && delta < bestDelta) {
+        bestDelta = delta;
+        best = candidate;
+      }
+    }
+    if (best == null) {
+      best = rest + (sign >= 0 ? 360 : -360);
+    }
+    return best;
+  },
+
+  _flapGaugeSpinDirForTarget(targetState) {
+    const dir = this._flapGaugeSpinDir || this.data.flapGaugeSpinDir || this.data.flapMotionDir;
+    if (dir === 'open' || dir === 'close') return dir;
+    return targetState === 'open' ? 'open' : 'close';
+  },
+
+  /** 至少转满 MIN_LAPS 圈，且落点与目标止位同相（避免瞬跳到止位） */
+  _computeFlapGaugeStopTraveled(baseDeg, sign, restDeg) {
+    const minTraveled = FLAP_GAUGE_MIN_LAPS * 360;
+    let tMod;
+    if (sign > 0) {
+      tMod = normDeg360(restDeg - baseDeg);
+    } else {
+      tMod = normDeg360(baseDeg - restDeg);
+    }
+    if (tMod < 0.5) tMod = 360;
+    let traveled = tMod;
+    while (traveled < minTraveled) traveled += 360;
+    return traveled;
+  },
+
+  _clearFlapGaugeEaseTimer() {
+    if (this._flapGaugeEaseTimer) {
+      clearTimeout(this._flapGaugeEaseTimer);
+      this._flapGaugeEaseTimer = null;
+    }
+  },
+
+  /** 相位是否已与止位对齐（允许整圈差） */
+  _flapGaugeSamePhase(current, targetState) {
+    const rest = this._flapGaugeRestDeg(targetState);
+    const phase = Math.abs(((current - rest) % 360 + 360) % 360);
+    return phase < 1.2 || phase > 358.8;
+  },
+
+  /**
+   * 最终必须停在开/关规范角，禁止停在半途。
+   * 已同相：静默归一；刚越过：就近合相；其余：只沿转向前进到下一合相位。
+   */
+  _flapGaugeParkExactRest(targetState) {
+    if (!targetState) return;
+    this._stopFlapGaugeSpinLoop();
+    this._clearFlapGaugeEaseTimer();
+    const rest = this._flapGaugeRestDeg(targetState);
+    const current = this._flapGaugeCurrentDeg();
+    if (this._flapGaugeSamePhase(current, targetState)) {
+      this._flapGaugeLastPaintDeg = rest;
+      this.setData({
+        flapGaugeSpinning: false,
+        flapGaugeTransition: false,
+        flapGaugeRotateDeg: rest
+      });
+      return;
+    }
+    const dir = this._flapGaugeSpinDirForTarget(targetState);
+    const sign = this._flapGaugeSpinSign(dir);
+    const forward = this._flapGaugeForwardRestDeg(current, sign, targetState);
+    const dist = (forward - current) * sign;
+    // 刚越过止位（前方要再绕近一圈）：用最近合相，避免再空转一圈或停半途
+    const park = (dist >= 330 || dist < 0.8)
+      ? this._flapGaugeNearestRestDeg(current, targetState)
+      : forward;
+    const jump = Math.abs(park - current);
+    this._flapGaugeLastPaintDeg = park;
+    this.setData({
+      flapGaugeSpinning: true,
+      flapGaugeTransition: jump > 1.5,
+      flapGaugeRotateDeg: park
+    });
+    this._flapGaugeEaseTimer = setTimeout(() => {
+      this._flapGaugeEaseTimer = null;
+      this._flapGaugeLastPaintDeg = rest;
+      this.setData({
+        flapGaugeSpinning: false,
+        flapGaugeTransition: false,
+        flapGaugeRotateDeg: rest
+      });
+    }, jump > 1.5 ? FLAP_GAUGE_EASE_MS : 140);
+  },
+
+  _flapGaugeSnapToRest(targetState, opts) {
+    if (!targetState) return;
+    const soft = !!(opts && opts.soft);
+    if (!soft) {
+      this._stopFlapGaugeSpinLoop();
+      this._clearFlapGaugeEaseTimer();
+      const rest = this._flapGaugeRestDeg(targetState);
+      this._flapGaugeLastPaintDeg = rest;
+      this.setData({
+        flapGaugeSpinning: false,
+        flapGaugeTransition: false,
+        flapGaugeRotateDeg: rest
+      });
+      return;
+    }
+    this._flapGaugeParkExactRest(targetState);
+  },
+
   _clearFlapGaugeSpinStopTimer() {
     if (this._flapGaugeSpinStopTimer) {
       clearTimeout(this._flapGaugeSpinStopTimer);
       this._flapGaugeSpinStopTimer = null;
+    }
+    if (this._flapGaugeSpinWatchdogTimer) {
+      clearTimeout(this._flapGaugeSpinWatchdogTimer);
+      this._flapGaugeSpinWatchdogTimer = null;
     }
   },
 
@@ -5953,7 +7232,6 @@ Page({
     this._flapGaugeSpinActive = false;
     this._flapGaugeSpinStopAtTraveled = null;
     this._flapGaugePendingTarget = null;
-    this._flapGaugeLastPaintDeg = null;
     this._clearFlapGaugeSpinStopTimer();
   },
 
@@ -5962,18 +7240,33 @@ Page({
     const dir = this._flapGaugeSpinDir || 'open';
     const sign = this._flapGaugeSpinSign(dir);
     const elapsed = Date.now() - (this._flapGaugeSpinStartMs || Date.now());
-    const traveled = elapsed * (360 / FLAP_GAUGE_CYCLE_MS);
+    let traveled = elapsed * (360 / FLAP_GAUGE_CYCLE_MS);
+    const stopAt = this._flapGaugeSpinStopAtTraveled;
+    if (stopAt != null && traveled >= stopAt) {
+      traveled = stopAt;
+      const deg = (this._flapGaugeSpinBaseDeg || 0) + sign * traveled;
+      const degRounded = Math.round(deg * 10) / 10;
+      this._flapGaugeLastPaintDeg = degRounded;
+      this.setData({
+        flapGaugeRotateDeg: degRounded,
+        flapGaugeTransition: false,
+        flapGaugeSpinning: true,
+        flapGaugeSpinDir: dir
+      });
+      this._flapGaugeSettleTo(this._flapGaugePendingTarget);
+      return;
+    }
     const deg = (this._flapGaugeSpinBaseDeg || 0) + sign * traveled;
     const degRounded = Math.round(deg * 10) / 10;
     if (this._flapGaugeLastPaintDeg !== degRounded) {
       this._flapGaugeLastPaintDeg = degRounded;
-      const patch = { flapGaugeRotateDeg: degRounded, flapGaugeTransition: false };
+      const patch = {
+        flapGaugeRotateDeg: degRounded,
+        flapGaugeTransition: false
+      };
       if (!this.data.flapGaugeSpinning) patch.flapGaugeSpinning = true;
       if (this.data.flapGaugeSpinDir !== dir) patch.flapGaugeSpinDir = dir;
       this.setData(patch);
-    }
-    if (this._flapGaugeSpinStopAtTraveled != null && traveled >= this._flapGaugeSpinStopAtTraveled) {
-      this._flapGaugeSettleTo(this._flapGaugePendingTarget);
     }
   },
 
@@ -5985,6 +7278,10 @@ Page({
         return;
       }
       this._tickFlapGaugeSpin();
+      if (!this._flapGaugeSpinActive) {
+        this._flapGaugeSpinTimer = null;
+        return;
+      }
       this._flapGaugeSpinTimer = setTimeout(tick, FLAP_GAUGE_TICK_MS);
     };
     tick();
@@ -5993,154 +7290,295 @@ Page({
   _armFlapGaugeSpin(dir) {
     if (!isMtUltraCardModel(this.data.currentModel)) return;
     const spinDir = dir === 'close' ? 'close' : 'open';
+    this._clearFlapGaugeEaseTimer();
     const sameDir = this._flapGaugeSpinActive && this._flapGaugeSpinDir === spinDir;
-    if (this._flapGaugeSettling) return;
-    if (sameDir) return;
+    if (sameDir) {
+      // 仍在运动：取消上一次“已到位刹停”，继续自由转，避免指令/状态包一来就半途掐停
+      this._flapGaugeSpinStopAtTraveled = null;
+      this._flapGaugePendingTarget = null;
+      if (!this._flapGaugeSpinTimer) this._startFlapGaugeSpinLoop();
+      this._armFlapGaugeSpinWatchdog();
+      return;
+    }
+    const baseDeg = this._flapGaugeCurrentDeg();
     this._stopFlapGaugeSpinLoop();
     this._flapGaugeSpinDir = spinDir;
-    this._flapGaugeSpinBaseDeg = Number(this.data.flapGaugeRotateDeg) || this._flapGaugeRestDeg('closed');
+    this._flapGaugeSpinBaseDeg = baseDeg;
     this._flapGaugeSpinStartMs = Date.now();
     this._flapGaugeSpinActive = true;
     this._flapGaugeSpinStopAtTraveled = null;
     this._flapGaugePendingTarget = null;
+    this._flapGaugeLastPaintDeg = baseDeg;
     this.setData({
       flapGaugeSpinning: true,
       flapGaugeSpinDir: spinDir,
-      flapGaugeTransition: false
+      flapGaugeTransition: false,
+      flapGaugeRotateDeg: baseDeg
     });
     this._startFlapGaugeSpinLoop();
+    this._armFlapGaugeSpinWatchdog();
   },
 
+  _armFlapGaugeSpinWatchdog() {
+    if (this._flapGaugeSpinWatchdogTimer) {
+      clearTimeout(this._flapGaugeSpinWatchdogTimer);
+    }
+    this._flapGaugeSpinWatchdogTimer = setTimeout(() => {
+      this._flapGaugeSpinWatchdogTimer = null;
+      if (!this._flapGaugeSpinActive && !this.data.flapGaugeSpinning) return;
+      const state = this.data.flapPanelState;
+      if (state === 'open' || state === 'closed') {
+        this._flapGaugeSnapToRest(state, { soft: true });
+      } else {
+        this._stopFlapGaugeSpinImmediate();
+      }
+    }, FLAP_GAUGE_SPIN_WATCHDOG_MS);
+  },
+
+  _inferFlapMotionDir(updates, prev) {
+    let dir = (updates && updates.flapMotionDir) || this.data.flapMotionDir;
+    if (dir === 'open' || dir === 'close') return dir;
+    if (prev === 'open') return 'close';
+    if (prev === 'closed') return 'open';
+    return 'open';
+  },
+
+  _inferFlapRestSpinDir(prev, next) {
+    if (next === 'open') return 'open';
+    if (next === 'closed') return 'close';
+    if (prev === 'open') return 'close';
+    if (prev === 'closed') return 'open';
+    return 'open';
+  },
+
+  /** 沿当前转向，到达目标止位还需转的角度（不回退） */
+  _flapGaugeRemainingToRest(current, sign, targetState) {
+    const forward = this._flapGaugeForwardRestDeg(current, sign, targetState);
+    return Math.max(0, (forward - current) * sign);
+  },
+
+  /**
+   * 正在转时突然到位：从当前角度沿原方向继续转到合相位刹停。
+   * 绝不停在半途。
+   */
   _requestFlapGaugeSpinStop(targetState) {
     if (!isMtUltraCardModel(this.data.currentModel)) return;
     if (!targetState) return;
-    if (this._flapGaugeSettling && this._flapGaugeSettleTarget === targetState) return;
+
+    // 已在朝同一止位刹停：不要反复重置行程，否则会“中途掐断”
+    if (
+      this._flapGaugeSpinActive &&
+      this._flapGaugePendingTarget === targetState &&
+      this._flapGaugeSpinStopAtTraveled != null
+    ) {
+      this._armFlapGaugeSpinWatchdog();
+      if (!this._flapGaugeSpinTimer) this._startFlapGaugeSpinLoop();
+      return;
+    }
+
     if (!this._flapGaugeSpinActive) {
-      this._flapGaugeSettleTo(targetState);
+      this._flapGaugeParkExactRest(targetState);
       return;
     }
-    if (this._flapGaugePendingTarget === targetState && this._flapGaugeSpinStopAtTraveled != null) {
+
+    const dir = this._flapGaugeSpinDir || 'open';
+    const sign = this._flapGaugeSpinSign(dir);
+    const current = this._flapGaugeCurrentDeg();
+    const need = this._flapGaugeRemainingToRest(current, sign, targetState);
+
+    // 已合相 / 刚越过：直接落到规范止位（绝不半途冻结）
+    if (need < 1 || need >= 330) {
+      this._flapGaugeParkExactRest(targetState);
       return;
     }
-    const elapsed = Date.now() - (this._flapGaugeSpinStartMs || Date.now());
-    const traveled = elapsed * (360 / FLAP_GAUGE_CYCLE_MS);
-    const minTraveled = FLAP_GAUGE_MIN_LAPS * 360;
-    let targetTraveled;
-    if (traveled < minTraveled) {
-      targetTraveled = minTraveled;
-    } else {
-      targetTraveled = Math.ceil(traveled / 360) * 360;
+
+    // 剩余不大：软过渡到合相位
+    if (need < 28) {
+      this._flapGaugeParkExactRest(targetState);
+      return;
     }
+
+    // 以当前角为新起点，只走剩余前进角
+    this._flapGaugeSpinBaseDeg = current;
+    this._flapGaugeSpinStartMs = Date.now();
+    this._flapGaugeSpinStopAtTraveled = need;
     this._flapGaugePendingTarget = targetState;
-    this._flapGaugeSpinStopAtTraveled = targetTraveled;
-    if (traveled >= targetTraveled) {
-      this._flapGaugeSettleTo(targetState);
+    this._flapGaugeLastPaintDeg = current;
+    this._armFlapGaugeSpinWatchdog();
+    if (!this._flapGaugeSpinTimer) this._startFlapGaugeSpinLoop();
+    if (!this.data.flapGaugeSpinning) {
+      this.setData({ flapGaugeSpinning: true, flapGaugeSpinDir: dir });
     }
   },
 
   _flapGaugeSettleTo(targetState) {
-    if (!targetState) return;
+    const stopAt = this._flapGaugeSpinStopAtTraveled;
+    const base = Number(this._flapGaugeSpinBaseDeg) || 0;
+    const sign = this._flapGaugeSpinSign(this._flapGaugeSpinDir || 'open');
+    const current = this._flapGaugeCurrentDeg();
     this._stopFlapGaugeSpinLoop();
-    this._flapGaugeSettling = true;
-    this._flapGaugeSettleTarget = targetState;
-    const current = Number(this.data.flapGaugeRotateDeg) || this._flapGaugeRestDeg(targetState);
-    const nearest = this._flapGaugeNearestRestDeg(current, targetState);
+    this._clearFlapGaugeEaseTimer();
+    if (!targetState) {
+      if (this.data.flapGaugeSpinning) {
+        this.setData({ flapGaugeSpinning: false, flapGaugeTransition: false });
+      }
+      return;
+    }
+    const rest = this._flapGaugeRestDeg(targetState);
+    let landed = stopAt != null
+      ? base + sign * stopAt
+      : this._flapGaugeForwardRestDeg(current, sign, targetState);
+
+    // 禁止任何回拨落点
+    const jump = (landed - current) * sign;
+    if (jump < -0.5) {
+      landed = this._flapGaugeForwardRestDeg(current, sign, targetState);
+    }
+    // 若前进落点还要绕一大圈，说明已越过 → 直接规范止位
+    if ((landed - current) * sign >= 330) {
+      this._flapGaugeParkExactRest(targetState);
+      return;
+    }
+
+    landed = Math.round(landed * 10) / 10;
+    this._flapGaugeLastPaintDeg = landed;
     this.setData({
-      flapGaugeSpinning: false,
-      flapGaugeTransition: true,
-      flapGaugeRotateDeg: nearest
+      flapGaugeSpinning: true,
+      flapGaugeTransition: false,
+      flapGaugeRotateDeg: landed
     });
-    this._clearFlapGaugeSpinStopTimer();
-    this._flapGaugeSpinStopTimer = setTimeout(() => {
-      this._flapGaugeSpinStopTimer = null;
-      this._flapGaugeSettling = false;
-      this._flapGaugeSettleTarget = null;
-      this.setData({ flapGaugeTransition: false });
-    }, FLAP_GAUGE_SETTLE_MS);
+    this._flapGaugeEaseTimer = setTimeout(() => {
+      this._flapGaugeEaseTimer = null;
+      this._flapGaugeLastPaintDeg = rest;
+      this.setData({
+        flapGaugeSpinning: false,
+        flapGaugeTransition: false,
+        flapGaugeRotateDeg: rest
+      });
+    }, 80);
   },
 
-  _cancelFlapGaugeSpin(targetState) {
-    this._stopFlapGaugeSpinLoop();
-    this._flapGaugeSettling = false;
-    this._flapGaugeSettleTarget = null;
-    if (!targetState) return;
+  /** 刹停后根据循环是否还在转，写回 updates，避免外层 setData 把 spinning 又写回 true */
+  _syncFlapGaugeSpinFlagToUpdates(updates, targetState) {
+    if (!updates) return;
+    // 还在转，或软过渡收尾中：保持黄色，别把止位角写回 updates 造成跳变
+    if (this._flapGaugeSpinActive || this._flapGaugeEaseTimer) {
+      updates.flapGaugeSpinning = true;
+      if ('flapGaugeRotateDeg' in updates) delete updates.flapGaugeRotateDeg;
+      return;
+    }
+    updates.flapGaugeSpinning = false;
+    if (targetState === 'open' || targetState === 'closed') {
+      const rest = this._flapGaugeRestDeg(targetState);
+      updates.flapGaugeRotateDeg = rest;
+      this._flapGaugeLastPaintDeg = rest;
+    }
+  },
+
+  /** 兜底：已开/已关时指针必须在止位；修掉历史「半途冻结」 */
+  _ensureFlapGaugeRestVisual() {
+    const state = this.data.flapPanelState;
+    if (state !== 'open' && state !== 'closed') return;
+    if (this._flapGaugeSpinActive || this._flapGaugeEaseTimer) return;
+    const rest = this._flapGaugeRestDeg(state);
+    const current = this._flapGaugeCurrentDeg();
+    const aligned = this._flapGaugeSamePhase(current, state)
+      && Math.abs(current - rest) < 2;
+    if (aligned && !this.data.flapGaugeSpinning) return;
+    this._flapGaugeLastPaintDeg = rest;
     this.setData({
       flapGaugeSpinning: false,
       flapGaugeTransition: false,
-      flapGaugeRotateDeg: this._flapGaugeRestDeg(targetState)
+      flapGaugeRotateDeg: rest
     });
+  },
+
+  _cancelFlapGaugeSpin(targetState) {
+    if (!targetState) {
+      this._stopFlapGaugeSpinLoop();
+      return;
+    }
+    this._flapGaugeParkExactRest(targetState);
   },
 
   _stopFlapGaugeSpinImmediate() {
     this._stopFlapGaugeSpinLoop();
+    this._clearFlapGaugeEaseTimer();
     if (this.data.flapGaugeSpinning) {
       this.setData({ flapGaugeSpinning: false, flapGaugeSpinDir: 'open' });
     }
   },
 
+  /**
+   * 到位不再瞬跳：转动中持续旋转；收到 open/closed 后同相刹停。
+   * 若状态直接 closed↔open（跳过 moving），也会先转起来再刹停。
+   */
   _patchFlapGaugeSpin(updates) {
     if (!updates || updates.flapPanelState === undefined) return updates;
     if (!isMtUltraCardModel(this.data.currentModel)) return updates;
     const prev = this.data.flapPanelState;
     const next = updates.flapPanelState;
-    if (this._flapGaugeSettling) {
-      if (next === 'moving') {
-        delete updates.flapPanelState;
-        delete updates.flapPanelStateText;
-        if (updates.flapMotionDir !== undefined) delete updates.flapMotionDir;
-      }
-      return updates;
-    }
+
     if (next === 'moving') {
-      const dir = updates.flapMotionDir || this.data.flapMotionDir || 'open';
+      const dir = this._inferFlapMotionDir(updates, prev);
+      updates.flapMotionDir = dir;
       const spinDir = dir === 'close' ? 'close' : 'open';
       updates.flapGaugeSpinning = true;
       updates.flapGaugeSpinDir = spinDir;
       updates.flapGaugeTransition = false;
+      if ('flapGaugeRotateDeg' in updates) delete updates.flapGaugeRotateDeg;
       this._armFlapGaugeSpin(spinDir);
-    } else if (
-      (prev === 'moving' || this.data.flapGaugeSpinning) &&
-      (next === 'open' || next === 'closed')
-    ) {
-      updates.flapGaugeSpinning = true;
-      if (!updates.flapGaugeSpinDir) {
-        updates.flapGaugeSpinDir = next === 'open' ? 'open' : 'close';
-      }
-      this._requestFlapGaugeSpinStop(next);
-    } else if ((prev === 'open' || prev === 'closed') && next === 'moving') {
-      if (this._flapGaugeSpinActive || this.data.flapGaugeTransition) {
-        delete updates.flapPanelState;
-        delete updates.flapPanelStateText;
-        if (updates.flapMotionDir !== undefined) delete updates.flapMotionDir;
-      } else {
-        const dir = updates.flapMotionDir || this.data.flapMotionDir || 'open';
-        const spinDir = dir === 'close' ? 'close' : 'open';
-        updates.flapGaugeSpinning = true;
-        updates.flapGaugeSpinDir = spinDir;
-        updates.flapGaugeTransition = false;
-        this._armFlapGaugeSpin(spinDir);
-      }
     } else if (next === 'open' || next === 'closed') {
-      const canAnimate = (prev === 'open' || prev === 'closed' || prev === 'unknown') && prev !== next;
-      if (canAnimate && !this._flapGaugeSpinActive && !this.data.flapGaugeSpinning) {
-        const dir = next === 'open' ? 'open' : 'close';
-        updates.flapGaugeSpinning = true;
-        updates.flapGaugeSpinDir = dir;
-        updates.flapGaugeTransition = false;
-        this._armFlapGaugeSpin(dir);
-        this._requestFlapGaugeSpinStop(next);
-      } else if (!this.data.flapGaugeSpinning && !this._flapGaugeSpinActive) {
+      // 关键：绝不能在 setData 里直接写死止位角，否则会从任意中间角瞬跳
+      if ('flapGaugeRotateDeg' in updates) delete updates.flapGaugeRotateDeg;
+      updates.flapGaugeTransition = false;
+      if (prev === next && !this._flapGaugeSpinActive) {
+        updates.flapGaugeSpinning = false;
         updates.flapGaugeRotateDeg = this._flapGaugeRestDeg(next);
-        updates.flapGaugeTransition = false;
+      } else if (this._flapGaugeSpinActive) {
+        this._requestFlapGaugeSpinStop(next);
+        // 若已同步刹停，绝不能再把 spinning 写回 true（否则黄盘卡死）
+        this._syncFlapGaugeSpinFlagToUpdates(updates, next);
+      } else {
+        const spinDir = this._inferFlapRestSpinDir(prev, next);
+        updates.flapGaugeSpinDir = spinDir;
+        this._armFlapGaugeSpin(spinDir);
+        this._requestFlapGaugeSpinStop(next);
+        this._syncFlapGaugeSpinFlagToUpdates(updates, next);
       }
     } else if (next === 'stealth' || next === 'fault' || next === 'unknown') {
       updates.flapGaugeSpinning = false;
       updates.flapGaugeSpinDir = 'open';
-      updates.flapGaugeTransition = false;
-      updates.flapGaugeRotateDeg = (next === 'stealth' || next === 'fault')
-        ? -90
-        : FLAP_GAUGE_CLOSED_DEG;
-      this._cancelFlapGaugeSpin(null);
+      const targetDeg = (next === 'stealth' || next === 'fault') ? -90 : FLAP_GAUGE_CLOSED_DEG;
+      this._stopFlapGaugeSpinLoop();
+      this._clearFlapGaugeEaseTimer();
+      const current = this._flapGaugeCurrentDeg();
+      let nearest = targetDeg;
+      let bestDelta = Math.abs(targetDeg - current);
+      for (let k = -3; k <= 3; k++) {
+        const candidate = targetDeg + k * 360;
+        const delta = Math.abs(candidate - current);
+        if (delta < bestDelta) {
+          bestDelta = delta;
+          nearest = candidate;
+        }
+      }
+      if (bestDelta < 0.8) {
+        updates.flapGaugeTransition = false;
+        updates.flapGaugeRotateDeg = targetDeg;
+      } else {
+        updates.flapGaugeTransition = true;
+        updates.flapGaugeRotateDeg = nearest;
+        this._flapGaugeEaseTimer = setTimeout(() => {
+          this._flapGaugeEaseTimer = null;
+          this._flapGaugeLastPaintDeg = targetDeg;
+          this.setData({
+            flapGaugeTransition: false,
+            flapGaugeRotateDeg: targetDeg
+          });
+        }, FLAP_GAUGE_EASE_MS);
+      }
+      this._flapGaugeLastPaintDeg = updates.flapGaugeRotateDeg;
     }
     return updates;
   },
@@ -6153,6 +7591,7 @@ Page({
     const updates = this._patchFlapGaugeSnap({ ...(patch || {}) });
     this._patchFlapGaugeSpin(updates);
     this.setData(updates, () => {
+      this._ensureFlapGaugeRestVisual();
       if (typeof done === 'function') done();
     });
   },
@@ -6256,12 +7695,19 @@ Page({
     }
   },
 
-  /** 演示模式单发翻板指令（仅用户点「停止」才结束） */
+  /** 演示模式翻板指令补发（与正常翻板使用相同的多次发送机制） */
   _fireF2DemoBleSend(cmd) {
     if (!this._f2DemoActive) return false;
     if (!this._isBleLinked()) return false;
-    this._prunePendingFlapBleQueue();
-    this._enqueueBleSend(cmd, BLE_SEND_GAP_MS);
+    
+    // 使用与正常翻板相同的多次发送机制，提高成功率
+    const model = this.data.currentModel;
+    const times = flapBleSendTimes(model, cmd);
+    const interval = flapBleSendInterval(model);
+    const wireText = flapBleWireText(model, cmd);
+    
+    console.log(`📤 [演示补发] ${wireText} ×${times} (间隔${interval}ms)`);
+    this.sendDataMultiple(wireText, times, interval);
     return true;
   },
 
@@ -6323,13 +7769,7 @@ Page({
     if (!isMtUltraCardModel(model)) {
       return;
     }
-    if (!this._canControlDevice()) {
-      this.setData({ showConnectBluetoothTip: true });
-      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
-      return;
-    }
-    if (this._isRemoteAssistAdminActive() && !this.data.remoteSessionBleConnected) {
-      this._showCustomToast('用户蓝牙未连接，无法控制', 'none', 2200);
+    if (!this._ensureBleControlReady()) {
       return;
     }
     if ((cmd === '打开' || cmd === '关闭') && this.data.flapPanelState === 'stealth') {
@@ -6365,10 +7805,9 @@ Page({
         if (!this._isRemoteAssistAdminActive()) {
           this._setFlapPanelStateOptimistic(cmd);
         }
-        const flapTimes = isF3MaxModel(model)
-          ? (cmd === '关闭' ? 5 : 3)
-          : (cmd === '关闭' ? 4 : 2);
-        this.sendDataMultiple(cmd + '#', flapTimes, FLAP_BLE_SEND_GAP_MS);
+        const flapTimes = flapBleSendTimes(model, cmd);
+        const flapInterval = flapBleSendInterval(model);
+        this.sendDataMultiple(flapBleWireText(model, cmd), flapTimes, flapInterval);
       } else {
         this._commitBleCommandAfterUi({
           sendText: cmd,
@@ -6388,9 +7827,7 @@ Page({
 
   openF2DemoModal() {
     if (!isMtUltraCardModel(this.data.currentModel)) return;
-    if (!this._canControlDevice()) {
-      this.setData({ showConnectBluetoothTip: true });
-      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
     this.setData({
@@ -6406,7 +7843,7 @@ Page({
   },
 
   startF2DemoMode() {
-    if (!isMtUltraCardModel(this.data.currentModel) || !this._canControlDevice()) return;
+    if (!isMtUltraCardModel(this.data.currentModel) || !this._ensureBleControlReady()) return;
     this._f2DemoActive = true;
     this._f2DemoAwaitStable = null;
     this.setData({
@@ -6440,8 +7877,12 @@ Page({
     });
     if (homeFold && wasActive && this.data.isConnected && isMtUltraCardModel(this.data.currentModel)) {
       this._setFlapPanelStateOptimistic('关闭');
-      const times = isF3MaxModel(this.data.currentModel) ? 3 : 2;
-      this.sendDataMultiple('关闭', times, 500);
+      const model = this.data.currentModel;
+      this.sendDataMultiple(
+        flapBleWireText(model, '关闭'),
+        flapBleSendTimes(model, '关闭'),
+        flapBleSendInterval(model)
+      );
       wx.vibrateShort({ type: 'light' });
     }
   },
@@ -6454,8 +7895,10 @@ Page({
     const startLoop = () => {
       if (!this._f2DemoActive) return;
       if (this._isBleLinked()) {
-        const times = isF3MaxModel(this.data.currentModel) ? 3 : 2;
-        this.sendDataMultiple(cmd, times, 500);
+        const model = this.data.currentModel;
+        const times = flapBleSendTimes(model, cmd);
+        const interval = flapBleSendInterval(model);
+        this.sendDataMultiple(flapBleWireText(model, cmd), times, interval);
         this._armF2DemoSendLoop(cmd);
       } else if (this.data.isAdmin) {
         setTimeout(() => {
@@ -6578,9 +8021,7 @@ Page({
       wx.setStorageSync('f2_servo_speed', speed);
     } catch (err) { /* ignore */ }
 
-    if (!this._canControlDevice()) {
-      this.setData({ showConnectBluetoothTip: true });
-      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
 
@@ -6647,7 +8088,7 @@ Page({
 
   _f3CalEnsureFlapClosedThen(onReady) {
     if (typeof onReady !== 'function') return;
-    if (!this._isBleLinked()) {
+    if (!this._canSendBleCommand()) {
       this._showCustomToast('请先连接蓝牙', 'none', 2000);
       return;
     }
@@ -6910,7 +8351,7 @@ Page({
   },
 
   _f3CalSendFoldCmd(tag, times = 1) {
-    if (!this._isBleLinked()) return;
+    if (!this._canSendBleCommand()) return;
     if (this._f3CalWritingHeights) return;
     const n = Math.max(1, Number(times) || 1);
     if (tag === 'U' || tag === 'D') {
@@ -7023,7 +8464,7 @@ Page({
   _f3EnsureHeightConfigModeForWrite(options) {
     const opts = options || {};
     return new Promise((resolve, reject) => {
-      if (!this._canControlDevice() || !this._isBleLinked()) {
+      if (!this._canControlDevice() || !this._canSendBleCommand()) {
         reject(new Error('ble not ready'));
         return;
       }
@@ -7067,7 +8508,7 @@ Page({
       sendM1();
 
       const tick = () => {
-        if (!this._isBleLinked()) {
+        if (!this._canSendBleCommand()) {
           reject(new Error('ble lost'));
           return;
         }
@@ -7123,6 +8564,7 @@ Page({
   },
 
   _f3CalClampRulerTranslate(trans) {
+    // 视觉位移不锁死；角度边界在 display/BLE 侧处理
     return Number(trans) || 0;
   },
 
@@ -7134,15 +8576,11 @@ Page({
     };
   },
 
-  _f3CalSendRulerIndexDelta(prev, next) {
-    if (next === prev) return;
-    const step = Math.abs(next - prev);
-    const tag = next > prev ? 'U' : 'D';
-    this._f3CalSendFoldCmd(tag, step);
-    wx.vibrateShort({ type: 'light' });
-    this._f3CalRulerLastIndex = next;
-    this._f3CalRulerIndex = next;
-    this._f3CalPreviewAngle = this._f3CalAngleFromRulerIndex(next);
+  _f3CalClampServoAngle(ang) {
+    const n = Math.round(Number(ang));
+    if (!Number.isFinite(n)) return FOLD_SERVO_ANGLE_DEFAULT;
+    const min = foldServoAngleMinForModel(this.data.currentModel);
+    return Math.max(min, Math.min(FOLD_SERVO_ANGLE_MAX, n));
   },
 
   _f3CalAngleFromRulerIndex(index) {
@@ -7150,12 +8588,31 @@ Page({
     return start - (Number(index) || 0);
   },
 
+  _f3CalDisplayAngleFromRulerIndex(index) {
+    return this._f3CalClampServoAngle(this._f3CalAngleFromRulerIndex(index));
+  },
+
+  _f3CalSendRulerIndexDelta(prev, next) {
+    if (next === prev) return;
+    const dir = next > prev ? 1 : -1;
+    let i = prev;
+    // 过舵机角边界仍继续发：每格都震、都发
+    while (i !== next) {
+      i += dir;
+      wx.vibrateShort({ type: 'light' });
+      this._f3CalSendFoldCmd(dir > 0 ? 'U' : 'D', 1);
+    }
+    this._f3CalRulerLastIndex = next;
+    this._f3CalRulerIndex = next;
+    this._f3CalPreviewAngle = this._f3CalDisplayAngleFromRulerIndex(next);
+  },
+
   _f3CalClampRulerIndex(index) {
     return Math.round(Number(index) || 0);
   },
 
   _f3CalSyncWheelAngleUi(index) {
-    const ang = this._f3CalAngleFromRulerIndex(index);
+    const ang = this._f3CalDisplayAngleFromRulerIndex(index);
     this._f3CalPreviewAngle = ang;
     const steps = Math.abs(Math.round(Number(index) || 0));
     return {
@@ -7269,33 +8726,33 @@ Page({
         f3CalPadTicks: new Array(50).fill(0)
       });
     }
-    const tick = this.tickWidthPx || 20;
     const touchX = e.touches[0].clientX;
     const diff = (touchX - this._f3CalTouchStartX) * OPEN_ANGLE_RULER_SENSITIVITY;
+    // 波轮跟手：位移不按角度边界锁死（方向与原先一致：右滑减小角）
     const rawTranslate = this._f3CalRulerIndexToTranslate(this._f3CalTouchStartIndex || 0) - diff;
-    const clampedTranslate = this._f3CalClampRulerTranslate(rawTranslate);
-    const snapped = this._f3CalSnapRulerToIndex(this._f3CalIndexFromTranslate(clampedTranslate));
+    const visualIndex = this._f3CalIndexFromTranslate(rawTranslate);
     const prev = this._f3CalRulerLastIndex;
-    const previewAng = this._f3CalAngleFromRulerIndex(snapped.index);
+    const displayAng = this._f3CalDisplayAngleFromRulerIndex(visualIndex);
     const patch = {
-      f3CalTranslateX: snapped.translateX,
+      f3CalTranslateX: rawTranslate,
       f3CalRulerTransition: 'none',
-      f3CalPreviewAngle: previewAng,
-      f3CalWheelSteps: Math.abs(snapped.index),
-      f3CalFoldGap: foldGapFromServoAngle(previewAng)
+      f3CalPreviewAngle: displayAng,
+      f3CalWheelSteps: Math.abs(visualIndex),
+      f3CalFoldGap: foldGapFromServoAngle(displayAng)
     };
-    if (snapped.index !== prev) {
-      this._f3CalSendRulerIndexDelta(prev, snapped.index);
+    if (visualIndex !== prev) {
+      this._f3CalSendRulerIndexDelta(prev, visualIndex);
       patch.f3CalPreviewAngle = this._f3CalPreviewAngle;
-      patch.f3CalWheelSteps = Math.abs(snapped.index);
+      patch.f3CalWheelSteps = Math.abs(visualIndex);
       patch.f3CalFoldGap = foldGapFromServoAngle(this._f3CalPreviewAngle);
     }
     this.setData(patch);
   },
 
   onF3CalRulerTouchEnd() {
+    // 松手保持当前视觉格（可超过角度边界）；数字已是夹紧后的有效角
     const snapped = this._f3CalSnapRulerToIndex(this._f3CalRulerLastIndex || 0);
-    const ang = this._f3CalAngleFromRulerIndex(snapped.index);
+    const ang = this._f3CalDisplayAngleFromRulerIndex(snapped.index);
     this.setData({
       f3CalTranslateX: snapped.translateX,
       f3CalRulerTransition: 'none',
@@ -7523,7 +8980,7 @@ Page({
       this._showCustomToast('无操作权限', 'none', 2000);
       return;
     }
-    if (!this._isBleLinked()) {
+    if (!this._canSendBleCommand()) {
       this._showCustomToast('请先连接蓝牙', 'none', 2000);
       return;
     }
@@ -7563,7 +9020,7 @@ Page({
       this._showCustomToast('请先连接蓝牙', 'none', 2000);
       return;
     }
-    if (!this._isBleLinked()) {
+    if (!this._canSendBleCommand()) {
       this._showCustomToast('请先连接蓝牙', 'none', 2000);
       return;
     }
@@ -7643,7 +9100,7 @@ Page({
       });
     };
 
-    if (!this._canControlDevice() || !this._isBleLinked()) {
+    if (!this._canControlDevice() || !this._canSendBleCommand()) {
       this._f3ShowHeightWriteModal({
         phase: 'fail',
         label,
@@ -7772,7 +9229,7 @@ Page({
   _f3SetHeightConfigMode(on, options) {
     const opts = options || {};
     if (!isF3MaxModel(this.data.currentModel)) return;
-    if (!this._canControlDevice() || !this._isBleLinked()) {
+    if (!this._canControlDevice() || !this._canSendBleCommand()) {
       if (!opts.silent) this._showCustomToast('请先连接蓝牙', 'none', 2000);
       return;
     }
@@ -7824,7 +9281,7 @@ Page({
       lockIn: Math.max(0, (this._f3HeightSendLockUntil || 0) - Date.now()),
       charId: this._getBleWriteCharacteristicId()
     });
-    if (!this._canControlDevice() || !this._isBleLinked()) {
+    if (!this._canControlDevice() || !this._canSendBleCommand()) {
       this._f3HeightLog('写入拒绝', '未连接蓝牙');
       this._showCustomToast('请先连接蓝牙', 'none', 2000);
       return false;
@@ -7939,8 +9396,17 @@ Page({
     const settingsPatch = {
       showSettingsModal: true,
       hasShownSettingsIndicatorModal: true,
-      delayPowerOffIndex
+      delayPowerOffIndex,
+      settingsModalCompact: !(isF2UltraFirmwareModel(model) || isF3MaxModel(model))
     };
+    if (modelUsesSettingClickOnly(model)) {
+      settingsPatch.settingState = buildNeutralSettingState();
+      this._bleVerifyPending = null;
+      this._bleVerifyExpireAt = 0;
+      if (this.data.showSettingSendingModal) {
+        this.setData({ showSettingSendingModal: false, settingSendingModalClosing: false });
+      }
+    }
     if (isF3MaxModel(model)) {
       settingsPatch.f3HeightConfigLocked = false;
     }
@@ -7967,8 +9433,20 @@ Page({
         travelModeTip: buildTravelModeTip(holdMin, durH, this.data.f2TravelModeOn)
       });
     }
-    this.setData(settingsPatch);
+    this.setData(settingsPatch, () => {
+      this._primeSettingsReadbackOnOpen(model);
+    });
     this.showToast();
+  },
+
+  /** 打开高级设置时，用最近一次状态包强制刷新滑块与 F3 测高回读 */
+  _primeSettingsReadbackOnOpen(model) {
+    if (!modelSupportsSettingBleVerify(model)) return;
+    this._f2ForceStatusSyncPending = true;
+    this._f2AdvSyncPending = true;
+    if (this._f2LastStatusParsed) {
+      this._syncF2StatusFromPacket(this._f2LastStatusParsed);
+    }
   },
 
   onDelayPowerOffChange(e) {
@@ -7978,9 +9456,7 @@ Page({
     }
     const model = this.data.currentModel;
     if (!isF2MaxDelayPowerModel(model)) return;
-    if (!this._canControlDevice()) {
-      this.setData({ showConnectBluetoothTip: true });
-      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
 
@@ -7995,7 +9471,11 @@ Page({
       console.log(`📤 [蓝牙] F2 ULTRA 设置延时断电: ${sendText}`);
       this._commitMagSettingBleAfterUi({
         sendText,
-        verify: isMtUltraCardModel(model) ? { type: 'delayPower', minutes: opt.minutes } : null,
+        verify: isMtUltraCardModel(model) ? {
+          type: 'delayPower',
+          minutes: opt.minutes,
+          successText: `延时断电已设为${opt.label}`
+        } : null,
         label: '延时断电'
       });
     });
@@ -8005,9 +9485,7 @@ Page({
   onTravelHoldChange(e) {
     const model = this.data.currentModel;
     if (!isMtUltraCardModel(model)) return;
-    if (!this._canControlDevice()) {
-      this.setData({ showConnectBluetoothTip: true });
-      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
     const idx = Number(e.detail.value);
@@ -8033,9 +9511,7 @@ Page({
   onTravelDurationChange(e) {
     const model = this.data.currentModel;
     if (!isMtUltraCardModel(model)) return;
-    if (!this._canControlDevice()) {
-      this.setData({ showConnectBluetoothTip: true });
-      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
     const idx = Number(e.detail.value);
@@ -8061,9 +9537,7 @@ Page({
   onTravelKeyOffChange(e) {
     const model = this.data.currentModel;
     if (!isMtUltraCardModel(model)) return;
-    if (!this._canControlDevice()) {
-      this.setData({ showConnectBluetoothTip: true });
-      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
     const idx = Number(e.detail.value);
@@ -8086,9 +9560,12 @@ Page({
   },
 
   closeSettings() {
-    this.setData({ showSettingsModal: false });
-    // 关闭时清除 Toast
-    this.setData({ toastClass: '' });
+    const patch = { showSettingsModal: false, toastClass: '' };
+    // 无回读机型：关闭后滑块回中，下次打开必定是中间态
+    if (modelUsesSettingClickOnly(this.data.currentModel)) {
+      patch.settingState = buildNeutralSettingState();
+    }
+    this.setData(patch);
   },
 
   // 🔴 新增：确认发送数据（指示灯确认弹窗）
@@ -8170,13 +9647,27 @@ Page({
     if (!key || !targetVal) return;
 
     const currentModel = this.data.currentModel;
-    const newState = { ...this.data.settingState, [key]: targetVal };
+    const prevVal = this.data.settingState && this.data.settingState[key];
+    
+    // 允许重复发送，但增加时间间隔限制防止连点
+    if (prevVal === targetVal) {
+      const now = Date.now();
+      const lastSendKey = `_lastMagSend_${key}_${targetVal}`;
+      const lastSendTime = this[lastSendKey] || 0;
+      
+      // 2秒内不允许重复发送相同设置
+      if (now - lastSendTime < 2000) {
+        console.log(`⚠️ [高级设置] ${key}=${targetVal} 发送间隔过短，已忽略`);
+        return;
+      }
+      
+      console.log(`🔄 [高级设置] 允许重发 ${key}=${targetVal}`);
+      this[lastSendKey] = now;
+    }
 
+    const clickOnly = modelUsesSettingClickOnly(currentModel);
     const isMtUltra = isMtUltraCardModel(currentModel);
-    const isF2Ble = isF2MaxSeriesModel(currentModel) || isMtUltra;
-    const isF1Max = currentModel &&
-                    currentModel.name && currentModel.name.includes('F1') &&
-                    currentModel.type === 'Max';
+    const newState = { ...this.data.settingState, [key]: targetVal };
 
     const stealthUi = isMtUltra
       ? buildF2StealthUiFlags(
@@ -8186,21 +9677,30 @@ Page({
       )
       : {};
 
-    const sendText = this._resolveMagSettingSendText(
-      key, targetVal, isF2Ble, isMtUltra, isF1Max, currentModel
-    );
+    const sendText = this._resolveMagSettingSendText(key, targetVal, currentModel);
     const sendLabel = isMtUltra
       ? mtUltraCardLabel(currentModel)
-      : (isF2Ble ? 'F2 MAX' : (isF1Max ? 'F1 MAX' : ''));
+      : (currentModel && currentModel.name === 'F2'
+        ? (isF2LongType(currentModel.type) ? 'F2 Long' : (currentModel.type === 'Pro' ? 'F2 PRO' : 'F2 MAX'))
+        : (currentModel && currentModel.name === 'F1'
+          ? (currentModel.type === 'Pro' ? 'F1 PRO' : 'F1 MAX')
+          : ''));
 
-    const prevVal = this.data.settingState && this.data.settingState[key];
     const enablingPowerOffLock = key === 'powerOffLock'
       && targetVal === 'left'
       && prevVal !== 'left'
       && isF3MaxModel(currentModel);
 
     const afterUiReady = () => {
-      if ((isF2Ble || isF1Max) && sendText) {
+      if (!sendText) return;
+      if (clickOnly) {
+        console.log(`📤 [蓝牙] ${sendLabel} 发送「${sendText}」`);
+        this._sendMagSettingBle(sendText);
+        wx.vibrateShort({ type: 'light' });
+        console.log(`Setting ${key} set to: ${targetVal}`);
+        return;
+      }
+      if (isMtUltra) {
         this._queueMagSettingSend(sendText, key, targetVal, sendLabel);
       }
       if (enablingPowerOffLock) {
@@ -8222,37 +9722,33 @@ Page({
 
   _showPowerOffLockGuide(step) {
     this.setData({ powerOffLockGuideStep: step === 2 ? 2 : 1 });
+    startGuideBtnCountdown(this, {
+      lockedKey: 'powerOffLockGuideBtnLocked',
+      textKey: 'powerOffLockGuideBtnText',
+      readyText: '我知道了',
+      timerProp: '_powerOffLockGuideBtnTimer'
+    });
   },
 
   onPowerOffLockGuideConfirm() {
+    if (this.data.powerOffLockGuideBtnLocked) return;
     if (this.data.powerOffLockGuideStep === 1) {
       this._showPowerOffLockGuide(2);
       return;
     }
+    clearGuideBtnCountdown(this, '_powerOffLockGuideBtnTimer');
     this.setData({ powerOffLockGuideStep: 0 });
   },
 
   // 【新增】打开全新产品提示 & 开始倒计时
   openNewProductHint() {
-    this.setData({ 
-      showNewProductHint: true,
-      newProductBtnLocked: true,
-      newProductBtnText: '知道了 (2s)'
+    this.setData({ showNewProductHint: true });
+    startGuideBtnCountdown(this, {
+      lockedKey: 'newProductBtnLocked',
+      textKey: 'newProductBtnText',
+      readyText: '知道了',
+      timerProp: '_newProductBtnTimer'
     });
-
-    let timeLeft = 2;
-    const timer = setInterval(() => {
-      timeLeft--;
-      if (timeLeft > 0) {
-        this.setData({ newProductBtnText: `知道了 (${timeLeft}s)` });
-      } else {
-        clearInterval(timer);
-        this.setData({ 
-          newProductBtnLocked: false,
-          newProductBtnText: '知道了'
-        });
-      }
-    }, 1000);
   },
 
   // 【新增】关闭全新产品提示
@@ -8263,107 +9759,359 @@ Page({
     wx.setStorageSync('hasShownNewProductHint_F1', true);
   },
 
+  _maybeShowCalSettingsGuide(model) {
+    const debugUserFlow = require('../../../utils/debugUserFlow.js');
+    if (this.data.isAdmin && !debugUserFlow.shouldForceUserGuides()) return;
+    if (!modelNeedsOnboardingGuide(model)) return;
+    if (hasScanBleConnectedOnce()) return;
+    this._startCalSettingsGuide(model, false);
+  },
+
+  _markScanBleConnectedOnce() {
+    if (hasScanBleConnectedOnce()) {
+      if (this.data.showCalSettingsGuide) {
+        this.closeCalSettingsGuide(false);
+      }
+      return;
+    }
+    markScanBleConnectedOnceStorage();
+    if (this.data.showCalSettingsGuide) {
+      this.closeCalSettingsGuide(false);
+    }
+  },
+
+  /** 控制台内部卡片右上角「教程」 */
+  openDetailUsageTutorial() {
+    if (this._isRemoteAssistUserLocked()) return;
+    const currentModel = this.data.currentModel;
+    if (!currentModel || currentModel.canLearn || !modelNeedsOnboardingGuide(currentModel)) return;
+    this._startCalSettingsGuide(currentModel, true);
+  },
+
+  /** 卡片「使用教程」或首次进入：进入控制台后展示分步功能引导 */
+  openUsageTutorial(e) {
+    if (this._isRemoteAssistUserLocked()) return;
+    const index = parseInt(e.currentTarget.dataset.index, 10);
+    const currentModel = this.data.models[index];
+    if (!currentModel || currentModel.canLearn || !modelNeedsOnboardingGuide(currentModel)) return;
+
+    const openGuide = () => {
+      this._startCalSettingsGuide(this.data.currentModel || currentModel, true);
+    };
+
+    if (this.data.showDetail &&
+        this.data.currentModel &&
+        this.data.currentModel.name === currentModel.name &&
+        this.data.currentModel.type === currentModel.type &&
+        this.data.detailMode === 'main') {
+      openGuide();
+      return;
+    }
+
+    this.updateCardStatus(index);
+    if (this.data.isConnected && isF2MaxStatusBleModel(currentModel)) {
+      this._bleSessionModel = currentModel;
+    }
+    const detailPatch = {
+      currentModel,
+      angleBtnText: resolveOpenAngleBtnText(currentModel)
+    };
+    if (modelUsesSettingClickOnly(currentModel)) {
+      detailPatch.settingState = buildNeutralSettingState();
+    }
+    this._openDetailAnimated(detailPatch, () => {
+      if (this.data.isConnected) {
+        this._ensureF2StatusBleListener(true);
+      }
+      openGuide();
+    });
+  },
+
+  _startCalSettingsGuide(model, forceReplay) {
+    // 管理员进控制台不自动播功能引导（手动点「教程」仍可用 forceReplay）
+    if (this.data.isAdmin && !forceReplay) return;
+    if (!modelNeedsOnboardingGuide(model)) return;
+    if (this.data.showCalSettingsGuide) return;
+    if (this.data.showAngleHint || this.data.showNewProductHint) return;
+    if (this._calSettingsGuideStartTimer) {
+      clearTimeout(this._calSettingsGuideStartTimer);
+      this._calSettingsGuideStartTimer = null;
+    }
+    this._calSettingsGuideForceReplay = !!forceReplay;
+    const targetName = model.name;
+    const targetType = model.type;
+    this._calSettingsGuideStartTimer = setTimeout(() => {
+      this._calSettingsGuideStartTimer = null;
+      const cur = this.data.currentModel;
+      if (!this.data.showDetail || this.data.detailMode !== 'main' || !cur) return;
+      if (cur.name !== targetName || cur.type !== targetType) return;
+      if (!modelNeedsOnboardingGuide(cur)) return;
+      this._onboardingGuideSteps = buildOnboardingGuideSteps(cur);
+      // 重置滚动，避免进入控制台后手动滑动导致折叠/打开角度教学错位
+      this.setData({ mainControlScrollTop: 0 }, () => {
+        wx.nextTick(() => this._showCalGuideStep(1));
+      });
+    }, 80);
+  },
+
+  _prepareCalGuideStepUI(step) {
+    if (!step || step.controlPanelOpen === undefined) {
+      return Promise.resolve();
+    }
+    const wantOpen = !!step.controlPanelOpen;
+    if (!!this.data.f2ControlPanelOpen === wantOpen) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.setData({ f2ControlPanelOpen: wantOpen }, () => {
+        const delay = wantOpen ? 220 : 80;
+        setTimeout(resolve, delay);
+      });
+    });
+  },
+
+  _showCalGuideStep(stepIndex) {
+    const steps = this._onboardingGuideSteps || [];
+    const step = steps[stepIndex - 1];
+    if (!step) return;
+    const isFirstShow = !this.data.showCalSettingsGuide;
+    const reveal = () => {
+      this._renderCalGuideBubble(stepIndex, step, 0);
+    };
+    const afterUiReady = () => {
+      if (isFirstShow) {
+        this._scrollMainControlToGuideAnchor(step.anchor, reveal, step.scrollCenterRatio);
+        return;
+      }
+      this.setData({ showCalSettingsGuide: false }, () => {
+        this._scrollMainControlToGuideAnchor(step.anchor, reveal, step.scrollCenterRatio);
+      });
+    };
+    this._prepareCalGuideStepUI(step).then(afterUiReady);
+  },
+
+  _scrollMainControlToGuideAnchor(anchorSel, done, scrollCenterRatio) {
+    const query = wx.createSelectorQuery().in(this);
+    query.select('#mainControlGuideScroll').boundingClientRect();
+    query.select('#mainControlGuideScroll').scrollOffset();
+    query.select('#mainControlGuideScroll .main-control-scroll-inner').boundingClientRect();
+    query.select(anchorSel).boundingClientRect();
+    query.exec((res) => {
+      const svRect = res && res[0];
+      const scrollOff = res && res[1];
+      const innerRect = res && res[2];
+      const anchorRect = res && res[3];
+      if (!svRect || !anchorRect || !anchorRect.height) {
+        if (typeof done === 'function') done();
+        return;
+      }
+      let winH = 667;
+      try {
+        const win = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+        winH = (win && win.windowHeight) || 667;
+      } catch (e) { /* ignore */ }
+
+      const currentScrollTop = (scrollOff && scrollOff.scrollTop) || 0;
+      const contentH = (innerRect && innerRect.height) || 0;
+      const maxScroll = Math.max(0, contentH - svRect.height);
+      const centerRatio = Number(scrollCenterRatio);
+      const targetCenterY = winH * (Number.isFinite(centerRatio) ? centerRatio : 0.58);
+      const anchorCenterY = anchorRect.top + anchorRect.height / 2;
+      let nextScrollTop = currentScrollTop + (anchorCenterY - targetCenterY);
+      if (nextScrollTop < 0) nextScrollTop = 0;
+      if (nextScrollTop > maxScroll) nextScrollTop = maxScroll;
+
+      const prevTop = this.data.mainControlScrollTop || 0;
+      const finish = () => {
+        setTimeout(() => {
+          if (typeof done === 'function') done();
+        }, Math.abs(nextScrollTop - prevTop) < 1 ? 60 : 280);
+      };
+      if (Math.abs(nextScrollTop - prevTop) < 1) {
+        finish();
+        return;
+      }
+      const kickTop = prevTop === nextScrollTop ? Math.max(0, nextScrollTop - 1) : prevTop;
+      this.setData({ mainControlScrollTop: kickTop }, () => {
+        wx.nextTick(() => {
+          this.setData({ mainControlScrollTop: nextScrollTop }, finish);
+        });
+      });
+    });
+  },
+
+  _renderCalGuideBubble(stepIndex, step, retryCount) {
+    const steps = this._onboardingGuideSteps || [];
+    const targetSel = step.anchor;
+    const retry = Number(retryCount) || 0;
+    const query = wx.createSelectorQuery().in(this);
+    query.select(targetSel).boundingClientRect();
+    query.exec((res) => {
+      const rect = res && res[0];
+      const isLast = stepIndex >= steps.length;
+      const readyText = isLast ? '知道了' : '下一步';
+      const contentPatch = {
+        showCalSettingsGuide: true,
+        calSettingsGuideStep: stepIndex,
+        calGuideStepTag: step.tag,
+        calGuideTitle: step.title,
+        calGuideDesc: step.desc,
+        calGuideBtnText: readyText,
+        calGuideBtnLocked: true
+      };
+      if (!rect || !rect.width) {
+        if (retry < 3) {
+          setTimeout(() => {
+            this._renderCalGuideBubble(stepIndex, step, retry + 1);
+          }, 180);
+          return;
+        }
+        this.setData({
+          ...contentPatch,
+          calGuideArrowDir: 'none',
+          calGuideBubbleStyle: 'left:50%; top:50%; transform:translate(-50%,-50%); width:520rpx;',
+          calGuideArrowStyle: 'display:none;',
+          calGuideSpotStyle: 'display:none;'
+        }, () => this._armCalGuideBtnLock(readyText));
+        return;
+      }
+      let win = null;
+      try {
+        win = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      } catch (e) {
+        win = wx.getSystemInfoSync();
+      }
+      const winW = (win && win.windowWidth) || 375;
+      const winH = (win && win.windowHeight) || 667;
+      const pxToRpx = 750 / winW;
+
+      const spotPadPx = 6;
+      const spotLeft = (rect.left - spotPadPx) * pxToRpx;
+      const spotTop = (rect.top - spotPadPx) * pxToRpx;
+      const spotW = (rect.width + spotPadPx * 2) * pxToRpx;
+      const spotH = (rect.height + spotPadPx * 2) * pxToRpx;
+      const calGuideSpotStyle = `left:${spotLeft}rpx; top:${spotTop}rpx; width:${spotW}rpx; height:${spotH}rpx;`;
+
+      const bubbleWidthRpx = 480;
+      const marginRpx = 24;
+      const centerXrpx = (rect.left + rect.width / 2) * pxToRpx;
+      let bubbleLeftRpx = centerXrpx - bubbleWidthRpx / 2;
+      if (bubbleLeftRpx < marginRpx) bubbleLeftRpx = marginRpx;
+      if (bubbleLeftRpx + bubbleWidthRpx > 750 - marginRpx) {
+        bubbleLeftRpx = 750 - marginRpx - bubbleWidthRpx;
+      }
+      const arrowLeftRpx = centerXrpx - bubbleLeftRpx;
+      const gapRpx = 22;
+
+      const placeAbove = rect.top > winH * 0.4;
+      let bubbleStyle = '';
+      let arrowDir = 'down';
+      if (placeAbove) {
+        const bottomRpx = (winH - rect.top) * pxToRpx + gapRpx;
+        bubbleStyle = `left:${bubbleLeftRpx}rpx; bottom:${bottomRpx}rpx; width:${bubbleWidthRpx}rpx;`;
+        arrowDir = 'down';
+      } else {
+        const topRpx = (rect.top + rect.height) * pxToRpx + gapRpx;
+        bubbleStyle = `left:${bubbleLeftRpx}rpx; top:${topRpx}rpx; width:${bubbleWidthRpx}rpx;`;
+        arrowDir = 'up';
+      }
+
+      this.setData({
+        ...contentPatch,
+        calGuideArrowDir: arrowDir,
+        calGuideBubbleStyle: bubbleStyle,
+        calGuideArrowStyle: `left:${arrowLeftRpx}rpx;`,
+        calGuideSpotStyle
+      }, () => this._armCalGuideBtnLock(readyText));
+    });
+  },
+
+  calSettingsGuideNext() {
+    if (this.data.calGuideBtnLocked) return;
+    const steps = this._onboardingGuideSteps || [];
+    const cur = this.data.calSettingsGuideStep;
+    if (cur < steps.length) {
+      this._showCalGuideStep(cur + 1);
+      return;
+    }
+    this.closeCalSettingsGuide();
+  },
+
+  closeCalSettingsGuide(_markDone = true) {
+    this._calSettingsGuideForceReplay = false;
+    clearGuideBtnCountdown(this, '_calGuideBtnTimer');
+    if (this._calSettingsGuideStartTimer) {
+      clearTimeout(this._calSettingsGuideStartTimer);
+      this._calSettingsGuideStartTimer = null;
+    }
+    this._onboardingGuideSteps = null;
+    this.setData({ showCalSettingsGuide: false });
+  },
+
+  _armCalGuideBtnLock(readyText) {
+    // 控制中心功能引导：下一步不延时，立即可点
+    clearGuideBtnCountdown(this, '_calGuideBtnTimer');
+    this.setData({
+      calGuideBtnLocked: false,
+      calGuideBtnText: readyText || '下一步'
+    });
+  },
+
   // ===============================================
-  // 🔴 所有弹窗的倒计时函数
+  // 🔴 所有弹窗的倒计时函数（统一 3 秒后可点）
   // ===============================================
 
   // 密码弹窗倒计时
   openPasswordModal() {
-    // 兜底：管理员不弹密码，直接进入教程
+    // 管理员不弹密码、不弹折叠教学，直接进入编辑
     if (this.data.isAdmin) {
       if (!this.data.isAuthorized) {
         this.setData({ isAuthorized: true });
       }
-      this.showTutorial('fold');
+      this._enterFoldEditWithoutTutorial();
       return;
     }
 
-    this.setData({ 
-      showPasswordModal: true, 
-      passwordInput: '',
-      passwordBtnLocked: true,
-      passwordBtnText: '确认 (2s)'
+    this.setData({
+      showPasswordModal: true,
+      passwordInput: ''
     });
-    
-    let timeLeft = 2;
-    const timer = setInterval(() => {
-      timeLeft--;
-      if (timeLeft > 0) {
-        this.setData({ passwordBtnText: `确认 (${timeLeft}s)` });
-      } else {
-        clearInterval(timer);
-        this.setData({ 
-          passwordBtnLocked: false,
-          passwordBtnText: '确认'
-        });
-      }
-    }, 1000);
+    startGuideBtnCountdown(this, {
+      lockedKey: 'passwordBtnLocked',
+      textKey: 'passwordBtnText',
+      readyText: '确认',
+      timerProp: '_passwordBtnTimer'
+    });
   },
 
   // 教程弹窗倒计时
   startTutorialCountdown() {
-    this.setData({ 
-      tutorialBtnLocked: true,
-      tutorialBtnText: '知道了 (2s)'
+    startGuideBtnCountdown(this, {
+      lockedKey: 'tutorialBtnLocked',
+      textKey: 'tutorialBtnText',
+      readyText: '知道了',
+      timerProp: '_tutorialBtnTimer'
     });
-    
-    let timeLeft = 2;
-    const timer = setInterval(() => {
-      timeLeft--;
-      if (timeLeft > 0) {
-        this.setData({ tutorialBtnText: `知道了 (${timeLeft}s)` });
-      } else {
-        clearInterval(timer);
-        this.setData({ 
-          tutorialBtnLocked: false,
-          tutorialBtnText: '知道了'
-        });
-      }
-    }, 1000);
   },
 
-  // 关钥匙弹窗倒计时
+  // 关钥匙 / 重启车子弹窗倒计时
   startKeyCountdown() {
-    this.setData({ 
-      keyBtnLocked: true,
-      keyBtnText: '确认 (2s)'
+    startGuideBtnCountdown(this, {
+      lockedKey: 'keyBtnLocked',
+      textKey: 'keyBtnText',
+      readyText: '我已重启',
+      timerProp: '_keyBtnTimer'
     });
-    
-    let timeLeft = 2;
-    const timer = setInterval(() => {
-      timeLeft--;
-      if (timeLeft > 0) {
-        this.setData({ keyBtnText: `确认 (${timeLeft}s)` });
-      } else {
-        clearInterval(timer);
-        this.setData({ 
-          keyBtnLocked: false,
-          keyBtnText: '确认'
-        });
-      }
-    }, 1000);
   },
 
   // 打开角度提示弹窗倒计时
   startAngleHintCountdown() {
-    this.setData({ 
-      angleHintBtnLocked: true,
-      angleHintBtnText: '知道了 (2s)'
+    startGuideBtnCountdown(this, {
+      lockedKey: 'angleHintBtnLocked',
+      textKey: 'angleHintBtnText',
+      readyText: '知道了',
+      timerProp: '_angleHintBtnTimer'
     });
-    
-    let timeLeft = 2;
-    const timer = setInterval(() => {
-      timeLeft--;
-      if (timeLeft > 0) {
-        this.setData({ angleHintBtnText: `知道了 (${timeLeft}s)` });
-      } else {
-        clearInterval(timer);
-        this.setData({ 
-          angleHintBtnLocked: false,
-          angleHintBtnText: '知道了'
-        });
-      }
-    }, 1000);
   },
 
   // ===============================================
@@ -8494,9 +10242,9 @@ Page({
         adjustSlideActive: true
       });
 
-      if (this._canControlDevice()) {
+      if (this._ensureBleControlReady()) {
         this._foldAdjustActive = true;
-        console.log('📤 [蓝牙] 上滑调整：发送「调整折叠角度」');
+        console.log('📤 [折叠角度] 上滑调整：全机型发送「调整折叠角度」');
         this.sendDataMultiple('调整折叠角度', 1, 300);
       }
       
@@ -8668,20 +10416,21 @@ Page({
 
   _buildSettingBleVerify(key, targetVal) {
     if (!key || !targetVal) return null;
-    if (!isF2MaxStatusBleModel(this.data.currentModel)) return null;
+    const model = this.data.currentModel;
+    if (!modelSupportsSettingBleVerify(model)) return null;
     return {
       type: 'setting',
       key,
       targetVal,
-      isMtUltra: isMtUltraCardModel(this.data.currentModel)
+      isMtUltra: isMtUltraCardModel(model),
+      successText: buildSettingChangeResultText(model, key, targetVal)
     };
   },
 
   /** 校验等待期间，不让设备回读覆盖用户刚点的 UI */
   _stripConflictingBleReadback(updates) {
-    const verify = this._bleVerifyPending;
-    if (verify && this._bleVerifyExpireAt && Date.now() > this._bleVerifyExpireAt) {
-      this._abortFlapBleVerify();
+    if (this._bleVerifyPending && this._bleVerifyExpireAt && Date.now() > this._bleVerifyExpireAt) {
+      this._failSettingBleVerify();
     }
     const heightPending = this._f3HeightWritePending;
     if (heightPending && updates && Date.now() < heightPending.expire) {
@@ -8720,7 +10469,8 @@ Page({
       this._f3HeightSendLockUntil = 0;
       if (typeof onFail === 'function') onFail();
     }
-    if (!verify || !updates) return updates;
+    if (!this._bleVerifyPending || !updates) return updates;
+    const verify = this._bleVerifyPending;
     if (verify.type === 'setting') {
       delete updates.settingState;
       if (verify.key === 'travelMode') {
@@ -8768,15 +10518,14 @@ Page({
       verify: intent.verify || null,
       label: intent.label || ''
     };
+    const isAdminRelay = this._isRemoteAssistAdminRelay();
     this._bleVerifyRetryCount = 0;
-    if (!this._canControlDevice()) {
-      this.setData({ showConnectBluetoothTip: true });
-      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
     const ultra = isMtUltraCardModel(this.data.currentModel);
-    this._bleVerifyPending = ultra && intent.verify ? intent.verify : null;
-    this._bleVerifyExpireAt = this._bleVerifyPending ? Date.now() + 12000 : 0;
+    this._bleVerifyPending = !isAdminRelay && ultra && intent.verify ? intent.verify : null;
+    this._bleVerifyExpireAt = this._bleVerifyPending ? Date.now() + SETTINGS_BLE_VERIFY_TIMEOUT_MS : 0;
     const { sendText, times, interval, label } = this._pendingBleIntent;
     console.log(`📤 [蓝牙] ${label} 发送「${sendText}」×${times}`);
     this.sendDataMultiple(sendText, times, interval);
@@ -8790,7 +10539,7 @@ Page({
     this._bleVerifyRetryCount = 0;
     const ultra = isMtUltraCardModel(this.data.currentModel);
     this._bleVerifyPending = ultra && intent.verify ? intent.verify : null;
-    this._bleVerifyExpireAt = this._bleVerifyPending ? Date.now() + 12000 : 0;
+    this._bleVerifyExpireAt = this._bleVerifyPending ? Date.now() + SETTINGS_BLE_VERIFY_TIMEOUT_MS : 0;
     this.sendDataMultiple(intent.sendText, intent.times || 3, intent.interval || 500);
   },
 
@@ -8805,13 +10554,28 @@ Page({
   },
 
   _abortFlapBleVerify() {
-    if (!this._bleVerifyPending) return;
+    if (!this._bleVerifyPending && !this.data.showSettingSendingModal) return;
     this._bleVerifyPending = null;
     this._pendingBleIntent = null;
     this._bleVerifyRetryCount = 0;
     this._bleVerifyExpireAt = 0;
     this._f2ForceStatusSyncPending = true;
-    this._dismissSettingSendingModal();
+    this._clearSettingSendingWatch(true);
+  },
+
+  _failSettingBleVerify() {
+    const hadPending = !!this._bleVerifyPending;
+    const modalVisible = !!this.data.showSettingSendingModal;
+    if (!hadPending && !modalVisible) return;
+    this._bleVerifyPending = null;
+    this._pendingBleIntent = null;
+    this._bleVerifyRetryCount = 0;
+    this._bleVerifyExpireAt = 0;
+    this._f2ForceStatusSyncPending = true;
+    this._clearSettingSendingWatch(true);
+    if (hadPending || modalVisible) {
+      this._showCustomToast('数据发送不成功', 'none', 2200);
+    }
   },
 
   _isFaultReportMuted() {
@@ -8826,6 +10590,7 @@ Page({
   _startSettingSendingWatch() {
     this._clearSettingSendingWatch(false);
     if (!this._bleVerifyPending) return;
+    this._bleVerifyExpireAt = Date.now() + SETTINGS_BLE_VERIFY_TIMEOUT_MS;
     this._settingSendingModalTimer = setTimeout(() => {
       this._settingSendingModalTimer = null;
       if (this._bleVerifyPending) {
@@ -8835,12 +10600,22 @@ Page({
         });
       }
     }, SETTINGS_SENDING_MODAL_DELAY_MS);
+    this._settingSendingTimeoutTimer = setTimeout(() => {
+      this._settingSendingTimeoutTimer = null;
+      if (this._bleVerifyPending || this.data.showSettingSendingModal) {
+        this._failSettingBleVerify();
+      }
+    }, SETTINGS_BLE_VERIFY_TIMEOUT_MS);
   },
 
   _clearSettingSendingWatch(dismissModal) {
     if (this._settingSendingModalTimer) {
       clearTimeout(this._settingSendingModalTimer);
       this._settingSendingModalTimer = null;
+    }
+    if (this._settingSendingTimeoutTimer) {
+      clearTimeout(this._settingSendingTimeoutTimer);
+      this._settingSendingTimeoutTimer = null;
     }
     if (dismissModal !== false) {
       this._dismissSettingSendingModal();
@@ -8851,6 +10626,10 @@ Page({
     if (this._settingSendingModalTimer) {
       clearTimeout(this._settingSendingModalTimer);
       this._settingSendingModalTimer = null;
+    }
+    if (this._settingSendingTimeoutTimer) {
+      clearTimeout(this._settingSendingTimeoutTimer);
+      this._settingSendingTimeoutTimer = null;
     }
     if (!this.data.showSettingSendingModal) return;
     this.setData({ settingSendingModalClosing: true });
@@ -8866,16 +10645,20 @@ Page({
     if (!isF2MaxStatusBleModel(this.data.currentModel)) return;
     if (!this._bleVerifyPending || !parsed) return;
     if (packetMatchesBleVerify(parsed, this._bleVerifyPending)) {
+      const successText = this._bleVerifyPending.successText;
       this._bleVerifyPending = null;
       this._bleVerifyRetryCount = 0;
       this._bleVerifyExpireAt = 0;
-      this._dismissSettingSendingModal();
+      this._clearSettingSendingWatch(true);
+      if (successText) {
+        this._showCustomToast(successText, 'success', 2200);
+      }
       return;
     }
     const retries = this._bleVerifyRetryCount || 0;
     if (retries >= 2) {
-      console.warn('📤 [蓝牙] 翻板回读校验放弃，恢复设备状态');
-      this._abortFlapBleVerify();
+      console.warn('📤 [蓝牙] 回读校验放弃，恢复设备状态');
+      this._failSettingBleVerify();
       return;
     }
     this._bleVerifyRetryCount = retries + 1;
@@ -8893,49 +10676,36 @@ Page({
     }, 500);
   },
 
-  _resolveMagSettingSendText(key, targetVal, isF2Ble, isMtUltra, isF1Max, model) {
-    if (isF2Ble) {
+  _resolveMagSettingSendText(key, targetVal, model) {
+    if (!model || !key || !targetVal) return '';
+    const isMtUltra = isMtUltraCardModel(model);
+    const isF2Line = model.name === 'F2';
+    const isF1ProMax = model.name === 'F1' && (model.type === 'Pro' || model.type === 'Max');
+
+    if (isMtUltra) {
+      return resolveMtUltraMagSettingSendText(key, targetVal, model);
+    }
+
+    if (isF2Line) {
       if (key === 'faultDetect') {
-        if (isMtUltra) {
-          return targetVal === 'left' ? '开启堵转检测' : (targetVal === 'right' ? '关闭堵转检测' : '');
-        }
         return targetVal === 'left' ? '开启自检' : (targetVal === 'right' ? '关闭自检' : '');
       }
-      if (key === 'selfRepair' && isMtUltra) {
-        return targetVal === 'left' ? '开启电机检测' : (targetVal === 'right' ? '关闭电机检测' : '');
-      }
       if (key === 'powerOn') {
-        if (isMtUltra) {
-          // 同款 Ultra 固件：UI 左=上翻/右=下翻，与固件指令左右对调
-          return targetVal === 'left' ? '开机下翻' : (targetVal === 'right' ? '开机上翻' : '');
-        }
         return targetVal === 'left' ? '开机上翻' : (targetVal === 'right' ? '开机下翻' : '');
       }
       if (key === 'shutdown') {
         return targetVal === 'left' ? '打开收回' : (targetVal === 'right' ? '关闭收回' : '');
-      }
-      if (key === 'travelMode' && isMtUltra) {
-        return targetVal === 'left' ? '关闭出行' : (targetVal === 'right' ? '开启出行' : '');
-      }
-      if (key === 'smoothMode' && isMtUltra) {
-        return targetVal === 'left' ? '开启平滑' : (targetVal === 'right' ? '关闭平滑' : '');
-      }
-      if (key === 'stealthBtnExit' && isMtUltra) {
-        return targetVal === 'left' ? '允许按钮退出' : (targetVal === 'right' ? '禁止按钮退出' : '');
-      }
-      if (key === 'powerOffLock' && isMtUltra) {
-        return targetVal === 'left' ? 'P1' : (targetVal === 'right' ? 'P0' : '');
-      }
-      if (key === 'heightMon' && isF3MaxModel(model)) {
-        return targetVal === 'left' ? 'H1' : (targetVal === 'right' ? 'H0' : '');
       }
     }
-    if (isF1Max) {
+    if (isF1ProMax) {
       if (key === 'powerOn') {
         return targetVal === 'left' ? '开机上翻' : (targetVal === 'right' ? '开机下翻' : '');
       }
       if (key === 'shutdown') {
         return targetVal === 'left' ? '打开收回' : (targetVal === 'right' ? '关闭收回' : '');
+      }
+      if (key === 'selfRepair') {
+        return targetVal === 'left' ? '开启自检' : (targetVal === 'right' ? '关闭自检' : '');
       }
     }
     return '';
@@ -8947,7 +10717,12 @@ Page({
   },
 
   _sendMagSettingBle(sendText) {
-    if (!sendText || !this._isBleLinked()) return;
+    if (!sendText) return;
+    if (this._isRemoteAssistAdminRelay()) {
+      this._relayBleCommand(sendText, SETTINGS_BLE_SEND_TIMES, SETTINGS_BLE_SEND_GAP_MS);
+      return;
+    }
+    if (!this._canSendBleCommand()) return;
     this._prunePendingMagSettingBleQueue();
     this._enqueueBleSend(sendText, SETTINGS_BLE_SEND_GAP_MS, { quickSetting: true });
   },
@@ -8961,18 +10736,17 @@ Page({
       verify: intent.verify || null,
       label: intent.label || '高级设置'
     };
+    const isAdminRelay = this._isRemoteAssistAdminRelay();
     this._bleVerifyRetryCount = 0;
-    if (!this._canControlDevice()) {
-      this.setData({ showConnectBluetoothTip: true });
-      setTimeout(() => this.setData({ showConnectBluetoothTip: false }), 2000);
+    if (!this._ensureBleControlReady()) {
       return;
     }
-    const hasStatusBle = isF2MaxStatusBleModel(this.data.currentModel);
-    this._bleVerifyPending = hasStatusBle && intent.verify ? intent.verify : null;
-    this._bleVerifyExpireAt = this._bleVerifyPending ? Date.now() + 12000 : 0;
+    const canVerifySetting = modelSupportsSettingBleVerify(this.data.currentModel);
+    this._bleVerifyPending = !isAdminRelay && canVerifySetting && intent.verify ? intent.verify : null;
+    this._bleVerifyExpireAt = this._bleVerifyPending ? Date.now() + SETTINGS_BLE_VERIFY_TIMEOUT_MS : 0;
     console.log(`📤 [蓝牙] ${this._pendingBleIntent.label} 发送「${intent.sendText}」`);
     this._sendMagSettingBle(intent.sendText);
-    if (this._bleVerifyPending) {
+    if (!isAdminRelay && this._bleVerifyPending) {
       this._startSettingSendingWatch();
     }
     wx.vibrateShort({ type: 'light' });
@@ -8997,9 +10771,16 @@ Page({
 
   _enqueueBleSend(text, gapAfterMs = BLE_SEND_GAP_MS, meta) {
     if (!text) return;
+    if (this._isRemoteAssistAdminRelay()) {
+      this._relayBleCommand(text, 1, gapAfterMs != null ? gapAfterMs : BLE_SEND_GAP_MS);
+      return;
+    }
     let raw = String(text);
     if (this._isFlapBleCmd(raw)) {
-      raw = raw.replace(/#$/, '') + '#';
+      raw = raw.replace(/#$/, '');
+      if (flapBleUsesHashSuffix(this.data.currentModel)) {
+        raw += '#';
+      }
     }
     if (/^(M[01]|DA|TB)/.test(raw) || raw === '#' || (meta && meta.f3HeightChar)) {
       this._f3HeightLog('入队', { text: raw, gapAfterMs, meta });
@@ -9010,6 +10791,13 @@ Page({
   },
 
   _enqueueBleSendBurst(text, count, gapAfterMs = BLE_ANGLE_STEP_GAP_MS) {
+    if (this._isRemoteAssistAdminRelay()) {
+      const n = Math.max(0, Number(count) || 0);
+      if (n > 0) {
+        this._relayBleCommand(text, n, gapAfterMs != null ? gapAfterMs : BLE_ANGLE_STEP_GAP_MS);
+      }
+      return;
+    }
     const n = Math.max(0, Number(count) || 0);
     for (let i = 0; i < n; i++) {
       this._enqueueBleSend(text, gapAfterMs);
@@ -9089,25 +10877,21 @@ Page({
 
   // 发送字符串数据（经队列串行写出，避免 BLE 连发粘包）
   sendData(text, gapAfterMs) {
-    if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) {
-      // 通过 _remoteAssistEnqueueCommand 中继发送
-      // 防止如果调用方自身已经有循环或重试，这里再排队会堆积
-      this._remoteAssistEnqueueCommand(text, 1, 0);
+    if (this._isRemoteAssistAdminRelay()) {
+      this._relayBleCommand(text, 1, gapAfterMs != null ? gapAfterMs : 0);
       return;
     }
-    if (!this._isBleLinked()) return;
+    if (!this._canSendBleCommand()) return;
     this._enqueueBleSend(text, gapAfterMs != null ? gapAfterMs : BLE_SEND_GAP_MS);
   },
 
   // 连续发送多次（用于 Max 版本），同样走队列间隔发送
   sendDataMultiple(text, times = 3, interval = 300) {
-    if (this.data.remoteAssistRole === 'admin' && this.data.remoteAssistSessionId) {
-      // 避免 enqueueCommand 和 timeout 嵌套导致指令乘方爆炸
-      // 直接交给远协云端队列去循环发送
-      this._remoteAssistEnqueueCommand(text, times, interval);
+    if (this._isRemoteAssistAdminRelay()) {
+      this._relayBleCommand(text, times, interval);
       return;
     }
-    if (!this._isBleLinked()) return;
+    if (!this._canSendBleCommand()) return;
     const flapCmd = this._isFlapBleCmd(text);
     if (flapCmd) {
       this._prunePendingFlapBleQueue();
@@ -9328,6 +11112,7 @@ Page({
     this._f2FaultConnectPending = false;
     this._f2AdvSyncPending = false;
     this._f2ForceStatusSyncPending = false;
+    this._f2LastStatusParsed = null;
     if (this.ble) this.ble.onDataReceived = null;
     this._resetFlapPanelState();
     this.setData({
@@ -9398,6 +11183,7 @@ Page({
     } else if (!faultMuted) {
       this._f2LastFaultKey = '0:0';
     }
+    this._f2LastStatusParsed = parsed;
     this._syncF2StatusFromPacket(parsed);
   },
 
@@ -9439,6 +11225,10 @@ Page({
 
     if (forceAdv) {
       this._f2AdvSyncPending = false;
+    }
+
+    if (modelUsesSettingClickOnly(model)) {
+      delete updates.settingState;
     }
 
     if (isUltra) {
@@ -9630,6 +11420,7 @@ Page({
       const f3CalFlapJustClosed = this._f3CalAwaitFlapClose && updates.flapPanelState === 'closed';
       if (f3CalJustFinished) delete updates._f3CalJustFinished;
       this.setData(updates, () => {
+        this._ensureFlapGaugeRestVisual();
         if (updates.f3ShowCalOverlay === false) this._clearF3CalTimer();
         if (f3CalDismissToast) {
           this._clearF3CalTimer();
@@ -9718,7 +11509,7 @@ Page({
   },
 
   _ackF2FaultReportToDevice() {
-    if (!this._isBleLinked()) return;
+    if (!this._canSendBleCommand()) return;
     this.sendData(F2_FAULT_ACK_CMD, 80);
   },
 });

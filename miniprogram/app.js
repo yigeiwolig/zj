@@ -1,6 +1,7 @@
 // app.js
 const GLOBAL_ACCESS_GUARD_INTERVAL_MS = 5 * 60 * 1000;
 const { redirectToPcBlockedIfNeeded, isPcBannedClient } = require('./utils/runtimeEnv.js');
+const { clearLoginIdentity } = require('./utils/userIdentity.js');
 
 /** 必须在首个 Page() 注册前执行，否则 index 等页面 onShow 套不上守卫 */
 function _installGlobalPageLifecycleGuard() {
@@ -335,7 +336,7 @@ App({
       const validRes = await db.collection('valid_users').where({ _openid: openid }).limit(1).get();
       if (!validRes.data || validRes.data.length === 0) {
         wx.removeStorageSync('has_permanent_auth');
-        wx.removeStorageSync('user_nickname');
+        clearLoginIdentity();
         wx.removeStorageSync('is_user_banned');
         if (isPcBannedClient()) {
           redirectToPcBlockedIfNeeded();
@@ -688,8 +689,8 @@ App({
     redirectToPcBlockedIfNeeded();
   },
 
-  async _isReviewPassMode() {
-    if (typeof this.globalData.reviewPassMode === 'boolean') {
+  async _isReviewPassMode(forceRefresh) {
+    if (!forceRefresh && typeof this.globalData.reviewPassMode === 'boolean') {
       return this.globalData.reviewPassMode;
     }
     try {
@@ -1022,8 +1023,8 @@ App({
 
       let viewerNickname = '';
       try {
-        const userInfo = wx.getStorageSync('userInfo');
-        viewerNickname = userInfo?.nickName || wx.getStorageSync('user_nickname') || '';
+        const { getDisplayIdentity } = require('./utils/userIdentity.js');
+        viewerNickname = getDisplayIdentity({ fallback: '' });
       } catch (e) {}
 
       let locationInfo = sessionStats.locationInfo || {

@@ -4,6 +4,7 @@
  */
 const { MUNICIPALITY_DISTRICTS } = require('../../../utils/smartAddressParser.js');
 const couponMixin = require('../../../utils/checkoutCouponMixin.js');
+const { withRepairProgressSubscribe, sendSubscribeNotify } = require('../../../utils/subscribeMessage.js');
 
 let qqmapsdk = null;
 let qqmapsdkDistrict = null;
@@ -155,6 +156,9 @@ const methods = {
   /** 已创建待付款订单但用户取消/失败支付：保留购物车，仅关闭弹窗 */
   _finalizeUnpaidOrder(payment) {
     const orderId = payment && payment.outTradeNo;
+    if (orderId) {
+      sendSubscribeNotify({ scene: 'shop_unpaid', orderId: String(orderId) });
+    }
     const finish = () => {
       this.setData({ agreedToDisclaimer: false });
       this.triggerEvent('unpaid', { orderId: orderId || '' });
@@ -1371,7 +1375,9 @@ const methods = {
       confirmText: '支付',
       cancelText: '取消',
       success: () => {
-        this.doRealPayment(cart, finalOrderInfo, currentFinalTotalPrice, currentShippingFee, shippingMethod);
+        withRepairProgressSubscribe(() => {
+          this.doRealPayment(cart, finalOrderInfo, currentFinalTotalPrice, currentShippingFee, shippingMethod);
+        });
       }
     });
   },

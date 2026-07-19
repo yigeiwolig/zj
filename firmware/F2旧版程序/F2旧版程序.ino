@@ -528,40 +528,44 @@ void loop(){
     shuju = "";
     EEPROM.put(3, item4);
   } else if (shuju == "调整折叠角度") {
-    digitalWrite(8,HIGH);
+    // 进入调角专用循环前先清空，否则后续「调大/调小」会拼成「调整折叠角度调大」永远匹配不上
+    shuju = "";
+    lastReceiveTime = 0;
+    digitalWrite(8, HIGH);
+    // 正常运行后 flapServoHold 会 detach + 关 Pin11，这里必须重新上电再写角
+    servoAttach();
+    servoMotionOn();
+    servo.write(item4);
     while (true) {
-      digitalWrite(8,HIGH);
-      digitalWrite(9,LOW);
+      digitalWrite(8, HIGH);
+      digitalWrite(9, LOW);
       if (mySerial.available()) {
         receivedChar = mySerial.read();
         shuju += receivedChar;
         lastReceiveTime = millis();
-
       }
-      if ((shuju.length() > 0 && millis() - lastReceiveTime > timeout)) {
-        Serial.println(shuju);
+      if (shuju.length() > 0 && millis() - lastReceiveTime > timeout) {
+        // 先判定完整指令，再清空（旧逻辑先清空会导致偶发丢「调大/调小」）
+        if (shuju == "调大") {
+          if (item4 > 0) {
+            item4 = item4 - 1;
+            servoAttach();
+            servoMotionOn();
+            servo.write(item4);
+            delay(300);
+            EEPROM.put(3, item4);
+          }
+        } else if (shuju == "调小") {
+          if (item4 < 180) {
+            item4 = item4 + 1;
+            servoAttach();
+            servoMotionOn();
+            servo.write(item4);
+            delay(300);
+            EEPROM.put(3, item4);
+          }
+        }
         shuju = "";
-
-      }
-      if (shuju == "调大") {
-        if (servo.read() != 0) {
-          item4 = item4 - 1;
-          servo.write(item4);
-          delay(300);
-          EEPROM.put(3, item4);
-          shuju = "调整折叠角度";
-
-        }
-
-      } else if (shuju == "调小") {
-        if (servo.read() != 180) {
-          item4 = item4 + 1;
-          servo.write(item4);
-          delay(300);
-          EEPROM.put(3, item4);
-          shuju = "调整折叠角度";
-
-        }
       }
     }
   }

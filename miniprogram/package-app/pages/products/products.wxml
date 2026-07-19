@@ -17,7 +17,20 @@
     >
       {{hubShellIsAdmin ? '退出管理员' : '管理员切换'}}
     </view>
+    <view
+      class="hub-admin-entry-btn hub-admin-entry-btn--secondary"
+      catchtap="onHubAdminBackToIndex"
+      hover-class="hub-admin-entry-btn--pressed"
+    >
+      返回 Index
+    </view>
   </view>
+
+  <view
+    wx:if="{{false}}"
+    class="hub-home-guide-entry"
+    catchtap="openHomeUsageTutorial"
+  >使用教程</view>
 
   <view
     class="hub-panels-viewport"
@@ -30,10 +43,12 @@
     >
     <view class="hub-panel-slot">
   <scroll-view
-    scroll-y
+    scroll-y="{{!showHomeGuide || homeGuideAllowScroll}}"
     class="main-content hub-home-scroll"
     enhanced
     show-scrollbar="{{false}}"
+    scroll-with-animation="{{true}}"
+    scroll-into-view="{{homeGuideScrollIntoView}}"
   >
     <view class="content-inner hub-home-layout">
 
@@ -120,6 +135,7 @@
       <!-- 产品选购 -->
       <view
         wx:if="{{hubHero}}"
+        id="hubGuideShop"
         class="hub-shop-card {{!isAuthorized && hubHero.pageEnabled === false ? 'card--disabled' : ''}}"
         hover-class="hub-card-hover"
         catchtap="onHubFeatureTap"
@@ -146,6 +162,7 @@
           class="hub-col-left"
         >
           <view
+            id="hubGuideCase"
             class="card hub-bento-main {{!isAuthorized && hubFeatureCase.pageEnabled === false ? 'card--disabled' : ''}}"
             hover-class="hub-card-hover"
             bindtap="onHubFeatureTap"
@@ -165,6 +182,7 @@
           <view class="hub-bento-col">
             <view
               wx:if="{{hubFeatureControl}}"
+              id="hubGuideControl"
               class="card hub-bento-sub {{!isAuthorized && hubFeatureControl.pageEnabled === false ? 'card--disabled' : ''}}"
               hover-class="hub-card-hover"
               bindtap="onHubFeatureTap"
@@ -177,6 +195,7 @@
             </view>
             <view
               wx:if="{{hubBentoRepair}}"
+              id="hubGuideRepair"
               class="card hub-bento-sub {{!isAuthorized && hubBentoRepair.pageEnabled === false ? 'card--disabled' : ''}}"
               hover-class="hub-card-hover"
               bindtap="onHubFeatureTap"
@@ -194,6 +213,7 @@
           class="hub-col-left"
         >
           <view
+            id="hubGuideTutorial"
             class="hub-pill-btn {{!isAuthorized && hubBentoTutorial.pageEnabled === false ? 'card--disabled' : ''}}"
             hover-class="hub-card-hover"
             bindtap="onHubFeatureTap"
@@ -210,6 +230,7 @@
           class="hub-col-right"
         >
           <view
+            id="hubGuideOta"
             class="hub-pill-btn {{!isAuthorized && hubBentoOta.pageEnabled === false ? 'card--disabled' : ''}}"
             hover-class="hub-card-hover"
             bindtap="onHubFeatureTap"
@@ -227,6 +248,7 @@
       <view class="hub-menu-card" wx:if="{{hubListItems.length > 0}}">
         <block wx:for="{{hubListItems}}" wx:key="id">
           <view
+            id="{{item.id === 13 ? 'hubGuideFaq' : ('hubMenu' + item.id)}}"
             class="hub-menu-item {{index < hubListItems.length - 1 ? 'hub-menu-item--line' : ''}} {{!isAuthorized && item.pageEnabled === false ? 'card--disabled' : ''}}"
             hover-class="hub-menu-item-hover"
             bindtap="onHubFeatureTap"
@@ -318,7 +340,7 @@
   </view>
 
   <view class="hub-tab-bar-wrap {{showHubTabBar && !hubShellModalOpen ? 'hub-tab-bar-wrap--show' : ''}}">
-    <hub-tab-bar active="{{hubBottomBarIndex}}" anim="{{hubPanelsAnim}}" bind:switch="onHubTabSwitch" />
+    <hub-tab-bar active="{{hubBottomBarIndex}}" anim="{{hubPanelsAnim}}" profile-dot="{{hubProfileBadge}}" bind:switch="onHubTabSwitch" />
   </view>
 </view>
 
@@ -486,5 +508,41 @@
     </button>
   </view>
 </view>
+
+<!-- 首页功能引导：再次进入时先选「查看教程 / 跳过」 -->
+<root-portal wx:if="{{showHomeGuideIntro}}">
+  <view class="home-guide-intro-mask" catchtouchmove="homeGuideNoop" catchtap="homeGuideNoop">
+    <view class="home-guide-intro-box" catchtap="homeGuideNoop">
+      <view class="home-guide-intro-title">功能导览</view>
+      <view class="home-guide-intro-desc">花半分钟了解首页各入口，选购、控制、维修一次说清。</view>
+      <view class="home-guide-intro-actions">
+        <view class="home-guide-intro-btn home-guide-intro-btn--ghost" catchtap="homeGuideIntroStart">查看教程</view>
+        <view class="home-guide-intro-btn home-guide-intro-btn--primary" catchtap="homeGuideSkip">跳过</view>
+      </view>
+    </view>
+  </view>
+</root-portal>
+
+<!-- 首页功能引导：分步高亮 -->
+<root-portal wx:if="{{showHomeGuide}}">
+  <view class="home-guide-mask" catchtouchmove="homeGuideNoop" catchtap="homeGuideNoop">
+    <view wx:if="{{homeGuideShowSpot}}" class="home-guide-spot" style="{{homeGuideSpotStyle}}"></view>
+    <view
+      wx:if="{{homeGuideShowBubble}}"
+      class="home-guide-bubble home-guide-bubble--{{homeGuideArrowDir}}"
+      style="{{homeGuideBubbleStyle}}"
+      catchtap="homeGuideNoop"
+    >
+      <view class="home-guide-arrow" style="{{homeGuideArrowStyle}}"></view>
+      <view class="home-guide-step-tag">{{homeGuideStepTag}}</view>
+      <view class="home-guide-title">{{homeGuideTitle}}</view>
+      <view class="home-guide-desc">{{homeGuideDesc}}</view>
+      <view class="home-guide-actions">
+        <view class="home-guide-skip" catchtap="homeGuideSkip">跳过</view>
+        <view class="home-guide-btn" catchtap="homeGuideNext">{{homeGuideBtnText}}</view>
+      </view>
+    </view>
+  </view>
+</root-portal>
 
 <custom-toast id="custom-toast" />

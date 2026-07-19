@@ -103,9 +103,12 @@
     >
     <view class="admin-header-row admin-header-row--hub admin-header-row--compact" style="padding-top: {{hubInShell ? 0 : (showHubTabBar ? 12 : (statusBarHeight + navBarHeight + 20))}}px;">
       <view class="admin-page-title" wx:if="{{!showHubTabBar && !hubInShell}}">待处理订单</view>
-      <view class="admin-dev-actions admin-dev-actions--row" wx:if="{{showAdminDevTools}}">
-        <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试清空</view>
-        <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
+      <view class="admin-dev-actions admin-dev-actions--row" wx:if="{{isAdmin}}">
+        <view class="admin-dev-btn admin-dev-btn--rollback" bindtap="openConfigRollbackModal">配置回溯</view>
+        <block wx:if="{{showAdminDevTools}}">
+          <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试清空</view>
+          <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
+        </block>
       </view>
     </view>
 
@@ -143,6 +146,9 @@
                 <text>{{item.guidedPartsPurchase ? '引导购配件·待发出' : item.statusText}}</text>
                 <block wx:if="{{item.shippingMethod}}">
                   <view class="status-divider"></view>
+                  <view class="status-ship-badge status-ship-badge--{{item.shippingMethod === 'sf' ? 'sf' : 'zto'}}">
+                    <text class="status-ship-badge-text">{{item.shippingMethod === 'sf' ? 'SF' : '中'}}</text>
+                  </view>
                   <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
                 </block>
               </view>
@@ -298,9 +304,12 @@
           <text class="admin-seg-badge" wx:if="{{returnRequiredList.length > 0}}">{{returnRequiredList.length > 99 ? '99+' : returnRequiredList.length}}</text>
         </view>
       </view>
-      <view class="admin-dev-actions" wx:if="{{showAdminDevTools}}">
-        <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试清空</view>
-        <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
+      <view class="admin-dev-actions" wx:if="{{isAdmin}}">
+        <view class="admin-dev-btn admin-dev-btn--rollback" bindtap="openConfigRollbackModal">配置回溯</view>
+        <block wx:if="{{showAdminDevTools}}">
+          <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试清空</view>
+          <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
+        </block>
       </view>
     </view>
 
@@ -330,7 +339,10 @@
           <view class="repair-info">
             <view class="r-title-row">
               <view class="r-title">{{item.displayModel || item.model}} - {{item.contact.name}}</view>
-              <view class="status-tag {{item.realStatus}}" style="margin-left: 16rpx;" wx:if="{{item.shippingMethod}}">
+              <view class="status-tag status-tag--ship-only" style="margin-left: 16rpx;" wx:if="{{item.shippingMethod}}">
+                <view class="status-ship-badge status-ship-badge--{{item.shippingMethod === 'sf' ? 'sf' : 'zto'}}">
+                  <text class="status-ship-badge-text">{{item.shippingMethod === 'sf' ? 'SF' : '中'}}</text>
+                </view>
                 <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
               </view>
             </view>
@@ -354,6 +366,9 @@
             </view>
             <view class="r-warranty-status normal" wx:elif="{{item.remainingDays !== undefined && item.remainingDays > 0}}">
               <text class="warranty-normal-tag">剩余质保：{{item.remainingDays}}天</text>
+            </view>
+            <view class="r-warranty-deducted-banner" wx:if="{{item.hadWarrantyDeducted}}">
+              <text class="r-warranty-deducted-text">该用户曾被扣质保，仅可要求寄回维修（不可录单备件免费支持）</text>
             </view>
           </view>
           
@@ -385,18 +400,42 @@
             </view>
             <!-- 其他状态：主按钮 + 次要操作（竖向排列，便于点击） -->
             <block wx:if="{{item.returnStatus !== 'USER_SENT' && item.status !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
-              <view class="repair-actions-primary">
-                <view class="r-btn diagnosis" bindtap="openDiagnosisDialog" data-id="{{item._id}}">填写诊断书</view>
-                <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单备件寄出</view>
-              </view>
-              <view class="repair-diagnosis-meta" wx:if="{{item.diagnosisDone || item.awaitingSnReplacement}}">
-                <text class="r-diagnosis-pill" wx:if="{{item.diagnosisDone}}">已诊断</text>
-                <text class="r-diagnosis-pill warn" wx:if="{{item.awaitingSnReplacement}}">待换机</text>
-              </view>
-              <view class="repair-actions-secondary repair-actions-grid">
-                <view class="r-btn purchase grid-half" bindtap="openPurchasePartsModal" data-item="{{item}}">请购买配件</view>
-                <view class="r-btn tutorial grid-half" bindtap="resolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
-                <view class="r-btn return grid-full" bindtap="requestUserReturn" data-id="{{item._id}}">需要寄回产品维修</view>
+              <!-- 曾扣质保：仅保留诊断书 + 需要寄回 -->
+              <block wx:if="{{item.hadWarrantyDeducted}}">
+                <view class="repair-actions-primary">
+                  <view class="r-btn diagnosis" bindtap="openDiagnosisDialog" data-id="{{item._id}}">填写诊断书</view>
+                </view>
+                <view class="repair-diagnosis-meta" wx:if="{{item.diagnosisDone || (item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement')}}">
+                  <text class="r-diagnosis-pill" wx:if="{{item.diagnosisDone}}">已诊断</text>
+                  <text class="r-diagnosis-pill warn" wx:if="{{item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement'}}">待换机</text>
+                </view>
+                <view class="repair-actions-secondary repair-actions-grid">
+                  <view class="r-btn return grid-full" bindtap="requestUserReturn" data-id="{{item._id}}">需要寄回产品维修</view>
+                </view>
+              </block>
+              <block wx:else>
+                <view class="repair-actions-primary">
+                  <view class="r-btn diagnosis" bindtap="openDiagnosisDialog" data-id="{{item._id}}">填写诊断书</view>
+                  <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单备件寄出</view>
+                </view>
+                <view class="repair-diagnosis-meta" wx:if="{{item.diagnosisDone || (item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement')}}">
+                  <text class="r-diagnosis-pill" wx:if="{{item.diagnosisDone}}">已诊断</text>
+                  <text class="r-diagnosis-pill warn" wx:if="{{item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement'}}">待换机</text>
+                </view>
+                <view class="repair-actions-secondary repair-actions-grid">
+                  <view class="r-btn purchase grid-half" bindtap="openPurchasePartsModal" data-item="{{item}}">请购买配件</view>
+                  <view class="r-btn tutorial grid-half" bindtap="resolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
+                  <view class="r-btn return grid-full" bindtap="requestUserReturn" data-id="{{item._id}}">需要寄回产品维修</view>
+                </view>
+              </block>
+              <view class="repair-actions-delete">
+                <view
+                  class="r-btn delete"
+                  bindtap="adminDeleteRepair"
+                  data-id="{{item._id}}"
+                  data-model="{{item.displayModel || item.model}}"
+                  data-name="{{item.contact.name}}"
+                >删除工单</view>
               </view>
             </block>
           </view>
@@ -428,7 +467,7 @@
         <view class="audit-card">
           <view class="audit-row">
             <text class="audit-model">{{item.productModel}}</text>
-            <text class="audit-sn">SN: {{item.bindType == 'fault' ? '待录入' : item.sn}}</text>
+            <text class="audit-sn">SN: {{item.bindType == 'fault' ? '无设备核验' : item.sn}}</text>
           </view>
           <view class="audit-row">
             <text class="audit-date">用户填: {{item.buyDate}}</text>
@@ -440,11 +479,35 @@
           </view>
           <view class="audit-actions">
             <view class="audit-btn reject" catchtap="handleReject" data-id="{{item._id}}">拒绝</view>
-            <view class="audit-btn approve" catchtap="openAuditModal" data-item="{{item}}">审核设置</view>
+            <view class="audit-btn approve" catchtap="openAuditModal" data-item="{{item}}">{{item.bindType == 'fault' ? '审核并保存' : '审核激活'}}</view>
           </view>
         </view>
       </swiper-item>
     </swiper>
+    </block>
+
+    <block wx:if="{{isAdmin && pendingSnEntryList.length > 0}}">
+    <view class="section-label">FAULT SN ENTRY / 故障核验·待录入 SN</view>
+    <view class="section-label-sub">仅诊断书含「主板/控制器」时出现；非主板故障走自动绑定，不出现在此列表</view>
+    <view class="sn-entry-card" wx:for="{{pendingSnEntryList}}" wx:key="_id">
+      <view class="sn-entry-top">
+        <text class="sn-entry-user">{{item.displayUser}}</text>
+        <text class="sn-entry-tag">待录入 SN</text>
+      </view>
+      <text class="sn-entry-model">{{item.productModel}}</text>
+      <view class="sn-entry-meta">
+        <text>质保剩余 {{item.remainingDays != null ? item.remainingDays + '天' : '—'}}</text>
+        <text>到期 {{item.expiryDate || '—'}}</text>
+      </view>
+      <text class="sn-entry-hint">质保已审核，请前往控制中心蓝牙连接新机后录入 SN</text>
+      <view
+        class="sn-entry-btn"
+        bindtap="goToControlCenterForSnEntry"
+        data-openid="{{item.userOpenid}}"
+        data-model="{{item.productModel}}">
+        去控制中心录入 SN
+      </view>
+    </view>
     </block>
     </scroll-view>
 
@@ -494,6 +557,9 @@
                 <text>{{item.statusText}}</text>
                 <block wx:if="{{item.shippingMethod}}">
                   <view class="status-divider"></view>
+                  <view class="status-ship-badge status-ship-badge--{{item.shippingMethod === 'sf' ? 'sf' : 'zto'}}">
+                    <text class="status-ship-badge-text">{{item.shippingMethod === 'sf' ? 'SF' : '中'}}</text>
+                  </view>
                   <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
                 </block>
               </view>
@@ -674,8 +740,9 @@
     <scroll-view
       scroll-y
       class="hub-profile-scroll {{hubInShell ? 'hub-profile-scroll--shell' : ''}}"
-      enhanced
       show-scrollbar="{{false}}"
+      scroll-into-view="{{profileGuideScrollIntoView}}"
+      enable-flex="{{true}}"
     >
     <view
       class="hub-profile-body"
@@ -702,7 +769,11 @@
         </view>
       </view>
 
-      <view class="profile-neo-card profile-neo-card--invite" wx:if="{{referralPanelLoaded}}">
+      <view
+        id="myGuideInviteBlock"
+        class="profile-neo-card profile-neo-card--invite"
+        wx:if="{{referralPanelLoaded}}"
+      >
         <view class="pi-head pi-head--neo">
           <view class="pi-head-left">
             <text class="pi-title">邀请奖励计划</text>
@@ -794,17 +865,23 @@
               <view class="alert-main-col">
                 <text class="alert-kicker">{{myReturnRequiredRepair.isOverdue ? '已超时' : '重要提醒'}}</text>
                 <view class="alert-lead" wx:if="{{!myReturnRequiredRepair.isOverdue && myReturnRequiredRepair.countdownDays !== null}}">
-                  请在<text class="highlight-days">{{myReturnRequiredRepair.countdownDays}}天</text>内寄回故障配件
+                  请在 <text class="highlight-days">{{myReturnRequiredRepair.countdownDays}} 天</text> 内寄回故障配件
                 </view>
                 <view class="alert-lead" wx:elif="{{myReturnRequiredRepair.isOverdue}}">请尽快寄回故障配件</view>
                 <view class="alert-lead" wx:else>请尽快寄回故障配件</view>
-                <view class="alert-desc">
-                  <block wx:if="{{!myReturnRequiredRepair.isOverdue && myReturnRequiredRepair.countdownDays !== null}}">
-                    逾期未寄回将强制扣除半年（<text class="highlight-penalty">180天</text>）质保。
-                  </block>
-                  <block wx:else>
-                    您已逾期未寄回，系统将强制扣除半年（<text class="highlight-penalty">180天</text>）质保。
-                  </block>
+                <view class="alert-rules">
+                  <view class="alert-rule" wx:if="{{!myReturnRequiredRepair.isOverdue}}">
+                    <text class="alert-rule-dot">·</text>
+                    <text class="alert-rule-text">逾期未寄回：扣除半年质保（<text class="highlight-penalty">180天</text>）</text>
+                  </view>
+                  <view class="alert-rule" wx:else>
+                    <text class="alert-rule-dot">·</text>
+                    <text class="alert-rule-text">已逾期：将扣除半年质保（<text class="highlight-penalty">180天</text>）</text>
+                  </view>
+                  <view class="alert-rule">
+                    <text class="alert-rule-dot">·</text>
+                    <text class="alert-rule-text"><text class="highlight-penalty">请勿寄到付</text>：<text class="highlight-penalty">仓库可能拒收</text>，到付也会<text class="highlight-penalty">扣除半年质保</text></text>
+                  </view>
                 </view>
               </view>
             </view>
@@ -824,7 +901,7 @@
               <text class="rr-value">{{myReturnRequiredRepair.shipRemark}}</text>
             </view>
             <view class="rr-ticket-kv-row" wx:if="{{myReturnRequiredRepair.returnNote}}">
-              <text class="rr-label">备注</text>
+              <text class="rr-label">寄回说明</text>
               <text class="rr-value">{{myReturnRequiredRepair.returnNote}}</text>
             </view>
           </view>
@@ -869,7 +946,7 @@
         </view>
         <view class="rr-ticket-footer">
           <view class="rr-ticket-ship-line" wx:if="{{afterSalesState.returnTicket.showShippingTip}}">
-            <text class="rr-ticket-ship-text">寄件提醒：请勿寄到付件，到付件仓库可能拒收。</text>
+            <text class="rr-ticket-ship-text">寄件请预付邮费，勿寄到付。</text>
           </view>
           <view class="rr-user-actions-simple rr-user-actions-row">
             <view class="rr-simple-btn secondary" bindtap="copyReturnAddress">复制商家地址</view>
@@ -930,6 +1007,7 @@
       </view>
     </view>
 
+    <view id="myGuideBindDevice">
     <view class="section-label section-label--cn">我的设备</view>
     <view class="device-card" wx:for="{{deviceList}}" wx:key="snRaw">
       <view class="remove-icon" bindtap="removeDevice" data-index="{{index}}">✕</view>
@@ -972,12 +1050,19 @@
       </view>
     </view>
 
-    <view class="device-card add-mode" bindtap="openBindModal">
-      <view class="add-content">
-        <view class="add-icon-circle">+</view>
-        <text class="add-tips">绑定新产品</text>
-        <text class="add-subtips">扫码或蓝牙连接后提交审核</text>
+    <button
+      class="bind-new-product-btn"
+      hover-class="bind-new-product-btn--pressed"
+      bindtap="openBindModal"
+    >
+      <view class="bind-new-inner">
+        <view class="bind-new-icon" aria-hidden="true">
+          <text class="bind-new-plus">+</text>
+        </view>
+        <text class="bind-new-title">绑定新产品</text>
+        <text class="bind-new-desc">蓝牙连接设备后，提交购买资料完成审核</text>
       </view>
+    </button>
     </view>
 
     <!-- 👇👇👇【核心补全】在这里插入申请记录列表 👇👇👇 -->
@@ -1090,8 +1175,13 @@
                 <view class="dot-s"></view>已购配件
               </view>
               
+              <!-- 管理员已审核诊断，待发出设备 -->
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 'ADMIN_REVIEWED' || ((item.status === 0 || item.status === 'PENDING') && item.diagnosisDone)) && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT' && !item.needReturn && !item.needPurchaseParts && (!item.purchasePartsList || item.purchasePartsList.length === 0)}}">
+                <view class="dot-p"></view>管理员已审核，待发出设备
+              </view>
+
               <!-- 审核中（非需寄回状态，且不需要购买配件） -->
-              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 0 || item.status === 'PENDING') && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT' && !item.needReturn && !item.needPurchaseParts && (!item.purchasePartsList || item.purchasePartsList.length === 0)}}">
+              <view class="status-pill processing" wx:if="{{item.type === 'repair' && (item.status === 0 || item.status === 'PENDING') && !item.diagnosisDone && item.status !== 'USER_SENT' && item.returnStatus !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT' && !item.needReturn && !item.needPurchaseParts && (!item.purchasePartsList || item.purchasePartsList.length === 0)}}">
                 <view class="dot-p"></view>审核中
               </view>
               
@@ -1141,6 +1231,11 @@
               查看维修单
             </view>
           </view>
+          
+          <!-- 管理员删除按钮 -->
+          <view class="admin-delete-repair-btn" wx:if="{{item.type === 'repair' && isAdmin}}" catchtap="adminDeleteRepairFromActivity" data-id="{{item._id}}" data-model="{{item.model || item.displayModel}}" data-name="{{item.title || '故障报修'}}">
+            删除工单
+          </view>
           <view class="logistics-btn-wrapper" wx:if="{{item.type === 'repair' && item.showTutorialJumpBtn}}">
             <view class="btn-logistics-action btn-tutorial-jump" catchtap="goToShouhouTutorialFromActivity" data-item="{{item}}">
               跳转教程
@@ -1164,229 +1259,163 @@
       <view class="profile-action-btn" bindtap="goToRepairService">预约维修服务</view>
       <view class="profile-action-btn profile-action-btn--primary" bindtap="goToKfSelectHub">联系客服</view>
     </view>
+
     </view>
     </scroll-view>
 
   </block>
 
   <root-portal enable="{{hubInShell}}">
+  <view class="hub-embed-portal-root">
   <view class="hub-embed-portal-layer">
-  <!-- 5. 绑定模态框 -->
-  <view class="modal {{showModal ? 'show' : ''}}" catchtouchmove="noop">
-    <!-- 当蓝牙连接成功时，加上 connected 类，触发整张卡片的二次上滑动画 -->
-    <view class="modal-content {{bluetoothReady ? 'connected' : ''}}" catchtouchmove="noop">
-      
-      <!-- 1. 文案修改：绑定设备 -->
-      <view class="modal-header">
-        <text>{{showFaultBindForm ? '故障核验' : '绑定设备'}}</text>
-        <view class="close-modal" bindtap="closeBindModal">✕</view>
-      </view>
 
-      <scroll-view scroll-y="true" class="modal-scroll-area">
-        
-        <!-- === 故障设备人工核验表单（无需蓝牙） === -->
-        <view class="fault-bind-form" wx:if="{{showFaultBindForm}}">
-          <view class="fault-bind-hero">
-            <view class="fault-bind-icon-ring">
-              <text class="fault-bind-icon">!</text>
-            </view>
-            <text class="fault-bind-headline">设备无法蓝牙连接</text>
-            <text class="fault-bind-subline">提交订单截图，审核通过后将创建产品档案</text>
-          </view>
-
-          <view class="fault-form-card">
-            <view class="fault-form-row">
-              <text class="fault-row-label">产品型号</text>
-              <picker class="fault-row-picker" bindchange="onModelChange" range="{{modelOptions}}" value="{{modelIndex}}">
-                <view class="fault-row-value {{modelIndex !== null ? '' : 'is-placeholder'}}">
-                  <text>{{modelOptions[modelIndex] || '请选择'}}</text>
-                  <text class="fault-row-chevron">›</text>
-                </view>
-              </picker>
-            </view>
-            <view class="fault-form-divider"></view>
-            <view class="fault-form-row">
-              <text class="fault-row-label">购买日期</text>
-              <picker class="fault-row-picker" mode="date" bindchange="onDateChange">
-                <view class="fault-row-value {{buyDate ? '' : 'is-placeholder'}}">
-                  <text>{{buyDate || '请选择'}}</text>
-                  <text class="fault-row-chevron">›</text>
-                </view>
-              </picker>
-            </view>
-          </view>
-
-          <view class="fault-upload-section">
-            <text class="fault-section-label">订单截图</text>
-            <view class="fault-upload-box" bindtap="chooseProofImage" data-type="receipt">
-              <block wx:if="{{previewImgReceipt}}">
-                <image src="{{previewImgReceipt}}" mode="aspectFill" class="fault-upload-preview" lazy-load="true" />
-                <view class="fault-upload-mask">点击更换</view>
-              </block>
-              <block wx:else>
-                <view class="fault-upload-empty">
-                  <text class="fault-upload-plus">+</text>
-                  <text class="fault-upload-tip">上传购买截图</text>
-                </view>
-              </block>
-            </view>
-          </view>
-
-          <view class="fault-bind-note">
-            <text>审核通过后序列号显示「待录入」，可正常发起报修</text>
-          </view>
-        </view>
-
-        <!-- === 2. 蓝牙扫描按钮 (雷达) === -->
-        <!-- 只有未连接时显示 -->
-        <view class="bt-scan-container" wx:if="{{!bluetoothReady && !showFaultBindForm}}">
-          <view class="radar-circle" bindtap="startConnect">
-            <view class="radar-core">
-              <!-- 👇👇👇【核心修改】换成图片 👇👇👇 -->
-              <image class="bt-icon-img" src="data:image/svg+xml;base64,PHN2ZyB0PSIxNzEwNDg4ODg4ODg4IiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjQ3NTciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHBhdGggZD0iTTIyMy41NTIgNzI0LjQ4TDQ2NS45MiA1MTIgMjIzLjU1MiAyOTkuNTJsNTguOTA4LTY3LjI4TDQ5OC41MiA0MjEuNjg4VjM1Ljg0aDg5LjY4bDIzMC40IDIyNC42NC0yNDIuNTI4IDIxMi40OCAyNDIuNTI4IDIxMi40OC0yMzAuNCAyMjQuNjRINDk4LjUyVjYwMi4zMTJsLTIxNi4wNjQgMTg5LjQ0LTU4LjkwOC02Ny4yN3pNNTgyLjM1MiA1MTJMNjg4IDE5NC43NTIgNTg4LjE2IDk3LjQ0VjUxMnpNNTg4LjE2IDkyNi41Nkw2ODggODI5LjI0OCA1ODIuMzUyIDUxMnY0MTQuNTZ6IiBmaWxsPSIjRkZGRkZGIiBwLWlkPSI0NzU4Ij48L3BhdGg+PC9zdmc+" mode="aspectFit" lazy-load="true"></image>
-            </view>
-            
-            <!-- 波纹动画 (保持结构，样式下面重写) -->
-            <view class="radar-ring r1 {{isScanning?'anim':''}}"></view>
-            <view class="radar-ring r2 {{isScanning?'anim':''}}"></view>
-            <view class="radar-ring r3 {{isScanning?'anim':''}}"></view>
-          </view>
-          <text class="radar-tip">{{connectStatusText}}</text>
-        </view>
-
-        <!-- 故障设备入口 -->
-        <view class="fault-bind-bar" wx:if="{{!bluetoothReady && !showFaultBindForm}}" bindtap="openFaultBindForm">
-          <text class="fault-bind-bar-text">设备已故障，无法连接？</text>
-          <text class="fault-bind-bar-link">提交订单核验</text>
-        </view>
-
-        <!-- === 3. 连接成功后的状态条 === -->
-        <view class="bt-connected-bar" wx:if="{{bluetoothReady}}">
-          <view class="bt-c-icon">✅</view>
-          <view class="bt-c-info">
-            <text class="bt-c-name">已连接设备</text>
-            <text class="bt-c-sn">{{connectedDeviceName}}</text>
-          </view>
-          <view class="bt-disconnect-btn" bindtap="resetBluetoothState">断开</view>
-        </view>
-
-        <!-- === 4. Tab 切换 (逻辑修改：连上蓝牙后才显示！) === -->
-        <!-- 🔴 强制显示：只要 bluetoothReady 为 true 就显示 -->
-        <view class="bind-verifying-tip" wx:if="{{bluetoothReady && !showBindAuditForm && !lockedReason}}">
-          <text>正在验证设备…</text>
-          <text class="bind-verifying-sub">预登记设备将自动激活绑定，无需上传审核资料</text>
-        </view>
-
-        <view class="type-tabs" wx:if="{{bluetoothReady && showBindAuditForm}}">
-          <view class="tab-item {{bindType == 'new' ? 'active' : ''}}" bindtap="changeBindType" data-type="new">全新设备</view>
-          <view class="tab-item {{bindType == 'used' ? 'active' : ''}}" bindtap="changeBindType" data-type="used">二手/旧设备</view>
-        </view>
-
-        <!-- === 5. 被锁状态 === -->
-        <!-- 🔴 修复：只有在有锁定原因时才显示"无法绑定"，验证中不显示 -->
-        <view class="locked-view" wx:if="{{bluetoothReady && isDeviceLocked && lockedReason}}">
-          <view class="locked-icon">🚫</view>
-          <text class="locked-title">无法绑定</text>
-          <text class="locked-desc">{{lockedReason}}</text>
-        </view>
-
-        <!-- === 6. 正常填表区域 (强制显示：只要 bluetoothReady 为 true 就显示) === -->
-        <!-- 🔴 强制显示表格，只要蓝牙连接成功就显示，不允许消失 -->
-        <view class="bind-form-area" wx:if="{{bluetoothReady && showBindAuditForm}}">
-          
-          <view class="form-item">
-            <text class="form-label">选择产品型号</text>
-            <picker bindchange="onModelChange" range="{{modelOptions}}" value="{{modelIndex}}">
-              <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
-            </picker>
-          </view>
-
-          <view class="form-item">
-            <text class="form-label">{{bindType == 'new' ? '订单截图' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
-            <view class="upload-group">
-              <view class="upload-box" bindtap="chooseProofImage" data-type="receipt">
-                <!-- 背景占位：始终显示 + 和文案，图片会覆盖在上面 -->
-                <view class="upload-placeholder-center">
-                  <text class="plus-icon">+</text>
-                  <text>购买截图</text>
-                </view>
-                <!-- 🔴 使用本地预览路径，让用户上传后立马看到缩略图 -->
-                <image wx:if="{{previewImgReceipt}}" src="{{previewImgReceipt}}" mode="aspectFill" class="uploaded-img" lazy-load="true" />
-              </view>
-              <view class="upload-box" wx:if="{{bindType == 'used'}}" bindtap="chooseProofImage" data-type="chat">
-                <view class="upload-placeholder-center">
-                  <text class="plus-icon">+</text>
-                  <text>聊天记录</text>
-                </view>
-                <image wx:if="{{previewImgChat}}" src="{{previewImgChat}}" mode="aspectFill" class="uploaded-img" lazy-load="true" />
-              </view>
-            </view>
-          </view>
-
-          <view class="form-item">
-            <text class="form-label">购买日期</text>
-            <picker mode="date" bindchange="onDateChange">
-              <view class="picker-val">{{buyDate || '请选择日期'}}</view>
-            </picker>
-          </view>
-        </view>
-        
-        <view style="height: 40rpx;"></view>
-      </scroll-view>
-
-      <!-- 底部提交按钮 -->
-      <!-- 🔴 强制显示：只要 bluetoothReady 为 true 就显示提交按钮 -->
-      <view class="modal-footer" wx:if="{{bluetoothReady && showBindAuditForm}}">
-        <button class="submit-btn" bindtap="submitAudit">提交上传审核</button>
-      </view>
-      <view class="modal-footer" wx:if="{{showFaultBindForm}}">
-        <button class="submit-btn fault-submit-btn" bindtap="submitFaultAudit">提交核验申请</button>
-      </view>
-
-    </view>
-  </view>
-
-  <!-- === 改动2：管理员审核弹窗 (放在最底部) === -->
+  <!-- 管理员审核：故障核验 与 蓝牙绑定 两套独立弹窗 -->
   <view class="modal {{showAuditModal ? 'show' : ''}}" style="z-index: 2000;" catchtouchmove="noop">
-    <view class="modal-content" catchtouchmove="noop">
+    <!-- A. 故障核验审核（无蓝牙，先建档案；是否待录入 SN 由售后诊断书判定） -->
+    <view
+      class="modal-content audit-setup-modal"
+      wx:if="{{currentAuditItem && currentAuditItem.bindType == 'fault'}}"
+      catchtouchmove="noop">
       <view class="modal-header">
-        <text>审批设置</text>
+        <text>故障核验审核</text>
         <view class="close-modal" bindtap="closeAuditModal">✕</view>
       </view>
 
-      <view class="modal-scroll-area">
-        <view class="form-item">
-          <text class="form-label">修改购买日期 (影响固件版本)</text>
-          <picker mode="date" value="{{adminSetDate}}" bindchange="onAdminDateChange">
-            <view class="picker-val">{{adminSetDate || '请选择日期'}}</view>
-          </picker>
+      <view class="audit-setup-body">
+        <view class="audit-fault-banner">
+          <text class="audit-fault-banner-title">无蓝牙故障核验</text>
+          <text class="audit-fault-banner-desc">确认购买日期与质保后保存档案。是否需录入新机 SN，须等售后在报修卡填写诊断书（主板/控制器）后再出现。</text>
         </view>
 
-        <view class="form-item">
-          <text class="form-label">设置总质保时间</text>
-          <picker range="{{warrantyOptions}}" value="{{adminSetDaysIndex}}" bindchange="onAdminDaysChange">
-            <view class="picker-val">{{warrantyOptions[adminSetDaysIndex]}}</view>
-          </picker>
+        <view class="audit-setup-summary">
+          <view class="audit-setup-summary-top">
+            <text class="audit-setup-model">用户申报：{{currentAuditItem.productModel}}</text>
+            <text class="audit-setup-tag audit-setup-tag--fault">故障核验</text>
+          </view>
+          <text class="audit-setup-user-date">用户填写购买日期：{{currentAuditItem.buyDate}}</text>
+        </view>
+
+        <view class="audit-setup-form">
+          <view class="audit-setup-field">
+            <text class="audit-setup-label">设备型号</text>
+            <text class="audit-setup-sublabel">用户申报可能不准，可在此修正</text>
+            <picker class="audit-setup-picker-host" range="{{adminAuditModelOptions}}" value="{{adminAuditModelIndex}}" bindchange="onAdminAuditModelChange">
+              <view class="audit-setup-picker">{{adminAuditModelOptions[adminAuditModelIndex]}}</view>
+            </picker>
+          </view>
+          <view class="audit-setup-field">
+            <text class="audit-setup-label">购买日期</text>
+            <text class="audit-setup-sublabel">影响固件版本判定</text>
+            <picker class="audit-setup-picker-host" mode="date" value="{{adminSetDate}}" bindchange="onAdminDateChange">
+              <view class="audit-setup-picker">{{adminSetDate || '请选择日期'}}</view>
+            </picker>
+          </view>
+          <view class="audit-setup-field">
+            <text class="audit-setup-label">总质保时间</text>
+            <picker class="audit-setup-picker-host" range="{{warrantyOptions}}" value="{{adminSetDaysIndex}}" bindchange="onAdminDaysChange">
+              <view class="audit-setup-picker">{{warrantyOptions[adminSetDaysIndex]}}</view>
+            </picker>
+          </view>
+        </view>
+
+        <view class="audit-warranty-preview" wx:if="{{auditWarrantyPreview.expiryDate}}">
+          <view class="audit-warranty-preview-row">
+            <text class="audit-warranty-preview-label">质保到期</text>
+            <text class="audit-warranty-preview-value">{{auditWarrantyPreview.expiryDate}}</text>
+          </view>
+          <view class="audit-warranty-preview-row">
+            <text class="audit-warranty-preview-label">剩余质保</text>
+            <text class="audit-warranty-preview-value {{auditWarrantyPreview.isExpired ? 'is-warn' : ''}}">{{auditWarrantyPreview.isExpired ? '已过期' : (auditWarrantyPreview.remainingDays + ' 天')}}</text>
+          </view>
+          <view class="audit-warranty-preview-row">
+            <text class="audit-warranty-preview-label">固件版本</text>
+            <text class="audit-warranty-preview-value">{{auditWarrantyPreview.firmwareVer}}</text>
+          </view>
         </view>
       </view>
 
-      <view class="modal-footer">
-        <button class="submit-btn" bindtap="confirmApprove">确认通过并同步</button>
+      <view class="audit-setup-footer">
+        <view class="audit-setup-submit" bindtap="confirmApprove">确认保存</view>
+      </view>
+    </view>
+
+    <!-- B. 蓝牙绑定审核（用户已连蓝牙，有真实 SN） -->
+    <view
+      class="modal-content audit-setup-modal"
+      wx:elif="{{currentAuditItem}}"
+      catchtouchmove="noop">
+      <view class="modal-header">
+        <text>蓝牙绑定审核</text>
+        <view class="close-modal" bindtap="closeAuditModal">✕</view>
+      </view>
+
+      <view class="audit-setup-body">
+        <view class="audit-bt-banner">
+          <text class="audit-bt-banner-title">蓝牙连接绑定</text>
+          <text class="audit-bt-banner-desc">用户已通过蓝牙连接设备，审核通过后激活该 SN</text>
+        </view>
+
+        <view class="audit-setup-summary">
+          <view class="audit-setup-summary-top">
+            <text class="audit-setup-model">用户申报：{{currentAuditItem.productModel}}</text>
+            <text class="audit-setup-tag">{{currentAuditItem.bindType == 'new' ? '全新' : '二手'}}</text>
+          </view>
+          <text class="audit-setup-sn">设备 SN：{{currentAuditItem.sn}}</text>
+          <text class="audit-setup-user-date">用户填写购买日期：{{currentAuditItem.buyDate}}</text>
+        </view>
+
+        <view class="audit-setup-form">
+          <view class="audit-setup-field">
+            <text class="audit-setup-label">设备型号</text>
+            <text class="audit-setup-sublabel">用户申报可能不准，可在此修正</text>
+            <picker class="audit-setup-picker-host" range="{{adminAuditModelOptions}}" value="{{adminAuditModelIndex}}" bindchange="onAdminAuditModelChange">
+              <view class="audit-setup-picker">{{adminAuditModelOptions[adminAuditModelIndex]}}</view>
+            </picker>
+          </view>
+          <view class="audit-setup-field">
+            <text class="audit-setup-label">购买日期</text>
+            <text class="audit-setup-sublabel">影响固件版本判定</text>
+            <picker class="audit-setup-picker-host" mode="date" value="{{adminSetDate}}" bindchange="onAdminDateChange">
+              <view class="audit-setup-picker">{{adminSetDate || '请选择日期'}}</view>
+            </picker>
+          </view>
+          <view class="audit-setup-field">
+            <text class="audit-setup-label">总质保时间</text>
+            <picker class="audit-setup-picker-host" range="{{warrantyOptions}}" value="{{adminSetDaysIndex}}" bindchange="onAdminDaysChange">
+              <view class="audit-setup-picker">{{warrantyOptions[adminSetDaysIndex]}}</view>
+            </picker>
+          </view>
+        </view>
+
+        <view class="audit-warranty-preview" wx:if="{{auditWarrantyPreview.expiryDate}}">
+          <view class="audit-warranty-preview-row">
+            <text class="audit-warranty-preview-label">质保到期</text>
+            <text class="audit-warranty-preview-value">{{auditWarrantyPreview.expiryDate}}</text>
+          </view>
+          <view class="audit-warranty-preview-row">
+            <text class="audit-warranty-preview-label">剩余质保</text>
+            <text class="audit-warranty-preview-value {{auditWarrantyPreview.isExpired ? 'is-warn' : ''}}">{{auditWarrantyPreview.isExpired ? '已过期' : (auditWarrantyPreview.remainingDays + ' 天')}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="audit-setup-footer">
+        <view class="audit-setup-submit" bindtap="confirmApprove">确认通过并激活</view>
       </view>
     </view>
   </view>
 
   <!-- ================= 全局自定义弹窗 (替代原生，带收缩退出动画) ================= -->
   <view class="custom-dialog-mask z-over-fill-repair {{dialogClosing ? 'closing' : ''}}" wx:if="{{dialog.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
-    <view class="custom-dialog-box" catchtouchmove="noop" bindtap="dismissTransientModals">
+    <view class="custom-dialog-box" catchtouchmove="noop" catchtap="noop">
       <view class="cd-title">{{dialog.title}}</view>
       <view class="cd-content">{{dialog.content}}</view>
       
       <view class="cd-btn-row">
         <!-- 取消按钮 (可选) -->
-        <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" bindtap="closeCustomDialog">{{dialog.cancelText || '取消'}}</view>
+        <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" catchtap="closeCustomDialog">{{dialog.cancelText || '取消'}}</view>
         <!-- 确认按钮 -->
-        <view class="cd-btn confirm" bindtap="onDialogConfirm">{{dialog.confirmText || '确定'}}</view>
+        <view class="cd-btn confirm" catchtap="onDialogConfirm">{{dialog.confirmText || '确定'}}</view>
       </view>
     </view>
   </view>
@@ -1456,6 +1485,79 @@
     </view>
   </view>
 
+  <!-- ================= 需要用户寄回：双备注（客户可见 + 内部维修） ================= -->
+  <view
+    class="diag-sheet-mask {{returnRequestDialogClosing ? 'closing' : ''}}"
+    wx:if="{{returnRequestDialog.show || returnRequestDialogClosing}}"
+    catchtouchmove="noop"
+    bindtap="closeReturnRequestDialog">
+    <view class="diag-sheet return-request-sheet {{returnRequestDialogClosing ? 'closing' : ''}}" catchtouchmove="noop" catchtap="noop">
+      <view class="diag-sheet-handle"></view>
+      <scroll-view scroll-y class="diag-sheet-scroll" enhanced show-scrollbar="{{false}}" catchtouchmove="noop">
+        <view class="diag-sheet-hero">
+          <text class="diag-sheet-title">需要用户寄回</text>
+          <view class="diag-sheet-badges">
+            <text class="diag-sheet-badge">两条备注均必填</text>
+          </view>
+        </view>
+        <view class="diag-sheet-body">
+          <view class="diag-field-head">
+            <text class="diag-field-label">给客户看的备注</text>
+            <text class="diag-field-count">{{returnRequestDialog.customerNote.length || 0}}/300</text>
+          </view>
+          <view class="diag-field-box">
+            <textarea
+              class="diag-field-input"
+              placeholder="用户端可见，例如：请寄回整机/故障模块，并保留包装…"
+              placeholder-class="diag-field-placeholder"
+              value="{{returnRequestDialog.customerNote}}"
+              maxlength="300"
+              show-confirm-bar="{{false}}"
+              adjust-position="{{true}}"
+              cursor-spacing="24"
+              bindinput="onReturnRequestCustomerInput"
+            />
+          </view>
+
+          <view class="diag-field-head" style="margin-top: 28rpx;">
+            <text class="diag-field-label">内部维修备注</text>
+            <text class="diag-field-count">{{returnRequestDialog.internalNote.length || 0}}/500</text>
+          </view>
+          <view class="diag-field-box">
+            <textarea
+              class="diag-field-input"
+              placeholder="仅管理员/维修可见。写清检查原因与部位，例如：查电机异响、主板通讯…"
+              placeholder-class="diag-field-placeholder"
+              value="{{returnRequestDialog.internalNote}}"
+              maxlength="500"
+              show-confirm-bar="{{false}}"
+              adjust-position="{{true}}"
+              cursor-spacing="24"
+              bindinput="onReturnRequestInternalInput"
+            />
+          </view>
+          <view class="diag-callout">
+            <view class="diag-callout-dot"></view>
+            <view class="diag-callout-text">
+              <text class="diag-callout-main">企业微信提醒</text>
+              <text class="diag-callout-sub">用户提交寄回运单号后满 2 天，会把运单号 + 本条内部备注推到维修群（昵称/质保/地址一并带上）。</text>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+      <view class="diag-sheet-footer return-request-footer">
+        <view class="cd-btn-row return-request-btn-row">
+          <view class="cd-btn cancel" bindtap="closeReturnRequestDialog">取消</view>
+          <view
+            class="cd-btn confirm {{returnRequestDialog.submitting ? 'disabled' : ''}}"
+            bindtap="confirmReturnRequestDialog">
+            {{returnRequestDialog.submitting ? '提交中…' : '确定'}}
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
   <!-- ================= 内部诊断书（仅管理员，用户不可见） ================= -->
   <view class="diag-sheet-mask {{diagnosisDialogClosing ? 'closing' : ''}}" wx:if="{{diagnosisDialog.show}}" catchtouchmove="noop" bindtap="closeDiagnosisDialog">
     <view class="diag-sheet {{diagnosisDialogClosing ? 'closing' : ''}}" catchtouchmove="noop" catchtap="noop">
@@ -1503,7 +1605,7 @@
             <view class="diag-callout-dot"></view>
             <view class="diag-callout-text">
               <text class="diag-callout-main">换机触发说明</text>
-              <text class="diag-callout-sub">文中出现「主板」或「控制器」时，将标记待换机；维修专员在控制中心完成 SN 更换后，客服方可录单发货。</text>
+              <text class="diag-callout-sub">文中出现「主板」或「控制器」→ A 方案：待录入 SN 卡片 + 控制中心换机；否则 B 方案：不出待录入卡，用户下次蓝牙连接自动绑定到设备档案。</text>
             </view>
           </view>
         </view>
@@ -1792,6 +1894,305 @@
   </view>
 
   </view>
+
+  <!-- 5. 绑定模态框（portal 根节点，勿放进 0×0 layer，避免真机不显示） -->
+  <view
+    wx:if="{{showModal && !showFaultBindForm && !profileGuideDemoBind}}"
+    class="modal bind-device-modal hub-bind-modal-portal show {{bindModalClosing ? 'is-closing' : ''}}"
+    catchtouchmove="noop">
+    <view class="modal-content {{bluetoothReady ? 'connected' : ''}} {{showBindAuditForm ? 'bind-audit-open' : ''}} {{showBindSuccess ? 'bind-success-open' : ''}} {{bindSheetFromBottom ? 'hub-sheet--from-bottom' : ''}}" catchtouchmove="noop">
+      <view class="modal-header">
+        <text>{{showBindSuccess ? '绑定完成' : '绑定设备'}}</text>
+        <view class="close-modal" bindtap="closeBindModal">✕</view>
+      </view>
+
+      <scroll-view scroll-y="true" class="modal-scroll-area">
+        <view class="bind-stage bind-stage--enter" wx:if="{{!bluetoothReady}}">
+          <view class="bt-scan-container">
+            <view class="radar-circle" bindtap="startConnect">
+              <view class="radar-core">
+                <image class="bt-icon-img" src="data:image/svg+xml;base64,PHN2ZyB0PSIxNzEwNDg4ODg4ODg4IiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjQ3NTciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHBhdGggZD0iTTIyMy41NTIgNzI0LjQ4TDQ2NS45MiA1MTIgMjIzLjU1MiAyOTkuNTJsNTguOTA4LTY3LjI4TDQ5OC41MiA0MjEuNjg4VjM1Ljg0aDg5LjY4bDIzMC40IDIyNC42NC0yNDIuNTI4IDIxMi40OCAyNDIuNTI4IDIxMi40OC0yMzAuNCAyMjQuNjRINDk4LjUyVjYwMi4zMTJsLTIxNi4wNjQgMTg5LjQ0LTU4LjkwOC02Ny4yN3pNNTgyLjM1MiA1MTJMNjg4IDE5NC43NTIgNTg4LjE2IDk3LjQ0VjUxMnpNNTg4LjE2IDkyNi41Nkw2ODggODI5LjI0OCA1ODIuMzUyIDUxMnY0MTQuNTZ6IiBmaWxsPSIjRkZGRkZGIiBwLWlkPSI0NzU4Ij48L3BhdGg+PC9zdmc+" mode="aspectFit" lazy-load="true"></image>
+              </view>
+              <view class="radar-ring r1 {{isScanning?'anim':''}}"></view>
+              <view class="radar-ring r2 {{isScanning?'anim':''}}"></view>
+              <view class="radar-ring r3 {{isScanning?'anim':''}}"></view>
+            </view>
+            <text class="radar-tip">{{connectStatusText}}</text>
+            <view class="bind-fault-entry" catchtap="openFaultBindForm">
+              <text class="bind-fault-entry-link">设备无法连接？走无设备核验</text>
+            </view>
+          </view>
+        </view>
+
+        <block wx:if="{{bluetoothReady}}">
+          <view class="bt-connected-bar">
+            <view class="bt-c-icon">✅</view>
+            <view class="bt-c-info">
+              <text class="bt-c-name">已连接设备</text>
+              <text class="bt-c-sn">{{connectedDeviceName}}</text>
+            </view>
+            <view class="bt-disconnect-btn" wx:if="{{!showBindSuccess}}" bindtap="resetBluetoothState">断开</view>
+          </view>
+
+          <view class="bind-stage bind-stage--enter" wx:if="{{showBindSuccess}}">
+            <view class="bind-success-panel">
+              <view class="bind-success-icon">✓</view>
+              <text class="bind-success-title">{{bindSuccessTitle || '绑定成功'}}</text>
+              <text class="bind-success-desc">{{bindSuccessContent}}</text>
+              <view class="bind-success-btn" bindtap="onBindSuccessConfirm">好的</view>
+            </view>
+          </view>
+
+          <view class="bind-stage bind-stage--enter" wx:elif="{{!showBindAuditForm && !lockedReason}}">
+            <view class="bind-verifying-tip">
+              <text>正在验证设备…</text>
+              <text class="bind-verifying-sub">预登记设备将自动激活绑定，无需上传审核资料</text>
+            </view>
+          </view>
+
+          <view class="bind-stage bind-stage--enter" wx:elif="{{isDeviceLocked && lockedReason}}">
+            <view class="locked-view">
+              <view class="locked-icon">🚫</view>
+              <text class="locked-title">无法绑定</text>
+              <text class="locked-desc">{{lockedReason}}</text>
+            </view>
+          </view>
+
+          <view class="bind-stage bind-stage--enter" wx:elif="{{showBindAuditForm}}">
+            <view class="type-tabs">
+              <view class="tab-item {{bindType == 'new' ? 'active' : ''}}" bindtap="changeBindType" data-type="new">全新设备</view>
+              <view class="tab-item {{bindType == 'used' ? 'active' : ''}}" bindtap="changeBindType" data-type="used">二手/旧设备</view>
+            </view>
+
+            <view class="form-item">
+              <text class="form-label">选择产品型号</text>
+              <picker bindchange="onModelChange" range="{{modelOptions}}" value="{{modelIndex}}">
+                <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
+              </picker>
+            </view>
+
+            <view class="form-item">
+              <text class="form-label">{{bindType == 'new' ? '订单截图' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
+              <view class="upload-group">
+                <view class="upload-box" bindtap="chooseProofImage" data-type="receipt">
+                  <view class="upload-box-frame">
+                    <view class="upload-placeholder-center">
+                      <text class="plus-icon">+</text>
+                      <text>购买截图</text>
+                    </view>
+                    <image wx:if="{{previewImgReceipt}}" src="{{previewImgReceipt}}" mode="aspectFill" class="uploaded-img" lazy-load="true" />
+                  </view>
+                </view>
+                <view class="upload-box" wx:if="{{bindType == 'used'}}" bindtap="chooseProofImage" data-type="chat">
+                  <view class="upload-box-frame">
+                    <view class="upload-placeholder-center">
+                      <text class="plus-icon">+</text>
+                      <text>聊天记录</text>
+                    </view>
+                    <image wx:if="{{previewImgChat}}" src="{{previewImgChat}}" mode="aspectFill" class="uploaded-img" lazy-load="true" />
+                  </view>
+                </view>
+              </view>
+            </view>
+
+            <view class="form-item">
+              <text class="form-label">购买日期</text>
+              <picker mode="date" value="{{buyDate}}" bindchange="onDateChange">
+                <view class="picker-val">{{buyDate || '请选择日期'}}</view>
+              </picker>
+            </view>
+          </view>
+        </block>
+
+        <view style="height: 40rpx;"></view>
+      </scroll-view>
+
+      <!-- 勿用 modal-footer：商城同名样式会 translateY(100%)+opacity:0 把提交钮藏掉 -->
+      <view class="bind-audit-footer" wx:if="{{bluetoothReady && showBindAuditForm && !showBindSuccess}}">
+        <button class="bind-audit-submit" bindtap="submitAudit">提交上传审核</button>
+      </view>
+    </view>
+  </view>
+
+  <view
+    wx:if="{{showModal && showFaultBindForm && !profileGuideDemoBind}}"
+    class="modal hub-bind-modal-portal show {{bindModalClosing ? 'is-closing' : ''}}"
+    catchtouchmove="noop">
+    <view class="modal-content fault-bind-mode bind-audit-open {{bindSheetFromBottom ? 'hub-sheet--from-bottom' : ''}}" catchtouchmove="noop">
+      <view class="modal-header">
+        <text>故障核验</text>
+        <view class="close-modal" bindtap="closeBindModal">✕</view>
+      </view>
+      <scroll-view scroll-y="true" class="modal-scroll-area fault-body">
+        <view class="fault-bind-form">
+          <view class="fault-status-banner">
+            <view class="fault-status-icon">!</view>
+            <view class="fault-status-copy">
+              <text class="fault-status-title">设备无法蓝牙连接</text>
+              <text class="fault-status-desc">提交订单截图，审核通过后创建产品档案</text>
+            </view>
+          </view>
+          <view class="fault-form-card">
+            <view class="fault-form-row">
+              <text class="fault-row-label">产品型号</text>
+              <picker class="fault-row-picker" bindchange="onModelChange" range="{{modelOptions}}" value="{{modelIndex}}">
+                <view class="fault-row-value {{modelIndex !== null ? '' : 'is-placeholder'}}">
+                  <text>{{modelOptions[modelIndex] || '请选择'}}</text>
+                  <text class="fault-row-chevron">›</text>
+                </view>
+              </picker>
+            </view>
+            <view class="fault-form-divider"></view>
+            <view class="fault-form-row">
+              <text class="fault-row-label">购买日期</text>
+              <picker class="fault-row-picker" mode="date" bindchange="onDateChange">
+                <view class="fault-row-value {{buyDate ? '' : 'is-placeholder'}}">
+                  <text>{{buyDate || '请选择'}}</text>
+                  <text class="fault-row-chevron">›</text>
+                </view>
+              </picker>
+            </view>
+          </view>
+          <view class="fault-upload-card">
+            <text class="fault-upload-label">订单截图</text>
+            <view class="fault-upload-box {{previewImgReceipt ? 'fault-upload-box--filled' : ''}}" bindtap="chooseProofImage" data-type="receipt">
+              <block wx:if="{{previewImgReceipt}}">
+                <image src="{{previewImgReceipt}}" mode="aspectFit" class="fault-upload-preview" catchtap="previewFaultReceipt" lazy-load="true" />
+                <view class="fault-upload-change" catchtap="chooseProofImage" data-type="receipt">更换截图</view>
+              </block>
+              <block wx:else>
+                <view class="fault-upload-empty">
+                  <view class="fault-upload-icon">+</view>
+                  <text class="fault-upload-tip">上传购买订单截图</text>
+                  <text class="fault-upload-sub">支持相册或拍照</text>
+                </view>
+              </block>
+            </view>
+          </view>
+          <view class="fault-bind-note">
+            <text class="fault-bind-note-text">审核通过后先创建质保档案；是否需录入新机 SN，由售后在报修卡填写诊断书判定</text>
+          </view>
+        </view>
+      </scroll-view>
+      <view class="bind-audit-footer">
+        <button class="bind-audit-submit" bindtap="submitFaultAudit">提交核验申请</button>
+      </view>
+    </view>
+  </view>
+
+  <view
+    wx:if="{{showModal && profileGuideDemoBind}}"
+    class="modal bind-device-modal hub-bind-modal-portal show {{bindModalClosing ? 'is-closing' : ''}}"
+    catchtouchmove="noop">
+    <view class="modal-content profile-guide-bind-demo {{bluetoothReady ? 'connected' : ''}} {{bindSheetFromBottom ? 'hub-sheet--from-bottom' : ''}}" catchtouchmove="noop">
+      <view id="myGuideBtScan" wx:if="{{!bluetoothReady}}">
+        <view class="modal-header">
+          <text>绑定设备</text>
+        </view>
+        <scroll-view
+          scroll-y="true"
+          class="modal-scroll-area"
+          scroll-into-view="{{profileGuideModalScrollIntoView}}">
+          <view class="bt-scan-container">
+            <view class="radar-circle">
+              <view class="radar-core">
+                <image class="bt-icon-img" src="data:image/svg+xml;base64,PHN2ZyB0PSIxNzEwNDg4ODg4ODg4IiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjQ3NTciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHBhdGggZD0iTTIyMy41NTIgNzI0LjQ4TDQ2NS45MiA1MTIgMjIzLjU1MiAyOTkuNTJsNTguOTA4LTY3LjI4TDQ5OC41MiA0MjEuNjg4VjM1Ljg0aDg5LjY4bDIzMC40IDIyNC42NC0yNDIuNTI4IDIxMi40OCAyNDIuNTI4IDIxMi40OC0yMzAuNCAyMjQuNjRINDk4LjUyVjYwMi4zMTJsLTIxNi4wNjQgMTg5LjQ0LTU4LjkwOC02Ny4yN3pNNTgyLjM1MiA1MTJMNjg4IDE5NC43NTIgNTg4LjE2IDk3LjQ0VjUxMnpNNTg4LjE2IDkyNi41Nkw2ODggODI5LjI0OCA1ODIuMzUyIDUxMnY0MTQuNTZ6IiBmaWxsPSIjRkZGRkZGIiBwLWlkPSI0NzU4Ij48L3BhdGg+PC9zdmc+" mode="aspectFit" lazy-load="true"></image>
+              </view>
+              <view class="radar-ring r1"></view>
+              <view class="radar-ring r2"></view>
+              <view class="radar-ring r3"></view>
+            </view>
+            <text class="radar-tip">{{connectStatusText}}</text>
+          </view>
+          <view style="height: 40rpx;"></view>
+        </scroll-view>
+      </view>
+      <block wx:else>
+        <view class="modal-header">
+          <text>绑定设备</text>
+        </view>
+        <scroll-view
+          scroll-y="true"
+          class="modal-scroll-area"
+          scroll-into-view="{{profileGuideModalScrollIntoView}}">
+          <view class="bt-connected-bar">
+            <view class="bt-c-icon">✅</view>
+            <view class="bt-c-info">
+              <text class="bt-c-name">已连接设备</text>
+              <text class="bt-c-sn">{{connectedDeviceName}}</text>
+            </view>
+          </view>
+          <view class="type-tabs" wx:if="{{showBindAuditForm}}">
+            <view class="tab-item {{bindType == 'new' ? 'active' : ''}}">全新设备</view>
+            <view class="tab-item {{bindType == 'used' ? 'active' : ''}}">二手/旧设备</view>
+          </view>
+          <block wx:if="{{showBindAuditForm}}" id="myGuideBindForm">
+            <view class="form-item">
+              <text class="form-label">选择产品型号</text>
+              <view class="picker-val">{{modelOptions[modelIndex] || '请选择型号'}}</view>
+            </view>
+            <view class="form-item">
+              <text class="form-label">订单截图</text>
+              <view class="upload-group">
+                <view class="upload-box">
+                  <view class="upload-box-frame">
+                    <view class="upload-placeholder-center">
+                      <text class="plus-icon">+</text>
+                      <text>购买截图</text>
+                    </view>
+                  </view>
+                </view>
+              </view>
+            </view>
+            <view class="form-item">
+              <text class="form-label">购买日期</text>
+              <view class="picker-val">{{buyDate || '请选择日期'}}</view>
+            </view>
+          </block>
+          <view style="height: 40rpx;"></view>
+        </scroll-view>
+      </block>
+    </view>
+  </view>
+
+  </view>
+  <!-- /hub-embed-portal-root：layer + 绑定弹窗共用单根，满足 root-portal 单子节点 -->
+  </root-portal>
+
+  <!-- 我的 Tab 功能引导：独立 root-portal，与首页/客服一致，才能盖住壳层底栏 -->
+  <root-portal wx:if="{{showProfileGuideIntro && (!hubInShell || active)}}">
+    <view
+      class="my-profile-guide-mask my-profile-guide-mask--portal"
+      catchtouchmove="profileGuideNoop"
+      catchtap="profileGuideNoop">
+      <view class="my-profile-guide-intro-box" catchtap="profileGuideNoop">
+        <view class="my-profile-guide-intro-title">我的</view>
+        <view class="my-profile-guide-intro-desc">需要了解邀请奖励与设备绑定流程吗？</view>
+        <view class="my-profile-guide-intro-actions">
+          <view class="my-profile-guide-intro-btn my-profile-guide-intro-btn--ghost" catchtap="profileGuideIntroStart">查看教程</view>
+          <view class="my-profile-guide-intro-btn my-profile-guide-intro-btn--primary" catchtap="profileGuideSkip">跳过</view>
+        </view>
+      </view>
+    </view>
+  </root-portal>
+
+  <root-portal wx:if="{{showProfileGuide && (!hubInShell || active)}}">
+    <view
+      class="my-profile-guide-mask my-profile-guide-mask--portal {{profileGuideMaskPassthrough ? 'my-profile-guide-mask--passthrough' : ''}}"
+      catchtouchmove="profileGuideNoop"
+      catchtap="profileGuideNoop">
+      <view wx:if="{{profileGuideShowSpot}}" class="my-profile-guide-spot" style="{{profileGuideSpotStyle}}"></view>
+      <view
+        wx:if="{{profileGuideShowBubble}}"
+        class="my-profile-guide-bubble my-profile-guide-bubble--{{profileGuideArrowDir}} {{profileGuideCenterOnly ? 'my-profile-guide-bubble--center' : ''}} {{profileGuideBubbleEnter ? 'profile-guide-bubble--enter' : ''}} {{profileGuideAnimating ? 'profile-guide-bubble--animating' : ''}} {{!profileGuideBubbleStyle ? 'my-profile-guide-bubble--center-fallback' : ''}}"
+        style="{{profileGuideBubbleStyle || ''}}">
+        <view class="my-profile-guide-arrow" style="{{profileGuideArrowStyle}}"></view>
+        <view class="my-profile-guide-step-tag">{{profileGuideStepTag}}</view>
+        <view class="my-profile-guide-title">{{profileGuideTitle}}</view>
+        <view class="my-profile-guide-desc">{{profileGuideDesc}}</view>
+        <view class="my-profile-guide-btn {{profileGuideBtnLocked ? 'is-locked' : ''}}" catchtap="profileGuideNext">{{profileGuideBtnText}}</view>
+      </view>
+    </view>
   </root-portal>
 
   <hub-tab-bar wx:if="{{showHubTabBar && !hubInShell}}" active="{{hubTabIndex}}" bind:switch="onHubTabSwitch" />
@@ -1872,15 +2273,15 @@
             <text class="fr-label">需要用户支付维修费</text>
             <switch checked="{{fillRepairRequireUserPay}}" bindchange="onFillRepairRequireUserPayChange" color="#000000" />
           </view>
-          <text class="fr-switch-hint" wx:if="{{afterSalesState.fillRepairModal.showPayHint}}">开启后仅保存报价，用户需在「我的」需寄回卡片中完成支付；支付完成前请勿填写寄回运单号。</text>
+          <text class="fr-switch-hint" wx:if="{{afterSalesState.fillRepairModal.showPayHint}}">开启后仅保存报价，用户需在「我的」需寄回卡片中完成支付；支付完成前请勿填写寄出运单号。</text>
         </view>
         
-        <!-- 🔴 运单号输入：统一逻辑，不区分是否过保；仅在不需要用户付款时可填 -->
+        <!-- 🔴 运单号输入：管理员寄给用户的单号（trackingId），不是用户寄回的 returnTrackingId -->
         <view class="fr-tracking-section" wx:if="{{afterSalesState.fillRepairModal && afterSalesState.fillRepairModal.showTrackingSection}}">
-          <view class="fr-label">寄回运单号</view>
+          <view class="fr-label">寄出运单号</view>
           <input 
             class="fr-tracking-input" 
-            placeholder="请输入寄回给用户的运单号"
+            placeholder="请输入寄给用户的快递单号"
             value="{{fillRepairTrackingId}}"
             bindinput="onFillRepairTrackingIdInput"
           />
@@ -1950,6 +2351,93 @@
     <view class="cd-btn-row">
       <view class="cd-btn cancel" bindtap="rejectPaidRepair">取消</view>
       <view class="cd-btn confirm" bindtap="confirmPaidRepair">同意</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 寄回维修：页内直接蓝牙更换主板 ================= -->
+<view class="custom-dialog-mask {{motherboardBleClosing ? 'closing' : ''}}" wx:if="{{showMotherboardBleModal}}" catchtouchmove="noop">
+  <view class="custom-dialog-box motherboard-ble-dialog" catchtap="noop" catchtouchmove="noop">
+    <view class="cd-title">更换主板</view>
+    <view class="motherboard-ble-sub">
+      请靠近新主板并保持蓝牙开启，连接后会自动解析 SN 并替换用户设备卡
+    </view>
+    <view class="motherboard-ble-meta" wx:if="{{motherboardBleOldSn || motherboardBleModel}}">
+      <text wx:if="{{motherboardBleModel}}">型号 {{motherboardBleModel}}</text>
+      <text wx:if="{{motherboardBleOldSn}}">旧 SN {{motherboardBleOldSn}}</text>
+    </view>
+
+    <view class="bt-scan-container motherboard-ble-radar">
+      <view class="radar-circle" bindtap="startMotherboardBleScan">
+        <view class="radar-core">
+          <image class="bt-icon-img" src="data:image/svg+xml;base64,PHN2ZyB0PSIxNzEwNDg4ODg4ODg4IiBjbGFzcz0iaWNvbiIgdmlld0JveD0iMCAwIDEwMjQgMTAyNCIgdmVyc2lvbj0iMS4xIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHAtaWQ9IjQ3NTciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCI+PHBhdGggZD0iTTIyMy41NTIgNzI0LjQ4TDQ2NS45MiA1MTIgMjIzLjU1MiAyOTkuNTJsNTguOTA4LTY3LjI4TDQ5OC41MiA0MjEuNjg4VjM1Ljg0aDg5LjY4bDIzMC40IDIyNC42NC0yNDIuNTI4IDIxMi40OCAyNDIuNTI4IDIxMi40OC0yMzAuNCAyMjQuNjRINDk4LjUyVjYwMi4zMTJsLTIxNi4wNjQgMTg5LjQ0LTU4LjkwOC02Ny4yN3pNNTgyLjM1MiA1MTJMNjg4IDE5NC43NTIgNTg4LjE2IDk3LjQ0VjUxMnpNNTg4LjE2IDkyNi41Nkw2ODggODI5LjI0OCA1ODIuMzUyIDUxMnY0MTQuNTZ6IiBmaWxsPSIjRkZGRkZGIiBwLWlkPSI0NzU4Ij48L3BhdGg+PC9zdmc+" mode="aspectFit" lazy-load="true"></image>
+        </view>
+        <view class="radar-ring r1 {{isScanning?'anim':''}}"></view>
+        <view class="radar-ring r2 {{isScanning?'anim':''}}"></view>
+        <view class="radar-ring r3 {{isScanning?'anim':''}}"></view>
+      </view>
+      <text class="radar-tip">{{connectStatusText}}</text>
+      <text class="motherboard-ble-sn" wx:if="{{currentSn}}">{{currentSn}}</text>
+    </view>
+
+    <view class="cd-btn-row">
+      <view class="cd-btn cancel {{motherboardBleSubmitting ? 'disabled' : ''}}" bindtap="closeMotherboardBleModal">取消</view>
+      <view class="cd-btn confirm {{motherboardBleSubmitting ? 'disabled' : ''}}" bindtap="startMotherboardBleScan">
+        {{motherboardBleSubmitting ? '替换中…' : (isScanning ? '扫描中…' : '重新扫描')}}
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 配置回溯：已审核绑定申请，可修改质保时长 ================= -->
+<view class="custom-dialog-mask {{configRollbackClosing ? 'closing' : ''}}" wx:if="{{showConfigRollbackModal}}" bindtap="closeConfigRollbackModal" catchtouchmove="noop">
+  <view class="custom-dialog-box config-rollback-dialog" catchtap="noop" catchtouchmove="noop">
+    <view class="cd-title">配置回溯</view>
+    <view class="config-rollback-sub">绑定申请记录（含今日起的管理员测试单），审核时质保选错了可在这里直接改</view>
+
+    <view class="config-rollback-loading" wx:if="{{configRollbackLoading}}">加载中…</view>
+    <view class="config-rollback-empty" wx:elif="{{configRollbackHistory.length === 0}}">暂无申请记录</view>
+
+    <scroll-view wx:else class="config-rollback-list" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="config-rollback-item" wx:for="{{configRollbackHistory}}" wx:key="_id">
+        <view class="config-rollback-item-main">
+          <view class="config-rollback-item-top">
+            <text class="config-rollback-item-sn">{{item.sn || '（未录入 SN）'}}</text>
+            <text class="config-rollback-item-tag" wx:if="{{item.bindType === 'fault'}}">故障核验</text>
+            <text class="config-rollback-item-tag admin" wx:if="{{item.isAdminApply}}">管理员测试</text>
+            <text class="config-rollback-item-tag pending" wx:if="{{!item.approved}}">待审核</text>
+          </view>
+          <view class="config-rollback-item-meta">
+            <text class="config-rollback-item-model-name" wx:if="{{item.productModel}}">{{item.productModel}}</text>
+            <text class="config-rollback-item-time" wx:if="{{item.timeText}}">{{item.timeText}} 申请</text>
+          </view>
+          <view class="config-rollback-item-meta" wx:if="{{item.hasDevice}}">
+            <text class="config-rollback-item-expiry">到期 {{item.expiryDate}} · 剩 {{item.remainingDays}} 天</text>
+          </view>
+          <view class="config-rollback-item-meta" wx:elif="{{item.approved}}">
+            <text class="config-rollback-item-expiry warn">设备档案不存在（可能已删除）</text>
+          </view>
+          <view class="config-rollback-item-meta" wx:else>
+            <text class="config-rollback-item-expiry">尚未审核，请先在「绑定审核」中处理</text>
+          </view>
+        </view>
+        <picker
+          wx:if="{{item.hasDevice}}"
+          mode="selector"
+          range="{{warrantyOptions}}"
+          value="{{item.warrantyIndex}}"
+          data-index="{{index}}"
+          bindchange="onConfigRollbackWarrantyChange">
+          <view class="config-rollback-item-model">
+            {{item.totalDays}}天
+            <text class="config-rollback-item-model-arrow">▾</text>
+          </view>
+        </picker>
+      </view>
+    </scroll-view>
+
+    <view class="cd-btn-row config-rollback-btns">
+      <view class="cd-btn confirm" bindtap="closeConfigRollbackModal">关闭</view>
     </view>
   </view>
 </view>

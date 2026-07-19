@@ -35,10 +35,18 @@ function resolvePreRegisterModel(preReg, device, myOpenid) {
 async function activatePreRegistered(db, _, normalizedSn, productModel, myOpenid, deviceName, device) {
   const activation = buildActivationFields(productModel)
   const bindData = {
-    ...activation,
+    productModel: activation.productModel,
+    firmware: activation.firmwareVer,
+    expiryDate: activation.expiryDate,
+    remainingDays: activation.remainingDays,
     sn: normalizedSn,
     name: deviceName || normalizedSn,
     openid: myOpenid,
+    isActive: true,
+    activations: 1,
+    bindCount: 1,
+    preRegistered: false,
+    snPending: false,
     lastBindTime: db.serverDate()
   }
 
@@ -72,79 +80,6 @@ async function activatePreRegistered(db, _, normalizedSn, productModel, myOpenid
   }
 }
 
-function isPendingFaultSn(sn) {
-  return String(sn || '').trim().toUpperCase().startsWith('PENDING-FAULT-')
-}
-
-function normModel(s) {
-  return String(s || '').trim().toUpperCase()
-}
-
-/** 故障预绑定：管理员已录入 SN 或用户蓝牙连上新设备时合并待录入记录 */
-async function tryMergePendingFaultDevice(db, _, myOpenid, normalizedSn, deviceName) {
-  const pendingRes = await db.collection('sn').where({
-    openid: myOpenid,
-    isActive: true,
-    snPending: true
-  }).limit(1).get()
-
-  if (!pendingRes.data.length) return null
-
-  const pending = pendingRes.data[0]
-  const preReg = await findPreRegister(db, _, normalizedSn)
-  const connectedModel = String((preReg && preReg.productModel) || '').trim()
-  const pendingModel = String(pending.productModel || '').trim()
-
-  if (!connectedModel) {
-    return null
-  }
-
-  if (pendingModel && normModel(pendingModel) !== normModel(connectedModel)) {
-    return {
-      success: false,
-      status: 'FAULT_PENDING_MISMATCH',
-      msg: '您已有待录入的故障设备，当前连接的设备型号不一致，无法绑定'
-    }
-  }
-
-  const candidates = snCandidates(normalizedSn)
-  const realSnRes = await db.collection('sn').where({ sn: _.in(candidates) }).limit(1).get()
-  const realDevice = realSnRes.data[0] || null
-
-  if (realDevice && realDevice._id !== pending._id && realDevice.openid === myOpenid && !realDevice.snPending) {
-    await db.collection('sn').doc(pending._id).update({
-      data: { isActive: false, deviceStatus: 'merged', openid: '', snPending: false }
-    })
-    await applyPendingWarranty(db, _, myOpenid, normalizedSn)
-    return { success: true, status: 'AUTO_APPROVED', msg: '设备已连接' }
-  }
-
-  if (realDevice && realDevice.openid && realDevice.openid !== myOpenid) {
-    return { success: false, status: 'LOCKED', msg: '设备已被绑定，请联系原主解绑' }
-  }
-
-  await db.collection('sn').doc(pending._id).update({
-    data: {
-      sn: normalizedSn,
-      snPending: false,
-      name: deviceName || normalizedSn,
-      lastBindTime: db.serverDate(),
-      activations: _.inc(1)
-    }
-  })
-
-  if (realDevice && realDevice._id !== pending._id && !realDevice.isActive && !realDevice.openid) {
-    try {
-      await db.collection('sn').doc(realDevice._id).remove()
-    } catch (e) {
-      console.warn('[bindDevice] cleanup inactive duplicate failed', e)
-    }
-  }
-
-  await applyPendingWarranty(db, _, myOpenid, normalizedSn)
-  return { success: true, status: 'AUTO_APPROVED', msg: '设备已激活并连接' }
-}
-
 exports.main = async (event, context) => {
   const db = cloud.database()
   const _ = db.command
@@ -158,9 +93,6 @@ exports.main = async (event, context) => {
       return { success: false, msg: 'SN 不能为空' }
     }
 
-    const merged = await tryMergePendingFaultDevice(db, _, myOpenid, normalizedSn, deviceName)
-    if (merged) return merged
-
     const pendingBlock = await db.collection('sn').where({
       openid: myOpenid,
       isActive: true,
@@ -170,7 +102,36 @@ exports.main = async (event, context) => {
       return {
         success: false,
         status: 'FAULT_PENDING_BLOCK',
-        msg: '您已有待录入的故障设备档案，请联系售后完成 SN 录入后再绑定'
+        msg: '您已有待录入的故障设备档案，请联系售后录入新设备序列号'
+      }
+    }
+
+    // B 方案：故障核验档案已确认非主板故障，下次连接自动写入真实 SN
+    const faultAutoBindRes = await db.collection('sn').where({
+      openid: myOpenid,
+      isActive: true,
+      bindSource: 'fault_claim',
+      faultAutoBind: true
+    }).limit(1).get()
+    if (faultAutoBindRes.data.length > 0) {
+      const card = faultAutoBindRes.data[0]
+      await db.collection('sn').doc(card._id).update({
+        data: {
+          sn: normalizedSn,
+          name: deviceName || normalizedSn,
+          faultAutoBind: false,
+          faultAwaitingDiagnosis: false,
+          isActive: true,
+          activations: _.inc(1),
+          lastBindTime: db.serverDate()
+        }
+      })
+      await applyPendingWarranty(db, _, myOpenid, normalizedSn)
+      return {
+        success: true,
+        status: 'AUTO_APPROVED',
+        msg: '设备已连接并绑定到档案',
+        fromFaultAutoBind: true
       }
     }
 

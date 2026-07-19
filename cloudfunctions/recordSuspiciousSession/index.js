@@ -4,10 +4,31 @@ cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const _ = db.command;
 
+const ENTER_THRESHOLD = 3;
+const STAY_MINUTES_THRESHOLD = 30;
+
 function sanitizeRoute(route) {
   const s = String(route || '').trim();
   if (!s) return 'unknown';
   return s.replace(/[./\\-]+/g, '_').replace(/[^\w]/g, '_').slice(0, 80);
+}
+
+async function softWecomSuspicious(oneLine) {
+  try {
+    await cloud.callFunction({
+      name: 'wecomNotify',
+      data: { action: 'notifyAdminTodo', kind: 'suspicious', oneLine: oneLine || '' }
+    });
+  } catch (e) {
+    console.warn('[recordSuspiciousSession] wecomAdminTodo failed', e);
+  }
+}
+
+function crossedSuspiciousThreshold(enterCount, totalStayMinutes) {
+  return (
+    Number(enterCount || 0) >= ENTER_THRESHOLD ||
+    Number(totalStayMinutes || 0) >= STAY_MINUTES_THRESHOLD
+  );
 }
 
 exports.main = async (event = {}) => {
@@ -42,10 +63,30 @@ exports.main = async (event = {}) => {
   }
 
   if (sessionRes.data && sessionRes.data.length > 0) {
+    const prev = sessionRes.data[0];
+    const nextEnter = Number(prev.sessionCount || 0) + 1;
+    const nextStay = Number(prev.totalStayMinutes || 0) + stayMinutes;
+    const shouldNotify =
+      !prev.wecomSuspiciousNotifySent &&
+      crossedSuspiciousThreshold(nextEnter, nextStay) &&
+      prev.reviewDecision !== 'ignore' &&
+      prev.reviewDecision !== 'ban' &&
+      prev.reviewStatus !== 'archived';
+
+    if (shouldNotify) {
+      baseUpdate.wecomSuspiciousNotifySent = true;
+      baseUpdate.wecomSuspiciousNotifyAt = now;
+    }
+
     await db.collection('suspicious_user_sessions').doc(sessionRes.data[0]._id).update({ data: baseUpdate });
-    return { success: true, created: false, stayMinutes };
+
+    if (shouldNotify) {
+      await softWecomSuspicious(`会话${nextEnter}次 / 停留${nextStay.toFixed(1)}分钟`);
+    }
+    return { success: true, created: false, stayMinutes, notified: !!shouldNotify };
   }
 
+  const shouldNotifyOnCreate = crossedSuspiciousThreshold(1, stayMinutes);
   await db.collection('suspicious_user_sessions').add({
     data: {
       _openid: OPENID,
@@ -62,9 +103,15 @@ exports.main = async (event = {}) => {
       longitude: locationInfo.longitude != null ? locationInfo.longitude : null,
       lastActiveAt: now,
       createTime: now,
-      updateTime: now
+      updateTime: now,
+      wecomSuspiciousNotifySent: !!shouldNotifyOnCreate,
+      ...(shouldNotifyOnCreate ? { wecomSuspiciousNotifyAt: now } : {})
     }
   });
 
-  return { success: true, created: true, stayMinutes };
+  if (shouldNotifyOnCreate) {
+    await softWecomSuspicious(`会话1次 / 停留${stayMinutes.toFixed(1)}分钟`);
+  }
+
+  return { success: true, created: true, stayMinutes, notified: !!shouldNotifyOnCreate };
 };

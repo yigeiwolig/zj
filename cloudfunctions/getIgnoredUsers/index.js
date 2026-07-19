@@ -300,7 +300,7 @@ async function enrichFromSessionsAndFenxi(users) {
       if (enterCount >= 3 || pageVisits >= 3) {
         triggers.push(`多次进入(会话${enterCount}次/页面访问${pageVisits}次)`);
       }
-      if (totalStayMinutes >= 10) {
+      if (totalStayMinutes >= 30) {
         triggers.push(`长时间停留(${totalStayMinutes.toFixed(2)}分钟)`);
       }
       if (triggers.length) triggerReasonText = triggers.join('；');

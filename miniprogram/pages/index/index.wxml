@@ -30,45 +30,19 @@
 <!-- 闲鱼/抖音：进入后首个须知弹窗（在加微信引导之前） -->
 <view class="custom-modal-mask first-time-modal-mask {{xianyuWarningModalEnterReady ? 'first-time-modal-enter-ready' : ''}} {{xianyuWarningModalClosing ? 'closing' : ''}}" wx:if="{{showXianyuWarningModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box first-time-modal xianyu-notice-card" catchtouchmove="noop" catchtap="noop">
-    <view class="first-time-icon">📋</view>
-    <view class="first-time-title">使用须知</view>
+    <view class="first-time-icon">👋</view>
+    <view class="first-time-title">领取访问口令</view>
     <view class="first-time-desc-wrap">
-      <view class="first-time-desc-line">闲鱼 / 抖音用户请先阅读</view>
-      <view class="first-time-desc-line">按步骤操作即可查看案例库</view>
+      <view class="first-time-desc-line xianyu-notice-lead-em">闲鱼 / 抖音用户：点「联系客服」领取访问口令</view>
+      <view class="first-time-desc-line">微信用户若已有口令，可直接填写</view>
     </view>
-
-    <view class="xianyu-notice-panel">
-      <view class="xianyu-notice-row">
-        <view class="xianyu-notice-badge xianyu-notice-badge--ban">禁</view>
-        <text class="xianyu-notice-row-text">闲鱼勿发「加了」「已加」及微信、微信号、加微信、加我微信、vx、wx、威信、薇信等词</text>
-      </view>
-      <view class="xianyu-notice-row">
-        <view class="xianyu-notice-badge xianyu-notice-badge--ban">禁</view>
-        <text class="xianyu-notice-row-text">申请发送后请稍等，客服会联系你，勿在闲鱼发敏感词</text>
-      </view>
-      <view class="xianyu-notice-split"></view>
-      <view class="xianyu-notice-row">
-        <view class="xianyu-notice-badge">1</view>
-        <text class="xianyu-notice-row-text">点击「复制微信号」添加管理员</text>
-      </view>
-      <view class="xianyu-notice-row">
-        <view class="xianyu-notice-badge">2</view>
-        <text class="xianyu-notice-row-text">或长按二维码扫码添加微信</text>
-      </view>
-      <view class="xianyu-notice-row xianyu-notice-row--last">
-        <view class="xianyu-notice-badge">3</view>
-        <text class="xianyu-notice-row-text">添加客服后请耐心等待，等待客服通过</text>
-      </view>
-    </view>
-
-    <text class="xianyu-notice-foot">违反以上规则，将无法查看案例库</text>
 
     <view class="first-time-btns xianyu-notice-btns">
       <view class="xianyu-notice-progress" wx:if="{{!xianyuWarningActionReady}}">
         <view class="xianyu-notice-progress-track">
           <view class="xianyu-notice-progress-fill" style="width: {{xianyuWarningProgress}}%;"></view>
         </view>
-        <text class="xianyu-notice-wait">{{xianyuWarningActionCountdown}} 秒后可确认</text>
+        <text class="xianyu-notice-wait">{{xianyuWarningActionCountdown}} 秒后可继续</text>
       </view>
       <view
         class="first-time-btn primary {{xianyuWarningActionReady ? '' : 'is-disabled'}}"
@@ -76,21 +50,29 @@
         hover-class="{{xianyuWarningActionReady ? 'first-time-btn-active' : ''}}"
         hover-start-time="10"
         hover-stay-time="70">
-        {{xianyuWarningActionReady ? '我知道了' : '请仔细阅读…'}}
+        {{xianyuWarningActionReady ? '联系客服' : '请稍候…'}}
+      </view>
+      <view
+        class="first-time-btn secondary {{xianyuWarningActionReady ? '' : 'is-disabled'}}"
+        bindtap="skipXianyuWarningToAccessCode"
+        hover-class="{{xianyuWarningActionReady ? 'first-time-btn-active' : ''}}"
+        hover-start-time="10"
+        hover-stay-time="70">
+        {{xianyuWarningActionReady ? '我已有口令' : '我已有口令…'}}
       </view>
     </view>
   </view>
 </view>
 
-<!-- 抖音/闲鱼用户：加微信引导（须知关闭后再显示，与昵称层互斥） -->
+<!-- 备用：企微客服打开失败时用复制号 / 扫码 -->
 <view class="custom-modal-mask first-time-modal-mask {{firstTimeModalEnterReady ? 'first-time-modal-enter-ready' : ''}} {{firstTimeModalClosing ? 'closing' : ''}}" wx:if="{{showFirstTimeModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box first-time-modal" catchtouchmove="noop" catchtap="noop">
     <image class="first-time-qr-preload" src="/images/qrcode.jpg" mode="aspectFit" aria-hidden="true" />
     <view class="first-time-icon">✨</view>
-    <view class="first-time-title">添加管理员微信</view>
+    <view class="first-time-title">添加客服微信</view>
     <view class="first-time-desc-wrap">
-      <view class="first-time-desc-line">抖音/闲鱼用户请先添加管理员微信</view>
-      <view class="first-time-desc-line">录入昵称后再使用</view>
+      <view class="first-time-desc-line">长按二维码，或复制微信号添加</view>
+      <view class="first-time-desc-line">添加后向客服领取访问口令</view>
     </view>
     <view class="qr-code-container">
       <image class="qr-code-image {{qrPressing ? 'is-pressing' : ''}}" src="/images/qrcode.jpg" mode="aspectFit" show-menu-by-longpress="{{true}}" bindtouchstart="onFirstTimeQrTouchStart" bindtouchend="onFirstTimeQrTouchEnd" bindtouchcancel="onFirstTimeQrTouchEnd" bindtap="saveFirstTimeQrcode" />
@@ -100,11 +82,19 @@
     <view class="first-time-btns">
       <view
         class="first-time-btn primary {{firstTimeActionReady ? '' : 'is-disabled'}}"
+        bindtap="openPresalesKfFromGuide"
+        hover-class="{{firstTimeActionReady ? 'first-time-btn-active' : ''}}"
+        hover-start-time="10"
+        hover-stay-time="70">
+        {{firstTimeActionReady ? '联系客服' : '联系客服 (' + firstTimeActionCountdown + 's)'}}
+      </view>
+      <view
+        class="first-time-btn secondary {{firstTimeActionReady ? '' : 'is-disabled'}}"
         bindtap="copyAdminWechat"
         hover-class="{{firstTimeActionReady ? 'first-time-btn-active' : ''}}"
         hover-start-time="10"
         hover-stay-time="70">
-        {{copyWechatBusy ? '复制中...' : (firstTimeActionReady ? '点击复制微信号' : '点击复制微信号 (' + firstTimeActionCountdown + 's)')}}
+        {{copyWechatBusy ? '复制中...' : (firstTimeActionReady ? '复制微信号' : '复制微信号 (' + firstTimeActionCountdown + 's)')}}
       </view>
       <view
         class="first-time-btn secondary {{firstTimeActionReady ? '' : 'is-disabled'}}"
@@ -112,7 +102,7 @@
         hover-class="{{firstTimeActionReady ? 'first-time-btn-active' : ''}}"
         hover-start-time="10"
         hover-stay-time="70">
-        {{firstTimeActionReady ? '我知道了' : '我知道了 (' + firstTimeActionCountdown + 's)'}}
+        {{firstTimeActionReady ? '已有口令，去填写' : '已有口令，去填写 (' + firstTimeActionCountdown + 's)'}}
       </view>
     </view>
   </view>
@@ -531,7 +521,19 @@
             />
             <view wx:if="{{adminSuspiciousSearch}}" class="admin-search-clear" catchtap="onAdminSuspiciousSearchClear">清除</view>
           </view>
-          <text class="admin-search-hint" wx:if="{{suspiciousUsers.length}}">共 {{suspiciousUsers.length}} 人{{adminSuspiciousSearchTrim ? ' · 匹配 ' + suspiciousSearchMatchCount + ' 人 · 全部可见' : ''}}</text>
+          <view class="admin-sort-bar">
+            <text class="admin-sort-label">排序</text>
+            <view class="admin-sort-chips">
+              <view
+                class="admin-sort-chip {{suspiciousSortBy === item.key ? 'is-active' : ''}}"
+                wx:for="{{suspiciousSortOptions}}"
+                wx:key="key"
+                catchtap="onSuspiciousSortChange"
+                data-key="{{item.key}}"
+              >{{item.label}}</view>
+            </view>
+          </view>
+          <text class="admin-search-hint" wx:if="{{suspiciousUsers.length}}">共 {{suspiciousUsers.length}} 人{{adminSuspiciousSearchTrim ? ' · 匹配 ' + suspiciousSearchMatchCount + ' 人 · 全部可见' : ''}} · 当前按「{{suspiciousSortLabel}}」从高到低</text>
         </view>
         <view wx:if="{{isLoadingSuspiciousUsers}}" class="admin-loading">
           <text class="loading-dot">···</text>
@@ -539,7 +541,7 @@
         <view wx:elif="{{suspiciousUsers.length === 0}}" class="admin-empty">
           <text class="empty-icon">🕵️</text>
           <text class="empty-title">暂无可疑人员</text>
-          <text class="empty-desc">命中规则：截图行为 / 多次进入（≥3次）/ 长时间停留（>1分钟）</text>
+          <text class="empty-desc">命中规则：截图行为 / 多次进入（≥3次）/ 长时间停留（≥30分钟）</text>
         </view>
         <view wx:else class="admin-user-cards">
           <view wx:if="{{adminSuspiciousSearchTrim && suspiciousSearchMatchCount === 0}}" class="admin-search-no-match">
@@ -1014,9 +1016,12 @@
         <text class="btn-text" wx:if="{{step === 0}}">MT  RIDE</text>
       </view>
 
-      <view wx:if="{{isAdmin && !isAdminMode}}" class="admin-quick-gen" catchtap="generateAccessCode">
-        <view class="admin-quick-gen-btn {{isGeneratingAccessCode ? 'is-loading' : ''}}">
+      <view wx:if="{{isAdmin && !isAdminMode}}" class="admin-quick-gen">
+        <view class="admin-quick-gen-btn {{isGeneratingAccessCode ? 'is-loading' : ''}}" catchtap="generateAccessCode">
           {{isGeneratingAccessCode ? '生成中…' : '生成访问口令'}}
+        </view>
+        <view class="admin-quick-gen-btn admin-quick-gen-btn--debug" catchtap="startDebugUserFullFlow">
+          调试全流程
         </view>
       </view>
     </view>

@@ -2316,35 +2316,177 @@ page { height: 100%; background: #fff; overflow: hidden; }
 }
 
 .xianyu-verify-modal {
-  min-height: 420rpx;
-  padding: 56rpx 40rpx 40rpx;
+  width: 620rpx;
+  min-height: 72vh;
+  max-height: 90vh;
+  padding: 48rpx 32rpx 36rpx;
+  align-items: stretch;
+  text-align: left;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.xianyu-verify-hint {
-  margin-top: 12rpx;
-  line-height: 1.5;
+.xianyu-verify-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 28rpx;
+  flex-shrink: 0;
 }
 
-.xianyu-verify-sample {
-  margin: 28rpx 0 36rpx;
-  padding: 20rpx 24rpx;
-  border-radius: 16rpx;
-  background: #f5f5f7;
-  color: #666;
+.xianyu-verify-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #1d1d1f;
+  text-align: center;
+  letter-spacing: -0.5rpx;
+  line-height: 1.2;
+  margin-bottom: 6rpx;
+}
+
+.xianyu-verify-lead {
   font-size: 26rpx;
+  color: #86868b;
+  font-weight: 400;
+  text-align: center;
+  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.xianyu-verify-scroll {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  max-height: 58vh;
+  margin-bottom: 24rpx;
+}
+
+.xianyu-verify-sample-wrap {
+  width: 100%;
+  margin-bottom: 0;
+  padding: 16rpx 16rpx 18rpx;
+  background: #f5f5f7;
+  border-radius: 18rpx;
+  box-sizing: border-box;
+  min-height: 360rpx;
+}
+
+.xianyu-verify-sample-label {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #aeaeb2;
+  text-align: center;
+  margin-bottom: 10rpx;
+  letter-spacing: 1rpx;
+}
+
+.xianyu-verify-sample-img {
+  display: block;
+  width: 100%;
+  border-radius: 14rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.08);
+}
+
+.xianyu-verify-tip {
+  width: 100%;
+  margin-bottom: 22rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 18rpx;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  flex-shrink: 0;
+}
+
+.xianyu-verify-tip-icon {
+  flex-shrink: 0;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  font-size: 30rpx;
+  font-weight: 800;
+  line-height: 44rpx;
   text-align: center;
 }
 
-.xianyu-verify-modal .modal-btn-new.is-disabled {
+.xianyu-verify-tip-text {
+  flex: 0 1 auto;
+  font-size: 28rpx;
+  line-height: 1.5;
+  font-weight: 600;
+  white-space: pre-line;
+  text-align: center;
+}
+
+.xianyu-verify-tip--error {
+  background: #fff7ed;
+  border: 2rpx solid rgba(255, 149, 0, 0.35);
+  box-shadow: 0 6rpx 20rpx rgba(255, 149, 0, 0.12);
+}
+
+.xianyu-verify-tip--error .xianyu-verify-tip-icon {
+  background: #ff9500;
+  color: #fff;
+}
+
+.xianyu-verify-tip--error .xianyu-verify-tip-text {
+  color: #c2410c;
+}
+
+.xianyu-verify-tip--success {
+  background: #f0fdf4;
+  border: 2rpx solid rgba(52, 199, 89, 0.28);
+  box-shadow: 0 6rpx 20rpx rgba(52, 199, 89, 0.1);
+}
+
+.xianyu-verify-tip--success .xianyu-verify-tip-icon {
+  background: #34c759;
+  color: #fff;
+}
+
+.xianyu-verify-tip--success .xianyu-verify-tip-text {
+  color: #15803d;
+}
+
+.xianyu-verify-btn {
+  width: 100%;
+  height: 96rpx;
+  border-radius: 48rpx;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12rpx 28rpx rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.xianyu-verify-btn--active {
+  opacity: 0.88;
+}
+
+.xianyu-verify-btn.is-disabled {
   opacity: 0.55;
 }
 
 .xianyu-verify-cancel {
-  margin-top: 24rpx;
+  margin-top: 22rpx;
   text-align: center;
   color: #8e8e93;
   font-size: 28rpx;
-  padding: 12rpx 0;
+  font-weight: 500;
+  padding: 14rpx 0 2rpx;
+  flex-shrink: 0;
+}
+
+.xianyu-verify-cancel--active {
+  opacity: 0.65;
 }
 
 /* ================= MT 自定义暂停键（azjc 全屏视频） ================= */

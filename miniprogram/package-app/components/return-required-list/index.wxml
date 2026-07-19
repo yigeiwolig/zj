@@ -1,77 +1,142 @@
 <view class="return-required-list-root">
   <block wx:for="{{list}}" wx:key="_id">
-    <view class="rr-item {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? 'user-sent' : (item.returnTrackingId ? 'returned' : 'pending')}} {{simple ? 'simple-mode' : ''}}">
-      <view class="rr-item-header">
-        <text class="rr-model" wx:if="{{!simple}}">{{item.displayModel || item.model}}</text>
-        <view class="rr-model-with-badge" wx:else>
-          <text class="rr-model-badge">MT</text>
-          <text class="rr-model">MT维修单详情</text>
-        </view>
-        <text class="rr-status-badge {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? 'user-sent' : (item.returnTrackingId ? 'returned' : 'pending')}}" wx:if="{{!simple}}">
-          {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN' ? '用户寄回故障配件' : (item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? '用户寄回维修' : (item.returnTrackingId ? '已寄回' : '待寄回'))}}
-        </text>
-      </view>
-
-      <view class="rr-item-info" wx:if="{{!simple}}">
-        <view class="rr-info-section">
-          <view class="rr-info-row">
-            <text class="rr-info-label">用户昵称</text>
-            <text class="rr-info-value">{{item.userNickname || '匿名用户'}}</text>
+    <view
+      class="rr-card {{item.userReturnShipState === 'signed' ? 'rr-card--signed' : (item.userReturnShipState === 'transit' ? 'rr-card--transit' : 'rr-card--none')}} {{simple ? 'rr-card--simple' : ''}} {{!simple && expandedMap[item._id] ? 'rr-card--open' : ''}}"
+    >
+      <!-- 管理员折叠头 -->
+      <view
+        class="rr-card-head"
+        wx:if="{{!simple}}"
+        data-id="{{item._id}}"
+        bindtap="onToggleExpand"
+      >
+        <view class="rr-card-accent"></view>
+        <view class="rr-card-head-body">
+          <view class="rr-card-head-left">
+            <text class="rr-card-model">{{item.displayModel || item.model}}</text>
+            <text class="rr-card-date">报修 {{item.repairTimeText || '—'}}</text>
           </view>
-          <view class="rr-info-row">
-            <text class="rr-info-label">质保状态</text>
-            <text class="rr-info-value {{(item.warrantyExpired === true || (item.expiryDate && item.remainingDays === 0)) ? 'rr-warranty-expired-text' : 'rr-warranty-normal-text'}}">
-              {{(item.warrantyExpired === true || (item.expiryDate && item.remainingDays === 0)) ? '已过期' : ('剩余质保日：' + ((item.remainingDays !== undefined && item.remainingDays !== null) ? item.remainingDays : '--') + '天')}}
-            </text>
-          </view>
-          <view class="rr-info-row" wx:if="{{item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0}}">
-            <text class="rr-info-label">支付状态</text>
-            <text class="rr-info-value {{item.repairPaid === true ? 'rr-payment-paid-text' : 'rr-payment-unpaid-text'}}">
-              {{item.repairPaid === true ? '✓ 已支付' : ('待支付：¥' + (isAdmin ? 0.01 : (item.repairTotalPrice || 0)))}}
-            </text>
-          </view>
-        </view>
-
-        <view class="rr-info-section" wx:if="{{item.returnStatus === 'PENDING_RETURN'}}">
-          <view class="rr-info-row rr-address-row">
-            <text class="rr-info-label">收货地址</text>
-            <view class="rr-info-value-wrapper">
-              <text class="rr-info-value">
-                {{item.returnAddress ? (item.returnAddress.name + ' ' + item.returnAddress.phone + ' ' + item.returnAddress.address) : (item.contact.name + ' ' + item.contact.phone + ' ' + item.contact.address)}}
-              </text>
-              <view class="rr-copy-user-address-btn" bindtap="onCopyUserAddress" data-index="{{index}}">
-                <text class="rr-copy-text">复制</text>
-              </view>
+          <view class="rr-card-head-right">
+            <view class="rr-ship-pill {{item.userReturnShipClass}}">
+              <view class="rr-ship-dot"></view>
+              <text class="rr-ship-pill-text">{{item.userReturnShipText || '未发出'}}</text>
+            </view>
+            <view class="rr-card-chevron {{expandedMap[item._id] ? 'rr-card-chevron--open' : ''}}">
+              <text class="rr-card-chevron-icon">›</text>
             </view>
           </view>
         </view>
-
-        <view class="rr-info-section">
-          <view class="rr-info-row" wx:if="{{item.returnNote}}">
-            <text class="rr-info-label">备注</text>
-            <text class="rr-info-value">{{item.returnNote}}</text>
-          </view>
-          <view class="rr-info-row" wx:if="{{item.shipRemark}}">
-            <text class="rr-info-label">备件寄出备注</text>
-            <text class="rr-info-value">{{item.shipRemark}}</text>
-          </view>
-          <view class="rr-info-row">
-            <text class="rr-info-label">故障描述</text>
-            <text class="rr-info-value">{{item.description}}</text>
-          </view>
-          <view class="rr-info-row">
-            <text class="rr-info-label">商品发出时间</text>
-            <text class="rr-info-value">{{item.shipTime}}</text>
-          </view>
-          <view class="rr-info-row" wx:if="{{item.returnTrackingId}}">
-            <text class="rr-info-label">寄回运单号</text>
-            <text class="rr-info-value">{{item.returnTrackingId}}</text>
-          </view>
-        </view>
       </view>
 
-      <view class="rr-item-info" wx:elif="{{simple}}">
-        <view class="rr-info-section">
+      <block wx:if="{{simple || expandedMap[item._id]}}">
+        <!-- 用户简化模式标题 -->
+        <view class="rr-simple-head" wx:if="{{simple}}">
+          <view class="rr-model-with-badge">
+            <text class="rr-model-badge">MT</text>
+            <text class="rr-model">MT维修单详情</text>
+          </view>
+        </view>
+
+        <view class="rr-card-body" wx:if="{{!simple}}">
+          <view class="rr-ticket-chip-row">
+            <text class="rr-ticket-chip {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? 'user-sent' : (item.returnTrackingId ? 'returned' : (item.returnStatus === 'PENDING_RETURN' ? 'pending' : 'pending-part'))}}">
+              {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN' ? '用户寄回故障配件' : (item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? '用户寄回维修' : (item.returnTrackingId ? '已寄回' : (item.returnStatus === 'PENDING_RETURN' ? '待寄回维修' : '待寄回故障配件')))}}
+            </text>
+          </view>
+
+          <view class="rr-card-body-inner">
+          <view class="rr-kv">
+            <view class="rr-kv-row">
+              <text class="rr-kv-k">用户昵称</text>
+              <text class="rr-kv-v">{{item.userNickname || '匿名用户'}}</text>
+            </view>
+            <view class="rr-kv-row">
+              <text class="rr-kv-k">质保状态</text>
+              <text class="rr-kv-v {{(item.warrantyExpired === true || (item.expiryDate && item.remainingDays === 0)) ? 'rr-warranty-expired-text' : 'rr-warranty-normal-text'}}">
+                {{(item.warrantyExpired === true || (item.expiryDate && item.remainingDays === 0)) ? '已过期' : ('剩余质保日：' + ((item.remainingDays !== undefined && item.remainingDays !== null) ? item.remainingDays : '--') + '天')}}
+              </text>
+            </view>
+            <view class="rr-kv-row" wx:if="{{item.repairItems && item.repairItems.length > 0 && item.repairTotalPrice > 0}}">
+              <text class="rr-kv-k">支付状态</text>
+              <text class="rr-kv-v {{item.repairPaid === true ? 'rr-payment-paid-text' : 'rr-payment-unpaid-text'}}">
+                {{item.repairPaid === true ? '✓ 已支付' : ('待支付：¥' + (isAdmin ? 0.01 : (item.repairTotalPrice || 0)))}}
+              </text>
+            </view>
+            <view class="rr-kv-row">
+              <text class="rr-kv-k">主板状态</text>
+              <text class="rr-kv-v {{item.motherboardStatusClass}}">{{item.motherboardStatusText || '未更换主板'}}</text>
+            </view>
+          </view>
+
+          <view class="rr-kv" wx:if="{{item.returnStatus === 'PENDING_RETURN'}}">
+            <view class="rr-kv-row rr-kv-row--top">
+              <text class="rr-kv-k">收货地址</text>
+              <view class="rr-kv-v-wrap">
+                <text class="rr-kv-v rr-kv-v--multi">
+                  {{item.returnAddress ? (item.returnAddress.name + ' ' + item.returnAddress.phone + ' ' + item.returnAddress.address) : (item.contact.name + ' ' + item.contact.phone + ' ' + item.contact.address)}}
+                </text>
+                <view class="rr-mini-btn" catchtap="onCopyUserAddress" data-index="{{index}}">复制</view>
+              </view>
+            </view>
+          </view>
+
+          <view class="rr-kv">
+            <view class="rr-kv-row rr-kv-row--top" wx:if="{{item.returnNote}}">
+              <text class="rr-kv-k">客户备注</text>
+              <text class="rr-kv-v rr-kv-v--multi">{{item.returnNote}}</text>
+            </view>
+            <view class="rr-kv-row rr-kv-row--top" wx:if="{{item.returnNoteInternal}}">
+              <text class="rr-kv-k">内部备注</text>
+              <text class="rr-kv-v rr-kv-v--multi">{{item.returnNoteInternal}}</text>
+            </view>
+            <view class="rr-kv-row rr-kv-row--top" wx:if="{{item.shipRemark}}">
+              <text class="rr-kv-k">寄出备注</text>
+              <text class="rr-kv-v rr-kv-v--multi">{{item.shipRemark}}</text>
+            </view>
+            <view class="rr-kv-row rr-kv-row--top">
+              <text class="rr-kv-k">故障描述</text>
+              <text class="rr-kv-v rr-kv-v--multi">{{item.description}}</text>
+            </view>
+            <view class="rr-kv-row">
+              <text class="rr-kv-k">商品发出</text>
+              <text class="rr-kv-v">{{item.shipTime}}</text>
+            </view>
+            <view class="rr-kv-row" wx:if="{{item.trackingId}}">
+              <text class="rr-kv-k">寄出运单</text>
+              <view class="rr-kv-v-wrap">
+                <text class="rr-kv-v rr-kv-v--mono">{{item.trackingId}}</text>
+                <view
+                  class="rr-mini-btn"
+                  catchtap="onViewLogistics"
+                  data-sn="{{item.trackingId}}"
+                  data-company="{{item.expressCompany}}"
+                  data-phone="{{item.contact.phone}}"
+                  data-tail-required="2427"
+                >查物流</view>
+              </view>
+            </view>
+            <view class="rr-kv-row" wx:elif="{{item.returnStatus !== 'PENDING_RETURN' || item.status === 'SHIPPED'}}">
+              <text class="rr-kv-k">寄出运单</text>
+              <text class="rr-kv-v rr-replace-none-text">暂无单号</text>
+            </view>
+            <view class="rr-kv-row" wx:if="{{item.returnTrackingId}}">
+              <text class="rr-kv-k">寄回运单</text>
+              <view class="rr-kv-v-wrap">
+                <text class="rr-kv-v rr-kv-v--mono">{{item.returnTrackingId}}</text>
+                <view
+                  class="rr-mini-btn"
+                  catchtap="onViewLogistics"
+                  data-sn="{{item.returnTrackingId}}"
+                  data-phone="{{item.contact.phone}}"
+                  data-tail-required="2427"
+                >查物流</view>
+              </view>
+            </view>
+          </view>
+          </view>
+        </view>
+
+        <view class="rr-card-body" wx:elif="{{simple}}">
           <text class="rr-repair-caption">管理员提交维修明细</text>
           <view class="rr-repair-details" wx:if="{{item.repairItems && item.repairItems.length > 0}}">
             <view class="rr-repair-item rr-repair-item-head">
@@ -87,35 +152,64 @@
               <text class="rr-total-price">¥{{isAdmin ? 0.01 : (item.repairTotalDisplayPrice || item.repairTotalPrice || 0)}}</text>
             </view>
           </view>
-          <view class="rr-info-row" wx:else>
-            <text class="rr-info-value">管理员暂未提交维修明细</text>
+          <view class="rr-kv-row" wx:else>
+            <text class="rr-kv-v">管理员暂未提交维修明细</text>
           </view>
         </view>
-      </view>
 
-      <view class="rr-actions" wx:if="{{!simple}}">
-        <block wx:if="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus === 'PENDING_RETURN'}}">
-          <block wx:if="{{item.repairItems && item.repairItems.length > 0 && item.repairPaid === true}}">
-            <view class="rr-btn-enter-tracking" bindtap="onOpenEnterTracking" data-index="{{index}}">录入单号</view>
+        <view class="rr-actions" wx:if="{{!simple}}">
+          <view
+            class="rr-btn replace-board"
+            wx:if="{{isAdmin && item.returnStatus === 'PENDING_RETURN' && !item.replacementNewSn && !item.motherboardReplaced}}"
+            catchtap="onReplaceMotherboard"
+            data-id="{{item._id}}">
+            {{item.motherboardReplacementPending ? '继续扫描更换主板' : '更换主板'}}
+          </view>
+          <block wx:if="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus === 'PENDING_RETURN'}}">
+            <block wx:if="{{item.repairItems && item.repairItems.length > 0 && item.repairPaid === true}}">
+              <view class="rr-btn-enter-tracking" catchtap="onOpenEnterTracking" data-index="{{index}}">录入单号</view>
+              <view class="rr-btn wecom-resend" catchtap="onResendWecomNotify" data-id="{{item._id}}">重新推送通知</view>
+            </block>
+            <block wx:else>
+              <view class="rr-btn logistics" catchtap="onViewLogistics" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查看物流</view>
+              <view class="rr-btn ship-out" wx:if="{{item.repairItems && item.repairItems.length > 0 && ((item.warrantyExpired && item.repairPaid) || (!item.warrantyExpired && item.trackingId))}}" catchtap="onAdminShipOut" data-id="{{item._id}}">寄出快递</view>
+              <view class="rr-btn fill-repair" wx:else catchtap="onOpenFillRepair" data-index="{{index}}">填写售后单</view>
+              <view class="rr-btn wecom-resend" catchtap="onResendWecomNotify" data-id="{{item._id}}">重新推送通知</view>
+            </block>
+          </block>
+          <block wx:elif="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN'}}">
+            <view class="rr-btn deduct" catchtap="onDeductWarranty" data-id="{{item._id}}">扣除质保</view>
+            <view class="rr-btn logistics" catchtap="onViewLogistics" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查看物流</view>
+            <view class="rr-btn confirm" catchtap="onConfirmReceived" data-id="{{item._id}}">确认收货</view>
+            <view class="rr-btn wecom-resend" catchtap="onResendWecomNotify" data-id="{{item._id}}">重新推送通知</view>
           </block>
           <block wx:else>
-            <view class="rr-btn logistics" bindtap="onViewLogistics" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查看物流</view>
-            <view class="rr-btn ship-out" wx:if="{{item.repairItems && item.repairItems.length > 0 && ((item.warrantyExpired && item.repairPaid) || (!item.warrantyExpired && item.trackingId))}}" bindtap="onAdminShipOut" data-id="{{item._id}}">寄出快递</view>
-            <view class="rr-btn fill-repair" wx:else bindtap="onOpenFillRepair" data-index="{{index}}">填写售后单</view>
+            <view
+              class="rr-btn tracking-entry"
+              wx:if="{{isAdmin}}"
+              catchtap="onEnterOutboundTracking"
+              data-index="{{index}}"
+              data-id="{{item._id}}">
+              {{item.trackingId ? '改寄出单号' : '录入寄出单号'}}
+            </view>
+            <view class="rr-btn fill-repair" catchtap="onOpenFillRepair" data-index="{{index}}">填写售后单</view>
+            <view class="rr-btn cancel" catchtap="onCancelReturn" data-id="{{item._id}}">取消</view>
+            <view
+              class="rr-btn logistics"
+              wx:if="{{item.trackingId}}"
+              catchtap="onViewLogistics"
+              data-sn="{{item.trackingId}}"
+              data-company="{{item.expressCompany}}"
+              data-phone="{{item.contact.phone}}"
+              data-tail-required="2427">
+              查寄出物流
+            </view>
+            <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" catchtap="onViewLogistics" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查寄回物流</view>
+            <view class="rr-btn wecom-resend" wx:if="{{item.returnTrackingId || item.trackingId}}" catchtap="onResendWecomNotify" data-id="{{item._id}}">重新推送通知</view>
+            <view class="rr-btn complete" wx:if="{{item.returnStatus !== 'PENDING_RETURN'}}" catchtap="onCompleteReturn" data-id="{{item._id}}">完结此单</view>
           </block>
-        </block>
-        <block wx:elif="{{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN'}}">
-          <view class="rr-btn deduct" bindtap="onDeductWarranty" data-id="{{item._id}}">扣除质保</view>
-          <view class="rr-btn logistics" bindtap="onViewLogistics" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查看物流</view>
-          <view class="rr-btn confirm" bindtap="onConfirmReceived" data-id="{{item._id}}">确认收货</view>
-        </block>
-        <block wx:else>
-          <view class="rr-btn fill-repair" bindtap="onOpenFillRepair" data-index="{{index}}">填写售后单</view>
-          <view class="rr-btn cancel" bindtap="onCancelReturn" data-id="{{item._id}}">取消</view>
-          <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" bindtap="onViewLogistics" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查看物流</view>
-          <view class="rr-btn complete" bindtap="onCompleteReturn" data-id="{{item._id}}">已完成</view>
-        </block>
-      </view>
+        </view>
+      </block>
     </view>
   </block>
   <view class="rr-empty" wx:if="{{!list || list.length === 0}}">

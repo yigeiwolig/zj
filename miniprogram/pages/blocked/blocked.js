@@ -1,6 +1,8 @@
 // miniprogram/pages/blocked/blocked.js
 const referralPendingBind = require('../../utils/referralPendingBind.js');
 const screenshotExempt = require('../../utils/screenshotAdminExempt.js');
+const { isAccessCodeFormat } = require('../../utils/accessCode.js');
+const { saveLoginIdentityFromLoginResult } = require('../../utils/userIdentity.js');
 
 Page({
   data: {
@@ -238,7 +240,10 @@ Page({
           console.log('[blocked] 昵称/Auto 解封，设置永久授权，nickname:', nickname);
           wx.setStorageSync('has_permanent_auth', true);
           if (nickname) {
-            wx.setStorageSync('user_nickname', nickname);
+            saveLoginIdentityFromLoginResult({
+              isAccessCodeLogin: isAccessCodeFormat(nickname),
+              nickname
+            });
           }
           referralPendingBind.flushPendingReferralBind({ silent: true });
 
@@ -321,28 +326,6 @@ Page({
     }).catch(err => {
       console.error('云函数调用失败', err);
     });
-  },
-
-  // 🔴 新增：清除缓存并重试
-  handleClearCache() {
-    console.log('🔄 清除所有封禁相关缓存...');
-    wx.removeStorageSync('is_user_banned');
-    wx.removeStorageSync('is_screenshot_banned');
-    wx.removeStorageSync('has_permanent_auth');
-    
-    // 显示提示
-    this._closeAllPopups();
-    this.setData({
-      showCustomSuccessModal: true,
-      successModalTitle: '缓存已清除',
-      successModalContent: '正在重新检查状态...'
-    });
-    
-    setTimeout(() => {
-      this.setData({ showCustomSuccessModal: false });
-      // 立即重新检查
-      this.callCheckCloud();
-    }, 1500);
   },
 
   handleCopyWechat() {

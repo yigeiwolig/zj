@@ -2,6 +2,7 @@ const app = getApp();
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
+const { getDisplayIdentity } = require('../../../utils/userIdentity.js');
 
 function isLocalOrTmpImagePath(s) {
   if (!s || typeof s !== 'string') return false;
@@ -119,7 +120,7 @@ Page({
     // wx.clearStorageSync(); 
 
     // 🆕 读取小程序启动时保存的昵称（与 my 页一致：user_nickname）
-    const savedNickname = wx.getStorageSync('user_nickname');
+    const savedNickname = getDisplayIdentity({ fallback: '' });
     if (savedNickname) {
       this.setData({ 'myInfo.name': savedNickname });
     }

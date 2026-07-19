@@ -7,6 +7,11 @@ Component({
     anim: {
       type: Boolean,
       value: false
+    },
+    /** 「我的」右上角红点：有售后待办/未读进度 */
+    profileDot: {
+      type: Boolean,
+      value: false
     }
   },
   methods: {

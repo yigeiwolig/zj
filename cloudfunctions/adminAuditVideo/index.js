@@ -59,12 +59,19 @@ exports.main = async (event, context) => {
 
     // 1. 拒绝逻辑
     if (action === 'reject') {
+      const videoRes = await db.collection('video').doc(item._id).get()
+      const videoData = (videoRes && videoRes.data) || {}
       await db.collection('video').doc(item._id).update({
         data: { 
           status: -1,
           rejectReason: rejectReason || '未填写理由' // 保存拒绝理由
         }
       })
+      await notifyCaseSubscribe(
+        videoData._openid || videoData.openid,
+        'case_rejected',
+        rejectReason
+      )
       return { success: true, msg: '已驳回' }
     }
 
@@ -126,6 +133,7 @@ exports.main = async (event, context) => {
         console.warn('[adminAuditVideo] 既无SN也无OpenID，无法创建待生效延保记录')
       }
 
+      await notifyCaseSubscribe(videoOpenid || videoData._openid, 'case_approved')
       return { success: true, msg: '审核通过，已发布' }
     }
 
@@ -172,6 +180,7 @@ exports.main = async (event, context) => {
         console.warn('[adminAuditVideo] 既无SN也无OpenID，无法创建待生效延保记录')
       }
 
+      await notifyCaseSubscribe(videoOpenid || videoData._openid, 'case_approved')
       return { success: true, msg: '已标记采纳，奖励已发' }
     }
 
@@ -180,6 +189,23 @@ exports.main = async (event, context) => {
       return { success: false, errMsg: '无管理员权限' }
     }
     return { success: false, errMsg: err.toString() }
+  }
+}
+
+async function notifyCaseSubscribe(openid, scene, rejectReason) {
+  const touser = String(openid || '').trim()
+  if (!touser || !scene) return
+  try {
+    const data = { openid: touser, scene }
+    if (scene === 'case_rejected' && rejectReason) {
+      data.thing6 = String(rejectReason).trim().slice(0, 20) || '请到「案例库」查看原因可再投'
+    }
+    await cloud.callFunction({
+      name: 'sendSubscribeMessage',
+      data
+    })
+  } catch (e) {
+    console.warn('[adminAuditVideo] subscribe notify failed', scene, e)
   }
 }
 

@@ -1,0 +1,9 @@
+{
+  "name": "manageGuanliyuan",
+  "version": "1.0.0",
+  "description": "管理员白名单维护（添加/查询/移除）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

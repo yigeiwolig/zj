@@ -20,6 +20,65 @@ const CASE_TAB_LIST = [
 ];
 const CASE_MODEL_TAB_SET = new Set(['F1', 'F2', 'F3']);
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
+const { getDisplayIdentity } = require('../../../utils/userIdentity.js');
+const { notifyAdminTodo } = require('../../../utils/wecomAdminTodo.js');
+const { withRepairProgressSubscribe } = require('../../../utils/subscribeMessage.js');
+
+const {
+  getGuideIntroKeys,
+  markGuideIntroSeen,
+  markGuidePermSkip,
+  resolveGuideAutoEntry
+} = require('../../../utils/usageGuideIntro.js');
+const { startGuideBtnCountdown, clearGuideBtnCountdown } = require('../../../utils/guideBtnCountdown.js');
+
+/** 案例库功能引导 */
+const CASE_GUIDE_BASE_KEY = 'mt_case_first_visit_guide_done_v1';
+const CASE_GUIDE_INTRO_KEYS = getGuideIntroKeys(CASE_GUIDE_BASE_KEY);
+
+function buildCaseGuideSteps(pageData) {
+  const d = pageData || {};
+  const steps = [
+    {
+      key: 'tabs',
+      anchor: '#caseGuideTabAnchor',
+      scrollIntoView: '',
+      title: '按分类筛选案例',
+      desc: '左右滑动切换「全部、F1/F2/F3、街车、仿赛」等标签，快速找到对应产品或车型的安装案例。'
+    },
+    {
+      key: 'search',
+      anchor: '#case-search-inner',
+      scrollIntoView: '',
+      title: '搜索车型',
+      desc: '在这里输入车型名称（如 XMAX、NMAX），即可查找相关案例。向上浏览时搜索栏会收起，向下滑动会再次出现。'
+    }
+  ];
+  if ((d.displayList || []).length > 0) {
+    steps.push({
+      key: 'card',
+      anchor: '#case-guide-thumb',
+      resetListScroll: true,
+      title: '观看案例视频',
+      desc: '点击案例卡片可全屏播放，查看实车安装效果与细节展示。'
+    });
+  }
+  if (!d.isAdmin || d.adminSubMode === 'manage') {
+    steps.push({
+      key: 'fab',
+      anchor: '#caseGuideFabAnchor',
+      scrollIntoView: '',
+      title: '上传您的案例',
+      desc: '点底部「+」可从相册选择或现场录制视频，填写车型信息后提交，审核通过有机会获得延保奖励。'
+    });
+  }
+  return steps.map((step, idx, arr) => ({
+    ...step,
+    tag: `第 ${idx + 1} 步`,
+    stepNo: idx + 1,
+    total: arr.length
+  }));
+}
 
 let _cosUploadMod;
 function getCosUpload() {
@@ -94,6 +153,8 @@ Page({
     // --- 播放器与管理员状态 ---
     showVideoPlayer: false, 
     currentVideo: null,     
+    /** false：blocking_rules.is_active===false 时只展示截图，点击提示完善视频号 */
+    caseVideoPlaybackEnabled: true,
     videoWatermarkNickname: '', // 播放器昵称水印（淡色）
     /** 全屏自定义控件（叠在 video 之上，不嵌在 video 内） */
     caseFullscreenDuration: 0,
@@ -127,6 +188,22 @@ Page({
     lastScrollTop: 0, // 上一次滚动的位置
     caseMainScrollTop: 0,
     caseMainScrollHeight: 0,
+    caseListScrollTop: 0,
+    caseGuideScrollIntoView: '',
+
+    // --- 案例库分步功能引导 ---
+    showCaseUsageGuide: false,
+    showCaseGuideIntro: false,
+    caseUsageGuideStep: 1,
+    caseGuideStepTag: '',
+    caseGuideTitle: '',
+    caseGuideDesc: '',
+    caseGuideBtnText: '下一步',
+    caseGuideBtnLocked: true,
+    caseGuideArrowDir: 'down',
+    caseGuideBubbleStyle: '',
+    caseGuideArrowStyle: '',
+    caseGuideSpotStyle: '',
 
     // --- 录制状态 ---
     isRecording: false,
@@ -437,6 +514,8 @@ Page({
   _initCasePageDeferred() {
     if (this._pageDestroyed) return;
 
+    this._syncCaseVideoPlaybackGate(true);
+
     this.ctx = wx.createCameraContext();
     this.loadShootingGuideVideo();
     this.loadCaseBgmAudio();
@@ -577,19 +656,38 @@ Page({
       this._beginCaseBgmSession();
     }
     this._syncCaseMainScrollLayout();
+    this._syncCaseVideoPlaybackGate(false);
+  },
+
+  /**
+   * blocking_rules.is_active === false → 审核放行：案例库不播放，只显示截图
+   * is_active === true → 正常播放
+   */
+  async _syncCaseVideoPlaybackGate(forceRefresh) {
+    try {
+      const appInst = getApp();
+      let reviewPass = false;
+      if (appInst && typeof appInst._isReviewPassMode === 'function') {
+        reviewPass = !!(await appInst._isReviewPassMode(!!forceRefresh));
+      }
+      const enabled = !reviewPass;
+      if (this.data.caseVideoPlaybackEnabled !== enabled) {
+        this.setData({ caseVideoPlaybackEnabled: enabled });
+      }
+      if (!enabled && this.data.showVideoPlayer) {
+        this.setData({
+          showVideoPlayer: false,
+          currentVideo: null
+        });
+        this._forceStopCaseBgm();
+      }
+    } catch (e) {
+      /* ignore */
+    }
   },
 
   refreshVideoWatermarkNickname() {
-    let nickname = '';
-    try {
-      const userInfo = wx.getStorageSync('userInfo');
-      nickname = (userInfo && userInfo.nickName) || wx.getStorageSync('user_nickname') || '';
-    } catch (e) {}
-
-    nickname = String(nickname || '').trim();
-    if (!nickname) nickname = '匿名用户';
-    if (nickname.length > 18) nickname = `${nickname.slice(0, 18)}...`;
-
+    const nickname = getDisplayIdentity({ fallback: '匿名用户', maxLen: 18 });
     if (this.data.videoWatermarkNickname !== nickname) {
       this.setData({ videoWatermarkNickname: nickname });
     }
@@ -627,24 +725,29 @@ Page({
     const nb = this.data.navBarHeight || 44;
     const ww = wx.getWindowInfo().windowWidth || 375;
     const rpx = (n) => Math.ceil((ww / 750) * n);
-    const tabH = rpx(80);
-    const searchH = this.data.showSearchBar ? rpx(88) : 0;
+    const tabH = (this.data.isAdmin && this.data.adminSubMode === 'edit') ? 0 : rpx(80);
+    const searchH = (this.data.isAdmin && this.data.adminSubMode === 'edit')
+      ? 0
+      : (this.data.showSearchBar ? rpx(88) : 0);
     const adminH = this.data.isAdmin ? rpx(72) : 0;
     return sb + nb + adminH + tabH + searchH + 4;
   },
 
-  /** 只量可见底边：有搜索框量搜索框，否则量顶栏 */
+  /** 只量可见底边：视频编辑量管理子栏；否则量搜索框/顶栏 */
   _syncCaseMainScrollLayout() {
     wx.nextTick(() => {
       const q = this.createSelectorQuery();
-      if (this.data.showSearchBar) {
+      const editPending = !!(this.data.isAdmin && this.data.adminSubMode === 'edit');
+      if (editPending) {
+        q.select('#caseAdminSubmodeAnchor').boundingClientRect();
+      } else if (this.data.showSearchBar) {
         q.select('#case-search-inner').boundingClientRect();
       } else {
         q.select('.case-top-chrome').boundingClientRect();
       }
       q.exec((res) => {
         const rect = res && res[0];
-        const GAP = 6;
+        const GAP = editPending ? 0 : 6;
         let top = rect && rect.bottom > 0
           ? Math.ceil(rect.bottom) + GAP
           : this._caseScrollPaddingFallback();
@@ -724,6 +827,10 @@ Page({
     this._teardownScreenshotProtection();
     if (this.data.timer) clearInterval(this.data.timer);
     if (this.data.guideTimer) clearInterval(this.data.guideTimer);
+    if (this._caseUsageGuideStartTimer) {
+      clearTimeout(this._caseUsageGuideStartTimer);
+      this._caseUsageGuideStartTimer = null;
+    }
     if (this._caseCardLongPressTimer) clearTimeout(this._caseCardLongPressTimer);
     if (this._caseFullscreenExitTimer) clearTimeout(this._caseFullscreenExitTimer);
     if (this._loadingHideTimer) clearTimeout(this._loadingHideTimer);
@@ -737,6 +844,7 @@ Page({
   // 🔴 新增：处理 ScrollView 的滚动，替代原来的 onPageScroll
   handleScrollViewScroll(e) {
     const currentTop = e.detail.scrollTop;
+    this._caseListScrollPos = currentTop;
     
     // 1. 防止负值
     if (currentTop < 0) return;
@@ -895,7 +1003,10 @@ Page({
     this.setData({ adminSubMode: mode }, () => {
       this._scheduleCaseMainScrollLayout();
     });
-    this._showCustomToast(mode === 'edit' ? '视频编辑模式' : '管理现有视频模式', 'none');
+    if (mode === 'edit') {
+      this.fetchPendingVideos();
+    }
+    this._showCustomToast(mode === 'edit' ? '视频编辑：下载待审用户视频' : '管理现有视频模式', 'none');
   },
 
   // ==========================================
@@ -1362,7 +1473,9 @@ Page({
     
     if (fileIDs.length === 0) {
       // 如果没有云存储路径，直接使用原数据
-      this.setData({ pendingList: list });
+      this.setData({ pendingList: list }, () => {
+        this._scheduleCaseMainScrollLayout();
+      });
       return;
     }
     
@@ -1388,13 +1501,17 @@ Page({
           return item;
         });
         
-        this.setData({ pendingList: updatedList });
+        this.setData({ pendingList: updatedList }, () => {
+          this._scheduleCaseMainScrollLayout();
+        });
         console.log('🔵 [视频] 已转换视频路径:', updatedList);
       },
       fail: err => {
         console.error('❌ [视频] 转换视频路径失败:', err);
         // 转换失败时使用原数据
-        this.setData({ pendingList: list });
+        this.setData({ pendingList: list }, () => {
+          this._scheduleCaseMainScrollLayout();
+        });
       }
     });
   },
@@ -2614,6 +2731,15 @@ Page({
       // 🔧 管理员编辑模式：进入编辑
       this.editCase(targetItem);
     } else {
+      // 审核放行：不打开播放器，仅提示视频号筹备中
+      if (!this.data.caseVideoPlaybackEnabled) {
+        wx.showToast({
+          title: '完善视频号链接中',
+          icon: 'none',
+          duration: 2200
+        });
+        return;
+      }
       // ▶️ 普通模式或管理现有视频模式：播放视频
       if (targetItem && targetItem.videoUrl) {
         this._forceStopCaseBgm();
@@ -3237,6 +3363,32 @@ Page({
     }
     const targetSn = myDevices[selectedSnIndex].sn;
     console.log('🔵 [提交] 准备提交，targetSn:', targetSn);
+    withRepairProgressSubscribe(() => {
+      this._doSubmitCaseForm({
+        e,
+        vehicleName,
+        categoryIndex,
+        modelIndex,
+        videoPath,
+        categoryValueArray,
+        categoryArray,
+        modelArray,
+        targetSn
+      });
+    });
+  },
+
+  _doSubmitCaseForm(ctx) {
+    const {
+      vehicleName,
+      categoryIndex,
+      modelIndex,
+      videoPath,
+      categoryValueArray,
+      categoryArray,
+      modelArray,
+      targetSn
+    } = ctx || {};
     this.showMyLoading('上传中...');
     console.log('🔵 [提交] 开始上传视频(COS)...');
     getCosUpload()
@@ -3278,6 +3430,7 @@ Page({
           data: submitData,
           success: (dbRes) => {
             console.log('🔵 [提交] 数据库写入成功，_id:', dbRes._id);
+            notifyAdminTodo('case_video', `${submitData.model || ''} / ${targetSn || ''}`);
             this.hideMyLoading(); 
             this.setData({ 
               isSubmitting: false, 
@@ -3291,15 +3444,15 @@ Page({
             console.error('❌ [提交] 数据库写入失败:', dbErr);
             this.hideMyLoading();
             this.setData({ isSubmitting: false });
-            this._showCustomToast('提交失败: ' + (dbErr.errMsg || '未知错误'), 'none', 3000);
+            this.showFormErrorWithShake('保存失败，请重试');
           }
         });
       })
-      .catch(uploadErr => {
-        console.error('❌ [提交] 视频上传失败:', uploadErr);
+      .catch((err) => {
+        console.error('❌ [提交] 视频上传失败:', err);
         this.hideMyLoading();
         this.setData({ isSubmitting: false });
-        this._showCustomToast('上传失败: ' + ((uploadErr && uploadErr.message) || (uploadErr && uploadErr.errMsg) || '未知错误'), 'none', 3000);
+        this.showFormErrorWithShake((err && err.message) || '上传失败，请重试');
       });
   },
 
@@ -4222,6 +4375,8 @@ Page({
       });
       if (this._shouldShowLotteryPromo()) {
         this._openLotteryPromo();
+      } else {
+        this._maybeShowCaseUsageGuide();
       }
     }, 420);
   },
@@ -4235,6 +4390,7 @@ Page({
         lotteryPromoClosing: false,
         lotteryPromoAnimIn: false
       });
+      this._maybeShowCaseUsageGuide();
     }, 420);
   },
   closeSuccess() {
@@ -4614,5 +4770,283 @@ Page({
     };
     tryShow();
   },
-  
+
+  _caseGuideBlockingModal() {
+    return !!(this.data.showIntro || this.data.introClosing ||
+      this.data.showLotteryPromo || this.data.lotteryPromoClosing ||
+      this.data.showVideoPlayer);
+  },
+
+  _maybeShowCaseUsageGuide() {
+    if (this.data.showCaseUsageGuide || this.data.showCaseGuideIntro) return;
+    const entry = resolveGuideAutoEntry(CASE_GUIDE_INTRO_KEYS);
+    if (entry === 'none') return;
+    if (entry === 'intro') {
+      this.setData({ showCaseGuideIntro: true });
+      return;
+    }
+    this._startCaseUsageGuide(false);
+  },
+
+  caseGuideIntroStart() {
+    this.setData({ showCaseGuideIntro: false }, () => {
+      this._startCaseUsageGuide(false);
+    });
+  },
+
+  _startCaseUsageGuide(forceReplay) {
+    if (this._caseGuideBlockingModal()) return;
+    if (this.data.showCaseUsageGuide) return;
+    if (this._caseUsageGuideStartTimer) {
+      clearTimeout(this._caseUsageGuideStartTimer);
+      this._caseUsageGuideStartTimer = null;
+    }
+    this._caseUsageGuideForceReplay = !!forceReplay;
+    this._caseUsageGuideStartTimer = setTimeout(() => {
+      this._caseUsageGuideStartTimer = null;
+      if (this._caseGuideBlockingModal()) return;
+      const steps = buildCaseGuideSteps(this.data);
+      if (!steps.length) return;
+      this._caseGuideSteps = steps;
+      if (!this.data.showSearchBar) {
+        this.setData({ showSearchBar: true }, () => {
+          this._syncCaseMainScrollLayout();
+          this._showCaseGuideStep(1);
+        });
+        return;
+      }
+      this._showCaseGuideStep(1);
+    }, forceReplay ? 320 : 720);
+  },
+
+  _showCaseGuideStep(stepIndex) {
+    const steps = this._caseGuideSteps || [];
+    const step = steps[stepIndex - 1];
+    if (!step) return;
+    const isFirstShow = !this.data.showCaseUsageGuide;
+    const reveal = () => {
+      this._renderCaseGuideBubble(stepIndex, step, 0);
+    };
+    if (step.key === 'search' && !this.data.showSearchBar) {
+      this.setData({ showSearchBar: true }, () => {
+        this._syncCaseMainScrollLayout();
+        this._scrollCaseGuideToAnchor(step, reveal);
+      });
+      return;
+    }
+    if (isFirstShow) {
+      this._scrollCaseGuideToAnchor(step, reveal);
+      return;
+    }
+    this.setData({ showCaseUsageGuide: false, caseGuideScrollIntoView: '' }, () => {
+      this._scrollCaseGuideToAnchor(step, reveal);
+    });
+  },
+
+  _scrollCaseGuideToAnchor(step, done) {
+    if (step && step.resetListScroll) {
+      const finish = () => {
+        setTimeout(() => {
+          if (typeof done === 'function') done();
+        }, 320);
+      };
+      this.setData({ caseGuideScrollIntoView: '' }, () => {
+        this._syncCaseMainScrollLayout();
+        const prev = Number(this._caseListScrollPos) || 0;
+        if (prev <= 1) {
+          this.setData({ caseListScrollTop: 0 }, finish);
+          return;
+        }
+        this.setData({ caseListScrollTop: prev + 0.01 }, () => {
+          wx.nextTick(() => {
+            this.setData({ caseListScrollTop: 0 }, finish);
+          });
+        });
+      });
+      return;
+    }
+    if (step && step.scrollIntoView) {
+      this.setData({ caseGuideScrollIntoView: step.scrollIntoView }, () => {
+        setTimeout(() => {
+          if (typeof done === 'function') done();
+        }, 420);
+      });
+      return;
+    }
+    if (typeof done === 'function') done();
+  },
+
+  _clampCaseGuideSpotRect(rect, winW, winH) {
+    const chromeBottomPx = Number(this.data.caseMainScrollTop) || 0;
+    let left = rect.left;
+    let top = rect.top;
+    let right = rect.left + rect.width;
+    let bottom = rect.top + rect.height;
+    if (chromeBottomPx > 0) {
+      top = Math.max(top, chromeBottomPx);
+    }
+    left = Math.max(0, left);
+    top = Math.max(0, top);
+    right = Math.min(winW, right);
+    bottom = Math.min(winH, bottom);
+    const width = Math.max(0, right - left);
+    const height = Math.max(0, bottom - top);
+    return { left, top, width, height };
+  },
+
+  _renderCaseGuideBubble(stepIndex, step, retryCount) {
+    const steps = this._caseGuideSteps || [];
+    const retry = Number(retryCount) || 0;
+    const query = wx.createSelectorQuery().in(this);
+    if (step.key === 'card') {
+      query.select('#case-guide-thumb').boundingClientRect();
+      query.select('#case-guide-card').boundingClientRect();
+    } else {
+      query.select(step.anchor).boundingClientRect();
+    }
+    query.exec((res) => {
+      let rect = res && res[0];
+      if (step.key === 'card') {
+        const cardRect = res && res[1];
+        if ((!rect || !rect.height || rect.height < 12) && cardRect && cardRect.width && cardRect.height) {
+          const thumbH = Math.min(cardRect.width * (4 / 3), cardRect.height * 0.82);
+          rect = {
+            left: cardRect.left,
+            top: cardRect.top,
+            width: cardRect.width,
+            height: thumbH
+          };
+        }
+      }
+      const isLast = stepIndex >= steps.length;
+      const readyText = isLast ? '知道了' : '下一步';
+      const contentPatch = {
+        showCaseUsageGuide: true,
+        caseUsageGuideStep: stepIndex,
+        caseGuideStepTag: step.tag,
+        caseGuideTitle: step.title,
+        caseGuideDesc: step.desc,
+        caseGuideBtnText: readyText,
+        caseGuideBtnLocked: true
+      };
+      if (!rect || !rect.width) {
+        if (retry < 4) {
+          setTimeout(() => {
+            this._renderCaseGuideBubble(stepIndex, step, retry + 1);
+          }, step.key === 'card' ? 240 : 180);
+          return;
+        }
+        this.setData({
+          ...contentPatch,
+          caseGuideArrowDir: 'none',
+          caseGuideBubbleStyle: 'left:50%; top:50%; transform:translate(-50%,-50%); width:520rpx;',
+          caseGuideArrowStyle: 'display:none;',
+          caseGuideSpotStyle: 'display:none;'
+        }, () => this._armCaseGuideBtnLock(readyText));
+        return;
+      }
+      let win = null;
+      try {
+        win = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      } catch (e) {
+        win = wx.getSystemInfoSync();
+      }
+      const winW = (win && win.windowWidth) || 375;
+      const winH = (win && win.windowHeight) || 667;
+      const pxToRpx = 750 / winW;
+
+      const clamped = this._clampCaseGuideSpotRect(rect, winW, winH);
+      if (!clamped.width || !clamped.height) {
+        if (retry < 4) {
+          setTimeout(() => {
+            this._renderCaseGuideBubble(stepIndex, step, retry + 1);
+          }, step.key === 'card' ? 240 : 180);
+          return;
+        }
+      }
+      const spotRect = clamped.width && clamped.height ? clamped : rect;
+
+      const spotPadPx = 6;
+      const spotLeft = (spotRect.left - spotPadPx) * pxToRpx;
+      const spotTop = (spotRect.top - spotPadPx) * pxToRpx;
+      const spotW = (spotRect.width + spotPadPx * 2) * pxToRpx;
+      const spotH = (spotRect.height + spotPadPx * 2) * pxToRpx;
+      const caseGuideSpotStyle = `left:${spotLeft}rpx; top:${spotTop}rpx; width:${spotW}rpx; height:${spotH}rpx;`;
+
+      const bubbleWidthRpx = 480;
+      const marginRpx = 24;
+      const centerXrpx = (spotRect.left + spotRect.width / 2) * pxToRpx;
+      let bubbleLeftRpx = centerXrpx - bubbleWidthRpx / 2;
+      if (bubbleLeftRpx < marginRpx) bubbleLeftRpx = marginRpx;
+      if (bubbleLeftRpx + bubbleWidthRpx > 750 - marginRpx) {
+        bubbleLeftRpx = 750 - marginRpx - bubbleWidthRpx;
+      }
+      const arrowLeftRpx = centerXrpx - bubbleLeftRpx;
+      const gapRpx = 22;
+
+      const placeAbove = spotRect.top > winH * 0.42;
+      let bubbleStyle = '';
+      let arrowDir = 'down';
+      if (placeAbove) {
+        const bottomRpx = (winH - spotRect.top) * pxToRpx + gapRpx;
+        bubbleStyle = `left:${bubbleLeftRpx}rpx; bottom:${bottomRpx}rpx; width:${bubbleWidthRpx}rpx;`;
+        arrowDir = 'down';
+      } else {
+        const topRpx = (spotRect.top + spotRect.height) * pxToRpx + gapRpx;
+        bubbleStyle = `left:${bubbleLeftRpx}rpx; top:${topRpx}rpx; width:${bubbleWidthRpx}rpx;`;
+        arrowDir = 'up';
+      }
+
+      this.setData({
+        ...contentPatch,
+        caseGuideArrowDir: arrowDir,
+        caseGuideBubbleStyle: bubbleStyle,
+        caseGuideArrowStyle: `left:${arrowLeftRpx}rpx;`,
+        caseGuideSpotStyle
+      }, () => this._armCaseGuideBtnLock(readyText));
+    });
+  },
+
+  _armCaseGuideBtnLock(readyText) {
+    startGuideBtnCountdown(this, {
+      lockedKey: 'caseGuideBtnLocked',
+      textKey: 'caseGuideBtnText',
+      readyText: readyText || '下一步',
+      timerProp: '_caseGuideBtnTimer'
+    });
+  },
+
+  caseUsageGuideNext() {
+    if (this.data.caseGuideBtnLocked) return;
+    const steps = this._caseGuideSteps || [];
+    const cur = this.data.caseUsageGuideStep;
+    if (cur < steps.length) {
+      this._showCaseGuideStep(cur + 1);
+      return;
+    }
+    markGuideIntroSeen(CASE_GUIDE_INTRO_KEYS);
+    this.closeCaseUsageGuide(false);
+  },
+
+  caseUsageGuideSkip() {
+    markGuidePermSkip(CASE_GUIDE_INTRO_KEYS);
+    this.closeCaseUsageGuide(false);
+  },
+
+  closeCaseUsageGuide(_markDone = true) {
+    this._caseUsageGuideForceReplay = false;
+    clearGuideBtnCountdown(this, '_caseGuideBtnTimer');
+    if (this._caseUsageGuideStartTimer) {
+      clearTimeout(this._caseUsageGuideStartTimer);
+      this._caseUsageGuideStartTimer = null;
+    }
+    this._caseGuideSteps = null;
+    this.setData({
+      showCaseUsageGuide: false,
+      showCaseGuideIntro: false,
+      caseGuideScrollIntoView: '',
+      caseListScrollTop: 0
+    });
+  },
+
 });

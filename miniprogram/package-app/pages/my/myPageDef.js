@@ -25,6 +25,9 @@ const regionFallback = require('../../../utils/regionFallback.js');
 const { PRODUCT_DETAIL_OPTIONS, normalizeProductDetailModel } = require('../../../utils/productModels.js');
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const productFeatureFlags = require('../../../utils/productFeatureFlags.js');
+const { isBlockedDebugBleDevice } = require('../../../utils/blockedDebugBle.js');
+const { sendRepairProgressNotify, withRepairProgressSubscribe, requestRepairProgressSubscribe } = require('../../../utils/subscribeMessage.js');
+const controlCenterDebug = require('../../../utils/controlCenterDebug.js');
 
 // 维修寄回统一时间常量（避免文案与逻辑不一致）
 const RETURN_OVERDUE_DAYS = 30;     // 超过30天未寄回视为超时
@@ -60,10 +63,18 @@ module.exports = function createMyPageConfig(hubView) {
     countdownTimer: null, // 🔴 倒计时定时器
     currentOrderIndex: 0,
     showModal: false,
+    bindSheetFromBottom: false,
+    bindModalClosing: false,
+    bindModalScrollH: 400,
     hasModalOpen: false, // 🔴 是否有弹窗打开（用于锁定页面滚动）
     bluetoothReady: false,
     showBindAuditForm: false, // 仅 NEED_AUDIT 时显示填表；预登记自动绑定不显示
     showFaultBindForm: false, // 故障设备人工核验（无需蓝牙）
+    showBindSuccess: false,
+    bindSuccessTitle: '',
+    bindSuccessContent: '',
+    bindStageKey: 0,
+    fromRepairBind: false,
     modelOptions: PRODUCT_DETAIL_OPTIONS,
     modelIndex: null,
     buyDate: '',
@@ -103,6 +114,16 @@ module.exports = function createMyPageConfig(hubView) {
       value: '',
       submitting: false
     },
+    // 需要用户寄回：客户可见备注 + 内部维修备注
+    returnRequestDialogClosing: false,
+    returnRequestDialog: {
+      show: false,
+      repairId: '',
+      customerNote: '',
+      internalNote: '',
+      isWarrantyExpired: false,
+      submitting: false
+    },
     
     // 图片路径
     imgReceipt: '',      // 购买截图（云端 fileID，用于提交）
@@ -129,12 +150,16 @@ module.exports = function createMyPageConfig(hubView) {
 
     // 审核列表 (管理员用)
     auditList: [],
-    
+    pendingSnEntryList: [],
+
     // 【新增】管理员审核弹窗数据
     showAuditModal: false,
     currentAuditItem: null, // 当前正在审的那一条
     adminSetDate: '',       // 管理员修改的日期
     adminSetDaysIndex: 1,   // 选中的天数索引（默认365天）
+    adminAuditModelIndex: 0, // 审核时可改设备型号
+    adminAuditModelOptions: PRODUCT_DETAIL_OPTIONS,
+    auditWarrantyPreview: {},
     warrantyOptions: ['180天 (半年)', '365天 (一年)', '500天', '720天 (两年)'], // 选项文案
     warrantyValues: [180, 365, 500, 720], // 对应的值
 
@@ -166,7 +191,19 @@ module.exports = function createMyPageConfig(hubView) {
     isAdmin: false,      // 是否开启了管理模式
     shopFeatureEnabled: true, // 产品选购(id=4) 开关，与主页抽屉一致
     showAdminDevTools: false, // 仅开发者工具显示「测试清空」等
-    
+    showConfigRollbackModal: false,
+    configRollbackClosing: false,
+    configRollbackLoading: false,
+    configRollbackHistory: [],
+    configRollbackSubmitting: false,
+
+    // 寄回维修：页内直接蓝牙更换主板
+    showMotherboardBleModal: false,
+    motherboardBleClosing: false,
+    motherboardBleRepairId: '',
+    motherboardBleOldSn: '',
+    motherboardBleModel: '',
+    motherboardBleSubmitting: false,
     // 【新增】控制视图模式
     
     // 【新增】拆分数据源
@@ -337,7 +374,12 @@ module.exports = function createMyPageConfig(hubView) {
     const patch = {};
     if (this.data.showShareCodeGenerateModal) patch.showShareCodeGenerateModal = false;
     if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
-    if (this.data.dialog && this.data.dialog.show) patch['dialog.show'] = false;
+    if (this.data.dialog && this.data.dialog.show) {
+      // 点遮罩关闭：中止操作，不触发「取消=不需要寄回」那种双选项回调
+      patch['dialog.show'] = false;
+      patch['dialog.callback'] = null;
+      if (this._shippingRepairId) this._shippingRepairId = '';
+    }
     if (this.data.autoToast && this.data.autoToast.show) patch['autoToast.show'] = false;
     if (Object.keys(patch).length) this.setData(patch);
   },
@@ -432,7 +474,7 @@ module.exports = function createMyPageConfig(hubView) {
     if (options && options.orderId) {
       this.pendingOrderId = options.orderId; // 保存待跳转的订单号
     }
-    
+
     // 省份列表改为打开「智能分析」弹窗时再加载，减轻首屏进入个人中心的负担
   },
 
@@ -979,6 +1021,8 @@ module.exports = function createMyPageConfig(hubView) {
       if (hv === 'profile') {
         loadPromises.push(this.loadMyActivitiesPromise());
         if (this.data.isAdmin) {
+          this.loadAuditList();
+          this.loadPendingSnEntryList();
           loadPromises.push(
             new Promise((resolve) => {
               this.loadPendingRepairs();
@@ -1085,8 +1129,9 @@ module.exports = function createMyPageConfig(hubView) {
           patch.isAdmin = true;
         }
         this.setData(patch);
-        if (this.data.hubView === 'profile' && !this.data.hubInShell) {
+        if (this.data.hubView === 'profile') {
           this.loadAuditList();
+          this.loadPendingSnEntryList();
         }
       }
       
@@ -1207,6 +1252,7 @@ module.exports = function createMyPageConfig(hubView) {
         });
         if (nextState) {
           try { this.loadAuditList(); } catch (e) {}
+          try { this.loadPendingSnEntryList(); } catch (e) {}
           try { this.loadPendingRepairs(); } catch (e) {}
           try { this.loadReturnRequiredList(true); } catch (e) {}
         }
@@ -1405,7 +1451,7 @@ module.exports = function createMyPageConfig(hubView) {
           if (res && Array.isArray(res.repairs)) {
             // 🔴 只显示 PENDING 的维修单，排除已标记需要寄回、已标记需要购买配件的
             const pendingRepairs = res.repairs.filter(i =>
-              i.status === 'PENDING' && !i.needReturn && i.needPurchaseParts !== true
+              (i.status === 'PENDING' || i.status === 'ADMIN_REVIEWED') && !i.needReturn && i.needPurchaseParts !== true
             );
             const normalizedRepairs = await this._normalizePendingRepairs(pendingRepairs);
             this.setData({ repairList: normalizedRepairs });
@@ -1500,12 +1546,17 @@ module.exports = function createMyPageConfig(hubView) {
       const mediaType = (item.mediaType || '').toString().trim().toLowerCase();
 
       const userShipMethod = (item.contact && item.contact.shippingMethod) || item.shippingMethod || '';
+      const realAwaitingReplace =
+        item.awaitingSnReplacement === true &&
+        String(item.replacementDetectSource || '').trim() === 'manual_board_replacement';
       return {
         ...item,
         imageFileID,
         videoFileID,
         displayModel,
         mediaType,
+        // 仅手动「更换主板」才算待换机；旧关键词误标在展示层直接抹掉
+        awaitingSnReplacement: realAwaitingReplace,
         expiryDate: expiryDate || null,
         remainingDays: (remainingDays !== undefined && remainingDays !== null && !Number.isNaN(Number(remainingDays)))
           ? Number(remainingDays)
@@ -1520,7 +1571,7 @@ module.exports = function createMyPageConfig(hubView) {
       };
     });
 
-    return Promise.all(
+    const withMedia = await Promise.all(
       normalizedBase.map(async item => {
         const imageExtRe = /\.(jpg|jpeg|png|webp|gif|bmp|heic|heif)(\?|$)/i;
         const fallbackSource = item.imageFileID || item.videoFileID || '';
@@ -1549,6 +1600,51 @@ module.exports = function createMyPageConfig(hubView) {
         };
       })
     );
+
+    // 补充「曾扣质保」标记（云函数 list pending 通常已带；回退直查时在此补齐）
+    const needLookup = withMedia.some((item) => item.hadWarrantyDeducted === undefined || item.hadWarrantyDeducted === null);
+    if (!needLookup) return withMedia;
+
+    const openids = [...new Set(withMedia.map((i) => i && i._openid).filter(Boolean))];
+    const deductedOpenids = new Set();
+    if (openids.length) {
+      const db = wx.cloud.database();
+      const _ = db.command;
+      const chunkSize = 20;
+      for (let i = 0; i < openids.length; i += chunkSize) {
+        const chunk = openids.slice(i, i + chunkSize);
+        try {
+          const res = await db.collection('shouhou_repair')
+            .where({ _openid: _.in(chunk), warrantyDeducted: true })
+            .field({ _openid: true })
+            .limit(100)
+            .get();
+          (res.data || []).forEach((row) => {
+            if (row && row._openid) deductedOpenids.add(row._openid);
+          });
+        } catch (e) { /* 管理员无直读权限时忽略，依赖云函数 */ }
+        try {
+          const res2 = await db.collection('shouhou_repair')
+            .where({ _openid: _.in(chunk), isWarrantyDeducted: true })
+            .field({ _openid: true })
+            .limit(100)
+            .get();
+          (res2.data || []).forEach((row) => {
+            if (row && row._openid) deductedOpenids.add(row._openid);
+          });
+        } catch (e) { /* ignore */ }
+      }
+    }
+
+    return withMedia.map((item) => ({
+      ...item,
+      hadWarrantyDeducted: !!(
+        item.hadWarrantyDeducted
+        || item.warrantyDeducted
+        || item.isWarrantyDeducted
+        || (item._openid && deductedOpenids.has(item._openid))
+      )
+    }));
   },
 
   _canAdminRepairCloud() {
@@ -1583,9 +1679,27 @@ module.exports = function createMyPageConfig(hubView) {
     return userRepairApi.patchRepair(id, data);
   },
 
+  /** 向用户发订阅消息（失败不影响业务） */
+  _notifyRepairSubscribe(repairId, scene, extra = {}) {
+    const id = String(repairId || '').trim();
+    if (!id || !scene) return;
+    sendRepairProgressNotify({ repairId: id, scene, ...(extra || {}) });
+  },
+
+  /** 关键关键一次订阅授权额度（一次性模板要多次推就必须多要几次） */
+  _askRepairSubscribeThen(next) {
+    return withRepairProgressSubscribe(typeof next === 'function' ? next : () => {});
+  },
+
   // [新增] 管理员：加载待处理维修工单（只显示未处理的，点击任意按钮后卡片消失）
   loadPendingRepairs() {
     if (!this.data.isAdmin) return;
+
+    // 静默清理旧逻辑误标的待换机/误锁，避免「待换机」pill 误导
+    if (!this._staleReplacementCleanupAt || Date.now() - this._staleReplacementCleanupAt > 60000) {
+      this._staleReplacementCleanupAt = Date.now();
+      controlCenterDebug.cleanupStaleReplacements().catch(() => {});
+    }
 
     const finish = async (filtered) => {
       const normalized = await this._normalizePendingRepairs(filtered);
@@ -1611,7 +1725,7 @@ module.exports = function createMyPageConfig(hubView) {
     const _ = db.command;
     db.collection('shouhou_repair')
       .where({
-        status: 'PENDING',
+        status: _.in(['PENDING', 'ADMIN_REVIEWED']),
         needReturn: _.neq(true),
         needPurchaseParts: _.neq(true)
       })
@@ -2378,6 +2492,7 @@ module.exports = function createMyPageConfig(hubView) {
       if (this.data.isAdmin) {
         try { this.loadPendingRepairs(); } catch (e) {}
         try { this.loadAuditList(); } catch (e) {}
+        try { this.loadPendingSnEntryList(); } catch (e) {}
         try { this.loadReturnRequiredList(); } catch (e) {}
       } else {
         // 普通用户页补充刷新：设备列表、需寄回列表
@@ -2396,41 +2511,63 @@ module.exports = function createMyPageConfig(hubView) {
   
   // 使用探数API查询物流（通过云函数）
   viewLogisticsDetail(e) {
-    const sn = String(e.currentTarget.dataset.sn || '').trim().toUpperCase();
-    const expressCompany = String(e.currentTarget.dataset.company || '').trim();
-    const phone = String(e.currentTarget.dataset.phone || '').trim();
-    const tailRequired = String(e.currentTarget.dataset.tailRequired || '').trim();
-    const defaultTail = tailRequired || (phone && phone.length >= 4 ? phone.slice(-4) : '');
-    if (!sn) {
-      this.showMyDialog({
-        title: '提示',
-        content: '运单号为空，无法查询物流信息',
-        showCancel: false,
-        confirmText: '知道了',
-        success: () => {}
+    try {
+      const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
+      const detail = (e && e.detail) || {};
+      const item = ds.item || null;
+      const sn = String(
+        ds.sn ||
+        detail.sn ||
+        (item && (item.trackingId || item.returnTrackingId)) ||
+        ''
+      ).trim().toUpperCase();
+      const expressCompany = String(
+        ds.company || detail.company || (item && item.expressCompany) || ''
+      ).trim();
+      const phone = String(
+        ds.phone || detail.phone || (item && item.contact && item.contact.phone) || ''
+      ).trim();
+      const tailRequired = String(ds.tailRequired || detail.tailRequired || '').trim();
+      const defaultTail = tailRequired || (phone && phone.length >= 4 ? phone.slice(-4) : '');
+      if (!sn) {
+        this.showMyDialog({
+          title: '提示',
+          content: '运单号为空，无法查询物流信息',
+          showCancel: false,
+          confirmText: '知道了',
+          success: () => {}
+        });
+        return;
+      }
+
+      // 显示物流查询弹窗并开始加载
+      this.setData({
+        showLogisticsModal: true,
+        logisticsModalClosing: false,
+        currentTrackingId: sn,
+        currentLogisticsCompany: expressCompany || '',
+        logisticsData: null,
+        logisticsLoading: true,
+        logisticsError: null,
+        logisticsExpectedTail: defaultTail,
+        logisticsBlockDisplay: false
       });
-      return;
+      this.updateModalState();
+
+      this.fetchLogisticsByTail({
+        trackingId: sn,
+        expressCompany: expressCompany || '',
+        receiverPhone: defaultTail || phone || ''
+      });
+    } catch (err) {
+      console.error('[viewLogisticsDetail] failed', err);
+      this.showMyDialog({
+        title: '无法打开物流',
+        content: (err && (err.message || err.errMsg)) || '请稍后重试',
+        showCancel: false,
+        confirmText: '知道了'
+      });
     }
-
-    // 显示物流查询弹窗并开始加载
-    this.setData({
-      showLogisticsModal: true,
-      logisticsModalClosing: false,
-      currentTrackingId: sn,
-      currentLogisticsCompany: expressCompany || '',
-      logisticsData: null,
-      logisticsLoading: true,
-      logisticsError: null,
-      logisticsExpectedTail: defaultTail,
-      logisticsBlockDisplay: false
-    });
-    this.updateModalState();
-
-    this.fetchLogisticsByTail({
-      trackingId: sn,
-      expressCompany: expressCompany || '',
-      receiverPhone: defaultTail || phone || ''
-    });
   },
 
   fetchLogisticsByTail({ trackingId, expressCompany = '', receiverPhone = '' }) {
@@ -2681,13 +2818,19 @@ module.exports = function createMyPageConfig(hubView) {
       if (r.success) {
         const msg = r.msg || '内部诊断书已记录（用户不可见）';
         const needsReplace = !!(r.needsReplacement || (r.replacement && (r.replacement.locked || r.replacement.awaitingSnReplacement)));
+        const faultSync = r.faultSync || {};
         const repairList = (this.data.repairList || []).map((item) => {
           if (!item || item._id !== repairId) return item;
+          // 诊断只生成「故障待录入」卡片，不再把工单标成待换机（待换机仅手动点更换主板）
           return {
             ...item,
             adminDiagnosis: text,
             diagnosisDone: true,
-            awaitingSnReplacement: needsReplace || item.awaitingSnReplacement
+            status: 'ADMIN_REVIEWED',
+            awaitingSnReplacement:
+              item.replacementDetectSource === 'manual_board_replacement'
+                ? !!(needsReplace || item.awaitingSnReplacement)
+                : false
           };
         });
         this.setData({ diagnosisDialogClosing: true, repairList });
@@ -2703,6 +2846,10 @@ module.exports = function createMyPageConfig(hubView) {
             confirmText: '好的',
             success: () => {
               this.loadPendingRepairs();
+              if (faultSync.synced) {
+                this.loadPendingSnEntryList();
+                this.loadMyDevices();
+              }
             }
           });
         }, 280);
@@ -2720,47 +2867,82 @@ module.exports = function createMyPageConfig(hubView) {
   resolveRepair(e) {
     const id = e.currentTarget.dataset.id;
     const type = e.currentTarget.dataset.type; // 'ship' 或 'tutorial'
-    
+    const repairItem = (this.data.repairList || []).find((r) => r && r._id === id);
+    if (repairItem && repairItem.hadWarrantyDeducted) {
+      this.showMyDialog({
+        title: '无法免费支持',
+        content: '该用户曾被扣质保，仅可点击「需要寄回产品维修」，无法录单备件或教程处理。',
+        showCancel: false,
+        confirmText: '知道了'
+      });
+      return;
+    }
+
     if (type === 'ship') {
-       const id = e.currentTarget.dataset.id;
-       wx.cloud.callFunction({
-         name: 'deviceReplacement',
-         data: { action: 'checkCanShip', repairId: id }
-       }).then((res) => {
-         const gate = res.result || {};
-         if (gate.success === false) {
-           this.showAutoToast('提示', gate.msg || '校验失败');
-           return;
-         }
-         if (gate.canShip === false) {
-           this.showMyDialog({
-             title: '暂不可录单',
-             content: gate.msg || '请先填写诊断书，或等待控制中心完成换机',
-             showCancel: false,
-             confirmText: '知道了'
-           });
-           return;
-         }
-         this.showInputDialog({
-           title: '录单备件寄出',
-           placeholder: '请输入物料运单号',
-           showRemark: true,
-           remarkPlaceholder: '对外备注（选填，用户可见）',
-           success: (dialogRes) => {
-             if (dialogRes.confirm && dialogRes.content) {
-               const trackingId = dialogRes.content.trim();
-               if (!trackingId) {
-                 this.showAutoToast('提示', '请输入运单号');
-                 return;
-               }
-               const shipRemark = (dialogRes.remark || '').trim();
-               this.updateRepairStatus(id, 'SHIPPED', trackingId, { shipRemark });
-             }
-           }
-         });
-       }).catch(() => {
-         this.showAutoToast('错误', '网络异常，请重试');
-       });
+      if (this._shippingRepairId) {
+        this.showAutoToast('提示', '正在处理上一笔录单，请稍候');
+        return;
+      }
+      this._shippingRepairId = id;
+      this.showMyLoading('校验中...');
+      wx.cloud.callFunction({
+        name: 'deviceReplacement',
+        data: { action: 'checkCanShip', repairId: id }
+      }).then((res) => {
+        this.hideMyLoading();
+        const gate = res.result || {};
+        if (gate.success === false) {
+          this._shippingRepairId = '';
+          this.showAutoToast('提示', gate.msg || '校验失败');
+          return;
+        }
+        if (gate.canShip === false) {
+          this._shippingRepairId = '';
+          this.showMyDialog({
+            title: '暂不可录单',
+            content: gate.msg || '请先填写诊断书，或等待控制中心完成换机',
+            showCancel: false,
+            confirmText: '知道了'
+          });
+          return;
+        }
+        this.showInputDialog({
+          title: '录单备件寄出',
+          placeholder: '请输入物料运单号',
+          showRemark: true,
+          remarkPlaceholder: '对外备注（选填，用户可见）',
+          success: (dialogRes) => {
+            if (!(dialogRes && dialogRes.confirm && dialogRes.content)) {
+              this._shippingRepairId = '';
+              return;
+            }
+            const trackingId = dialogRes.content.trim();
+            if (!trackingId) {
+              this._shippingRepairId = '';
+              this.showAutoToast('提示', '请输入运单号');
+              return;
+            }
+            const shipRemark = (dialogRes.remark || '').trim();
+            // 录单前再次确认：是否要求用户寄回（不以开关默认为准）
+            this.showMyDialog({
+              title: '是否需要用户寄回？',
+              content: '运单号：' + trackingId + '\n\n「需要寄回」：用户端会出现寄回提醒；约 3 天后（预计已收到件）再推一次「记得寄回」\n「不需要寄回」：仅通知配件已寄出，不要求寄回',
+              showCancel: true,
+              confirmText: '需要寄回',
+              cancelText: '不需要寄回',
+              success: (confirmRes) => {
+                // 两个按钮都是有效选择：确定=需要寄回，取消=不需要寄回
+                const needReturn = !!(confirmRes && confirmRes.confirm);
+                this.updateRepairStatus(id, 'SHIPPED', trackingId, { shipRemark, needReturn });
+              }
+            });
+          }
+        });
+      }).catch(() => {
+        this.hideMyLoading();
+        this._shippingRepairId = '';
+        this.showAutoToast('错误', '网络异常，请重试');
+      });
     } else {
        // 无需录入（使用自定义弹窗）
        this.showMyDialog({
@@ -2778,11 +2960,197 @@ module.exports = function createMyPageConfig(hubView) {
     }
   },
 
+  /** 管理员：从申请进度删除维修工单（强制删除，忽略所有限制） */
+  adminDeleteRepairFromActivity(e) {
+    if (!this.data.isAdmin) {
+      this.showAutoToast('提示', '仅管理员可删除');
+      return;
+    }
+    const id = e && e.currentTarget && e.currentTarget.dataset
+      ? e.currentTarget.dataset.id
+      : '';
+    if (!id) {
+      this.showAutoToast('提示', '工单无效');
+      return;
+    }
+    const model = (e.currentTarget.dataset.model || '').trim();
+    const name = (e.currentTarget.dataset.name || '').trim();
+    const label = [model, name].filter(Boolean).join(' · ') || '该工单';
+
+    this.showMyDialog({
+      title: '强制删除工单',
+      content: `确定删除「${label}」吗？\n⚠️ 此操作将忽略所有限制，包括已付款、已寄出的工单。\n删除后不可恢复，请谨慎操作。`,
+      showCancel: true,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      success: (res) => {
+        if (!(res && res.confirm)) return;
+        if (this._deletingRepairId) return;
+        this._deletingRepairId = id;
+
+        // 先从列表拿掉，避免云函数返回慢时一直卡在 loading
+        const prevList = this.data.myActivityList || [];
+        const nextList = prevList.filter((item) => item && item._id !== id);
+        this.setData({ myActivityList: nextList });
+        this.showMyLoading('正在删除...');
+
+        let settled = false;
+        const finish = (ok, msg) => {
+          if (settled) return;
+          settled = true;
+          this._deletingRepairId = '';
+          try { clearTimeout(watchdog); } catch (err) {}
+          this.hideMyLoading();
+          try { this.loadMyActivitiesPromise().catch(() => {}); } catch (err) {}
+          try { this.loadPendingRepairs(); } catch (err) {}
+          if (ok) {
+            this.showAutoToast('已删除', '工单已强制清除');
+            return;
+          }
+          // 失败时把卡片加回去（若云端其实已删，刷新会自然消失）
+          this.setData({ myActivityList: prevList });
+          let content = msg || '删除失败，请稍后重试';
+          this.showMyDialog({
+            title: '无法删除',
+            content,
+            showCancel: false,
+            confirmText: '知道了'
+          });
+        };
+
+        // 云端常已删完，但客户端回调卡住：超时后关 loading 并刷新列表
+        const watchdog = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          this._deletingRepairId = '';
+          this.hideMyLoading();
+          try { this.loadMyActivitiesPromise().catch(() => {}); } catch (err) {}
+          try { this.loadPendingRepairs(); } catch (err) {}
+          this.showAutoToast('提示', '删除已提交，列表已刷新');
+        }, 8000);
+
+        const run = this._canAdminRepairCloud()
+          ? adminRepairApi.deleteRepair(id, true)
+          : Promise.resolve({ success: false, errMsg: '请使用管理员账号操作' });
+
+        run.then((result) => {
+          if (!result || !result.success) {
+            finish(false, (result && result.errMsg) || '删除失败');
+            return;
+          }
+          finish(true);
+        }).catch((err) => {
+          finish(false, (err && (err.message || err.errMsg)) || String(err) || '网络异常');
+        });
+      }
+    });
+  },
+
+  /** 管理员：删除待处理报修工单（仅 PENDING，级联解锁换机锁） */
+  adminDeleteRepair(e) {
+    if (!this.data.isAdmin) {
+      this.showAutoToast('提示', '仅管理员可删除');
+      return;
+    }
+    const id = e && e.currentTarget && e.currentTarget.dataset
+      ? e.currentTarget.dataset.id
+      : '';
+    if (!id) {
+      this.showAutoToast('提示', '工单无效');
+      return;
+    }
+    const model = (e.currentTarget.dataset.model || '').trim();
+    const name = (e.currentTarget.dataset.name || '').trim();
+    const label = [model, name].filter(Boolean).join(' · ') || '该工单';
+
+    this.showMyDialog({
+      title: '删除报修工单',
+      content: `确定删除「${label}」吗？\n用户端审核中/待换机绑定目标会一并消失，且不可恢复。\n已付款、已寄出或已完成换机的工单无法删除。`,
+      showCancel: true,
+      confirmText: '确认删除',
+      cancelText: '取消',
+      success: (res) => {
+        if (!(res && res.confirm)) return;
+        if (this._deletingRepairId) return;
+        this._deletingRepairId = id;
+
+        // 先从列表拿掉，避免云函数返回慢时一直卡在 loading
+        const prevList = this.data.repairList || [];
+        const nextList = prevList.filter((item) => item && item._id !== id);
+        this.setData({ repairList: nextList });
+        this.showMyLoading('正在删除...');
+
+        let settled = false;
+        const finish = (ok, msg) => {
+          if (settled) return;
+          settled = true;
+          this._deletingRepairId = '';
+          try { clearTimeout(watchdog); } catch (err) {}
+          this.hideMyLoading();
+          try { this.loadPendingRepairs(); } catch (err) {}
+          try { this.loadPendingSnEntryList(); } catch (err) {}
+          try { this.loadMyActivitiesPromise().catch(() => {}); } catch (err) {}
+          if (ok) {
+            this.showAutoToast('已删除', '工单已清除，用户可重新提交报修');
+            return;
+          }
+          // 失败时把卡片加回去（若云端其实已删，刷新会自然消失）
+          this.setData({ repairList: prevList });
+          let content = msg || '删除失败，请稍后重试';
+          if (String(content).indexOf('Missing id or action') >= 0) {
+            content = '云函数未更新：请重新上传并部署 adminUpdateRepair 后再试';
+          }
+          this.showMyDialog({
+            title: '无法删除',
+            content,
+            showCancel: false,
+            confirmText: '知道了'
+          });
+        };
+
+        // 云端常已删完，但客户端回调卡住：超时后关 loading 并刷新列表
+        const watchdog = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          this._deletingRepairId = '';
+          this.hideMyLoading();
+          try { this.loadPendingRepairs(); } catch (err) {}
+          try { this.loadPendingSnEntryList(); } catch (err) {}
+          try { this.loadMyActivitiesPromise().catch(() => {}); } catch (err) {}
+          this.showAutoToast('提示', '删除已提交，列表已刷新');
+        }, 8000);
+
+        const run = this._canAdminRepairCloud()
+          ? adminRepairApi.deleteRepair(id, true)
+          : Promise.resolve({ success: false, errMsg: '请使用管理员账号操作' });
+
+        run.then((result) => {
+          if (!result || !result.success) {
+            finish(false, (result && result.errMsg) || '删除失败');
+            return;
+          }
+          finish(true);
+        }).catch((err) => {
+          finish(false, (err && (err.message || err.errMsg)) || String(err) || '网络异常');
+        });
+      }
+    });
+  },
+
   // 🔴 新增：打开购买配件弹窗（从数据库读取配件数据）
   openPurchasePartsModal(e) {
     const item = e.currentTarget.dataset.item;
     if (!item || !item.model) {
       this.showAutoToast('提示', '维修单信息异常');
+      return;
+    }
+    if (item.hadWarrantyDeducted) {
+      this.showMyDialog({
+        title: '无法免费支持',
+        content: '该用户曾被扣质保，仅可点击「需要寄回产品维修」。',
+        showCancel: false,
+        confirmText: '知道了'
+      });
       return;
     }
     
@@ -2932,6 +3300,7 @@ module.exports = function createMyPageConfig(hubView) {
     }).then(() => {
       this.hideMyLoading();
       this._closeWithAnimation('showPurchasePartsModal', 'purchasePartsModalClosing');
+      this._notifyRepairSubscribe(currentRepairItem._id, 'need_parts');
       // 🔴 立即刷新数据，不等待用户点击确认
       this.loadPendingRepairs(); // 刷新管理员待处理列表
       // 添加延迟确保数据库同步完成
@@ -2980,33 +3349,35 @@ module.exports = function createMyPageConfig(hubView) {
       this.showAutoToast('提示', '维修单信息异常');
       return;
     }
-    
-    this.showMyLoading('处理中...');
-    this._userRepairPatch(currentPaidRepairItem._id, {
-      paidRepairAgreed: true,
-      paidRepairAgreedTime: userRepairApi.SERVER_DATE
-    }).then(() => {
-      this.hideMyLoading();
-      this._closeWithAnimation('showPaidRepairConfirmModal', 'paidRepairConfirmModalClosing', {
-        currentPaidRepairItem: null
-      }); // 🔴 更新弹窗状态，解锁页面滚动
-      this.showMyDialog({
-        title: '已确认',
-        content: '您已同意付费维修\n维修完成后需要支付维修费用30元+配件费用',
-        showCancel: false,
-        confirmText: '知道了',
-        success: () => {
-          this.loadMyActivitiesPromise().catch(() => {});
-        }
-      });
-    }).catch(err => {
-      this.hideMyLoading();
-      console.error('更新失败:', err);
-      this.showMyDialog({
-        title: '操作失败',
-        content: err.errMsg || '请稍后重试',
-        showCancel: false,
-        confirmText: '知道了'
+
+    this._askRepairSubscribeThen(() => {
+      this.showMyLoading('处理中...');
+      this._userRepairPatch(currentPaidRepairItem._id, {
+        paidRepairAgreed: true,
+        paidRepairAgreedTime: userRepairApi.SERVER_DATE
+      }).then(() => {
+        this.hideMyLoading();
+        this._closeWithAnimation('showPaidRepairConfirmModal', 'paidRepairConfirmModalClosing', {
+          currentPaidRepairItem: null
+        }); // 🔴 更新弹窗状态，解锁页面滚动
+        this.showMyDialog({
+          title: '已确认',
+          content: '您已同意付费维修\n维修完成后需要支付维修费用30元+配件费用',
+          showCancel: false,
+          confirmText: '知道了',
+          success: () => {
+            this.loadMyActivitiesPromise().catch(() => {});
+          }
+        });
+      }).catch(err => {
+        this.hideMyLoading();
+        console.error('更新失败:', err);
+        this.showMyDialog({
+          title: '操作失败',
+          content: err.errMsg || '请稍后重试',
+          showCancel: false,
+          confirmText: '知道了'
+        });
       });
     });
   },
@@ -3049,78 +3420,137 @@ module.exports = function createMyPageConfig(hubView) {
     });
   },
   
-  // 【新增】管理员点击"需要用户寄回"按钮，只填写备注
+  // 【新增】管理员点击"需要用户寄回"：客户可见备注 + 内部维修备注（均必填）
   requestUserReturn(e) {
     const id = e.currentTarget.dataset.id;
-    
-    // 🔴 查询维修单信息，检查是否质保过期
-    this._repairGet(id).then(res => {
-      const repair = res.data;
-      const isWarrantyExpired = repair.warrantyExpired === true;
-      
-      // 弹出输入框，让管理员填写备注
-      this.showInputDialog({
-        title: '需要用户寄回',
-        placeholder: '请输入备注信息（选填）',
-        success: (res) => {
-          if (res.confirm) {
-            const returnNote = res.content ? res.content.trim() : '';
-            this.showMyLoading('处理中...');
-            
-            // 🔴 如果质保过期，需要记录付费维修信息
-            const updateData = {
-              needReturn: true,
-              returnNote: returnNote,
-              returnStatus: 'PENDING_RETURN' // 待用户寄回
-            };
-            
-            if (isWarrantyExpired) {
-              updateData.repairFee = 30; // 维修费用30元
-              updateData.partsFee = 0; // 配件费用（根据实际购买计算）
-              updateData.paidRepairAgreed = null; // 用户是否同意（待用户确认）
-            }
-            
-            this._repairPatch(id, updateData).then(() => {
-              return wx.cloud.callFunction({
-                name: 'deviceReplacement',
-                data: { action: 'checkReturnNote', repairId: id, returnNote }
-              }).catch(() => null);
-            }).then((cfRes) => {
-              this.hideMyLoading();
-              let replacementHint = '';
-              const rep = cfRes && cfRes.result && cfRes.result.replacement;
-              if (rep && (rep.locked || rep.awaitingSnReplacement)) {
-                replacementHint = '\n备注含主板/控制器，已标记待换机';
-              }
-              this.showMyDialog({
-                title: '操作成功',
-                content: (isWarrantyExpired ?
-                  '已标记为需要用户寄回\n用户质保已过期，将提示付费维修' :
-                  '已标记为需要用户寄回\n用户端将显示寄回提示') + replacementHint,
-                showCancel: false,
-                confirmText: '好的',
-                success: () => {
-                  this.loadMyOrders(); // 刷新订单列表
-                  this.loadPendingRepairs(); // 🔴 刷新待处理列表（卡片会消失）
-                  this.loadReturnRequiredList(); // 刷新需寄回列表
-                }
-              });
-            }).catch(err => {
-              this.hideMyLoading();
-              console.error('更新失败:', err);
-              this.showMyDialog({
-                title: '操作失败',
-                content: err.errMsg || '请稍后重试',
-                showCancel: false,
-                confirmText: '知道了'
-              });
-            });
-          }
+    this._repairGet(id).then((res) => {
+      const repair = res.data || {};
+      this.setData({
+        returnRequestDialogClosing: false,
+        returnRequestDialog: {
+          show: true,
+          repairId: id,
+          customerNote: '',
+          internalNote: '',
+          isWarrantyExpired: repair.warrantyExpired === true,
+          submitting: false
         }
       });
-    }).catch(err => {
+      this.updateModalState();
+    }).catch((err) => {
       console.error('查询维修单失败:', err);
       this.showAutoToast('提示', '查询维修单信息失败');
+    });
+  },
+
+  closeReturnRequestDialog() {
+    if (this.data.returnRequestDialog && this.data.returnRequestDialog.submitting) return;
+    this.setData({ returnRequestDialogClosing: true });
+    setTimeout(() => {
+      this.setData({
+        returnRequestDialogClosing: false,
+        returnRequestDialog: {
+          show: false,
+          repairId: '',
+          customerNote: '',
+          internalNote: '',
+          isWarrantyExpired: false,
+          submitting: false
+        }
+      });
+      this.updateModalState();
+    }, 420);
+  },
+
+  onReturnRequestCustomerInput(e) {
+    this.setData({ 'returnRequestDialog.customerNote': e.detail.value });
+  },
+
+  onReturnRequestInternalInput(e) {
+    this.setData({ 'returnRequestDialog.internalNote': e.detail.value });
+  },
+
+  confirmReturnRequestDialog() {
+    const dialog = this.data.returnRequestDialog || {};
+    if (dialog.submitting) return;
+    const id = dialog.repairId;
+    const returnNote = String(dialog.customerNote || '').trim();
+    const returnNoteInternal = String(dialog.internalNote || '').trim();
+    if (!id) return;
+    if (!returnNote) {
+      this.showAutoToast('提示', '请填写给客户看的备注');
+      return;
+    }
+    if (!returnNoteInternal) {
+      this.showAutoToast('提示', '请填写内部维修备注');
+      return;
+    }
+
+    const isWarrantyExpired = !!dialog.isWarrantyExpired;
+    this.setData({ 'returnRequestDialog.submitting': true });
+    this.showMyLoading('处理中...');
+
+    const updateData = {
+      needReturn: true,
+      returnNote,
+      returnNoteInternal,
+      returnStatus: 'PENDING_RETURN'
+    };
+    if (isWarrantyExpired) {
+      updateData.repairFee = 30;
+      updateData.partsFee = 0;
+      updateData.paidRepairAgreed = null;
+    }
+
+    // 主板/控制器判定以内部详细备注为准，兼容扫客户备注
+    const noteForLock = `${returnNoteInternal}\n${returnNote}`;
+
+    this._repairPatch(id, updateData).then(() => {
+      return wx.cloud.callFunction({
+        name: 'deviceReplacement',
+        data: { action: 'checkReturnNote', repairId: id, returnNote: noteForLock }
+      }).catch(() => null);
+    }).then((cfRes) => {
+      this.hideMyLoading();
+      this.setData({ returnRequestDialogClosing: true });
+      setTimeout(() => {
+        this.setData({
+          returnRequestDialogClosing: false,
+          returnRequestDialog: {
+            show: false,
+            repairId: '',
+            customerNote: '',
+            internalNote: '',
+            isWarrantyExpired: false,
+            submitting: false
+          }
+        });
+        this.updateModalState();
+        this._notifyRepairSubscribe(id, 'need_return');
+        this.showMyDialog({
+          title: '操作成功',
+          content: (isWarrantyExpired
+            ? '已标记为需要用户寄回\n用户质保已过期，将提示付费维修'
+            : '已标记为需要用户寄回\n用户端将显示客户备注') + '\n如需更换主板，请在需寄回列表点「更换主板」',
+          showCancel: false,
+          confirmText: '好的',
+          success: () => {
+            this.loadMyOrders();
+            this.loadPendingRepairs();
+            this.loadReturnRequiredList();
+          }
+        });
+      }, 420);
+    }).catch((err) => {
+      this.hideMyLoading();
+      this.setData({ 'returnRequestDialog.submitting': false });
+      console.error('更新失败:', err);
+      this.showMyDialog({
+        title: '操作失败',
+        content: err.errMsg || '请稍后重试',
+        showCancel: false,
+        confirmText: '知道了'
+      });
     });
   },
 
@@ -3208,29 +3638,22 @@ module.exports = function createMyPageConfig(hubView) {
   // 【新增】切换需要寄回开关
   toggleReturnRequired(e) {
     const id = e.currentTarget.dataset.id;
-    const checked = e.detail.value;
-    
-    // 静默更新，不显示任何提示
+    const checked = !!e.detail.value;
+
+    // 先改本地，再写云端；失败再回滚并提示
+    const prevList = this.data.repairList || [];
+    const repairList = prevList.map((item) => {
+      if (item._id === id) return { ...item, needReturn: checked };
+      return item;
+    });
+    this.setData({ repairList });
+
     this._repairPatch(id, { needReturn: checked }).then(() => {
-      // 更新本地数据
-      const repairList = this.data.repairList.map(item => {
-        if (item._id === id) {
-          return { ...item, needReturn: checked };
-        }
-        return item;
-      });
-      this.setData({ repairList });
-    }).catch(err => {
+      // ok
+    }).catch((err) => {
       console.error('❌ [toggleReturnRequired] 更新失败:', err);
-      // 更新失败时也不显示弹窗，静默处理
-      // 如果失败，恢复开关状态
-      const repairList = this.data.repairList.map(item => {
-        if (item._id === id) {
-          return { ...item, needReturn: !checked };
-        }
-        return item;
-      });
-      this.setData({ repairList });
+      this.setData({ repairList: prevList });
+      this.showAutoToast('同步失败', '「需要寄回」未保存成功，请重试');
     });
   },
 
@@ -3554,13 +3977,39 @@ module.exports = function createMyPageConfig(hubView) {
   },
 
   // 【新增】关闭需寄回订单确认弹窗
+  // 注意：用户从申请进度打开时 isUserRepairOrderSimple=true；若在关闭动画途中就改成 false，
+  // 蒙层未卸掉前会闪出管理员「待寄回」完整卡片。须等动画结束再还原。
   closeReturnRequiredModal() {
-    this._closeWithAnimation('showReturnRequiredModal', 'returnRequiredModalClosing', {
-      isUserRepairOrderSimple: false
-    });
+    if (!this.data.showReturnRequiredModal && !this.data.returnRequiredModalClosing) {
+      this.setData({ isUserRepairOrderSimple: false });
+      this.updateModalState();
+      return;
+    }
+    if (this.data.returnRequiredModalClosing) return;
+
+    const wasUserSimple = !!this.data.isUserRepairOrderSimple;
+    this.setData({ returnRequiredModalClosing: true });
+    setTimeout(() => {
+      const patch = {
+        showReturnRequiredModal: false,
+        returnRequiredModalClosing: false,
+        isUserRepairOrderSimple: false
+      };
+      // 用户端详情用临时 list 塞进弹窗，关闭后清空，避免污染管理员需寄回列表
+      if (wasUserSimple) {
+        patch.returnRequiredList = [];
+        patch.returnRequiredCount = 0;
+      }
+      this.setData(patch, () => {
+        this.updateModalState();
+        if (wasUserSimple && this.data.isAdmin && this.data.adminAfterSalesTab === 'returns') {
+          this.loadReturnRequiredList(true);
+        }
+      });
+    }, 420);
   },
 
-  _normalizeReturnRequiredRow(item, nicknameDict, snExpiryMap) {
+  _normalizeReturnRequiredRow(item, nicknameDict, snExpiryMap, replacementMap, trackingMap) {
     const contactRaw = item && item.contact;
     const contact = {
       name: (contactRaw && contactRaw.name) || '',
@@ -3583,53 +4032,423 @@ module.exports = function createMyPageConfig(hubView) {
       remainingDays = diff > 0 ? diff : 0;
       warrantyExpired = diff <= 0;
     }
+
+    // 寄出运单号：管理员寄给用户的单号写在维修工单上（trackingId 等），
+    // 不是 shop_orders。物料订单仅作极少数旧数据兜底。
+    const orderTracking = (trackingMap && trackingMap[item._id]) || null;
+    const outboundTrackingId = String(
+      item.trackingId ||
+      item.spareTrackingId ||
+      item.expressNo ||
+      item.logisticsNo ||
+      item.shipSn ||
+      item.outboundTrackingId ||
+      item.shipTrackingId ||
+      item.expressNumber ||
+      (orderTracking && orderTracking.trackingId) ||
+      ''
+    ).trim();
+    const outboundExpressCompany = String(
+      item.expressCompany ||
+      item.shipExpressCompany ||
+      (orderTracking && orderTracking.expressCompany) ||
+      ''
+    ).trim();
+    // 真正寄出时间：repairCompleteTime / solveTime；没有就不伪装成 createTime
+    const shipTimeRaw = item.repairCompleteTime || item.solveTime || null;
+    const shipTimeText = shipTimeRaw
+      ? this.formatTime(shipTimeRaw)
+      : (outboundTrackingId ? '已有单号（时间未记录）' : '未寄出');
+
+    // 换主板完成：工单自身的 replacementNewSn，或云端从 sn 集合反查（旧流程只写了设备档案）
+    const resolvedReplacement = (replacementMap && replacementMap[item._id]) || null;
+    const replacementNewSn = String(
+      item.replacementNewSn || (resolvedReplacement && resolvedReplacement.newSn) || ''
+    ).trim();
+    const motherboardReplaced = !!replacementNewSn;
+    const motherboardReplacementPending =
+      !motherboardReplaced &&
+      item.awaitingSnReplacement === true &&
+      item.replacementDetectSource === 'manual_board_replacement';
+    let motherboardStatusText = '未更换主板';
+    let motherboardStatusClass = 'rr-replace-none-text';
+    if (motherboardReplaced) {
+      // 是否已同步到用户档案：设备档案激活，且 openid 归属该工单用户
+      if (resolvedReplacement) {
+        const synced =
+          resolvedReplacement.isActive === true &&
+          !!resolvedReplacement.openid &&
+          resolvedReplacement.openid === String(item._openid || '').trim();
+        motherboardStatusText = synced
+          ? `✓ 已更换主板：${replacementNewSn}（已同步到用户）`
+          : `已更换主板：${replacementNewSn}（⚠ 未同步到用户档案）`;
+        motherboardStatusClass = synced ? 'rr-replace-done-text' : 'rr-replace-pending-text';
+      } else {
+        motherboardStatusText = `✓ 已更换主板：${replacementNewSn}`;
+        motherboardStatusClass = 'rr-replace-done-text';
+      }
+    } else if (motherboardReplacementPending) {
+      motherboardStatusText = item.replacementOldSn
+        ? `待更换主板（旧 SN：${item.replacementOldSn}）`
+        : '待更换主板';
+      motherboardStatusClass = 'rr-replace-pending-text';
+    }
+
+    // 用户寄回故障件物流状态：未发出(灰) / 运输中(蓝) / 已签收(绿)
+    const returnSn = String(item.returnTrackingId || '').trim();
+    const logisticsSigned =
+      item.returnLogisticsSigned === true ||
+      String(item.returnLogisticsStatus || '').trim() === '3' ||
+      /签收|送达/.test(String(item.returnLogisticsStatusText || ''));
+    const adminReceived =
+      item.returnCompleted === true ||
+      String(item.status || '').toUpperCase() === 'RETURN_RECEIVED';
+    let userReturnShipState = 'none';
+    let userReturnShipText = '未发出';
+    let userReturnShipClass = 'rr-ship-state--none';
+    if (adminReceived || logisticsSigned) {
+      userReturnShipState = 'signed';
+      userReturnShipText = '已签收';
+      userReturnShipClass = 'rr-ship-state--signed';
+    } else if (returnSn) {
+      userReturnShipState = 'transit';
+      userReturnShipText = '运输中';
+      userReturnShipClass = 'rr-ship-state--transit';
+    }
+
     return {
       ...item,
       contact,
-      shipTime: item.solveTime ? this.formatTime(item.solveTime) : (item.createTime ? this.formatTime(item.createTime) : '未知'),
+      trackingId: outboundTrackingId || item.trackingId || '',
+      expressCompany: outboundExpressCompany || item.expressCompany || '',
+      shipTime: shipTimeText,
+      repairTimeText: this.formatTime(item.createTime) || '—',
+      userReturnShipState,
+      userReturnShipText,
+      userReturnShipClass,
+      // 旧数据反查到的新 SN 回填，避免状态已显示“已更换”却仍出更换按钮
+      replacementNewSn: replacementNewSn || item.replacementNewSn || '',
       userNickname: (nicknameDict && nicknameDict[item._openid]) || null,
       expiryDate: expiryDate || null,
       remainingDays: (remainingDays !== undefined && remainingDays !== null && !Number.isNaN(Number(remainingDays))) ? Number(remainingDays) : null,
-      warrantyExpired
+      warrantyExpired,
+      motherboardReplacementPending,
+      motherboardReplaced,
+      motherboardStatusText,
+      motherboardStatusClass
     };
   },
 
   onReturnRequiredListAction(e) {
     const detail = (e && e.detail) || {};
-    const { type, index, id, sn, phone, tailRequired } = detail;
+    const { type, index, id, phone, company, tailRequired } = detail;
+    const repairId = detail.repairId || id;
+    const item = index != null ? this.data.returnRequiredList[index] : null;
+    const sn = String(
+      detail.sn ||
+      (item && (item.trackingId || item.returnTrackingId)) ||
+      ''
+    ).trim();
     const synthetic = {
       currentTarget: {
         dataset: {
           index,
-          id,
-          item: index != null ? this.data.returnRequiredList[index] : null,
+          id: repairId,
+          repairId,
+          item,
           sn,
-          phone,
+          phone: phone || (item && item.contact && item.contact.phone) || '',
+          company: company || (item && item.expressCompany) || '',
           tailRequired
         }
-      }
+      },
+      detail
     };
     const handlers = {
       copyUserAddress: () => this.copyUserAddress(synthetic),
       openEnterTrackingModal: () => this.openEnterTrackingModal(synthetic),
+      enterOutboundTracking: () => this.enterOutboundTracking(synthetic),
       viewLogisticsDetail: () => this.viewLogisticsDetail(synthetic),
       adminShipOutAfterRepair: () => this.adminShipOutAfterRepair(synthetic),
       openFillRepairModal: () => this.openFillRepairModal(synthetic),
       deductWarrantyForRepair: () => this.deductWarrantyForRepair(synthetic),
       confirmReturnReceived: () => this.confirmReturnReceived(synthetic),
       cancelReturnRequired: () => this.cancelReturnRequired(synthetic),
-      completeReturnRequired: () => this.completeReturnRequired(synthetic)
+      completeReturnRequired: () => this.completeReturnRequired(synthetic),
+      resendWecomReturnNotify: () => this.resendWecomReturnNotify(synthetic),
+      replaceMotherboard: () => this.startReturnRepairMotherboardReplacement(synthetic)
     };
     if (handlers[type]) handlers[type]();
+  },
+
+  /** 管理员：寄回维修卡片里直接蓝牙更换主板（不进控制中心） */
+  startReturnRepairMotherboardReplacement(e) {
+    const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const repairId = String(ds.id || ds.repairId || '').trim();
+    if (!repairId) {
+      this.showAutoToast('提示', '工单无效');
+      return;
+    }
+    const item = ds.item || (this.data.returnRequiredList || []).find((row) => row._id === repairId);
+    if (item && item.replacementNewSn && item.awaitingSnReplacement !== true) {
+      this.showMyDialog({
+        title: '已更换主板',
+        content: `新 SN：${item.replacementNewSn}`,
+        showCancel: false,
+        confirmText: '知道了'
+      });
+      return;
+    }
+
+    this.showMyDialog({
+      title: '确认更换主板',
+      content: '仅在维修时确实更换了主板后使用。\n\n确认后将直接扫描新主板蓝牙，解析 SN 并替换用户设备卡。原机维修但未更换主板时不要点击。',
+      showCancel: true,
+      confirmText: '开始扫描',
+      cancelText: '取消',
+      success: (res) => {
+        if (!(res && res.confirm)) return;
+        this.showMyLoading('准备更换主板...');
+        wx.cloud.callFunction({
+          name: 'deviceReplacement',
+          data: { action: 'startMotherboardReplacement', repairId }
+        }).then((callRes) => {
+          this.hideMyLoading();
+          const r = (callRes && callRes.result) || {};
+          if (!r.success) {
+            this.showAutoToast('操作失败', r.msg || '请稍后重试');
+            return;
+          }
+          if (r.alreadyCompleted) {
+            this.showMyDialog({
+              title: '已更换主板',
+              content: r.msg || `新 SN：${r.newSn || ''}`,
+              showCancel: false,
+              confirmText: '知道了'
+            });
+            this.loadReturnRequiredList(true);
+            return;
+          }
+          this._openMotherboardBleModal({
+            repairId,
+            oldSn: r.oldSn || (item && item.replacementOldSn) || '',
+            model: (item && (item.displayModel || item.model)) || ''
+          });
+        }).catch((err) => {
+          this.hideMyLoading();
+          this.showAutoToast('操作失败', (err && (err.errMsg || err.message)) || '网络异常');
+        });
+      }
+    });
+  },
+
+  _openMotherboardBleModal({ repairId, oldSn, model }) {
+    // 断开可能残留的绑定连接，避免抢占回调
+    try {
+      if (this.ble) {
+        this.ble.stopScan();
+        this.ble.disconnect();
+      }
+    } catch (e) { /* ignore */ }
+
+    this.setData({
+      showMotherboardBleModal: true,
+      motherboardBleClosing: false,
+      motherboardBleRepairId: repairId,
+      motherboardBleOldSn: oldSn || '',
+      motherboardBleModel: model || '',
+      motherboardBleSubmitting: false,
+      isScanning: false,
+      bluetoothReady: false,
+      currentSn: '',
+      connectedDeviceName: '',
+      connectStatusText: '正在搜索新主板...'
+    }, () => {
+      this.updateModalState();
+      // 自动开始扫描，无需再点一次
+      setTimeout(() => this.startMotherboardBleScan(), 200);
+    });
+  },
+
+  closeMotherboardBleModal() {
+    if (this.data.motherboardBleSubmitting) return;
+    try {
+      if (this.ble) {
+        this.ble.stopScan();
+        this.ble.disconnect();
+      }
+    } catch (e) { /* ignore */ }
+    this.setData({ motherboardBleClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showMotherboardBleModal: false,
+        motherboardBleClosing: false,
+        motherboardBleRepairId: '',
+        motherboardBleOldSn: '',
+        motherboardBleModel: '',
+        motherboardBleSubmitting: false,
+        isScanning: false,
+        bluetoothReady: false,
+        connectStatusText: '点击搜索设备'
+      }, () => this.updateModalState());
+    }, 250);
+  },
+
+  startMotherboardBleScan() {
+    if (!this.data.showMotherboardBleModal || this.data.motherboardBleSubmitting) return;
+    if (this.data.bluetoothReady && this.data.currentSn) return;
+
+    this.setData({
+      isScanning: true,
+      bluetoothReady: false,
+      connectStatusText: '搜索附近新主板...'
+    });
+
+    this.ble.initBluetoothAdapter()
+      .then(() => {
+        this.ble.startScan();
+      })
+      .catch(() => {
+        this.setData({
+          isScanning: false,
+          connectStatusText: '请开启手机蓝牙后重试'
+        });
+        this.showAutoToast('提示', '请开启手机蓝牙');
+      });
+  },
+
+  _completeMotherboardReplacementFromBle(normalizedSn) {
+    const repairId = String(this.data.motherboardBleRepairId || '').trim();
+    if (!repairId || !normalizedSn) return;
+    if (this.data.motherboardBleSubmitting) return;
+
+    this.setData({
+      motherboardBleSubmitting: true,
+      isScanning: false,
+      bluetoothReady: true,
+      currentSn: normalizedSn,
+      connectedDeviceName: normalizedSn,
+      connectStatusText: `已连接 ${normalizedSn}，正在替换...`
+    });
+    this.showMyLoading('正在替换 SN...');
+
+    wx.cloud.callFunction({
+      name: 'deviceReplacement',
+      data: {
+        action: 'complete',
+        repairId,
+        newSn: normalizedSn,
+        productModel: this.data.motherboardBleModel || ''
+      }
+    }).then((callRes) => {
+      this.hideMyLoading();
+      const r = (callRes && callRes.result) || {};
+      try {
+        if (this.ble) {
+          this.ble.stopScan();
+          this.ble.disconnect();
+        }
+      } catch (e) { /* ignore */ }
+
+      if (!r.success) {
+        this.setData({
+          motherboardBleSubmitting: false,
+          bluetoothReady: false,
+          isScanning: false,
+          connectStatusText: '替换失败，可点雷达重试'
+        });
+        this.showMyDialog({
+          title: '更换失败',
+          content: (r.msg || '未知错误') + '\n\n用户设备卡未变更，请处理后重试。',
+          showCancel: false,
+          confirmText: '知道了'
+        });
+        return;
+      }
+
+      const lines = [];
+      if (r.oldSn) lines.push(`旧主板 SN：${r.oldSn}（已失效）`);
+      lines.push(`新主板 SN：${r.newSn || normalizedSn}`);
+      if (r.productModel) lines.push(`型号：${r.productModel}`);
+      lines.push('');
+      lines.push(r.verifyDetail || (r.verified ? '已核对绑定成功' : '未能核对绑定状态，请手动检查'));
+
+      this.setData({ motherboardBleSubmitting: false });
+      this.closeMotherboardBleModal();
+      this.showMyDialog({
+        title: r.verified ? '✅ 主板更换成功' : '⚠️ 主板更换完成（待核查）',
+        content: lines.join('\n'),
+        showCancel: false,
+        confirmText: '知道了',
+        success: () => {
+          try { this.loadReturnRequiredList(true); } catch (e) {}
+          try { this.loadMyDevices(); } catch (e2) {}
+        }
+      });
+    }).catch((err) => {
+      this.hideMyLoading();
+      this.setData({
+        motherboardBleSubmitting: false,
+        bluetoothReady: false,
+        isScanning: false,
+        connectStatusText: '网络异常，可点雷达重试'
+      });
+      this.showMyDialog({
+        title: '更换失败',
+        content: '网络异常，云函数未确认执行结果。\n请稍后重试，或到数据库确认该 SN 是否已绑定。',
+        showCancel: false,
+        confirmText: '知道了'
+      });
+      console.error('[my] motherboard replacement failed', err);
+    });
+  },
+
+  /** 管理员：立刻重新推送寄回企业微信通知 */
+  resendWecomReturnNotify(e) {
+    const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const detail = (e && e.detail) || {};
+    const id = String(ds.id || ds.repairId || detail.id || detail.repairId || '').trim();
+    console.log('[wecomNotify] resend click', { id, isAdmin: this.data.isAdmin, isAuthorized: this.data.isAuthorized });
+    if (!id) {
+      wx.showToast({ title: '工单无效', icon: 'none' });
+      return;
+    }
+    // 枢纽内自定义 toast/loading 常被 transform 裁切，看起来像“没反应”，这里用原生提示
+    wx.showLoading({ title: '推送中...', mask: true });
+    wx.cloud.callFunction({
+      name: 'wecomNotify',
+      data: { action: 'resendReturnArrive', repairId: id }
+    }).then((res) => {
+      wx.hideLoading();
+      const r = (res && res.result) || {};
+      console.log('[wecomNotify] resend result', r);
+      if (r.ok) {
+        wx.showToast({ title: '已推送到企业微信', icon: 'success', duration: 2200 });
+      } else {
+        wx.showToast({
+          title: String(r.errMsg || '推送失败').slice(0, 20),
+          icon: 'none',
+          duration: 2800
+        });
+      }
+    }).catch((err) => {
+      wx.hideLoading();
+      console.error('[wecomNotify] resend fail', err);
+      wx.showToast({
+        title: String((err && (err.errMsg || err.message)) || '网络异常').slice(0, 20),
+        icon: 'none',
+        duration: 2800
+      });
+    });
   },
 
   // 【新增】加载需寄回订单列表（只显示维修单，不显示普通订单）
   loadReturnRequiredList(silent) {
     if (!silent) this.showMyLoading('加载中...');
 
-    const applyList = (rows, nicknameDict, snExpiryMap) => {
+    const applyList = (rows, nicknameDict, snExpiryMap, replacementMap, trackingMap) => {
       const filtered = (rows || []).map((item) =>
-        this._normalizeReturnRequiredRow(item, nicknameDict || {}, snExpiryMap || {})
+        this._normalizeReturnRequiredRow(item, nicknameDict || {}, snExpiryMap || {}, replacementMap || {}, trackingMap || {})
       );
       this.hideMyLoading();
       this.setData({
@@ -3647,7 +4466,7 @@ module.exports = function createMyPageConfig(hubView) {
             if (!silent) this.showAutoToast('加载失败', (res && res.errMsg) || '请稍后重试');
             return;
           }
-          applyList(res.data, res.nicknameDict, res.snExpiryMap);
+          applyList(res.data, res.nicknameDict, res.snExpiryMap, res.replacementMap, res.trackingMap);
         })
         .catch((err) => {
           this.hideMyLoading();
@@ -3933,7 +4752,7 @@ module.exports = function createMyPageConfig(hubView) {
     const check = this._validateFillRepairItems(fillRepairItems, true);
     if (!check.ok) return check;
     if (String(fillRepairTrackingId || '').trim()) {
-      return { ok: false, message: '用户付款完成前请勿填写寄回运单号' };
+      return { ok: false, message: '用户付款完成前请勿填写寄出运单号' };
     }
     return { ok: true, validItems: check.validItems, totalPrice: check.totalPrice };
   },
@@ -3942,7 +4761,7 @@ module.exports = function createMyPageConfig(hubView) {
     const check = this._validateFillRepairItems(fillRepairItems, false);
     if (!check.ok) return check;
     if (!String(fillRepairTrackingId || '').trim()) {
-      return { ok: false, message: '请输入寄回运单号' };
+      return { ok: false, message: '请输入寄出运单号' };
     }
     return {
       ok: true,
@@ -4095,6 +4914,7 @@ module.exports = function createMyPageConfig(hubView) {
       repairSubmitTime: adminRepairApi.SERVER_DATE
     }).then((updateRes) => {
       this.hideMyLoading();
+      this._notifyRepairSubscribe(currentFillRepairItem._id, 'need_pay');
       
       // 关闭填写售后单弹窗
       this.closeFillRepairModal();
@@ -4287,9 +5107,11 @@ module.exports = function createMyPageConfig(hubView) {
       this.showAfterSalesToast('提示', '维修费用异常');
       return;
     }
-    
-    // 调用支付逻辑
-    this.doRepairPayment(repairId, repair.repairItems, totalPrice);
+
+    // 再要一次授权，留给支付成功 / 修好寄回通知
+    this._askRepairSubscribeThen(() => {
+      this.doRepairPayment(repairId, repair.repairItems, totalPrice);
+    });
   },
 
   adminShipOutAfterRepair(e) {
@@ -4313,6 +5135,7 @@ module.exports = function createMyPageConfig(hubView) {
             returnCompleted: true
           }).then(() => {
             this.hideMyLoading();
+            this._notifyRepairSubscribe(id, 'completed_sent');
             this.showMyDialog({
               title: '操作成功',
               content: '维修完成，已寄出快递\n用户端已更新状态',
@@ -4334,6 +5157,69 @@ module.exports = function createMyPageConfig(hubView) {
             });
           });
         }
+      }
+    });
+  },
+
+  /** 管理员：仅补录「寄给用户」的运单号，不完结工单（卡片继续留在需寄回） */
+  enterOutboundTracking(e) {
+    const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const index = ds.index;
+    const item = ds.item || (index != null ? this.data.returnRequiredList[index] : null);
+    const id = String((item && item._id) || ds.id || ds.repairId || '').trim();
+    if (!id) {
+      this.showAutoToast('提示', '工单无效');
+      return;
+    }
+    const oldTracking = String((item && item.trackingId) || '').trim();
+    this.showInputDialog({
+      title: oldTracking ? '修改寄出运单号' : '录入寄出运单号',
+      placeholder: '请输入寄给用户的快递单号',
+      value: oldTracking,
+      success: (res) => {
+        if (!(res && res.confirm)) return;
+        const trackingId = String(res.content || '').trim();
+        if (!trackingId) {
+          this.showAutoToast('提示', '请输入运单号');
+          return;
+        }
+        this.showMyLoading('保存中...');
+        const isNewTracking = trackingId !== oldTracking;
+        const nextStatus = (item && (item.status === 'REPAIR_COMPLETED_SENT' || item.status === 'SHIPPED'))
+          ? item.status
+          : (item && item.returnStatus === 'PENDING_RETURN' ? String(item.status || '') : 'SHIPPED');
+        const patchData = {
+          trackingId,
+          // 有单号但未记时间时补上；已有 SHIPPED/REPAIR_COMPLETED_SENT 不强行改状态
+          solveTime: adminRepairApi.SERVER_DATE
+        };
+        if (nextStatus) patchData.status = nextStatus;
+        this._repairPatch(id, patchData).then(() => {
+          this.hideMyLoading();
+          // 用户端同步：订阅消息推「已发货」，申请进度同字段自动可见
+          if (isNewTracking) {
+            const scene = nextStatus === 'REPAIR_COMPLETED_SENT' ? 'completed_sent' : 'shipped';
+            this._notifyRepairSubscribe(id, scene, { trackingId });
+          }
+          this.showMyDialog({
+            title: '已保存',
+            content: `寄出运单号已写入维修工单：\n${trackingId}\n\n用户端「申请进度」将同步显示「查看物流」，并已尝试推送发货通知。`,
+            showCancel: false,
+            confirmText: '好的',
+            success: () => {
+              this.loadReturnRequiredList();
+              try { this.loadMyActivitiesPromise().catch(() => {}); } catch (err) {}
+            }
+          });
+        }).catch((err) => {
+          this.hideMyLoading();
+          this.showMyDialog({
+            title: '保存失败',
+            content: (err && (err.errMsg || err.message)) || '请稍后重试',
+            showCancel: false,
+            confirmText: '知道了'
+          });
+        });
       }
     });
   },
@@ -4371,6 +5257,7 @@ module.exports = function createMyPageConfig(hubView) {
           }).then(() => {
             // 🔴 第二步：查找对应的 shop_orders 订单并同步到微信订单中心
             // 通过用户的 openid 和维修项目来匹配订单
+            this._notifyRepairSubscribe(item._id, 'completed_sent');
             const userOpenId = item._openid;
             if (!userOpenId) {
               this.hideMyLoading();
@@ -4546,9 +5433,19 @@ module.exports = function createMyPageConfig(hubView) {
           this._repairPatch(id, {
             returnCompleted: true,
             returnCompleteTime: adminRepairApi.SERVER_DATE,
-            status: 'RETURN_RECEIVED'
+            status: 'RETURN_RECEIVED',
+            returnLogisticsSigned: true,
+            returnSignedAdminNotifySent: true,
+            returnSignedAdminNotifyAt: adminRepairApi.SERVER_DATE
           }).then(() => {
             this.hideMyLoading();
+            try {
+              const wecomAdminTodo = require('../../../utils/wecomAdminTodo.js');
+              wecomAdminTodo.notifyAdminTodo(
+                'return_signed',
+                '故障配件已签收，请注意查收'
+              );
+            } catch (e) { /* ignore */ }
             this.showMyDialog({
               title: '操作成功',
               content: '已确认收货，订单已标记为售后完结',
@@ -4643,10 +5540,10 @@ module.exports = function createMyPageConfig(hubView) {
     const id = e.currentTarget.dataset.id;
     
     this.showMyDialog({
-      title: '确认完成',
-      content: '确认该订单已完成？完成后将删除该订单记录。',
+      title: '完结此单',
+      content: '确认整个售后流程已结束？\n完结后卡片将从「需寄回」列表移除，用户端也会标记为售后完结。\n未处理完请不要点。',
       showCancel: true,
-      confirmText: '确定',
+      confirmText: '确认完结',
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
@@ -4725,16 +5622,42 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 更新数据库状态
   updateRepairStatus(id, status, trackingId = '', extras = {}) {
-    this.showMyLoading('处理中...');
+    if (this._updatingRepairStatus) {
+      this.showAutoToast('提示', '正在提交，请稍候');
+      return;
+    }
+    this._updatingRepairStatus = true;
+    this.showMyLoading(status === 'SHIPPED' ? '正在写入运单号，请勿重复点击...' : '处理中...');
+
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      this._updatingRepairStatus = false;
+      if (this._shippingRepairId === id) this._shippingRepairId = '';
+      try { clearTimeout(watchdog); } catch (e) {}
+    };
+    const watchdog = setTimeout(() => {
+      if (settled) return;
+      finish();
+      this.hideMyLoading();
+      this.loadPendingRepairs();
+      this.showAutoToast('提示', '请求较慢，列表已刷新，请确认是否已寄出');
+    }, 12000);
+
     let promise;
     if (this._canAdminRepairCloud() && (status === 'SHIPPED' || status === 'TUTORIAL')) {
-      promise = adminRepairApi.call({
+      const payload = {
         id,
         action: status === 'SHIPPED' ? 'ship' : 'tutorial',
         trackingId,
         note: (extras && (extras.solveNote || extras.shipRemark)) || '',
         shipRemark: (extras && extras.shipRemark) || ''
-      }).then((res) => {
+      };
+      if (status === 'SHIPPED' && extras && Object.prototype.hasOwnProperty.call(extras, 'needReturn')) {
+        payload.needReturn = extras.needReturn === true;
+      }
+      promise = adminRepairApi.call(payload).then((res) => {
         if (!res || !res.success) {
           return Promise.reject(new Error((res && res.errMsg) || '更新失败'));
         }
@@ -4749,6 +5672,9 @@ module.exports = function createMyPageConfig(hubView) {
       if (extras && typeof extras.shipRemark === 'string') {
         patch.shipRemark = extras.shipRemark.trim();
       }
+      if (status === 'SHIPPED' && extras && Object.prototype.hasOwnProperty.call(extras, 'needReturn')) {
+        patch.needReturn = extras.needReturn === true;
+      }
       promise = this._repairPatch(id, patch);
     } else {
       const db = wx.cloud.database();
@@ -4760,17 +5686,26 @@ module.exports = function createMyPageConfig(hubView) {
       if (extras && typeof extras.shipRemark === 'string') {
         updateData.shipRemark = extras.shipRemark.trim();
       }
+      if (status === 'SHIPPED' && extras && Object.prototype.hasOwnProperty.call(extras, 'needReturn')) {
+        updateData.needReturn = extras.needReturn === true;
+      }
       promise = db.collection('shouhou_repair').doc(id).update({ data: updateData });
     }
     promise.then(() => {
+      finish();
       this.hideMyLoading();
       
       // 根据状态显示不同的成功提示
       let successMsg = '处理完成';
       if (status === 'SHIPPED') {
-        successMsg = '备件寄出成功\n运单号已录入，用户端已同步';
+        const needReturn = extras && extras.needReturn === true;
+        successMsg = needReturn
+          ? '备件寄出成功\n已要求用户寄回故障配件\n约 3 天后将再提醒用户寄回'
+          : '备件寄出成功\n未要求用户寄回';
+        this._notifyRepairSubscribe(id, 'shipped');
       } else if (status === 'TUTORIAL') {
         successMsg = '已通知用户查看维修教程\n用户可在个人中心查看教程进行修复';
+        this._notifyRepairSubscribe(id, 'tutorial');
       }
       
       this.showMyDialog({
@@ -4787,11 +5722,12 @@ module.exports = function createMyPageConfig(hubView) {
         }
       });
     }).catch(err => {
+      finish();
       this.hideMyLoading();
       console.error('更新失败:', err);
       this.showMyDialog({
         title: '处理失败',
-        content: err.errMsg || '操作失败，请稍后重试',
+        content: (err && (err.message || err.errMsg)) || '操作失败，请稍后重试',
         showCancel: false,
         confirmText: '知道了'
       });
@@ -4876,19 +5812,246 @@ module.exports = function createMyPageConfig(hubView) {
   },
 
   // --- 绑定设备相关逻辑 ---
-  openBindModal() { 
-    this.resetBluetoothState(); // 这一步保证了每次进来都是干净的
-    this.setData({ showModal: true });
-    this.updateModalState();
+  _calcBindModalScrollH() {
+    try {
+      const win = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      const winH = win.windowHeight || 667;
+      const d = this.data || {};
+      // 填表态需要更高滚动区，否则上传框/提交按钮被裁切
+      if (d.bluetoothReady && d.showBindAuditForm) {
+        return Math.max(420, Math.floor(winH * 0.62));
+      }
+      if (d.bluetoothReady) {
+        return Math.max(220, Math.floor(winH * 0.32));
+      }
+      return Math.max(300, Math.floor(winH * 0.46));
+    } catch (e) {
+      return 400;
+    }
   },
-  closeBindModal() { 
-    this.resetBluetoothState(); // 关闭时也重置
-    this.setData({ showModal: false });
-    this.updateModalState();
+
+  _refreshBindModalScrollH(extraData, callback) {
+    const patch = Object.assign({ bindModalScrollH: this._calcBindModalScrollH() }, extraData || {});
+    this.setData(patch, callback);
+  },
+
+  _playBindSheetIn() {
+    this.setData({ bindSheetFromBottom: true, bindModalClosing: false }, () => {
+      setTimeout(() => {
+        this.setData({ bindSheetFromBottom: false });
+      }, 40);
+    });
+  },
+
+  /** 故障报修中心「去绑定」来源（30 分钟内有效） */
+  _peekFromRepairBind() {
+    try {
+      const app = getApp();
+      const ctx = app && app.globalData && app.globalData.fromRepairBind;
+      if (!ctx || !ctx.ts) return null;
+      if (Date.now() - Number(ctx.ts) > 30 * 60 * 1000) {
+        app.globalData.fromRepairBind = null;
+        return null;
+      }
+      return ctx;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  _clearFromRepairBind() {
+    try {
+      const app = getApp();
+      if (app && app.globalData) app.globalData.fromRepairBind = null;
+    } catch (e) { /* ignore */ }
+    if (this.data.fromRepairBind) {
+      this.setData({ fromRepairBind: false });
+    }
+  },
+
+  _isFromRepairBindFlow() {
+    return !!(this.data.fromRepairBind || this._peekFromRepairBind());
+  },
+
+  /** 绑定已可报修：回到售后中心故障报修页 */
+  _returnToRepairCenterAfterBind() {
+    const ctx = this._peekFromRepairBind() || {};
+    const model = String(ctx.model || '').trim();
+    this._clearFromRepairBind();
+    try {
+      if (typeof this.closeBindModal === 'function') this.closeBindModal();
+      if (typeof this.resetBluetoothState === 'function') this.resetBluetoothState();
+    } catch (e) { /* ignore */ }
+
+    const pages = getCurrentPages() || [];
+    for (let i = pages.length - 2; i >= 0; i--) {
+      const p = pages[i];
+      if ((p.route || '').indexOf('shouhou/shouhou') >= 0) {
+        if (typeof p._enterRepairAfterBindReturn === 'function') {
+          p._enterRepairAfterBindReturn(model);
+        }
+        wx.navigateBack({ delta: pages.length - 1 - i });
+        return;
+      }
+    }
+
+    const qs = ['serviceType=repair'];
+    if (model) qs.push('model=' + encodeURIComponent(model));
+    const url = '/package-biz/pages/shouhou/shouhou?' + qs.join('&');
+    wx.redirectTo({
+      url,
+      fail: () => wx.navigateTo({ url, animationType: 'none' })
+    });
+  },
+
+  /** 需等管理员审核：提示后留在「我的」，清除回流标记 */
+  _notifyRepairBindPendingAudit(options = {}) {
+    const title = options.title || '已提交，请等待审核';
+    const content = options.content
+      || '管理员尚未录入该设备信息。请等待审核通过后，再回到维修中心提交故障报修资料。';
+    this._clearFromRepairBind();
+    this.showMyDialog({
+      title,
+      content,
+      confirmText: '知道了',
+      success: () => {
+        if (typeof this.closeBindModal === 'function') this.closeBindModal();
+        if (typeof this.resetBluetoothState === 'function') this.resetBluetoothState();
+      }
+    });
+  },
+
+  openBindModal() {
+    console.warn('[openBindModal] tap', {
+      showModal: this.data.showModal,
+      profileGuideActive: this.data.profileGuideActive,
+      profileGuideDemoBind: this.data.profileGuideDemoBind,
+      showProfileGuideIntro: this.data.showProfileGuideIntro,
+      hubInShell: this.data.hubInShell,
+      active: this.properties ? this.properties.active : this.data.active
+    });
+    if (this.data.profileGuideDemoBind && !this._profileGuideAllowBindOpen) {
+      console.warn('[openBindModal] blocked by guide demo');
+      return;
+    }
+    if (this._closingBindModal) return;
+    if (typeof this._clearProfileGuideTimers === 'function') {
+      this._clearProfileGuideTimers();
+    }
+
+    // 断开蓝牙同步清理；弹窗打开合并进同一次 setData，避免真机竞态把 showModal 冲掉
+    try {
+      if (this.ble) {
+        this.ble.stopScan();
+        this.ble.disconnect();
+      }
+    } catch (e) {
+      console.error('[openBindModal] ble reset failed', e);
+    }
+
+    const fromRepair = this._peekFromRepairBind();
+    const patch = {
+      profileGuideDemoBind: false,
+      showFaultBindForm: false,
+      showModal: true,
+      bindSheetFromBottom: true,
+      bindModalClosing: false,
+      fromRepairBind: !!fromRepair,
+      isScanning: false,
+      bluetoothReady: false,
+      connectStatusText: '点击搜索设备',
+      currentSn: '',
+      connectedDeviceName: '',
+      isDeviceLocked: false,
+      lockedReason: '',
+      modelIndex: null,
+      buyDate: '',
+      imgReceipt: '',
+      imgChat: '',
+      previewImgReceipt: '',
+      previewImgChat: '',
+      showBindAuditForm: false,
+      showBindSuccess: false,
+      bindSuccessTitle: '',
+      bindSuccessContent: '',
+      bindStageKey: (this.data.bindStageKey || 0) + 1,
+      bindModalScrollH: this._calcBindModalScrollH()
+    };
+    if (this.data.showProfileGuideIntro || this.data.profileGuideActive || this.data.showProfileGuide) {
+      Object.assign(patch, {
+        showProfileGuideIntro: false,
+        showProfileGuide: false,
+        profileGuideActive: false,
+        profileGuideShowSpot: false,
+        profileGuideShowBubble: false,
+        profileGuideCenterOnly: false,
+        profileGuideMaskPassthrough: false,
+        profileGuideStep: 0,
+        profileGuideSpotStyle: 'display:none;',
+        profileGuideBubbleStyle: '',
+        profileGuideModalScrollIntoView: ''
+      });
+    }
+    this.setData(patch, () => {
+      console.warn('[openBindModal] showModal after setData =', this.data.showModal);
+      setTimeout(() => {
+        this.setData({ bindSheetFromBottom: false });
+      }, 40);
+      if (typeof this.updateModalState === 'function') {
+        this.updateModalState();
+      }
+    });
+  },
+
+  closeBindModal() {
+    if (this.data.profileGuideDemoBind && !this._profileGuideAllowClose) return;
+    if (this._closingBindModal) return;
+    if (!this.data.showModal && !this.data.bindModalClosing) return;
+
+    this._closingBindModal = true;
+    try {
+      if (this.ble) {
+        this.ble.stopScan();
+        this.ble.disconnect();
+      }
+    } catch (e) { /* ignore */ }
+
+    // 先播下滑收起，再清数据，避免硬切消失
+    this.setData({
+      bindModalClosing: true,
+      bindSheetFromBottom: true
+    });
+    if (typeof this.updateModalState === 'function') {
+      this.updateModalState();
+    }
+
+    setTimeout(() => {
+      this._closingBindModal = false;
+      this.resetBluetoothState();
+      this.setData({
+        showModal: false,
+        bindModalClosing: false,
+        bindSheetFromBottom: false,
+        profileGuideDemoBind: false,
+        showFaultBindForm: false,
+        showBindSuccess: false,
+        bindSuccessTitle: '',
+        bindSuccessContent: ''
+      });
+      if (typeof this.updateModalState === 'function') {
+        this.updateModalState();
+      }
+    }, 300);
+  },
+
+  onBindSuccessConfirm() {
+    this.closeBindModal();
+    try { this.loadMyDevices(); } catch (e) { /* ignore */ }
   },
   
   // [新增] 重置蓝牙和表单状态
   resetBluetoothState() {
+    if (this.data.profileGuideDemoBind && !this._profileGuideAllowClose && !this._profileGuideAllowReset) return;
     // 1. 断开物理连接
     if (this.ble) {
       this.ble.stopScan();
@@ -4915,7 +6078,10 @@ module.exports = function createMyPageConfig(hubView) {
       previewImgReceipt: '',
       previewImgChat: '',
       showBindAuditForm: false,
-      showFaultBindForm: false
+      showFaultBindForm: false,
+      showBindSuccess: false,
+      bindSuccessTitle: '',
+      bindSuccessContent: ''
     });
   },
   
@@ -4940,7 +6106,7 @@ module.exports = function createMyPageConfig(hubView) {
   // [交互] 点击弹窗确定（带收缩退出动画）
   onDialogConfirm() {
     const cb = this.data.dialog.callback;
-    this.setData({ dialogClosing: true });
+    this.setData({ dialogClosing: true, 'dialog.callback': null });
     setTimeout(() => {
       this.setData({ 
         'dialog.show': false,
@@ -4951,15 +6117,17 @@ module.exports = function createMyPageConfig(hubView) {
     }, 420);
   },
 
-  // [交互] 点击取消（带收缩退出动画）
+  // [交互] 点击取消（带收缩退出动画；有回调时传 confirm:false，供双选项弹窗使用）
   closeCustomDialog() {
-    this.setData({ dialogClosing: true });
+    const cb = this.data.dialog.callback;
+    this.setData({ dialogClosing: true, 'dialog.callback': null });
     setTimeout(() => {
       this.setData({ 
         'dialog.show': false,
         dialogClosing: false
       });
       this.updateModalState();
+      if (cb) cb({ confirm: false });
     }, 420);
   },
 
@@ -5049,6 +6217,135 @@ module.exports = function createMyPageConfig(hubView) {
       (this.data.afterSalesToast && this.data.afterSalesToast.show) ||
       (repair && repair.needReturn)
     );
+  },
+
+  // ========== 配置回溯：已审核绑定申请，可修改质保时长 ==========
+  openConfigRollbackModal() {
+    if (!this.data.isAdmin) {
+      this.showAutoToast('提示', '仅管理员可操作');
+      return;
+    }
+    this.setData({
+      showConfigRollbackModal: true,
+      configRollbackClosing: false,
+      configRollbackLoading: true,
+      configRollbackHistory: [],
+      configRollbackSubmitting: false
+    });
+    this.loadConfigRollbackHistory();
+  },
+
+  closeConfigRollbackModal() {
+    if (this.data.configRollbackSubmitting) return;
+    this.setData({ configRollbackClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showConfigRollbackModal: false,
+        configRollbackClosing: false
+      });
+    }, 250);
+  },
+
+  loadConfigRollbackHistory() {
+    const formatTime = (raw) => {
+      if (!raw) return '';
+      try {
+        const d = new Date(typeof raw === 'object' && raw.$date ? raw.$date : raw);
+        if (isNaN(d.getTime())) return '';
+        const pad = (n) => (n < 10 ? '0' + n : '' + n);
+        return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      } catch (e) {
+        return '';
+      }
+    };
+
+    wx.cloud.callFunction({
+      name: 'adminAuditDevice',
+      data: { action: 'list_audited' }
+    }).then((res) => {
+      const r = (res && res.result) || {};
+      if (!r.success) {
+        this.setData({ configRollbackLoading: false });
+        this.showAutoToast('加载失败', r.errMsg || r.msg || '请稍后重试');
+        return;
+      }
+      const warrantyValues = this.data.warrantyValues || [180, 365, 500, 720];
+      const list = (r.data || []).map((item) => {
+        let warrantyIndex = warrantyValues.indexOf(Number(item.totalDays));
+        if (warrantyIndex < 0) warrantyIndex = 1;
+        return {
+          _id: item._id,
+          sn: item.sn,
+          productModel: item.productModel || '',
+          bindType: item.bindType || 'normal',
+          isAdminApply: !!item.isAdminApply,
+          status: item.status || 'PENDING',
+          approved: !!item.approved,
+          hasDevice: !!item.hasDevice,
+          totalDays: Number(item.totalDays) || 0,
+          expiryDate: item.expiryDate || '',
+          remainingDays: Number(item.remainingDays) || 0,
+          timeText: formatTime(item.createTime),
+          warrantyIndex
+        };
+      });
+      this.setData({ configRollbackLoading: false, configRollbackHistory: list });
+    }).catch((err) => {
+      this.setData({ configRollbackLoading: false });
+      this.showAutoToast('加载失败', (err && (err.message || err.errMsg)) || '网络异常');
+    });
+  },
+
+  onConfigRollbackWarrantyChange(e) {
+    if (this.data.configRollbackSubmitting) return;
+    const idx = Number(e.currentTarget.dataset.index);
+    const pickedIndex = Number(e.detail && e.detail.value);
+    const warrantyValues = this.data.warrantyValues || [180, 365, 500, 720];
+    const warrantyOptions = this.data.warrantyOptions || [];
+    const item = (this.data.configRollbackHistory || [])[idx];
+    const days = warrantyValues[pickedIndex];
+    if (!item || !days) return;
+
+    if (Number(item.totalDays) === Number(days)) return;
+
+    this.showMyDialog({
+      title: '确认修改质保',
+      content: `SN：${item.sn}\n\n质保 ${item.totalDays}天 → ${warrantyOptions[pickedIndex] || days + '天'}\n\n将按原购买时间重新计算到期日。`,
+      showCancel: true,
+      confirmText: '确认修改',
+      cancelText: '取消',
+      success: (res) => {
+        if (!(res && res.confirm)) return;
+        this.setData({ configRollbackSubmitting: true });
+        this.showMyLoading('修改中...');
+        wx.cloud.callFunction({
+          name: 'adminAuditDevice',
+          data: { action: 'rollback_warranty', sn: item.sn, claimId: item._id, customDays: days }
+        }).then((callRes) => {
+          const r = (callRes && callRes.result) || {};
+          this.hideMyLoading();
+          this.setData({ configRollbackSubmitting: false });
+          if (!r.success) {
+            this.showAutoToast('修改失败', r.errMsg || r.msg || '请稍后重试');
+            return;
+          }
+          // 本地同步更新该行
+          this.setData({
+            [`configRollbackHistory[${idx}].totalDays`]: r.totalDays || days,
+            [`configRollbackHistory[${idx}].expiryDate`]: r.expiryDate || '',
+            [`configRollbackHistory[${idx}].remainingDays`]: r.remainingDays || 0,
+            [`configRollbackHistory[${idx}].warrantyIndex`]: pickedIndex
+          });
+          this.showAutoToast('已修改', r.msg || `质保已改为 ${days} 天`);
+          // 用户设备列表里显示的剩余天数也要刷新
+          try { this.loadMyDevices(); } catch (err2) {}
+        }).catch((err) => {
+          this.hideMyLoading();
+          this.setData({ configRollbackSubmitting: false });
+          this.showAutoToast('修改失败', (err && (err.message || err.errMsg)) || '网络异常');
+        });
+      }
+    });
   },
 
   // 测试清空：打开密码输入弹窗
@@ -5331,6 +6628,8 @@ module.exports = function createMyPageConfig(hubView) {
   },
 
   closeInputDialog() {
+    // 录单备件弹窗取消时解锁，避免下一次点不动
+    if (this._shippingRepairId) this._shippingRepairId = '';
     this.setData({ inputDialogClosing: true });
     setTimeout(() => {
       this.setData({ 
@@ -5379,7 +6678,9 @@ module.exports = function createMyPageConfig(hubView) {
     this.ble.onConnecting = () => {
       this.setData({ 
         isScanning: true, // 保持动画
-        connectStatusText: '正在连接设备...' 
+        connectStatusText: this.data.showMotherboardBleModal
+          ? '正在连接新主板...'
+          : '正在连接设备...'
       });
     };
 
@@ -5390,10 +6691,13 @@ module.exports = function createMyPageConfig(hubView) {
 
     // 状态：连接断开
     this.ble.onDisconnected = () => {
+      if (this.data.motherboardBleSubmitting) return;
       this.setData({ 
         isScanning: false,
         bluetoothReady: false,
-        connectStatusText: '连接断开，请重试' 
+        connectStatusText: this.data.showMotherboardBleModal
+          ? '连接断开，点雷达重试'
+          : '连接断开，请重试'
       });
     };
 
@@ -5413,7 +6717,9 @@ module.exports = function createMyPageConfig(hubView) {
       
       this.setData({ 
         isScanning: false, 
-        connectStatusText: '蓝牙错误，请检查权限' 
+        connectStatusText: this.data.showMotherboardBleModal
+          ? '蓝牙错误，点雷达重试'
+          : '蓝牙错误，请检查权限'
       });
       console.error(err);
     };
@@ -5421,6 +6727,7 @@ module.exports = function createMyPageConfig(hubView) {
 
   // --- 点击按钮：开始扫描 ---
   async startConnect() {
+    if (this.data.profileGuideDemoBind) return;
     if (this.data.bluetoothReady) return; // 已连接就不点了
 
     this.setData({ 
@@ -5454,25 +6761,56 @@ module.exports = function createMyPageConfig(hubView) {
     const raw = String(snValue || '').trim().toUpperCase();
     if (!raw) return '';
     if (raw.startsWith('PENDING-FAULT-')) return '待录入';
+    if (raw.startsWith('FAULT-CLAIM-')) return '待售后确认';
     if (raw.startsWith('MT-')) return raw;
     if (raw.startsWith('MT')) return `MT-${raw.slice(2).replace(/^-/, '')}`;
     if (raw.startsWith('NB')) return `MT-${raw.replace(/^NB-?/, '')}`;
     return `MT-${raw.replace(/^-/, '')}`;
   },
 
-  formatDeviceSnDisplay(snValue, snPending) {
+  formatDeviceSnDisplay(snValue, snPending, device) {
     const raw = String(snValue || '').trim();
+    const d = device || {};
     if (snPending || raw.startsWith('PENDING-FAULT-')) return '待录入';
+    if (d.faultAutoBind) return '待连接';
+    if (d.faultAwaitingDiagnosis || raw.startsWith('FAULT-CLAIM-')) return '待售后确认';
     return this.normalizeDisplaySn(raw);
   },
 
   isPendingFaultSn(snValue) {
-    return String(snValue || '').trim().toUpperCase().startsWith('PENDING-FAULT-');
+    const u = String(snValue || '').trim().toUpperCase();
+    return u.startsWith('PENDING-FAULT-') || u.startsWith('FAULT-CLAIM-');
+  },
+
+  /** 解绑/删除设备时传给云端的 SN（禁止用展示文案如「待录入」） */
+  resolveUnbindSn(device) {
+    if (!device) return '';
+    const raw = String(device.snRaw || device.sn || '').trim();
+    if (!raw) return '';
+    const displayLabels = ['待录入', '待连接', '待售后确认'];
+    if (displayLabels.indexOf(raw) >= 0) return '';
+    return raw;
   },
 
   // --- 核心业务：处理设备绑定 (连接成功后调用) ---
   handleDeviceBound(device) {
     const rawName = device.name || device.localName || '';
+
+    // 工厂调试机：立即断开，不弹绑定/审核
+    if (isBlockedDebugBleDevice(device)) {
+      console.warn('[bind] reject blocked debug device', rawName);
+      try { this.ble && this.ble.disconnect(); } catch (e) {}
+      this.setData({
+        isScanning: false,
+        bluetoothReady: false,
+        showBindAuditForm: false,
+        showBindSuccess: false,
+        isDeviceLocked: false,
+        connectStatusText: '调试设备不可绑定'
+      });
+      this.showAutoToast('提示', '这是调试设备，不允许绑定');
+      return;
+    }
     
     // 1. 【搜 NB】只允许 NB 开头的设备连接
     if (!rawName.toUpperCase().startsWith('NB')) {
@@ -5488,6 +6826,12 @@ module.exports = function createMyPageConfig(hubView) {
       return;
     }
 
+    // 寄回维修「更换主板」：解析到 SN 后直接替换，不走普通绑定
+    if (this.data.showMotherboardBleModal && this.data.motherboardBleRepairId) {
+      this._completeMotherboardReplacementFromBle(normalizedSn);
+      return;
+    }
+
     const displayName = normalizedSn;
 
     // 🔴 修复：蓝牙物理连接成功后，立即设置 bluetoothReady 为 true
@@ -5500,7 +6844,10 @@ module.exports = function createMyPageConfig(hubView) {
       currentSn: normalizedSn,
       connectStatusText: `正在验证: ${displayName}...`,
       isDeviceLocked: true, // 等待云函数结果
-      showBindAuditForm: false // 预登记成功则不显示审核表单
+      showBindAuditForm: false, // 预登记成功则不显示审核表单
+      showBindSuccess: false,
+      bindStageKey: (this.data.bindStageKey || 0) + 1,
+      bindModalScrollH: this._calcBindModalScrollH()
     });
 
     // 4. 调用云函数 (传过去的 deviceName 是 MT 开头的)
@@ -5525,20 +6872,37 @@ module.exports = function createMyPageConfig(hubView) {
         
         if (result && result.success) {
           this.setData({ connectStatusText: '已连接' });
-          // 情况1：自动通过 (重绑/二手)
+          // 情况1：自动通过 (重绑/二手/预登记)
           if (result.status === 'AUTO_APPROVED') {
             const bindOkContent = result.fromPreRegister
               ? '该设备已预登记，已自动激活并绑定，无需提交审核。'
-              : '设备已激活并连接，数据已同步。';
-            // 使用自定义弹窗，而不是 Toast
-            this.showMyDialog({
-              title: '绑定成功',
-              content: bindOkContent,
-              confirmText: '好的',
-              success: () => {
-                this.closeBindModal();
-                this.loadMyDevices();
-              }
+              : (result.fromFaultAutoBind
+                ? '设备已连接并绑定到档案。'
+                : '设备已激活并连接，数据已同步。');
+            if (this._isFromRepairBindFlow()) {
+              this.setData({
+                isDeviceLocked: false,
+                lockedReason: '',
+                showBindAuditForm: false,
+                showBindSuccess: true,
+                bindSuccessTitle: '绑定成功',
+                bindSuccessContent: bindOkContent + '\n将返回故障报修继续提交。',
+                bindStageKey: (this.data.bindStageKey || 0) + 1,
+                bindModalScrollH: this._calcBindModalScrollH()
+              });
+              setTimeout(() => this._returnToRepairCenterAfterBind(), 900);
+              return;
+            }
+            // 片内成功态（上滑切换），不要突然盖一层中心弹窗再硬关
+            this.setData({
+              isDeviceLocked: false,
+              lockedReason: '',
+              showBindAuditForm: false,
+              showBindSuccess: true,
+              bindSuccessTitle: '绑定成功',
+              bindSuccessContent: bindOkContent,
+              bindStageKey: (this.data.bindStageKey || 0) + 1,
+              bindModalScrollH: this._calcBindModalScrollH()
             });
           } 
           // 情况2：新机需审核
@@ -5550,10 +6914,11 @@ module.exports = function createMyPageConfig(hubView) {
               isDeviceLocked: false, // 立即解锁，显示表格
               bluetoothReady: true,  // 确保 bluetoothReady 也是 true
               lockedReason: '',       // 清空锁定原因
-              showBindAuditForm: true
+              showBindAuditForm: true,
+              showBindSuccess: false,
+              bindStageKey: (this.data.bindStageKey || 0) + 1
             }, () => {
-              // setData 完成后的回调，验证状态
-              // 🔴 双重保险：如果状态还是不对，强制再设置一次
+              this.setData({ bindModalScrollH: this._calcBindModalScrollH() });
               if (this.data.isDeviceLocked !== false) {
                 this.setData({ isDeviceLocked: false });
               }
@@ -5564,7 +6929,9 @@ module.exports = function createMyPageConfig(hubView) {
             this.setData({
               isDeviceLocked: false,
               currentSn: normalizedSn,
-              showBindAuditForm: false
+              showBindAuditForm: false,
+              showBindSuccess: false,
+              bindStageKey: (this.data.bindStageKey || 0) + 1
             });
             this.showAutoToast('提示', result.msg || '连接成功');
           }
@@ -5572,7 +6939,6 @@ module.exports = function createMyPageConfig(hubView) {
         } else {
           const blockedConnect = result?.status === 'SCRAPPED'
             || result?.status === 'LOCKED_REPLACEMENT'
-            || result?.status === 'FAULT_PENDING_MISMATCH'
             || result?.status === 'FAULT_PENDING_BLOCK';
           if (blockedConnect) {
             this.ble.disconnect();
@@ -5584,7 +6950,9 @@ module.exports = function createMyPageConfig(hubView) {
             bluetoothReady: blockedConnect ? false : this.data.bluetoothReady,
             isDeviceLocked: true,
             lockedReason: result?.msg || '设备绑定失败',
-            showBindAuditForm: false
+            showBindAuditForm: false,
+            showBindSuccess: false,
+            bindStageKey: (this.data.bindStageKey || 0) + 1
           });
           if (blockedConnect) {
             this.showAutoToast('无法绑定', result?.msg || '该设备不可用', { preserveBindModal: true });
@@ -5667,11 +7035,9 @@ module.exports = function createMyPageConfig(hubView) {
         }
         // 🔴 先用本地路径做预览：用户能“立马看到”图片
         if (type === 'receipt') {
-          this.setData({ previewImgReceipt: tempPath }, () => {
-          });
+          this.setData({ previewImgReceipt: tempPath });
         } else {
-          this.setData({ previewImgChat: tempPath }, () => {
-          });
+          this.setData({ previewImgChat: tempPath });
         }
         
         this.showMyLoading('上传中...');
@@ -5702,6 +7068,7 @@ module.exports = function createMyPageConfig(hubView) {
   // 3. 提交审核 (存入 my_read)
   // ==========================================
   submitAudit() {
+    if (this.data.profileGuideDemoBind) return;
     // A. 校验蓝牙是否连接 (必须有 SN)
     if (!this.data.bluetoothReady || !this.data.currentSn) {
       this.showAutoToast('提示', '请先连接MT设备', { preserveBindModal: true });
@@ -5724,41 +7091,57 @@ module.exports = function createMyPageConfig(hubView) {
       this.showAutoToast('提示', '请上传聊天记录', { preserveBindModal: true });
       return;
     }
+    if (!this.data.buyDate) {
+      this.showAutoToast('提示', '请选择购买日期', { preserveBindModal: true });
+      return;
+    }
 
+    // 蓝牙绑定提交：再要一次授权，审核通过后可推服务通知
+    this._askRepairSubscribeThen(() => this._submitAuditNow());
+  },
+
+  _submitAuditNow() {
     this.showMyLoading('提交中...');
 
-    // D. 存入数据库 my_read
-    const db = wx.cloud.database();
-    
-    db.collection('my_read').add({
+    wx.cloud.callFunction({
+      name: 'submitFaultBind',
       data: {
-        // openid 会自动被云开发注入，不用手动传
+        action: 'submitDevice',
         sn: this.data.currentSn,
         fullDeviceName: this.data.currentSn,
-        
         productModel: this.data.modelOptions[this.data.modelIndex],
         buyDate: this.data.buyDate,
-        bindType: this.data.bindType, // new / used
-        
+        bindType: this.data.bindType || 'new',
         imgReceipt: this.data.imgReceipt,
-        imgChat: this.data.imgChat || '',
-        
-        status: 'PENDING', // 审核状态
-        createTime: db.serverDate()
+        imgChat: this.data.imgChat || ''
       }
-    }).then(res => {
+    }).then((res) => {
       this.hideMyLoading();
-      
-      // 使用自定义弹窗
+      const result = res.result || {};
+      if (!result.success) {
+        this.showMyDialog({
+          title: result.blocked ? '无法重复提交' : '提交失败',
+          content: result.msg || '请稍后重试',
+          confirmText: '知道了'
+        });
+        return;
+      }
+      if (this._isFromRepairBindFlow()) {
+        this._notifyRepairBindPendingAudit({
+          title: '已提交，请等待审核',
+          content: '管理员尚未录入该设备信息。请等待审核通过后，再回到维修中心提交故障报修资料。'
+        });
+        return;
+      }
       this.showMyDialog({
         title: '已提交',
-        content: '审核通过后将自动生效。',
+        content: '审核通过后将自动生效。处理完成前请勿重复申请。',
         success: () => {
           this.closeBindModal();
-          this.resetBluetoothState(); // 【关键】提交成功后，断开连接，清空状态
+          this.resetBluetoothState();
         }
       });
-    }).catch(err => {
+    }).catch((err) => {
       this.hideMyLoading();
       console.error(err);
       this.showAutoToast('提交失败', err.errMsg || '网络错误，请重试');
@@ -5766,6 +7149,7 @@ module.exports = function createMyPageConfig(hubView) {
   },
 
   openFaultBindForm() {
+    if (this.data.profileGuideDemoBind || (this.data.profileGuideActive && !this._profileGuideAllowBindOpen)) return;
     if (!this.data.myOpenid) {
       this.showAutoToast('提示', '请稍候，正在加载账户信息', { preserveBindModal: true });
       return;
@@ -5773,6 +7157,7 @@ module.exports = function createMyPageConfig(hubView) {
     this._checkFaultBindEligibility().then((blocked) => {
       if (blocked) return;
       this.setData({
+        showModal: true,
         showFaultBindForm: true,
         bindType: 'fault',
         modelIndex: null,
@@ -5780,9 +7165,18 @@ module.exports = function createMyPageConfig(hubView) {
         imgReceipt: '',
         imgChat: '',
         previewImgReceipt: '',
-        previewImgChat: ''
+        previewImgChat: '',
+        showBindAuditForm: false,
+        showBindSuccess: false,
+        bindSheetFromBottom: false
       });
     });
+  },
+
+  previewFaultReceipt() {
+    const url = this.data.previewImgReceipt;
+    if (!url) return;
+    wx.previewImage({ urls: [url], current: url });
   },
 
   closeFaultBindForm() {
@@ -5829,6 +7223,7 @@ module.exports = function createMyPageConfig(hubView) {
       return;
     }
 
+    this._askRepairSubscribeThen(() => {
     this._checkFaultBindEligibility().then((blocked) => {
       if (blocked) return;
 
@@ -5846,12 +7241,23 @@ module.exports = function createMyPageConfig(hubView) {
         this.hideMyLoading();
         const result = res.result || {};
         if (!result.success) {
-          this.showAutoToast('提交失败', result.msg || '请重试');
+          this.showMyDialog({
+            title: result.blocked ? '无法重复提交' : '提交失败',
+            content: result.msg || '请重试',
+            confirmText: '知道了'
+          });
+          return;
+        }
+        if (this._isFromRepairBindFlow()) {
+          this._notifyRepairBindPendingAudit({
+            title: '已提交，请等待审核',
+            content: '无设备核验申请已提交。请等待管理员审核通过后，再回到维修中心提交故障报修资料。'
+          });
           return;
         }
         this.showMyDialog({
           title: '已提交',
-          content: '故障核验申请已提交，审核通过后将创建产品档案（序列号待录入），届时可发起报修。',
+          content: '故障核验申请已提交，审核通过后将创建质保档案。是否需录入新机 SN，由售后诊断书判定。',
           success: () => {
             this.closeBindModal();
             this.resetBluetoothState();
@@ -5862,6 +7268,7 @@ module.exports = function createMyPageConfig(hubView) {
         console.error(err);
         this.showAutoToast('提交失败', err.errMsg || '网络错误，请重试');
       });
+    });
     });
   },
 
@@ -5876,42 +7283,66 @@ module.exports = function createMyPageConfig(hubView) {
   removeDevice(e) {
     const index = e.currentTarget.dataset.index;
     const device = this.data.deviceList[index];
-    const snForUnbind = device.snRaw || device.sn;
-    const normalizedSn = this.isPendingFaultSn(snForUnbind)
-      ? String(snForUnbind).trim()
-      : this.normalizeDisplaySn(snForUnbind);
+    if (!device) {
+      this.showAutoToast('失败', '设备信息异常');
+      return;
+    }
+    const snForUnbind = this.resolveUnbindSn(device);
+    const deviceId = device._id || '';
+    const asAdmin = !!(this.data.isAdmin || this.data.isAuthorized);
 
-    // 使用自定义弹窗替代 wx.showModal
+    if (!deviceId && !snForUnbind) {
+      this.showAutoToast('失败', '设备 SN 异常，请刷新后重试');
+      return;
+    }
+
     this.showMyDialog({
-      title: '解除绑定',
-      content: '解绑后您将无法查看该设备状态。如果设备转让给他人，解绑后对方才可连接。确定操作吗？',
+      title: asAdmin ? '强制解绑（管理员）' : '解除绑定',
+      content: asAdmin
+        ? '管理员将强制解绑该设备（无视待购配件、锁定等状态）。确定继续吗？'
+        : '解绑后您将无法查看该设备状态。如果设备转让给他人，解绑后对方才可连接。确定操作吗？',
       showCancel: true,
-      confirmText: '确定解绑',
+      confirmText: asAdmin ? '强制解绑' : '确定解绑',
       cancelText: '取消',
       success: (res) => {
         if (res.confirm) {
           this.showMyLoading('正在解绑...');
-          
+
+          const payload = { forceAdmin: asAdmin };
+          if (deviceId) payload.deviceId = deviceId;
+          if (snForUnbind) payload.sn = snForUnbind;
+
+          console.log('[removeDevice] 准备解绑：', {
+            deviceId,
+            snForUnbind,
+            deviceName: device.name,
+            asAdmin,
+            payload
+          });
+
           wx.cloud.callFunction({
             name: 'unbindDevice',
-            data: { sn: normalizedSn },
-            success: res => {
+            data: payload,
+            success: (cfRes) => {
               this.hideMyLoading();
-              if (res.result.success) {
-                
-                // ✅ [替换]
+              const result = (cfRes && cfRes.result) || {};
+              if (result.success) {
                 this.showMyDialog({
                   title: '解绑成功',
-                  content: '设备已移除',
+                  content: result.msg || '设备已移除',
                   success: () => {
-                    this.loadMyDevices(); // 刷新设备列表
+                    // 云端已按用户清理残留售后记录，这里刷新设备与卡片数据
+                    this.loadMyDevices();
+                    if (typeof this.loadMyActivitiesPromise === 'function') {
+                      this.loadMyActivitiesPromise().catch(() => {});
+                    }
                   }
                 });
               } else {
-                this.showAutoToast('失败', res.result.msg);
+                this.showAutoToast('失败', result.msg || '解绑失败');
               }
             },
-            fail: err => {
+            fail: () => {
               this.hideMyLoading();
               this.showAutoToast('错误', '网络异常');
             }
@@ -6012,10 +7443,13 @@ module.exports = function createMyPageConfig(hubView) {
         const isExpired = exp ? diff <= 0 : false;
 
         uniqueList.push({
+          _id: item._id,
           name: item.productModel || '未知型号',
-          sn: this.formatDeviceSnDisplay(item.sn, snPending),
+          sn: this.formatDeviceSnDisplay(item.sn, snPending, item),
           snRaw: item.sn,
           snPending,
+          faultAutoBind: !!item.faultAutoBind,
+          faultAwaitingDiagnosis: !!item.faultAwaitingDiagnosis,
           days: diff > 0 ? diff : 0,
           isExpired,
           hasExtra: item.hasExtra,
@@ -6031,35 +7465,185 @@ module.exports = function createMyPageConfig(hubView) {
         deviceList: uniqueList,
         ...this.syncMemberTierFromDevices(uniqueList)
       });
+
+      // 设备列表就绪后清理孤儿售后记录（设备已移除但残留待购配件/待寄回）
+      this._cleanupOrphanRepairs();
     }).catch(err => {
       console.error('设备加载失败:', err);
     });
   },
 
-  // 2. 加载待审核列表 (管理员用)
+  /** 云端按 openid 清理孤儿售后记录；清掉了就刷新卡片。每次页面生命周期只跑一次 */
+  _cleanupOrphanRepairs() {
+    if (this._orphanCleanupRan) return;
+    this._orphanCleanupRan = true;
+    wx.cloud.callFunction({
+      name: 'userUpdateRepair',
+      data: { action: 'cleanupOrphanRepairs' }
+    }).then((res) => {
+      const r = (res && res.result) || {};
+      console.log('[my] 孤儿售后清理结果:', r);
+      if (r.success && r.cleaned > 0) {
+        this.loadMyActivitiesPromise().catch(() => {});
+        if (typeof this.loadReturnRequiredList === 'function') {
+          this.loadReturnRequiredList();
+        }
+      }
+    }).catch((err) => {
+      console.warn('[my] 孤儿售后清理失败（忽略）:', err);
+    });
+  },
+
+  // 2. 加载待审核列表 (管理员用，走云函数以拿到 openid)
   loadAuditList() {
     if (!this.data.isAdmin) return;
-    
+
+    wx.cloud.callFunction({
+      name: 'adminAuditDevice',
+      data: { action: 'list_pending' }
+    }).then((res) => {
+      const r = res.result || {};
+      if (r.success && Array.isArray(r.data)) {
+        const auditList = r.data.map((item) => this._enrichAuditItem(item));
+        this.setData({ auditList });
+        return;
+      }
+      console.warn('[my] loadAuditList cloud failed', r);
+      this._loadAuditListFallback();
+    }).catch((err) => {
+      console.warn('[my] loadAuditList cloud error', err);
+      this._loadAuditListFallback();
+    });
+  },
+
+  _loadAuditListFallback() {
     wx.cloud.database().collection('my_read')
-      .where({ status: 'PENDING' }) // 只看待审核
+      .where({ status: 'PENDING' })
       .orderBy('createTime', 'desc')
       .get()
       .then(res => {
-        this.setData({ auditList: res.data });
+        const auditList = (res.data || []).map((item) => this._enrichAuditItem(item));
+        this.setData({ auditList });
       })
       .catch(err => {
         console.error('加载审核列表失败', err);
       });
   },
 
+  _resolveApplicantOpenid(item) {
+    const fromItem = String(
+      (item && (item.openid || item.userOpenid || item._openid)) || ''
+    ).trim();
+    if (fromItem) return fromItem;
+
+    const isAdmin = this.data.isAuthorized || this.data.isAdmin;
+    if (!isAdmin) return '';
+
+    const myOpenid = String(this.data.myOpenid || '').trim();
+    if (!myOpenid) return '';
+
+    // 管理员审核故障核验：缺 openid 时用当前管理员（自测 / 历史单）
+    if (item && item.bindType === 'fault') return myOpenid;
+    if (item && item.submittedByAdmin === true) return myOpenid;
+    return '';
+  },
+
+  _ensureMyOpenid() {
+    const cached = String(this.data.myOpenid || '').trim();
+    if (cached) return Promise.resolve(cached);
+    return wx.cloud.callFunction({ name: 'login' })
+      .then((res) => {
+        const openid = String((res.result && res.result.openid) || '').trim();
+        if (openid) this.setData({ myOpenid: openid });
+        return openid;
+      })
+      .catch(() => '');
+  },
+
+  _enrichAuditItem(item) {
+    if (!item) return item;
+    const openid = this._resolveApplicantOpenid(item);
+    return Object.assign({}, item, {
+      openid,
+      userOpenid: openid
+    });
+  },
+
+  loadPendingSnEntryList() {
+    if (!this.data.isAdmin) return;
+    wx.cloud.callFunction({
+      name: 'adminRegisterSn',
+      data: { action: 'list_pending_fault' }
+    }).then((res) => {
+      const r = res.result || {};
+      if (r.success && Array.isArray(r.data)) {
+        this.setData({ pendingSnEntryList: r.data });
+      }
+    }).catch((err) => {
+      console.warn('[my] loadPendingSnEntryList failed', err);
+    });
+  },
+
+  computeAuditWarrantyPreview(buyDateStr, daysIndex) {
+    const warrantyValues = this.data.warrantyValues || [180, 365, 500, 720];
+    const idx = Number(daysIndex);
+    const days = warrantyValues[idx] || 365;
+    const finalDate = buyDateStr ? new Date(buyDateStr) : new Date();
+    const expiryDateObj = new Date(finalDate.getTime() + days * 24 * 60 * 60 * 1000);
+    const expiryDateStr = expiryDateObj.toISOString().split('T')[0];
+    const now = new Date();
+    const remainingDays = Math.ceil((expiryDateObj - now) / (1000 * 60 * 60 * 24));
+    const yearShort = finalDate.getFullYear() % 10;
+    const month = finalDate.getMonth() + 1;
+    return {
+      totalDays: days,
+      expiryDate: expiryDateStr,
+      remainingDays: remainingDays > 0 ? remainingDays : 0,
+      isExpired: remainingDays <= 0,
+      firmwareVer: `V${yearShort}.${month}.3`
+    };
+  },
+
+  refreshAuditWarrantyPreview() {
+    const { adminSetDate, adminSetDaysIndex } = this.data;
+    this.setData({
+      auditWarrantyPreview: this.computeAuditWarrantyPreview(adminSetDate, adminSetDaysIndex)
+    });
+  },
+
+  goToControlCenterForSnEntry(e) {
+    const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
+    const userOpenid = String(ds.openid || '').trim();
+    const productModel = String(ds.model || '').trim();
+    let url = '/package-app/pages/scan/scan';
+    const params = [];
+    if (userOpenid) params.push(`pendingSnUser=${encodeURIComponent(userOpenid)}`);
+    if (productModel) params.push(`pendingSnModel=${encodeURIComponent(productModel)}`);
+    if (params.length) url += `?${params.join('&')}`;
+    wx.navigateTo({
+      url,
+      fail: () => this.showAutoToast('提示', '跳转控制中心失败，请从功能列表进入')
+    });
+  },
+
   // 3. 打开审核弹窗（点击"审核设置"按钮）
   openAuditModal(e) {
-    const item = e.currentTarget.dataset.item;
+    const item = this._enrichAuditItem(e.currentTarget.dataset.item);
+    const options = this.data.adminAuditModelOptions || PRODUCT_DETAIL_OPTIONS;
+    const canonical = normalizeProductDetailModel(item && item.productModel) || '';
+    let modelIndex = options.indexOf(canonical);
+    if (modelIndex < 0 && item && item.productModel) {
+      modelIndex = options.findIndex((m) => String(m).toUpperCase() === String(item.productModel).toUpperCase());
+    }
+    if (modelIndex < 0) modelIndex = 0;
     this.setData({
       showAuditModal: true,
       currentAuditItem: item,
       adminSetDate: item.buyDate, // 默认填用户写的日期
-      adminSetDaysIndex: 1        // 默认选 365天
+      adminSetDaysIndex: 1,        // 默认选 365天
+      adminAuditModelIndex: modelIndex
+    }, () => {
+      this.refreshAuditWarrantyPreview();
     });
     this.updateModalState();
   },
@@ -6072,55 +7656,88 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 5. 弹窗里的输入监听
   onAdminDateChange(e) { 
-    this.setData({ adminSetDate: e.detail.value }); 
+    this.setData({ adminSetDate: e.detail.value }, () => {
+      this.refreshAuditWarrantyPreview();
+    });
   },
   
   onAdminDaysChange(e) { 
-    this.setData({ adminSetDaysIndex: e.detail.value }); 
+    this.setData({ adminSetDaysIndex: e.detail.value }, () => {
+      this.refreshAuditWarrantyPreview();
+    });
+  },
+
+  onAdminAuditModelChange(e) {
+    const idx = Number(e.detail.value);
+    if (Number.isNaN(idx) || idx < 0) return;
+    this.setData({ adminAuditModelIndex: idx });
   },
 
   // 6. 【核心】确认通过 -> 调用云函数
   confirmApprove() {
-    const { currentAuditItem, adminSetDate, adminSetDaysIndex, warrantyValues } = this.data;
+    const {
+      currentAuditItem,
+      adminSetDate,
+      adminSetDaysIndex,
+      warrantyValues,
+      adminAuditModelIndex,
+      adminAuditModelOptions
+    } = this.data;
+    if (!currentAuditItem) return;
+    if (!adminSetDate) {
+      this.showAutoToast('提示', '请选择购买日期');
+      return;
+    }
     const days = warrantyValues[adminSetDaysIndex];
+    const options = adminAuditModelOptions || PRODUCT_DETAIL_OPTIONS;
+    const productModel = String(options[adminAuditModelIndex] || '').trim();
+    if (!productModel) {
+      this.showAutoToast('提示', '请选择设备型号');
+      return;
+    }
+    const isFault = currentAuditItem.bindType === 'fault';
 
-    this.showMyLoading('正在同步...');
+    this.showMyLoading(isFault ? '正在保存...' : '正在激活...');
 
-    wx.cloud.callFunction({
-      name: 'adminAuditDevice',
-      data: { 
-        id: currentAuditItem._id, 
-        action: 'approve',
-        customDate: adminSetDate, // 传修改后的日期
-        customDays: days          // 传选择的天数
-      },
-      success: res => {
-        this.hideMyLoading();
-        if (res.result.success) {
-          
-          // ✅ [替换为自定义弹窗]
-          this.showMyDialog({
-            title: '审核完成',
-            content: currentAuditItem.bindType === 'fault'
-              ? '故障核验已通过，用户设备卡已创建（序列号待录入）。'
-              : '该设备已激活，数据已同步给用户。',
-            confirmText: '好的',
-            success: () => {
-              this.closeAuditModal(); // 关闭审核框
-              this.loadAuditList();   // 刷新列表
-              this.loadMyDevices();   // 刷新设备
-            }
-          });
-        } else {
-          // ✅ 替换
-          this.showAutoToast('失败', res.result.errMsg);
+    this._ensureMyOpenid().then(() => {
+      const applicantOpenid = this._resolveApplicantOpenid(currentAuditItem);
+
+      wx.cloud.callFunction({
+        name: 'adminAuditDevice',
+        data: { 
+          id: currentAuditItem._id, 
+          action: 'approve',
+          customDate: adminSetDate,
+          customDays: days,
+          productModel,
+          applicantOpenid
+        },
+        success: res => {
+          this.hideMyLoading();
+          if (res.result.success) {
+            this.showMyDialog({
+              title: isFault ? '已保存' : '审核完成',
+              content: isFault
+                ? '质保档案已创建。是否在「待录入 SN」出现，需售后在报修卡填写诊断书：仅主板/控制器故障才需录入新机 SN。'
+                : '该设备 SN 已激活，数据已同步给用户。',
+              confirmText: '好的',
+              success: () => {
+                this.closeAuditModal();
+                this.loadAuditList();
+                this.loadPendingSnEntryList();
+                this.loadMyDevices();
+              }
+            });
+          } else {
+            this.showAutoToast('失败', res.result.errMsg);
+          }
+        },
+        fail: err => {
+          this.hideMyLoading();
+          console.error(err);
+          this.showAutoToast('操作失败', err.errMsg || '网络错误，请重试');
         }
-      },
-      fail: err => {
-        this.hideMyLoading();
-        console.error(err);
-        this.showAutoToast('操作失败', err.errMsg || '网络错误，请重试');
-      }
+      });
     });
   },
 
@@ -6252,8 +7869,10 @@ module.exports = function createMyPageConfig(hubView) {
   },
 
   closeAfterSalesDialog() {
+    const cb = this.data.afterSalesDialog.callback;
     this.setData({ 'afterSalesDialog.show': false, 'afterSalesDialog.callback': null });
     this.updateModalState();
+    if (cb) cb({ confirm: false });
   },
 
   buildReturnAddressSubmitContext() {
@@ -6461,8 +8080,8 @@ module.exports = function createMyPageConfig(hubView) {
         };
       });
       
-      // [新增] 处理维修工单
-      const repairApps = res[2].data.map(i => {
+      // [新增] 处理维修工单（orphanHidden：设备已移除后自动清理的记录，用户端不再显示）
+      const repairApps = res[2].data.filter(i => i.orphanHidden !== true).map(i => {
         // 🔴 调试日志：检查每条维修单的数据
         if (i._id) {
         }
@@ -6571,6 +8190,10 @@ module.exports = function createMyPageConfig(hubView) {
             statusClass = 'processing';
           }
           statusNum = 0; // 待处理
+        } else if (i.status === 'ADMIN_REVIEWED' || (i.status === 'PENDING' && i.diagnosisDone)) {
+          statusText = '管理员已审核，待发出设备';
+          statusClass = 'processing';
+          statusNum = 0;
         } else if (i.status === 'PENDING') {
           statusText = '审核中';
           statusClass = 'processing';
@@ -6592,12 +8215,12 @@ module.exports = function createMyPageConfig(hubView) {
           i.expressNo,
           i.logisticsNo,
           i.shipSn,
-          i.outboundTrackingId
+          i.outboundTrackingId,
+          i.shipTrackingId,
+          i.expressNumber
         );
         const stRaw = i.status;
         const stRawNorm = String(stRaw == null ? '' : stRaw).trim().toUpperCase();
-        const shippedLike =
-          stRawNorm === 'SHIPPED' || stRaw === 1 || stRaw === '1';
         const completedSent = stRaw === 'REPAIR_COMPLETED_SENT';
 
         const result = {
@@ -6623,7 +8246,9 @@ module.exports = function createMyPageConfig(hubView) {
         };
 
         const tid = String(result.trackingId || '').trim();
-        const showLogisticsRepairBtn = !!tid && (shippedLike || completedSent);
+        // 只要有寄出单号就给用户「查看物流」；不强制要求状态已是 SHIPPED/REPAIR_COMPLETED_SENT
+        // （管理员在寄回维修卡上补录单号时可能仍保留原状态）
+        const showLogisticsRepairBtn = !!tid;
         const showRepairOrderBtn = !!completedSent;
         const showTutorialJumpBtn =
           (stRaw === 1 || stRaw === '1' || stRawNorm === 'TUTORIAL') &&
@@ -7103,18 +8728,19 @@ module.exports = function createMyPageConfig(hubView) {
       return;
     }
 
-    if (!this.data.provinceList || this.data.provinceList.length === 0) {
-      this.loadProvinceList();
-    }
-    
-    // 设置当前运单号（如果有）
-    this.setData({
-      returnTrackingIdInput: repair.returnTrackingId || '',
-      showReturnAddressModal: true,
-      returnAddressModalClosing: false,
-      'afterSalesState.returnAddressModal': this.buildReturnAddressModalState(repair)
+    // 用户点开寄回填写：再攒一次推送额度（后续待支付 / 寄回）
+    this._askRepairSubscribeThen(() => {
+      if (!this.data.provinceList || this.data.provinceList.length === 0) {
+        this.loadProvinceList();
+      }
+      this.setData({
+        returnTrackingIdInput: repair.returnTrackingId || '',
+        showReturnAddressModal: true,
+        returnAddressModalClosing: false,
+        'afterSalesState.returnAddressModal': this.buildReturnAddressModalState(repair)
+      });
+      this.updateModalState();
     });
-    this.updateModalState();
   },
 
   // 关闭底部弹窗
@@ -7280,10 +8906,12 @@ module.exports = function createMyPageConfig(hubView) {
               this.loadCityListForSmartAnalyze(this.data.provinceList[provinceIndex].id, targetCity, targetDistrict);
             }
           });
-          
-          // 🔴 修复：不在这里继续执行，等待 loadCityListForSmartAnalyze 完成
+
+          // 省份命中走早退路径时，必须收起智能粘贴输入框（原先漏关，解析完大框还压着）
+          this._closeWithAnimation('showSmartAnalyzeModal', 'smartAnalyzeModalClosing');
+          this.updateModalState();
           wx.hideLoading();
-        this.showAutoToast('提示', '解析完成');
+          this.showAutoToast('提示', '解析完成');
           return;
       } else {
           // 如果找不到匹配的省份，清空选择
@@ -8164,6 +9792,11 @@ module.exports = function createMyPageConfig(hubView) {
       return;
     }
 
+    // 寄回信息提交后再攒额度：留给「待支付 / 修好寄回」
+    this._askRepairSubscribeThen(() => this._submitAddressAndTrackingIdNow(ctx));
+  },
+
+  _submitAddressAndTrackingIdNow(ctx) {
     this.showMyLoading('提交中...');
     const db = wx.cloud.database();
     const updateData = this.buildReturnAddressUpdatePayload(ctx, db);
@@ -8394,8 +10027,10 @@ module.exports = function createMyPageConfig(hubView) {
   updateModalState() {
     const hasModal = 
       this.data.showModal ||
+      this.data.bindModalClosing ||
       this.data.showAuditModal ||
       this.data.showReturnRequiredModal ||
+      this.data.showMotherboardBleModal ||
       this.data.showReturnAddressModal ||
       this.data.showReturnAddressDialog ||
       this.data.showSmartAnalyzeModal ||
@@ -8406,6 +10041,8 @@ module.exports = function createMyPageConfig(hubView) {
       this.data.showFillRepairModal ||
       this.data.showPurchasePartsModal ||
       this.data.showPaidRepairConfirmModal ||
+      this.data.showProfileGuide ||
+      this.data.showProfileGuideIntro ||
       (this.data.afterSalesToast && this.data.afterSalesToast.show) ||
       (this.data.afterSalesDialog && this.data.afterSalesDialog.show) ||
       this.data.showCopySuccessModal ||
@@ -8414,6 +10051,8 @@ module.exports = function createMyPageConfig(hubView) {
       (this.data.dialog && this.data.dialog.show) ||
       (this.data.inputDialog && this.data.inputDialog.show) ||
       (this.data.diagnosisDialog && this.data.diagnosisDialog.show) ||
+      (this.data.returnRequestDialog && this.data.returnRequestDialog.show) ||
+      this.data.returnRequestDialogClosing ||
       (this.data.autoToast && this.data.autoToast.show);
     
     if (this.data.hasModalOpen !== hasModal) {
@@ -8487,6 +10126,10 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 维修状态「查看教程可修复」：跳转到 shouhou 对应型号教程
   goToShouhouTutorialFromActivity(e) {
+    this._askRepairSubscribeThen(() => this._goToShouhouTutorialFromActivityNow(e));
+  },
+
+  _goToShouhouTutorialFromActivityNow(e) {
     const item = e.currentTarget.dataset.item || {};
     let model = String(item.model || item.displayModel || '').trim();
     if (model && model.indexOf(' - ') !== -1) {
@@ -8527,6 +10170,10 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 🔴 「去购买配件」专用：只跳售后中心（shouhou）对应型号卡，绝不跳 shop
   goToShouhouForParts() {
+    this._askRepairSubscribeThen(() => this._goToShouhouForPartsNow());
+  },
+
+  _goToShouhouForPartsNow() {
     const { myReturnRequiredRepair, myPurchasePartsRepair } = this.data;
     const repair = (myReturnRequiredRepair && myReturnRequiredRepair.needPurchaseParts)
       ? myReturnRequiredRepair
@@ -8783,10 +10430,10 @@ class BLEHelper {
     this.wx.onBluetoothDeviceFound((res) => {
       const devices = res.devices || [];
       
-      // 识别 NB 开头的设备
+      // 识别 NB 开头且非调试机的设备
       const targetDevice = devices.find(device => {
         const name = device.name || device.localName || '';
-        return name.toUpperCase().startsWith('NB');
+        return name.toUpperCase().startsWith('NB') && !isBlockedDebugBleDevice(device);
       });
 
       if (targetDevice) {
@@ -8798,6 +10445,10 @@ class BLEHelper {
 
   // 连接设备
   connectDevice(device) {
+    if (isBlockedDebugBleDevice(device)) {
+      console.warn('[bind BLE] skip blocked debug device', device && (device.name || device.localName));
+      return;
+    }
     if (this.onConnecting) this.onConnecting();
     
     this.deviceId = device.deviceId;

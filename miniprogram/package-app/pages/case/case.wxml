@@ -10,20 +10,30 @@
 <!-- 顶部固定区：标题 + 管理员子模式 + Tab + 搜索（与全屏播放器分层，不随播放卸载） -->
 <view class="case-top-chrome">
   <view class="case-top-inner" style="padding-top: {{statusBarHeight}}px;">
-    <view class="case-title-row" style="min-height: {{navBarHeight}}px;">
-      <text class="case-title-text">MT 案例库</text>
-      <view wx:if="{{isAuthorized}}" class="admin-toggle-btn {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
-        {{isAdmin ? 'EXIT' : 'EDIT'}}
+    <view class="case-title-row case-title-row--bar" style="min-height: {{navBarHeight + 24}}px;">
+      <view class="case-title-side case-title-side--left"></view>
+      <view class="case-title-center">
+        <text class="case-title-text">MT 案例库</text>
+        <view wx:if="{{isAuthorized}}" class="admin-toggle-btn case-admin-below-title {{isAdmin ? 'on' : ''}}" catchtap="toggleAdminMode">
+          {{isAdmin ? 'EXIT' : 'EDIT'}}
+        </view>
       </view>
+      <view class="case-title-side case-title-side--right"></view>
     </view>
-    <view class="admin-submode-row {{isAdmin ? 'is-visible' : ''}}">
+    <view class="admin-submode-row {{isAdmin ? 'is-visible' : ''}}" id="caseAdminSubmodeAnchor">
       <view class="admin-submode-btns">
-        <view class="submode-btn {{adminSubMode === 'edit' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="edit">视频编辑</view>
+        <view class="submode-btn {{adminSubMode === 'edit' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="edit">
+          视频编辑
+          <text class="submode-badge" wx:if="{{pendingList.length > 0}}">{{pendingList.length}}</text>
+        </view>
         <view class="submode-btn {{adminSubMode === 'manage' ? 'active' : ''}}" catchtap="switchAdminSubMode" data-mode="manage">管理现有视频</view>
       </view>
     </view>
 
+  <!-- 视频编辑模式：隐藏分类 Tab / 搜索，整页给待处理素材 -->
+  <block wx:if="{{!(isAdmin && adminSubMode === 'edit')}}">
   <!-- 1. 可滚动的 Tab 栏 -->
+  <view id="caseGuideTabAnchor">
   <scroll-view 
     class="scroll-wrapper" 
     scroll-x="{{true}}" 
@@ -52,6 +62,7 @@
       <view class="tab-item {{currentTab === 'bicycle' ? 'active' : ''}}" bindtap="switchTab" data-type="bicycle">电动自行车</view>
     </view>
   </scroll-view>
+  </view>
 
   <!-- 🆕 刘海搜索栏 (通过 CSS 负边距与上面连接) -->
   <view class="search-notch {{showSearchBar ? 'open' : ''}}">
@@ -66,23 +77,30 @@
       <view class="search-tip" wx:if="{{searchTip}}">{{searchTip}}</view>
     </view>
   </view>
+  </block>
   </view>
 </view>
 
-<!-- 管理员待审核区域 (竖向大卡片版) -->
-<view class="pending-section" wx:if="{{isAdmin && adminSubMode === 'edit' && pendingList.length > 0}}" style="padding-top: {{caseMainScrollTop}}px; height: {{caseMainScrollHeight}}px;">
+<!-- 管理员待审核：从「视频编辑」横线以下铺满整页，不叠案例列表 -->
+<view
+  class="pending-section pending-section--fullscreen"
+  wx:if="{{isAdmin && adminSubMode === 'edit'}}"
+  style="top: {{caseMainScrollTop}}px; height: {{caseMainScrollHeight}}px;"
+>
   <view class="section-header">
     <text>待处理素材 ({{pendingList.length}})</text>
-    <text style="font-size:22rpx; font-weight:400; color:#666; margin-left:20rpx;">需下载处理后重新上传</text>
+    <text class="section-header-sub">下载打码处理后，切到「管理现有视频」再上传</text>
   </view>
   
-  <!-- 改为竖向滚动 scroll-y -->
   <scroll-view scroll-y class="pending-scroll" enhanced show-scrollbar="{{true}}">
-    <view class="pending-list">
+    <view class="pending-empty" wx:if="{{pendingList.length === 0}}">
+      <text class="pending-empty-title">暂无待审核用户视频</text>
+      <text class="pending-empty-desc">用户投稿出现后，点「⬇ 下载到相册」即可保存。</text>
+    </view>
+    <view class="pending-list" wx:else>
       <block wx:for="{{pendingList}}" wx:key="_id">
         <view class="pending-card full-width">
           
-          <!-- 1. 视频预览区 (极大) -->
           <view class="pending-video-wrap">
             <video 
               class="pending-video-el" 
@@ -96,10 +114,8 @@
             ></video>
           </view>
           
-          <!-- 2. 信息区 -->
           <view class="pending-info">
             <view class="p-row">
-              <!-- 👇👇👇 [修改] 强制加上 MT 前缀 👇👇👇 -->
               <view class="p-meta">
                 <view class="p-badges">
                   <text class="badge badge-blue">{{item.model}}</text>
@@ -117,47 +133,44 @@
             <text class="p-name-large">{{item.vehicleName}}</text>
           </view>
           
-          <!-- 3. 操作按钮组 -->
           <view class="pending-actions-large">
-            <!-- 拒绝：给用户发驳回通知 -->
             <view class="act-btn-lg reject" bindtap="rejectPending" data-id="{{item._id}}">拒绝</view>
-            
-            <!-- 标记为已处理/通过 (不发布，只改状态告诉用户过了) -->
             <view class="act-btn-lg pass" bindtap="markAsProcessed" data-id="{{item._id}}">已采纳</view>
-            
-            <!-- 下载 (必须保留，你要打马赛克) -->
-            <view class="act-btn-lg download" bindtap="downloadPending" data-fileid="{{item.videoFileID}}" data-id="{{item._id}}">⬇ 下载</view>
+            <view class="act-btn-lg download" bindtap="downloadPending" data-fileid="{{item.videoFileID}}" data-id="{{item._id}}">⬇ 下载到相册</view>
           </view>
 
         </view>
       </block>
       
-      <!-- 底部垫高，防止最后一个被遮挡 -->
       <view style="height: 40rpx;"></view>
     </view>
   </scroll-view>
 </view>
 
-<!-- 🔴 核心修改：使用 scroll-view 包裹视频列表 -->
-<!-- 高度计算：100vh - (状态栏 + 标题栏44px + 导航栏高度约120rpx) -->
+<!-- 案例列表：视频编辑模式不显示 -->
 <scroll-view 
   class="main-scroll-view"
+  wx:if="{{!(isAdmin && adminSubMode === 'edit')}}"
   scroll-y="{{true}}"
   bindscroll="handleScrollViewScroll" 
   enhanced="{{true}}"
   show-scrollbar="{{false}}"
+  scroll-into-view="{{caseGuideScrollIntoView}}"
+  scroll-top="{{caseListScrollTop}}"
+  scroll-with-animation="{{true}}"
 >
   <!-- 顶部撑开占位：高度 = 顶栏/搜索框底边 + 间距，避免卡片被搜索栏遮住 -->
   <view class="case-scroll-top-spacer" style="height: {{caseMainScrollTop > 0 ? caseMainScrollTop : (statusBarHeight + navBarHeight + 100)}}px;"></view>
   <!-- 视频列表 -->
   <view class="video-list">
     <view wx:if="{{displayList.length === 0}}" style="width:100%; text-align:center; padding:100rpx 0; color:#999;">
-      暂无案例视频
+      {{caseVideoPlaybackEnabled ? '暂无案例视频' : '暂无案例'}}
     </view>
 
     <block wx:for="{{displayList}}" wx:key="_id" wx:for-index="index">
       <!-- 🆕 move-animation: 实现列表重排时的过渡效果 -->
       <view 
+        id="{{index === 0 ? 'case-guide-card' : ''}}"
         class="ios-card move-animation {{isDraggingCard && draggingCardId === item._id ? 'dragging' : ''}}" 
         bindtap="onCardTap" 
         bindtouchstart="{{isAdmin ? 'onCaseCardPressStart' : ''}}"
@@ -169,7 +182,7 @@
         data-index="{{index}}"
         style="{{isDraggingCard && draggingCardId === item._id ? 'position: fixed; left: ' + dragX + 'px; top: ' + dragY + 'px; width: ' + cardWidth + 'px; opacity: 0.9; z-index: 9999; transition: none;' : ''}}"
       >
-        <view class="thumb-box" style="background-color: {{item.color}};">
+        <view class="thumb-box" id="{{index === 0 ? 'case-guide-thumb' : ''}}" style="background-color: {{item.color}};">
           <block wx:if="{{item.coverUrl}}">
             <block wx:if="{{item.dualCover}}">
               <image src="{{item.coverThumb}}" mode="aspectFill" class="card-cover-img card-cover-low {{caseCoverLoadedMap[index] ? 'is-hidden' : ''}}" lazy-load="true" binderror="onCaseCoverImageError" data-index="{{index}}"></image>
@@ -234,11 +247,35 @@
 </scroll-view>
 
 <!-- 底部发布按钮 (通用：录制或上传，管理员编辑模式下显示) -->
-<view class="fab-center" wx:if="{{!isAdmin || adminSubMode === 'edit'}}">
+<view id="caseGuideFabAnchor" class="fab-center" wx:if="{{!isAdmin || adminSubMode === 'manage'}}">
   <button class="publish-btn" bindtap="handleFabTap">
     <!-- 纯 CSS 绘制的加号图标 -->
     <view class="icon-plus"></view>
   </button>
+</view>
+
+<!-- 案例库：再次进入时先选「查看教程 / 跳过」 -->
+<view class="case-guide-intro-mask" wx:if="{{showCaseGuideIntro}}" catchtouchmove="noop" catchtap="noop">
+  <view class="case-guide-intro-box" catchtap="noop">
+    <view class="case-guide-intro-title">MT 案例库</view>
+    <view class="case-guide-intro-desc">需要快速了解如何浏览和上传案例吗？</view>
+    <view class="case-guide-intro-actions">
+      <view class="case-guide-intro-btn case-guide-intro-btn--ghost" catchtap="caseGuideIntroStart">查看教程</view>
+      <view class="case-guide-intro-btn case-guide-intro-btn--primary" catchtap="caseUsageGuideSkip">跳过</view>
+    </view>
+  </view>
+</view>
+
+<!-- 案例库分步功能引导 -->
+<view class="case-guide-mask" wx:if="{{showCaseUsageGuide}}" catchtouchmove="noop" catchtap="noop">
+  <view class="case-guide-spot" style="{{caseGuideSpotStyle}}"></view>
+  <view class="case-guide-bubble case-guide-bubble--{{caseGuideArrowDir}}" style="{{caseGuideBubbleStyle}}">
+    <view class="case-guide-arrow" style="{{caseGuideArrowStyle}}"></view>
+    <view class="case-guide-step-tag">{{caseGuideStepTag}}</view>
+    <view class="case-guide-title">{{caseGuideTitle}}</view>
+    <view class="case-guide-desc">{{caseGuideDesc}}</view>
+    <view class="case-guide-btn {{caseGuideBtnLocked ? 'is-locked' : ''}}" bindtap="caseUsageGuideNext">{{caseGuideBtnText}}</view>
+  </view>
 </view>
 
 <!-- ================= 弹窗区域 ================= -->
@@ -633,7 +670,7 @@
 <!-- 11. 全屏播放器：下拉跟手位移 + 退场动画；手势层负责任意处点击暂停 / 横向拖拽进度 / 任意区域下滑退出 -->
 <view 
   class="fullscreen-player-container {{caseFullscreenNoTrans ? 'fs-ty-instant' : 'fs-ty-smooth'}} {{caseFullscreenCoverHidden ? 'fs-cover-hidden' : ''}}" 
-  wx:if="{{showVideoPlayer}}"
+  wx:if="{{showVideoPlayer && caseVideoPlaybackEnabled}}"
   style="transform: translateY({{caseFullscreenTy}}px);"
 >
   <video 

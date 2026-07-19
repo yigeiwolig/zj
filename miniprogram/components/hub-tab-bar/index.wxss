@@ -33,10 +33,25 @@
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.tab-item-label-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .tab-item.is-active .tab-item-label {
   color: #1d1d1f;
   font-weight: 800;
   transform: translateY(-4rpx);
+}
+
+.tab-item.is-active .tab-item-label-wrap {
+  transform: translateY(-4rpx);
+}
+
+.tab-item.is-active .tab-item-label-wrap .tab-item-label {
+  transform: none;
 }
 
 .tab-item-dot {
@@ -54,4 +69,18 @@
 .tab-item.is-active .tab-item-dot {
   opacity: 1;
   transform: scale(1);
+}
+
+/* 「我的」未读/待办红点（贴在文字右上角） */
+.tab-item-badge {
+  position: absolute;
+  top: -6rpx;
+  right: -14rpx;
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: #ff3b30;
+  box-shadow: 0 0 0 3rpx rgba(255, 255, 255, 0.92);
+  z-index: 2;
+  pointer-events: none;
 }

@@ -1,8 +1,11 @@
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const hubNav = require('../../../utils/hubNav.js');
+const hubProfileBadge = require('../../../utils/hubProfileBadge.js');
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const shareApp = require('../../../utils/shareApp.js');
+const azjcAccessDebug = require('../../../utils/azjcAccessDebug.js');
+const homeGuideMixin = require('./hub-home-guide.mixin.js');
 
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js');
 var qqmapsdk = new QQMapWX({
@@ -111,6 +114,8 @@ Page({
     hubKfHighlightScene: '',
     hubShellIsAdmin: false,
     hubCartBadge: 0,
+    /** 底栏「我的」红点：售后待办/未读进度 */
+    hubProfileBadge: false,
     showHubTabBar: true,
     /** 嵌入订单/我的面板内有全屏弹窗时隐藏底栏 */
     hubShellModalOpen: false,
@@ -123,6 +128,7 @@ Page({
     hubHomeMediaCurrent: 0,
     hubHomeMediaAutoplay: false,
     hubHomeSwiperAutoplay: false,
+    ...homeGuideMixin.getHomeGuideData(),
     /** 管理员：本地开关与云端 shop_config 不一致（用户仍读云端） */
     featureFlagsUnsynced: false,
 
@@ -668,19 +674,64 @@ Page({
   /** MT 新品推荐弹窗：跟随「产品上新」(id=3) 开关，关闭入口则不再弹出 */
   _shouldShowNewArrivalModal() {
     const item = (this.data.list || []).find((i) => Number(i.id) === FEATURE_ID_PAGENEW);
-    if (item) return item.pageEnabled !== false;
+    if (item != null && item.pageEnabled != null) {
+      return this._isFlagEnabled(item.pageEnabled);
+    }
     const localFlags = this._readFeatureFlagsLocalCache();
     const key = String(FEATURE_ID_PAGENEW);
     if (localFlags && Object.prototype.hasOwnProperty.call(localFlags, key)) {
       return this._isFlagEnabled(localFlags[key]);
     }
-    return true;
+    const globalFlags = this._getGlobalProductFeatureFlags();
+    if (globalFlags && Object.prototype.hasOwnProperty.call(globalFlags, key)) {
+      return this._isFlagEnabled(globalFlags[key]);
+    }
+    // 开关未就绪时不弹，避免先闪一下再被 loadProductFeatureFlags 关掉
+    return false;
+  },
+
+  /** onLoad 前同步 global / 本地缓存开关，避免默认 pageEnabled:true 误开弹窗 */
+  _hydrateFeatureFlagsSync() {
+    let merged = {};
+    try {
+      const app = getApp();
+      const global = app && app.globalData && app.globalData.productFeatureFlags;
+      if (global && typeof global === 'object') {
+        merged = this._mergeFeatureFlagMaps(merged, this._normalizeFlagMap(global));
+      }
+    } catch (e) {}
+    const local = this._readFeatureFlagsLocalCache();
+    if (local) {
+      merged = this._mergeFeatureFlagMaps(merged, local);
+    }
+    if (!Object.keys(merged).length) return;
+    const list = this._applyFeatureFlagsToList(this.data.list, merged);
+    this._syncGlobalFlagsFromList(list);
+    this.setData({ list });
   },
 
   _syncNewArrivalModalWithPagenewFlag() {
-    if (!this._shouldShowNewArrivalModal() && this.data.showNewArrivalModal) {
-      this.closeNewArrivalModal();
+    if (!this._shouldShowNewArrivalModal()) {
+      if (this._newArrivalTimer) {
+        clearTimeout(this._newArrivalTimer);
+        this._newArrivalTimer = null;
+      }
+      if (this.data.showNewArrivalModal) {
+        this.closeNewArrivalModal();
+      }
     }
+  },
+
+  /** index 首进：等功能开关就绪后再决定是否弹窗（关「产品上新」则完全不弹） */
+  async _tryOpenNewArrivalAfterFeatureFlags() {
+    if (this._newArrivalFromIndexConsumed) return;
+    if (!this._hasPendingNewArrivalFromIndex()) return;
+    if (!this._shouldShowNewArrivalModal()) {
+      this._consumeNewArrivalFromIndexFlag();
+      this._newArrivalFromIndexConsumed = true;
+      return;
+    }
+    this._openNewArrivalFromIndexEarly();
   },
 
   _readAdminPrivilegeCache() {
@@ -1065,9 +1116,10 @@ Page({
     return Math.min(Math.max(0, prev), newLen - 1);
   },
 
-  /** wasAlreadyOpen：弹窗已展示且动画已播完则跳过；否则下一帧再挂动画类（避免同帧插入不播） */
+  /** 蒙层已展示时仅刷新内容；入场动画整段打开过程只播一次（避免数据到达后像弹两次） */
   _afterSetNewArrivalVisible(wasAlreadyOpen) {
-    if (wasAlreadyOpen && this.data.newArrivalAnimIn) return;
+    if (wasAlreadyOpen || this._newArrivalEntranceStarted) return;
+    this._newArrivalEntranceStarted = true;
     if (this._newArrivalAnimTimer) clearTimeout(this._newArrivalAnimTimer);
     this.setData({ newArrivalAnimIn: false });
     wx.nextTick(() => {
@@ -1146,6 +1198,13 @@ Page({
         this.setData(patch);
       }
     }
+    if (options && (String(options.openBind) === '1' || String(options.openBind) === 'true')) {
+      this._pendingOpenBindFromRepair = true;
+      // hubTab=2 → 我的；确保会打开绑定弹窗
+      this.setData({ hubProfileMounted: true });
+      setTimeout(() => this._tryOpenBindFromRepair(), 360);
+      setTimeout(() => this._tryOpenBindFromRepair(), 900);
+    }
     // 离页递增：作废仍在飞行的异步，防止晚到的云回调再写 __products_return_focus__ / navigateTo
     this._productsLifeSeq = 0;
     // onHide 时记录的页面栈深度；仅 >=2（曾叠子页）时才在 onShow 消费 __products_return_focus__，避免纯 onShow/前后台误消费把叠层拽回
@@ -1172,21 +1231,29 @@ Page({
     // 🔴 截屏/录屏封禁
     this.initScreenshotProtection();
 
+    // 先用 app 预拉 / 本地缓存还原开关，避免默认「产品上新=true」误开弹窗
+    this._hydrateFeatureFlagsSync();
+
     const adminCached = this._readAdminPrivilegeCache();
     if (adminCached === true) {
       this.setData({ isAuthorized: true }, () => this._syncHubPanelsAuth());
     }
 
-    // 🔴 极速优化：尽早触发新品弹窗（不等待权限和开关接口），消除 1~2 秒的瀑布流延迟
-    if (this._hasPendingNewArrivalFromIndex()) {
-      this._openNewArrivalFromIndexEarly();
-    }
+    const pendingNewArrivalFromIndex = this._hasPendingNewArrivalFromIndex();
 
-    // 顺序执行耗时操作，确保权限判定准确，但不再阻塞弹窗
+    // 等功能开关从云端就绪后再决定是否弹「产品上新」（关入口则完全不弹）
     this.checkAdminPrivilege().then(() => {
       this._syncHubPanelsAuth();
       return this.loadProductFeatureFlags();
-    }).catch(() => {});
+    }).then(() => {
+      if (pendingNewArrivalFromIndex) {
+        return this._tryOpenNewArrivalAfterFeatureFlags();
+      }
+    }).catch(() => {
+      if (pendingNewArrivalFromIndex) {
+        this._tryOpenNewArrivalAfterFeatureFlags();
+      }
+    });
     this.loadHubHomeConfig().catch(() => {});
 
     this.checkBanStatus();
@@ -1204,10 +1271,12 @@ Page({
 
     setTimeout(() => {
       this.setData({ hasEntered: true });
-      this._maybeScheduleNewArrivalFromIndex();
     }, 200);
 
-    setTimeout(() => this._preloadCasePageOnce(), 600);
+    setTimeout(() => {
+      this._preloadCasePageOnce();
+      this._preloadScanPageOnce();
+    }, 600);
   },
 
   /** 预载案例库页代码，减轻 navigateTo timeout */
@@ -1217,6 +1286,17 @@ Page({
     wx.preloadPage({
       url: '/package-app/pages/case/case',
       success: () => { this._casePagePreloaded = true; },
+      fail: () => {}
+    });
+  },
+
+  /** 预载控制中心页，减轻 navigateTo timeout */
+  _preloadScanPageOnce() {
+    if (this._scanPagePreloaded) return;
+    if (typeof wx.preloadPage !== 'function') return;
+    wx.preloadPage({
+      url: '/package-app/pages/scan/scan',
+      success: () => { this._scanPagePreloaded = true; },
       fail: () => {}
     });
   },
@@ -1290,7 +1370,18 @@ Page({
   async initNewArrivalModal() {
     if (!this._shouldShowNewArrivalModal()) return;
     if (!this._newArrivalFromIndexConsumed) return;
+    if (this._newArrivalModalInflight) return this._newArrivalModalInflight;
+    this._newArrivalModalInflight = this._initNewArrivalModalCore();
     try {
+      await this._newArrivalModalInflight;
+    } finally {
+      this._newArrivalModalInflight = null;
+    }
+  },
+
+  async _initNewArrivalModalCore() {
+    try {
+      if (!this._shouldShowNewArrivalModal()) return;
       if (!wx.cloud) return;
       const app = getApp();
       if (!app.globalData.newArrivalCache) {
@@ -1308,7 +1399,6 @@ Page({
         if (!needsCloud) {
           const enhancedCacheList = this.enhanceNewArrivalList(cache.list);
           const wasOpen = this.data.showNewArrivalModal;
-          const animDone = this.data.newArrivalAnimIn;
           this.setData({
             newArrivalList: enhancedCacheList,
             newArrivalIndex: this._pickNextNewArrivalIndex(enhancedCacheList.length),
@@ -1317,14 +1407,14 @@ Page({
             newArrivalHdLoaded: {},
             ...(wasOpen ? {} : { newArrivalAnimIn: false })
           });
-          this._afterSetNewArrivalVisible(wasOpen && animDone);
+          this._afterSetNewArrivalVisible(wasOpen);
           this.prewarmNewArrivalImages(enhancedCacheList, 2).catch(() => {});
           return;
         }
         const resolvedCache = await this.resolveProductCoverUrls(cache.list);
+        if (!this._shouldShowNewArrivalModal()) return;
         const enhancedCacheList = this.enhanceNewArrivalList(resolvedCache);
         const wasOpen2 = this.data.showNewArrivalModal;
-        const animDone2 = this.data.newArrivalAnimIn;
         this.setData({
           newArrivalList: enhancedCacheList,
           newArrivalIndex: this._pickNextNewArrivalIndex(enhancedCacheList.length),
@@ -1333,14 +1423,13 @@ Page({
           newArrivalHdLoaded: {},
           ...(wasOpen2 ? {} : { newArrivalAnimIn: false })
         });
-        this._afterSetNewArrivalVisible(wasOpen2 && animDone2);
+        this._afterSetNewArrivalVisible(wasOpen2);
         this.prewarmNewArrivalImages(enhancedCacheList, 2).catch(() => {});
         return;
       }
 
       // 无缓存：先立刻展示蒙层 + 占位，再拉云端（避免「先进页面半天才出弹窗」）
       const wasOpenLoading = this.data.showNewArrivalModal;
-      const animDoneLoading = this.data.newArrivalAnimIn;
       this.setData({
         showNewArrivalModal: true,
         newArrivalClosing: false,
@@ -1349,7 +1438,7 @@ Page({
         newArrivalHdLoaded: {},
         ...(wasOpenLoading ? {} : { newArrivalAnimIn: false })
       });
-      this._afterSetNewArrivalVisible(wasOpenLoading && animDoneLoading);
+      this._afterSetNewArrivalVisible(wasOpenLoading);
 
       // 确保已初始化云环境（有些场景只在 pagenew 里 init 过）
       if (!this.db) {
@@ -1362,15 +1451,16 @@ Page({
       }
 
       const res = await this.db.collection('products').get();
+      if (!this._shouldShowNewArrivalModal()) return;
       const products = (res.data || []).map(item => ({
         ...item,
         jumpNumber: item.jumpNumber || null
       }));
       const resolvedProducts = await this.resolveProductCoverUrls(products);
+      if (!this._shouldShowNewArrivalModal()) return;
       const enhancedProducts = this.enhanceNewArrivalList(resolvedProducts);
       if (!enhancedProducts.length) {
         const wasOpenE = this.data.showNewArrivalModal;
-        const animDoneE = this.data.newArrivalAnimIn;
         this.setData({
           newArrivalList: [{
             _id: 'fallback-empty',
@@ -1386,7 +1476,7 @@ Page({
           newArrivalHdLoaded: {},
           ...(wasOpenE ? {} : { newArrivalAnimIn: false })
         });
-        this._afterSetNewArrivalVisible(wasOpenE && animDoneE);
+        this._afterSetNewArrivalVisible(wasOpenE);
         return;
       }
 
@@ -1395,7 +1485,6 @@ Page({
         cacheTime: now
       };
       const wasOpenFinal = this.data.showNewArrivalModal;
-      const animDoneFinal = this.data.newArrivalAnimIn;
       this.setData({
         newArrivalList: enhancedProducts,
         newArrivalIndex: this._pickNextNewArrivalIndex(enhancedProducts.length),
@@ -1404,13 +1493,12 @@ Page({
         newArrivalHdLoaded: {},
         ...(wasOpenFinal ? {} : { newArrivalAnimIn: false })
       }, () => this._rebuildHubLayout());
-      this._afterSetNewArrivalVisible(wasOpenFinal && animDoneFinal);
+      this._afterSetNewArrivalVisible(wasOpenFinal);
       // 先展示后预热，避免首开被 await 阻塞导致“弹窗慢”
       this.prewarmNewArrivalImages(enhancedProducts, 2).catch(() => {});
     } catch (err) {
       console.error('[products] 加载新品弹窗数据失败:', err);
       const wasOpenErr = this.data.showNewArrivalModal;
-      const animDoneErr = this.data.newArrivalAnimIn;
       this.setData({
         newArrivalList: [{
           _id: 'fallback-error',
@@ -1426,7 +1514,7 @@ Page({
         newArrivalHdLoaded: {},
         ...(wasOpenErr ? {} : { newArrivalAnimIn: false })
       });
-      this._afterSetNewArrivalVisible(wasOpenErr && animDoneErr);
+      this._afterSetNewArrivalVisible(wasOpenErr);
     }
   },
 
@@ -1455,6 +1543,7 @@ Page({
   // 🆕 关闭新品弹窗
   closeNewArrivalModal(done) {
     if (!this.data.showNewArrivalModal || this.data.newArrivalClosing) return;
+    this._newArrivalEntranceStarted = false;
     this.setData({ newArrivalClosing: true, newArrivalAnimIn: false });
     if (this._newArrivalCloseTimer) clearTimeout(this._newArrivalCloseTimer);
     this._newArrivalCloseTimer = setTimeout(() => {
@@ -1584,9 +1673,17 @@ Page({
     if (!this.data.hasEntered) {
       this.setData({ hasEntered: true });
     }
+    if (this._pendingOpenBindFromRepair) {
+      setTimeout(() => this._tryOpenBindFromRepair(), 200);
+    }
     this.loadHubNewArrivalsForHome().catch(() => {});
     this.loadHubHomeConfig().catch(() => {});
     this._refreshHubCartBadge();
+    this._refreshHubProfileBadge();
+    // 主页功能引导（管理员不自动弹）
+    if (this.data.hubTabIndex === 0) {
+      this._maybeShowHomeGuide(false);
+    }
 
     // 从子页返回时清空跟手状态（页面缓存常见）：残留 isDragging / dragOffset 会导致滑不动、松手弹回
     this.touchStartY = 0;
@@ -1777,6 +1874,8 @@ Page({
       clearTimeout(this._newArrivalCloseTimer);
       this._newArrivalCloseTimer = null;
     }
+    this._newArrivalEntranceStarted = false;
+    this._newArrivalModalInflight = null;
     this._teardownScreenshotProtection();
   },
 
@@ -2397,6 +2496,18 @@ Page({
     });
   },
 
+  /** 管理员：回到启动页 Index（口令/入口页） */
+  onHubAdminBackToIndex() {
+    if (!this.data.isAuthorized) return;
+    wx.reLaunch({
+      url: '/pages/index/index',
+      fail: (err) => {
+        console.error('[products] 返回 Index 失败', err);
+        wx.showToast({ title: '返回失败', icon: 'none' });
+      }
+    });
+  },
+
   async onHubHomeMediaAutoplayChange(e) {
     if (!this.data.isAuthorized) return;
     const on = !!(e.detail && e.detail.value);
@@ -2491,7 +2602,17 @@ Page({
         });
         return;
       case 5: target = '/package-biz/pages/paihang/paihang'; break; // 排行榜单
-      case 1: target = '/package-app/pages/scan/scan'; break;       // 控制中心
+      case 1: // 控制中心（页面较大，预载 + 超时重试）
+        this.rememberReturnFocus(numId);
+        this._preloadScanPageOnce();
+        this._navigateToPage('/package-app/pages/scan/scan', {
+          retries: 2,
+          onFail: (err) => {
+            console.error('[products] navigateTo fail:', '/package-app/pages/scan/scan', err);
+            this.showAutoToast('提示', '页面打开失败，请稍后重试');
+          }
+        });
+        return;
       case 9: target = '/package-biz/pages/ota/ota'; break;         // OTA升级
       case 6: target = '/package-biz/pages/shouhou/shouhou'; break; // 维修中心
       case 12: target = '/package-biz/pages/home/home'; break;       // 附近门店
@@ -2551,7 +2672,7 @@ Page({
         return;
       }
 
-      if (adminCheck.total > 0) {
+      if (!azjcAccessDebug.IGNORE_ADMIN_FOR_ACCESS && adminCheck.total > 0) {
         // 是管理员：直接放行
         this.hideMyLoading();
         if (!stillOk()) return;
@@ -2626,7 +2747,7 @@ Page({
         return;
       }
 
-      // 3. 如果有未确认收货的订单 -> 提示先确认收货
+      // 3. 如果有未确认收货的已发货订单 -> 提示先确认收货
       if (realPendingOrders.length > 0) {
         this.hideMyLoading();
         if (!stillOk()) return;
@@ -2639,29 +2760,12 @@ Page({
         return;
       }
 
-      // 4. 既没订单也没绑定设备 -> 显示提示（只给这种情况）
-      // 🔴 这个提示只显示给：没下过单，并且没绑定设备的用户
-      if (allOrdersRes.data.length === 0 && !hasDevice) {
-        this.hideMyLoading();
-        if (!stillOk()) return;
-        this._showCustomModal({
-          title: '提示',
-          content: '请前往个人中心-我的订单\n确认收货后解锁教程',
-          showCancel: false,
-          confirmText: '知道了'
-        });
-        return;
-      }
-
-      // 5. 其他情况（理论上不应该到这里，但保留兜底逻辑）
+      // 4. 其余情况（含闲鱼用户、无小程序订单）-> 进入安装教程页，由 azjc 展示闲鱼截图验证
       this.hideMyLoading();
       if (!stillOk()) return;
-      this._showCustomModal({
-        title: '提示',
-        content: '请前往个人中心-我的订单\n确认收货后解锁教程',
-        showCancel: false,
-        confirmText: '知道了'
-      });
+      this.rememberReturnFocus(7);
+      wx.navigateTo({ url: '/package-biz/pages/azjc/azjc', animationType: 'none' });
+      return;
 
     } catch (err) {
       console.error('权限检查异常', err);
@@ -2775,6 +2879,10 @@ Page({
   _refreshHubPanel(tabIndex) {
     if (tabIndex === 1) {
       this._updateHubShopEmbedScrollHeight();
+      const shop = this.selectComponent('#hubShopPanel');
+      if (shop && typeof shop.scheduleShopExchangePolicyModal === 'function') {
+        shop.scheduleShopExchangePolicyModal(360);
+      }
       return;
     }
     const sel = tabIndex === 2 ? '#hubOrdersPanel' : tabIndex === 4 ? '#hubProfilePanel' : '';
@@ -2808,6 +2916,26 @@ Page({
     }
   },
 
+  /** 底栏「我的」红点：需寄回/购配件/已发货等进度 */
+  _refreshHubProfileBadge(options = {}) {
+    const markSeen = !!(options && options.markSeen);
+    const seq = (this._hubProfileBadgeSeq = (this._hubProfileBadgeSeq || 0) + 1);
+    return hubProfileBadge.fetchProfileBadgeState().then((state) => {
+      if (seq !== this._hubProfileBadgeSeq) return;
+      let show = !!state.show;
+      if (markSeen && state.list && state.list.length) {
+        hubProfileBadge.markProgressNoticesSeen(state.list);
+        show = hubProfileBadge.anyRepairNeedsBadge(
+          state.list,
+          hubProfileBadge.readSeenMap()
+        );
+      }
+      if (show !== this.data.hubProfileBadge) {
+        this.setData({ hubProfileBadge: show });
+      }
+    });
+  },
+
   onHubHomeCartTap() {
     this._setHubTabIndex(2);
   },
@@ -2820,11 +2948,32 @@ Page({
     } catch (e) {}
   },
 
+  _tryOpenBindFromRepair() {
+    if (!this._pendingOpenBindFromRepair) return;
+    const panel = this.selectComponent && this.selectComponent('#hubProfilePanel');
+    if (!panel || typeof panel.openBindModal !== 'function') return;
+    this._pendingOpenBindFromRepair = false;
+    try {
+      if (typeof panel.setData === 'function') {
+        const app = getApp();
+        const fromRepair = !!(app && app.globalData && app.globalData.fromRepairBind);
+        panel.setData({ fromRepairBind: fromRepair });
+      }
+      panel.openBindModal();
+    } catch (e) {
+      this._pendingOpenBindFromRepair = true;
+      console.warn('[products] openBind from repair failed', e);
+    }
+  },
+
   _setHubTabIndex(idx) {
     if (idx == null) return;
     const expectedPct = hubNav.panelIndexToTranslatePct(idx);
     const curPct = this.data.hubTrackTranslatePct || 0;
     if (idx === this.data.hubTabIndex && expectedPct === curPct) return;
+    if (idx !== 0 && (this.data.showHomeGuide || this.data.showHomeGuideIntro)) {
+      this.closeHomeGuide(false);
+    }
     if (idx >= 2) {
       this._dismissHubShopOverlays();
     }
@@ -2856,7 +3005,15 @@ Page({
       }
       const delay = trackMoves ? 340 : 0;
       setTimeout(() => {
-        if (idx >= 1 && idx <= 3) this._refreshHubPanel(idx);
+        if (idx >= 1 && idx <= 4) this._refreshHubPanel(idx);
+        if (idx === 4) {
+          this._refreshHubProfileBadge({ markSeen: true });
+        } else {
+          this._refreshHubProfileBadge();
+        }
+        if (idx === 0) {
+          this._maybeShowHomeGuide(false);
+        }
       }, delay);
     };
 
@@ -3220,6 +3377,10 @@ Page({
   },
 
   onBackPress() {
+    if (this.data.showHomeGuide || this.data.showHomeGuideIntro) {
+      this.closeHomeGuide(false);
+      return true;
+    }
     if (this.data.showNewArrivalModal && !this.data.newArrivalClosing) {
       this.closeNewArrivalModal();
       return true;
@@ -3231,5 +3392,7 @@ Page({
     const pageBack = require('../../../utils/pageBack.js');
     pageBack.popOrHub();
     return true;
-  }
+  },
+
+  ...homeGuideMixin.homeGuideMethods
 });

@@ -44,11 +44,47 @@
   <!-- 管理员 SN 绑定确认弹窗 -->
   <!-- ======================= -->
   <view class="password-modal-mask admin-sn-mask {{adminSnModalClosing ? 'closing' : ''}}" wx:if="{{showAdminSnModal}}" catchtouchmove="noop" catchtap="noop">
-    <view class="admin-sn-dialog" catchtouchmove="noop" catchtap="noop">
+    <view class="admin-sn-dialog {{adminSelectedBindTarget ? 'admin-bind-confirm-dialog' : ''}}" catchtouchmove="noop" catchtap="noop">
+
+      <block wx:if="{{adminSelectedBindTarget}}">
+        <view class="bind-confirm-type {{adminSelectedBindTarget.targetType === 'replacement' ? 'bind-confirm-type--blue' : 'bind-confirm-type--orange'}}">
+          <text class="bind-confirm-type-label">{{adminSelectedBindTarget.bindTypeLabel}} · {{adminSelectedBindTarget.statusLabel}}</text>
+          <text class="bind-confirm-type-title">{{adminSelectedBindTarget.actionTitle}}</text>
+        </view>
+
+        <view class="bind-confirm-user">
+          <text class="bind-confirm-name">{{adminSelectedBindTarget.displayUser}}</text>
+          <text class="bind-confirm-meta">{{adminSelectedBindTarget.productModel}}</text>
+        </view>
+
+        <view class="bind-confirm-sheet">
+          <view class="bind-confirm-line">
+            <text class="bind-confirm-line-label">{{adminSelectedBindTarget.targetType === 'fault_pending' ? '设备卡状态' : '旧设备 SN'}}</text>
+            <text class="bind-confirm-line-value {{adminSelectedBindTarget.targetType === 'fault_pending' ? 'is-warn' : ''}}">{{adminSelectedBindTarget.targetType === 'fault_pending' ? '序列号待录入' : adminSelectedBindTarget.oldSn}}</text>
+          </view>
+          <view class="bind-confirm-line">
+            <text class="bind-confirm-line-label">新机 SN</text>
+            <view class="bind-confirm-line-right">
+              <text class="bind-confirm-line-sn">{{adminSnModalSn}}</text>
+              <text class="bind-confirm-line-action" catchtap="onAdminSnSwitchDevice">换设备</text>
+            </view>
+          </view>
+        </view>
+
+        <view class="bind-confirm-explain">
+          <text class="bind-confirm-explain-title">确认后将：</text>
+          <view
+            wx:for="{{adminSelectedBindTarget.explainLines}}"
+            wx:key="*this"
+            class="bind-confirm-explain-item">
+            <text class="bind-confirm-explain-dot">·</text>
+            <text class="bind-confirm-explain-text">{{item}}</text>
+          </view>
+        </view>
+      </block>
+
+      <block wx:else>
       <view class="admin-sn-title">设备绑定</view>
-      <view class="admin-sn-question admin-sn-replacement-hint" wx:if="{{adminSelectedRepairId}}">
-        换机工单：{{adminSelectedRepair.model || '售后单'}} · 原 SN {{adminSelectedRepair.replacementOldSn || '未知'}}
-      </view>
 
       <block wx:if="{{adminSnModalMode === 'confirm_new'}}">
         <view class="admin-sn-question">将当前设备绑定为</view>
@@ -72,8 +108,9 @@
         <text class="admin-sn-sn-value">{{adminSnModalSn}}</text>
         <text class="admin-sn-switch-link" catchtap="onAdminSnSwitchDevice">换设备</text>
       </view>
+      </block>
 
-      <block wx:if="{{adminSnModalMode === 'change_model'}}">
+      <block wx:if="{{adminSnModalMode === 'change_model' && !adminSelectedBindTarget}}">
         <view
           class="admin-sn-btn primary {{adminSnRegisterSubmitting ? 'disabled' : ''}}"
           bindtap="confirmAdminSnSwitchBinding">
@@ -89,12 +126,19 @@
         <view
           class="admin-sn-btn primary {{adminSnRegisterSubmitting ? 'disabled' : ''}}"
           bindtap="confirmAdminSnRegister">
-          {{adminSnRegisterSubmitting ? '提交中…' : (adminSelectedRepairId ? '确认换机并绑定' : '确认绑定 ' + adminSnModalTargetModel)}}
+          {{adminSnRegisterSubmitting ? '提交中…' : (adminSelectedBindTarget ? adminSelectedBindTarget.confirmBtnText : ('确认绑定 ' + adminSnModalTargetModel))}}
         </view>
       </block>
 
       <view
-        wx:if="{{!adminSnShowModelPicker}}"
+        wx:if="{{adminSelectedBindTarget}}"
+        class="bind-confirm-back {{adminSnRegisterSubmitting ? 'disabled' : ''}}"
+        catchtap="onAdminBindConfirmReselect">
+        返回重选
+      </view>
+
+      <view
+        wx:if="{{!adminSnShowModelPicker && !adminSelectedBindTarget}}"
         class="admin-sn-pick-link {{adminSnRegisterSubmitting ? 'disabled' : ''}}"
         catchtap="openAdminSnOtherModelPicker">
         选择其他型号
@@ -119,27 +163,44 @@
     </view>
   </view>
 
-  <!-- 管理员：售后换机工单选择 -->
-  <view class="password-modal-mask admin-sn-mask {{adminRepairPickerClosing ? 'closing' : ''}}" wx:if="{{showAdminRepairPicker}}" catchtouchmove="noop" catchtap="noop">
-    <view class="admin-sn-dialog admin-repair-dialog" catchtouchmove="noop" catchtap="noop">
-      <view class="admin-sn-title">选择售后工单</view>
-      <view class="admin-sn-question">当前连接用于哪张待换机工单？</view>
-      <scroll-view scroll-y class="admin-repair-list" enhanced show-scrollbar="{{false}}">
+  <!-- 管理员：统一选择绑定用户（待换机 + 故障待录入） -->
+  <view wx:if="{{showAdminBindPicker}}">
+    <view class="fault-picker-mask" catchtap="skipAdminBindPick" catchtouchmove="noop"></view>
+    <view
+      class="fault-picker-panel {{adminBindPickerActive && !adminBindPickerClosing ? 'fault-picker-panel--open' : ''}}"
+      catchtouchmove="noop"
+      catchtap="noop"
+    >
+      <view class="fp-header">
+        <view class="fp-btn" bindtap="skipAdminBindPick">跳过</view>
+        <view class="fp-title-wrap">
+          <text class="fp-title">选择绑定用户</text>
+          <text class="fp-sub">待换机与待录入合并，确认后自动处理</text>
+        </view>
+        <view class="fp-btn fp-btn--confirm" bindtap="confirmAdminBindPick">下一步</view>
+      </view>
+
+      <scroll-view scroll-y class="fp-card-list" enhanced show-scrollbar="{{false}}">
         <view
-          wx:for="{{adminAwaitingRepairs}}"
+          wx:for="{{adminBindTargets}}"
           wx:key="_id"
-          class="admin-repair-item {{adminSelectedRepairId === item._id ? 'selected' : ''}}"
+          class="fp-card {{adminSelectedBindTargetId === item._id ? 'fp-card--active' : ''}} {{item.targetType === 'replacement' ? 'fp-card--replace' : 'fp-card--fault'}}"
           data-id="{{item._id}}"
-          bindtap="onPickAdminRepair">
-          <view class="admin-repair-model">{{item.model || '未知型号'}}</view>
-          <view class="admin-repair-sn" wx:if="{{item.replacementOldSn}}">原 SN：{{item.replacementOldSn}}</view>
-          <view class="admin-repair-diagnosis" wx:if="{{item.adminDiagnosis}}">诊断：{{item.adminDiagnosis}}</view>
-          <view class="admin-repair-desc">{{item.description || '无描述'}}</view>
-          <view class="admin-repair-remark" wx:if="{{item.returnNote}}">寄回备注：{{item.returnNote}}</view>
+          bindtap="onPickAdminBindTarget"
+        >
+          <view class="fp-card-main">
+            <view class="fp-card-top">
+              <text class="fp-user">{{item.displayUser}}</text>
+              <text class="fp-badge {{item.targetType === 'replacement' ? 'fp-badge--blue' : ''}}">{{item.statusLabel}}</text>
+            </view>
+            <text class="fp-model">{{item.productModel || '未知型号'}}</text>
+            <text class="fp-card-summary">{{item.cardSummary}}</text>
+          </view>
+        </view>
+        <view wx:if="{{!adminBindTargets || adminBindTargets.length === 0}}" class="fp-empty">
+          暂无待绑定用户
         </view>
       </scroll-view>
-      <view class="admin-sn-btn primary" bindtap="confirmAdminRepairPick">下一步：绑定设备</view>
-      <view class="admin-sn-btn secondary" bindtap="skipAdminRepairPick">跳过（仅预登记 SN）</view>
     </view>
   </view>
 
@@ -180,7 +241,7 @@
     <text>指令发送中，可继续拨轮</text>
   </view>
 
-  <!-- 高级设置：回读等待弹窗（3 秒内回读成功则不出现） -->
+  <!-- 高级设置：回读等待弹窗（3 秒内回读成功则不出现；超过 6 秒无回读则关闭并提示发送失败） -->
   <view class="password-modal-mask {{settingSendingModalClosing ? 'closing' : ''}}" wx:if="{{showSettingSendingModal}}" catchtouchmove="noop" catchtap="noop">
     <view class="password-box" catchtouchmove="noop" catchtap="noop">
       <view class="calibrating-icon-wrap">
@@ -191,6 +252,37 @@
     </view>
   </view>
 
+
+  <!-- ======================= -->
+  <!-- 0. 首次进入：如何选择产品型号 -->
+  <!-- ======================= -->
+  <view class="password-modal-mask {{modelPickTipClosing ? 'closing' : ''}}" wx:if="{{showModelPickTip}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box model-pick-tip-box" catchtouchmove="noop" catchtap="noop">
+      <view class="pass-title">不知道自己买的是哪款？</view>
+      <view class="model-pick-tip-sub">先看外观认<text class="model-pick-tip-strong">系列</text>，再按<text class="model-pick-tip-strong">购买价格</text>认配置</view>
+      <view class="series-map-table">
+        <view class="series-map-block" wx:for="{{modelPickGroups}}" wx:key="series" wx:for-item="group">
+          <view class="series-map-left">
+            <image class="series-map-icon" src="{{group.icon}}" mode="aspectFit" lazy-load="true"></image>
+            <view class="series-map-title-wrap">
+              <text class="series-map-title">{{group.title}}</text>
+              <text class="series-map-badge" wx:if="{{group.badge}}">{{group.badge}}</text>
+            </view>
+          </view>
+          <view class="series-map-right">
+            <view class="series-map-item" wx:for="{{group.items}}" wx:key="type">
+              <text class="series-map-item-badge">{{item.badge}}</text>
+              <text class="series-map-item-price">{{item.priceDisplay}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+      <view class="model-pick-tip-note">对照价格确认配置后，左右滑动卡片进入对应产品；仍不确定可到「客服」查询</view>
+      <view class="pass-btns">
+        <view class="p-btn confirm full-width" bindtap="closeModelPickTip">我知道了</view>
+      </view>
+    </view>
+  </view>
 
   <!-- ======================= -->
   <!-- 1. 密码验证弹窗 -->
@@ -229,16 +321,16 @@
   </view>
 
   <!-- ======================= -->
-  <!-- 3. 关钥匙动画弹窗 -->
+  <!-- 3. 折叠角度完成：要求重启车子 -->
   <!-- ======================= -->
   <view class="password-modal-mask {{keyModalClosing ? 'closing' : ''}}" wx:if="{{showKeyModal}}" catchtouchmove="noop" catchtap="noop">
     <view class="password-box" catchtouchmove="noop" catchtap="noop">
-      <view class="pass-title" style="margin-bottom: 60rpx;">操作完成</view>
+      <view class="pass-title" style="margin-bottom: 40rpx;">请重启车子</view>
       <view class="anim-stage">
         <view class="key-circle {{keyAnimState === 'grey' ? 'key-grey' : ''}}">
           <view class="key-bar {{keyAnimState === 'grey' ? 'turn-left' : ''}}"></view>
         </view>
-        <text class="anim-desc">关闭车钥匙\n重新打开</text>
+        <text class="anim-desc">关闭车钥匙后重新打开\n折叠角度设置才会生效</text>
       </view>
       <view class="pass-btns">
         <view class="p-btn confirm full-width {{keyBtnLocked ? 'btn-locked' : ''}}" bindtap="confirmKeyOff">{{keyBtnText}}</view>
@@ -259,7 +351,9 @@
             bindtap="onTapCard"
             style="transform: translateX({{item.status === 'active' ? (modelDragOffset + 'px') : (item.status === 'next' ? (nextCardOffsetPercent + '%') : (item.status === 'prev' ? (prevCardOffsetPercent + '%') : '0'))}}) scale({{item.status === 'active' ? modelActiveScale : (item.status === 'next' ? nextModelScale : (item.status === 'prev' ? prevModelScale : modelSideScale))}}); opacity: {{item.status === 'active' ? activeCardOpacity : (item.status === 'next' ? nextCardOpacity : (item.status === 'prev' ? prevCardOpacity : 0))}}; transition: {{isDraggingModel ? 'none' : 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.22s ease'}}; will-change: transform, opacity;">
         <view class="card-header">
-          <view class="series-tag">{{item.tag}}</view>
+          <view class="card-header-top">
+            <view class="series-tag">{{item.tag}}</view>
+          </view>
           <view class="model-name">{{item.name}} <text class="model-suffix {{item.type === 'Max' ? 'max' : ''}} {{item.type === 'Long' ? 'max-long' : ''}} {{item.type === 'Ultra' ? 'ultra' : ''}}">{{item.type}}</text></view>
         </view>
         <view class="visual-area {{item.name === 'F3' ? 'visual-area--f3' : ''}} {{item.canLearn ? 'visual-area--can' : ''}}">
@@ -278,6 +372,7 @@
             <image class="custom-icon" src="{{item.icon}}" mode="aspectFit" lazy-load="true"></image>
           </block>
         </view>
+        <view class="model-price-hint" wx:if="{{item.priceDisplay && !item.canLearn}}">{{item.priceDisplay}}</view>
         <view class="can-led-row" wx:if="{{item.canLearn && item.status === 'active'}}" catchtap="noop">
           <text class="can-led-label">灯珠总数</text>
           <input
@@ -335,11 +430,16 @@
       
       <!-- A. 主视图 -->
       <view class="view-layer {{detailMode === 'main' ? 'active' : ''}}">
-        <scroll-view scroll-y class="main-control-scroll" enhanced show-scrollbar="{{false}}" wx:if="{{currentModel}}">
+        <scroll-view id="mainControlGuideScroll" scroll-y class="main-control-scroll" enhanced show-scrollbar="{{false}}" scroll-top="{{mainControlScrollTop}}" scroll-with-animation="{{true}}" wx:if="{{currentModel}}">
         <view class="main-control-scroll-inner">
         <view class="integrated-card {{currentModel.name === 'F3' ? 'integrated-card--f3' : ''}}">
 
-
+          <view
+            wx:if="{{currentModel.hasUsageGuide}}"
+            class="detail-usage-guide-corner"
+            catchtap="openDetailUsageTutorial">
+            <text class="detail-usage-guide-corner-text">教程</text>
+          </view>
 
           <!-- 1. 顶部智能胶囊 -->
           <!-- 修改点：给外层加了 connected-wrapper 类，用于控制向上贴合动画 -->
@@ -369,7 +469,8 @@
                      <view class="bar {{remoteSessionBleConnected ? 'green' : 'red'}}"></view>
                      <view class="bar {{remoteSessionBleConnected ? 'green' : 'red'}}"></view>
                    </view>
-                   <text class="device-name remote-assist-capsule-text">远协中 · 用户{{remoteSessionBleConnected ? '已连蓝牙' : '未连蓝牙'}}</text>
+                   <text class="device-name remote-assist-capsule-text" wx:if="{{!remoteAssistUserAccepted}}">远协中 · 等待用户接受</text>
+                   <text class="device-name remote-assist-capsule-text" wx:else>远协中 · 用户{{remoteSessionBleConnected ? '已连蓝牙' : '未连蓝牙'}}</text>
                  </view>
                  <view class="disconnect-btn remote-assist-end-btn" catchtap="onEndRemoteAssistSession">
                    <view class="close-x remote-assist-close-x"></view>
@@ -435,12 +536,12 @@
           <view class="card-controls">
             <!-- 按钮代码保持不变 -->
             <view class="split-btn-group">
-              <view class="split-item" bindtap="enterEdit" data-type="fold">
+              <view class="split-item" id="foldAngleGuideAnchor" bindtap="enterEdit" data-type="fold">
                 <view class="btn-icon-circle"><image class="svg-icon bounce-icon" src="{{icons.lock}}"></image></view>
                 <text class="btn-text">折叠角度</text>
               </view>
               <view class="btn-divider"></view>
-              <view class="split-item" bindtap="enterEdit" data-type="open">
+              <view class="split-item" id="openAngleGuideAnchor" bindtap="enterEdit" data-type="open">
                 <view class="btn-icon-circle"><image class="svg-icon bounce-icon" src="{{icons.arrowUp}}"></image></view>
                 <text class="btn-text">打开角度</text>
               </view>
@@ -448,12 +549,12 @@
 
             <!-- 🔴 隐蔽模式教学入口（非 Max 型号显示，F1 PRO 不显示） -->
             <view class="split-btn-group" wx:if="{{currentModel.type !== 'Max' && currentModel.type !== 'Long' && currentModel.type !== 'Ultra' && !(currentModel.name === 'F1' && currentModel.type === 'Pro')}}">
-              <view class="split-item" bindtap="openStealthTutorial">
+              <view class="split-item" id="stealthEnterGuideAnchor" bindtap="openStealthTutorial">
                 <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
                 <text class="btn-text">开启隐蔽模式</text>
               </view>
               <view class="btn-divider"></view>
-              <view class="split-item" bindtap="openExitStealthTutorial">
+              <view class="split-item" id="stealthExitGuideAnchor" bindtap="openExitStealthTutorial">
                 <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
                 <text class="btn-text">退出隐蔽模式</text>
               </view>
@@ -480,10 +581,10 @@
                     </text>
                   </block>
                 </view>
-                <view class="telemetry-gauge {{(flapGaugeSpinning || flapGaugeTransition) ? ('telemetry-gauge--spinning telemetry-gauge--spin-' + flapGaugeSpinDir) : ('telemetry-gauge--' + flapPanelState)}}">
+                <view class="telemetry-gauge telemetry-gauge--{{flapPanelState}} {{flapPanelState === 'moving' || flapGaugeSpinning ? 'telemetry-gauge--spinning' : ''}}">
                   <view class="gauge-bg"></view>
-                  <view class="gauge-bar gauge-rotor {{flapGaugeTransition ? 'gauge-rotor--ease' : ''}}" style="transform: rotate({{flapGaugeRotateDeg}}deg) translate3d(0,0,0);"></view>
-                  <view class="orbit-container gauge-rotor {{flapGaugeTransition ? 'gauge-rotor--ease' : ''}}" style="transform: rotate({{flapGaugeRotateDeg}}deg) translate3d(0,0,0);">
+                  <view class="gauge-bar gauge-rotor {{flapGaugeTransition ? 'gauge-rotor--ease' : (flapPanelState === 'moving' || flapGaugeSpinning ? 'gauge-rotor--spin' : '')}}" style="transform: rotate({{flapGaugeRotateDeg}}deg) translate3d(0,0,0);"></view>
+                  <view class="orbit-container gauge-rotor {{flapGaugeTransition ? 'gauge-rotor--ease' : (flapPanelState === 'moving' || flapGaugeSpinning ? 'gauge-rotor--spin' : '')}}" style="transform: rotate({{flapGaugeRotateDeg}}deg) translate3d(0,0,0);">
                     <view class="orbit-dot"></view>
                   </view>
                   <view class="gauge-center-lamp">
@@ -521,12 +622,13 @@
 
             <!-- F1/F2 Ultra、F3 MAX：控制面板 -->
             <view class="control-panel" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
-              <view class="control-header" catchtap="toggleF2ControlPanel">
+              <view class="control-header" id="f2ControlPanelGuideAnchor" catchtap="toggleF2ControlPanel">
                 <text class="control-title">控制</text>
                 <view class="chevron-up {{f2ControlPanelOpen ? 'open' : ''}}"></view>
               </view>
               <view class="control-panel-body {{f2ControlPanelOpen ? 'is-open' : ''}}">
-                <view class="segmented-control {{flapPanelState === 'stealth' ? 'is-disabled' : ''}}">
+                <view class="control-panel-body-inner">
+                <view class="segmented-control {{flapPanelState === 'stealth' ? 'is-disabled' : ''}}" id="f2FlapControlGuideAnchor">
                   <view
                     class="segment-btn {{flapPanelState === 'closed' || flapPanelState === 'unknown' ? 'active' : ''}}"
                     catchtap="handleF2RemoteControl"
@@ -536,7 +638,7 @@
                     catchtap="handleF2RemoteControl"
                     data-cmd="打开">翻开</view>
                 </view>
-                <view class="slider-section">
+                <view class="slider-section" id="f2SpeedGuideAnchor">
                   <view class="slider-meta">
                     <text class="slider-label">运行速度</text>
                     <view class="slider-value-wrap">
@@ -556,20 +658,23 @@
                     </view>
                   </view>
                 </view>
-                <view class="voice-link" bindtap="handleVoiceControl">
+                <view class="voice-link" id="f2VoiceGuideAnchor" bindtap="handleVoiceControl">
                   <text class="voice-link-text">语音控制</text>
                   <view class="arrow-right"></view>
+                </view>
                 </view>
               </view>
             </view>
 
             <view class="split-btn-group" wx:if="{{currentModel.type === 'Max' || currentModel.type === 'Long' || currentModel.type === 'Ultra'}}">
-               <view class="split-item" style="{{currentModel.name === 'F1' && currentModel.type === 'Max' ? 'opacity:0.3; pointer-events:none;' : ''}}" bindtap="handleAutoCalibrate">
+               <block wx:if="{{filters.supportsAutoCalibrate(currentModel.name, currentModel.type)}}">
+               <view class="split-item" id="calGuideAnchor" bindtap="handleAutoCalibrate">
                  <view class="btn-icon-circle"><image class="svg-icon rotate-icon" src="{{icons.cali}}"></image></view>
                  <text class="btn-text">自动校准</text>
                </view>
                <view class="btn-divider"></view>
-               <view class="split-item" bindtap="openSettings">
+               </block>
+               <view class="split-item" id="settingsGuideAnchor" bindtap="openSettings">
                  <view class="btn-icon-circle"><image class="svg-icon rotate-icon" src="{{icons.gear}}"></image></view>
                  <text class="btn-text">高级设置</text>
                </view>
@@ -577,12 +682,12 @@
 
             <!-- F1/F2 Ultra、F3 MAX：隐蔽模式蓝牙直控 -->
             <view class="split-btn-group" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
-              <view class="split-item" bindtap="handleF2RemoteControl" data-cmd="开启隐蔽">
+              <view class="split-item" id="stealthEnterGuideAnchor" bindtap="handleF2RemoteControl" data-cmd="开启隐蔽">
                 <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
                 <text class="btn-text">开启隐蔽模式</text>
               </view>
               <view class="btn-divider"></view>
-              <view class="split-item" bindtap="handleF2RemoteControl" data-cmd="退出隐蔽">
+              <view class="split-item" id="stealthExitGuideAnchor" bindtap="handleF2RemoteControl" data-cmd="退出隐蔽">
                 <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
                 <text class="btn-text">退出隐蔽模式</text>
               </view>
@@ -590,12 +695,12 @@
 
             <!-- 其他 Max / Long / Ultra：隐蔽模式教学入口（同款卡片型号除外，使用蓝牙直控） -->
             <view class="split-btn-group" wx:if="{{(currentModel.type === 'Max' || currentModel.type === 'Long' || currentModel.type === 'Ultra') && !filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
-              <view class="split-item" bindtap="openStealthTutorial">
+              <view class="split-item" id="stealthEnterGuideAnchor" bindtap="openStealthTutorial">
                 <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
                 <text class="btn-text">开启隐蔽模式</text>
               </view>
               <view class="btn-divider"></view>
-              <view class="split-item" bindtap="openExitStealthTutorial">
+              <view class="split-item" id="stealthExitGuideAnchor" bindtap="openExitStealthTutorial">
                 <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
                 <text class="btn-text">退出隐蔽模式</text>
               </view>
@@ -621,13 +726,18 @@
             <view
               class="single-btn-wrapper"
               wx:if="{{isAdmin && remoteAssistRole === 'admin' && detailMode === 'main'}}">
+              <view class="ra-wait-banner" wx:if="{{!remoteAssistUserAccepted}}">
+                <text class="ra-wait-banner-title">等待用户接受</text>
+                <text class="ra-wait-banner-sub">用户确认后才能远程控制设备</text>
+              </view>
               <view class="ra-debug-panel">
                 <view class="ra-debug-head">
                   <view class="ra-debug-head-main">
                     <text class="ra-debug-title">远协调试日志</text>
                     <view class="ra-debug-meta">
-                      <view class="ra-debug-dot {{remoteSessionBleConnected ? 'on' : ''}}"></view>
-                      <text class="ra-debug-meta-text">用户蓝牙{{remoteSessionBleConnected ? '已连接' : '未连接'}}</text>
+                      <view class="ra-debug-dot {{remoteAssistUserAccepted ? (remoteSessionBleConnected ? 'on' : '') : ''}}"></view>
+                      <text class="ra-debug-meta-text" wx:if="{{!remoteAssistUserAccepted}}">等待用户接受远协</text>
+                      <text class="ra-debug-meta-text" wx:else>用户蓝牙{{remoteSessionBleConnected ? '已连接' : '未连接'}}</text>
                     </view>
                   </view>
                   <text class="ra-debug-end" catchtap="onEndRemoteAssistSession">结束远协</text>
@@ -653,9 +763,11 @@
               class="single-btn-wrapper"
               wx:if="{{isAdmin && remoteAssistCardEnabled && detailMode === 'main' && remoteAssistRole !== 'admin'}}">
               <view
-                class="remote-assist-request-btn remote-assist-request-btn--in-card {{remoteAssistPendingForCard ? 'active' : ''}}"
+                id="remoteAssistGuideAnchor"
+                class="remote-assist-request-btn remote-assist-request-btn--in-card {{(remoteAssistPendingForCard || remoteAssistPendingCount > 0) ? 'active' : ''}}"
                 catchtap="onAdminRemoteAssistTap">
                 <text wx:if="{{remoteAssistPendingForCard}}">接入远程协助<text wx:if="{{remoteAssistPendingCount > 1}}">({{remoteAssistPendingCount}})</text></text>
+                <text wx:elif="{{remoteAssistPendingCount > 0}}">远协请求({{remoteAssistPendingCount}})</text>
                 <text wx:else>远程协助</text>
               </view>
             </view>
@@ -665,6 +777,7 @@
               class="single-btn-wrapper"
               wx:if="{{remoteAssistCardEnabled && detailMode === 'main' && !isAdmin && remoteAssistRole !== 'admin'}}">
               <view
+                id="remoteAssistGuideAnchor"
                 class="remote-assist-request-btn remote-assist-request-btn--in-card {{ra.isCardSession(remoteAssistSessionProductKey, currentModel.name, currentModel.type, remoteAssistSessionId) ? 'active' : ''}}"
                 catchtap="onUserRemoteAssistTap">
                 <text wx:if="{{!ra.isCardSession(remoteAssistSessionProductKey, currentModel.name, currentModel.type, remoteAssistSessionId)}}">请求远程协助</text>
@@ -680,9 +793,9 @@
         </scroll-view>
       </view>
 
-      <!-- B. 折叠编辑界面 (已还原为按钮控制模式) -->
-      <view class="view-layer {{detailMode === 'edit' && editType === 'fold' ? 'active' : ''}}">
-        <scroll-view scroll-y class="main-control-scroll" enhanced show-scrollbar="{{false}}">
+      <!-- B. 折叠编辑界面 (已还原为按钮控制模式；禁止整页上下滑，避免和「调整」上滑手势打架) -->
+      <view class="view-layer {{detailMode === 'edit' && editType === 'fold' ? 'active' : ''}}" catchtouchmove="noop">
+        <scroll-view scroll-y="{{false}}" class="main-control-scroll main-control-scroll--no-page-scroll" enhanced show-scrollbar="{{false}}">
         <view class="main-control-scroll-inner">
         <view class="integrated-card">
            <!-- 顶部空白 -->
@@ -781,9 +894,9 @@
         </scroll-view>
       </view>
 
-      <!-- C. 打开编辑界面 (修复棍子 + 新弹窗) -->
-      <view class="view-layer {{detailMode === 'edit' && editType === 'open' ? 'active' : ''}}">
-        <scroll-view scroll-y="{{false}}" class="main-control-scroll" enhanced show-scrollbar="{{false}}">
+      <!-- C. 打开编辑界面 (修复棍子 + 新弹窗；禁止整页上下滑) -->
+      <view class="view-layer {{detailMode === 'edit' && editType === 'open' ? 'active' : ''}}" catchtouchmove="noop">
+        <scroll-view scroll-y="{{false}}" class="main-control-scroll main-control-scroll--no-page-scroll" enhanced show-scrollbar="{{false}}">
         <view class="main-control-scroll-inner">
         <view class="integrated-card">
           <!-- 1. 顶部按钮 -->
@@ -791,8 +904,8 @@
              <view class="preset-btn {{angleMode === '90' ? 'active' : ''}}" 
                    bindtap="switchAngle" data-angle="90">{{filters.openAnglePresetBtnText(currentModel.name, currentModel.type, 90)}}</view>
              
-             <!-- F1/F2 逻辑 -->
-             <block wx:if="{{filters.isF1Series(currentModel.name) && !filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
+             <!-- F1 非 Ultra、F3 PRO：90° / 180° -->
+             <block wx:if="{{filters.isLegacyOpenAnglePresets(currentModel.name, currentModel.type)}}">
                 <view class="preset-btn {{angleMode === '180' ? 'active' : ''}}" 
                       bindtap="switchAngle" data-angle="180">180°</view>
              </block>
@@ -817,7 +930,7 @@
           <!-- 3. 数值与提示 -->
           <view class="value-info-row">
              <text class="val-big-text">{{openAngleUiActive ? filters.openAngleDisplayDeg(currentModel.name, currentModel.type, currentAngle) : ''}}</text>
-             <text class="val-status-text">{{openAngleUiActive ? '滑动波轮微调角度' : '点击预设角度后棍子联动'}}</text>
+             <text class="val-status-text">{{openAngleUiActive ? '左右滑动波轮 · 每格跟手 · 单次最多三格' : '波轮可左右拨 · 点预设后同步棍子'}}</text>
           </view>
 
           <!-- ========================================== -->
@@ -831,10 +944,10 @@
             <view class="wave-track" style="transform: translateX({{translateX}}px);">
                
                <!-- 左侧补白 -->
-               <block wx:for="{{[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]}}" wx:key="index">
+               <block wx:for="{{[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]}}" wx:key="index">
                   <!-- 移除 angleMode 参数 -->
-                  <view class="bar {{filters.getWaveClassByX(-50 + index, translateX)}}" 
-                        style="{{index === 0 ? 'margin-left: -1000px;' : ''}}"></view>
+                  <view class="bar {{filters.getWaveClassByX(-100 + index, translateX)}}" 
+                        style="{{index === 0 ? 'margin-left: -2000px;' : ''}}"></view>
                </block>
 
                <!-- 中间正文 -->
@@ -843,7 +956,7 @@
                </block>
 
                <!-- 右侧补白 -->
-               <block wx:for="{{[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]}}" wx:key="index">
+               <block wx:for="{{[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]}}" wx:key="index">
                   <view class="bar {{filters.getWaveClassByX((ticks.length || 91) + index, translateX)}}"></view>
                </block>
 
@@ -879,18 +992,18 @@
     <!-- 高级设置弹窗 -->
     <view class="modal-mask-new {{showSettingsModal ? 'show' : ''}}" bindtap="closeSettings" catchtouchmove="noop" catchtap="noop">
       <view class="ui-toast {{toastClass}}">请点击需要更改的设置</view>
-      <view class="modal-body-new" catchtap="preventBubble">
+      <view class="modal-body-new {{settingsModalCompact ? 'modal-body-new--compact' : ''}}" catchtap="preventBubble">
         <view class="modal-header">
           <text class="m-title">高级配置</text>
           <view class="m-close" bindtap="closeSettings">✕</view>
         </view>
-        <scroll-view scroll-y class="settings-scroll" enhanced show-scrollbar="{{false}}">
+        <scroll-view scroll-y="{{!settingsModalCompact}}" class="settings-scroll {{settingsModalCompact ? 'settings-scroll--compact' : ''}}" enhanced show-scrollbar="{{false}}">
         <view class="setting-row" wx:if="{{currentModel.name !== 'F1' || currentModel.type === 'Ultra'}}">
           <block wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
-            <view class="row-info"><text class="label-main">堵转检测</text><text class="label-sub">STALL DETECT</text></view>
+            <view class="row-info"><text class="label-main">堵转检测</text></view>
           </block>
           <block wx:else>
-            <view class="row-info"><text class="label-main">主动故障检测</text><text class="label-sub">FAULT DETECTION</text></view>
+            <view class="row-info"><text class="label-main">主动故障检测</text></view>
           </block>
           <view class="mag-track" data-key="faultDetect" data-state="{{settingState.faultDetect}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="faultDetect" data-val="left"></view>
@@ -902,10 +1015,10 @@
 
         <view class="setting-row" wx:if="{{!filters.isF3Max(currentModel.name, currentModel.type)}}">
           <block wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
-            <view class="row-info"><text class="label-main">电机工作检测</text><text class="label-sub">MOTOR RUN CHECK</text></view>
+            <view class="row-info"><text class="label-main">电机工作检测</text></view>
           </block>
           <block wx:else>
-            <view class="row-info"><text class="label-main">故障自修复</text><text class="label-sub">SELF REPAIR</text></view>
+            <view class="row-info"><text class="label-main">故障自修复</text></view>
           </block>
           <view class="mag-track" data-key="selfRepair" data-state="{{settingState.selfRepair}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="selfRepair" data-val="left"></view>
@@ -915,7 +1028,7 @@
           </view>
         </view>
         <view class="setting-row">
-          <view class="row-info"><text class="label-main">开机位置</text><text class="label-sub">POWER ON POS</text></view>
+          <view class="row-info"><text class="label-main">开机位置</text></view>
           <view class="mag-track" data-key="powerOn" data-state="{{settingState.powerOn}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="powerOn" data-val="left"></view>
             <view class="click-pad right" catchtap="handleMagClick" data-key="powerOn" data-val="right"></view>
@@ -931,7 +1044,7 @@
           </view>
         </view>
         <view class="setting-row">
-          <view class="row-info"><text class="label-main">关机位置</text><text class="label-sub">SHUTDOWN POS</text></view>
+          <view class="row-info"><text class="label-main">关机位置</text></view>
           <view class="mag-track" data-key="shutdown" data-state="{{settingState.shutdown}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="shutdown" data-val="left"></view>
             <view class="click-pad right" catchtap="handleMagClick" data-key="shutdown" data-val="right"></view>
@@ -943,9 +1056,8 @@
         <view class="setting-row" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type)}}">
           <view class="row-info row-info-wide">
             <text class="label-main">断电锁死</text>
-            <text class="label-sub">POWER OFF LOCK（关钥匙折至 {{foldServoAngle}}° 锁止位）</text>
+            <text class="label-sub">关钥匙折至 {{foldServoAngle}}° 锁止位</text>
           </view>
-          <text class="f2-readback-inline">设备回读：{{f3PowerOffLockReadbackText}}</text>
           <view class="mag-track" data-key="powerOffLock" data-state="{{settingState.powerOffLock}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="powerOffLock" data-val="left"></view>
             <view class="click-pad right" catchtap="handleMagClick" data-key="powerOffLock" data-val="right"></view>
@@ -957,7 +1069,7 @@
         <view class="setting-row" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
           <view class="row-info row-info-wide">
             <text class="label-main">隐蔽模式退出</text>
-            <text class="label-sub">STEALTH EXIT（仅小程序模式下可查看状态并解锁）</text>
+            <text class="label-sub">仅小程序模式下可查看状态并解锁</text>
           </view>
           <view class="mag-track" data-key="stealthBtnExit" data-state="{{settingState.stealthBtnExit}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="stealthBtnExit" data-val="left"></view>
@@ -968,7 +1080,7 @@
         </view>
 
         <view class="setting-row" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type) && !filters.isF3Max(currentModel.name, currentModel.type)}}">
-          <view class="row-info"><text class="label-main">平滑模式</text><text class="label-sub">SMOOTH MODE</text></view>
+          <view class="row-info"><text class="label-main">平滑模式</text></view>
           <view class="mag-track" data-key="smoothMode" data-state="{{settingState.smoothMode}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="smoothMode" data-val="left"></view>
             <view class="click-pad right" catchtap="handleMagClick" data-key="smoothMode" data-val="right"></view>
@@ -980,7 +1092,7 @@
         <view class="setting-row" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type)}}">
           <view class="row-info row-info-wide">
             <text class="label-main">高度检测</text>
-            <text class="label-sub">HEIGHT SENSOR（关闭后不测距、不拦翻开）</text>
+            <text class="label-sub">关闭后不测距、不拦翻开</text>
           </view>
           <view class="mag-track" data-key="heightMon" data-state="{{settingState.heightMon}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="heightMon" data-val="left"></view>
@@ -1053,7 +1165,6 @@
         <view class="travel-mode-card" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type) && !filters.isF3Max(currentModel.name, currentModel.type)}}">
           <view class="travel-mode-card-head">
             <view class="travel-mode-card-title-wrap">
-              <text class="travel-mode-card-badge">TRAVEL</text>
               <text class="travel-mode-card-title">出行模式</text>
             </view>
             <view class="travel-mode-card-status {{f2TravelModeOn ? 'on' : ''}}">
@@ -1061,7 +1172,6 @@
             </view>
           </view>
           <text class="travel-mode-card-desc">{{travelModeTip}}</text>
-          <text class="f2-readback-inline travel-mode-readback">设备回读：{{f2TravelReadbackText}}</text>
 
           <view class="mag-track travel-mode-toggle" data-key="travelMode" data-state="{{settingState.travelMode}}">
             <view class="click-pad left" catchtap="handleMagClick" data-key="travelMode" data-val="left"></view>
@@ -1107,10 +1217,9 @@
         <view class="setting-row setting-row-picker {{f2TravelModeOn ? 'setting-row-disabled' : ''}}" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type) && !filters.isF3Max(currentModel.name, currentModel.type)}}">
           <view class="row-info row-info-wide">
             <text class="label-main">延时断电</text>
-            <text class="label-sub">DELAY POWER OFF（10秒后可设）</text>
+            <text class="label-sub">10秒后可设</text>
           </view>
           <text class="delay-power-tip">{{delayPowerOffTip}}</text>
-          <text class="f2-readback-inline">设备回读：{{f2DelayPowerReadbackText}}</text>
           <picker mode="selector" range="{{delayPowerOffOptions}}" range-key="pickerLabel" value="{{delayPowerOffIndex}}" bindchange="onDelayPowerOffChange" disabled="{{f2TravelModeOn}}">
             <view class="delay-power-picker">
               <text class="delay-power-picker-label">{{delayPowerOffOptions[delayPowerOffIndex].label}}</text>
@@ -1199,6 +1308,18 @@
     </view>
   </view>
 
+  <!-- 新用户分步指引（箭头指向对应按钮） -->
+  <view class="cal-guide-mask" wx:if="{{showCalSettingsGuide}}" catchtouchmove="noop" catchtap="noop">
+    <view class="cal-guide-spot" style="{{calGuideSpotStyle}}"></view>
+    <view class="cal-guide-bubble cal-guide-bubble--{{calGuideArrowDir}}" style="{{calGuideBubbleStyle}}">
+      <view class="cal-guide-arrow" style="{{calGuideArrowStyle}}"></view>
+      <view class="cal-guide-step-tag">{{calGuideStepTag}}</view>
+      <view class="cal-guide-title">{{calGuideTitle}}</view>
+      <view class="cal-guide-desc">{{calGuideDesc}}</view>
+      <view class="cal-guide-btn {{calGuideBtnLocked ? 'btn-locked' : ''}}" bindtap="calSettingsGuideNext">{{calGuideBtnText}}</view>
+    </view>
+  </view>
+
   <!-- ======================= -->
   <!-- 断电锁死开启引导（两步） -->
   <!-- ======================= -->
@@ -1228,7 +1349,7 @@
         </view>
       </block>
       <view class="pass-btns" style="margin-top: 48rpx;">
-        <view class="p-btn confirm full-width" bindtap="onPowerOffLockGuideConfirm">我知道了</view>
+        <view class="p-btn confirm full-width {{powerOffLockGuideBtnLocked ? 'btn-locked' : ''}}" bindtap="onPowerOffLockGuideConfirm">{{powerOffLockGuideBtnText}}</view>
       </view>
     </view>
   </view>
@@ -1257,6 +1378,23 @@
       <view class="pass-btns">
         <view class="p-btn confirm full-width {{stealthTutorialBtnDisabled ? 'disabled' : ''}}" bindtap="closeStealthTutorial" wx:if="{{!stealthTutorialBtnDisabled}}">知道了</view>
         <view class="p-btn confirm full-width disabled" wx:else>知道了</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 用户发起远协后：提醒勿离开本页 -->
+  <view
+    class="password-modal-mask {{remoteAssistStayModalClosing ? 'closing' : ''}}"
+    wx:if="{{showRemoteAssistStayModal}}"
+    catchtouchmove="noop"
+    catchtap="noop">
+    <view class="password-box remote-assist-stay-box" catchtouchmove="noop" catchtap="noop">
+      <view class="pass-title">请勿离开此页面</view>
+      <view class="pass-desc remote-assist-stay-desc">
+        远程协助已发起。请一直停留在本页并保持小程序在前台，否则技师将无法控制您的设备。
+      </view>
+      <view class="pass-btns">
+        <view class="p-btn confirm full-width" catchtap="closeRemoteAssistStayModal">我知道了</view>
       </view>
     </view>
   </view>
@@ -1363,6 +1501,21 @@
     </view>
   </view>
 
+  <!-- 管理员：全局远协待接入浮层（控制台/录入 SN 弹窗内均实时显示） -->
+  <view
+    wx:if="{{isAdmin && remoteAssistRole !== 'admin' && remoteAssistPendingCount > 0}}"
+    class="remote-assist-global-dock"
+    catchtouchmove="noop">
+    <view class="remote-assist-gallery-dock-card remote-assist-global-dock-card">
+      <view class="remote-assist-gallery-dock-dot"></view>
+      <view class="remote-assist-gallery-dock-text">
+        <text class="remote-assist-gallery-dock-title">远协请求</text>
+        <text class="remote-assist-gallery-dock-sub">{{remoteAssistPendingCount}} 位用户等待接入{{remoteAssistPendingSessions[0].productKey ? ' · ' + remoteAssistPendingSessions[0].productKey : ''}}</text>
+      </view>
+      <view class="remote-assist-gallery-dock-btn" catchtap="onAdminRemoteAssistTap">接入远协</view>
+    </view>
+  </view>
+
 </view> <!-- 结束 container -->
 
 <!-- WXS 核心修复：移除 activeMode 判断，恢复视觉动画 -->
@@ -1427,6 +1580,24 @@ var isF3Max = function(name, type) {
   return name === 'F3' && type === 'Max';
 }
 
+/** F2 除 PRO 外 + F1 Ultra + F3 MAX 显示自动校准 */
+var supportsAutoCalibrate = function(name, type) {
+  if (name === 'F3' && type === 'Max') return true;
+  if (name === 'F1' && (type === 'Ultra' || type === 'ultra' || type === 'Pro Max')) return true;
+  if (name === 'F2' && type !== 'Pro') {
+    return type === 'Max' || type === 'Long' || type === 'Max Long' || type === 'Ultra';
+  }
+  return false;
+}
+
+/** 打开角度第二预设用 180°（F1 非 Ultra、F3 PRO） */
+var isLegacyOpenAnglePresets = function(name, type) {
+  if (isMtUltraCard(name, type)) return false;
+  if (name === 'F1') return true;
+  if (name === 'F3' && type === 'Pro') return true;
+  return false;
+}
+
 var openAnglePresetBtnText = function(name, type, angle) {
   if (isF1Series(name) && !isMtUltraCard(name, type)) {
     if (angle === 180) return '180°';
@@ -1442,14 +1613,11 @@ var openAnglePresetBtnText = function(name, type, angle) {
 var openAngleInternalToDisplayNum = function(name, type, internal) {
   var v = parseInt(internal);
   if (isNaN(v)) return 0;
-  if (isF3Max(name, type)) {
-    return clamp(v, 0, 90);
-  }
-  if (isMtUltraCard(name, type)) {
-    return clamp(v, 0, 180);
+  if (isF3Max(name, type) || isMtUltraCard(name, type)) {
+    return v < 0 ? 0 : v;
   }
   if (isF1Series(name) || !isF2OpenAngleSeries(name)) {
-    return clamp(v, 0, 180);
+    return v < 0 ? 0 : v;
   }
   if (v <= 90) return Math.round(v * 30 / 90);
   return Math.round(30 + (v - 90) * 60 / 70);
@@ -1476,6 +1644,8 @@ module.exports = {
   isF2UltraFirmware: isF2UltraFirmware,
   isMtUltraCard: isMtUltraCard,
   isF3Max: isF3Max,
+  supportsAutoCalibrate: supportsAutoCalibrate,
+  isLegacyOpenAnglePresets: isLegacyOpenAnglePresets,
   openAngleDisplayDeg: openAngleDisplayDeg,
   openAngleStickRotate: openAngleStickRotate,
   getWaveClass: getWaveClass

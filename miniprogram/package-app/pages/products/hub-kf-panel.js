@@ -1,5 +1,30 @@
 const weworkKf = require('../../../utils/weworkCustomerService.js');
 const kfFeedbackApi = require('../../../utils/kfFeedbackApi.js');
+const {
+  getGuideIntroKeys,
+  markGuideIntroSeen,
+  markGuidePermSkip,
+  resolveGuideAutoEntry
+} = require('../../../utils/usageGuideIntro.js');
+const { startGuideBtnCountdown, clearGuideBtnCountdown } = require('../../../utils/guideBtnCountdown.js');
+
+const KF_GUIDE_BASE_KEY = 'mt_kf_first_visit_guide_done_v1';
+const KF_GUIDE_INTRO_KEYS = getGuideIntroKeys(KF_GUIDE_BASE_KEY);
+
+const KF_GUIDE_STEPS = [
+  {
+    anchor: '#kfGuidePreCard',
+    title: '售前客服',
+    btnText: '下一步',
+    desc: '还没购买或准备下单？选购建议、型号对比、优惠活动、发货时间等问题，点这张卡片联系售前客服。'
+  },
+  {
+    anchor: '#kfGuideAfterCard',
+    title: '售后客服',
+    btnText: '知道了',
+    desc: '已购设备遇到问题？维修进度、安装与技术支持、退换货等，点这张卡片联系售后客服。'
+  }
+];
 
 Component({
   properties: {
@@ -26,16 +51,40 @@ Component({
     isAdmin: false,
     boardContent: '',
     boardSending: false,
-    boardTearing: false,
-    boardSentTip: false,
+    boardFlying: false,
+    boardFlyContent: '',
+    boardDropIn: false,
     showFeedbackPanel: false,
     adminMessages: [],
-    showAdminList: false
+    showAdminList: false,
+    showKfGuide: false,
+    showKfGuideIntro: false,
+    kfGuideStep: 0,
+    kfGuideStepTag: '',
+    kfGuideTitle: '',
+    kfGuideDesc: '',
+    kfGuideBtnText: '下一步',
+    kfGuideBtnLocked: true,
+    kfGuideSpotStyle: 'display:none;',
+    kfGuideBubbleStyle: '',
+    kfGuideArrowStyle: '',
+    kfGuideArrowDir: 'up',
+    kfGuideShowSpot: false
   },
 
   lifetimes: {
     attached() {
       this.checkAdminPrivilege();
+      if (this.properties.active) {
+        this._maybeShowKfGuide(false);
+      }
+    },
+    detached() {
+      if (this._kfGuideStartTimer) {
+        clearTimeout(this._kfGuideStartTimer);
+        this._kfGuideStartTimer = null;
+      }
+      this._clearBoardAnimTimers();
     }
   },
 
@@ -53,6 +102,11 @@ Component({
     active(val) {
       if (val && this.properties.shellAdmin) {
         this.loadAdminMessages();
+      }
+      if (val) {
+        this._maybeShowKfGuide(false);
+      } else if (this.data.showKfGuide || this.data.showKfGuideIntro) {
+        this.closeKfGuide(false);
       }
     }
   },
@@ -79,6 +133,162 @@ Component({
       } catch (e) {}
     },
 
+    kfGuideNoop() {},
+
+    _maybeShowKfGuide(forceReplay) {
+      if (this.data.showKfGuide || this.data.showKfGuideIntro) return;
+      if (this._kfGuideStartTimer) clearTimeout(this._kfGuideStartTimer);
+      if (forceReplay) {
+        this._startKfGuideSteps();
+        return;
+      }
+      const entry = resolveGuideAutoEntry(KF_GUIDE_INTRO_KEYS);
+      if (entry === 'none') return;
+      if (entry === 'intro') {
+        this.setData({ showKfGuideIntro: true });
+        return;
+      }
+      this._startKfGuideSteps();
+    },
+
+    _startKfGuideSteps() {
+      if (this._kfGuideStartTimer) clearTimeout(this._kfGuideStartTimer);
+      this._kfGuideStartTimer = setTimeout(() => {
+        this._kfGuideStartTimer = null;
+        if (!this.properties.active) return;
+        this._showKfGuideStep(1, 0);
+      }, 560);
+    },
+
+    kfGuideIntroStart() {
+      this.setData({ showKfGuideIntro: false }, () => {
+        this._startKfGuideSteps();
+      });
+    },
+
+    _showKfGuideStep(stepNo, retryCount) {
+      const step = KF_GUIDE_STEPS[stepNo - 1];
+      if (!step) {
+        this.closeKfGuide(false);
+        return;
+      }
+      const retry = Number(retryCount) || 0;
+
+      const measureAndPaint = () => {
+        const query = wx.createSelectorQuery().in(this);
+        query.select(step.anchor).boundingClientRect();
+        query.exec((res) => {
+          const rect = res && res[0];
+          if (!rect || !rect.width || !rect.height) {
+            if (retry < 10) {
+              setTimeout(() => this._showKfGuideStep(stepNo, retry + 1), 240);
+              return;
+            }
+            this.setData({
+              showKfGuide: true,
+              kfGuideStep: stepNo,
+              kfGuideStepTag: `第 ${stepNo} 步`,
+              kfGuideTitle: step.title,
+              kfGuideDesc: step.desc,
+              kfGuideBtnText: step.btnText || '下一步',
+              kfGuideBtnLocked: true,
+              kfGuideShowSpot: false,
+              kfGuideSpotStyle: 'display:none;',
+              kfGuideBubbleStyle: 'left:50%; top:50%; transform:translate(-50%,-50%); width:520rpx;',
+              kfGuideArrowDir: 'none',
+              kfGuideArrowStyle: 'display:none;'
+            }, () => this._armKfGuideBtnLock(step.btnText || '下一步'));
+            return;
+          }
+
+          let win = null;
+          try {
+            win = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
+          } catch (e) {
+            win = { windowWidth: 375, windowHeight: 667 };
+          }
+          const winH = (win && win.windowHeight) || 667;
+          const padPx = 8;
+          const marginPx = 16;
+          const gapPx = 12;
+          const spotStyle = `left:${rect.left - padPx}px; top:${rect.top - padPx}px; width:${rect.width + padPx * 2}px; height:${rect.height + padPx * 2}px;`;
+
+          const spaceBelowPx = winH - (rect.top + rect.height);
+          let bubbleStyle = '';
+          let arrowDir = 'up';
+          if (spaceBelowPx > 120) {
+            const topPx = rect.top + rect.height + gapPx;
+            bubbleStyle = `left:${marginPx}px; right:${marginPx}px; top:${topPx}px; width:auto;`;
+          } else {
+            const bottomPx = winH - rect.top + gapPx;
+            bubbleStyle = `left:${marginPx}px; right:${marginPx}px; bottom:${bottomPx}px; width:auto;`;
+            arrowDir = 'down';
+          }
+          const arrowLeftPx = rect.left + rect.width / 2 - marginPx;
+
+          this.setData({
+            showKfGuide: true,
+            kfGuideStep: stepNo,
+            kfGuideStepTag: `第 ${stepNo} 步`,
+            kfGuideTitle: step.title,
+            kfGuideDesc: step.desc,
+            kfGuideBtnText: step.btnText || '下一步',
+            kfGuideBtnLocked: true,
+            kfGuideShowSpot: true,
+            kfGuideSpotStyle: spotStyle,
+            kfGuideBubbleStyle: bubbleStyle,
+            kfGuideArrowDir: arrowDir,
+            kfGuideArrowStyle: `left:${arrowLeftPx}px;`
+          }, () => this._armKfGuideBtnLock(step.btnText || '下一步'));
+        });
+      };
+
+      measureAndPaint();
+    },
+
+    _armKfGuideBtnLock(readyText) {
+      startGuideBtnCountdown(this, {
+        lockedKey: 'kfGuideBtnLocked',
+        textKey: 'kfGuideBtnText',
+        readyText: readyText || '下一步',
+        timerProp: '_kfGuideBtnTimer'
+      });
+    },
+
+    kfGuideNext() {
+      if (this.data.kfGuideBtnLocked) return;
+      const cur = Number(this.data.kfGuideStep) || 0;
+      if (cur >= KF_GUIDE_STEPS.length) {
+        markGuideIntroSeen(KF_GUIDE_INTRO_KEYS);
+        this.closeKfGuide(false);
+        return;
+      }
+      const next = cur + 1;
+      this._showKfGuideStep(next, 0);
+    },
+
+    kfGuideSkip() {
+      markGuidePermSkip(KF_GUIDE_INTRO_KEYS);
+      this.closeKfGuide(false);
+    },
+
+    closeKfGuide(_markDone) {
+      if (this._kfGuideStartTimer) {
+        clearTimeout(this._kfGuideStartTimer);
+        this._kfGuideStartTimer = null;
+      }
+      clearGuideBtnCountdown(this, '_kfGuideBtnTimer');
+      if (this.data.showKfGuide || this.data.showKfGuideIntro) {
+        this.setData({
+          showKfGuide: false,
+          showKfGuideIntro: false,
+          kfGuideStep: 0,
+          kfGuideShowSpot: false,
+          kfGuideSpotStyle: 'display:none;'
+        });
+      }
+    },
+
     handlePreSalesTap() {
       weworkKf.openPreSalesKf();
     },
@@ -91,8 +301,19 @@ Component({
       this.setData({ boardContent: e.detail.value || '' });
     },
 
+    _clearBoardAnimTimers() {
+      if (this._flyUpFallbackTimer) {
+        clearTimeout(this._flyUpFallbackTimer);
+        this._flyUpFallbackTimer = null;
+      }
+      if (this._dropInFallbackTimer) {
+        clearTimeout(this._dropInFallbackTimer);
+        this._dropInFallbackTimer = null;
+      }
+    },
+
     async handleBoardSend() {
-      if (this.data.boardSending || this.data.boardTearing) return;
+      if (this.data.boardSending || this.data.boardFlying || this.data.boardDropIn) return;
       const content = String(this.data.boardContent || '').trim();
       if (!content) {
         wx.showToast({ title: '写点什么再贴上去', icon: 'none' });
@@ -100,40 +321,53 @@ Component({
       }
       this.setData({ boardSending: true });
       try {
-        const res = await kfFeedbackApi.submit(content, kfFeedbackApi.resolveNickName());
+        const res = await kfFeedbackApi.submit(content);
         if (!res.success) {
-          let tip = '发送失败，请稍后重试';
-          if (res.error === 'RATE_LIMIT') tip = '发送太频繁，请稍后再试';
-          if (res.error === 'TOO_LONG') tip = '内容过长，请精简后重试';
-          wx.showToast({ title: tip, icon: 'none' });
+          wx.showToast({ title: kfFeedbackApi.tipForError(res.error), icon: 'none' });
           this.setData({ boardSending: false });
           return;
         }
-        this.setData({ boardTearing: true, boardSending: false });
-        if (this._tearFallbackTimer) clearTimeout(this._tearFallbackTimer);
-        this._tearFallbackTimer = setTimeout(() => {
-          if (this.data.boardTearing) this.onBoardTearEnd();
-        }, 780);
+        this._clearBoardAnimTimers();
+        this.setData({
+          boardFlying: true,
+          boardFlyContent: content,
+          boardSending: false
+        });
+        this._flyUpFallbackTimer = setTimeout(() => {
+          if (this.data.boardFlying) this.onFlyUpEnd();
+        }, 620);
       } catch (e) {
-        wx.showToast({ title: '网络异常，请重试', icon: 'none' });
+        console.warn('[hub-kf-panel] handleBoardSend', e);
+        wx.showToast({ title: kfFeedbackApi.tipForError('NETWORK'), icon: 'none' });
         this.setData({ boardSending: false });
       }
     },
 
-    onBoardTearEnd() {
-      if (!this.data.boardTearing) return;
-      if (this._tearFallbackTimer) {
-        clearTimeout(this._tearFallbackTimer);
-        this._tearFallbackTimer = null;
+    onFlyUpEnd() {
+      if (!this.data.boardFlying) return;
+      if (this._flyUpFallbackTimer) {
+        clearTimeout(this._flyUpFallbackTimer);
+        this._flyUpFallbackTimer = null;
       }
       this.setData({
-        boardTearing: false,
+        boardFlying: false,
+        boardFlyContent: '',
         boardContent: '',
-        boardSentTip: true
+        boardDropIn: true
       });
-      setTimeout(() => {
-        this.setData({ boardSentTip: false });
-      }, 1600);
+      this._dropInFallbackTimer = setTimeout(() => {
+        if (this.data.boardDropIn) this.onDropInEnd();
+      }, 680);
+    },
+
+    onDropInEnd() {
+      if (!this.data.boardDropIn) return;
+      if (this._dropInFallbackTimer) {
+        clearTimeout(this._dropInFallbackTimer);
+        this._dropInFallbackTimer = null;
+      }
+      this.setData({ boardDropIn: false });
+      wx.showToast({ title: '反馈已提交，感谢支持', icon: 'success' });
       if (this.properties.shellAdmin) {
         this.loadAdminMessages();
       }
@@ -143,23 +377,34 @@ Component({
       try {
         const res = await kfFeedbackApi.listAdmin();
         if (!res.success) return;
-        const list = (res.list || []).map((item) => ({
-          ...item,
-          timeText: kfFeedbackApi.formatTime(item.createTime)
-        }));
+        const list = (res.list || []).map((item) => kfFeedbackApi.mapAdminMessage(item));
         this.setData({ adminMessages: list });
       } catch (e) {}
     },
 
-    async handleMarkRead(e) {
+    async handleDelete(e) {
       const id = e.currentTarget.dataset.id;
       if (!id) return;
-      try {
-        const res = await kfFeedbackApi.markRead(id);
-        if (res.success) {
-          this.loadAdminMessages();
+      wx.showModal({
+        title: '删除留言',
+        content: '确定删除这条留言吗？',
+        confirmText: '删除',
+        confirmColor: '#FF3B30',
+        success: async (modal) => {
+          if (!modal.confirm) return;
+          try {
+            const res = await kfFeedbackApi.remove(id);
+            if (!res.success) {
+              wx.showToast({ title: kfFeedbackApi.tipForError(res.error), icon: 'none' });
+              return;
+            }
+            wx.showToast({ title: '已删除', icon: 'success' });
+            this.loadAdminMessages();
+          } catch (err) {
+            wx.showToast({ title: kfFeedbackApi.tipForError('NETWORK'), icon: 'none' });
+          }
         }
-      } catch (err) {}
+      });
     },
 
     toggleAdmin() {

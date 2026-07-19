@@ -32,7 +32,8 @@ function listFromAdminGetOrders(kind) {
     }
     if (kind === 'pending') {
       const data = repairs.filter((item) => {
-        if (item.status !== 'PENDING') return false;
+        const st = String(item.status || '').toUpperCase();
+        if (st !== 'PENDING' && st !== 'ADMIN_REVIEWED') return false;
         if (item.needReturn === true) return false;
         if (item.needPurchaseParts === true) return false;
         if (item.purchasePartsStatus === 'completed') return false;
@@ -68,11 +69,25 @@ function patchRepair(id, data) {
   return call({ id, data: data || {} });
 }
 
+/** 管理员删除待处理报修（级联解锁 SN / 未付配件单） */
+function deleteRepair(id, forceAdmin = false) {
+  return wx.cloud.callFunction({
+    name: 'adminUpdateRepair',
+    data: { 
+      action: 'delete', 
+      id: String(id || ''),
+      forceAdmin: forceAdmin === true
+    },
+    config: { timeout: 20000 }
+  }).then((res) => res.result || {});
+}
+
 module.exports = {
   SERVER_DATE,
   call,
   listPending,
   listReturnRequired,
   getRepair,
-  patchRepair
+  patchRepair,
+  deleteRepair
 };

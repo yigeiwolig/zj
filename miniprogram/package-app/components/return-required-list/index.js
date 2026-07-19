@@ -13,15 +13,27 @@ Component({
       value: false
     }
   },
+  data: {
+    expandedMap: {}
+  },
   methods: {
+    onToggleExpand(e) {
+      const id = String((e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.id) || '').trim();
+      if (!id) return;
+      const next = Object.assign({}, this.data.expandedMap || {});
+      next[id] = !next[id];
+      this.setData({ expandedMap: next });
+    },
     emitAction(type, e) {
       const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
       this.triggerEvent('action', {
         type,
         index: ds.index,
         id: ds.id,
+        repairId: ds.id,
         sn: ds.sn,
         phone: ds.phone,
+        company: ds.company,
         tailRequired: ds.tailRequired
       }, { bubbles: true, composed: true });
     },
@@ -30,6 +42,9 @@ Component({
     },
     onOpenEnterTracking(e) {
       this.emitAction('openEnterTrackingModal', e);
+    },
+    onEnterOutboundTracking(e) {
+      this.emitAction('enterOutboundTracking', e);
     },
     onViewLogistics(e) {
       this.emitAction('viewLogisticsDetail', e);
@@ -51,6 +66,12 @@ Component({
     },
     onCompleteReturn(e) {
       this.emitAction('completeReturnRequired', e);
+    },
+    onResendWecomNotify(e) {
+      this.emitAction('resendWecomReturnNotify', e);
+    },
+    onReplaceMotherboard(e) {
+      this.emitAction('replaceMotherboard', e);
     }
   }
 });

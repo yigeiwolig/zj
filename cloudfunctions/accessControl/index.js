@@ -268,8 +268,8 @@ exports.main = async (event, context) => {
             finalMsg = adminBypassLocation ? "📍 管理员跳过地域规则" : "📍 访问通过";
           }
     } else {
-          finalIsBlocked = false; 
-          finalMsg = "⚠️ 未获取定位"; 
+          finalIsBlocked = true;
+          finalMsg = "⚠️ 系统暂时无法校验访问权限";
         }
       }
     } 
@@ -395,6 +395,7 @@ exports.main = async (event, context) => {
 
   } catch (err) {
     console.error(err);
-    return { isBlocked: false, msg: "系统错误" };
+    // 权限状态无法确认时不得默认放行。
+    return { isBlocked: true, msg: "系统暂时无法校验访问权限，请稍后重试" };
   }
 };

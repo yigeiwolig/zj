@@ -3,16 +3,335 @@
 .return-required-list-root {
   width: 100%;
   box-sizing: border-box;
-  padding: 0 32rpx 8rpx;
-}
-
-.return-required-list-root .rr-item {
-  margin-left: 0;
-  margin-right: 0;
-  margin-bottom: 24rpx;
-  box-sizing: border-box;
+  padding: 0 28rpx 12rpx;
 }
 
 .return-required-list-root .rr-empty {
-  margin: 24rpx 0;
+  margin: 48rpx 0;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 26rpx;
+}
+
+/* ========== 卡片外壳 ========== */
+.return-required-list-root .rr-card {
+  position: relative;
+  margin: 0 0 20rpx;
+  padding: 0;
+  border-radius: 28rpx;
+  background: #fff;
+  border: 1rpx solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 10rpx 28rpx rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+
+.return-required-list-root .rr-card--open {
+  box-shadow: 0 14rpx 36rpx rgba(15, 23, 42, 0.08);
+}
+
+.return-required-list-root .rr-card--simple {
+  border-color: rgba(28, 28, 30, 0.16);
+  padding: 28rpx;
+}
+
+/* 左侧状态色条：灰 / 蓝 / 绿 */
+.return-required-list-root .rr-card-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8rpx;
+  background: #9ca3af;
+}
+
+.return-required-list-root .rr-card--none .rr-card-accent {
+  background: linear-gradient(180deg, #9ca3af 0%, #d1d5db 100%);
+}
+
+.return-required-list-root .rr-card--transit .rr-card-accent {
+  background: linear-gradient(180deg, #3b82f6 0%, #60a5fa 100%);
+}
+
+.return-required-list-root .rr-card--signed .rr-card-accent {
+  background: linear-gradient(180deg, #16a34a 0%, #4ade80 100%);
+}
+
+/* ========== 折叠头 ========== */
+.return-required-list-root .rr-card-head {
+  position: relative;
+  padding: 28rpx 28rpx 28rpx 36rpx;
+}
+
+.return-required-list-root .rr-card-head-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.return-required-list-root .rr-card-head-left {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.return-required-list-root .rr-card-model {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: 0.2rpx;
+  line-height: 1.15;
+}
+
+.return-required-list-root .rr-card-date {
+  font-size: 22rpx;
+  color: #94a3b8;
+  font-weight: 500;
+  letter-spacing: 0.3rpx;
+}
+
+.return-required-list-root .rr-card-head-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.return-required-list-root .rr-card-chevron {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.return-required-list-root .rr-card-chevron--open {
+  transform: rotate(90deg);
+  background: #e2e8f0;
+}
+
+.return-required-list-root .rr-card-chevron-icon {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #64748b;
+  line-height: 1;
+  margin-top: -2rpx;
+}
+
+/* 寄回状态 pill：圆点 + 文案 */
+.return-required-list-root .rr-ship-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: #f8fafc;
+}
+
+.return-required-list-root .rr-ship-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.return-required-list-root .rr-ship-pill-text {
+  font-size: 22rpx;
+  font-weight: 700;
+  letter-spacing: 0.4rpx;
+}
+
+.return-required-list-root .rr-ship-state--none,
+.return-required-list-root .rr-ship-pill.rr-ship-state--none {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.return-required-list-root .rr-ship-state--transit,
+.return-required-list-root .rr-ship-pill.rr-ship-state--transit {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.return-required-list-root .rr-ship-state--signed,
+.return-required-list-root .rr-ship-pill.rr-ship-state--signed {
+  color: #15803d;
+  background: #f0fdf4;
+}
+
+/* ========== 展开区 ========== */
+.return-required-list-root .rr-card-body {
+  padding: 0;
+  border-top: 1rpx solid #f1f5f9;
+}
+
+.return-required-list-root .rr-ticket-chip-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 22rpx 0 10rpx;
+  margin: 0;
+}
+
+.return-required-list-root .rr-ticket-chip {
+  display: inline-block;
+  font-size: 20rpx;
+  font-weight: 700;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  letter-spacing: 0.4rpx;
+  text-align: center;
+}
+
+.return-required-list-root .rr-card-body-inner {
+  padding: 0 28rpx 8rpx 36rpx;
+}
+
+.return-required-list-root .rr-ticket-chip.pending {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.return-required-list-root .rr-ticket-chip.pending-part {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.return-required-list-root .rr-ticket-chip.returned {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.return-required-list-root .rr-ticket-chip.user-sent {
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.return-required-list-root .rr-ship-inline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8rpx;
+  font-size: 22rpx;
+}
+
+.return-required-list-root .rr-ship-inline-label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.return-required-list-root .rr-ship-inline-value {
+  font-weight: 800;
+}
+
+.return-required-list-root .rr-ship-inline.rr-ship-state--none .rr-ship-inline-value {
+  color: #64748b;
+}
+
+.return-required-list-root .rr-ship-inline.rr-ship-state--transit .rr-ship-inline-value {
+  color: #1d4ed8;
+}
+
+.return-required-list-root .rr-ship-inline.rr-ship-state--signed .rr-ship-inline-value {
+  color: #15803d;
+}
+
+/* KV 信息组 */
+.return-required-list-root .rr-kv {
+  margin: 12rpx 0 20rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 20rpx;
+  background: #f8fafc;
+}
+
+.return-required-list-root .rr-kv-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  padding: 18rpx 0;
+  border-bottom: 1rpx solid rgba(148, 163, 184, 0.18);
+}
+
+.return-required-list-root .rr-kv-row:last-child {
+  border-bottom: none;
+}
+
+.return-required-list-root .rr-kv-row--top {
+  align-items: flex-start;
+}
+
+.return-required-list-root .rr-kv-k {
+  flex-shrink: 0;
+  width: 140rpx;
+  font-size: 24rpx;
+  color: #94a3b8;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.return-required-list-root .rr-kv-v {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 26rpx;
+  color: #0f172a;
+  font-weight: 600;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.return-required-list-root .rr-kv-v--multi {
+  text-align: right;
+  font-weight: 500;
+  color: #334155;
+}
+
+.return-required-list-root .rr-kv-v--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 24rpx;
+  letter-spacing: 0.2rpx;
+}
+
+.return-required-list-root .rr-kv-v-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12rpx;
+}
+
+.return-required-list-root .rr-mini-btn {
+  flex-shrink: 0;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  background: #0f172a;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.return-required-list-root .rr-mini-btn:active {
+  opacity: 0.82;
+}
+
+/* 操作区：更干净的间距 */
+.return-required-list-root .rr-actions {
+  margin: 8rpx 28rpx 28rpx 36rpx !important;
+  padding-top: 8rpx !important;
+  border-top: none !important;
+  gap: 12rpx !important;
+}
+
+.return-required-list-root .rr-simple-head {
+  margin-bottom: 16rpx;
 }

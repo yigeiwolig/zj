@@ -370,6 +370,19 @@ exports.main = async (event, context) => {
               console.error('[payCallback] 支付金额与订单金额不一致，拒绝更新订单', { paidFen, orderFen })
               return { code: 'FAIL', message: 'amount mismatch' }
             }
+
+            // 优惠券必须由当前订单预先占用，并在订单改为 PAID 前原子核销。
+            if (Array.isArray(order.couponIds) && order.couponIds.length > 0) {
+              const couponCall = await cloud.callFunction({
+                name: 'referral',
+                data: internalCallData({ action: 'markCouponsUsed', orderId: outTradeNo })
+              })
+              const couponResult = couponCall && couponCall.result
+              if (!couponResult || !couponResult.success) {
+                console.error('[payCallback] 优惠券核销失败:', couponResult)
+                return { code: 'FAIL', message: 'coupon finalize failed' }
+              }
+            }
             
             // 2. 更新订单状态（不做 repairId 推断，避免把普通订单误判为引导购配件）
             const updateData = {
@@ -405,14 +418,6 @@ exports.main = async (event, context) => {
               })
             } catch (referralErr) {
               console.error('[payCallback] 推荐奖励发放失败:', referralErr)
-            }
-            try {
-              await cloud.callFunction({
-                name: 'referral',
-                data: internalCallData({ action: 'markCouponsUsed', orderId: outTradeNo })
-              })
-            } catch (couponErr) {
-              console.error('[payCallback] 优惠券核销失败:', couponErr)
             }
           } else {
             console.warn('[payCallback] 未找到订单:', outTradeNo)

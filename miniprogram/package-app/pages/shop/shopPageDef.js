@@ -10,6 +10,12 @@ const hubNav = require('../../../utils/hubNav.js');
 const shareApp = require('../../../utils/shareApp.js');
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js'); 
 const SHOP_MAIN_DOC_ID = 'shopMain';
+/** 商城首次进入：设备型号更换政策说明（仅弹一次） */
+const SHOP_EXCHANGE_POLICY_SEEN_KEY = 'mt_shop_exchange_policy_seen_v2';
+/** 调试：true=每次进商城都弹；正式环境必须为 false（仅首次） */
+const SHOP_GUIDE_DEBUG_EVERY_ENTRY = false;
+/** 商城首次进入：按预算理性选购提示（仅弹一次，在升级说明之后） */
+const SHOP_BUDGET_GUIDE_SEEN_KEY = 'mt_shop_budget_guide_seen_v1';
 /** 列表卡片封面比例 4:3 → padding-bottom = 3/4 = 75% */
 const SHOP_COVER_ASPECT_PADDING_PERCENT = 75;
 // 🔴 使用专门的行政区key（用于省市区选择器 - getCityList）
@@ -29,6 +35,7 @@ const checkoutCouponMixin = require('../../../utils/checkoutCouponMixin.js');
 const dbPermissionHint = require('../../../utils/dbPermissionHint.js');
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const weworkKf = require('../../../utils/weworkCustomerService.js');
+const { withRepairProgressSubscribe, sendSubscribeNotify } = require('../../../utils/subscribeMessage.js');
 
 module.exports = function createShopPageConfig(opts = {}) {
   const __hubEmbed = !!(opts && opts.hubEmbed);
@@ -54,6 +61,8 @@ module.exports = function createShopPageConfig(opts = {}) {
     showHubShell: false,
     /** 嵌入 products 横向枢纽（顶部分段由 products 渲染） */
     hubEmbedInProducts: __hubEmbed,
+    /** 嵌入枢纽时：仅 MT 商城 Tab 激活为 true（避免 root-portal 浮层盖到主页） */
+    hubPanelActive: !__hubEmbed,
     hubPageEnterAnim: false,
     /** 嵌入枢纽时 scroll-view 实测高度（px） */
     embedScrollHeight: 0,
@@ -264,7 +273,19 @@ module.exports = function createShopPageConfig(opts = {}) {
     detailScrollViewHeight: 0,
 
     // 自定义弹窗
-    dialog: { show: false, title: '', content: '', showCancel: false, callback: null, confirmText: '确定', cancelText: '取消' },
+    dialog: {
+      show: false,
+      kind: '',
+      title: '',
+      content: '',
+      showCancel: false,
+      callback: null,
+      confirmText: '确定',
+      cancelText: '取消',
+      confirmLocked: false,
+      confirmCountdown: 0,
+      confirmBtnText: '确定'
+    },
 
     // Loading 状态（使用和 index.js 一样的白色背景进度条动画）
     showLoadingAnimation: false,
@@ -1133,6 +1154,17 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   // 🔴 新增：页面隐藏时清理拖拽状态
   onHide() {
+    if (this.data.hubEmbedInProducts) {
+      this.setData({ hubPanelActive: false });
+      if (this._shopExchangePolicyShowTimer) {
+        clearTimeout(this._shopExchangePolicyShowTimer);
+        this._shopExchangePolicyShowTimer = null;
+      }
+      if (this._shopBudgetGuideShowTimer) {
+        clearTimeout(this._shopBudgetGuideShowTimer);
+        this._shopBudgetGuideShowTimer = null;
+      }
+    }
     this._clearCompareGuideTimers();
     this._clearHeroAutoTimer();
     // 清理拖拽定时器和状态，防止卡住
@@ -1320,6 +1352,9 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   // 1. 页面每次显示时，读取本地缓存的购物车
   onShow() {
+    if (this.data.hubEmbedInProducts) {
+      this.setData({ hubPanelActive: true });
+    }
     hubNav.tryPlayEnterAnimOnShow(this);
     this._syncHeroAutoForCurrent();
     try {
@@ -1372,6 +1407,9 @@ module.exports = function createShopPageConfig(opts = {}) {
     const cache = this.ensureShopDataCache();
     cache.cacheTime = null; // 先失效本地内存缓存，再拉取
     this.loadDataFromCloudBackground();
+
+    this._prepareShopGuideForShow();
+    this.scheduleShopExchangePolicyModal(720);
   },
   
   onReady() {
@@ -6080,6 +6118,9 @@ module.exports = function createShopPageConfig(opts = {}) {
     const tip = orderId
       ? '订单已生成，可在「订单」待付款中继续支付'
       : '支付已取消';
+    if (orderId) {
+      sendSubscribeNotify({ scene: 'shop_unpaid', orderId: String(orderId) });
+    }
     const restoreAccDetail = !!this.data.accCheckoutActive;
     const afterAnim = () => {
       if (this.data.buyNowCartSnapshot !== null) {
@@ -7082,27 +7123,195 @@ module.exports = function createShopPageConfig(opts = {}) {
   },
 
   // ========================================================
+  // 商城首次进入：设备更换政策说明
+  // ========================================================
+  _shopExchangePolicyBlockingModal() {
+    const d = this.data;
+    return !!(d.showDetail || d.showAccDetail || d.showOrderModal || d.showCartSuccess ||
+      d.showCustomEditModal || d.showSmartPasteModal || d.showVideoPlayer || d.showSpecsModal ||
+      (d.dialog && d.dialog.show) || d.showLoadingAnimation);
+  },
+
+  /** 是否每次进商城强制预览引导：仅调试开关打开时 */
+  _shouldShopGuideAlwaysForAdmin() {
+    return !!SHOP_GUIDE_DEBUG_EVERY_ENTRY;
+  },
+
+  _prepareShopGuideForShow() {
+    if (SHOP_GUIDE_DEBUG_EVERY_ENTRY || this._shouldShopGuideAlwaysForAdmin()) {
+      this._shopExchangePolicyShownThisSession = false;
+      this._shopBudgetGuideShownThisSession = false;
+    }
+  },
+
+  _markShopGuideSeenIfUser(key) {
+    if (SHOP_GUIDE_DEBUG_EVERY_ENTRY) return;
+    if (this._shouldShopGuideAlwaysForAdmin()) return;
+    try { wx.setStorageSync(key, true); } catch (e) { /* ignore */ }
+  },
+
+  _hasShopGuideSeen(key) {
+    if (SHOP_GUIDE_DEBUG_EVERY_ENTRY) return false;
+    if (this._shouldShopGuideAlwaysForAdmin()) return false;
+    try {
+      return !!wx.getStorageSync(key);
+    } catch (e) {
+      return false;
+    }
+  },
+
+  scheduleShopExchangePolicyModal(delay = 480) {
+    if (this._shopExchangePolicyShowTimer) clearTimeout(this._shopExchangePolicyShowTimer);
+    this._shopExchangePolicyShowTimer = setTimeout(() => {
+      this._shopExchangePolicyShowTimer = null;
+      this._maybeShowShopExchangePolicyModal();
+    }, delay);
+  },
+
+  scheduleShopBudgetGuideModal(delay = 480) {
+    if (this._shopBudgetGuideShowTimer) clearTimeout(this._shopBudgetGuideShowTimer);
+    this._shopBudgetGuideShowTimer = setTimeout(() => {
+      this._shopBudgetGuideShowTimer = null;
+      this._maybeShowShopBudgetGuideModal();
+    }, delay);
+  },
+
+  _maybeShowShopExchangePolicyModal() {
+    if (this._shopExchangePolicyShownThisSession) return;
+    if (this._hasShopGuideSeen(SHOP_EXCHANGE_POLICY_SEEN_KEY)) {
+      this._shopExchangePolicyShownThisSession = true;
+      this.scheduleShopBudgetGuideModal(360);
+      return;
+    }
+    if (this._shopExchangePolicyBlockingModal()) {
+      if (!this._shopExchangePolicyRetryTimer) {
+        this._shopExchangePolicyRetryTimer = setTimeout(() => {
+          this._shopExchangePolicyRetryTimer = null;
+          this._maybeShowShopExchangePolicyModal();
+        }, 800);
+      }
+      return;
+    }
+    this._shopExchangePolicyShownThisSession = true;
+    this.showMyDialog({
+      kind: 'shop-exchange',
+      title: '升级换新说明',
+      showCancel: false,
+      confirmText: '我明白了',
+      confirmDelaySec: 5,
+      success: () => {
+        this._markShopGuideSeenIfUser(SHOP_EXCHANGE_POLICY_SEEN_KEY);
+        this.scheduleShopBudgetGuideModal(420);
+      }
+    });
+  },
+
+  _maybeShowShopBudgetGuideModal() {
+    if (this._shopBudgetGuideShownThisSession) return;
+    if (this._hasShopGuideSeen(SHOP_BUDGET_GUIDE_SEEN_KEY)) {
+      this._shopBudgetGuideShownThisSession = true;
+      return;
+    }
+    if (this._shopExchangePolicyBlockingModal()) {
+      if (!this._shopBudgetGuideRetryTimer) {
+        this._shopBudgetGuideRetryTimer = setTimeout(() => {
+          this._shopBudgetGuideRetryTimer = null;
+          this._maybeShowShopBudgetGuideModal();
+        }, 800);
+      }
+      return;
+    }
+    this._shopBudgetGuideShownThisSession = true;
+    this.showMyDialog({
+      kind: 'shop-budget',
+      title: '怎么选配置',
+      showCancel: false,
+      confirmText: '开始逛逛',
+      success: () => {
+        this._markShopGuideSeenIfUser(SHOP_BUDGET_GUIDE_SEEN_KEY);
+      }
+    });
+  },
+
+  // ========================================================
   // 自定义弹窗方法
   // ========================================================
+  _clearDialogConfirmDelay() {
+    if (this._dialogConfirmDelayTimer) {
+      clearInterval(this._dialogConfirmDelayTimer);
+      this._dialogConfirmDelayTimer = null;
+    }
+  },
+
+  _startDialogConfirmDelay(sec, confirmText) {
+    this._clearDialogConfirmDelay();
+    const label = confirmText || '确定';
+    const total = Math.max(0, parseInt(sec, 10) || 0);
+    if (total <= 0) {
+      this.setData({
+        'dialog.confirmLocked': false,
+        'dialog.confirmCountdown': 0,
+        'dialog.confirmBtnText': label
+      });
+      return;
+    }
+    const startedAt = Date.now();
+    const paint = () => {
+      const left = Math.max(0, total - Math.floor((Date.now() - startedAt) / 1000));
+      if (left <= 0) {
+        this._clearDialogConfirmDelay();
+        this.setData({
+          'dialog.confirmLocked': false,
+          'dialog.confirmCountdown': 0,
+          'dialog.confirmBtnText': label
+        });
+        return;
+      }
+      this.setData({
+        'dialog.confirmLocked': true,
+        'dialog.confirmCountdown': left,
+        'dialog.confirmBtnText': `${label}（${left}）`
+      });
+    };
+    paint();
+    this._dialogConfirmDelayTimer = setInterval(paint, 200);
+  },
+
   // 显示自定义弹窗
   showMyDialog(options) {
     this._dialogCallback = typeof options.success === 'function' ? options.success : null;
+    const confirmText = options.confirmText || '确定';
+    const delaySec = Math.max(0, parseInt(options.confirmDelaySec, 10) || 0);
+    this._clearDialogConfirmDelay();
     this.setData({
-      'dialog.show': true,
-      'dialog.title': options.title || '提示',
-      'dialog.content': options.content || '',
-      'dialog.showCancel': options.showCancel || false,
-      'dialog.confirmText': options.confirmText || '确定',
-      'dialog.cancelText': options.cancelText || '取消'
+      dialog: {
+        show: true,
+        kind: options.kind || '',
+        title: options.title || '提示',
+        content: options.content || '',
+        showCancel: !!options.showCancel,
+        confirmText,
+        cancelText: options.cancelText || '取消',
+        confirmLocked: delaySec > 0,
+        confirmCountdown: delaySec,
+        confirmBtnText: delaySec > 0 ? `${confirmText}（${delaySec}）` : confirmText
+      }
     });
+    if (delaySec > 0) {
+      this._startDialogConfirmDelay(delaySec, confirmText);
+    }
   },
 
   // 关闭自定义弹窗（带收缩退出动画）
   _closeDialogWithAnimation(callback) {
+    this._clearDialogConfirmDelay();
     this.setData({ dialogClosing: true });
     setTimeout(() => {
-      this.setData({ 
+      this.setData({
         'dialog.show': false,
+        'dialog.kind': '',
+        'dialog.confirmLocked': false,
+        'dialog.confirmCountdown': 0,
         dialogClosing: false
       });
       if (typeof callback === 'function') {
@@ -7119,8 +7328,13 @@ module.exports = function createShopPageConfig(opts = {}) {
   },
 
   dismissTransientModals() {
+    // 倒计时未结束：不允许点遮罩关掉说明弹窗
+    if (this.data.dialog && this.data.dialog.show && this.data.dialog.confirmLocked) {
+      return;
+    }
     this._dialogCallback = null;
     this._paySuccessDialogShown = false;
+    this._clearDialogConfirmDelay();
     const patch = {};
     if (this.data.dialog && this.data.dialog.show) patch['dialog.show'] = false;
     if (this.data.autoToast && this.data.autoToast.show) patch['autoToast.show'] = false;
@@ -7193,6 +7407,7 @@ module.exports = function createShopPageConfig(opts = {}) {
 
   // 点击弹窗确定
   onDialogConfirm() {
+    if (this.data.dialog && this.data.dialog.confirmLocked) return;
     const cb = this._dialogCallback;
     this._dialogCallback = null;
     this._closeDialogWithAnimation(() => {
@@ -7425,7 +7640,9 @@ module.exports = function createShopPageConfig(opts = {}) {
       cancelText: '取消',
       success: () => {
         this._commitBuyNowCart();
-        this.doRealPayment(cart, finalOrderInfo, currentFinalTotalPrice, currentShippingFee, shippingMethod);
+        withRepairProgressSubscribe(() => {
+          this.doRealPayment(cart, finalOrderInfo, currentFinalTotalPrice, currentShippingFee, shippingMethod);
+        });
       }
     });
   },

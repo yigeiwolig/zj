@@ -32,6 +32,23 @@ function pageConfigToComponent(pageConfig, options = {}) {
   });
 
   const loadOptions = options.loadOptions || {};
+  const extraObservers = options.observers || {};
+  const extraActiveObserver = extraObservers.active;
+  const mergedObservers = { ...extraObservers };
+
+  mergedObservers.active = function hubPanelActiveObserver(active) {
+    if (!this._hubPanelAttached) return;
+    if (active) {
+      this._isLoading = false;
+      this._isLoadingSince = 0;
+      if (lifecycles.onShow) lifecycles.onShow.call(this);
+    } else if (lifecycles.onHide) {
+      lifecycles.onHide.call(this);
+    }
+    if (typeof extraActiveObserver === 'function') {
+      extraActiveObserver.call(this, active);
+    }
+  };
 
   return {
     properties: {
@@ -69,6 +86,9 @@ function pageConfigToComponent(pageConfig, options = {}) {
       },
       detached() {
         this._hubPanelAttached = false;
+        if (typeof options.onDetached === 'function') {
+          options.onDetached.call(this);
+        }
         if (lifecycles.onUnload) {
           lifecycles.onUnload.call(this);
         }
@@ -87,19 +107,7 @@ function pageConfigToComponent(pageConfig, options = {}) {
         }
       }
     },
-    observers: {
-      active(active) {
-        if (!this._hubPanelAttached) return;
-        if (active) {
-          this._isLoading = false;
-          this._isLoadingSince = 0;
-          if (lifecycles.onShow) lifecycles.onShow.call(this);
-        } else if (lifecycles.onHide) {
-          lifecycles.onHide.call(this);
-        }
-      },
-      ...(options.observers || {})
-    },
+    observers: mergedObservers,
     methods: {
       ...methods,
       ...(options.methodPatch || {})

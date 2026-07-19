@@ -1,6 +1,7 @@
 @import "../my/my.wxss";
 
 .hub-my-panel-root {
+  position: relative;
   height: 100%;
   box-sizing: border-box;
   overflow: visible;
@@ -29,4 +30,260 @@
   height: 0;
   min-height: 0;
   box-sizing: border-box;
+}
+
+/* ===== 我的 Tab 功能引导 ===== */
+.my-profile-guide-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 12050;
+  pointer-events: auto;
+}
+
+.my-profile-guide-mask--portal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 100000120 !important;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.my-profile-guide-mask--passthrough {
+  background: transparent;
+  pointer-events: none;
+}
+
+.my-profile-guide-mask--passthrough .my-profile-guide-bubble {
+  pointer-events: auto;
+}
+
+.my-profile-guide-spot {
+  position: fixed;
+  border-radius: 32rpx;
+  border: 3rpx solid rgba(255, 255, 255, 0.95);
+  /* 光晕收窄，避免大卡片时左右溢出屏幕 */
+  box-shadow: 0 0 0 4rpx rgba(0, 122, 255, 0.32), 0 0 16rpx 2rpx rgba(0, 122, 255, 0.4);
+  background: rgba(255, 255, 255, 0.12);
+  pointer-events: none;
+  transition: left 0.3s cubic-bezier(0.22, 1, 0.36, 1), top 0.3s cubic-bezier(0.22, 1, 0.36, 1), width 0.3s cubic-bezier(0.22, 1, 0.36, 1), height 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+  animation: my-profile-guide-spot-pulse 1.05s ease-in-out infinite;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+@keyframes my-profile-guide-spot-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 4rpx rgba(0, 122, 255, 0.32), 0 0 14rpx 2rpx rgba(0, 122, 255, 0.38);
+  }
+  50% {
+    transform: scale(1.008);
+    box-shadow: 0 0 0 6rpx rgba(0, 122, 255, 0.42), 0 0 20rpx 4rpx rgba(0, 122, 255, 0.5);
+  }
+}
+
+.my-profile-guide-bubble {
+  position: fixed;
+  background: #FFFFFF;
+  border-radius: 28rpx;
+  padding: 32rpx 32rpx 28rpx;
+  box-shadow: 0 18rpx 44rpx rgba(0, 0, 0, 0.28);
+  box-sizing: border-box;
+  z-index: 2;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 入场：先略下移透明，再弹到不透明（不用 CSS animation，避免真机卡在 opacity:0） */
+.my-profile-guide-bubble.profile-guide-bubble--enter {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.my-profile-guide-bubble.profile-guide-bubble--animating {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.my-profile-guide-bubble--center,
+.my-profile-guide-bubble.my-profile-guide-bubble--center-fallback {
+  left: 32rpx !important;
+  right: 32rpx !important;
+  top: 50% !important;
+  bottom: auto !important;
+  width: auto !important;
+  max-width: none !important;
+  transform: translateY(-50%);
+}
+
+.my-profile-guide-bubble--center.profile-guide-bubble--enter,
+.my-profile-guide-bubble--center-fallback.profile-guide-bubble--enter {
+  opacity: 0;
+  transform: translateY(calc(-50% + 12px));
+}
+
+.my-profile-guide-bubble--center.profile-guide-bubble--animating,
+.my-profile-guide-bubble--center-fallback.profile-guide-bubble--animating {
+  opacity: 1;
+  transform: translateY(-50%);
+}
+
+.my-profile-guide-bubble--center .my-profile-guide-arrow,
+.my-profile-guide-bubble--center-fallback .my-profile-guide-arrow {
+  display: none !important;
+}
+
+.my-profile-guide-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 18rpx solid transparent;
+  border-right: 18rpx solid transparent;
+  transform: translateX(-50%);
+}
+
+.my-profile-guide-bubble--up .my-profile-guide-arrow {
+  top: -18rpx;
+  border-bottom: 18rpx solid #FFFFFF;
+}
+
+.my-profile-guide-bubble--down .my-profile-guide-arrow {
+  bottom: -18rpx;
+  border-top: 18rpx solid #FFFFFF;
+}
+
+.my-profile-guide-step-tag {
+  display: inline-block;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #007AFF;
+  background: rgba(0, 122, 255, 0.1);
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  margin-bottom: 16rpx;
+}
+
+.my-profile-guide-title {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #1D1D1F;
+  margin-bottom: 12rpx;
+}
+
+.my-profile-guide-desc {
+  font-size: 26rpx;
+  color: #636366;
+  line-height: 1.6;
+  margin-bottom: 28rpx;
+}
+
+.my-profile-guide-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.my-profile-guide-intro-box {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 560rpx;
+  max-width: calc(100% - 64rpx);
+  background: #fff;
+  border-radius: 28rpx;
+  padding: 40rpx 36rpx 32rpx;
+  box-shadow: 0 18rpx 44rpx rgba(0, 0, 0, 0.28);
+  box-sizing: border-box;
+}
+
+.my-profile-guide-intro-title {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #1D1D1F;
+  margin-bottom: 12rpx;
+  text-align: center;
+}
+
+.my-profile-guide-intro-desc {
+  font-size: 26rpx;
+  color: #636366;
+  line-height: 1.6;
+  text-align: center;
+  margin-bottom: 32rpx;
+}
+
+.my-profile-guide-intro-actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.my-profile-guide-intro-btn {
+  flex: 1;
+  height: 80rpx;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+
+.my-profile-guide-intro-btn--ghost {
+  background: #F2F2F7;
+  color: #1D1D1F;
+}
+
+.my-profile-guide-intro-btn--primary {
+  background: #1D1D1F;
+  color: #fff;
+}
+
+.my-profile-guide-intro-btn:active {
+  opacity: 0.82;
+  transform: scale(0.98);
+}
+
+.my-profile-guide-skip {
+  align-self: flex-end;
+  font-size: 26rpx;
+  color: #8E8E93;
+  padding: 4rpx 8rpx;
+}
+
+.my-profile-guide-skip:active {
+  opacity: 0.65;
+}
+
+.my-profile-guide-btn {
+  width: 100%;
+  height: 80rpx;
+  background: #1D1D1F;
+  color: #fff;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.my-profile-guide-btn.is-locked {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.my-profile-guide-btn:active {
+  transform: scale(0.96);
 }

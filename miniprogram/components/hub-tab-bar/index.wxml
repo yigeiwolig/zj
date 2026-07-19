@@ -28,7 +28,10 @@
     data-tab="profile"
     bindtap="onTap"
   >
-    <text class="tab-item-label">我的</text>
+    <view class="tab-item-label-wrap">
+      <text class="tab-item-label">我的</text>
+      <view class="tab-item-badge" wx:if="{{profileDot && active !== 3}}"></view>
+    </view>
     <view class="tab-item-dot"></view>
   </view>
 </view>

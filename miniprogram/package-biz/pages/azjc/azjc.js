@@ -1,6 +1,7 @@
 const db = wx.cloud.database();
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
+const azjcAccessDebug = require('../../../utils/azjcAccessDebug.js');
 const AZJC_DEFAULT_PRODUCTS = [
   { name: 'F1', series: '智能系列', suffix: 'F1', number: 1 },
   { name: 'F2', series: '性能系列', suffix: 'F2', number: 2 },
@@ -160,7 +161,9 @@ Page({
 
     // 闲鱼订单截图验证（无小程序订单/未绑设备时解锁教程）
     showXianyuVerifyModal: false,
-    xianyuVerifying: false
+    xianyuVerifying: false,
+    xianyuVerifyResult: '',
+    xianyuVerifyResultType: '' // success | error
   },
 
   _isCloudFileId(u) {
@@ -720,7 +723,7 @@ Page({
         adminCheck = await db.collection('guanliyuan').where({ _openid: openid }).count();
       }
       
-      if (adminCheck.total > 0) {
+      if (!azjcAccessDebug.IGNORE_ADMIN_FOR_ACCESS && adminCheck.total > 0) {
         // 是管理员：授权并放行
         this.setData({ isAuthorized: true });
         this.hideMyLoading();
@@ -819,18 +822,12 @@ Page({
         return;
       }
 
-      // 4. 既没订单也没绑定设备 -> 引导上传闲鱼订单截图验证
-      if (allOrdersRes.data.length === 0 && !hasDevice) {
-        console.log('[azjc checkAccessPermission] ⚠️ 既没订单也没绑定设备，展示闲鱼验证');
-        this.hideMyLoading();
-        this.showXianyuVerifyModal();
-        return;
-      }
-
-      // 5. 其他情况（理论上不应该到这里，但保留兜底逻辑）
-      console.log('[azjc checkAccessPermission] ⚠️ 未知情况，拒绝访问');
+      // 4. 无设备、无已确认订单、无待确认收货的已发货订单 -> 引导闲鱼截图验证
+      // （含：完全无小程序订单、仅有未付款/待发货订单的闲鱼用户）
+      console.log('[azjc checkAccessPermission] ⚠️ 展示闲鱼订单验证');
       this.hideMyLoading();
-      this.showRejectModal('请前往个人中心-我的订单\n确认收货后解锁教程');
+      this.showXianyuVerifyModal();
+      return;
 
     } catch (err) {
       console.error('权限检查异常', err);
@@ -869,7 +866,11 @@ Page({
   },
 
   showXianyuVerifyModal() {
-    this.setData({ showXianyuVerifyModal: true });
+    this.setData({
+      showXianyuVerifyModal: true,
+      xianyuVerifyResult: '',
+      xianyuVerifyResultType: ''
+    });
   },
 
   closeXianyuVerifyModal() {
@@ -903,9 +904,44 @@ Page({
     });
   },
 
+  _formatXianyuVerifyError(result) {
+    if (result && result.error === 'SELLER_MISMATCH') {
+      return '非本公司订单，请重新上传';
+    }
+    const base = (result && result.message) || '验证未通过，请重试';
+    if (/卖家昵称不匹配/.test(base)) {
+      return '非本公司订单，请重新上传';
+    }
+    if (result && result.error === 'ORDER_UNPAID') {
+      return base;
+    }
+    const parsed = result && result.parsed;
+    const nick = parsed && parsed.sellerNickname;
+    const status = parsed && parsed.orderStatus;
+    if (nick) {
+      let msg = `${base}\n识别到卖家昵称：${nick}`;
+      if (status) msg += `\n订单状态：${status}`;
+      return msg;
+    }
+    if (result && result.error === 'SELLER_LIST_EMPTY') {
+      return `${base}\n（云端未配置 sellerNicknames）`;
+    }
+    if (result && result.error === 'OCR_NOT_CONFIGURED') {
+      return `${base}\n（云函数未配置百度 OCR 密钥）`;
+    }
+    return base;
+  },
+
   _verifyXianyuOrderScreenshot(filePath) {
-    this.setData({ xianyuVerifying: true });
-    this.showMyLoading('识别订单中...');
+    this.setData({
+      xianyuVerifying: true,
+      xianyuVerifyResult: '',
+      xianyuVerifyResultType: ''
+    });
+    const toast = this._getCustomToast();
+    if (toast && toast.showLoading) {
+      toast.showLoading({ title: '识别订单中...' });
+    }
     const fs = wx.getFileSystemManager();
     fs.readFile({
       filePath,
@@ -916,29 +952,42 @@ Page({
           data: { imageBase64: readRes.data }
         }).then((cfRes) => {
           const result = cfRes && cfRes.result ? cfRes.result : {};
-          this.hideMyLoading();
+          if (toast && toast.hideLoading) toast.hideLoading();
           this.setData({ xianyuVerifying: false });
           if (result.success) {
-            this.setData({ showXianyuVerifyModal: false });
+            this.setData({
+              showXianyuVerifyModal: false,
+              xianyuVerifyResult: '',
+              xianyuVerifyResultType: ''
+            });
             this._showCustomToast(result.message || '验证通过', 'success');
             this.checkAdminPrivilege().then(() => {
               this.loadDataFromCloud();
             });
             return;
           }
-          this._showCustomToast(result.message || '验证未通过，请重试', 'none', 3000);
+          this.setData({
+            xianyuVerifyResult: this._formatXianyuVerifyError(result),
+            xianyuVerifyResultType: 'error'
+          });
         }).catch((err) => {
           console.error('[azjc] 闲鱼订单识别失败:', err);
-          this.hideMyLoading();
-          this.setData({ xianyuVerifying: false });
-          this._showCustomToast('识别失败，请稍后重试', 'none');
+          if (toast && toast.hideLoading) toast.hideLoading();
+          this.setData({
+            xianyuVerifying: false,
+            xianyuVerifyResult: '识别失败，请稍后重试',
+            xianyuVerifyResultType: 'error'
+          });
         });
       },
       fail: (err) => {
         console.error('[azjc] 读取订单截图失败:', err);
-        this.hideMyLoading();
-        this.setData({ xianyuVerifying: false });
-        this._showCustomToast('读取图片失败', 'none');
+        if (toast && toast.hideLoading) toast.hideLoading();
+        this.setData({
+          xianyuVerifying: false,
+          xianyuVerifyResult: '读取图片失败',
+          xianyuVerifyResultType: 'error'
+        });
       }
     });
   },

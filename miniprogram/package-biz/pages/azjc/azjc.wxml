@@ -477,10 +477,6 @@
   </view>
 </view>
 
-<!-- 全局自定义弹窗组件 -->
-<custom-toast id="custom-toast" />
-
-<!-- 自定义分享码剩余次数弹窗 -->
 <view class="custom-modal-mask {{showShareCodeModal ? 'active' : ''}}" wx:if="{{showShareCodeModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box share-code-modal" catchtouchmove="noop" catchtap="noop">
     
@@ -506,15 +502,40 @@
 <!-- 闲鱼订单截图验证 -->
 <view class="custom-modal-mask {{showXianyuVerifyModal ? 'active' : ''}}" wx:if="{{showXianyuVerifyModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box xianyu-verify-modal" catchtouchmove="noop" catchtap="noop">
-    <view class="modal-title-large">闲鱼订单验证</view>
-    <view class="modal-desc">请上传闲鱼「订单详情」截图</view>
-    <view class="modal-sub-desc xianyu-verify-hint">系统将识别卖家昵称，确认是否在本店下单后即可查看安装教程</view>
-    <view class="xianyu-verify-sample">需包含：卖家昵称、下单时间</view>
-    <view
-      class="modal-btn-new btn-black {{xianyuVerifying ? 'is-disabled' : ''}}"
-      bindtap="onChooseXianyuOrderScreenshot">
-      {{xianyuVerifying ? '识别中…' : '上传订单截图'}}
+    <view class="xianyu-verify-head">
+      <view class="xianyu-verify-title">闲鱼订单验证</view>
+      <view class="xianyu-verify-lead">请上传订单详情页截图</view>
     </view>
-    <view class="xianyu-verify-cancel" bindtap="closeXianyuVerifyModal">返回</view>
+
+    <scroll-view class="xianyu-verify-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="xianyu-verify-sample-wrap">
+        <view class="xianyu-verify-sample-label">参考示例</view>
+        <image
+          class="xianyu-verify-sample-img"
+          src="/images/xianyu-order-sample.png"
+          mode="widthFix"
+          show-menu-by-longpress="{{true}}" />
+      </view>
+
+    </scroll-view>
+
+    <view
+      class="xianyu-verify-tip xianyu-verify-tip--{{xianyuVerifyResultType}}"
+      wx:if="{{xianyuVerifyResult}}">
+      <view class="xianyu-verify-tip-icon">!</view>
+      <text class="xianyu-verify-tip-text">{{xianyuVerifyResult}}</text>
+    </view>
+
+    <view
+      class="xianyu-verify-btn {{xianyuVerifying ? 'is-disabled' : ''}}"
+      hover-class="{{xianyuVerifying ? '' : 'xianyu-verify-btn--active'}}"
+      bindtap="onChooseXianyuOrderScreenshot">
+      <text>{{xianyuVerifying ? '正在识别…' : '上传订单截图'}}</text>
+    </view>
+
+    <view class="xianyu-verify-cancel" hover-class="xianyu-verify-cancel--active" bindtap="closeXianyuVerifyModal">返回</view>
   </view>
 </view>
+
+<!-- 全局自定义弹窗组件（置于所有页面弹窗之后，保证 toast/loading 在最上层） -->
+<custom-toast id="custom-toast" />

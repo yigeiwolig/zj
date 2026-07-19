@@ -9,8 +9,9 @@ Page({
     isAdmin: false,
     boardContent: '',
     boardSending: false,
-    boardTearing: false,
-    boardSentTip: false,
+    boardFlying: false,
+    boardFlyContent: '',
+    boardDropIn: false,
     showFeedbackPanel: false,
     adminMessages: [],
     showAdminList: false
@@ -43,6 +44,18 @@ Page({
   onUnload() {
     const app = getApp();
     if (app && app.stopQiangliCheck) app.stopQiangliCheck();
+    this._clearBoardAnimTimers();
+  },
+
+  _clearBoardAnimTimers() {
+    if (this._flyUpFallbackTimer) {
+      clearTimeout(this._flyUpFallbackTimer);
+      this._flyUpFallbackTimer = null;
+    }
+    if (this._dropInFallbackTimer) {
+      clearTimeout(this._dropInFallbackTimer);
+      this._dropInFallbackTimer = null;
+    }
   },
 
   async checkAdminPrivilege() {
@@ -74,7 +87,7 @@ Page({
   },
 
   async handleBoardSend() {
-    if (this.data.boardSending || this.data.boardTearing) return;
+    if (this.data.boardSending || this.data.boardFlying || this.data.boardDropIn) return;
     const content = String(this.data.boardContent || '').trim();
     if (!content) {
       wx.showToast({ title: '写点什么再贴上去', icon: 'none' });
@@ -82,40 +95,53 @@ Page({
     }
     this.setData({ boardSending: true });
     try {
-      const res = await kfFeedbackApi.submit(content, kfFeedbackApi.resolveNickName());
+      const res = await kfFeedbackApi.submit(content);
       if (!res.success) {
-        let tip = '发送失败，请稍后重试';
-        if (res.error === 'RATE_LIMIT') tip = '发送太频繁，请稍后再试';
-        if (res.error === 'TOO_LONG') tip = '内容过长，请精简后重试';
-        wx.showToast({ title: tip, icon: 'none' });
+        wx.showToast({ title: kfFeedbackApi.tipForError(res.error), icon: 'none' });
         this.setData({ boardSending: false });
         return;
       }
-      this.setData({ boardTearing: true, boardSending: false });
-      if (this._tearFallbackTimer) clearTimeout(this._tearFallbackTimer);
-      this._tearFallbackTimer = setTimeout(() => {
-        if (this.data.boardTearing) this.onBoardTearEnd();
-      }, 780);
+      this._clearBoardAnimTimers();
+      this.setData({
+        boardFlying: true,
+        boardFlyContent: content,
+        boardSending: false
+      });
+      this._flyUpFallbackTimer = setTimeout(() => {
+        if (this.data.boardFlying) this.onFlyUpEnd();
+      }, 620);
     } catch (e) {
-      wx.showToast({ title: '网络异常，请重试', icon: 'none' });
+      console.warn('[kf-select] handleBoardSend', e);
+      wx.showToast({ title: kfFeedbackApi.tipForError('NETWORK'), icon: 'none' });
       this.setData({ boardSending: false });
     }
   },
 
-  onBoardTearEnd() {
-    if (!this.data.boardTearing) return;
-    if (this._tearFallbackTimer) {
-      clearTimeout(this._tearFallbackTimer);
-      this._tearFallbackTimer = null;
+  onFlyUpEnd() {
+    if (!this.data.boardFlying) return;
+    if (this._flyUpFallbackTimer) {
+      clearTimeout(this._flyUpFallbackTimer);
+      this._flyUpFallbackTimer = null;
     }
     this.setData({
-      boardTearing: false,
+      boardFlying: false,
+      boardFlyContent: '',
       boardContent: '',
-      boardSentTip: true
+      boardDropIn: true
     });
-    setTimeout(() => {
-      this.setData({ boardSentTip: false });
-    }, 1600);
+    this._dropInFallbackTimer = setTimeout(() => {
+      if (this.data.boardDropIn) this.onDropInEnd();
+    }, 680);
+  },
+
+  onDropInEnd() {
+    if (!this.data.boardDropIn) return;
+    if (this._dropInFallbackTimer) {
+      clearTimeout(this._dropInFallbackTimer);
+      this._dropInFallbackTimer = null;
+    }
+    this.setData({ boardDropIn: false });
+    wx.showToast({ title: '反馈已提交，感谢支持', icon: 'success' });
     if (this.data.isAdmin) this.loadAdminMessages();
   },
 
@@ -123,21 +149,34 @@ Page({
     try {
       const res = await kfFeedbackApi.listAdmin();
       if (!res.success) return;
-      const list = (res.list || []).map((item) => ({
-        ...item,
-        timeText: kfFeedbackApi.formatTime(item.createTime)
-      }));
+      const list = (res.list || []).map((item) => kfFeedbackApi.mapAdminMessage(item));
       this.setData({ adminMessages: list });
     } catch (e) {}
   },
 
-  async handleMarkRead(e) {
+  async handleDelete(e) {
     const id = e.currentTarget.dataset.id;
     if (!id) return;
-    try {
-      const res = await kfFeedbackApi.markRead(id);
-      if (res.success) this.loadAdminMessages();
-    } catch (err) {}
+    wx.showModal({
+      title: '删除留言',
+      content: '确定删除这条留言吗？',
+      confirmText: '删除',
+      confirmColor: '#FF3B30',
+      success: async (modal) => {
+        if (!modal.confirm) return;
+        try {
+          const res = await kfFeedbackApi.remove(id);
+          if (!res.success) {
+            wx.showToast({ title: kfFeedbackApi.tipForError(res.error), icon: 'none' });
+            return;
+          }
+          wx.showToast({ title: '已删除', icon: 'success' });
+          this.loadAdminMessages();
+        } catch (err) {
+          wx.showToast({ title: kfFeedbackApi.tipForError('NETWORK'), icon: 'none' });
+        }
+      }
+    });
   },
 
   toggleAdmin() {

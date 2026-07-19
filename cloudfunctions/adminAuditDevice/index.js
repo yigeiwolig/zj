@@ -16,6 +16,228 @@ async function assertAdmin(db) {
   throw new Error('FORBIDDEN')
 }
 
+async function handleListPending(db) {
+  const res = await db.collection('my_read')
+    .where({ status: 'PENDING' })
+    .orderBy('createTime', 'desc')
+    .limit(50)
+    .get()
+
+  const data = (res.data || []).map((item) => {
+    const openid = String(item.openid || item._openid || item.userOpenid || '').trim()
+    return {
+      ...item,
+      openid,
+      userOpenid: openid
+    }
+  })
+
+  return { success: true, data }
+}
+
+/** 配置回溯：用户绑定申请历史（排除管理员自己提交的），含当前质保信息 */
+async function handleListAudited(db, _) {
+  // 1. 管理员 openid 集合，用于排除管理员自己提交的申请
+  const adminSet = new Set()
+  try {
+    const adminRes = await db.collection('guanliyuan').limit(100).get()
+    ;(adminRes.data || []).forEach((a) => {
+      if (a.openid) adminSet.add(String(a.openid).trim())
+      if (a._openid) adminSet.add(String(a._openid).trim())
+    })
+  } catch (e) {
+    console.warn('[adminAuditDevice] list_audited load admins failed', e)
+  }
+
+  // 2. 分页拉取全部申请记录（含待审核/已通过，刚申请的也能看到）
+  const PAGE = 100
+  const rows = []
+  let skip = 0
+  for (let round = 0; round < 5; round++) {
+    const res = await db.collection('my_read')
+      .orderBy('createTime', 'desc')
+      .skip(skip)
+      .limit(PAGE)
+      .get()
+    const batch = res.data || []
+    rows.push(...batch)
+    if (batch.length < PAGE) break
+    skip += PAGE
+  }
+
+  // 3. 过滤规则：
+  //    - 已拒绝的不显示
+  //    - 管理员自己提交的申请：2026-07-18 之前的旧自测单隐藏，之后的显示（测试用）
+  const ADMIN_SHOW_SINCE = new Date('2026-07-18T00:00:00+08:00').getTime()
+  const isAdminApply = (r) => {
+    if (r.submittedByAdmin === true) return true
+    const openid = String(r.openid || r.userOpenid || r._openid || '').trim()
+    return !!(openid && adminSet.has(openid))
+  }
+  const filtered = rows.filter((r) => {
+    const status = String(r.status || '').trim().toUpperCase()
+    if (status === 'REJECTED') return false
+    if (isAdminApply(r)) {
+      const t = r.createTime ? new Date(r.createTime).getTime() : 0
+      if (!t || t < ADMIN_SHOW_SINCE) return false
+    }
+    return true
+  })
+
+  // 4. 关联 sn 集合档案：
+  //    - 普通绑定按 my_read.sn 匹配
+  //    - 故障核验按 faultClaimId = 申请ID 匹配（SN 可能已被补录改写）
+  const snList = [...new Set(filtered.map((r) => String(r.sn || '').trim()).filter(Boolean))]
+  const claimIds = filtered
+    .filter((r) => (r.bindType || 'normal') === 'fault')
+    .map((r) => r._id)
+
+  const snMap = {}
+  const claimMap = {}
+
+  for (let i = 0; i < snList.length; i += 20) {
+    const batch = snList.slice(i, i + 20)
+    try {
+      const devRes = await db.collection('sn').where({ sn: _.in(batch) }).get()
+      ;(devRes.data || []).forEach((d) => {
+        snMap[String(d.sn || '').trim()] = d
+      })
+    } catch (e) {
+      console.warn('[adminAuditDevice] list_audited sn batch failed', e)
+    }
+  }
+
+  for (let i = 0; i < claimIds.length; i += 20) {
+    const batch = claimIds.slice(i, i + 20)
+    try {
+      const devRes = await db.collection('sn').where({ faultClaimId: _.in(batch) }).get()
+      ;(devRes.data || []).forEach((d) => {
+        claimMap[String(d.faultClaimId || '').trim()] = d
+      })
+    } catch (e) {
+      console.warn('[adminAuditDevice] list_audited claim batch failed', e)
+    }
+  }
+
+  const data = filtered.map((r) => {
+    const isFault = (r.bindType || 'normal') === 'fault'
+    const sn = String(r.sn || '').trim()
+    // 故障核验优先用 faultClaimId 关联，找不到再退回按 SN
+    const dev = (isFault ? claimMap[r._id] : null) || snMap[sn] || {}
+    const status = String(r.status || '').trim().toUpperCase()
+    const approved = status === 'APPROVED'
+    // 只要档案存在且有质保天数就允许回溯修改（不再强绑 status）
+    const editable = !!dev._id && Number(dev.totalDays) > 0
+    return {
+      _id: r._id,
+      sn: String(dev.sn || sn || '').trim(),
+      productModel: String(dev.productModel || r.productModel || '').trim(),
+      bindType: r.bindType || 'normal',
+      isAdminApply: isAdminApply(r),
+      status: status || 'PENDING',
+      buyDate: r.buyDate || '',
+      createTime: r.createTime || null,
+      // 当前质保信息（来自 sn 集合）
+      hasDevice: editable,
+      approved,
+      totalDays: dev.totalDays || 0,
+      expiryDate: dev.expiryDate || '',
+      remainingDays: dev.remainingDays || 0,
+      bindTime: dev.bindTime || null,
+      isActive: !!dev.isActive,
+      warrantyRollbackAt: dev.warrantyRollbackAt || null
+    }
+  })
+
+  return { success: true, data }
+}
+
+/** 配置回溯：修正已审核设备的质保时长（管理员手滑选错时用） */
+async function handleRollbackWarranty(db, _, event, adminOpenid) {
+  const targetSn = String(event.sn || '').trim()
+  const claimId = String(event.claimId || event.recordId || '').trim()
+  const days = parseInt(event.customDays)
+  if (!days || days <= 0) return { success: false, errMsg: '质保天数无效' }
+
+  // 先按 SN 找；找不到再按 faultClaimId 兜底（故障核验补录后 SN 可能已变）
+  let dev = null
+  if (targetSn) {
+    const devRes = await db.collection('sn').where({ sn: targetSn }).limit(1).get()
+    if (devRes.data && devRes.data.length > 0) dev = devRes.data[0]
+  }
+  if (!dev && claimId) {
+    const byClaim = await db.collection('sn').where({ faultClaimId: claimId }).limit(1).get()
+    if (byClaim.data && byClaim.data.length > 0) dev = byClaim.data[0]
+  }
+  if (!dev) {
+    return { success: false, errMsg: `设备档案不存在或已被删除` }
+  }
+
+  // 以原购买/绑定时间为基准重算到期日；允许传 customDate 顺带修正购买日期
+  let baseDate = null
+  if (event.customDate) {
+    baseDate = new Date(event.customDate)
+  } else if (dev.bindTime) {
+    baseDate = new Date(dev.bindTime)
+  }
+  if (!baseDate || isNaN(baseDate.getTime())) baseDate = new Date()
+
+  const expiryDateObj = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000)
+  const expiryDateStr = expiryDateObj.toISOString().split('T')[0]
+  const remainingDays = Math.ceil((expiryDateObj - new Date()) / (1000 * 60 * 60 * 24))
+
+  const updateData = {
+    totalDays: days,
+    expiryDate: expiryDateStr,
+    remainingDays: remainingDays > 0 ? remainingDays : 0,
+    warrantyRollbackAt: db.serverDate(),
+    warrantyRollbackBy: adminOpenid,
+    warrantyRollbackFrom: dev.totalDays || 0
+  }
+  if (event.customDate) {
+    updateData.bindTime = baseDate
+  }
+
+  await db.collection('sn').doc(dev._id).update({ data: updateData })
+
+  return {
+    success: true,
+    msg: `质保已改为 ${days} 天，到期日 ${expiryDateStr}`,
+    totalDays: days,
+    expiryDate: expiryDateStr,
+    remainingDays: remainingDays > 0 ? remainingDays : 0
+  }
+}
+
+function resolveApplicantOpenid(applyData, applicantOpenidFromClient, adminOpenid) {
+  let applicantOpenid = String(
+    applyData.openid ||
+    applyData.userOpenid ||
+    applyData._openid ||
+    applicantOpenidFromClient ||
+    ''
+  ).trim()
+
+  // 故障核验：管理员自测 / 历史单缺 openid
+  if (!applicantOpenid && applyData.bindType === 'fault') {
+    if (applyData.submittedByAdmin === true) {
+      applicantOpenid = String(applyData.openid || applyData._openid || adminOpenid || '').trim()
+    } else if (applicantOpenidFromClient) {
+      applicantOpenid = String(applicantOpenidFromClient).trim()
+    } else if (
+      adminOpenid &&
+      !applyData.openid &&
+      !applyData.userOpenid &&
+      !applyData._openid
+    ) {
+      // 无任何申请人字段的历史自测单：审核管理员即申请人
+      applicantOpenid = adminOpenid
+    }
+  }
+
+  return applicantOpenid
+}
+
 // 🔴 调试日志辅助函数
 function sendDebugLog(location, message, data, hypothesisId) {
   // 同时使用 console.log 和 HTTP 请求
@@ -58,32 +280,77 @@ function sendDebugLog(location, message, data, hypothesisId) {
   }
 }
 
+
+async function notifyUserSubscribe(openid, scene) {
+  const touser = String(openid || '').trim()
+  if (!touser || !scene) return
+  try {
+    await cloud.callFunction({
+      name: 'sendSubscribeMessage',
+      data: { openid: touser, scene }
+    })
+  } catch (e) {
+    console.warn('[adminAuditDevice] subscribe notify failed', scene, e)
+  }
+}
 exports.main = async (event, context) => {
   const db = cloud.database()
   const _ = db.command
   
   // 接收前端传来的自定义参数：customDate(管理员改的时间), customDays(管理员选的天数)
-  const { id, action, customDate, customDays } = event
+  // productModel：管理员可修正用户申报的设备型号
+  // applicantOpenid：前端列表里带的申请人 openid，作为兜底（历史单据可能缺字段）
+  const { id, action, customDate, customDays, productModel: productModelFromClient, applicantOpenid: applicantOpenidFromClient } = event
+
+  const PRODUCT_DETAIL_OPTIONS = [
+    'F1 PRO', 'F1 MAX', 'F1 ULTRA',
+    'F2 PRO', 'F2 MAX', 'F2 ULTRA', 'F2 Long',
+    'F3 PRO', 'F3 MAX'
+  ]
+  function normalizeAuditProductModel(raw) {
+    const s = String(raw || '').trim()
+    if (!s) return ''
+    const aliases = {
+      'F1 Pro Max': 'F1 ULTRA',
+      'F1 ultra': 'F1 ULTRA',
+      'F2 MAX Long': 'F2 Long',
+      'F2 MAX LONG': 'F2 Long',
+      'F2 Max Long': 'F2 Long'
+    }
+    if (aliases[s]) return aliases[s]
+    const hit = PRODUCT_DETAIL_OPTIONS.find((m) => m.toUpperCase() === s.toUpperCase())
+    return hit || s
+  }
 
   try {
-    await assertAdmin(db)
+    const adminOpenid = await assertAdmin(db)
+
+    if (action === 'list_pending') {
+      return await handleListPending(db)
+    }
+
+    if (action === 'list_audited') {
+      return await handleListAudited(db, _)
+    }
+
+    if (action === 'rollback_warranty') {
+      return await handleRollbackWarranty(db, _, event, adminOpenid)
+    }
+
+    if (!id || String(id).startsWith('preview-')) {
+      return { success: false, errMsg: '无效的申请记录，请刷新后重试' }
+    }
 
     // 1. 获取申请详情
     const applyRes = await db.collection('my_read').doc(id).get()
-    const applyData = applyRes.data
-    
-    // 🔴 获取申请人的 openid（从文档的 _openid 字段获取，这是云开发自动注入的）
-    // 注意：在云函数中，_openid 字段可以直接访问
-    // 🔴 修复：如果 _openid 不存在，尝试从文档的 openid 字段获取（某些情况下可能存储在这里）
-    let applicantOpenid = applyData._openid || applyData.openid
-    
-    // 🔴 如果还是没有，尝试从查询结果中获取（云开发会自动注入 _openid）
-    if (!applicantOpenid && applyRes.data) {
-      // 在某些情况下，_openid 可能不在 data 中，需要从其他地方获取
-      // 但通常 _openid 应该在 data 中
-      applicantOpenid = applyData._openid
-    }
-    
+    const applyData = applyRes.data || {}
+
+    const applicantOpenid = resolveApplicantOpenid(
+      applyData,
+      applicantOpenidFromClient,
+      adminOpenid
+    )
+
     // #region agent log
     sendDebugLog('cloudfunctions/adminAuditDevice/index.js:main', '获取申请详情', { 
       id, 
@@ -92,14 +359,32 @@ exports.main = async (event, context) => {
       hasOpenid: !!applicantOpenid,
       has_openid: !!applyData._openid,
       has_openid_field: !!applyData.openid,
+      submittedByAdmin: !!applyData.submittedByAdmin,
       allKeys: Object.keys(applyData)
     }, 'B')
     // #endregion
     
-    // 🔴 如果还是没有 openid，记录错误
     if (!applicantOpenid) {
-      console.error('[adminAuditDevice] 无法获取申请人 openid，申请记录:', applyData)
-      return { success: false, errMsg: '无法获取申请人信息，请重试' }
+      console.error('[adminAuditDevice] 无法获取申请人 openid，申请记录:', {
+        id,
+        keys: Object.keys(applyData),
+        bindType: applyData.bindType
+      })
+      return {
+        success: false,
+        errMsg: '无法获取申请人信息。请让用户重新提交故障核验申请后再审（旧申请缺 openid）'
+      }
+    }
+
+    // 补写 openid，避免后续步骤 / 再次审核再踩坑
+    if (!applyData.openid) {
+      try {
+        await db.collection('my_read').doc(id).update({
+          data: { openid: applicantOpenid }
+        })
+      } catch (e) {
+        console.warn('[adminAuditDevice] backfill openid failed', e)
+      }
     }
 
     if (action === 'reject') {
@@ -110,6 +395,14 @@ exports.main = async (event, context) => {
     if (action === 'approve') {
       // === A. 使用管理员设定的日期 ===
       const finalDate = customDate ? new Date(customDate) : new Date(applyData.buyDate)
+      // 管理员可修正用户申报的型号（蓝牙申报不一定准）
+      const finalProductModel =
+        normalizeAuditProductModel(productModelFromClient) ||
+        normalizeAuditProductModel(applyData.productModel) ||
+        String(applyData.productModel || '').trim()
+      if (!finalProductModel) {
+        return { success: false, errMsg: '请选择设备型号' }
+      }
       
       // === B. 计算固件版本 (V年尾.月.3) ===
       // 基于设定的购买日期来生成版本，或者基于当前时间，这里建议用设定日期
@@ -170,34 +463,38 @@ exports.main = async (event, context) => {
       let targetSn = String(applyData.sn || '').trim()
 
       if (isFaultClaim) {
-        const existingPending = await db.collection('sn').where({
+        const existingFault = await db.collection('sn').where({
           openid: userOpenid,
           isActive: true,
-          snPending: true
+          bindSource: 'fault_claim'
         }).limit(1).get()
 
-        if (existingPending.data.length > 0) {
-          return { success: false, errMsg: '该用户已有待录入设备，请勿重复审核' }
+        if (existingFault.data.length > 0) {
+          return { success: false, errMsg: '该用户已有故障核验档案，请勿重复审核' }
         }
 
-        targetSn = `PENDING-FAULT-${String(id).slice(-8).toUpperCase()}`
+        // 仅保存质保档案，不立即待录入 SN；是否待录入由售后诊断书（主板/控制器）决定
+        const claimSn = `FAULT-CLAIM-${String(id).slice(-8).toUpperCase()}`
 
-        await db.collection('sn').add({
+        const addRes = await db.collection('sn').add({
           data: {
-            sn: targetSn,
-            name: applyData.productModel,
-            productModel: applyData.productModel,
+            sn: claimSn,
+            name: finalProductModel,
+            productModel: finalProductModel,
             firmware: firmwareVer,
             expiryDate: finalExpiryDateStr,
             totalDays: finalTotalDays,
             remainingDays: remainingDays > 0 ? remainingDays : 0,
-            activations: 1,
+            activations: 0,
             hasExtra: false,
             bindTime: finalDate instanceof Date ? finalDate.toISOString() : finalDate,
             imgReceipt: applyData.imgReceipt,
             isActive: true,
             openid: userOpenid,
-            snPending: true,
+            snPending: false,
+            faultAwaitingDiagnosis: true,
+            faultAutoBind: false,
+            faultScheme: '',
             bindSource: 'fault_claim',
             faultClaimId: id,
             createTime: db.serverDate()
@@ -205,8 +502,31 @@ exports.main = async (event, context) => {
         })
 
         await db.collection('my_read').doc(id).update({
-          data: { status: 'APPROVED', sn: targetSn }
+          data: { status: 'APPROVED', sn: claimSn, productModel: finalProductModel }
         })
+
+        // 关联用户未完结售后工单，供诊断书判定 A/B 方案
+        try {
+          const repairRes = await db.collection('shouhou_repair')
+            .where(_.or([{ _openid: userOpenid }, { openid: userOpenid }]))
+            .orderBy('createTime', 'desc')
+            .limit(20)
+            .get()
+          const openRepair = (repairRes.data || []).find((row) => {
+            const st = String(row.status || '').trim().toUpperCase()
+            return !['COMPLETED', 'RETURN_RECEIVED', 'REPAIR_COMPLETED_SENT', 'TUTORIAL'].includes(st)
+          })
+          if (openRepair && openRepair._id) {
+            await db.collection('shouhou_repair').doc(openRepair._id).update({
+              data: {
+                faultClaimId: id,
+                faultClaimSnDocId: addRes._id
+              }
+            })
+          }
+        } catch (linkErr) {
+          console.warn('[adminAuditDevice] link fault claim to repair failed', linkErr)
+        }
 
         if (userOpenid && pendingWarrantyDays > 0) {
           const pendingRes = await db.collection('pending_warranty')
@@ -218,13 +538,17 @@ exports.main = async (event, context) => {
               data: {
                 status: 'applied',
                 appliedAt: db.serverDate(),
-                appliedSn: targetSn
+                appliedSn: claimSn
               }
             })
           }
         }
 
-        return { success: true, msg: '故障核验已通过，设备卡已创建' }
+        await notifyUserSubscribe(userOpenid, 'fault_bind_ok')
+        return {
+          success: true,
+          msg: '故障核验已通过，质保档案已创建；待售后诊断书确认是否需录入新机 SN'
+        }
       }
 
       if (!targetSn) {
@@ -244,7 +568,8 @@ exports.main = async (event, context) => {
       
       // 🔴 修复：确保 openid 被设置（必须设置，不能为空）
       const updateData = {
-        productModel: applyData.productModel,
+        productModel: finalProductModel,
+        name: finalProductModel,
         firmware: firmwareVer,
         expiryDate: finalExpiryDateStr, // 🔴 使用包含待生效延保的最终日期
         totalDays: finalTotalDays, // 🔴 使用包含待生效延保的最终天数
@@ -286,8 +611,10 @@ exports.main = async (event, context) => {
         console.error('[adminAuditDevice] 警告：更新后验证失败，设备可能未正确更新，SN:', targetSn, 'openid:', userOpenid)
       }
 
-      // 更新申请单状态
-      await db.collection('my_read').doc(id).update({ data: { status: 'APPROVED' } })
+      // 更新申请单状态（同步修正后的型号）
+      await db.collection('my_read').doc(id).update({
+        data: { status: 'APPROVED', productModel: finalProductModel }
+      })
 
       // 🔴 设备审核通过：更新待生效延保记录状态为"已生效"
       if (userOpenid && pendingWarrantyDays > 0) {
@@ -316,6 +643,7 @@ exports.main = async (event, context) => {
         console.log('[adminAuditDevice] 已更新', recordIds.length, '条待生效延保记录为已生效')
       }
 
+      await notifyUserSubscribe(userOpenid, 'bind_approved')
       return { success: true, msg: '同步成功' }
     }
 

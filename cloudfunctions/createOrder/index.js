@@ -125,6 +125,7 @@ function createWxPayOrder(orderData) {
       mchid: mchId,
       description: orderData.body || 'MT摩改社-车辆定制改装与维修服务费',
       out_trade_no: orderData.outTradeNo,
+      time_expire: orderData.timeExpire,
       // 🔴 回调地址：云开发控制台配置的 payCallback 云函数 HTTP 触发地址
       // 已在云开发控制台配置：域名关联资源 -> /payCallback -> payCallback 云函数
       notify_url: `https://cloudbase-4gn1heip7c38ec6c-1392958388.ap-shanghai.app.tcloudbase.com/payCallback`,
@@ -257,7 +258,7 @@ function shopQualifiesFreeShipping(goods, goodsSubtotal) {
 /** 顺丰等：省内 13 / 省外 22（单位：元） */
 function provinceShippingFee(province) {
   const p = province ? String(province).trim() : ''
-  if (!p) return 0
+  if (!p) throw new Error('配送地址缺少省份信息')
   if (p.indexOf('广东') !== -1) return 13
   return 22
 }
@@ -265,7 +266,7 @@ function provinceShippingFee(province) {
 /** 商城仅配件 + 中通：省内 12 / 省外 15 */
 function ztoAccessoryShippingFee(province) {
   const p = province ? String(province).trim() : ''
-  if (!p) return 0
+  if (!p) throw new Error('配送地址缺少省份信息')
   if (p.indexOf('广东') !== -1) return 12
   return 15
 }
@@ -275,7 +276,7 @@ function computePaidShippingFee(shippingMethod, province) {
   const m = String(shippingMethod || 'zto').toLowerCase()
   if (m === 'zto') return ztoAccessoryShippingFee(province)
   if (m === 'sf') return provinceShippingFee(province)
-  return 0
+  throw new Error('不支持的物流方式')
 }
 
 /**
@@ -283,8 +284,9 @@ function computePaidShippingFee(shippingMethod, province) {
  */
 function computeShippingFeeServer(shippingMethod, addressData, goods, goodsSubtotal) {
   const m = String(shippingMethod || 'zto').toLowerCase()
-  if (m === 'none' || m === '') return 0
+  if (m !== 'zto' && m !== 'sf') throw new Error('不支持的物流方式')
   const province = guessProvince(addressData || {})
+  if (!province) throw new Error('配送地址缺少省份信息，请重新选择收货地址')
   const cat = classifyGoods(goods || [])
   if (cat === 'shop' && shopQualifiesFreeShipping(goods, goodsSubtotal)) return 0
   if (cat === 'shop' || cat === 'shouhou_parts') {
@@ -485,6 +487,31 @@ exports.main = async (event, context) => {
   let outTradeNo = `MT${Date.now()}${Math.floor(Math.random() * 1000)}`
   const db = cloud.database()
   let repayExistingDoc = null
+  let reservedCouponIds = []
+
+  async function releaseReservedCoupons() {
+    if (!reservedCouponIds.length) return
+    try {
+      const internalSecret = process.env.INTERNAL_CALL_SECRET
+      if (!internalSecret) throw new Error('INTERNAL_CALL_SECRET 未配置')
+      const releaseCall = await cloud.callFunction({
+        name: 'referral',
+        data: {
+          action: 'releaseCouponReservation',
+          couponIds: reservedCouponIds,
+          orderId: outTradeNo,
+          _internalSecret: internalSecret
+        }
+      })
+      const releaseResult = releaseCall && releaseCall.result
+      if (!releaseResult || !releaseResult.success) {
+        throw new Error((releaseResult && releaseResult.error) || '释放优惠券占用失败')
+      }
+      reservedCouponIds = []
+    } catch (releaseErr) {
+      console.error('[createOrder] 释放优惠券占用失败:', releaseErr)
+    }
+  }
 
   if (!wxContext.OPENID) {
     return { error: true, msg: '请先登录' }
@@ -541,13 +568,15 @@ exports.main = async (event, context) => {
       !pricing.adminUser &&
       pricing.pricingMode === 'shop'
     ) {
+      const couponAction = action === 'save_only' ? 'computeCouponDiscount' : 'reserveCouponDiscount'
       const couponRes = await cloud.callFunction({
         name: 'referral',
         data: {
-          action: 'computeCouponDiscount',
+          action: couponAction,
           couponIds,
           fullTotalYuan: pricing.serverFullTotal,
-          pricingMode: pricing.pricingMode
+          pricingMode: pricing.pricingMode,
+          orderId: outTradeNo
         }
       })
       const cr = (couponRes && couponRes.result) || {}
@@ -555,6 +584,7 @@ exports.main = async (event, context) => {
         return { error: true, msg: cr.error || '优惠券不可用' }
       }
       couponIds = cr.appliedIds || couponIds
+      if (couponAction === 'reserveCouponDiscount') reservedCouponIds = couponIds.slice()
       couponDiscountYuan = cr.discountYuan || 0
       preCouponTotalYuan = cr.preCouponTotalYuan || pricing.serverFullTotal
       pricing.payAmountYuan = cr.payAmountYuan != null ? cr.payAmountYuan : roundMoney(pricing.serverFullTotal - couponDiscountYuan)
@@ -601,11 +631,13 @@ exports.main = async (event, context) => {
     // === 情况2: 立即支付（应付金额完全由服务端计算；管理员仍为 0.01 测付）===
     const payYuan = pricing.payAmountYuan
     if (!Number.isFinite(payYuan) || payYuan <= 0) {
+      await releaseReservedCoupons()
       return { error: true, msg: '订单金额异常，请返回购物车刷新后重试' }
     }
     // 非管理员且非维修类：应付通常应大于 0.01（防止未配置价格却被下单）
     const repairLike = pricing.pricingMode === 'repair' || pricing.pricingMode === 'repair_repay'
     if (!pricing.adminUser && payYuan <= 0.01 && !repairLike && !(couponDiscountYuan > 0)) {
+      await releaseReservedCoupons()
       return { error: true, msg: '订单金额过低，请确认商品价格已配置' }
     }
 
@@ -623,6 +655,7 @@ exports.main = async (event, context) => {
       orderSource: (repayExistingDoc && repayExistingDoc.orderSource) || orderSource || '',
       pricingAudit: auditBase,
       couponIds: couponIds.length ? couponIds : [],
+      couponReservationRequired: reservedCouponIds.length > 0,
       couponDiscountYuan: couponDiscountYuan || 0,
       preCouponTotalYuan: preCouponTotalYuan || payYuan
     }
@@ -647,7 +680,9 @@ exports.main = async (event, context) => {
       body: 'MT摩改社-车辆定制改装与维修服务费',
       outTradeNo: outTradeNo,
       totalFee: Math.round(payYuan * 100), // 转为分
-      openid: wxContext.OPENID
+      openid: wxContext.OPENID,
+      // 与优惠券占用期一致，防止占用过期后旧支付单仍可付款。
+      timeExpire: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
     }
     
     console.log('[createOrder] 调用微信支付统一下单:', orderData)
@@ -656,6 +691,7 @@ exports.main = async (event, context) => {
     
     if (!wxPayRes.prepay_id) {
       console.error('微信支付下单失败:', wxPayRes)
+      await releaseReservedCoupons()
       return { error: true, msg: wxPayRes.message || JSON.stringify(wxPayRes) }
     }
     
@@ -669,6 +705,7 @@ exports.main = async (event, context) => {
     
   } catch (err) {
     console.error('云函数运行崩溃:', err)
+    await releaseReservedCoupons()
     return { error: true, msg: err.message || '系统繁忙' }
   }
 }

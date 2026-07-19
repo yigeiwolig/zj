@@ -8,6 +8,7 @@ const MIN_SPEND_FEN = COUPON_AMOUNT_FEN + 1
 const CODE_PREFIX = 'INV'
 const CODE_BODY_LEN = 6
 const COUPON_ONLY_BY_REFERRAL_MSG = '优惠券仅可通过邀请新用户下单获得'
+const COUPON_RESERVATION_MS = 2 * 60 * 60 * 1000
 
 function roundMoney(n) {
   return Math.round(Number(n) * 100) / 100
@@ -43,17 +44,22 @@ function formatCheckoutCoupon(c) {
 
 async function listCheckoutCoupons(db, openid) {
   const res = await db.collection('user_coupons').where({
-    ownerOpenid: openid,
-    status: 'available'
-  }).get()
+    ownerOpenid: openid
+  }).limit(100).get()
+  const now = Date.now()
   const list = (res.data || [])
-    .filter((c) => c && c.source === 'referral')
+    .filter((c) => {
+      if (!c || c.source !== 'referral') return false
+      if (c.status === 'available') return true
+      const expiresAt = c.reservedUntil ? new Date(c.reservedUntil).getTime() : 0
+      return c.status === 'reserved' && expiresAt > 0 && expiresAt <= now
+    })
     .map(formatCheckoutCoupon)
   list.sort((a, b) => (b.amountFen || 0) - (a.amountFen || 0))
   return { success: true, coupons: list }
 }
 
-async function computeCouponDiscount(db, openid, couponIds, fullTotalYuan, pricingMode) {
+async function computeCouponDiscount(db, openid, couponIds, fullTotalYuan, pricingMode, reservationOrderId) {
   if (pricingMode && pricingMode !== 'shop') {
     return { success: false, error: '仅商城订单可使用优惠券' }
   }
@@ -73,7 +79,12 @@ async function computeCouponDiscount(db, openid, couponIds, fullTotalYuan, prici
     const c = doc.data
     if (!c) return { success: false, error: '优惠券不存在或已失效' }
     if (couponOwner(c) !== openid) return { success: false, error: '无权使用该优惠券' }
-    if (c.status !== 'available') return { success: false, error: '部分优惠券已使用或已失效，请重新选择' }
+    const expiresAt = c.reservedUntil ? new Date(c.reservedUntil).getTime() : 0
+    const reservedByThisOrder = c.status === 'reserved' && c.reservedOrderId === reservationOrderId
+    const expiredReservation = c.status === 'reserved' && expiresAt > 0 && expiresAt <= Date.now()
+    if (c.status !== 'available' && !reservedByThisOrder && !expiredReservation) {
+      return { success: false, error: '部分优惠券已使用或已被其他订单占用，请重新选择' }
+    }
     if (c.source !== 'referral') {
       return { success: false, error: COUPON_ONLY_BY_REFERRAL_MSG }
     }
@@ -107,6 +118,89 @@ async function computeCouponDiscount(db, openid, couponIds, fullTotalYuan, prici
   }
 }
 
+/**
+ * 生成支付单前原子占用优惠券，防止同一张券被多个未支付订单同时使用。
+ * 同一订单重试支付时允许续期；超时占用可被新订单接管。
+ */
+async function reserveCouponDiscount(db, openid, couponIds, fullTotalYuan, pricingMode, orderId) {
+  if (!orderId) return { success: false, error: '缺少订单号，无法占用优惠券' }
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      const result = await computeCouponDiscount(
+        transaction,
+        openid,
+        couponIds,
+        fullTotalYuan,
+        pricingMode,
+        orderId
+      )
+      if (!result.success) throw new Error(result.error || '优惠券不可用')
+
+      const now = Date.now()
+      const reservedUntil = now + COUPON_RESERVATION_MS
+      const docs = []
+
+      for (const cid of result.appliedIds || []) {
+        const doc = await transaction.collection('user_coupons').doc(cid).get()
+        const coupon = doc.data
+        const expiresAt = coupon && coupon.reservedUntil
+          ? new Date(coupon.reservedUntil).getTime()
+          : 0
+        const reservedByThisOrder = coupon && coupon.status === 'reserved' && coupon.reservedOrderId === orderId
+        const expiredReservation = coupon && coupon.status === 'reserved' && expiresAt > 0 && expiresAt <= now
+
+        if (!coupon || couponOwner(coupon) !== openid || coupon.source !== 'referral') {
+          throw new Error('优惠券不存在或无权使用')
+        }
+        if (coupon.status !== 'available' && !reservedByThisOrder && !expiredReservation) {
+          throw new Error('部分优惠券已被其他订单占用，请重新选择')
+        }
+        docs.push(cid)
+      }
+
+      for (const cid of docs) {
+        await transaction.collection('user_coupons').doc(cid).update({
+          data: {
+            status: 'reserved',
+            reservedOrderId: orderId,
+            reservedTime: db.serverDate(),
+            reservedUntil: new Date(reservedUntil)
+          }
+        })
+      }
+
+      return { ...result, reservedUntil }
+    })
+  } catch (err) {
+    return { success: false, error: (err && err.message) || '优惠券占用失败' }
+  }
+}
+
+async function releaseCouponReservation(db, openid, couponIds, orderId) {
+  const ids = [...new Set((couponIds || []).map((id) => String(id).trim()).filter(Boolean))]
+  if (!openid || !orderId || !ids.length) return { success: true, skipped: true }
+
+  await db.runTransaction(async (transaction) => {
+    for (const cid of ids) {
+      const doc = await transaction.collection('user_coupons').doc(cid).get()
+      const coupon = doc.data
+      if (!coupon || couponOwner(coupon) !== openid) continue
+      if (coupon.status === 'reserved' && coupon.reservedOrderId === orderId) {
+        await transaction.collection('user_coupons').doc(cid).update({
+          data: {
+            status: 'available',
+            reservedOrderId: '',
+            reservedTime: null,
+            reservedUntil: null
+          }
+        })
+      }
+    }
+  })
+  return { success: true }
+}
+
 async function markCouponsUsed(db, orderId) {
   if (!orderId) return { success: false, skipped: true }
 
@@ -116,23 +210,40 @@ async function markCouponsUsed(db, orderId) {
   const ids = order.couponIds || []
   if (!ids.length) return { success: true, skipped: true }
 
-  for (const cid of ids) {
-    try {
-      const doc = await db.collection('user_coupons').doc(cid).get()
-      const c = doc.data
-      if (!c || c.status !== 'available') continue
-      await db.collection('user_coupons').doc(cid).update({
-        data: {
-          status: 'used',
-          usedOrderId: orderId,
-          usedTime: db.serverDate()
+  try {
+    await db.runTransaction(async (transaction) => {
+      const coupons = []
+      for (const cid of ids) {
+        const doc = await transaction.collection('user_coupons').doc(cid).get()
+        const coupon = doc.data
+        const alreadyUsedByThisOrder = coupon && coupon.status === 'used' && coupon.usedOrderId === orderId
+        const reservedByThisOrder = coupon && coupon.status === 'reserved' && coupon.reservedOrderId === orderId
+        const legacyAvailable = coupon && coupon.status === 'available' && !order.couponReservationRequired
+        if (!coupon || (!alreadyUsedByThisOrder && !reservedByThisOrder && !legacyAvailable)) {
+          throw new Error(`优惠券 ${cid} 未被当前订单占用`)
         }
-      })
-    } catch (e) {
-      console.warn('[referral] markCouponsUsed item failed:', cid, e)
-    }
+        coupons.push({ cid, alreadyUsedByThisOrder })
+      }
+
+      for (const item of coupons) {
+        if (item.alreadyUsedByThisOrder) continue
+        await transaction.collection('user_coupons').doc(item.cid).update({
+          data: {
+            status: 'used',
+            usedOrderId: orderId,
+            usedTime: db.serverDate(),
+            reservedOrderId: '',
+            reservedTime: null,
+            reservedUntil: null
+          }
+        })
+      }
+    })
+    return { success: true }
+  } catch (e) {
+    console.error('[referral] markCouponsUsed transaction failed:', e)
+    return { success: false, error: (e && e.message) || '优惠券核销失败' }
   }
-  return { success: true }
 }
 
 async function restoreCouponsForOrder(db, order) {
@@ -145,12 +256,17 @@ async function restoreCouponsForOrder(db, order) {
       const doc = await db.collection('user_coupons').doc(cid).get()
       const c = doc.data
       if (!c) continue
-      if (c.status === 'used' && c.usedOrderId === orderId) {
+      const usedByOrder = c.status === 'used' && c.usedOrderId === orderId
+      const reservedByOrder = c.status === 'reserved' && c.reservedOrderId === orderId
+      if (usedByOrder || reservedByOrder) {
         await db.collection('user_coupons').doc(cid).update({
           data: {
             status: 'available',
             usedOrderId: '',
             usedTime: null,
+            reservedOrderId: '',
+            reservedTime: null,
+            reservedUntil: null,
             restoredTime: db.serverDate()
           }
         })
@@ -453,6 +569,15 @@ async function grantOnOrderPaid(db, orderId) {
     }
   })
 
+  try {
+    await cloud.callFunction({
+      name: 'sendSubscribeMessage',
+      data: { openid: inviterOpenid, scene: 'referral_reward' }
+    })
+  } catch (e) {
+    console.warn('[referral] subscribe referral_reward failed', e)
+  }
+
   return { success: true, granted: true, couponId: couponAdd._id }
 }
 
@@ -551,7 +676,12 @@ exports.main = async (event) => {
       return await bindInviteCode(db, openid, event.code)
     }
 
-    const internalOnly = new Set(['grantOnOrderPaid', 'revokeOnOrderInvalid', 'markCouponsUsed'])
+    const internalOnly = new Set([
+      'grantOnOrderPaid',
+      'revokeOnOrderInvalid',
+      'markCouponsUsed',
+      'releaseCouponReservation'
+    ])
     if (internalOnly.has(action)) {
       const secret = process.env.INTERNAL_CALL_SECRET
       if (!secret || !event || event._internalSecret !== secret) {
@@ -581,6 +711,23 @@ exports.main = async (event) => {
         event.fullTotalYuan,
         event.pricingMode || 'shop'
       )
+    }
+
+    if (action === 'reserveCouponDiscount') {
+      if (!openid) return { success: false, error: '未登录' }
+      return await reserveCouponDiscount(
+        db,
+        openid,
+        event.couponIds,
+        event.fullTotalYuan,
+        event.pricingMode || 'shop',
+        event.orderId
+      )
+    }
+
+    if (action === 'releaseCouponReservation') {
+      if (!openid) return { success: false, error: '未登录' }
+      return await releaseCouponReservation(db, openid, event.couponIds, event.orderId)
     }
 
     if (action === 'markCouponsUsed') {

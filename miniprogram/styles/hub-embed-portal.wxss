@@ -9,6 +9,14 @@
   overflow: visible;
 }
 
+/* root-portal 单根包装：容纳 0×0 layer 与绑定弹窗兄弟节点 */
+.hub-embed-portal-root {
+  position: relative;
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
 .hub-embed-portal-layer .modal,
 .hub-embed-portal-layer .custom-dialog-mask,
 .hub-embed-portal-layer .auto-toast-mask,
@@ -58,6 +66,7 @@
   z-index: 100000060;
 }
 
+.hub-embed-portal-layer .modal,
 .hub-embed-portal-layer .upload-modal-overlay,
 .hub-embed-portal-layer .full-modal,
 .hub-embed-portal-layer .success-mask,
@@ -68,12 +77,547 @@
 .hub-embed-portal-layer .acc-slot-picker-mask,
 .hub-embed-portal-layer .fill-repair-mask,
 .hub-embed-portal-layer .purchase-parts-mask,
-.hub-embed-portal-layer .paid-repair-confirm-mask {
+.hub-embed-portal-layer .paid-repair-confirm-mask,
+.hub-embed-portal-layer .custom-dialog-mask,
+.hub-embed-portal-layer .bottom-modal-mask,
+.hub-embed-portal-layer .after-sales-dialog-mask,
+.hub-embed-portal-layer .return-required-mask,
+.hub-embed-portal-layer .custom-modal-mask,
+.hub-embed-portal-layer .logistics-modal-mask,
+.hub-embed-portal-layer .password-modal-mask,
+.hub-embed-portal-layer .location-permission-mask,
+.hub-embed-portal-layer .my-profile-guide-mask.my-profile-guide-mask--portal {
   position: fixed;
   left: 0;
   top: 0;
   width: 100vw;
   height: 100vh;
+  box-sizing: border-box;
+}
+
+.hub-embed-portal-layer .modal.bind-device-modal.show,
+.hub-embed-portal-layer .modal.show.bind-device-modal,
+.hub-bind-modal-portal.modal.show,
+.hub-bind-modal-portal.modal.bind-device-modal {
+  z-index: 100000100 !important;
+}
+
+/* 绑定设备弹窗：挂 root-portal 根节点；样式写在页面级，避免组件样式隔离导致真机空白 */
+@keyframes hubBindModalMaskIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.hub-bind-modal-portal {
+  position: fixed !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.55) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  overflow: hidden !important;
+  z-index: 100000100 !important;
+  pointer-events: auto !important;
+  animation: hubBindModalMaskIn 0.22s ease-out;
+  transition: opacity 0.28s ease;
+}
+
+.hub-bind-modal-portal.is-closing {
+  animation: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.hub-bind-modal-portal .modal-content {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  min-height: 52vh !important;
+  max-height: 85vh !important;
+  background: #fff !important;
+  border-radius: 40rpx 40rpx 0 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  /* 默认就在可视位置，避免 animation 卡住时整张白卡在屏外 */
+  transform: translate3d(0, 0, 0) !important;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1) !important;
+  animation: none !important;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom)) !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* 打开 / 关闭：自底部滑入 / 滑出 */
+.hub-bind-modal-portal .modal-content.hub-sheet--from-bottom {
+  transform: translate3d(0, 100%, 0) !important;
+}
+
+.hub-bind-modal-portal.is-closing .modal-content {
+  transform: translate3d(0, 100%, 0) !important;
+}
+
+@keyframes hubBindStageIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 28rpx, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.hub-bind-modal-portal .bind-stage--enter {
+  animation: hubBindStageIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.hub-bind-modal-portal .bind-success-panel {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 48rpx 24rpx 32rpx !important;
+  text-align: center !important;
+}
+
+.hub-bind-modal-portal .bind-success-icon {
+  width: 96rpx !important;
+  height: 96rpx !important;
+  border-radius: 50% !important;
+  background: #111 !important;
+  color: #fff !important;
+  font-size: 48rpx !important;
+  font-weight: 700 !important;
+  line-height: 96rpx !important;
+  margin-bottom: 28rpx !important;
+}
+
+.hub-bind-modal-portal .bind-success-title {
+  font-size: 36rpx !important;
+  font-weight: 700 !important;
+  color: #1d1d1f !important;
+  margin-bottom: 16rpx !important;
+}
+
+.hub-bind-modal-portal .bind-success-desc {
+  font-size: 28rpx !important;
+  line-height: 1.55 !important;
+  color: #6e6e73 !important;
+  padding: 0 20rpx !important;
+  margin-bottom: 40rpx !important;
+}
+
+.hub-bind-modal-portal .bind-success-btn {
+  min-width: 280rpx !important;
+  height: 88rpx !important;
+  line-height: 88rpx !important;
+  text-align: center !important;
+  border-radius: 999rpx !important;
+  background: #111 !important;
+  color: #fff !important;
+  font-size: 30rpx !important;
+  font-weight: 600 !important;
+}
+
+.hub-bind-modal-portal .bind-success-btn:active {
+  opacity: 0.86;
+}
+
+.hub-bind-modal-portal .modal-content.bind-success-open {
+  min-height: 58vh !important;
+}
+
+.hub-bind-modal-portal .modal-header {
+  padding: 40rpx 40rpx 20rpx !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  font-size: 34rpx !important;
+  font-weight: 700 !important;
+  flex-shrink: 0 !important;
+  color: #1d1d1f !important;
+}
+
+.hub-bind-modal-portal .close-modal {
+  font-size: 36rpx !important;
+  color: #999 !important;
+  padding: 10rpx !important;
+  line-height: 1 !important;
+}
+
+/* 审核填表 / 无设备核验：高度随内容，提交钮贴底 */
+.hub-bind-modal-portal .modal-content.bind-audit-open,
+.hub-bind-modal-portal .modal-content.fault-bind-mode {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: 85vh !important;
+  padding-bottom: 0 !important;
+}
+
+.hub-bind-modal-portal .modal-scroll-area,
+.hub-bind-modal-portal.bind-device-modal .modal-scroll-area {
+  flex: 1 1 auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: 58vh !important;
+  padding: 0 40rpx !important;
+  box-sizing: border-box !important;
+}
+
+.hub-bind-modal-portal .bt-scan-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 72rpx 0 80rpx !important;
+  width: 100% !important;
+}
+
+.hub-bind-modal-portal .radar-circle {
+  width: 200rpx !important;
+  height: 200rpx !important;
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.hub-bind-modal-portal .radar-core {
+  width: 120rpx !important;
+  height: 120rpx !important;
+  background: #000 !important;
+  border-radius: 50% !important;
+  z-index: 20 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 10rpx 30rpx rgba(0, 0, 0, 0.25) !important;
+}
+
+.hub-bind-modal-portal .bt-icon-img {
+  width: 50rpx !important;
+  height: 50rpx !important;
+}
+
+.hub-bind-modal-portal .radar-ring {
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: 120rpx !important;
+  height: 120rpx !important;
+  border-radius: 50% !important;
+  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  background: transparent !important;
+  box-sizing: border-box !important;
+  opacity: 0;
+  z-index: 10 !important;
+}
+
+.hub-bind-modal-portal .radar-ring.anim {
+  animation: hubBindAirDropRipple 2.5s cubic-bezier(0.25, 0.8, 0.25, 1) infinite !important;
+}
+
+.hub-bind-modal-portal .radar-ring.r1 { animation-delay: 0s !important; }
+.hub-bind-modal-portal .radar-ring.r2 { animation-delay: 0.8s !important; }
+.hub-bind-modal-portal .radar-ring.r3 { animation-delay: 1.6s !important; }
+
+@keyframes hubBindAirDropRipple {
+  0% {
+    width: 120rpx;
+    height: 120rpx;
+    opacity: 0.6;
+    border-color: rgba(0, 0, 0, 0.3);
+  }
+  100% {
+    width: 300rpx;
+    height: 300rpx;
+    opacity: 0;
+    border-color: rgba(0, 0, 0, 0);
+  }
+}
+
+.hub-bind-modal-portal .radar-tip {
+  margin-top: 40rpx !important;
+  font-size: 28rpx !important;
+  color: #8e8e93 !important;
+  text-align: center !important;
+}
+
+.hub-bind-modal-portal .bind-fault-entry {
+  margin-top: 36rpx !important;
+  padding: 8rpx 12rpx !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+}
+
+.hub-bind-modal-portal .bind-fault-entry:active {
+  opacity: 0.65 !important;
+}
+
+.hub-bind-modal-portal .bind-fault-entry-link {
+  font-size: 24rpx !important;
+  font-weight: 400 !important;
+  color: #007aff !important;
+  line-height: 1.4 !important;
+  text-align: center !important;
+}
+
+.hub-bind-modal-portal .bt-connected-bar {
+  display: flex !important;
+  align-items: center !important;
+  gap: 20rpx !important;
+  padding: 24rpx !important;
+  margin: 24rpx 0 32rpx !important;
+  background: #f5f5f7 !important;
+  border-radius: 24rpx !important;
+}
+
+.hub-bind-modal-portal .bt-c-icon {
+  font-size: 36rpx !important;
+}
+
+.hub-bind-modal-portal .bt-c-info {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6rpx !important;
+  min-width: 0 !important;
+}
+
+.hub-bind-modal-portal .bt-c-name {
+  font-size: 24rpx !important;
+  color: #8e8e93 !important;
+}
+
+.hub-bind-modal-portal .bt-c-sn {
+  font-size: 28rpx !important;
+  font-weight: 600 !important;
+  color: #1d1d1f !important;
+}
+
+.hub-bind-modal-portal .bt-disconnect-btn {
+  padding: 12rpx 20rpx !important;
+  font-size: 24rpx !important;
+  color: #ff3b30 !important;
+  background: #fff !important;
+  border-radius: 999rpx !important;
+  border: 1rpx solid rgba(255, 59, 48, 0.25) !important;
+}
+
+.hub-bind-modal-portal .bind-verifying-tip {
+  margin: 0 0 32rpx !important;
+  text-align: center !important;
+}
+
+.hub-bind-modal-portal .bind-verifying-tip > text:first-child {
+  font-size: 26rpx !important;
+  font-weight: 600 !important;
+  color: #1d1d1f !important;
+}
+
+.hub-bind-modal-portal .bind-verifying-sub {
+  display: block !important;
+  margin-top: 8rpx !important;
+  font-size: 22rpx !important;
+  color: #8e8e93 !important;
+}
+
+.hub-bind-modal-portal .type-tabs {
+  display: flex !important;
+  background: #f2f2f7 !important;
+  padding: 8rpx !important;
+  border-radius: 20rpx !important;
+  margin-bottom: 40rpx !important;
+}
+
+.hub-bind-modal-portal .tab-item {
+  flex: 1 !important;
+  text-align: center !important;
+  font-size: 26rpx !important;
+  color: #8e8e93 !important;
+  padding: 16rpx 0 !important;
+  border-radius: 16rpx !important;
+  font-weight: 600 !important;
+}
+
+.hub-bind-modal-portal .tab-item.active {
+  background: #fff !important;
+  color: #000 !important;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.05) !important;
+}
+
+.hub-bind-modal-portal .form-item {
+  margin-bottom: 36rpx !important;
+}
+
+.hub-bind-modal-portal .form-label {
+  display: block !important;
+  font-size: 26rpx !important;
+  color: #1d1d1f !important;
+  font-weight: 600 !important;
+  margin-bottom: 16rpx !important;
+}
+
+.hub-bind-modal-portal .picker-val {
+  padding: 24rpx 28rpx !important;
+  background: #f5f5f7 !important;
+  border-radius: 20rpx !important;
+  font-size: 28rpx !important;
+  color: #1d1d1f !important;
+}
+
+.hub-bind-modal-portal .upload-group {
+  display: flex !important;
+  gap: 20rpx !important;
+}
+
+.hub-bind-modal-portal .upload-box {
+  flex: 1 !important;
+  min-height: 220rpx !important;
+}
+
+.hub-bind-modal-portal .upload-box-frame {
+  position: relative !important;
+  height: 220rpx !important;
+  border-radius: 20rpx !important;
+  border: 2rpx dashed #d1d1d6 !important;
+  background: #fafafa !important;
+  overflow: hidden !important;
+}
+
+.hub-bind-modal-portal .upload-placeholder-center {
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #8e8e93 !important;
+  font-size: 24rpx !important;
+  gap: 8rpx !important;
+}
+
+.hub-bind-modal-portal .plus-icon {
+  font-size: 48rpx !important;
+  color: #1d1d1f !important;
+  line-height: 1 !important;
+}
+
+.hub-bind-modal-portal .uploaded-img {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.hub-bind-modal-portal .bind-audit-footer,
+.hub-bind-modal-portal .modal-footer.bind-audit-footer {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: 100% !important;
+  height: auto !important;
+  padding: 16rpx 40rpx calc(10rpx + env(safe-area-inset-bottom)) !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+  box-sizing: border-box !important;
+  background: #fff !important;
+  border-top: 1rpx solid #eee !important;
+  transform: none !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+  z-index: 2 !important;
+  display: block !important;
+}
+
+.hub-bind-modal-portal .bind-audit-submit {
+  width: 100% !important;
+  height: 96rpx !important;
+  line-height: 96rpx !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #000 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 24rpx !important;
+  font-size: 30rpx !important;
+  font-weight: 600 !important;
+}
+
+.hub-bind-modal-portal .bind-audit-submit::after {
+  border: none !important;
+}
+
+.hub-bind-modal-portal .locked-view {
+  text-align: center !important;
+  padding: 48rpx 24rpx !important;
+}
+
+.hub-bind-modal-portal .locked-icon {
+  font-size: 64rpx !important;
+  margin-bottom: 16rpx !important;
+}
+
+.hub-bind-modal-portal .locked-title {
+  display: block !important;
+  font-size: 32rpx !important;
+  font-weight: 700 !important;
+  color: #1d1d1f !important;
+  margin-bottom: 12rpx !important;
+}
+
+.hub-bind-modal-portal .locked-desc {
+  display: block !important;
+  font-size: 26rpx !important;
+  color: #8e8e93 !important;
+  line-height: 1.5 !important;
+}
+
+.hub-bind-modal-portal .modal-content.profile-guide-bind-demo {
+  min-height: 62vh !important;
+}
+
+.hub-bind-modal-portal .modal-content.profile-guide-bind-demo.connected {
+  min-height: 78vh !important;
+}
+
+.hub-embed-portal-layer .modal .modal-content {
+  max-height: calc(100vh - env(safe-area-inset-top, 0px));
+}
+
+.hub-embed-portal-layer .modal-content.profile-guide-bind-demo {
+  min-height: 62vh;
+}
+
+.hub-embed-portal-layer .modal-content.profile-guide-bind-demo.connected {
+  min-height: 78vh;
+}
+
+.my-profile-guide-mask--portal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  /* 必须盖在绑定弹窗之上，高亮框和说明气泡才能看到 */
+  z-index: 100000120 !important;
   box-sizing: border-box;
 }
 
@@ -146,4 +690,31 @@
 
 .hub-embed-portal-layer .acc-detail-nav.modal-nav--safe-top {
   min-height: calc(88rpx + env(safe-area-inset-top));
+}
+
+/* 售前客服悬浮：在 portal 根下用 vh 定位，避免 0×0 layer 导致偏移 */
+.shop-float-kf--hub-portal {
+  position: fixed;
+  right: 0;
+  z-index: 100000055;
+  top: 56vh;
+  transform: translateY(-50%);
+}
+
+.shop-float-kf--hub-portal.shop-float-kf--main {
+  top: 44vh;
+}
+
+.shop-float-kf--hub-portal.shop-float-kf--raised {
+  top: 50vh;
+  transform: translateY(calc(-50% - 72rpx));
+}
+
+.shop-float-kf--hub-portal.shop-float-kf--pressed {
+  opacity: 0.92;
+  transform: translateY(-50%) scale(0.98);
+}
+
+.shop-float-kf--hub-portal.shop-float-kf--raised.shop-float-kf--pressed {
+  transform: translateY(calc(-50% - 72rpx)) scale(0.98);
 }

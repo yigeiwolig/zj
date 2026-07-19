@@ -199,24 +199,78 @@ async function syncOrderInfoToMiniProgram(outTradeNo, transactionId, orderData, 
   })
 }
 
-/** 支付成功后的业务副作用（维修费、引导购配件等），幂等可重试 */
+/** 支付成功后的业务副作用（维修费、引导购配件、购物待发货推群等），幂等可重试 */
 async function postOrderPaidSideEffects(orderDoc) {
   if (!orderDoc || !orderDoc.orderId) return
 
   const repairId = orderDoc.repairId ? String(orderDoc.repairId).trim() : ''
   const orderSource = (orderDoc.orderSource || '').toString().trim()
 
+  // 购物单（售后配件 / MT商城）：付款成功 → 【待发货】推群（不含维修费）
+  if (!orderDoc.isRepairPayment) {
+    try {
+      await cloud.callFunction({
+        name: 'wecomNotify',
+        data: {
+          action: 'notifyShopOrderPaid',
+          orderId: orderDoc.orderId,
+          orderSnapshot: orderDoc
+        }
+      })
+      console.log('[checkPayResult] wecomNotify shop paid 已触发', orderDoc.orderId)
+    } catch (err) {
+      console.error('[checkPayResult] wecomNotify shop paid 失败:', err)
+    }
+    // 用户：订单排单中（服务进度模板）
+    try {
+      await cloud.callFunction({
+        name: 'sendSubscribeMessage',
+        data: {
+          scene: 'shop_queued',
+          orderId: orderDoc.orderId,
+          openid: orderDoc._openid || orderDoc.openid || ''
+        }
+      })
+    } catch (subErr) {
+      console.warn('[checkPayResult] subscribe shop_queued failed', subErr)
+    }
+  }
+
   if (orderDoc.isRepairPayment && repairId) {
     try {
       await db.collection('shouhou_repair').doc(repairId).update({
         data: {
           repairPaid: true,
-          repairPaidTime: db.serverDate()
+          repairPaidTime: db.serverDate(),
+          repairPayOrderId: orderDoc.orderId || ''
         }
       })
       console.log('[checkPayResult] repairPaid 已更新', repairId)
+      try {
+        await cloud.callFunction({
+          name: 'sendSubscribeMessage',
+          data: { repairId, scene: 'paid_ok' }
+        })
+      } catch (subErr) {
+        console.warn('[checkPayResult] subscribe paid_ok failed', subErr)
+      }
     } catch (err) {
       console.error('[checkPayResult] 更新 repairPaid 失败:', err)
+    }
+    // 付费成功后再推地址+单号（过保流程关键：付费前通知不含地址）
+    try {
+      await cloud.callFunction({
+        name: 'wecomNotify',
+        data: {
+          action: 'notifyRepairPaid',
+          repairId,
+          payOrderId: orderDoc.orderId || '',
+          orderId: orderDoc.orderId || ''
+        }
+      })
+      console.log('[checkPayResult] wecomNotify repairPaid 已触发', repairId)
+    } catch (err) {
+      console.error('[checkPayResult] wecomNotify repairPaid 失败:', err)
     }
   }
 
@@ -267,6 +321,20 @@ async function handleOrderPayment(orderDoc) {
 
   const transactionId = wxOrder.transaction_id
   const payTime = wxOrder.success_time ? new Date(wxOrder.success_time) : new Date()
+
+  // 先原子核销当前订单占用的优惠券，再把订单标记为已支付。
+  if (Array.isArray(orderDoc.couponIds) && orderDoc.couponIds.length > 0) {
+    const secret = process.env.INTERNAL_CALL_SECRET
+    if (!secret) return { success: false, msg: '优惠券核销配置缺失' }
+    const couponCall = await cloud.callFunction({
+      name: 'referral',
+      data: { action: 'markCouponsUsed', orderId: orderDoc.orderId, _internalSecret: secret }
+    })
+    const couponResult = couponCall && couponCall.result
+    if (!couponResult || !couponResult.success) {
+      return { success: false, msg: (couponResult && couponResult.error) || '优惠券核销失败' }
+    }
+  }
 
   await db.collection('shop_orders').where({ orderId: orderDoc.orderId }).update({
     data: {
