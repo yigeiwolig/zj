@@ -1020,9 +1020,6 @@
         <view class="admin-quick-gen-btn {{isGeneratingAccessCode ? 'is-loading' : ''}}" catchtap="generateAccessCode">
           {{isGeneratingAccessCode ? '生成中…' : '生成访问口令'}}
         </view>
-        <view class="admin-quick-gen-btn admin-quick-gen-btn--debug" catchtap="startDebugUserFullFlow">
-          调试全流程
-        </view>
       </view>
     </view>
     

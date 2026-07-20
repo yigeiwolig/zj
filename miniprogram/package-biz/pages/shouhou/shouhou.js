@@ -1326,6 +1326,7 @@ Page({
         }
       }
       this._maybeShowShouhouUsageGuide();
+      this._armEntryNoticeWatchdog();
     });
   },
 
@@ -1907,6 +1908,16 @@ Page({
       this._shGuideResumeTimer = null;
     }
     this._clearShGuideSeriesTourTimer();
+    if (this._entryNoticeRetryTimer) {
+      clearTimeout(this._entryNoticeRetryTimer);
+      this._entryNoticeRetryTimer = null;
+    }
+    if (this._entryNoticeWatchdogTimer) {
+      clearTimeout(this._entryNoticeWatchdogTimer);
+      this._entryNoticeWatchdogTimer = null;
+    }
+    clearGuideBtnCountdown(this, '_aftersaleNoticeBtnTimer');
+    clearGuideBtnCountdown(this, '_expiredRoastBtnTimer');
 
     this._pageDestroyed = true;
     this._cancelPaymentVerification();
@@ -8591,6 +8602,9 @@ Page({
       clearInterval(this._arrowBounceTimer);
       this._arrowBounceTimer = null;
     }
+
+    // 回流时补弹售后告知 / 卸掉透明引导遮罩，避免卡片点不进去
+    this._ensureEntryNoticeOrUnblock();
     
     // 🔴 从「去购买配件」带来的 repairId：globalData + 本地存储（切 Tab / 重进小程序不丢）
     const GUIDED_KEY = 'guided_parts_repair_id';
@@ -8825,6 +8839,65 @@ Page({
       (d.dialog && d.dialog.show) || d.isTutorialVideoFullScreen || d.showLoadingAnimation);
   },
 
+  /** 透明引导层 / 关闭动画卡住时卸遮罩，避免首页卡片无法点击 */
+  _clearStuckEntryOverlays() {
+    const d = this.data;
+    if (d.showShUsageGuide && !d.shGuideShowBubble && !d.shGuideShowSpot && !d.shGuideMaskDim) {
+      this.closeShUsageGuide(false);
+    }
+    const patch = {};
+    if (d.aftersaleNoticeClosing && !d.showAftersaleNoticeModal) {
+      patch.aftersaleNoticeClosing = false;
+    }
+    if (d.expiredRoastClosing && !d.showExpiredRoastModal) {
+      patch.expiredRoastClosing = false;
+    }
+    if (Object.keys(patch).length) {
+      this.setData(patch);
+    }
+  },
+
+  _scheduleEntryNoticeRetry({ thenStartGuide = true, surface = 'main', delay = 360 } = {}) {
+    if (this._shouhouSkipAutoGuideFromQuery) return;
+    if (this._entryNoticeAShown || this._entryNoticeBShown) return;
+    if (this.data.showAftersaleNoticeModal || this.data.showExpiredRoastModal) return;
+    this._entryNoticeRetryCount = (this._entryNoticeRetryCount || 0) + 1;
+    if (this._entryNoticeRetryCount > 15) {
+      this._clearStuckEntryOverlays();
+      return;
+    }
+    if (this._entryNoticeRetryTimer) {
+      clearTimeout(this._entryNoticeRetryTimer);
+    }
+    this._entryNoticeRetryTimer = setTimeout(() => {
+      this._entryNoticeRetryTimer = null;
+      this._resolveEntryNoticeAndMaybeShow({ thenStartGuide, surface });
+    }, delay);
+  },
+
+  _armEntryNoticeWatchdog() {
+    if (this._shouhouSkipAutoGuideFromQuery) return;
+    if (this._entryNoticeWatchdogTimer) {
+      clearTimeout(this._entryNoticeWatchdogTimer);
+    }
+    this._entryNoticeWatchdogTimer = setTimeout(() => {
+      this._entryNoticeWatchdogTimer = null;
+      this._ensureEntryNoticeOrUnblock();
+    }, 1200);
+  },
+
+  _ensureEntryNoticeOrUnblock() {
+    if (this._shouhouSkipAutoGuideFromQuery) return;
+    this._clearStuckEntryOverlays();
+    const d = this.data;
+    const noticeUp = d.showAftersaleNoticeModal || d.showExpiredRoastModal ||
+      d.aftersaleNoticeClosing || d.expiredRoastClosing;
+    const noticeDone = this._entryNoticeAShown || this._entryNoticeBShown;
+    if (!noticeUp && !noticeDone && !this._entryNoticeResolving) {
+      this._resolveEntryNoticeAndMaybeShow({ thenStartGuide: true, surface: 'main' });
+    }
+  },
+
   /**
    * 进页 / 报修回流弹卡决策：
    * - 主页 surface=main：未过保弹 A；已过保只弹 B（不弹 A）
@@ -8844,10 +8917,24 @@ Page({
     const showGuideAfter = () => {
       if (thenStartGuide) this._continueAfterEntryNotices(thenStartGuide);
     };
-    if (this._entryNoticeResolving) return;
+    if (this._entryNoticeResolving) {
+      this._scheduleEntryNoticeRetry({ thenStartGuide, surface, delay: 480 });
+      return;
+    }
     if (this.data.showAftersaleNoticeDebugStack) return;
-    if (this._shGuideBlockingModal()) return;
-    if (this.data.showShUsageGuide) return;
+    if (this._shGuideBlockingModal()) {
+      this._clearStuckEntryOverlays();
+      this._scheduleEntryNoticeRetry({ thenStartGuide, surface });
+      return;
+    }
+    if (this.data.showShUsageGuide) {
+      if (!this.data.shGuideShowBubble && !this.data.shGuideShowSpot && !this.data.shGuideMaskDim) {
+        this.closeShUsageGuide(false);
+      } else {
+        this._scheduleEntryNoticeRetry({ thenStartGuide, surface });
+        return;
+      }
+    }
 
     const isRepairSurface = surface === 'repair';
     // 报修处：若 B 已弹过则结束；主页：A 或 B 任一已处理过保路径则不再弹 A
@@ -8865,7 +8952,14 @@ Page({
       this._userHasExpiredBoundDevice()
         .then((isExpired) => {
           this._entryNoticeResolving = false;
-          if (this._shGuideBlockingModal() || this.data.showShUsageGuide) return;
+          if (this._shGuideBlockingModal() || this.data.showShUsageGuide) {
+            this._clearStuckEntryOverlays();
+            this._scheduleEntryNoticeRetry({
+              thenStartGuide,
+              surface: isRepairSurface ? 'repair' : 'main'
+            });
+            return;
+          }
 
           if (isRepairSurface) {
             // 报修处永不弹 A
@@ -8967,8 +9061,10 @@ Page({
     if (this.data.showAftersaleNoticeDebugStack) return;
     if (this.data.showAftersaleNoticeModal || this.data.aftersaleNoticeClosing) return;
     if (this.data.showExpiredRoastModal || this.data.expiredRoastClosing) return;
-    if (this.data.showShUsageGuide) return;
-    this._entryNoticeAShown = true;
+    if (this.data.showShUsageGuide) {
+      this._scheduleEntryNoticeRetry({ thenStartGuide, surface: 'main' });
+      return;
+    }
     this._aftersaleNoticeThenGuide = thenStartGuide;
     clearGuideBtnCountdown(this, '_aftersaleNoticeBtnTimer');
     this.setData({
@@ -8978,6 +9074,7 @@ Page({
       aftersaleNoticeBtnText: SHOUHOU_AFTERSALE_NOTICE.btnText,
       aftersaleOrderPolicy: SHOUHOU_AFTERSALE_NOTICE
     }, () => {
+      this._entryNoticeAShown = true;
       startGuideBtnCountdown(this, {
         lockedKey: 'aftersaleNoticeBtnLocked',
         textKey: 'aftersaleNoticeBtnText',
@@ -9012,13 +9109,15 @@ Page({
 
   _showExpiredRoastModal({ thenStartGuide = false } = {}) {
     if (this.data.showExpiredRoastModal || this.data.expiredRoastClosing) return;
-    if (this.data.showShUsageGuide) return;
+    if (this.data.showShUsageGuide) {
+      this._scheduleEntryNoticeRetry({ thenStartGuide, surface: 'main' });
+      return;
+    }
     // 第一张若仍在关闭动画中，延后重试一次
     if (this.data.showAftersaleNoticeModal || this.data.aftersaleNoticeClosing) {
       setTimeout(() => this._showExpiredRoastModal({ thenStartGuide }), 160);
       return;
     }
-    this._entryNoticeBShown = true;
     this._expiredRoastThenGuide = thenStartGuide;
     clearGuideBtnCountdown(this, '_expiredRoastBtnTimer');
     this.setData({
@@ -9027,6 +9126,8 @@ Page({
       expiredRoastBtnLocked: false,
       expiredRoastBtnText: SHOUHOU_EXPIRED_ROAST_NOTICE.btnText,
       expiredPaidPolicy: SHOUHOU_EXPIRED_ROAST_NOTICE
+    }, () => {
+      this._entryNoticeBShown = true;
     });
   },
 
@@ -9053,9 +9154,18 @@ Page({
     const forceReplay = thenGuide === 'manual';
     // 等 A/B 遮罩卸干净后再开教学，避免被 _shGuideBlockingModal 拦住后彻底不弹
     const tryStart = (left) => {
-      if (this.data.showShUsageGuide) return;
+      if (this.data.showShUsageGuide) {
+        if (!this.data.shGuideShowBubble && !this.data.shGuideShowSpot && !this.data.shGuideMaskDim) {
+          this.closeShUsageGuide(false);
+        } else {
+          return;
+        }
+      }
       if (this._shGuideBlockingModal()) {
-        if (left <= 0) return;
+        if (left <= 0) {
+          this._clearStuckEntryOverlays();
+          return;
+        }
         setTimeout(() => tryStart(left - 1), 120);
         return;
       }

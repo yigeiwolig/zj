@@ -6,6 +6,8 @@ const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const shareApp = require('../../../utils/shareApp.js');
 const azjcAccessDebug = require('../../../utils/azjcAccessDebug.js');
 const homeGuideMixin = require('./hub-home-guide.mixin.js');
+const accessEntryPath = require('../../../utils/accessEntryPath.js');
+const { startGuideBtnCountdown, clearGuideBtnCountdown } = require('../../../utils/guideBtnCountdown.js');
 
 var QQMapWX = require('../../../utils/qqmap-wx-jssdk.js');
 var qqmapsdk = new QQMapWX({
@@ -129,6 +131,11 @@ Page({
     hubHomeMediaAutoplay: false,
     hubHomeSwiperAutoplay: false,
     ...homeGuideMixin.getHomeGuideData(),
+    /** 直接粘贴口令进入：请先看教程提醒 */
+    showDirectCodeTutorialNotice: false,
+    directCodeTutorialNoticeClosing: false,
+    directCodeTutorialBtnLocked: true,
+    directCodeTutorialBtnText: '我知道了 (5s)',
     /** 管理员：本地开关与云端 shop_config 不一致（用户仍读云端） */
     featureFlagsUnsynced: false,
 
@@ -785,6 +792,9 @@ Page({
         this._syncHubPanelsAuth();
         this._updateHubShopEmbedScrollHeight();
         this._rebuildHubLayout();
+        if (isAuthorized && this.data.hubTabIndex === 0) {
+          this._maybeShowDirectCodeTutorialNotice();
+        }
       });
       try {
         wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized, ts: Date.now() });
@@ -1680,8 +1690,10 @@ Page({
     this.loadHubHomeConfig().catch(() => {});
     this._refreshHubCartBadge();
     this._refreshHubProfileBadge();
-    // 主页功能引导（管理员不自动弹）
-    if (this.data.hubTabIndex === 0) {
+    // 直接粘贴口令进主页：先弹「请先看教程」；客服领取路径不弹
+    const showingDirectNotice = this._maybeShowDirectCodeTutorialNotice();
+    // 主页功能引导（管理员不自动弹）；教程提醒优先
+    if (!showingDirectNotice && this.data.hubTabIndex === 0) {
       this._maybeShowHomeGuide(false);
     }
 
@@ -1874,6 +1886,7 @@ Page({
       clearTimeout(this._newArrivalCloseTimer);
       this._newArrivalCloseTimer = null;
     }
+    clearGuideBtnCountdown(this, '_directCodeTutorialBtnTimer');
     this._newArrivalEntranceStarted = false;
     this._newArrivalModalInflight = null;
     this._teardownScreenshotProtection();
@@ -2499,12 +2512,62 @@ Page({
   /** 管理员：回到启动页 Index（口令/入口页） */
   onHubAdminBackToIndex() {
     if (!this.data.isAuthorized) return;
-    wx.reLaunch({
-      url: '/pages/index/index',
-      fail: (err) => {
-        console.error('[products] 返回 Index 失败', err);
-        wx.showToast({ title: '返回失败', icon: 'none' });
-      }
+    if (this._hubBackToIndexPending) return;
+    this._hubBackToIndexPending = true;
+
+    const targetUrl = '/pages/index/index';
+    const clearPending = () => {
+      this._hubBackToIndexPending = false;
+    };
+
+    const fallbackNavigate = () => {
+      wx.redirectTo({
+        url: targetUrl,
+        success: clearPending,
+        fail: (redirectErr) => {
+          wx.navigateTo({
+            url: targetUrl,
+            success: clearPending,
+            fail: (navErr) => {
+              clearPending();
+              console.error('[products] 返回 Index 失败(reLaunch/redirect/navigate)', {
+                redirectErr,
+                navErr
+              });
+              wx.showToast({ title: '返回失败', icon: 'none' });
+            }
+          });
+        }
+      });
+    };
+
+    const tryRelaunch = (retry) => {
+      wx.reLaunch({
+        url: targetUrl,
+        success: clearPending,
+        fail: (err) => {
+          const isTimeout = err && /timeout/i.test(String(err.errMsg || ''));
+          if (retry < 2 && isTimeout) {
+            setTimeout(() => tryRelaunch(retry + 1), 140);
+            return;
+          }
+          console.error('[products] 返回 Index 失败(reLaunch)', err);
+          fallbackNavigate();
+        }
+      });
+    };
+
+    // 先收起壳层 UI，避免遮罩/动画过渡期触发 reLaunch 超时
+    this.setData({
+      isDrawerOpen: false,
+      showLoadingAnimation: false,
+      autoToastClosing: false,
+      'autoToast.show': false,
+      showHomeGuide: false,
+      showHomeGuideIntro: false,
+      hubShellModalOpen: false
+    }, () => {
+      setTimeout(() => tryRelaunch(0), 40);
     });
   },
 
@@ -3012,7 +3075,9 @@ Page({
           this._refreshHubProfileBadge();
         }
         if (idx === 0) {
-          this._maybeShowHomeGuide(false);
+          if (!this.data.showDirectCodeTutorialNotice) {
+            this._maybeShowHomeGuide(false);
+          }
         }
       }, delay);
     };
@@ -3377,6 +3442,13 @@ Page({
   },
 
   onBackPress() {
+    if (this.data.showDirectCodeTutorialNotice && !this.data.directCodeTutorialNoticeClosing) {
+      // 倒计时未结束不允许返回关掉；结束后可关
+      if (!this.data.directCodeTutorialBtnLocked) {
+        this.closeDirectCodeTutorialNotice();
+      }
+      return true;
+    }
     if (this.data.showHomeGuide || this.data.showHomeGuideIntro) {
       this.closeHomeGuide(false);
       return true;
@@ -3392,6 +3464,74 @@ Page({
     const pageBack = require('../../../utils/pageBack.js');
     pageBack.popOrHub();
     return true;
+  },
+
+  _maybeShowDirectCodeTutorialNotice() {
+    if (this.data.hubTabIndex !== 0) return false;
+    if (this.data.showDirectCodeTutorialNotice || this.data.directCodeTutorialNoticeClosing) {
+      return true;
+    }
+    // 管理员进主页：直接弹出预览，便于验收（不影响普通用户已读标记）
+    if (this.data.isAuthorized) {
+      return this._openDirectCodeTutorialNotice({ preview: true });
+    }
+    if (!accessEntryPath.consumePendingDirectCodeTutorialNotice()) return false;
+    return this._openDirectCodeTutorialNotice({ preview: false });
+  },
+
+  previewDirectCodeTutorialNotice() {
+    if (!this.data.isAuthorized) return;
+    if (this.data.hubTabIndex !== 0) {
+      this._setHubTabIndex(0);
+      setTimeout(() => this._openDirectCodeTutorialNotice({ preview: true }), 360);
+      return;
+    }
+    this._openDirectCodeTutorialNotice({ preview: true });
+  },
+
+  _openDirectCodeTutorialNotice({ preview = false } = {}) {
+    if (this.data.showDirectCodeTutorialNotice || this.data.directCodeTutorialNoticeClosing) {
+      return true;
+    }
+    this._directCodeTutorialPreview = !!preview;
+    clearGuideBtnCountdown(this, '_directCodeTutorialBtnTimer');
+    this.setData({
+      showDirectCodeTutorialNotice: true,
+      directCodeTutorialNoticeClosing: false,
+      directCodeTutorialBtnLocked: true,
+      directCodeTutorialBtnText: '我知道了 (5s)'
+    }, () => {
+      startGuideBtnCountdown(this, {
+        lockedKey: 'directCodeTutorialBtnLocked',
+        textKey: 'directCodeTutorialBtnText',
+        readyText: '我知道了',
+        seconds: 5,
+        lockedText: (n) => `我知道了 (${n}s)`,
+        timerProp: '_directCodeTutorialBtnTimer'
+      });
+    });
+    return true;
+  },
+
+  closeDirectCodeTutorialNotice() {
+    if (this.data.directCodeTutorialBtnLocked) return;
+    if (!this.data.showDirectCodeTutorialNotice || this.data.directCodeTutorialNoticeClosing) return;
+    clearGuideBtnCountdown(this, '_directCodeTutorialBtnTimer');
+    if (!this._directCodeTutorialPreview) {
+      accessEntryPath.markDirectCodeTutorialNoticeSeen();
+    }
+    this._directCodeTutorialPreview = false;
+    this.setData({ directCodeTutorialNoticeClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showDirectCodeTutorialNotice: false,
+        directCodeTutorialNoticeClosing: false
+      }, () => {
+        if (this.data.hubTabIndex === 0 && !this.data.isAuthorized) {
+          this._maybeShowHomeGuide(false);
+        }
+      });
+    }, 280);
   },
 
   ...homeGuideMixin.homeGuideMethods

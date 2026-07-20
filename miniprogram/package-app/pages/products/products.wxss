@@ -199,6 +199,130 @@
   box-sizing: border-box;
 }
 
+/* 直接粘贴口令：请先看教程 */
+.direct-code-notice-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 10080;
+  background: rgba(0, 0, 0, 0.48);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48rpx 40rpx;
+  box-sizing: border-box;
+}
+
+.direct-code-notice-mask.is-closing {
+  animation: directCodeNoticeMaskOut 0.28s ease forwards;
+}
+
+.direct-code-notice-box {
+  width: 100%;
+  max-width: 620rpx;
+  background: #fff;
+  border-radius: 32rpx;
+  padding: 48rpx 40rpx 36rpx;
+  box-sizing: border-box;
+  box-shadow: 0 24rpx 60rpx rgba(0, 0, 0, 0.22);
+  animation: directCodeNoticeBoxIn 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.direct-code-notice-box.is-closing {
+  animation: directCodeNoticeBoxOut 0.28s ease forwards;
+}
+
+.direct-code-notice-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #1d1d1f;
+  margin-bottom: 12rpx;
+  text-align: center;
+}
+
+.direct-code-notice-sub {
+  font-size: 26rpx;
+  color: #8e8e93;
+  text-align: center;
+  margin-bottom: 28rpx;
+  line-height: 1.45;
+}
+
+.direct-code-notice-desc {
+  margin-bottom: 40rpx;
+}
+
+.direct-code-notice-line {
+  font-size: 28rpx;
+  color: #636366;
+  line-height: 1.65;
+  margin-bottom: 16rpx;
+}
+
+.direct-code-notice-line:last-child {
+  margin-bottom: 0;
+}
+
+.direct-code-notice-line--tip {
+  padding: 18rpx 20rpx;
+  margin-top: 8rpx;
+  margin-bottom: 0;
+  background: #f5f5f7;
+  border-radius: 16rpx;
+}
+
+.direct-code-notice-em {
+  color: #1d1d1f;
+  font-weight: 700;
+}
+
+.direct-code-notice-btn {
+  height: 88rpx;
+  border-radius: 44rpx;
+  background: #1d1d1f;
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.direct-code-notice-btn.is-locked {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.direct-code-notice-btn:active {
+  opacity: 0.88;
+}
+
+@keyframes directCodeNoticeBoxIn {
+  from {
+    opacity: 0.55;
+    transform: translateY(20rpx) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes directCodeNoticeBoxOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(16rpx) scale(0.98);
+  }
+}
+
+@keyframes directCodeNoticeMaskOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
 .home-guide-intro-box {
   width: 100%;
   max-width: 620rpx;

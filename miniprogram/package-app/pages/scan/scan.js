@@ -82,6 +82,66 @@ function isConnectableMtBleDevice(device) {
   return !!advName && advName.startsWith('NB') && !isBlockedDebugBleDevice(device);
 }
 
+function bleErrMsg(err) {
+  if (!err) return '';
+  if (typeof err === 'string') return err;
+  return String(err.errMsg || err.message || '');
+}
+
+function isBleAlreadyOpenError(err) {
+  const msg = bleErrMsg(err).toLowerCase();
+  return msg.includes('already open');
+}
+
+function classifyBleError(err) {
+  if (!err) return 'generic';
+  if (err._bleKind) return err._bleKind;
+  if (err.type === 'auth_deny') return 'auth';
+  if (err.type === 'location_deny') return 'location';
+  const msg = bleErrMsg(err).toLowerCase();
+  const errno = err.errno;
+  const errCode = err.errCode;
+  // errno 3：系统级权限未授予「微信」本身（不是小程序 scope）
+  if (errno === 3 || msg.includes('system permission denied')) {
+    return 'system_auth';
+  }
+  if (
+    msg.includes('auth deny') ||
+    msg.includes('authorize') ||
+    msg.includes('privacy') ||
+    errno === 103 ||
+    errno === 104 ||
+    errCode === 103 ||
+    errCode === 104
+  ) {
+    return 'auth';
+  }
+  if (msg.includes('location') || msg.includes('定位') || errCode === 10002) {
+    return 'location';
+  }
+  if (
+    errCode === 10001 ||
+    errno === 1500102 ||
+    msg.includes('not available') ||
+    msg.includes('未开启') ||
+    msg.includes('未打开') ||
+    msg.includes('adapter not available')
+  ) {
+    return 'off';
+  }
+  if (isBleAlreadyOpenError(err)) return 'ok';
+  return 'generic';
+}
+
+function isAndroidBleScanPlatform() {
+  try {
+    const info = wx.getDeviceInfo ? wx.getDeviceInfo() : wx.getSystemInfoSync();
+    return String(info.platform || '').toLowerCase() === 'android';
+  } catch (e) {
+    return false;
+  }
+}
+
 // ==========================================
 // 蓝牙连接工具类 (你提供的代码融合)
 // ==========================================
@@ -127,64 +187,21 @@ class BLEHelper {
 
   initBluetoothAdapter() {
     return new Promise((resolve, reject) => {
-      // 先检查系统蓝牙是否开启
-      this.api.getBluetoothAdapterState({
-        success: (res) => {
-          if (!res.available) {
-            reject(new Error('系统蓝牙未开启，请先开启系统蓝牙'));
+      const onReady = (res) => {
+        this.api.onBluetoothAdapterStateChange((state) => {
+          console.log('蓝牙适配器状态变化', state);
+        });
+        resolve(res || {});
+      };
+      // 微信要求先 openBluetoothAdapter；getBluetoothAdapterState 在适配器未开时会误报
+      this.api.openBluetoothAdapter({
+        success: onReady,
+        fail: (err) => {
+          if (isBleAlreadyOpenError(err)) {
+            onReady({});
             return;
           }
-          // 蓝牙已开启，初始化适配器
-          this.api.openBluetoothAdapter({
-            success: (res) => {
-              this.api.onBluetoothAdapterStateChange((res) => {
-                console.log('蓝牙适配器状态变化', res);
-              });
-              resolve(res);
-            },
-            fail: (err) => {
-            // 如果用户拒绝蓝牙授权，提示去设置中开启
-            if (err && err.errMsg && err.errMsg.includes('auth deny')) {
-              // 🔴 使用回调方式，让Page层处理弹窗
-              if (this.onError) {
-                this.onError({ 
-                  type: 'auth_deny',
-                  message: '蓝牙权限被拒绝',
-                  detail: '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。'
-              });
-              }
-            }
-              if (this.onError) this.onError(err);
-              reject(err);
-            }
-          });
-        },
-        fail: (err) => {
-          // 如果getBluetoothAdapterState失败，直接尝试openBluetoothAdapter
-          // 这可能是因为适配器还未初始化
-          this.api.openBluetoothAdapter({
-            success: (res) => {
-              this.api.onBluetoothAdapterStateChange((res) => {
-                console.log('蓝牙适配器状态变化', res);
-              });
-              resolve(res);
-            },
-            fail: (err) => {
-              // 如果是权限错误，提供更友好的提示
-              if (err.errMsg && err.errMsg.includes('auth deny')) {
-                // 🔴 使用回调方式，让Page层处理弹窗
-                if (this.onError) {
-                  this.onError({ 
-                    type: 'auth_deny',
-                    message: '蓝牙功能不可用',
-                    detail: '请确保：\n1. 系统蓝牙已开启\n2. 已授权小程序使用蓝牙功能\n\n可在手机设置中检查权限'
-                });
-                }
-              }
-              if (this.onError) this.onError(err);
-              reject(err);
-            }
-          });
+          reject(Object.assign({}, err || {}, { _bleKind: classifyBleError(err) }));
         }
       });
     });
@@ -769,16 +786,20 @@ function resolveOpenAngleBtnText(model) {
 }
 
 function openAngleInternalToDisplayDeg(model, internal) {
-  const v = parseInt(internal, 10);
-  if (isNaN(v)) return 0;
-  if (!model || !usesF2StyleOpenAngleBle(model)) {
-    return Math.max(0, v);
+  const v = Math.max(0, parseInt(internal, 10) || 0);
+  const maxInternal = openAngleMaxDeg(model, 170);
+  if (maxInternal >= 180) {
+    return Math.min(180, v);
   }
-  if (isF3MaxModel(model) || isMtUltraCardModel(model)) {
-    return Math.max(0, v);
-  }
-  if (v <= 90) return Math.round(v * 30 / 90);
-  return Math.round(30 + (v - 90) * 60 / 70);
+  // F2 等内部上限 170：UI 仍显示 0~180°，90 对 90，完全打开对 180
+  if (v <= 90) return v;
+  if (v >= 160) return 180;
+  return Math.round(90 + ((v - 90) * 90) / 70);
+}
+
+function openAngleVisualIndexFromInternal(model, internalDeg) {
+  const display = openAngleInternalToDisplayDeg(model, internalDeg);
+  return Math.max(0, Math.min(90, Math.round(display / 2)));
 }
 
 function openAngleStickRotateDeg(model, internal) {
@@ -1228,7 +1249,8 @@ const FLAP_GAUGE_OPEN_DEG = 45;
 const FLAP_GAUGE_CYCLE_MS = 900;
 /** 到位前至少转过的圈数（保证有可见的「转动中」过程） */
 const FLAP_GAUGE_MIN_LAPS = 0.75;
-const FLAP_GAUGE_TICK_MS = 32;
+/** 原 32ms 约 30Hz setData，中低端机滚动时易掉帧；CSS transition 可补间 */
+const FLAP_GAUGE_TICK_MS = 80;
 const FLAP_GAUGE_EASE_MS = 520;
 const FLAP_GAUGE_SPIN_WATCHDOG_MS = 10000;
 
@@ -1424,12 +1446,18 @@ Page({
     showDisconnectTip: false,
     showModelPickTip: false,
     modelPickTipClosing: false,
+    modelPickTipBtnLocked: true,
+    modelPickTipBtnText: '我知道了 (5s)',
     modelPickGroups: [],
     showApproachTip: false,  // 新增：靠近车辆提示
     
     // 新增：蓝牙未开启提示弹窗
     showBluetoothAlert: false,
     bluetoothAlertClosing: false, // 蓝牙提示弹窗退出动画中
+    bluetoothAlertTitle: '蓝牙未开启',
+    bluetoothAlertDesc: '请在手机"设置"中打开蓝牙功能\n以便连接设备',
+    showPermissionModal: false,
+    permissionModalClosing: false,
 
     // 管理员 SN 预登记弹窗
     showAdminSnModal: false,
@@ -1597,6 +1625,8 @@ Page({
     calGuideArrowStyle: '',
     calGuideSpotStyle: '',
     mainControlScrollTop: 0,
+    mainControlScrollAnim: false,
+    mainControlScrolling: false,
 
     // === 新增：高级设置相关数据 ===
     showSettingsModal: false, // 控制高级设置弹窗
@@ -1616,6 +1646,8 @@ Page({
       flapOpen: iconFlapOpen,
       flapFold: iconFlapFold,
       btSmall: iconBtSmall,
+      btDark: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzFDMUUiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48cG9seWxpbmUgcG9pbnRzPSI2LjUgNi41IDE3LjUgMTcuNSAxMiAyMyAxMiAxIDE3LjUgNi41IDYuNSAxNy41Ij48L3BvbHlsaW5lPjwvc3ZnPg==',
+      moreDark: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSI1IiBjeT0iMTIiIHI9IjIiIGZpbGw9IiMxQzFDMUUiLz48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIyIiBmaWxsPSIjMUMxQzFFIi8+PGNpcmNsZSBjeD0iMTkiIGN5PSIxMiIgcj0iMiIgZmlsbD0iIzFDMUMxRSIvPjwvc3ZnPg==',
       mic: iconMic
     },
 
@@ -1792,11 +1824,22 @@ Page({
           priceDisplay: m.priceDisplay
         });
       });
-      this.setData({ showModelPickTip: true, modelPickGroups: groups });
+      this.setData({ showModelPickTip: true, modelPickGroups: groups }, () => {
+        startGuideBtnCountdown(this, {
+          lockedKey: 'modelPickTipBtnLocked',
+          textKey: 'modelPickTipBtnText',
+          readyText: '我知道了',
+          seconds: 5,
+          lockedText: (n) => `我知道了 (${n}s)`,
+          timerProp: '_modelPickTipBtnTimer'
+        });
+      });
     }, 600);
   },
 
   closeModelPickTip() {
+    if (this.data.modelPickTipBtnLocked) return;
+    clearGuideBtnCountdown(this, '_modelPickTipBtnTimer');
     try {
       wx.setStorageSync('scan_model_pick_tip_seen_v1', true);
     } catch (e) { /* ignore */ }
@@ -2008,17 +2051,16 @@ Page({
     };
     this.ble.onError = (err) => {
       this.setData({ isScanning: false, isConnecting: false });
-      
-      // 🔴 处理蓝牙权限错误，使用自定义弹窗
-      if (err && err.type === 'auth_deny') {
-        this._showCustomModal({
-          title: err.message || '蓝牙权限被拒绝',
-          content: err.detail || '请在系统设置中开启蓝牙，并允许小程序使用蓝牙功能。',
-          showCancel: false,
-          confirmText: '知道了'
-        });
+      const kind = classifyBleError(err);
+      if (kind === 'auth') {
+        this.setData({ showPermissionModal: true });
+        return;
       }
-      // 可以在这里做必要的错误上报或静默处理
+      if (kind === 'system_auth' || kind === 'location' || kind === 'off') {
+        this._handleBleInitFailure(err);
+        return;
+      }
+      console.warn('[BLE] runtime error', err);
     };
     this.ble.onDisconnected = (meta) => {
       this._stopBleLinkWatch();
@@ -2055,9 +2097,8 @@ Page({
     // 注意：CSS中使用的是px单位，所以直接计算px
     this.tickWidthPx = 20; // 每个刻度总宽度20px
 
-    // 初始化位置 (根据当前机型)
-    const isF1Legacy = currentModel.name.includes('F1') && !isMtUltraCardModel(currentModel);
-    this.maxAngle = isF1Legacy ? 180 : 170;
+    // 初始化位置：UI 刻度统一 0~180°（内部/蓝牙上限仍按机型）
+    this.maxAngle = 180;
 
     // 生成刻度数据 (扩展到更多刻度，实现无限滑动视觉效果)
     const count = (this.maxAngle - 0) / 2 + 1;
@@ -2167,6 +2208,7 @@ Page({
       'showAngleHint',
       'showNewProductHint',
       'showBluetoothAlert',
+      'showPermissionModal',
       'isNavigatingToOta',
       'passwordModalClosing',
       'tutorialModalClosing',
@@ -2388,6 +2430,8 @@ Page({
     this._stopF2DemoMode(false);
     this._stopFlapGaugeSpinImmediate();
     this._clearF3CalTimer();
+    this._clearMainControlScrollIdle();
+    this._flushPendingBleUiPatch(true);
     // 兜底：若详情主层被系统手势带走，记录恢复信息给 products onShow 使用
     try {
       if (this.data.showDetail && this.data.detailMode === 'main') {
@@ -2415,6 +2459,7 @@ Page({
     this._clearFlapGaugeEaseTimer();
     this._clearF3CalTimer();
     this._clearSettingSendingWatch();
+    clearGuideBtnCountdown(this, '_modelPickTipBtnTimer');
     // 🔴 停止定时检查
     const app = getApp();
     if (app && app.stopQiangliCheck) {
@@ -4625,8 +4670,9 @@ Page({
 
     this.setData({ isScanning: true, isConnecting: false });
 
-    // 3. 初始化蓝牙适配器
-    this.ble.initBluetoothAdapter()
+    // 3. Android 扫描 BLE 需定位权限；再初始化蓝牙适配器
+    this._ensureBleLocationPermission()
+      .then(() => this.ble.initBluetoothAdapter())
       .then(() => { 
         this.ble.startScan(); 
         
@@ -4645,18 +4691,61 @@ Page({
         }, isAutoReconnect ? 8000 : 15000);
       })
       .catch((err) => {
-        console.error("蓝牙初始化失败", err);
-        
-        this.setData({ 
-          isScanning: false,
-          isConnecting: false,
-          isBleAutoReconnecting: false,
-          showBluetoothAlert: true
-        });
-        
-        this.setModalDelay();
-        wx.vibrateLong(); 
+        console.error('蓝牙初始化失败', err);
+        this._handleBleInitFailure(err);
       });
+  },
+
+  _ensureBleLocationPermission() {
+    if (!isAndroidBleScanPlatform()) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      wx.getSetting({
+        success: (res) => {
+          if (res.authSetting && res.authSetting['scope.userLocation'] === true) {
+            resolve();
+            return;
+          }
+          wx.authorize({
+            scope: 'scope.userLocation',
+            success: () => resolve(),
+            fail: () => reject({ type: 'location_deny', _bleKind: 'location' })
+          });
+        },
+        fail: () => resolve()
+      });
+    });
+  },
+
+  _handleBleInitFailure(err) {
+    const kind = classifyBleError(err);
+    if (kind === 'ok') return;
+    this.setData({
+      isScanning: false,
+      isConnecting: false,
+      isBleAutoReconnecting: false
+    });
+    if (kind === 'auth') {
+      this.setData({ showPermissionModal: true });
+      wx.vibrateLong();
+      return;
+    }
+    const patch = { showBluetoothAlert: true };
+    if (kind === 'system_auth') {
+      patch.bluetoothAlertTitle = '微信未获得蓝牙权限';
+      patch.bluetoothAlertDesc = '系统蓝牙已开也可能失败：请到手机\n「设置 → 应用 → 微信」开启蓝牙/附近设备\n（华为/小米等 Android 常见）';
+    } else if (kind === 'location') {
+      patch.bluetoothAlertTitle = '需要开启定位权限';
+      patch.bluetoothAlertDesc = 'Android 扫描蓝牙设备需要定位权限\n请在设置中允许小程序使用定位';
+    } else if (kind === 'off') {
+      patch.bluetoothAlertTitle = '蓝牙未开启';
+      patch.bluetoothAlertDesc = '请在手机"设置"中打开蓝牙功能\n以便连接设备';
+    } else {
+      patch.bluetoothAlertTitle = '蓝牙暂不可用';
+      patch.bluetoothAlertDesc = '请确认系统蓝牙已开启，并在小程序右上角\n「··· → 设置」中允许蓝牙相关权限';
+    }
+    this.setData(patch);
+    this.setModalDelay();
+    wx.vibrateLong();
   },
 
   stopBleAutoReconnect(showTip, markUserStopped) {
@@ -5063,9 +5152,44 @@ Page({
     setTimeout(() => {
       this.setData({ 
         showBluetoothAlert: false,
-        bluetoothAlertClosing: false
+        bluetoothAlertClosing: false,
+        bluetoothAlertTitle: '蓝牙未开启',
+        bluetoothAlertDesc: '请在手机"设置"中打开蓝牙功能\n以便连接设备'
       });
     }, 420);
+  },
+
+  closePermissionModal() {
+    if (this.data.permissionModalClosing) return;
+    this.setData({ permissionModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showPermissionModal: false,
+        permissionModalClosing: false
+      });
+    }, 420);
+  },
+
+  openBlePermissionSetting() {
+    if (typeof wx.openAppAuthorizeSetting === 'function') {
+      wx.openAppAuthorizeSetting({
+        fail: () => this._openBleSystemSettingFallback()
+      });
+      return;
+    }
+    this._openBleSystemSettingFallback();
+  },
+
+  _openBleSystemSettingFallback() {
+    if (typeof wx.openSetting === 'function') {
+      wx.openSetting({
+        fail: () => {
+          this._showCustomToast('请到系统设置中为微信开启蓝牙/附近设备权限', 'none', 2800);
+        }
+      });
+      return;
+    }
+    this._showCustomToast('请到系统设置中为微信开启蓝牙/附近设备权限', 'none', 2800);
   },
 
   closeRemoteAssistStayModal() {
@@ -6192,8 +6316,8 @@ Page({
     const isF1Legacy = isF1 && !isMtUltra;
     const isF2MaxSeries = isF2MaxSeriesModel(model);
     
-    this.maxAngle = isF1Legacy ? 180 : 170;
-    const maxDeg = openAngleMaxDeg(model, this.maxAngle);
+    this.maxAngle = 180;
+    const maxDeg = 180;
     
     // 生成刻度数据 (扩展到更多刻度，实现无限滑动视觉效果)
     const count = (maxDeg - 0) / 2 + 1;
@@ -6288,9 +6412,11 @@ Page({
   updateRuler(deg, animate) {
     if (deg < 0) deg = 0;
 
-    const index = this._clampOpenAngleIndex(Math.round(deg / 2));
-    deg = index * 2;
-    const trans = this._indexToOpenAngleTranslate(index);
+    const model = this.data.currentModel;
+    const internalIndex = this._clampOpenAngleIndex(Math.round(deg / 2));
+    deg = internalIndex * 2;
+    const visualIndex = openAngleVisualIndexFromInternal(model, deg);
+    const trans = this._indexToOpenAngleTranslate(visualIndex);
     this._rulerTranslateX = trans;
 
     const uiActive = !!this.data.openAngleUiActive;
@@ -6301,8 +6427,8 @@ Page({
     // 没点预设：只摆波轮，不改棍子/数字
     if (uiActive) {
       patch.currentAngle = deg;
-      patch.activeIndex = index;
-      patch.angleRotation = openAngleStickRotateDeg(this.data.currentModel, deg);
+      patch.activeIndex = internalIndex;
+      patch.angleRotation = openAngleStickRotateDeg(model, deg);
     }
     this.setData(patch);
     if (uiActive) this.updateAngleText(deg);
@@ -7258,6 +7384,8 @@ Page({
     }
     const deg = (this._flapGaugeSpinBaseDeg || 0) + sign * traveled;
     const degRounded = Math.round(deg * 10) / 10;
+    // 滑动中不刷仪表角度，松手后下一帧会追上
+    if (this._mainControlScrolling) return;
     if (this._flapGaugeLastPaintDeg !== degRounded) {
       this._flapGaugeLastPaintDeg = degRounded;
       const patch = {
@@ -9848,10 +9976,79 @@ Page({
       if (!modelNeedsOnboardingGuide(cur)) return;
       this._onboardingGuideSteps = buildOnboardingGuideSteps(cur);
       // 重置滚动，避免进入控制台后手动滑动导致折叠/打开角度教学错位
-      this.setData({ mainControlScrollTop: 0 }, () => {
+      this.setData({ mainControlScrollTop: 0, mainControlScrollAnim: false }, () => {
         wx.nextTick(() => this._showCalGuideStep(1));
       });
     }, 80);
+  },
+
+  onMainControlScrollStart() {
+    this._markMainControlScrolling();
+  },
+
+  onMainControlScrollDragging() {
+    this._markMainControlScrolling();
+  },
+
+  onMainControlScrollEnd() {
+    this._scheduleMainControlScrollIdle();
+  },
+
+  _markMainControlScrolling() {
+    this._mainControlScrolling = true;
+    if (this._mainControlScrollIdleTimer) {
+      clearTimeout(this._mainControlScrollIdleTimer);
+      this._mainControlScrollIdleTimer = null;
+    }
+    if (!this.data.mainControlScrolling) {
+      this.setData({ mainControlScrolling: true });
+    }
+  },
+
+  _scheduleMainControlScrollIdle() {
+    if (this._mainControlScrollIdleTimer) {
+      clearTimeout(this._mainControlScrollIdleTimer);
+    }
+    this._mainControlScrollIdleTimer = setTimeout(() => {
+      this._mainControlScrollIdleTimer = null;
+      this._mainControlScrolling = false;
+      const patch = {};
+      if (this.data.mainControlScrolling) patch.mainControlScrolling = false;
+      if (Object.keys(patch).length) {
+        this.setData(patch, () => this._flushPendingBleUiPatch());
+      } else {
+        this._flushPendingBleUiPatch();
+      }
+    }, 140);
+  },
+
+  _clearMainControlScrollIdle() {
+    if (this._mainControlScrollIdleTimer) {
+      clearTimeout(this._mainControlScrollIdleTimer);
+      this._mainControlScrollIdleTimer = null;
+    }
+    this._mainControlScrolling = false;
+    if (this.data.mainControlScrolling) {
+      this.setData({ mainControlScrolling: false });
+    }
+  },
+
+  _flushPendingBleUiPatch(silent) {
+    const pending = this._pendingBleUiPatch;
+    if (!pending || !Object.keys(pending).length) {
+      this._pendingBleUiPatch = null;
+      return;
+    }
+    this._pendingBleUiPatch = null;
+    if (silent) {
+      try {
+        this.setData(pending);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+    this.setData(pending, () => {
+      this._ensureFlapGaugeRestVisual();
+    });
   },
 
   _prepareCalGuideStepUI(step) {
@@ -9932,9 +10129,16 @@ Page({
         return;
       }
       const kickTop = prevTop === nextScrollTop ? Math.max(0, nextScrollTop - 1) : prevTop;
-      this.setData({ mainControlScrollTop: kickTop }, () => {
+      this.setData({ mainControlScrollTop: kickTop, mainControlScrollAnim: true }, () => {
         wx.nextTick(() => {
-          this.setData({ mainControlScrollTop: nextScrollTop }, finish);
+          this.setData({ mainControlScrollTop: nextScrollTop }, () => {
+            setTimeout(() => {
+              if (this.data.mainControlScrollAnim) {
+                this.setData({ mainControlScrollAnim: false });
+              }
+            }, 320);
+            finish();
+          });
         });
       });
     });
@@ -11419,6 +11623,19 @@ Page({
       const f3CalJustFinished = !!updates._f3CalJustFinished;
       const f3CalFlapJustClosed = this._f3CalAwaitFlapClose && updates.flapPanelState === 'closed';
       if (f3CalJustFinished) delete updates._f3CalJustFinished;
+      // 滑动中暂缓遥测 setData，避免与 scroll-view 合成抢主线程
+      if (this._mainControlScrolling && !forceFull && !forceAdv &&
+          updates.flapPanelState === undefined &&
+          updates.settingState === undefined &&
+          updates.f3ShowCalOverlay === undefined) {
+        this._pendingBleUiPatch = Object.assign(this._pendingBleUiPatch || {}, updates);
+        this._scheduleRemoteStatePush();
+        return;
+      }
+      if (this._pendingBleUiPatch) {
+        Object.assign(updates, this._pendingBleUiPatch);
+        this._pendingBleUiPatch = null;
+      }
       this.setData(updates, () => {
         this._ensureFlapGaugeRestVisual();
         if (updates.f3ShowCalOverlay === false) this._clearF3CalTimer();

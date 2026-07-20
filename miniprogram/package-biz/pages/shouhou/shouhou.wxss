@@ -5917,6 +5917,10 @@ page {
   height: 100vh;
   background: rgba(0, 0, 0, 0.5);
   z-index: 10250;
+  pointer-events: none;
+}
+
+.sh-guide-mask--block {
   pointer-events: auto;
 }
 

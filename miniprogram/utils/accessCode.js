@@ -10,11 +10,11 @@ function isAccessCodeFormat(raw) {
   return ACCESS_CODE_RE.test(normalizeAccessCode(raw));
 }
 
-/** 复制/展示用：去掉「用户-」等前缀，只保留 VK 口令 */
+/** 复制/展示用：去掉「用户-」「用户_」等前缀，只保留码本身 */
 function extractPlainAccessCode(raw) {
   let s = String(raw || '').trim();
   if (!s) return '';
-  if (s.indexOf('用户-') === 0) {
+  if (s.indexOf('用户-') === 0 || s.indexOf('用户_') === 0) {
     s = s.slice(3);
   }
   const normalized = normalizeAccessCode(s);

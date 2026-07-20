@@ -3,6 +3,7 @@ const app = getApp();
 var QQMapWX = require('../../utils/qqmap-wx-jssdk.js');
 const referralPendingBind = require('../../utils/referralPendingBind.js');
 const { normalizeAccessCode, isAccessCodeFormat, extractPlainAccessCode } = require('../../utils/accessCode.js');
+const accessEntryPath = require('../../utils/accessEntryPath.js');
 const {
   getDisplayIdentity,
   saveLoginIdentityFromLoginResult,
@@ -813,6 +814,7 @@ Page({
           });
           wx.setStorageSync('has_seen_first_time_modal', true);
           wx.removeStorageSync('is_user_banned');
+          accessEntryPath.maybeQueueDirectCodeTutorialNotice({ isAccessCodeLogin: isAccessCode });
           this._bindReferralInviteAfterAuth().finally(() => {
             const keepInvite = !!referralPendingBind.getPendingInviteCode();
             this._hideNicknameUIWithAnimation({
@@ -2095,7 +2097,10 @@ Page({
   },
 
   copyAdminNickname(e) {
-    const text = String((e.currentTarget.dataset.text || '')).trim();
+    const raw = String((e.currentTarget.dataset.text || '')).trim();
+    if (!raw) return;
+    // 只复制码：用户-VKHNGH44 / 用户_XXXXXX → VKHNGH44 / XXXXXX
+    const text = extractPlainAccessCode(raw) || raw;
     if (!text) return;
     const hideOfficialToast = () => {
       try {
@@ -3275,6 +3280,7 @@ Page({
     if (!this.data.xianyuWarningActionReady) return;
     this._clearXianyuWarningActionCooldown();
     this._markXianyuWarningDismissed();
+    accessEntryPath.markAccessEntryViaKf();
 
     const debugOn = debugUserFlow.shouldForceUserGuides();
     // 必须在用户点击的同一调用栈同步打开，否则企微会话/气泡可能失败
@@ -3285,7 +3291,11 @@ Page({
       }
     });
 
-    this._finishXianyuWarningModal({ openNickname: true, debugOn });
+    // 延后关弹窗，避免与 openCustomerServiceChat 抢 webview 路由（DevTools 常见 routeDone 告警）
+    setTimeout(() => {
+      if (this.data.xianyuWarningModalClosing) return;
+      this._finishXianyuWarningModal({ openNickname: true, debugOn });
+    }, 320);
   },
 
   /** 微信用户若已有口令：跳过客服，直接去填写 */
@@ -3294,6 +3304,7 @@ Page({
     if (!this.data.xianyuWarningActionReady) return;
     this._clearXianyuWarningActionCooldown();
     this._markXianyuWarningDismissed();
+    accessEntryPath.markAccessEntryViaDirectCode();
     this._finishXianyuWarningModal({
       openNickname: true,
       debugOn: debugUserFlow.shouldForceUserGuides()
@@ -3327,6 +3338,7 @@ Page({
 
   openPresalesKfFromGuide() {
     if (!this.data.firstTimeActionReady) return;
+    accessEntryPath.markAccessEntryViaKf();
     this._openPresalesKfForAccessCode({
       onFail: () => {
         wx.showToast({ title: '打开客服失败，请复制微信号添加', icon: 'none', duration: 2500 });
@@ -3436,6 +3448,7 @@ Page({
     if (!this.data.firstTimeActionReady) return;
     this._clearFirstTimeActionCooldown();
     this._markDouyinXianyuGuideDismissed();
+    accessEntryPath.markAccessEntryViaDirectCode();
     this.setData({ firstTimeModalClosing: true });
     setTimeout(() => {
       if (debugUserFlow.shouldForceUserGuides()) {
@@ -3890,48 +3903,6 @@ Page({
     } finally {
       this.setData({ isGeneratingAccessCode: false });
     }
-  },
-
-  /** 管理员：以普通用户视角重跑入场弹窗 → 主页新品/教程，并开放各页自动引导 */
-  startDebugUserFullFlow() {
-    if (!this.data.isAdmin) return;
-    wx.showModal({
-      title: '调试全流程',
-      content: '将清理各页教程状态，并以普通用户视角重跑：使用须知 → 加微信 → 进主页（新品+主页教程）。期间点客服/我的/维修中心/控制中心也会自动弹引导。约 45 分钟后自动结束。',
-      confirmText: '开始',
-      cancelText: '取消',
-      success: (res) => {
-        if (!res.confirm) return;
-        debugUserFlow.start();
-        this._xianyuWarningDismissedThisSession = false;
-        this._firstTimeGuideDismissedThisSession = false;
-        this._xianyuWarningShownOnce = false;
-        this._firstTimeModalShownOnce = false;
-        this.setData({
-          isShowNicknameUI: false,
-          nicknameUiClosing: false,
-          showFirstTimeModal: false,
-          firstTimeModalEnterReady: false,
-          firstTimeModalClosing: false,
-          showXianyuWarningModal: false,
-          xianyuWarningModalEnterReady: false,
-          xianyuWarningModalClosing: false
-        }, () => {
-          const ok = this._openXianyuWarningModalAnimated(true);
-          if (!ok) {
-            this._continueDebugUserFlowAfterIndexModals();
-            return;
-          }
-          // 调试模式：跳过须知倒计时
-          this._clearXianyuWarningActionCooldown();
-          this.setData({
-            xianyuWarningActionReady: true,
-            xianyuWarningActionCountdown: 0,
-            xianyuWarningProgress: 100
-          });
-        });
-      }
-    });
   },
 
   _continueDebugUserFlowAfterIndexModals() {

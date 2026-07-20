@@ -22,7 +22,10 @@ const EXTRA_KEYS = [
   'mt_scan_ble_connected_once_v1',
   'scan_model_pick_tip_seen_v1',
   'hasShownNewProductHint_F1',
-  '__products_new_arrival_from_index__'
+  '__products_new_arrival_from_index__',
+  'mt_access_entry_path_v1',
+  'mt_direct_code_tutorial_notice_seen_v1',
+  '__mt_pending_direct_code_tutorial_notice__'
 ];
 
 function _setAppFlag(on) {

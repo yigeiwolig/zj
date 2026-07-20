@@ -1248,7 +1248,7 @@
 </view>
 
 <!-- 维修中心分步功能引导 -->
-<view class="sh-guide-mask {{shGuideMaskDim ? '' : 'sh-guide-mask--clear'}}" wx:if="{{showShUsageGuide}}" catchtouchmove="noop" catchtap="noop">
+<view class="sh-guide-mask {{shGuideMaskDim ? '' : 'sh-guide-mask--clear'}} {{(shGuideMaskDim || shGuideShowBubble || shGuideShowSpot) ? 'sh-guide-mask--block' : ''}}" wx:if="{{showShUsageGuide}}" catchtouchmove="noop" catchtap="noop">
   <view wx:if="{{shGuideShowSpot}}" class="sh-guide-spot {{shGuideSpotPulse ? 'sh-guide-spot--pulse' : ''}}" style="{{shGuideSpotStyle}}"></view>
   <view wx:if="{{shGuideShowBubble}}" class="sh-guide-bubble sh-guide-bubble--{{shGuideArrowDir}} {{shGuideBubbleFixed ? 'sh-guide-bubble--fixed' : ''}}" style="{{shGuideBubbleStyle}}">
     <view class="sh-guide-arrow" style="{{shGuideArrowStyle}}"></view>

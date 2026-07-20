@@ -274,7 +274,8 @@ page {
   /* 外观 */
   background: #FFFFFF;
   border-radius: 60rpx;
-  box-shadow: 0 40rpx 80rpx rgba(0,0,0,0.06);
+  /* 轻阴影：大模糊阴影在部分机型滚动时合成成本高 */
+  box-shadow: 0 12rpx 28rpx rgba(0,0,0,0.06);
   
   /* 布局核心：相对定位，Flex 纵向排列 */
   position: relative; 
@@ -753,13 +754,13 @@ page {
   }
 }
 
-/* 小幽灵图标动画 */
+/* 小幽灵图标动画（放慢；滚动时由 .is-scrolling 暂停） */
 .ghost-icon-open {
-  animation: float-ghost-open 2s ease-in-out infinite;
+  animation: float-ghost-open 2.8s ease-in-out infinite;
 }
 
 .ghost-icon-close {
-  animation: exit-ghost-animation 2s linear infinite;
+  animation: exit-ghost-animation 2.8s linear infinite;
 }
 
 /* 上下跳动动画（折叠角度、打开角度） */
@@ -768,12 +769,12 @@ page {
     transform: translateY(0);
   }
   50% {
-    transform: translateY(-8rpx);
+    transform: translateY(-6rpx);
   }
 }
 
 .bounce-icon {
-  animation: bounce 1.5s ease-in-out infinite;
+  animation: bounce 2.2s ease-in-out infinite;
 }
 
 /* 旋转动画（自动校准、高级设置） */
@@ -787,7 +788,22 @@ page {
 }
 
 .rotate-icon {
-  animation: rotate 3s linear infinite;
+  animation: rotate 4.5s linear infinite;
+}
+
+/* 手指滑动主控制区时暂停装饰动画，降低中低端机滚动掉帧 */
+.main-control-scroll.is-scrolling .ghost-icon-open,
+.main-control-scroll.is-scrolling .ghost-icon-close,
+.main-control-scroll.is-scrolling .bounce-icon,
+.main-control-scroll.is-scrolling .rotate-icon,
+.main-control-scroll.is-scrolling .idle-icon-img,
+.main-control-scroll.is-scrolling .wave,
+.main-control-scroll.is-scrolling .signal-group .bar,
+.main-control-scroll.is-scrolling .status-card--moving,
+.main-control-scroll.is-scrolling .telemetry-gauge--closed .gauge-center-lamp,
+.main-control-scroll.is-scrolling .telemetry-gauge--spinning .orbit-dot,
+.main-control-scroll.is-scrolling .telemetry-gauge--spinning .gauge-center-lamp {
+  animation-play-state: paused !important;
 }
 
 .entry-text {
@@ -993,12 +1009,12 @@ page {
 .gauge-rotor {
   transition: none;
   transform-origin: 50% 50%;
-  will-change: transform;
 }
 
 .gauge-rotor--spin {
-  /* 帧间短线性插值，减轻 setData 步进感 */
-  transition: transform 48ms linear !important;
+  /* 帧间短线性插值，减轻 setData 步进感；仅转动时开启 will-change */
+  transition: transform 90ms linear !important;
+  will-change: transform;
 }
 
 .gauge-rotor--ease {
