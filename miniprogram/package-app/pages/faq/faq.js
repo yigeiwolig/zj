@@ -17,49 +17,28 @@ function genFaqId() {
 const VIDEO_PANEL_HEIGHT = '580rpx';
 const MIXED_PANEL_HEIGHT = '780rpx';
 const EMPTY_VIDEO_PANEL_HEIGHT = '420rpx';
-const { PRODUCT_DETAIL_OPTIONS } = require('../../../utils/productModels.js');
+const { PRODUCT_SERIES_OPTIONS } = require('../../../utils/productModels.js');
 
+/** 设备使用问题：按系列收拢（明细故障走自助排查） */
 const FALLBACK_FAQS = {
-  'F1 PRO': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F1 PRO 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '设备固件更新失败？', answer: '请保持 F1 PRO 电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
-  ],
-  'F1 MAX': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F1 MAX 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F1 MAX 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
+  F1: [
+    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭设备后重新上电，再进入控制中心重试配对。', videoUrl: '' },
+    { question: '如何调节性能模式？', answer: '进入控制中心，在对应车型参数页中选择性能档位；保存后设备将按新配置运行。', videoUrl: '' },
     { question: '设备固件更新失败？', answer: '请保持设备电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
   ],
-  'F1 ULTRA': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F1 ULTRA 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F1 Ultra 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
-    { question: '设备固件更新失败？', answer: '请保持 F1 ULTRA 电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
-  ],
-  'F2 PRO': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F2 PRO 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '设备固件更新失败？', answer: '请保持 F2 PRO 电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
-  ],
-  'F2 MAX': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F2 MAX 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F2 MAX 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
+  F2: [
+    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭设备后重新上电，再进入控制中心重试配对。', videoUrl: '' },
+    { question: '如何调节性能模式？', answer: '进入控制中心，在对应车型参数页中选择性能档位；保存后设备将按新配置运行。', videoUrl: '' },
     { question: '设备固件更新失败？', answer: '请保持设备电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
-  ],
-  'F2 ULTRA': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F2 ULTRA 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F2 Ultra 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
-    { question: '设备固件更新失败？', answer: '请保持 F2 ULTRA 电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
   ],
   'F2 Long': [
     { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F2 Long 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F2 Long 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
-    { question: 'F2 MAX 与 F2 Long 有何区别？', answer: 'F2 Long 为加长版线束/安装方案，核心控制逻辑与 F2 MAX 一致；具体线长与安装位请以产品说明书为准。', videoUrl: '' }
+    { question: 'F2 与 F2 Long 有何区别？', answer: 'F2 Long 为加长版线束/安装方案，核心控制逻辑与 F2 系列一致；具体线长与安装位请以产品说明书为准。', videoUrl: '' },
+    { question: '设备固件更新失败？', answer: '请保持设备电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
   ],
-  'F3 PRO': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F3 PRO 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '设备固件更新失败？', answer: '请保持 F3 PRO 电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
-  ],
-  'F3 MAX': [
-    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭 F3 MAX 后重新上电，再进入控制中心重试配对。', videoUrl: '' },
-    { question: '如何调节性能模式？', answer: '进入控制中心，选择 F3 MAX 对应车型参数页中的性能档位；保存后设备将按新配置运行。', videoUrl: '' },
+  F3: [
+    { question: '无法连接蓝牙怎么办？', answer: '请确认手机蓝牙已开启，并在系统设置中允许小程序使用蓝牙；关闭设备后重新上电，再进入控制中心重试配对。', videoUrl: '' },
+    { question: '如何调节性能模式？', answer: '进入控制中心，在对应车型参数页中选择性能档位；保存后设备将按新配置运行。', videoUrl: '' },
     { question: '设备固件更新失败？', answer: '请保持设备电量充足、网络稳定；若多次失败，可重启设备与小程序后重试，或联系客服协助处理。', videoUrl: '' }
   ],
   '购买与订单': [
@@ -75,6 +54,35 @@ const FALLBACK_FAQS = {
     { question: '投诉建议如何提交？', answer: '在「联系方式」页选择投诉建议，填写内容后按指引发送邮件，24 小时内处理。', videoUrl: '' }
   ]
 };
+
+function mapToFaqDeviceSeries(name) {
+  const key = String(name || '').trim();
+  if (!key) return '';
+  if (PRODUCT_SERIES_OPTIONS.indexOf(key) >= 0) return key;
+  const upper = key.toUpperCase();
+  if (upper.indexOf('F2 LONG') >= 0 || upper.indexOf('F2 MAX LONG') >= 0) return 'F2 Long';
+  if (/^F1\b/i.test(key)) return 'F1';
+  if (/^F2\b/i.test(key)) return 'F2';
+  if (/^F3\b/i.test(key)) return 'F3';
+  return '';
+}
+
+/** 设备使用问题固定为四大系列 */
+function buildFaqDeviceProducts() {
+  return PRODUCT_SERIES_OPTIONS.map((name) => ({ name, icon: 'MT' }));
+}
+
+/** 读 FAQ 时兼容旧明细分类名（F1 PRO 等归入 F1） */
+function faqLookupCategories(category) {
+  const series = mapToFaqDeviceSeries(category) || String(category || '').trim();
+  const alias = {
+    F1: ['F1', 'F1 PRO', 'F1 MAX', 'F1 ULTRA'],
+    F2: ['F2', 'F2 PRO', 'F2 MAX', 'F2 ULTRA'],
+    'F2 Long': ['F2 Long', 'F2 MAX Long', 'F2 Max Long', 'F2 MAX LONG'],
+    F3: ['F3', 'F3 PRO', 'F3 MAX']
+  };
+  return alias[series] || [category];
+}
 
 function cloneFaqList(list) {
   return (list || []).map((item) => ({
@@ -125,7 +133,7 @@ Page({
       { name: '维修与售后', icon: 'MT' },
       { name: '联系客服', icon: 'MT' }
     ],
-    products: PRODUCT_DETAIL_OPTIONS.map((name) => ({
+    products: PRODUCT_SERIES_OPTIONS.map((name) => ({
       name,
       icon: 'MT'
     })),
@@ -322,22 +330,23 @@ Page({
 
   async _loadCategoriesFromStore() {
     const store = await this._loadFaqStoreAll();
-    const patch = {};
-    if (store.categories && store.categories.devices && store.categories.devices.length) {
-      patch.products = store.categories.devices;
-    }
+    const patch = {
+      // 设备使用问题固定四大系列（明细故障改走自助排查）
+      products: buildFaqDeviceProducts()
+    };
     if (store.categories && store.categories.general && store.categories.general.length) {
       patch.generalTopics = store.categories.general.map((p) => ({
         ...p,
         icon: 'MT'
       }));
     }
-    if (Object.keys(patch).length) this.setData(patch);
+    this.setData(patch);
   },
 
   async _fetchFaqFromStore(category) {
     const store = await this._loadFaqStoreAll();
-    const rows = (store.items || []).filter((i) => i && i.category === category);
+    const cats = faqLookupCategories(category);
+    const rows = (store.items || []).filter((i) => i && cats.indexOf(i.category) >= 0);
     if (!rows.length) return null;
     const fileIds = [];
     rows.forEach((row) => {
@@ -350,27 +359,45 @@ Page({
 
   async _fetchFaqFromCloud(category) {
     if (!this.db || !category) return null;
+    const cats = faqLookupCategories(category);
     try {
-      let res = await this.db.collection(FAQ_COLLECTION)
-        .where({ category })
-        .orderBy('order', 'asc')
-        .get();
-      if (!res.data || !res.data.length) {
-        res = await this.db.collection(FAQ_COLLECTION)
-          .where({ category })
-          .orderBy('createTime', 'asc')
-          .get()
-          .catch(() => ({ data: [] }));
+      let rows = [];
+      for (let i = 0; i < cats.length; i++) {
+        let res = { data: [] };
+        try {
+          res = await this.db.collection(FAQ_COLLECTION)
+            .where({ category: cats[i] })
+            .orderBy('order', 'asc')
+            .get();
+        } catch (e) {
+          try {
+            res = await this.db.collection(FAQ_COLLECTION)
+              .where({ category: cats[i] })
+              .orderBy('createTime', 'asc')
+              .get();
+          } catch (e2) {
+            try {
+              res = await this.db.collection(FAQ_COLLECTION)
+                .where({ category: cats[i] })
+                .get();
+            } catch (e3) {
+              res = { data: [] };
+            }
+          }
+        }
+        if (res && res.data && res.data.length) {
+          rows = rows.concat(res.data);
+        }
       }
-      if (res.data && res.data.length) {
+      if (rows.length) {
         const fileIds = [];
-        res.data.forEach((row) => {
+        rows.forEach((row) => {
           const v = row.videoUrl || row.videoFileID;
           if (v) fileIds.push(v);
         });
         const urlMap = await this._buildMediaUrlMap(fileIds);
         this._faqUseStore = false;
-        return this._mapDbRows(res.data, urlMap);
+        return this._mapDbRows(rows, urlMap);
       }
     } catch (err) {
       if (!isDbNotExist(err)) {
@@ -382,9 +409,10 @@ Page({
 
   async _loadFaqForCategory(category) {
     const cloudList = await this._fetchFaqFromCloud(category);
+    const series = mapToFaqDeviceSeries(category) || category;
     const source = (cloudList && cloudList.length)
       ? cloudList
-      : (FALLBACK_FAQS[category] || []);
+      : (FALLBACK_FAQS[series] || FALLBACK_FAQS[category] || []);
     return cloneFaqList(source);
   },
 
@@ -448,6 +476,19 @@ Page({
     }
     const pageBack = require('../../../utils/pageBack.js');
     pageBack.popOrHub();
+  },
+
+  openTroubleshoot() {
+    wx.navigateTo({
+      url: '/package-app/pages/troubleshoot/troubleshoot'
+    });
+  },
+
+  openTroubleshootAdmin() {
+    if (!this.data.isAdmin) return;
+    wx.navigateTo({
+      url: '/package-app/pages/troubleshoot-admin/troubleshoot-admin'
+    });
   },
 
   onBackPress() {

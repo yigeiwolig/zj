@@ -18,7 +18,9 @@
         "pages/voice-control/voice-control",
         "pages/can-learn/can-learn",
         "pages/can-learn-admin/can-learn-admin",
-        "pages/faq/faq"
+        "pages/faq/faq",
+        "pages/troubleshoot/troubleshoot",
+        "pages/troubleshoot-admin/troubleshoot-admin"
       ]
     },
     {

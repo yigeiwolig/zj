@@ -18,7 +18,28 @@
     </view>
 
     <view class="home-admin-tip" wx:if="{{isAdmin}}">
-      <text>「管理」进入分类添加问题；「改名」改名称；底部可「添加设备」或「添加分类」</text>
+      <text>「管理」进入分类添加问题；「改名」改名称；设备使用问题固定为 F1 / F2 / F2 Long / F3；底部可「添加分类」</text>
+    </view>
+
+    <view class="glass-list-section faq-troubleshoot-section">
+      <text class="section-label">自助排查</text>
+      <view class="glass-container">
+        <view
+          class="glass-item faq-troubleshoot-entry"
+          hover-class="glass-item-hover"
+          bindtap="openTroubleshoot"
+        >
+          <view class="item-icon item-icon--diagnose">诊</view>
+          <view class="glass-item-main">
+            <text class="item-text">问答式故障排查</text>
+            <text class="item-subtext">看视频、选现象，一步步找到解决方法</text>
+          </view>
+          <view class="item-admin-col" wx:if="{{isAdmin}}">
+            <text class="item-admin-tag item-admin-tag--primary" catchtap="openTroubleshootAdmin">管理流程</text>
+          </view>
+          <view class="chevron" wx:else></view>
+        </view>
+      </view>
     </view>
 
     <view class="glass-list-section">
@@ -44,12 +65,6 @@
           </block>
           <view class="chevron" wx:else></view>
         </view>
-        <view
-          wx:if="{{isAdmin}}"
-          class="glass-section-add"
-          catchtap="adminAddCategory"
-          data-type="device"
-        >＋ 添加设备</view>
       </view>
     </view>
 
@@ -249,7 +264,7 @@
       class="faq-modal-input"
       value="{{renameNewName}}"
       bindinput="onRenameInput"
-      placeholder="{{renameTargetType === 'device' ? '例如：F3 PRO' : '例如：退换货政策'}}"
+      placeholder="{{renameTargetType === 'device' ? '例如：F2 Long' : '例如：退换货政策'}}"
       focus="{{showRenameModal}}"
     />
     <view class="faq-modal-btns">

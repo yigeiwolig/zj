@@ -147,6 +147,29 @@ page {
   font-size: 22rpx;
   letter-spacing: 0;
 }
+
+.item-icon--diagnose {
+  background: #e8f3ff;
+  color: #006edb;
+  font-size: 24rpx;
+}
+
+.faq-troubleshoot-section {
+  margin-bottom: 36rpx;
+}
+
+.faq-troubleshoot-entry {
+  min-height: 112rpx;
+}
+
+.item-subtext {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 23rpx;
+  line-height: 1.4;
+  color: rgba(0, 0, 0, 0.42);
+}
+
 .glass-section-add {
   margin: 20rpx 0 0;
   padding: 28rpx 32rpx;
