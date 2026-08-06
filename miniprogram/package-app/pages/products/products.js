@@ -1294,7 +1294,7 @@ Page({
     if (this._casePagePreloaded) return;
     if (typeof wx.preloadPage !== 'function') return;
     wx.preloadPage({
-      url: '/package-app/pages/case/case',
+      url: '/package-extra/pages/case/case',
       success: () => { this._casePagePreloaded = true; },
       fail: () => {}
     });
@@ -1305,7 +1305,7 @@ Page({
     if (this._scanPagePreloaded) return;
     if (typeof wx.preloadPage !== 'function') return;
     wx.preloadPage({
-      url: '/package-app/pages/scan/scan',
+      url: '/package-extra/pages/scan/scan',
       success: () => { this._scanPagePreloaded = true; },
       fail: () => {}
     });
@@ -1800,11 +1800,11 @@ Page({
         const idx = Number(payload.index || 0);
         setTimeout(() => {
           wx.navigateTo({
-            url: `/package-app/pages/scan/scan?restoreIndex=${idx}`,
+            url: `/package-extra/pages/scan/scan?restoreIndex=${idx}`,
             animationType: 'none',
             fail: () => {
               wx.reLaunch({
-                url: `/package-app/pages/scan/scan?restoreIndex=${idx}`
+                url: `/package-extra/pages/scan/scan?restoreIndex=${idx}`
               });
             }
           });
@@ -2656,10 +2656,10 @@ Page({
       case 10: // 案例展示（页面较大，预载 + 超时重试）
         this.rememberReturnFocus(numId);
         this._preloadCasePageOnce();
-        this._navigateToPage('/package-app/pages/case/case', {
+        this._navigateToPage('/package-extra/pages/case/case', {
           retries: 2,
           onFail: (err) => {
-            console.error('[products] navigateTo fail:', '/package-app/pages/case/case', err);
+            console.error('[products] navigateTo fail:', '/package-extra/pages/case/case', err);
             this.showAutoToast('提示', '页面打开失败，请稍后重试');
           }
         });
@@ -2668,10 +2668,10 @@ Page({
       case 1: // 控制中心（页面较大，预载 + 超时重试）
         this.rememberReturnFocus(numId);
         this._preloadScanPageOnce();
-        this._navigateToPage('/package-app/pages/scan/scan', {
+        this._navigateToPage('/package-extra/pages/scan/scan', {
           retries: 2,
           onFail: (err) => {
-            console.error('[products] navigateTo fail:', '/package-app/pages/scan/scan', err);
+            console.error('[products] navigateTo fail:', '/package-extra/pages/scan/scan', err);
             this.showAutoToast('提示', '页面打开失败，请稍后重试');
           }
         });
@@ -2679,7 +2679,7 @@ Page({
       case 9: target = '/package-biz/pages/ota/ota'; break;         // OTA升级
       case 6: target = '/package-biz/pages/shouhou/shouhou'; break; // 维修中心
       case 12: target = '/package-biz/pages/home/home'; break;       // 附近门店
-      case 13: target = '/package-app/pages/faq/faq'; break;         // 常见问题
+      case 13: target = '/package-extra/pages/faq/faq'; break;         // 常见问题
       case 2: target = '/package-app/pages/profile/profile'; break;
       // 其他待开发...
       default: target = ''; break;
@@ -3118,6 +3118,17 @@ Page({
     if (this.data.hubShellModalOpen !== open) {
       this.setData({ hubShellModalOpen: open });
     }
+  },
+
+  // 订单/我的面板「查看物流」→ 打开挂在本页的 logistics-modal
+  onHubLogisticsOpen(e) {
+    const detail = (e && e.detail) || {};
+    const modal = this.selectComponent && this.selectComponent('#hubLogisticsModal');
+    if (modal && typeof modal.open === 'function') {
+      modal.open(detail);
+      return;
+    }
+    wx.showToast({ title: '无法打开物流', icon: 'none' });
   },
 
   onHubPanelsTouchStart(e) {

@@ -396,18 +396,21 @@
   color: #8e8e93;
 }
 .config-rollback-list {
-  max-height: 640rpx;
+  max-height: 72vh;
   margin-bottom: 24rpx;
 }
 .config-rollback-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16rpx;
-  padding: 20rpx 24rpx;
-  margin-bottom: 12rpx;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12rpx;
+  padding: 22rpx 24rpx;
+  margin-bottom: 14rpx;
   background: #f5f5f7;
   border-radius: 16rpx;
+}
+.config-rollback-item--edit {
+  align-items: stretch;
 }
 .config-rollback-item-main {
   flex: 1;
@@ -415,6 +418,51 @@
   display: flex;
   flex-direction: column;
   gap: 6rpx;
+}
+.config-rollback-field {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-top: 4rpx;
+}
+.config-rollback-field-label {
+  font-size: 22rpx;
+  font-weight: 650;
+  color: #8e8e93;
+}
+.config-rollback-field-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 68rpx;
+  padding: 0 20rpx;
+  border-radius: 14rpx;
+  background: #fff;
+  font-size: 26rpx;
+  font-weight: 650;
+  color: #1c1c1e;
+  box-sizing: border-box;
+}
+.config-rollback-variant {
+  margin-left: 0;
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+  background: #fff;
+}
+.config-rollback-save {
+  margin-top: 8rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  text-align: center;
+  border-radius: 14rpx;
+  background: #111;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+.config-rollback-save:active {
+  opacity: 0.86;
 }
 .config-rollback-item-top {
   display: flex;
@@ -3575,6 +3623,7 @@
 /* 🔴 正常状态：绿色背景 */
 .r-warranty-status.normal {
   background: #F0FFF4;
+  flex-wrap: wrap;
 }
 
 .warranty-expired-tag {
@@ -3590,6 +3639,11 @@
   font-size: 24rpx;
   color: #34C759;
   font-weight: 500;
+}
+.warranty-normal-meta {
+  font-size: 22rpx;
+  color: #6B7280;
+  font-weight: 400;
 }
 
 /* 曾扣质保：待处理卡片限制提示 */
@@ -4253,11 +4307,12 @@
   display: block !important;
   width: 100% !important;
   max-width: none !important;
-  margin-bottom: 20rpx !important;
-  font-size: 22rpx !important;
-  font-weight: 700 !important;
-  color: #8e8e93 !important;
-  line-height: 1.4;
+  margin-bottom: 14rpx !important;
+  font-size: 28rpx !important;
+  font-weight: 650 !important;
+  color: #1c1c1e !important;
+  line-height: 1.35 !important;
+  white-space: normal !important;
 }
 
 .bind-device-modal picker {
@@ -9875,6 +9930,26 @@
   border: 2rpx solid #F57C00;
 }
 
+.repair-actions-wecom {
+  margin-top: 12rpx;
+  width: 100%;
+}
+
+.repair-actions-wecom .r-btn.wecom-resend {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  color: #07c160;
+  border: 2rpx solid #07c160;
+  background: #fff;
+  font-weight: 600;
+}
+
+.repair-actions-wecom .r-btn.wecom-resend:active {
+  opacity: 0.85;
+  transform: scale(0.98);
+}
+
 .repair-actions-delete {
   margin-top: 12rpx;
   width: 100%;
@@ -10040,6 +10115,16 @@
   width: 100%;
   display: flex;
   gap: 24rpx;
+}
+.after-sales-dialog-box .cd-btn-row--stack,
+.custom-dialog-box .cd-btn-row--stack {
+  flex-direction: column;
+  gap: 20rpx;
+}
+.after-sales-dialog-box .cd-btn-row--stack .cd-btn,
+.custom-dialog-box .cd-btn-row--stack .cd-btn {
+  width: 100%;
+  flex: none;
 }
 
 .after-sales-dialog-box .cd-btn {
@@ -12829,4 +12914,118 @@
 @keyframes diagSheetDown {
   from { transform: translateY(0); }
   to { transform: translateY(100%); }
+}
+
+/* 控制版本：按钮版 / 遥控版（用 left 平移，避免 transform 在弹窗内盖住文字） */
+.ctrl-variant-seg {
+  position: relative;
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8rpx;
+  border-radius: 20rpx;
+  background: #f2f2f7;
+  overflow: hidden;
+}
+.ctrl-variant-thumb-wrap {
+  position: absolute;
+  left: 8rpx;
+  right: 8rpx;
+  top: 8rpx;
+  bottom: 8rpx;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ctrl-variant-thumb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  border-radius: 16rpx;
+  background: #fff;
+  box-shadow: 0 2rpx 10rpx rgba(0, 0, 0, 0.06);
+  opacity: 0;
+  transition:
+    left 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.18s ease;
+}
+.ctrl-variant-seg.is-button .ctrl-variant-thumb,
+.ctrl-variant-seg.is-remote .ctrl-variant-thumb {
+  opacity: 1;
+}
+.ctrl-variant-seg.is-button .ctrl-variant-thumb {
+  left: 0;
+}
+.ctrl-variant-seg.is-remote .ctrl-variant-thumb {
+  left: 50%;
+}
+.ctrl-variant-item {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1.2;
+  color: #8e8e93;
+  padding: 18rpx 8rpx;
+  border-radius: 16rpx;
+  background: transparent;
+  transition: color 0.2s ease;
+}
+.ctrl-variant-item.is-on {
+  background: transparent;
+  color: #111;
+  box-shadow: none;
+}
+.ctrl-variant-seg--compact {
+  flex: 1;
+  width: auto;
+  max-width: none;
+  min-width: 280rpx;
+  margin-left: 24rpx;
+  padding: 6rpx;
+}
+.ctrl-variant-seg--compact .ctrl-variant-thumb-wrap {
+  left: 6rpx;
+  right: 6rpx;
+  top: 6rpx;
+  bottom: 6rpx;
+}
+.ctrl-variant-seg--compact .ctrl-variant-item {
+  font-size: 24rpx;
+  padding: 14rpx 6rpx;
+}
+.fault-form-row--variant {
+  align-items: center;
+}
+.fault-form-row--block {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  padding-top: 24rpx;
+  padding-bottom: 24rpx;
+}
+.fault-form-row--block .fault-row-label {
+  margin-bottom: 0;
+}
+.audit-variant {
+  font-size: 24rpx;
+  color: #666;
+  font-weight: 600;
+}
+.bind-device-modal .ctrl-variant-seg,
+.hub-embed-portal-layer .bind-device-modal .ctrl-variant-seg {
+  width: 100%;
+}
+
+.bind-device-modal .ctrl-variant-item.is-on,
+.hub-embed-portal-layer .bind-device-modal .ctrl-variant-item.is-on {
+  background: transparent;
+  color: #111;
+  box-shadow: none;
 }

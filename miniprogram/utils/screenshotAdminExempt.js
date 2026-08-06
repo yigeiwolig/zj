@@ -1,8 +1,14 @@
 /**
  * 管理员（guanliyuan）豁免截屏/录屏封禁
+ * setVisualEffectOnCapture 是小程序全局态：任一页设为 hidden，其它页也会黑屏，
+ * 因此管理员需在「任意界面」持续允许截屏/录屏。
  */
 const ADMIN_CACHE_KEY = '__guanliyuan_screenshot_exempt__';
 const ADMIN_CACHE_TTL = 10 * 60 * 1000;
+
+let _ensureInFlight = null;
+/** null=未确认，true/false=本会话已确认 */
+let _sessionIsGuanliyuan = null;
 
 function isTruthyFlag(v) {
   return v === true || v === 1 || v === 'true' || v === '1';
@@ -30,8 +36,9 @@ function readLegacyAdminCache() {
   return false;
 }
 
-/** 同步判断：页面 data + 本地缓存 */
+/** 同步判断：页面 data + 本地缓存 + 本会话确认 */
 function isScreenshotBanExempt(ctx) {
+  if (_sessionIsGuanliyuan === true) return true;
   if (!ctx) return false;
   const d = ctx.data || {};
   if (isTruthyFlag(d.isAdmin)) return true;
@@ -46,6 +53,7 @@ function isScreenshotBanExempt(ctx) {
 }
 
 function markGuanliyuanCache(isGuanliyuan) {
+  _sessionIsGuanliyuan = !!isGuanliyuan;
   try {
     wx.setStorageSync(ADMIN_CACHE_KEY, { isGuanliyuan: !!isGuanliyuan, ts: Date.now() });
   } catch (e) {}
@@ -55,7 +63,7 @@ function markGuanliyuanCache(isGuanliyuan) {
 function allowScreenCaptureIfExempt() {
   try {
     if (wx.setVisualEffectOnCapture) {
-      wx.setVisualEffectOnCapture({ visualEffect: 'none', success: () => {} });
+      wx.setVisualEffectOnCapture({ visualEffect: 'none', success: () => {}, fail: () => {} });
     }
   } catch (e) {}
 }
@@ -81,8 +89,18 @@ async function ensureScreenshotBanExempt(ctx) {
       allowScreenCaptureIfExempt();
       if (ctx && ctx.setData) {
         const patch = {};
-        if (!ctx.data.isAuthorized) patch.isAuthorized = true;
-        if (!ctx.data.isAdmin && !ctx.data.hubInShell) patch.isAdmin = true;
+        if (ctx.data && 'isAuthorized' in ctx.data && !ctx.data.isAuthorized) {
+          patch.isAuthorized = true;
+        }
+        // hub 内嵌页勿强行打开 isAdmin；独立页可同步，避免 UI 误亮管理员开关
+        if (
+          ctx.data &&
+          'isAdmin' in ctx.data &&
+          !ctx.data.isAdmin &&
+          !ctx.data.hubInShell
+        ) {
+          patch.isAdmin = true;
+        }
         if (Object.keys(patch).length) ctx.setData(patch);
       }
     }
@@ -92,10 +110,35 @@ async function ensureScreenshotBanExempt(ctx) {
   }
 }
 
+/**
+ * 每个页面 onShow 调用：管理员在任意界面保持可截图/录屏。
+ * 非管理员只做一次云端确认，避免每页都打 login。
+ */
+function applyAdminCaptureOnPageShow(ctx) {
+  if (isScreenshotBanExempt(ctx)) {
+    allowScreenCaptureIfExempt();
+    return;
+  }
+  if (_sessionIsGuanliyuan === false) return;
+  if (_ensureInFlight) return;
+  _ensureInFlight = ensureScreenshotBanExempt(ctx)
+    .then((ok) => {
+      if (_sessionIsGuanliyuan === null) {
+        _sessionIsGuanliyuan = !!ok;
+      }
+      return ok;
+    })
+    .catch(() => false)
+    .finally(() => {
+      _ensureInFlight = null;
+    });
+}
+
 module.exports = {
   ADMIN_CACHE_KEY,
   isScreenshotBanExempt,
   markGuanliyuanCache,
   allowScreenCaptureIfExempt,
-  ensureScreenshotBanExempt
+  ensureScreenshotBanExempt,
+  applyAdminCaptureOnPageShow
 };

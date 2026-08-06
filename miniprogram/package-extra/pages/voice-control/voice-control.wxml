@@ -1,0 +1,132 @@
+<view class="pure-screen">
+  <view class="pure-back-hit" catchtap="goBack" style="top: {{statusBarHeight}}px; height: {{navBarHeight}}px;">
+    <text class="pure-back-arrow">‹</text>
+  </view>
+
+  <!-- 顶部状态 -->
+  <view class="top-meta" style="top: {{statusBarHeight + navBarHeight + 8}}px;">
+    <view class="top-meta-row top-meta-row--{{flapPanelState}}">
+      <view class="status-dot status-dot--{{flapPanelState}}"></view>
+      <text class="status-text">{{statusMetaText}}</text>
+    </view>
+  </view>
+
+  <!-- 中部：点一下说话（大点击区，骑行好点） -->
+  <view
+    class="ai-engine {{rippleClass}} {{voiceListening || voiceBusy ? 'is-busy' : ''}}"
+    catchtap="onTapSpeak">
+    <view class="string-container">
+      <view class="string-wave"></view>
+      <view class="ai-string"></view>
+    </view>
+    <view class="tap-hint" wx:if="{{!voiceListening && !voiceBusy}}">轻触开始</view>
+  </view>
+
+  <!-- 底部对话 -->
+  <view class="dialog-area">
+    <view class="main-msg">{{mainMsg}}</view>
+    <view class="sub-msg">{{subMsg}}</view>
+
+    <view
+      class="speak-btn {{voiceListening || voiceBusy ? 'is-listening' : ''}}"
+      catchtap="onTapSpeak">
+      <text class="speak-btn-text">
+        {{voiceListening || voiceBusy ? '正在听…' : '点一下说话'}}
+      </text>
+    </view>
+
+    <view class="kw-entry-hit" catchtap="openKeywordEditor">
+      <view class="kw-entry-link">
+        <text class="kw-entry-text">自定义口令</text>
+        <text class="kw-entry-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="admin-footer" wx:if="{{showAdminFooter}}">MANAGEMENT PREVIEW</view>
+
+  <!-- 自定义口令弹层 -->
+  <view
+    class="kw-mask {{keywordEditorClosing ? 'is-closing' : ''}}"
+    wx:if="{{showKeywordEditor || keywordEditorClosing}}"
+    catchtouchmove="noop"
+    catchtap="closeKeywordEditor">
+    <view class="kw-sheet {{keywordEditorClosing ? 'is-closing' : ''}}" catchtap="noop">
+      <view class="kw-sheet-handle"></view>
+      <view class="kw-sheet-head">
+        <text class="kw-sheet-kicker">语音控制</text>
+        <view class="kw-sheet-title">自定义口令</view>
+        <view class="kw-sheet-desc">说出你写的词即可控制，仍发送打开或关闭指令。口令保存在本机，重开页面不会丢。</view>
+      </view>
+
+      <scroll-view scroll-y class="kw-sheet-scroll" enhanced show-scrollbar="{{false}}">
+        <view class="kw-card">
+          <view class="kw-card-head">
+            <view class="kw-card-label">
+              <text class="kw-card-title">打开 / 折叠</text>
+              <text class="kw-card-hint">例：折叠一下</text>
+            </view>
+            <text class="kw-card-count">{{draftOpenPhrases.length}}/{{kwMaxPerGroup}}</text>
+          </view>
+          <view class="kw-chips" wx:if="{{draftOpenPhrases.length}}">
+            <view class="kw-chip" wx:for="{{draftOpenPhrases}}" wx:key="*this">
+              <text class="kw-chip-text">{{item}}</text>
+              <text class="kw-chip-del" data-side="open" data-index="{{index}}" catchtap="removeDraftPhrase">×</text>
+            </view>
+          </view>
+          <view class="kw-empty" wx:else>还没有口令，在下方添加</view>
+          <view class="kw-field">
+            <input
+              class="kw-input"
+              value="{{draftOpenInput}}"
+              maxlength="{{kwMaxLen}}"
+              placeholder="输入关键词"
+              confirm-type="done"
+              bindinput="onDraftOpenInput"
+              bindconfirm="addOpenPhrase"
+            />
+            <view class="kw-add-btn" catchtap="addOpenPhrase">添加</view>
+          </view>
+        </view>
+
+        <view class="kw-card">
+          <view class="kw-card-head">
+            <view class="kw-card-label">
+              <text class="kw-card-title">关闭 / 恢复</text>
+              <text class="kw-card-hint">例：恢复原位</text>
+            </view>
+            <text class="kw-card-count">{{draftClosePhrases.length}}/{{kwMaxPerGroup}}</text>
+          </view>
+          <view class="kw-chips" wx:if="{{draftClosePhrases.length}}">
+            <view class="kw-chip" wx:for="{{draftClosePhrases}}" wx:key="*this">
+              <text class="kw-chip-text">{{item}}</text>
+              <text class="kw-chip-del" data-side="close" data-index="{{index}}" catchtap="removeDraftPhrase">×</text>
+            </view>
+          </view>
+          <view class="kw-empty" wx:else>还没有口令，在下方添加</view>
+          <view class="kw-field">
+            <input
+              class="kw-input"
+              value="{{draftCloseInput}}"
+              maxlength="{{kwMaxLen}}"
+              placeholder="输入关键词"
+              confirm-type="done"
+              bindinput="onDraftCloseInput"
+              bindconfirm="addClosePhrase"
+            />
+            <view class="kw-add-btn" catchtap="addClosePhrase">添加</view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <view class="kw-sheet-actions">
+        <view class="kw-btn kw-btn--ghost" catchtap="closeKeywordEditor">取消</view>
+        <view class="kw-btn kw-btn--primary {{keywordSaving ? 'is-busy' : ''}}" catchtap="saveKeywordEditor">
+          {{keywordSaving ? '保存中…' : '保存'}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <custom-toast id="custom-toast"></custom-toast>
+</view>

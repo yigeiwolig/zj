@@ -2,6 +2,7 @@
 const GLOBAL_ACCESS_GUARD_INTERVAL_MS = 5 * 60 * 1000;
 const { redirectToPcBlockedIfNeeded, isPcBannedClient } = require('./utils/runtimeEnv.js');
 const { clearLoginIdentity } = require('./utils/userIdentity.js');
+const screenshotExempt = require('./utils/screenshotAdminExempt.js');
 
 /** 必须在首个 Page() 注册前执行，否则 index 等页面 onShow 套不上守卫 */
 function _installGlobalPageLifecycleGuard() {
@@ -14,6 +15,10 @@ function _installGlobalPageLifecycleGuard() {
 
     pageDef.onLoad = function(...args) {
       if (redirectToPcBlockedIfNeeded()) return;
+      try {
+        // 尽早确认管理员，避免页面 init 先锁黑屏、管理员短暂无法截图
+        screenshotExempt.applyAdminCaptureOnPageShow(this);
+      } catch (e) {}
       if (typeof originalOnLoad === 'function') {
         return originalOnLoad.apply(this, args);
       }
@@ -27,6 +32,10 @@ function _installGlobalPageLifecycleGuard() {
           const pass = await app.enforceGlobalAccessGuard({ silent: true });
           if (!pass) return;
         }
+      } catch (e) {}
+      try {
+        // 任意界面：管理员始终允许截图/录屏（防截屏是全局态，会被其它页重新锁上）
+        screenshotExempt.applyAdminCaptureOnPageShow(this);
       } catch (e) {}
       if (typeof originalOnShow === 'function') {
         return originalOnShow.apply(this, args);
@@ -314,7 +323,13 @@ App({
       if (!adminCheck.data || adminCheck.data.length === 0) {
         adminCheck = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get();
       }
-      if (adminCheck.data && adminCheck.data.length > 0) return true;
+      if (adminCheck.data && adminCheck.data.length > 0) {
+        try {
+          screenshotExempt.markGuanliyuanCache(true);
+          screenshotExempt.allowScreenCaptureIfExempt();
+        } catch (e) {}
+        return true;
+      }
 
       const buttonRes = await db.collection('login_logbutton')
         .where({ _openid: openid })
@@ -570,6 +585,14 @@ App({
     if (!isPcBannedClient()) {
       this.enforceGlobalAccessGuard({ silent: true });
     }
+    try {
+      // 从后台回前台时也恢复管理员截图权限
+      if (screenshotExempt.isScreenshotBanExempt({ data: {} })) {
+        screenshotExempt.allowScreenCaptureIfExempt();
+      } else {
+        screenshotExempt.applyAdminCaptureOnPageShow({ data: {} });
+      }
+    } catch (e) {}
     this._startGlobalAccessGuardTimer();
     this._suspiciousSessionStartAt = Date.now();
     this._startSuspiciousSessionHeartbeat();
@@ -778,6 +801,10 @@ App({
       }
       
       if (adminCheck.data && adminCheck.data.length > 0) {
+        try {
+          screenshotExempt.markGuanliyuanCache(true);
+          screenshotExempt.allowScreenCaptureIfExempt();
+        } catch (e) {}
         return; // ???????
       }
       
@@ -869,6 +896,10 @@ App({
       }
       
       if (adminCheck.data && adminCheck.data.length > 0) {
+        try {
+          screenshotExempt.markGuanliyuanCache(true);
+          screenshotExempt.allowScreenCaptureIfExempt();
+        } catch (e) {}
         return; // ???????
       }
 

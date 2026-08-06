@@ -197,15 +197,31 @@ input, textarea { text-align: left; }
   pointer-events: auto;
 }
 
+.admin-quick-gen-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  flex-wrap: wrap;
+  padding: 0 28rpx;
+}
+
 .admin-quick-gen-btn {
   padding: 18rpx 36rpx;
   background: #ffffff;
   border-radius: 999rpx;
   font-size: 26rpx;
   font-weight: 600;
-  color: #007AFF;
+  color: #111111;
   box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.06);
-  border: 1rpx solid rgba(0, 122, 255, 0.15);
+  border: 1rpx solid rgba(0, 0, 0, 0.12);
+}
+
+.admin-quick-gen-btn--dark {
+  background: #111111;
+  color: #ffffff;
+  border-color: #111111;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.18);
 }
 
 .admin-quick-gen-btn.is-loading {

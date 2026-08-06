@@ -1,0 +1,553 @@
+<view class="inv-page" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
+  <view class="inv-nav" style="height: {{navBarHeight}}px; padding-top: {{statusBarHeight}}px;">
+    <view class="inv-nav-back" bindtap="goBack">‹</view>
+    <text class="inv-nav-title">出入库</text>
+  </view>
+
+  <view class="inv-actions">
+    <view class="inv-action inv-action--primary" bindtap="scanOutbound" hover-class="inv-action--pressed">
+      <text class="inv-action-kicker">默认</text>
+      <text class="inv-action-title">扫码出库</text>
+    </view>
+    <view class="inv-action" bindtap="scanInbound" hover-class="inv-action--pressed">
+      <text class="inv-action-kicker">建档</text>
+      <text class="inv-action-title">扫描入库</text>
+    </view>
+  </view>
+
+  <view class="inv-staff-entry">
+    <view class="inv-staff-entry-btn" bindtap="openStaffSheet" hover-class="inv-mini-btn--pressed">
+      <text class="inv-staff-entry-title">我的操作昵称</text>
+      <text class="inv-staff-entry-sub" wx:if="{{!staffEntered}}">本账号尚未绑定，出入库前请先录入</text>
+      <text class="inv-staff-entry-sub" wx:else>当前：{{selectedOperator}} · 点此修改</text>
+    </view>
+  </view>
+
+  <view class="inv-scanned" wx:if="{{lastScannedBarcode}}">
+    <text class="inv-scanned-label">最近扫到的条码</text>
+    <text class="inv-scanned-code" selectable="true">{{lastScannedBarcode}}</text>
+  </view>
+
+  <view class="inv-section">
+    <view class="inv-section-head" bindtap="toggleLogsCollapse" hover-class="inv-section-head--pressed">
+      <view class="inv-section-head-left">
+        <text class="inv-section-title">出入库记录</text>
+        <text class="inv-section-count" wx:if="{{logs.length}}">{{logs.length}}</text>
+      </view>
+      <view class="inv-section-head-right">
+        <text class="inv-section-hint" wx:if="{{logsLoading}}">加载中…</text>
+        <text class="inv-section-hint" wx:elif="{{logsCollapsed}}">展开</text>
+        <text class="inv-section-hint" wx:else>收起</text>
+        <text class="inv-section-chevron {{logsCollapsed ? '' : 'is-open'}}">›</text>
+      </view>
+    </view>
+    <block wx:if="{{!logsCollapsed}}">
+      <view class="inv-hint inv-hint--compact" wx:if="{{!logsLoading && logs.length === 0}}">暂无记录</view>
+      <view class="inv-logs" wx:else>
+        <view class="inv-log" wx:for="{{logs}}" wx:key="_id">
+          <view class="inv-log-top">
+            <text class="inv-log-time">{{item.timeText || '—'}}</text>
+            <text class="inv-log-action">{{item.actionLabel}}</text>
+          </view>
+          <view class="inv-log-row">
+            <text class="inv-log-op">{{item.operatorName || '未知'}}</text>
+            <text class="inv-log-code" selectable="true">{{item.barcode}}</text>
+          </view>
+          <text class="inv-log-name" wx:if="{{item.name}}">{{item.name}}</text>
+          <text class="inv-log-summary" wx:if="{{item.summary}}">{{item.summary}}</text>
+        </view>
+      </view>
+    </block>
+  </view>
+
+  <view class="inv-search">
+    <input
+      class="inv-search-input"
+      placeholder="搜索名称 / 条码"
+      placeholder-class="inv-ph"
+      value="{{keyword}}"
+      bindinput="onKeywordInput"
+      bindconfirm="onSearchConfirm"
+      confirm-type="search"
+    />
+    <view
+      class="inv-search-scan"
+      bindtap="scanSearch"
+      hover-class="inv-search-scan--pressed"
+    >扫码搜索</view>
+  </view>
+
+  <view class="inv-hint" wx:if="{{loading}}">加载中…</view>
+  <view class="inv-hint" wx:elif="{{displayList.length === 0}}">暂无耗材，先点「扫描入库」</view>
+
+  <view class="inv-list" wx:else>
+    <view class="inv-card" wx:for="{{displayList}}" wx:key="_id">
+      <view class="inv-card-main">
+        <image
+          wx:if="{{item.photoUrl}}"
+          class="inv-thumb"
+          src="{{item.photoUrl}}"
+          mode="aspectFill"
+          data-url="{{item.photoUrl}}"
+          bindtap="previewPhoto"
+        />
+        <view class="inv-thumb inv-thumb--empty" wx:else></view>
+        <view class="inv-card-text">
+          <text class="inv-name">{{item.name}}</text>
+          <text class="inv-code">{{item.barcode}}</text>
+          <view class="inv-meta">
+            <text class="inv-pill">{{item.unitTypeLabel}}</text>
+            <text class="inv-pill">{{item.usageFreqLabel || '常用'}}</text>
+            <text class="inv-pill inv-pill--dark">{{item.summary}}</text>
+          </view>
+        </view>
+      </view>
+      <view class="inv-card-ops">
+        <view
+          class="inv-mini-btn"
+          data-id="{{item._id}}"
+          bindtap="openEdit"
+          hover-class="inv-mini-btn--pressed"
+        >修改</view>
+        <view
+          class="inv-mini-btn inv-mini-btn--dark"
+          data-barcode="{{item.barcode}}"
+          bindtap="openOutboundFromCard"
+          hover-class="inv-mini-btn--pressed"
+        >出库</view>
+        <view
+          class="inv-mini-btn inv-mini-btn--danger"
+          data-id="{{item._id}}"
+          data-barcode="{{item.barcode}}"
+          data-name="{{item.name}}"
+          bindtap="onDeleteItem"
+          hover-class="inv-mini-btn--pressed"
+        >删除</view>
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- 出库弹窗 -->
+<root-portal wx:if="{{showOutbound}}">
+  <view class="inv-mask {{outboundClosing ? 'is-out' : ''}} {{sheetDragKind === 'outbound' && sheetDragY > 0 ? 'is-dragging' : ''}}" style="{{sheetDragKind === 'outbound' && sheetDragY > 0 ? 'opacity:' + (1 - sheetDragY / 420) + ';' : ''}}" catchtouchmove="noop" bindtap="closeOutbound">
+    <view
+      class="inv-sheet {{outboundClosing ? 'is-out' : ''}} {{sheetDragKind === 'outbound' && sheetDragY > 0 ? 'is-dragging' : ''}}"
+      style="{{sheetDragKind === 'outbound' ? 'transform:translateY(' + sheetDragY + 'px);' : ''}}"
+      catchtap="noop"
+    >
+      <view
+        class="inv-sheet-grab"
+        data-sheet="outbound"
+        catchtouchstart="onSheetTouchStart"
+        catchtouchmove="onSheetTouchMove"
+        catchtouchend="onSheetTouchEnd"
+        catchtouchcancel="onSheetTouchEnd"
+      >
+        <view class="inv-sheet-handle"></view>
+        <text class="inv-sheet-title">出库</text>
+      </view>
+      <view class="inv-code-block" wx:if="{{outboundItem.barcode || lastScannedBarcode}}">
+        <text class="inv-code-block-label">条形码</text>
+        <text class="inv-code-block-value" selectable="true">{{outboundItem.barcode || lastScannedBarcode}}</text>
+      </view>
+      <text class="inv-sheet-sub" wx:if="{{outboundItem}}">{{outboundItem.name}}</text>
+      <text class="inv-sheet-sub" wx:if="{{outboundItem}}">当前：{{outboundItem.summary}}（{{outboundItem.unitTypeLabel}}）</text>
+
+      <text class="inv-label">操作人员</text>
+      <text class="inv-sheet-sub" wx:if="{{selectedOperator}}">本账号自动使用：{{selectedOperator}}</text>
+      <text class="inv-sheet-sub" wx:else>请先绑定你的操作昵称</text>
+
+      <block wx:if="{{outboundItem.unitType === 'status'}}">
+        <text class="inv-label">现在还剩怎样？</text>
+        <view class="inv-seg inv-seg--status">
+          <view class="inv-seg-item inv-seg-item--col {{outboundStatus === 'many' ? 'is-on' : ''}}" data-value="many" bindtap="onOutboundStatusTap">
+            <text class="inv-seg-main">多</text>
+            <text class="inv-seg-sub">100%</text>
+          </view>
+          <view class="inv-seg-item inv-seg-item--col {{outboundStatus === 'plenty' ? 'is-on' : ''}}" data-value="plenty" bindtap="onOutboundStatusTap">
+            <text class="inv-seg-main">较足</text>
+            <text class="inv-seg-sub">75%</text>
+          </view>
+          <view class="inv-seg-item inv-seg-item--col {{outboundStatus === 'enough' ? 'is-on' : ''}}" data-value="enough" bindtap="onOutboundStatusTap">
+            <text class="inv-seg-main">够用</text>
+            <text class="inv-seg-sub">50%</text>
+          </view>
+          <view class="inv-seg-item inv-seg-item--col {{outboundStatus === 'scarce' ? 'is-on' : ''}}" data-value="scarce" bindtap="onOutboundStatusTap">
+            <text class="inv-seg-main">紧缺</text>
+            <text class="inv-seg-sub">25%</text>
+          </view>
+          <view class="inv-seg-item inv-seg-item--col {{outboundStatus === 'empty' ? 'is-on' : ''}}" data-value="empty" bindtap="onOutboundStatusTap">
+            <text class="inv-seg-main">没货</text>
+            <text class="inv-seg-sub">0%</text>
+          </view>
+        </view>
+      </block>
+
+      <block wx:else>
+        <text class="inv-label">{{outboundItem.unitType === 'piece' ? '用了多少件' : '用了多少'}}</text>
+        <input
+          class="inv-input"
+          type="digit"
+          placeholder="{{outboundItem.unitType === 'piece' ? '件数' : '数量'}}"
+          placeholder-class="inv-ph"
+          value="{{outboundUsedQty}}"
+          bindinput="onOutboundUsedInput"
+        />
+      </block>
+
+      <view class="inv-sheet-actions">
+        <view class="inv-btn inv-btn--ghost" bindtap="closeOutbound">取消</view>
+        <view class="inv-btn inv-btn--dark {{outboundSubmitting ? 'is-disabled' : ''}}" bindtap="submitOutbound">
+          {{outboundSubmitting ? '提交中…' : '确认出库'}}
+        </view>
+      </view>
+    </view>
+  </view>
+</root-portal>
+
+<!-- 入库弹窗 -->
+<root-portal wx:if="{{showInbound}}">
+  <view class="inv-mask-root">
+    <view
+      class="inv-mask-dim {{inboundClosing ? 'is-out' : ''}} {{sheetDragKind === 'inbound' && sheetDragY > 0 ? 'is-dragging' : ''}}"
+      style="{{sheetDragKind === 'inbound' && sheetDragY > 0 ? 'opacity:' + (1 - sheetDragY / 420) + ';' : ''}}"
+      catchtouchmove="noop"
+      bindtap="closeInbound"
+    ></view>
+    <view
+      class="inv-sheet inv-sheet--tall inv-sheet--scrollable {{inboundClosing ? 'is-out' : ''}} {{sheetDragKind === 'inbound' && sheetDragY > 0 ? 'is-dragging' : ''}}"
+      style="height: {{inboundSheetHeightPx}}px; max-height: {{inboundSheetHeightPx}}px; {{sheetDragKind === 'inbound' ? 'transform:translateY(' + sheetDragY + 'px);' : ''}}"
+      catchtap="noop"
+    >
+      <view
+        class="inv-sheet-grab"
+        data-sheet="inbound"
+        catchtouchstart="onSheetTouchStart"
+        catchtouchmove="onSheetTouchMove"
+        catchtouchend="onSheetTouchEnd"
+        catchtouchcancel="onSheetTouchEnd"
+      >
+        <view class="inv-sheet-handle"></view>
+        <text class="inv-sheet-title">{{inboundIsRestock ? '再次入库' : '扫描入库'}}</text>
+      </view>
+
+      <scroll-view
+        scroll-y
+        class="inv-sheet-body"
+        style="height: {{inboundSheetBodyPx}}px;"
+        show-scrollbar="{{true}}"
+        enable-flex="{{true}}"
+      >
+        <view class="inv-sheet-body-inner">
+        <text class="inv-sheet-sub" wx:if="{{inboundIsRestock}}">同码再入：状态型自动变「多 100%」；件数/数量自动累加</text>
+
+        <view class="inv-code-block" wx:if="{{inboundBarcode}}">
+          <text class="inv-code-block-label">已扫条形码</text>
+          <text class="inv-code-block-value" selectable="true">{{inboundBarcode}}</text>
+        </view>
+
+        <text class="inv-label">操作人员</text>
+        <text class="inv-sheet-sub" wx:if="{{selectedOperator}}">本账号自动使用：{{selectedOperator}}</text>
+        <text class="inv-sheet-sub" wx:else>请先绑定你的操作昵称</text>
+
+        <text class="inv-label">厂家条码</text>
+        <view class="inv-row">
+          <input
+            class="inv-input inv-input--flex"
+            placeholder="扫码或手输（须 9 位数字）"
+            placeholder-class="inv-ph"
+            type="number"
+            maxlength="9"
+            value="{{inboundBarcode}}"
+            data-field="inboundBarcode"
+            bindinput="onInboundField"
+            bindblur="onInboundBarcodeBlur"
+          />
+          <view class="inv-mini-btn inv-mini-btn--dark" bindtap="scanInboundBarcode">扫码</view>
+        </view>
+
+        <text class="inv-label">名称</text>
+        <input
+          class="inv-input"
+          placeholder="耗材名称"
+          placeholder-class="inv-ph"
+          value="{{inboundName}}"
+          data-field="inboundName"
+          bindinput="onInboundField"
+        />
+
+        <text class="inv-label">单位类型</text>
+        <view class="inv-seg {{inboundIsRestock ? 'is-locked' : ''}}">
+          <view class="inv-seg-item {{inboundUnitType === 'status' ? 'is-on' : ''}}" data-value="status" bindtap="onInboundUnitTap">状态</view>
+          <view class="inv-seg-item {{inboundUnitType === 'piece' ? 'is-on' : ''}}" data-value="piece" bindtap="onInboundUnitTap">件数</view>
+          <view class="inv-seg-item {{inboundUnitType === 'qty' ? 'is-on' : ''}}" data-value="qty" bindtap="onInboundUnitTap">数量</view>
+        </view>
+
+        <text class="inv-label">使用频次</text>
+        <view class="inv-seg">
+          <view class="inv-seg-item {{inboundUsageFreq === 'common' ? 'is-on' : ''}}" data-value="common" bindtap="onInboundUsageFreqTap">常用</view>
+          <view class="inv-seg-item {{inboundUsageFreq === 'uncommon' ? 'is-on' : ''}}" data-value="uncommon" bindtap="onInboundUsageFreqTap">不常用</view>
+        </view>
+        <text class="inv-sheet-sub">常用：低于 10 推送；不常用：低于 2 才推送</text>
+
+        <block wx:if="{{inboundUnitType === 'status'}}">
+          <text class="inv-label">{{inboundIsRestock ? '状态（自动：多 100%）' : '状态'}}</text>
+          <view class="inv-seg inv-seg--status {{inboundIsRestock ? 'is-locked' : ''}}">
+            <view class="inv-seg-item inv-seg-item--col {{inboundStatus === 'many' || inboundIsRestock ? 'is-on' : ''}}" data-value="many" bindtap="onInboundStatusTap">
+              <text class="inv-seg-main">多</text>
+              <text class="inv-seg-sub">100%</text>
+            </view>
+            <view class="inv-seg-item inv-seg-item--col {{!inboundIsRestock && inboundStatus === 'plenty' ? 'is-on' : ''}}" data-value="plenty" bindtap="onInboundStatusTap">
+              <text class="inv-seg-main">较足</text>
+              <text class="inv-seg-sub">75%</text>
+            </view>
+            <view class="inv-seg-item inv-seg-item--col {{!inboundIsRestock && inboundStatus === 'enough' ? 'is-on' : ''}}" data-value="enough" bindtap="onInboundStatusTap">
+              <text class="inv-seg-main">够用</text>
+              <text class="inv-seg-sub">50%</text>
+            </view>
+            <view class="inv-seg-item inv-seg-item--col {{!inboundIsRestock && inboundStatus === 'scarce' ? 'is-on' : ''}}" data-value="scarce" bindtap="onInboundStatusTap">
+              <text class="inv-seg-main">紧缺</text>
+              <text class="inv-seg-sub">25%</text>
+            </view>
+            <view class="inv-seg-item inv-seg-item--col {{!inboundIsRestock && inboundStatus === 'empty' ? 'is-on' : ''}}" data-value="empty" bindtap="onInboundStatusTap">
+              <text class="inv-seg-main">没货</text>
+              <text class="inv-seg-sub">0%</text>
+            </view>
+          </view>
+        </block>
+        <block wx:else>
+          <text class="inv-label">{{inboundIsRestock ? (inboundUnitType === 'piece' ? '本次增加件数' : '本次增加数量') : (inboundUnitType === 'piece' ? '件数' : '数量')}}</text>
+          <input
+            class="inv-input"
+            type="digit"
+            placeholder="填写数字"
+            placeholder-class="inv-ph"
+            value="{{inboundQty}}"
+            data-field="inboundQty"
+            bindinput="onInboundField"
+          />
+        </block>
+
+        <text class="inv-label">{{inboundIsRestock ? '照片（沿用已有，可点更换）' : '照片（必须）'}}</text>
+        <view class="inv-photo-box" bindtap="takeInboundPhoto">
+          <image wx:if="{{inboundPhotoLocal || inboundPhotoUrl}}" class="inv-photo" src="{{inboundPhotoLocal || inboundPhotoUrl}}" mode="aspectFill" />
+          <view wx:else class="inv-photo-empty">
+            <text class="inv-photo-plus">+</text>
+            <text>{{inboundIsRestock ? '可选拍照' : '拍照 / 选图'}}</text>
+          </view>
+        </view>
+
+        <view class="inv-sheet-actions">
+          <view class="inv-btn inv-btn--ghost" bindtap="closeInbound">取消</view>
+          <view class="inv-btn inv-btn--dark {{inboundSubmitting ? 'is-disabled' : ''}}" bindtap="submitInbound">
+            {{inboundSubmitting ? '提交中…' : '确认入库'}}
+          </view>
+        </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</root-portal>
+
+<!-- 修改弹窗 -->
+<root-portal wx:if="{{showEdit}}">
+  <view class="inv-mask-root">
+    <view
+      class="inv-mask-dim {{editClosing ? 'is-out' : ''}} {{sheetDragKind === 'edit' && sheetDragY > 0 ? 'is-dragging' : ''}}"
+      style="{{sheetDragKind === 'edit' && sheetDragY > 0 ? 'opacity:' + (1 - sheetDragY / 420) + ';' : ''}}"
+      catchtouchmove="noop"
+      bindtap="closeEdit"
+    ></view>
+    <view
+      class="inv-sheet inv-sheet--tall inv-sheet--scrollable {{editClosing ? 'is-out' : ''}} {{sheetDragKind === 'edit' && sheetDragY > 0 ? 'is-dragging' : ''}}"
+      style="height: {{editSheetHeightPx}}px; max-height: {{editSheetHeightPx}}px; {{sheetDragKind === 'edit' ? 'transform:translateY(' + sheetDragY + 'px);' : ''}}"
+      catchtap="noop"
+    >
+      <view
+        class="inv-sheet-grab"
+        data-sheet="edit"
+        catchtouchstart="onSheetTouchStart"
+        catchtouchmove="onSheetTouchMove"
+        catchtouchend="onSheetTouchEnd"
+        catchtouchcancel="onSheetTouchEnd"
+      >
+        <view class="inv-sheet-handle"></view>
+        <text class="inv-sheet-title">修改</text>
+      </view>
+
+      <scroll-view
+        scroll-y
+        class="inv-sheet-body"
+        style="height: {{editSheetBodyPx}}px;"
+        show-scrollbar="{{true}}"
+        enable-flex="{{true}}"
+      >
+        <view class="inv-sheet-body-inner">
+
+      <text class="inv-label">条码</text>
+      <view class="inv-row">
+        <text class="inv-input inv-input--flex inv-input--readonly" selectable="true">{{editBarcode || '—'}}</text>
+        <view class="inv-mini-btn inv-mini-btn--dark" bindtap="scanEditBarcode">重新扫码</view>
+      </view>
+      <text class="inv-sheet-sub" wx:if="{{editBarcodeChanged}}">已扫到新条码，保存后生效</text>
+
+      <text class="inv-label">名称</text>
+      <input class="inv-input" value="{{editName}}" data-field="editName" bindinput="onEditField" placeholder-class="inv-ph" />
+
+      <text class="inv-label">单位类型</text>
+      <view class="inv-seg">
+        <view class="inv-seg-item {{editUnitType === 'status' ? 'is-on' : ''}}" data-value="status" bindtap="onEditUnitTap">状态</view>
+        <view class="inv-seg-item {{editUnitType === 'piece' ? 'is-on' : ''}}" data-value="piece" bindtap="onEditUnitTap">件数</view>
+        <view class="inv-seg-item {{editUnitType === 'qty' ? 'is-on' : ''}}" data-value="qty" bindtap="onEditUnitTap">数量</view>
+      </view>
+
+      <text class="inv-label">使用频次</text>
+      <view class="inv-seg">
+        <view class="inv-seg-item {{editUsageFreq === 'common' ? 'is-on' : ''}}" data-value="common" bindtap="onEditUsageFreqTap">常用</view>
+        <view class="inv-seg-item {{editUsageFreq === 'uncommon' ? 'is-on' : ''}}" data-value="uncommon" bindtap="onEditUsageFreqTap">不常用</view>
+      </view>
+      <text class="inv-sheet-sub">常用：低于 10 推送；不常用：低于 2 才推送</text>
+
+      <block wx:if="{{editUnitType === 'status'}}">
+        <text class="inv-label">状态</text>
+        <view class="inv-seg inv-seg--status">
+          <view class="inv-seg-item inv-seg-item--col {{editStatus === 'many' ? 'is-on' : ''}}" data-value="many" bindtap="onEditStatusTap">
+            <text class="inv-seg-main">多</text>
+            <text class="inv-seg-sub">100%</text>
+          </view>
+          <view class="inv-seg-item inv-seg-item--col {{editStatus === 'plenty' ? 'is-on' : ''}}" data-value="plenty" bindtap="onEditStatusTap">
+            <text class="inv-seg-main">较足</text>
+            <text class="inv-seg-sub">75%</text>
+          </view>
+          <view class="inv-seg-item inv-seg-item--col {{editStatus === 'enough' ? 'is-on' : ''}}" data-value="enough" bindtap="onEditStatusTap">
+            <text class="inv-seg-main">够用</text>
+            <text class="inv-seg-sub">50%</text>
+          </view>
+          <view class="inv-seg-item inv-seg-item--col {{editStatus === 'scarce' ? 'is-on' : ''}}" data-value="scarce" bindtap="onEditStatusTap">
+            <text class="inv-seg-main">紧缺</text>
+            <text class="inv-seg-sub">25%</text>
+          </view>
+          <view class="inv-seg-item inv-seg-item--col {{editStatus === 'empty' ? 'is-on' : ''}}" data-value="empty" bindtap="onEditStatusTap">
+            <text class="inv-seg-main">没货</text>
+            <text class="inv-seg-sub">0%</text>
+          </view>
+        </view>
+      </block>
+      <block wx:else>
+        <text class="inv-label">{{editUnitType === 'piece' ? '当前件数' : '当前数量'}}</text>
+        <input class="inv-input" type="digit" value="{{editQty}}" data-field="editQty" bindinput="onEditField" placeholder-class="inv-ph" />
+      </block>
+
+      <text class="inv-label">照片</text>
+      <view class="inv-photo-box" bindtap="takeEditPhoto">
+        <image wx:if="{{editPhotoLocal || editPhotoUrl}}" class="inv-photo" src="{{editPhotoLocal || editPhotoUrl}}" mode="aspectFill" />
+        <view wx:else class="inv-photo-empty">
+          <text class="inv-photo-plus">+</text>
+          <text>更换照片</text>
+        </view>
+      </view>
+
+      <view class="inv-sheet-actions">
+        <view class="inv-btn inv-btn--ghost" bindtap="closeEdit">取消</view>
+        <view class="inv-btn inv-btn--dark {{editSubmitting ? 'is-disabled' : ''}}" bindtap="submitEdit">
+          {{editSubmitting ? '保存中…' : '保存修改'}}
+        </view>
+      </view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</root-portal>
+
+<!-- 人员管理 -->
+<root-portal wx:if="{{showStaff}}">
+  <view class="inv-mask {{staffClosing ? 'is-out' : ''}} {{sheetDragKind === 'staff' && sheetDragY > 0 ? 'is-dragging' : ''}}" style="{{sheetDragKind === 'staff' && sheetDragY > 0 ? 'opacity:' + (1 - sheetDragY / 420) + ';' : ''}}" catchtouchmove="noop" bindtap="closeStaffSheet">
+    <view
+      class="inv-sheet {{staffClosing ? 'is-out' : ''}} {{sheetDragKind === 'staff' && sheetDragY > 0 ? 'is-dragging' : ''}}"
+      style="{{sheetDragKind === 'staff' ? 'transform:translateY(' + sheetDragY + 'px);' : ''}}"
+      catchtap="noop"
+    >
+      <view
+        class="inv-sheet-grab"
+        data-sheet="staff"
+        catchtouchstart="onSheetTouchStart"
+        catchtouchmove="onSheetTouchMove"
+        catchtouchend="onSheetTouchEnd"
+        catchtouchcancel="onSheetTouchEnd"
+      >
+        <view class="inv-sheet-handle"></view>
+        <text class="inv-sheet-title">我的操作昵称</text>
+      </view>
+      <text class="inv-sheet-sub">一个微信号只绑一个昵称，出入库自动记在你名下</text>
+
+      <text class="inv-label">{{staffEntered ? '修改昵称' : '录入昵称'}}</text>
+      <view class="inv-row">
+        <input
+          class="inv-input inv-input--flex"
+          placeholder="例如：小王"
+          placeholder-class="inv-ph"
+          value="{{staffNameInput}}"
+          bindinput="onStaffNameInput"
+          confirm-type="done"
+          bindconfirm="submitAddStaff"
+        />
+        <view class="inv-mini-btn inv-mini-btn--dark {{staffSubmitting ? 'is-disabled' : ''}}" bindtap="submitAddStaff">{{staffEntered ? '更新' : '绑定'}}</view>
+      </view>
+
+      <text class="inv-label">已绑定账号</text>
+      <view class="inv-hint inv-hint--compact" wx:if="{{staffList.length === 0}}">暂无绑定</view>
+      <view class="inv-staff-list" wx:else>
+        <view class="inv-staff-row" wx:for="{{staffList}}" wx:key="_id">
+          <text class="inv-staff-name">{{item.name}}{{item._id === myStaffId ? '（我）' : ''}}</text>
+          <view
+            class="inv-staff-del"
+            data-id="{{item._id}}"
+            data-name="{{item.name}}"
+            bindtap="removeStaff"
+          >删除</view>
+        </view>
+      </view>
+
+      <view class="inv-sheet-actions">
+        <view class="inv-btn inv-btn--dark" bindtap="closeStaffSheet">完成</view>
+      </view>
+    </view>
+  </view>
+</root-portal>
+
+<!-- 底部确认条：替代系统居中弹窗 -->
+<root-portal wx:if="{{showConfirm}}">
+  <view class="inv-mask {{confirmClosing ? 'is-out' : ''}} {{sheetDragKind === 'confirm' && sheetDragY > 0 ? 'is-dragging' : ''}}" style="{{sheetDragKind === 'confirm' && sheetDragY > 0 ? 'opacity:' + (1 - sheetDragY / 420) + ';' : ''}}" catchtouchmove="noop" bindtap="onConfirmCancel">
+    <view
+      class="inv-sheet inv-sheet--confirm {{confirmClosing ? 'is-out' : ''}} {{sheetDragKind === 'confirm' && sheetDragY > 0 ? 'is-dragging' : ''}}"
+      style="{{sheetDragKind === 'confirm' ? 'transform:translateY(' + sheetDragY + 'px);' : ''}}"
+      catchtap="noop"
+    >
+      <view
+        class="inv-sheet-grab"
+        data-sheet="confirm"
+        catchtouchstart="onSheetTouchStart"
+        catchtouchmove="onSheetTouchMove"
+        catchtouchend="onSheetTouchEnd"
+        catchtouchcancel="onSheetTouchEnd"
+      >
+        <view class="inv-sheet-handle"></view>
+        <text class="inv-sheet-title">{{confirmTitle}}</text>
+      </view>
+      <view class="inv-code-block" wx:if="{{confirmBarcode}}">
+        <text class="inv-code-block-label">条形码</text>
+        <text class="inv-code-block-value" selectable="true">{{confirmBarcode}}</text>
+      </view>
+      <text class="inv-sheet-sub" wx:if="{{confirmDesc}}">{{confirmDesc}}</text>
+      <view class="inv-sheet-actions">
+        <view class="inv-btn inv-btn--ghost" bindtap="onConfirmCancel">{{confirmCancelText}}</view>
+        <view class="inv-btn inv-btn--dark" bindtap="onConfirmOk">{{confirmOkText}}</view>
+      </view>
+    </view>
+  </view>
+</root-portal>
+
+<root-portal>
+  <custom-toast id="custom-toast" />
+</root-portal>

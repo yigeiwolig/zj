@@ -19,13 +19,6 @@
     </view>
     <view
       class="hub-admin-entry-btn hub-admin-entry-btn--secondary"
-      catchtap="previewDirectCodeTutorialNotice"
-      hover-class="hub-admin-entry-btn--pressed"
-    >
-      预览教程提醒
-    </view>
-    <view
-      class="hub-admin-entry-btn hub-admin-entry-btn--secondary"
       catchtap="onHubAdminBackToIndex"
       hover-class="hub-admin-entry-btn--pressed"
     >
@@ -307,6 +300,7 @@
         bind:switch="onHubTabSwitch"
         bind:adminchange="onHubAdminChange"
         bind:shellmodal="onHubShellModal"
+        bind:logistics="onHubLogisticsOpen"
       />
     </view>
 
@@ -329,6 +323,7 @@
         bind:switch="onHubTabSwitch"
         bind:adminchange="onHubAdminChange"
         bind:shellmodal="onHubShellModal"
+        bind:logistics="onHubLogisticsOpen"
       />
     </view>
     </view>
@@ -520,12 +515,15 @@
 <root-portal wx:if="{{showDirectCodeTutorialNotice || directCodeTutorialNoticeClosing}}">
   <view class="direct-code-notice-mask {{directCodeTutorialNoticeClosing ? 'is-closing' : ''}}" catchtouchmove="noop" catchtap="noop">
     <view class="direct-code-notice-box {{directCodeTutorialNoticeClosing ? 'is-closing' : ''}}" catchtap="noop" catchtouchmove="noop">
-      <view class="direct-code-notice-title">请先看看使用教程</view>
-      <view class="direct-code-notice-sub">各功能里都有说明，先看一遍更省心</view>
-      <view class="direct-code-notice-desc">
-        <view class="direct-code-notice-line">做这个小程序，是为了让您<text class="direct-code-notice-em">用起来更方便</text>，而不是把流程搞复杂。</view>
-        <view class="direct-code-notice-line">控制中心、维修、绑定等功能都附了<text class="direct-code-notice-em">图文教程</text>。遇到不会的地方，请<text class="direct-code-notice-em">先看教程再操作</text>——多数问题按步骤就能解决。</view>
-        <view class="direct-code-notice-line direct-code-notice-line--tip"><text class="direct-code-notice-em">先自助查阅</text>，通常比反复询问更省事。</view>
+      <view class="direct-code-notice-kicker">使用提示</view>
+      <view class="direct-code-notice-title">处处都有卡片教学</view>
+      <view class="direct-code-notice-content">
+        <view class="direct-code-notice-lead">
+          做这个小程序，是为了让操作更顺手，不是多添麻烦。
+        </view>
+        <view class="direct-code-notice-body">
+          几乎每个功能页都配了分步图文。卡住时，先打开当前页教程，按图走一般就能搞定。
+        </view>
       </view>
       <view
         class="direct-code-notice-btn {{directCodeTutorialBtnLocked ? 'is-locked' : ''}}"
@@ -571,5 +569,11 @@
     </view>
   </view>
 </root-portal>
+
+<logistics-modal
+  id="hubLogisticsModal"
+  portal-to-page="{{true}}"
+  bind:modalchange="onHubShellModal"
+/>
 
 <custom-toast id="custom-toast" />

@@ -1,0 +1,114 @@
+<!-- F3 MAX：停车姿态标定（扶正 + 倾斜） -->
+<view class="f3-imu-wrap">
+  <view class="f3-imu-card">
+    <!-- 顶栏：步骤点 + 关闭 -->
+    <view class="f3-imu-top">
+      <view class="f3-imu-dots" wx:if="{{f3CalStep !== 'imuDone'}}">
+        <view class="f3-imu-dot {{f3CalStepNo >= 1 ? 'is-on' : ''}}"></view>
+        <view class="f3-imu-dot {{f3CalStepNo >= 2 ? 'is-on' : ''}}"></view>
+        <view class="f3-imu-dot {{f3CalStepNo >= 3 ? 'is-on' : ''}}"></view>
+      </view>
+      <view class="f3-imu-top-spacer" wx:else></view>
+      <view
+        class="f3-imu-close"
+        wx:if="{{f3CalStep && f3CalStep !== 'imuDone' && f3CalStep !== 'imuSampling' && f3CalStep !== 'imuWriting'}}"
+        catchtap="onF3ImuCalCancel"
+      >×</view>
+    </view>
+
+    <!-- 说明 -->
+    <block wx:if="{{f3CalStep === 'imuIntro'}}">
+      <view class="f3-imu-body">
+        <text class="f3-imu-kicker">自动校准</text>
+        <text class="f3-imu-title">停车姿态标定</text>
+        <text class="f3-imu-lead">{{f3CalDesc || '依次采集扶正与脚撑倾斜，写入设备'}}</text>
+        <view class="f3-imu-steps">
+          <view class="f3-imu-step-row">
+            <text class="f3-imu-step-no">1</text>
+            <text class="f3-imu-step-txt">扶正角度</text>
+          </view>
+          <view class="f3-imu-step-row">
+            <text class="f3-imu-step-no">2</text>
+            <text class="f3-imu-step-txt">脚撑倾斜</text>
+          </view>
+        </view>
+        <view class="f3-imu-btn" catchtap="onF3ImuCalIntroNext">开始</view>
+      </view>
+    </block>
+
+    <!-- 准备姿态 -->
+    <block wx:if="{{f3CalStep === 'imuReadyUp' || f3CalStep === 'imuReadyLean'}}">
+      <view class="f3-imu-body">
+        <text class="f3-imu-kicker">{{f3CalTitle}}</text>
+        <text class="f3-imu-title">{{f3ImuReadyHintK}}</text>
+        <view class="f3-imu-action-pill">
+          <text class="f3-imu-action-pill-txt">{{f3ImuReadyHintV}}</text>
+        </view>
+        <text class="f3-imu-hint">{{f3CalStatusText}}</text>
+        <view class="f3-imu-live" wx:if="{{f3ImuLiveText}}">
+          <text class="f3-imu-live-k">实时</text>
+          <text class="f3-imu-live-v">{{f3ImuLiveText}}</text>
+        </view>
+        <view class="f3-imu-btn" catchtap="onF3ImuCalReadyConfirm">开始采集</view>
+      </view>
+    </block>
+
+    <!-- 采集中 -->
+    <block wx:if="{{f3CalStep === 'imuSampling'}}">
+      <view class="f3-imu-body f3-imu-body--center">
+        <text class="f3-imu-kicker">{{f3ImuSampleLabel}}</text>
+        <view class="f3-imu-metric">
+          <text class="f3-imu-metric-num">{{f3ImuLiveNum}}</text>
+          <text class="f3-imu-metric-unit" wx:if="{{f3ImuLiveUnit}}">{{f3ImuLiveUnit}}</text>
+        </view>
+        <view class="f3-imu-bar">
+          <view class="f3-imu-bar-fill" style="width: {{f3ImuProgressPct}}%;"></view>
+        </view>
+        <text class="f3-imu-hint">{{f3CalCountdown}} 秒 · {{f3ImuSampleHint}}</text>
+        <text class="f3-imu-sub" wx:if="{{f3ImuAvgText}}">{{f3ImuAvgText}}</text>
+        <text class="f3-imu-sub">{{f3ImuSampleHoldHint || '请保持姿势，不要晃动'}}</text>
+      </view>
+    </block>
+
+    <!-- 写入 -->
+    <block wx:if="{{f3CalStep === 'imuWriting'}}">
+      <view class="f3-imu-body f3-imu-body--center">
+        <view class="f3-imu-spin"></view>
+        <text class="f3-imu-hint" style="margin-top: 28rpx;">{{f3CalStatusText || '写入中…'}}</text>
+      </view>
+    </block>
+
+    <!-- 不稳定 -->
+    <block wx:if="{{f3CalStep === 'imuUnstable'}}">
+      <view class="f3-imu-body f3-imu-body--center">
+        <view class="f3-imu-badge f3-imu-badge--warn">!</view>
+        <text class="f3-imu-title" style="margin-top: 20rpx;">数据不够稳定</text>
+        <text class="f3-imu-hint">{{f3CalStatusText}}</text>
+        <view class="f3-imu-btn" catchtap="onF3ImuCalRetry">重新采集</view>
+      </view>
+    </block>
+
+    <!-- 完成 -->
+    <block wx:if="{{f3CalStep === 'imuDone'}}">
+      <view class="f3-imu-body f3-imu-body--center">
+        <view class="f3-imu-badge">✓</view>
+        <text class="f3-imu-title" style="margin-top: 20rpx;">校准完成</text>
+
+        <view class="f3-imu-result">
+          <view class="f3-imu-result-row">
+            <text class="f3-imu-result-k">扶正</text>
+            <text class="f3-imu-result-v">{{f3ImuUpText}}</text>
+          </view>
+          <view class="f3-imu-result-row">
+            <text class="f3-imu-result-k">倾斜</text>
+            <text class="f3-imu-result-v">{{f3ImuLeanText}}</text>
+          </view>
+        </view>
+
+        <text class="f3-imu-hint" style="margin-top: 16rpx;">{{f3CalDesc || '标定数据已写入设备'}}</text>
+        <text class="f3-imu-tip">{{f3ImuCalWriteHint || '倾角仅用于显示与标定，翻板请用按钮或小程序'}}</text>
+        <view class="f3-imu-btn" catchtap="onF3ImuCalDoneClose">完成</view>
+      </view>
+    </block>
+  </view>
+</view>

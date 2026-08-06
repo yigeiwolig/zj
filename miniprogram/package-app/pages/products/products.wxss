@@ -35,6 +35,12 @@
   background: rgba(0, 122, 255, 0.06);
 }
 
+.hub-admin-entry-btn--dark {
+  color: #fff;
+  background: #111;
+  border-color: #111;
+}
+
 .hub-admin-entry-btn--pressed {
   transform: scale(0.98);
   opacity: 0.88;
@@ -204,102 +210,111 @@
   position: fixed;
   inset: 0;
   z-index: 10080;
-  background: rgba(0, 0, 0, 0.48);
+  background: rgba(12, 12, 14, 0.44);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 48rpx 40rpx;
+  padding: 56rpx 48rpx;
   box-sizing: border-box;
 }
 
 .direct-code-notice-mask.is-closing {
-  animation: directCodeNoticeMaskOut 0.28s ease forwards;
+  animation: directCodeNoticeMaskOut 0.3s ease forwards;
 }
 
 .direct-code-notice-box {
+  position: relative;
   width: 100%;
-  max-width: 620rpx;
+  max-width: 560rpx;
   background: #fff;
-  border-radius: 32rpx;
-  padding: 48rpx 40rpx 36rpx;
+  border-radius: 40rpx;
+  padding: 56rpx 48rpx 48rpx;
   box-sizing: border-box;
-  box-shadow: 0 24rpx 60rpx rgba(0, 0, 0, 0.22);
-  animation: directCodeNoticeBoxIn 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+  box-shadow: 0 32rpx 80rpx rgba(0, 0, 0, 0.12);
+  animation: directCodeNoticeBoxIn 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
 }
 
 .direct-code-notice-box.is-closing {
   animation: directCodeNoticeBoxOut 0.28s ease forwards;
 }
 
+.direct-code-notice-kicker {
+  align-self: flex-start;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #fff;
+  background: #111;
+  padding: 8rpx 16rpx;
+  border-radius: 10rpx;
+  letter-spacing: 0.05em;
+  margin-bottom: 24rpx;
+}
+
 .direct-code-notice-title {
-  font-size: 36rpx;
+  font-size: 44rpx;
   font-weight: 800;
-  color: #1d1d1f;
-  margin-bottom: 12rpx;
-  text-align: center;
+  color: #111;
+  text-align: left;
+  letter-spacing: -0.5rpx;
+  line-height: 1.3;
+  margin-bottom: 32rpx;
 }
 
-.direct-code-notice-sub {
-  font-size: 26rpx;
-  color: #8e8e93;
-  text-align: center;
-  margin-bottom: 28rpx;
-  line-height: 1.45;
+.direct-code-notice-content {
+  border-left: 4rpx solid #111;
+  padding-left: 20rpx;
+  margin-bottom: 48rpx;
 }
 
-.direct-code-notice-desc {
-  margin-bottom: 40rpx;
-}
-
-.direct-code-notice-line {
-  font-size: 28rpx;
-  color: #636366;
-  line-height: 1.65;
+.direct-code-notice-lead {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #111;
+  text-align: left;
+  line-height: 1.5;
   margin-bottom: 16rpx;
 }
 
-.direct-code-notice-line:last-child {
-  margin-bottom: 0;
-}
-
-.direct-code-notice-line--tip {
-  padding: 18rpx 20rpx;
-  margin-top: 8rpx;
-  margin-bottom: 0;
-  background: #f5f5f7;
-  border-radius: 16rpx;
-}
-
-.direct-code-notice-em {
-  color: #1d1d1f;
-  font-weight: 700;
+.direct-code-notice-body {
+  font-size: 28rpx;
+  color: #6e6e73;
+  text-align: left;
+  line-height: 1.65;
 }
 
 .direct-code-notice-btn {
-  height: 88rpx;
-  border-radius: 44rpx;
-  background: #1d1d1f;
+  height: 96rpx;
+  border-radius: 24rpx;
+  background: #111;
   color: #fff;
-  font-size: 30rpx;
-  font-weight: 700;
+  font-size: 32rpx;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
 }
 
 .direct-code-notice-btn.is-locked {
-  opacity: 0.35;
+  background: #f2f2f7;
+  color: #aeaeb2;
   pointer-events: none;
 }
 
 .direct-code-notice-btn:active {
-  opacity: 0.88;
+  opacity: 0.8;
 }
 
 @keyframes directCodeNoticeBoxIn {
   from {
-    opacity: 0.55;
-    transform: translateY(20rpx) scale(0.98);
+    opacity: 0;
+    transform: translateY(28rpx) scale(0.96);
   }
   to {
     opacity: 1;
@@ -314,7 +329,7 @@
   }
   to {
     opacity: 0;
-    transform: translateY(16rpx) scale(0.98);
+    transform: translateY(18rpx) scale(0.97);
   }
 }
 

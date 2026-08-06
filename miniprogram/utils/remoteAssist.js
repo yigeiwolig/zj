@@ -91,6 +91,9 @@ const REMOTE_STATE_KEYS = [
   'f3BaseReadback',
   'f3DangerBlocked',
   'f3HeightConfigModeOn',
+  // F3 MAX 传感器代次：'tof'=已售测高版 'imu'=陀螺仪版（技师端据此切旧版界面）
+  'f3DeviceVariant',
+  'f3SensorUi',
   'voiceListening',
   'voiceHint',
   'voiceLastCmd',

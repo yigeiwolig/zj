@@ -1,11 +1,11 @@
 const F2_FAULT_ERR_MAP = {
   1: {
     title: '电机不转',
-    content: '设备自检时发现翻板打开但电机未运转（指示灯持续闪烁后断电）。请重点检查：舵机线束、插头是否松动或接触不良，线序是否正确；并确认翻板机械无卡死。修复后重新上电测试。'
+    content: '开机或刚打开时电机未正常转动（常见：机械未解锁、舵机线束松动/线序错误，或翻板卡死）。指示灯会持续快闪。请先确认已解锁并检查线束与机械，修复后重新上电测试。'
   },
   2: {
     title: '卡住堵转',
-    content: '设备自检时打开连续遇阻，已自动收回并报警断电。请检查：是否有异物顶住、机械是否卡滞；舵机及电流检测线（A0）连接是否可靠、插头是否氧化松动。排除后重新上电再试。'
+    content: '运行中打开/收回连续遇阻，已自动处理并报警。指示灯会红-绿交替闪烁。请检查：是否有异物顶住、机械是否卡滞；舵机及电流检测线（A0）连接是否可靠。排除后重新上电再试。'
   }
 };
 
@@ -51,10 +51,27 @@ function parseF2StatusLine(line) {
     tsd: pick(/\|TSD:(\d+)/),
     spd: pick(/\|SPD:(\d+)/),
     hgt: pick(/\|HGT:(\d+)/),
+    hrw: pick(/\|HRW:(\d+)/),
+    tq: pick(/\|TQ:(\d+)/),
+    tsr: pick(/\|TSR:(\d+)/),
+    ttb: pick(/\|TTB:(\d+)/),
     dga: pick(/\|DGA:(\d+)/),
     dgb: pick(/\|DGB:(\d+)/),
     f3c: pick(/\|F3C:(\d+)/),
     dgd: pick(/\|DGD:(\d+)/),
+    adr: pick(/\|ADR:(\d+)/), // 兼容旧字段，可不存在
+    mok: pick(/\|MOK:(\d+)/),
+    who: pick(/\|WHO:(\d+)/),
+    pa: pick(/\|PA:(\d+)/),
+    ims: pick(/\|IMS:(\d+)/),
+    lit: pick(/\|LIT:(\d+)/),
+    il: pick(/\|IL:(\d+)/),
+    iu: pick(/\|IU:(\d+)/),
+    iv: pick(/\|IV:(\d+)/),
+    ss: pick(/\|SS:(\d+)/),
+    bs: pick(/\|BS:(\d+)/),
+    ird: pick(/\|IRD:(-?\d+)/),
+    iev: pick(/\|IEV:(\d+)/),
     cal: pick(/\|CAL:(\d+)/),
     calm: pick(/\|CALM:(\d+)/),
     dpo: pick(/\|DPO:(\d+)/),
@@ -214,6 +231,8 @@ function packetMatchesBleVerify(parsed, verify) {
     if (!exp) return true;
     return Object.keys(exp).every((field) => {
       if (field === 'hfMon') return parsed.hf != null && (parsed.hf & 1) === exp.hfMon;
+      // 状态包缺字段时不要当失败（例如 F3 MAX 省闪存无 |STB:|），交给超时/跳过校验处理
+      if (parsed[field] == null) return false;
       return parsed[field] === exp[field];
     });
   }

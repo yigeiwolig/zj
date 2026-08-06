@@ -105,6 +105,7 @@
       <view class="admin-page-title" wx:if="{{!showHubTabBar && !hubInShell}}">待处理订单</view>
       <view class="admin-dev-actions admin-dev-actions--row" wx:if="{{isAdmin}}">
         <view class="admin-dev-btn admin-dev-btn--rollback" bindtap="openConfigRollbackModal">配置回溯</view>
+        <view class="admin-dev-btn admin-dev-btn--rollback" bindtap="openReturnCompleteRollbackModal">寄回回溯</view>
         <block wx:if="{{showAdminDevTools}}">
           <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试清空</view>
           <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
@@ -279,6 +280,7 @@
   <!-- === 管理员：设备审核与维修（我的 Tab） === -->
   <block wx:if="{{isAdmin && hubView === 'profile' && (!hubInShell || active)}}">
     <scroll-view
+      id="hubProfileAdminScroll-{{profileViewEpoch}}"
       scroll-y
       class="hub-admin-scroll {{hubInShell ? 'hub-admin-scroll--shell' : ''}}"
       enhanced
@@ -306,6 +308,7 @@
       </view>
       <view class="admin-dev-actions" wx:if="{{isAdmin}}">
         <view class="admin-dev-btn admin-dev-btn--rollback" bindtap="openConfigRollbackModal">配置回溯</view>
+        <view class="admin-dev-btn admin-dev-btn--rollback" bindtap="openReturnCompleteRollbackModal">寄回回溯</view>
         <block wx:if="{{showAdminDevTools}}">
           <view class="admin-dev-btn admin-dev-btn--test" bindtap="openTestPasswordModal">测试清空</view>
           <view class="admin-dev-btn admin-dev-btn--seed" bindtap="seedAfterSalesOrdersQuick">生成售后单</view>
@@ -338,7 +341,18 @@
           <!-- 信息 -->
           <view class="repair-info">
             <view class="r-title-row">
-              <view class="r-title">{{item.displayModel || item.model}} - {{item.contact.name}}</view>
+              <view class="r-title">
+                <text>{{item.displayModel || item.model}}</text>
+                <text
+                  wx:if="{{item.controlVariant === 'remote'}}"
+                  class="ctrl-variant-mark"
+                > (遥控版)</text>
+                <text
+                  wx:elif="{{item.controlVariantLabel}}"
+                  class="ctrl-variant-mark"
+                > ({{item.controlVariantLabel}})</text>
+                <text> - {{item.contact.name}}</text>
+              </view>
               <view class="status-tag status-tag--ship-only" style="margin-left: 16rpx;" wx:if="{{item.shippingMethod}}">
                 <view class="status-ship-badge status-ship-badge--{{item.shippingMethod === 'sf' ? 'sf' : 'zto'}}">
                   <text class="status-ship-badge-text">{{item.shippingMethod === 'sf' ? 'SF' : '中'}}</text>
@@ -366,6 +380,11 @@
             </view>
             <view class="r-warranty-status normal" wx:elif="{{item.remainingDays !== undefined && item.remainingDays > 0}}">
               <text class="warranty-normal-tag">剩余质保：{{item.remainingDays}}天</text>
+              <text class="warranty-normal-meta" wx:if="{{item.expiryDate || item.totalDays}}">
+                <text wx:if="{{item.totalDays}}">总{{item.totalDays}}天</text>
+                <text wx:if="{{item.totalDays && item.expiryDate}}"> · </text>
+                <text wx:if="{{item.expiryDate}}">到期{{item.expiryDate}}</text>
+              </text>
             </view>
             <view class="r-warranty-deducted-banner" wx:if="{{item.hadWarrantyDeducted}}">
               <text class="r-warranty-deducted-text">该用户曾被扣质保，仅可要求寄回维修（不可录单备件免费支持）</text>
@@ -428,6 +447,9 @@
                   <view class="r-btn return grid-full" bindtap="requestUserReturn" data-id="{{item._id}}">需要寄回产品维修</view>
                 </view>
               </block>
+              <view class="repair-actions-wecom">
+                <view class="r-btn wecom-resend" catchtap="resendRepairWecomNotify" data-id="{{item._id}}">重新推送企微</view>
+              </view>
               <view class="repair-actions-delete">
                 <view
                   class="r-btn delete"
@@ -438,6 +460,9 @@
                 >删除工单</view>
               </view>
             </block>
+            <view class="repair-actions-wecom" wx:elif="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT' || item.status === 'REPAIR_COMPLETED_SENT'}}">
+              <view class="r-btn wecom-resend" catchtap="resendRepairWecomNotify" data-id="{{item._id}}">重新推送企微</view>
+            </view>
           </view>
         </view>
       </block>
@@ -472,6 +497,14 @@
           <view class="audit-row">
             <text class="audit-date">用户填: {{item.buyDate}}</text>
             <text class="audit-type">{{item.bindType == 'fault' ? '故障核验' : (item.bindType == 'new' ? '全新' : '二手')}}</text>
+          </view>
+          <view class="audit-row" wx:if="{{item.controlVariantLabel}}">
+            <text class="audit-variant">控制版本：</text>
+            <text class="audit-variant">{{item.controlVariantLabel}}</text>
+          </view>
+          <view class="audit-row" wx:if="{{isAdmin && item.sensorStampLabel}}">
+            <text class="audit-variant">传感器：</text>
+            <text class="audit-variant">{{item.sensorStampLabel}}</text>
           </view>
           <view class="audit-imgs">
             <image src="{{item.imgReceipt}}" mode="aspectFill" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgReceipt}}" lazy-load="true" binderror="onMyAuditImageError" data-index="{{index}}" data-field="imgReceipt"></image>
@@ -735,9 +768,10 @@
     </scroll-view>
   </block>
 
-  <!-- 普通用户：我的 Tab -->
+  <!-- 普通用户：我的 Tab（profileViewEpoch 用于切模式后强制重建，避免真机高度偶发为 0） -->
   <block wx:if="{{!isAdmin && hubView === 'profile' && (!hubInShell || active)}}">
     <scroll-view
+      id="hubProfileUserScroll-{{profileViewEpoch}}"
       scroll-y
       class="hub-profile-scroll {{hubInShell ? 'hub-profile-scroll--shell' : ''}}"
       show-scrollbar="{{false}}"
@@ -904,6 +938,14 @@
               <text class="rr-label">寄回说明</text>
               <text class="rr-value">{{myReturnRequiredRepair.returnNote}}</text>
             </view>
+            <view class="rr-ticket-kv-row" wx:if="{{myReturnRequiredRepair.trackingId}}">
+              <text class="rr-label">备件运单</text>
+              <text class="rr-value rr-value--mono">{{myReturnRequiredRepair.trackingId}}</text>
+            </view>
+            <view class="rr-ticket-kv-row" wx:if="{{myReturnRequiredRepair.returnTrackingId}}">
+              <text class="rr-label">寄回运单</text>
+              <text class="rr-value rr-value--mono">{{myReturnRequiredRepair.returnTrackingId}}</text>
+            </view>
           </view>
           <view class="rr-repair-details" wx:if="{{afterSalesState.returnTicket.showRepairDetails}}">
             <view class="rr-repair-details-title">维修费用明细</view>
@@ -949,8 +991,47 @@
             <text class="rr-ticket-ship-text">寄件请预付邮费，勿寄到付。</text>
           </view>
           <view class="rr-user-actions-simple rr-user-actions-row">
+            <view
+              class="rr-simple-btn secondary"
+              wx:if="{{myReturnRequiredRepair.trackingId}}"
+              catchtap="viewLogisticsDetail"
+              data-sn="{{myReturnRequiredRepair.trackingId}}"
+              data-phone="{{myReturnRequiredRepair.contact.phone}}"
+              data-tail-required="2427">
+              查备件物流
+            </view>
             <view class="rr-simple-btn secondary" bindtap="copyReturnAddress">复制商家地址</view>
             <view class="rr-simple-btn primary" bindtap="openReturnAddressModal">填写寄回信息</view>
+          </view>
+        </view>
+      </block>
+      <block wx:if="{{myReturnRequiredRepair.needReturn && afterSalesState.returnTicket.footerMode === 'edit_only'}}">
+        <view class="rr-ticket-divider-wrap">
+          <view class="rr-ticket-notch rr-ticket-notch-l"></view>
+          <view class="rr-ticket-notch rr-ticket-notch-r"></view>
+          <view class="rr-ticket-dash"></view>
+        </view>
+        <view class="rr-ticket-footer">
+          <view class="rr-user-actions-simple rr-user-actions-row">
+            <view
+              class="rr-simple-btn secondary"
+              wx:if="{{myReturnRequiredRepair.trackingId}}"
+              catchtap="viewLogisticsDetail"
+              data-sn="{{myReturnRequiredRepair.trackingId}}"
+              data-phone="{{myReturnRequiredRepair.contact.phone}}"
+              data-tail-required="2427">
+              查备件物流
+            </view>
+            <view
+              class="rr-simple-btn secondary"
+              wx:if="{{myReturnRequiredRepair.returnTrackingId}}"
+              catchtap="viewLogisticsDetail"
+              data-sn="{{myReturnRequiredRepair.returnTrackingId}}"
+              data-phone="{{myReturnRequiredRepair.contact.phone}}"
+              data-tail-required="2427">
+              查寄回物流
+            </view>
+            <view class="rr-simple-btn primary" bindtap="openReturnAddressModal">修改寄回单号</view>
           </view>
         </view>
       </block>
@@ -1019,7 +1100,7 @@
           <text class="value mono {{item.snPending ? 'sn-pending' : ''}}">{{item.sn}}</text>
         </view>
         <view class="spec-row">
-          <text class="label">总剩余质保</text>
+          <text class="label">剩余质保</text>
           <view class="warranty-val">
             <!-- 剩余天数或已过期 -->
             <text class="days-num {{item.days < 30 ? 'warning' : ''}} {{item.isExpired ? 'expired' : ''}}" wx:if="{{!item.isExpired}}">{{item.days}}天</text>
@@ -1292,6 +1373,14 @@
             <text class="audit-setup-model">用户申报：{{currentAuditItem.productModel}}</text>
             <text class="audit-setup-tag audit-setup-tag--fault">故障核验</text>
           </view>
+          <view class="audit-setup-user-date">
+            <text>控制版本：</text>
+            <text>{{currentAuditItem.controlVariantLabel || '未选'}}</text>
+          </view>
+          <view class="audit-setup-user-date" wx:if="{{currentAuditItem.sensorStampLabel}}">
+            <text>传感器：</text>
+            <text>{{currentAuditItem.sensorStampLabel}}</text>
+          </view>
           <text class="audit-setup-user-date">用户填写购买日期：{{currentAuditItem.buyDate}}</text>
         </view>
 
@@ -1302,6 +1391,28 @@
             <picker class="audit-setup-picker-host" range="{{adminAuditModelOptions}}" value="{{adminAuditModelIndex}}" bindchange="onAdminAuditModelChange">
               <view class="audit-setup-picker">{{adminAuditModelOptions[adminAuditModelIndex]}}</view>
             </picker>
+          </view>
+          <view class="audit-setup-field">
+            <text class="audit-setup-label">控制版本</text>
+            <text class="audit-setup-sublabel">左右滑动切换</text>
+            <view
+              class="ctrl-variant-seg {{adminAuditControlVariant === 'remote' ? 'is-remote' : (adminAuditControlVariant === 'button' ? 'is-button' : '')}}"
+              bindtouchstart="onCtrlVariantTouchStart"
+              bindtouchend="onCtrlVariantTouchEnd"
+              data-scope="admin"
+            >
+              <view class="ctrl-variant-thumb-wrap"><view class="ctrl-variant-thumb"></view></view>
+              <view
+                class="ctrl-variant-item {{adminAuditControlVariant === 'button' ? 'is-on' : ''}}"
+                catchtap="onAdminControlVariantChange"
+                data-value="button"
+              >按钮版</view>
+              <view
+                class="ctrl-variant-item {{adminAuditControlVariant === 'remote' ? 'is-on' : ''}}"
+                catchtap="onAdminControlVariantChange"
+                data-value="remote"
+              >遥控版</view>
+            </view>
           </view>
           <view class="audit-setup-field">
             <text class="audit-setup-label">购买日期</text>
@@ -1361,6 +1472,14 @@
             <text class="audit-setup-tag">{{currentAuditItem.bindType == 'new' ? '全新' : '二手'}}</text>
           </view>
           <text class="audit-setup-sn">设备 SN：{{currentAuditItem.sn}}</text>
+          <view class="audit-setup-user-date">
+            <text>控制版本：</text>
+            <text>{{currentAuditItem.controlVariantLabel || '未选'}}</text>
+          </view>
+          <view class="audit-setup-user-date" wx:if="{{currentAuditItem.sensorStampLabel}}">
+            <text>传感器：</text>
+            <text>{{currentAuditItem.sensorStampLabel}}</text>
+          </view>
           <text class="audit-setup-user-date">用户填写购买日期：{{currentAuditItem.buyDate}}</text>
         </view>
 
@@ -1371,6 +1490,28 @@
             <picker class="audit-setup-picker-host" range="{{adminAuditModelOptions}}" value="{{adminAuditModelIndex}}" bindchange="onAdminAuditModelChange">
               <view class="audit-setup-picker">{{adminAuditModelOptions[adminAuditModelIndex]}}</view>
             </picker>
+          </view>
+          <view class="audit-setup-field">
+            <text class="audit-setup-label">控制版本</text>
+            <text class="audit-setup-sublabel">左右滑动切换</text>
+            <view
+              class="ctrl-variant-seg {{adminAuditControlVariant === 'remote' ? 'is-remote' : (adminAuditControlVariant === 'button' ? 'is-button' : '')}}"
+              bindtouchstart="onCtrlVariantTouchStart"
+              bindtouchend="onCtrlVariantTouchEnd"
+              data-scope="admin"
+            >
+              <view class="ctrl-variant-thumb-wrap"><view class="ctrl-variant-thumb"></view></view>
+              <view
+                class="ctrl-variant-item {{adminAuditControlVariant === 'button' ? 'is-on' : ''}}"
+                catchtap="onAdminControlVariantChange"
+                data-value="button"
+              >按钮版</view>
+              <view
+                class="ctrl-variant-item {{adminAuditControlVariant === 'remote' ? 'is-on' : ''}}"
+                catchtap="onAdminControlVariantChange"
+                data-value="remote"
+              >遥控版</view>
+            </view>
           </view>
           <view class="audit-setup-field">
             <text class="audit-setup-label">购买日期</text>
@@ -1411,7 +1552,7 @@
       <view class="cd-title">{{dialog.title}}</view>
       <view class="cd-content">{{dialog.content}}</view>
       
-      <view class="cd-btn-row">
+      <view class="cd-btn-row {{dialog.stackButtons ? 'cd-btn-row--stack' : ''}}">
         <!-- 取消按钮 (可选) -->
         <view class="cd-btn cancel" wx:if="{{dialog.showCancel}}" catchtap="closeCustomDialog">{{dialog.cancelText || '取消'}}</view>
         <!-- 确认按钮 -->
@@ -1441,7 +1582,7 @@
     <view class="after-sales-dialog-box" catchtouchmove="noop" catchtap="noop">
       <view class="cd-title">{{afterSalesDialog.title}}</view>
       <view class="cd-content">{{afterSalesDialog.content}}</view>
-      <view class="cd-btn-row">
+      <view class="cd-btn-row {{afterSalesDialog.stackButtons ? 'cd-btn-row--stack' : ''}}">
         <view class="cd-btn cancel" wx:if="{{afterSalesDialog.showCancel}}" bindtap="closeAfterSalesDialog">{{afterSalesDialog.cancelText || '取消'}}</view>
         <view class="cd-btn confirm" bindtap="onAfterSalesDialogConfirm">{{afterSalesDialog.confirmText || '确定'}}</view>
       </view>
@@ -1972,6 +2113,28 @@
             </view>
 
             <view class="form-item">
+              <text class="form-label">控制版本</text>
+              <view
+                class="ctrl-variant-seg {{controlVariant === 'remote' ? 'is-remote' : (controlVariant === 'button' ? 'is-button' : '')}}"
+                bindtouchstart="onCtrlVariantTouchStart"
+                bindtouchend="onCtrlVariantTouchEnd"
+                data-scope="form"
+              >
+                <view class="ctrl-variant-thumb-wrap"><view class="ctrl-variant-thumb"></view></view>
+                <view
+                  class="ctrl-variant-item {{controlVariant === 'button' ? 'is-on' : ''}}"
+                  catchtap="onControlVariantChange"
+                  data-value="button"
+                >按钮版</view>
+                <view
+                  class="ctrl-variant-item {{controlVariant === 'remote' ? 'is-on' : ''}}"
+                  catchtap="onControlVariantChange"
+                  data-value="remote"
+                >遥控版</view>
+              </view>
+            </view>
+
+            <view class="form-item">
               <text class="form-label">{{bindType == 'new' ? '订单截图' : '上传凭证 (购买截图 + 聊天记录)'}}</text>
               <view class="upload-group">
                 <view class="upload-box" bindtap="chooseProofImage" data-type="receipt">
@@ -2041,6 +2204,29 @@
                   <text class="fault-row-chevron">›</text>
                 </view>
               </picker>
+            </view>
+            <view class="fault-form-divider"></view>
+            <view class="fault-form-row fault-form-row--block">
+              <text class="fault-row-label">控制版本</text>
+              <view
+                class="ctrl-variant-seg {{controlVariant === 'remote' ? 'is-remote' : (controlVariant === 'button' ? 'is-button' : '')}}"
+                style="margin-top: 16rpx;"
+                bindtouchstart="onCtrlVariantTouchStart"
+                bindtouchend="onCtrlVariantTouchEnd"
+                data-scope="form"
+              >
+                <view class="ctrl-variant-thumb-wrap"><view class="ctrl-variant-thumb"></view></view>
+                <view
+                  class="ctrl-variant-item {{controlVariant === 'button' ? 'is-on' : ''}}"
+                  catchtap="onControlVariantChange"
+                  data-value="button"
+                >按钮版</view>
+                <view
+                  class="ctrl-variant-item {{controlVariant === 'remote' ? 'is-on' : ''}}"
+                  catchtap="onControlVariantChange"
+                  data-value="remote"
+                >遥控版</view>
+              </view>
             </view>
             <view class="fault-form-divider"></view>
             <view class="fault-form-row">
@@ -2275,13 +2461,22 @@
           </view>
           <text class="fr-switch-hint" wx:if="{{afterSalesState.fillRepairModal.showPayHint}}">开启后仅保存报价，用户需在「我的」需寄回卡片中完成支付；支付完成前请勿填写寄出运单号。</text>
         </view>
+
+        <!-- 整机寄回维修：可选修回+新件同寄（继续需寄回） -->
+        <view class="fr-switch-section" wx:if="{{afterSalesState.fillRepairModal && afterSalesState.fillRepairModal.showReshipSwitch}}">
+          <view class="fr-switch-row">
+            <text class="fr-label">修回+新件同寄（继续需寄回）</text>
+            <switch checked="{{fillRepairReshipPlusSpare}}" bindchange="onFillRepairReshipPlusSpareChange" color="#000000" />
+          </view>
+          <text class="fr-switch-hint" wx:if="{{afterSalesState.fillRepairModal.showReshipHint}}">填写维修项目告诉用户换了什么；寄出运单号填一个（修好产品与新配件同一包裹）；提交后单子继续留在需寄回，等用户再寄故障件。</text>
+        </view>
         
         <!-- 🔴 运单号输入：管理员寄给用户的单号（trackingId），不是用户寄回的 returnTrackingId -->
         <view class="fr-tracking-section" wx:if="{{afterSalesState.fillRepairModal && afterSalesState.fillRepairModal.showTrackingSection}}">
-          <view class="fr-label">寄出运单号</view>
+          <view class="fr-label">{{afterSalesState.fillRepairModal.trackingLabel || '寄出运单号'}}</view>
           <input 
             class="fr-tracking-input" 
-            placeholder="请输入寄给用户的快递单号"
+            placeholder="{{afterSalesState.fillRepairModal.trackingPlaceholder || '请输入寄给用户的快递单号'}}"
             value="{{fillRepairTrackingId}}"
             bindinput="onFillRepairTrackingIdInput"
           />
@@ -2389,55 +2584,183 @@
   </view>
 </view>
 
-<!-- ================= 配置回溯：已审核绑定申请，可修改质保时长 ================= -->
+<!-- ================= 配置回溯：已审核绑定，可完整重填参数 ================= -->
 <view class="custom-dialog-mask {{configRollbackClosing ? 'closing' : ''}}" wx:if="{{showConfigRollbackModal}}" bindtap="closeConfigRollbackModal" catchtouchmove="noop">
   <view class="custom-dialog-box config-rollback-dialog" catchtap="noop" catchtouchmove="noop">
     <view class="cd-title">配置回溯</view>
-    <view class="config-rollback-sub">绑定申请记录（含今日起的管理员测试单），审核时质保选错了可在这里直接改</view>
+    <view class="config-rollback-sub">绑定申请记录可完整重填：型号、控制版本、购买日期、质保天数</view>
 
     <view class="config-rollback-loading" wx:if="{{configRollbackLoading}}">加载中…</view>
     <view class="config-rollback-empty" wx:elif="{{configRollbackHistory.length === 0}}">暂无申请记录</view>
 
     <scroll-view wx:else class="config-rollback-list" scroll-y enhanced show-scrollbar="{{false}}">
-      <view class="config-rollback-item" wx:for="{{configRollbackHistory}}" wx:key="_id">
-        <view class="config-rollback-item-main">
-          <view class="config-rollback-item-top">
-            <text class="config-rollback-item-sn">{{item.sn || '（未录入 SN）'}}</text>
-            <text class="config-rollback-item-tag" wx:if="{{item.bindType === 'fault'}}">故障核验</text>
-            <text class="config-rollback-item-tag admin" wx:if="{{item.isAdminApply}}">管理员测试</text>
-            <text class="config-rollback-item-tag pending" wx:if="{{!item.approved}}">待审核</text>
+      <view class="config-rollback-item config-rollback-item--edit" wx:for="{{configRollbackHistory}}" wx:key="_id">
+        <view class="config-rollback-item-top">
+          <text class="config-rollback-item-sn">{{item.sn || '（未录入 SN）'}}</text>
+          <text class="config-rollback-item-tag" wx:if="{{item.bindType === 'fault'}}">故障核验</text>
+          <text class="config-rollback-item-tag admin" wx:if="{{item.isAdminApply}}">管理员测试</text>
+          <text class="config-rollback-item-tag pending" wx:if="{{!item.approved}}">待审核</text>
+        </view>
+        <view class="config-rollback-item-meta" wx:if="{{item.timeText}}">
+          <text class="config-rollback-item-time">{{item.timeText}} 申请</text>
+        </view>
+
+        <block wx:if="{{item.hasDevice}}">
+          <view class="config-rollback-field">
+            <text class="config-rollback-field-label">设备型号</text>
+            <picker
+              mode="selector"
+              range="{{adminAuditModelOptions}}"
+              value="{{item.modelIndex}}"
+              data-index="{{index}}"
+              data-field="model"
+              bindchange="onConfigRollbackFieldChange"
+            >
+              <view class="config-rollback-field-value">
+                {{adminAuditModelOptions[item.modelIndex] || item.productModel || '请选择'}}
+                <text class="config-rollback-item-model-arrow">▾</text>
+              </view>
+            </picker>
           </view>
-          <view class="config-rollback-item-meta">
-            <text class="config-rollback-item-model-name" wx:if="{{item.productModel}}">{{item.productModel}}</text>
-            <text class="config-rollback-item-time" wx:if="{{item.timeText}}">{{item.timeText}} 申请</text>
+
+          <view class="config-rollback-field">
+            <text class="config-rollback-field-label">控制版本</text>
+            <view
+              class="ctrl-variant-seg ctrl-variant-seg--compact config-rollback-variant {{item.controlVariant === 'remote' ? 'is-remote' : (item.controlVariant === 'button' ? 'is-button' : '')}}"
+              bindtouchstart="onCtrlVariantTouchStart"
+              bindtouchend="onConfigRollbackVariantTouchEnd"
+              data-scope="rollback"
+              data-index="{{index}}"
+            >
+              <view class="ctrl-variant-thumb-wrap"><view class="ctrl-variant-thumb"></view></view>
+              <view
+                class="ctrl-variant-item {{item.controlVariant === 'button' ? 'is-on' : ''}}"
+                catchtap="onConfigRollbackVariantTap"
+                data-index="{{index}}"
+                data-value="button"
+              >按钮版</view>
+              <view
+                class="ctrl-variant-item {{item.controlVariant === 'remote' ? 'is-on' : ''}}"
+                catchtap="onConfigRollbackVariantTap"
+                data-index="{{index}}"
+                data-value="remote"
+              >遥控版</view>
+            </view>
           </view>
-          <view class="config-rollback-item-meta" wx:if="{{item.hasDevice}}">
+
+          <view class="config-rollback-field" wx:if="{{item.sensorStampLabel}}">
+            <text class="config-rollback-field-label">传感器（只读）</text>
+            <view class="config-rollback-field-value">{{item.sensorStampLabel}}</view>
+          </view>
+
+          <view class="config-rollback-field">
+            <text class="config-rollback-field-label">购买日期</text>
+            <picker
+              mode="date"
+              value="{{item.buyDate}}"
+              data-index="{{index}}"
+              data-field="buyDate"
+              bindchange="onConfigRollbackFieldChange"
+            >
+              <view class="config-rollback-field-value">
+                {{item.buyDate || '请选择日期'}}
+                <text class="config-rollback-item-model-arrow">▾</text>
+              </view>
+            </picker>
+          </view>
+
+          <view class="config-rollback-field">
+            <text class="config-rollback-field-label">质保时长</text>
+            <picker
+              mode="selector"
+              range="{{warrantyOptions}}"
+              value="{{item.warrantyIndex}}"
+              data-index="{{index}}"
+              data-field="warranty"
+              bindchange="onConfigRollbackFieldChange"
+            >
+              <view class="config-rollback-field-value">
+                {{warrantyOptions[item.warrantyIndex] || (item.totalDays + '天')}}
+                <text class="config-rollback-item-model-arrow">▾</text>
+              </view>
+            </picker>
+          </view>
+
+          <view class="config-rollback-item-meta" wx:if="{{item.expiryDate}}">
             <text class="config-rollback-item-expiry">到期 {{item.expiryDate}} · 剩 {{item.remainingDays}} 天</text>
           </view>
-          <view class="config-rollback-item-meta" wx:elif="{{item.approved}}">
+
+          <view
+            class="config-rollback-save"
+            data-index="{{index}}"
+            bindtap="saveConfigRollbackItem"
+          >保存修改</view>
+        </block>
+
+        <block wx:elif="{{item.approved}}">
+          <view class="config-rollback-item-meta">
             <text class="config-rollback-item-expiry warn">设备档案不存在（可能已删除）</text>
           </view>
-          <view class="config-rollback-item-meta" wx:else>
+        </block>
+        <block wx:else>
+          <view class="config-rollback-item-meta">
             <text class="config-rollback-item-expiry">尚未审核，请先在「绑定审核」中处理</text>
           </view>
-        </view>
-        <picker
-          wx:if="{{item.hasDevice}}"
-          mode="selector"
-          range="{{warrantyOptions}}"
-          value="{{item.warrantyIndex}}"
-          data-index="{{index}}"
-          bindchange="onConfigRollbackWarrantyChange">
-          <view class="config-rollback-item-model">
-            {{item.totalDays}}天
-            <text class="config-rollback-item-model-arrow">▾</text>
-          </view>
-        </picker>
+        </block>
       </view>
     </scroll-view>
 
     <view class="cd-btn-row config-rollback-btns">
       <view class="cd-btn confirm" bindtap="closeConfigRollbackModal">关闭</view>
+    </view>
+  </view>
+</view>
+
+<!-- ================= 寄回完结回溯：误点完结后拉回需寄回列表 ================= -->
+<view class="custom-dialog-mask {{returnCompleteRollbackClosing ? 'closing' : ''}}" wx:if="{{showReturnCompleteRollbackModal}}" bindtap="closeReturnCompleteRollbackModal" catchtouchmove="noop">
+  <view class="custom-dialog-box config-rollback-dialog" catchtap="noop" catchtouchmove="noop">
+    <view class="cd-title">寄回回溯</view>
+    <view class="config-rollback-sub">误完结可撤销；误撤回待处理的会查运单记录并恢复到「需寄回确认」</view>
+
+    <view class="config-rollback-loading" wx:if="{{returnCompleteRollbackLoading}}">加载中…</view>
+    <view class="config-rollback-empty" wx:elif="{{returnCompleteRollbackList.length === 0}}">暂无可回溯工单</view>
+
+    <scroll-view wx:else class="config-rollback-list" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="config-rollback-item config-rollback-item--edit" wx:for="{{returnCompleteRollbackList}}" wx:key="_id">
+        <view class="config-rollback-item-top">
+          <text class="config-rollback-item-sn">{{item.sn || '（无 SN）'}}</text>
+          <text class="config-rollback-item-tag">{{item.statusLabel}}</text>
+        </view>
+        <view class="config-rollback-item-meta" wx:if="{{item.model}}">
+          <text class="config-rollback-item-time">{{item.model}}</text>
+        </view>
+        <view class="config-rollback-item-meta" wx:if="{{item.completeTimeText}}">
+          <text class="config-rollback-item-time">时间 {{item.completeTimeText}}</text>
+        </view>
+        <view class="config-rollback-item-meta" wx:if="{{item.trackingId}}">
+          <text class="config-rollback-item-time">备件运单 {{item.trackingId}}</text>
+        </view>
+        <view class="config-rollback-item-meta" wx:elif="{{item.kind === 'restore'}}">
+          <text class="config-rollback-item-expiry warn">未查到运单号，恢复后可在需寄回里重录</text>
+        </view>
+        <view class="config-rollback-item-meta" wx:if="{{item.returnTrackingId}}">
+          <text class="config-rollback-item-time">用户运单 {{item.returnTrackingId}}</text>
+        </view>
+        <view class="config-rollback-item-meta" wx:if="{{item.returnNote}}">
+          <text class="config-rollback-item-expiry">{{item.returnNote}}</text>
+        </view>
+        <view
+          class="config-rollback-save"
+          data-id="{{item._id}}"
+          data-index="{{index}}"
+          data-kind="{{item.kind}}"
+          bindtap="undoReturnCompleteItem"
+        >{{item.actionText}}</view>
+      </view>
+    </scroll-view>
+
+    <view class="cd-btn-row config-rollback-btns">
+      <view class="cd-btn confirm" bindtap="closeReturnCompleteRollbackModal">关闭</view>
     </view>
   </view>
 </view>
@@ -2511,99 +2834,6 @@
       <view class="location-permission-btn confirm" bindtap="_openLocationSetting">去设置</view>
     </view>
     <text class="location-permission-tip" wx:if="{{locationPermissionChecking}}">等待授权中...</text>
-  </view>
-</view>
-
-<!-- ================= 物流查询弹窗 ================= -->
-<view class="logistics-modal-mask {{logisticsModalClosing ? 'closing' : ''}}" wx:if="{{showLogisticsModal || logisticsModalClosing}}" bindtap="closeLogisticsModal" catchtouchmove="noop">
-  <!-- 🔴 移除了 catchtouchmove="noop"，允许内部 scroll-view 滚动 -->
-  <view class="logistics-modal-box" catchtap="noop">
-    
-    <!-- 1. 品牌头部 -->
-    <view class="logistics-header">
-      <view class="brand-tag">MT-摩改社保障你的物流</view>
-      <view class="close-btn" bindtap="closeLogisticsModal">✕</view>
-    </view>
-
-    <view class="logistics-modal-content">
-      
-      <!-- 2. 核心信息区 (新版卡片样式) -->
-      <view class="logistics-card-container">
-      <view class="logistics-info-card">
-          <view class="card-header-row">
-            <view class="company-info">
-              <view class="company-icon-placeholder">MT</view>
-              <text class="company-name">{{logisticsData.express_company_name || '查询中...'}}</text>
-            </view>
-            <view class="logistics-status-right">
-              <view class="logistics-exception-btn" catchtap="onLogisticsException">物流校准</view>
-              <view class="status-badge {{logisticsData.status === '3' ? 'success' : ''}}" wx:if="{{logisticsData.status_text}}">
-                {{logisticsData.status_text}}
-              </view>
-            </view>
-          </view>
-          <view class="card-body-row">
-          <text class="tracking-number">{{currentTrackingId}}</text>
-          <view class="copy-btn" bindtap="copyTrackingId" data-sn="{{currentTrackingId}}">复制</view>
-        </view>
-        </view>
-      </view>
-      <!-- 3. 加载状态 -->
-      <view class="logistics-loading" wx:if="{{logisticsLoading}}">
-        <view class="mt-loader"></view>
-      </view>
-      
-      <!-- 4. 错误提示 -->
-      <view class="logistics-error" wx:if="{{logisticsError && !logisticsLoading}}">
-        <text class="error-icon">⚠️</text>
-        <text class="error-text">{{logisticsError}}</text>
-      </view>
-      
-      <!-- 5. 物流轨迹 (优化版：轴线左置，内容全宽) -->
-      <!-- 🔴 关键修复：确保 scroll-view 可以滚动，添加 enhanced 属性 -->
-      <scroll-view 
-        scroll-y 
-        class="logistics-scroll" 
-        enable-back-to-top="{{true}}" 
-        enhanced="{{true}}"
-        show-scrollbar="{{false}}"
-        wx:if="{{logisticsData && !logisticsLoading && !logisticsBlockDisplay}}">
-        <view class="timeline-container">
-          <view class="timeline-item" wx:for="{{logisticsData.path_list}}" wx:key="index">
-            
-            <!-- 左侧：轴线 -->
-            <view class="timeline-axis">
-              <view class="dot {{index === 0 ? 'active' : ''}}"></view>
-              <view class="line" wx:if="{{index < logisticsData.path_list.length - 1}}"></view>
-            </view>
-            
-            <!-- 右侧：时间 + 内容 -->
-            <view class="timeline-content-wrapper {{index === 0 ? 'active' : ''}}">
-              <!-- 时间行 -->
-              <view class="timeline-header">
-                <text class="time-full" wx:if="{{item._dateStr}}">{{item._dateStr}} {{item.time}}</text>
-                <text class="time-full" wx:else>{{item.time}}</text>
-              </view>
-              <!-- 内容行 -->
-              <view class="timeline-body">
-                <text class="desc-text" selectable="true">{{item.desc}}</text>
-              </view>
-            </view>
-
-          </view>
-        </view>
-        
-        <!-- 无轨迹信息 -->
-        <view class="logistics-empty" wx:if="{{!logisticsData.path_list || logisticsData.path_list.length === 0}}">
-          <text>暂无物流轨迹信息</text>
-        </view>
-      </scroll-view>
-      <view class="logistics-error" wx:if="{{logisticsBlockDisplay && !logisticsLoading}}">
-        <text class="error-icon">⚠️</text>
-        <text class="error-text">尾号校验不通过，已隐藏物流轨迹。请点击“物流异常”输入尾号后查询。</text>
-      </view>
-      
-    </view>
   </view>
 </view>
 

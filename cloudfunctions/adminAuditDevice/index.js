@@ -5,6 +5,81 @@ const http = require('http')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+function normalizeControlVariant(raw) {
+  const s = String(raw || '').trim().toLowerCase()
+  if (!s) return ''
+  if (
+    s === 'button' || s === 'btn' ||
+    s === 'bluetooth' || s === 'ble' || s === 'bt' ||
+    s.indexOf('按钮') >= 0 || s.indexOf('按键') >= 0 || s.indexOf('蓝牙') >= 0
+  ) return 'button'
+  if (s === 'remote' || s === '遥控' || s.indexOf('遥控') >= 0) return 'remote'
+  return ''
+}
+
+function controlVariantLabel(raw) {
+  const key = normalizeControlVariant(raw)
+  if (key === 'button') return '按钮版'
+  if (key === 'remote') return '遥控版'
+  return ''
+}
+
+function normalizeSensorStamp(raw) {
+  const s = String(raw || '').trim().toLowerCase()
+  if (s === 'imu' || s === 'gyro' || s === 'mpu') return 'imu'
+  if (s === 'tof' || s === 'height' || s === 'vl53') return 'tof'
+  return ''
+}
+
+/** 管理端只读：无章视为测高旧版 */
+function sensorStampLabel(raw) {
+  const key = normalizeSensorStamp(raw)
+  if (key === 'imu') return 'IMU(陀螺仪)'
+  if (key === 'tof') return 'TOF(测高)'
+  return ''
+}
+
+function sensorStampLabelForAdmin(raw, productModel) {
+  const label = sensorStampLabel(raw)
+  if (label) return label
+  // 仅 F3 MAX 无章时标测高，避免其它型号刷屏
+  if (String(productModel || '').trim().toUpperCase() === 'F3 MAX') return 'TOF(测高·无章)'
+  return ''
+}
+
+/** YYYY-MM-DD 按本地日历解析，避免 new Date('YYYY-MM-DD') 走 UTC 导致差一天 */
+function parseYmdLocal(raw) {
+  const s = String(raw || '').trim()
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) {
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0)
+  }
+  const d = new Date(s)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function formatYmdLocal(d) {
+  if (!d || Number.isNaN(d.getTime())) return ''
+  const y = d.getFullYear()
+  const mo = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${mo}-${day}`
+}
+
+function addDaysLocal(base, days) {
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate() + Number(days || 0), 12, 0, 0, 0)
+}
+
+/** 到期日 → 剩余整天数（本地日历，当天算在保） */
+function remainingDaysFromExpiry(expiryRaw) {
+  const exp = typeof expiryRaw === 'string' ? parseYmdLocal(expiryRaw) : expiryRaw
+  if (!exp || Number.isNaN(exp.getTime())) return 0
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0)
+  const expNoon = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate(), 12, 0, 0, 0)
+  return Math.max(0, Math.round((expNoon.getTime() - today.getTime()) / 86400000))
+}
+
 async function assertAdmin(db) {
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
@@ -128,21 +203,47 @@ async function handleListAudited(db, _) {
     const approved = status === 'APPROVED'
     // 只要档案存在且有质保天数就允许回溯修改（不再强绑 status）
     const editable = !!dev._id && Number(dev.totalDays) > 0
+    const controlVariant =
+      normalizeControlVariant(dev.controlVariant) ||
+      normalizeControlVariant(r.controlVariant) ||
+      ''
+    const productModel = String(dev.productModel || r.productModel || '').trim()
+    const sensorStamp = normalizeSensorStamp(dev.sensorStamp)
+    let buyDate = ''
+    if (dev.bindTime) {
+      try {
+        buyDate = formatYmdLocal(new Date(dev.bindTime))
+      } catch (e) {
+        buyDate = ''
+      }
+    }
+    if (!buyDate) buyDate = String(r.buyDate || '').trim()
     return {
       _id: r._id,
       sn: String(dev.sn || sn || '').trim(),
-      productModel: String(dev.productModel || r.productModel || '').trim(),
+      productModel,
+      controlVariant,
+      controlVariantLabel: controlVariantLabel(controlVariant),
+      sensorStamp,
+      sensorStampLabel: sensorStampLabelForAdmin(sensorStamp, productModel),
       bindType: r.bindType || 'normal',
       isAdminApply: isAdminApply(r),
       status: status || 'PENDING',
-      buyDate: r.buyDate || '',
+      buyDate,
       createTime: r.createTime || null,
       // 当前质保信息（来自 sn 集合）
       hasDevice: editable,
       approved,
       totalDays: dev.totalDays || 0,
       expiryDate: dev.expiryDate || '',
-      remainingDays: dev.remainingDays || 0,
+      remainingDays: (() => {
+        if (!dev.expiryDate) return Number(dev.remainingDays) || 0
+        try {
+          return remainingDaysFromExpiry(dev.expiryDate)
+        } catch (e) {
+          return Number(dev.remainingDays) || 0
+        }
+      })(),
       bindTime: dev.bindTime || null,
       isActive: !!dev.isActive,
       warrantyRollbackAt: dev.warrantyRollbackAt || null
@@ -152,12 +253,16 @@ async function handleListAudited(db, _) {
   return { success: true, data }
 }
 
-/** 配置回溯：修正已审核设备的质保时长（管理员手滑选错时用） */
+/** 配置回溯：完整重填型号 / 控制版本 / 购买日 / 质保（管理员纠错） */
 async function handleRollbackWarranty(db, _, event, adminOpenid) {
   const targetSn = String(event.sn || '').trim()
   const claimId = String(event.claimId || event.recordId || '').trim()
   const days = parseInt(event.customDays)
   if (!days || days <= 0) return { success: false, errMsg: '质保天数无效' }
+
+  const productModel = String(event.productModel || '').trim()
+  const controlVariant = normalizeControlVariant(event.controlVariant || '')
+  const customDateRaw = String(event.customDate || event.buyDate || '').trim()
 
   // 先按 SN 找；找不到再按 faultClaimId 兜底（故障核验补录后 SN 可能已变）
   let dev = null
@@ -174,17 +279,19 @@ async function handleRollbackWarranty(db, _, event, adminOpenid) {
   }
 
   // 以原购买/绑定时间为基准重算到期日；允许传 customDate 顺带修正购买日期
+  // 用本地日历日计算，避免 UTC 解析把购买日/到期日偏移一天
   let baseDate = null
-  if (event.customDate) {
-    baseDate = new Date(event.customDate)
+  if (customDateRaw) {
+    baseDate = parseYmdLocal(customDateRaw)
   } else if (dev.bindTime) {
-    baseDate = new Date(dev.bindTime)
+    baseDate = parseYmdLocal(dev.bindTime) || new Date(dev.bindTime)
   }
   if (!baseDate || isNaN(baseDate.getTime())) baseDate = new Date()
 
-  const expiryDateObj = new Date(baseDate.getTime() + days * 24 * 60 * 60 * 1000)
-  const expiryDateStr = expiryDateObj.toISOString().split('T')[0]
-  const remainingDays = Math.ceil((expiryDateObj - new Date()) / (1000 * 60 * 60 * 24))
+  const expiryDateObj = addDaysLocal(baseDate, days)
+  const expiryDateStr = formatYmdLocal(expiryDateObj)
+  const remainingDays = remainingDaysFromExpiry(expiryDateObj)
+  const buyDateStr = formatYmdLocal(baseDate)
 
   const updateData = {
     totalDays: days,
@@ -192,20 +299,122 @@ async function handleRollbackWarranty(db, _, event, adminOpenid) {
     remainingDays: remainingDays > 0 ? remainingDays : 0,
     warrantyRollbackAt: db.serverDate(),
     warrantyRollbackBy: adminOpenid,
-    warrantyRollbackFrom: dev.totalDays || 0
+    warrantyRollbackFrom: dev.totalDays || 0,
+    configRollbackAt: db.serverDate(),
+    configRollbackBy: adminOpenid
   }
-  if (event.customDate) {
+  if (customDateRaw) {
     updateData.bindTime = baseDate
+  }
+  if (productModel) {
+    updateData.productModel = productModel
+  }
+  if (controlVariant) {
+    updateData.controlVariant = controlVariant
   }
 
   await db.collection('sn').doc(dev._id).update({ data: updateData })
 
+  // 同步申请单，方便列表与再次审核看到最新值
+  if (claimId) {
+    const claimPatch = {}
+    if (productModel) claimPatch.productModel = productModel
+    if (controlVariant) claimPatch.controlVariant = controlVariant
+    if (customDateRaw) claimPatch.buyDate = buyDateStr
+    if (Object.keys(claimPatch).length > 0) {
+      try {
+        await db.collection('my_read').doc(claimId).update({ data: claimPatch })
+      } catch (e) {
+        console.warn('[adminAuditDevice] rollback sync my_read failed', e)
+      }
+    }
+  }
+
+  // 同步未完结报修单上的质保快照（需寄回/待处理列表否则仍显示旧剩余天数）
+  const warrantyExpiredFlag = remainingDays <= 0
+  const repairWarrantyPatch = {
+    expiryDate: expiryDateStr,
+    remainingDays: remainingDays > 0 ? remainingDays : 0,
+    totalDays: days,
+    warrantyExpired: warrantyExpiredFlag,
+    'device.expiryDate': expiryDateStr,
+    'device.days': remainingDays > 0 ? remainingDays : 0,
+    'device.totalDays': days
+  }
+  if (productModel) {
+    repairWarrantyPatch.model = productModel
+    repairWarrantyPatch['device.productModel'] = productModel
+  }
+  if (controlVariant) {
+    repairWarrantyPatch.controlVariant = controlVariant
+    repairWarrantyPatch['device.controlVariant'] = controlVariant
+  }
+  try {
+    const snForRepair = String(dev.sn || targetSn || '').trim()
+    const openidForRepair = String(dev.openid || '').trim()
+    const seen = new Set()
+    const collect = async (where) => {
+      const openRepairs = await db.collection('shouhou_repair').where({
+        ...where,
+        status: _.nin(['COMPLETED', 'RETURN_RECEIVED', 'DELETED', 'CANCELLED', 'REPAIR_COMPLETED_SENT'])
+      }).limit(50).get()
+      return openRepairs.data || []
+    }
+    let rows = []
+    if (snForRepair) {
+      rows = rows.concat(await collect({ 'device.sn': snForRepair }))
+      rows = rows.concat(await collect({ sn: snForRepair }))
+    }
+    if (openidForRepair) {
+      rows = rows.concat(await collect({ _openid: openidForRepair }))
+      rows = rows.concat(await collect({ openid: openidForRepair }))
+    }
+    const modelForRepair = String(productModel || dev.productModel || '').trim()
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]
+      if (!row || !row._id || seen.has(row._id)) continue
+      const rowSn = String((row.device && row.device.sn) || row.sn || '').trim()
+      const rowModel = String((row.device && row.device.productModel) || row.model || '').trim()
+      // openid 兜底：同 SN 直接改；无 SN 时按同型号改；有不同 SN 则跳过
+      if (openidForRepair && snForRepair && rowSn && rowSn !== snForRepair) continue
+      if (openidForRepair && !rowSn && modelForRepair && rowModel && rowModel !== modelForRepair) continue
+      seen.add(row._id)
+      const patch = { ...repairWarrantyPatch }
+      // 工单缺 SN 时补上，后续列表才能按 sn 实时刷质保
+      if (snForRepair && !rowSn) {
+        patch.sn = snForRepair
+        patch['device.sn'] = snForRepair
+      }
+      try {
+        await db.collection('shouhou_repair').doc(row._id).update({ data: patch })
+      } catch (e) {
+        console.warn('[adminAuditDevice] rollback sync repair failed', row._id, e)
+      }
+    }
+  } catch (e) {
+    console.warn('[adminAuditDevice] rollback sync repairs query failed', e)
+  }
+
+  const remShow = remainingDays > 0 ? remainingDays : 0
+  const parts = [
+    `总质保 ${days} 天`,
+    `剩余 ${remShow} 天`,
+    `到期 ${expiryDateStr}`
+  ]
+  if (productModel) parts.push(`型号 ${productModel}`)
+  if (controlVariant) parts.push(controlVariantLabel(controlVariant))
+  if (customDateRaw) parts.push(`购买日 ${buyDateStr}`)
+
   return {
     success: true,
-    msg: `质保已改为 ${days} 天，到期日 ${expiryDateStr}`,
+    msg: parts.join(' · '),
     totalDays: days,
     expiryDate: expiryDateStr,
-    remainingDays: remainingDays > 0 ? remainingDays : 0
+    remainingDays: remShow,
+    productModel: productModel || String(dev.productModel || '').trim(),
+    controlVariant: controlVariant || normalizeControlVariant(dev.controlVariant) || '',
+    controlVariantLabel: controlVariantLabel(controlVariant || dev.controlVariant),
+    buyDate: buyDateStr
   }
 }
 
@@ -300,7 +509,15 @@ exports.main = async (event, context) => {
   // 接收前端传来的自定义参数：customDate(管理员改的时间), customDays(管理员选的天数)
   // productModel：管理员可修正用户申报的设备型号
   // applicantOpenid：前端列表里带的申请人 openid，作为兜底（历史单据可能缺字段）
-  const { id, action, customDate, customDays, productModel: productModelFromClient, applicantOpenid: applicantOpenidFromClient } = event
+  const {
+    id,
+    action,
+    customDate,
+    customDays,
+    productModel: productModelFromClient,
+    controlVariant: controlVariantFromClient,
+    applicantOpenid: applicantOpenidFromClient
+  } = event
 
   const PRODUCT_DETAIL_OPTIONS = [
     'F1 PRO', 'F1 MAX', 'F1 ULTRA',
@@ -403,6 +620,13 @@ exports.main = async (event, context) => {
       if (!finalProductModel) {
         return { success: false, errMsg: '请选择设备型号' }
       }
+      const finalControlVariant =
+        normalizeControlVariant(controlVariantFromClient) ||
+        normalizeControlVariant(applyData.controlVariant) ||
+        ''
+      if (!finalControlVariant) {
+        return { success: false, errMsg: '请选择按钮版或遥控版' }
+      }
       
       // === B. 计算固件版本 (V年尾.月.3) ===
       // 基于设定的购买日期来生成版本，或者基于当前时间，这里建议用设定日期
@@ -481,6 +705,7 @@ exports.main = async (event, context) => {
             sn: claimSn,
             name: finalProductModel,
             productModel: finalProductModel,
+            controlVariant: finalControlVariant,
             firmware: firmwareVer,
             expiryDate: finalExpiryDateStr,
             totalDays: finalTotalDays,
@@ -502,7 +727,12 @@ exports.main = async (event, context) => {
         })
 
         await db.collection('my_read').doc(id).update({
-          data: { status: 'APPROVED', sn: claimSn, productModel: finalProductModel }
+          data: {
+            status: 'APPROVED',
+            sn: claimSn,
+            productModel: finalProductModel,
+            controlVariant: finalControlVariant
+          }
         })
 
         // 关联用户未完结售后工单，供诊断书判定 A/B 方案
@@ -570,6 +800,7 @@ exports.main = async (event, context) => {
       const updateData = {
         productModel: finalProductModel,
         name: finalProductModel,
+        controlVariant: finalControlVariant,
         firmware: firmwareVer,
         expiryDate: finalExpiryDateStr, // 🔴 使用包含待生效延保的最终日期
         totalDays: finalTotalDays, // 🔴 使用包含待生效延保的最终天数
@@ -613,7 +844,11 @@ exports.main = async (event, context) => {
 
       // 更新申请单状态（同步修正后的型号）
       await db.collection('my_read').doc(id).update({
-        data: { status: 'APPROVED', productModel: finalProductModel }
+        data: {
+          status: 'APPROVED',
+          productModel: finalProductModel,
+          controlVariant: finalControlVariant
+        }
       })
 
       // 🔴 设备审核通过：更新待生效延保记录状态为"已生效"

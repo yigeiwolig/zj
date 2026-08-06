@@ -1,0 +1,6 @@
+{
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "custom-toast": "/components/custom-toast/index"
+  }
+}

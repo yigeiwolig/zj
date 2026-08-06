@@ -6,13 +6,16 @@
  *   WECOM_WEBHOOK_DIAGNOSIS   = 诊断书专用 Webhook（可选；未配则复用 RETURN）
  *   WECOM_WEBHOOK_SHOP        = 购物待发货专用群
  *   WECOM_WEBHOOK_ADMIN       = 管理待办 1~6（可选覆盖；未配时用内置管理群 Webhook）
+ *   WECOM_WEBHOOK_INVENTORY   = 耗材紧缺/低库存上报（可选；未配用内置耗材群）
  *
  * 能力：
  * - 寄回运单满 2 天提醒（定时 tick）
  * - 保存诊断书立刻推送（notifyDiagnosis）
  * - 管理员手动重推寄回（resendReturnArrive）
+ * - 报修工单卡智能重推（resendRepairWecom：寄回 / 诊断 / 新报修）
  * - 购物付款成功待发货（notifyShopOrderPaid → SHOP Webhook）
  * - 管理待办：绑定/故障/报修/案例视频/截图风险/可疑人员（notifyAdminTodo → 管理群，不复用寄回群）
+ * - 耗材低库存：状态≤25%（紧缺/没货）或件数/数量 < 10（notifyInventoryLow）
  */
 const cloud = require('wx-server-sdk')
 const https = require('https')
@@ -30,6 +33,78 @@ const TERMINAL_STATUS = new Set([
   'DELETED',
   'CANCELLED'
 ])
+
+function normalizeControlVariant(raw) {
+  const s = String(raw || '').trim().toLowerCase()
+  if (!s) return ''
+  if (
+    s === 'button' || s === 'btn' ||
+    s === 'bluetooth' || s === 'ble' || s === 'bt' ||
+    s.indexOf('按钮') >= 0 || s.indexOf('按键') >= 0 || s.indexOf('蓝牙') >= 0
+  ) return 'button'
+  if (s === 'remote' || s === '遥控' || s.indexOf('遥控') >= 0) return 'remote'
+  return ''
+}
+
+function controlVariantLabel(raw) {
+  const key = normalizeControlVariant(raw)
+  if (key === 'button') return '按钮版'
+  if (key === 'remote') return '遥控版'
+  return ''
+}
+
+/** 企微文案：型号：F3 Max（遥控版本） */
+function controlVariantLabelFull(raw) {
+  const key = normalizeControlVariant(raw)
+  if (key === 'button') return '按钮版本'
+  if (key === 'remote') return '遥控版本'
+  return ''
+}
+
+function formatModelWithControlVariant(model, variant) {
+  const name = String(model || '').trim() || '未知型号'
+  const label = controlVariantLabel(variant)
+  if (!label) return name
+  if (/[（(]\s*(按钮版|遥控版|蓝牙版|按钮版本|遥控版本)\s*[）)]/.test(name)) return name
+  return `${name} (${label})`
+}
+
+function repairModelName(repair) {
+  return String(
+    (repair && (repair.model || repair.displayModel)) ||
+    (repair && repair.device && (repair.device.productModel || repair.device.model)) ||
+    ''
+  ).trim() || '未知型号'
+}
+
+function repairControlVariant(repair) {
+  return (
+    (repair && repair.controlVariant) ||
+    (repair && repair.device && repair.device.controlVariant) ||
+    ''
+  )
+}
+
+function repairModelWithVariant(repair) {
+  return formatModelWithControlVariant(repairModelName(repair), repairControlVariant(repair))
+}
+
+/** 型号：F3 Max（遥控版本）；按钮/遥控用绿色 info 标记 */
+function formatModelLine(repair) {
+  const rawName = repairModelName(repair)
+  const name = rawName
+    .replace(/[（(]\s*(按钮版|遥控版|蓝牙版|按钮版本|遥控版本)\s*[）)]/g, '')
+    .trim() || rawName
+  const full = controlVariantLabelFull(repairControlVariant(repair))
+  if (!full) return `型号：${name}`
+  return `型号：${name}（<font color="info">${full}</font>）`
+}
+
+/** 企微 markdown：标题后空一行，字段严格 \\n 分行（标题里塞 font 容易把正文挤成一行） */
+function wecomMarkdownLines(title, bodyLines) {
+  const body = (bodyLines || []).filter((x) => x != null && String(x).length > 0)
+  return [String(title || '').trim(), '', ...body].join('\n')
+}
 
 function getEnv(name) {
   return String((process.env && process.env[name]) || '').trim()
@@ -59,6 +134,14 @@ const DEFAULT_ADMIN_TODO_WEBHOOK =
 
 function getAdminTodoWebhook() {
   return getEnv('WECOM_WEBHOOK_ADMIN') || DEFAULT_ADMIN_TODO_WEBHOOK
+}
+
+/** 耗材紧缺/低库存上报群 */
+const DEFAULT_INVENTORY_WEBHOOK =
+  'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=dec92809-9f01-4f4d-b462-00c3944d035c'
+
+function getInventoryWebhook() {
+  return getEnv('WECOM_WEBHOOK_INVENTORY') || DEFAULT_INVENTORY_WEBHOOK
 }
 
 function postJson(urlStr, body) {
@@ -370,78 +453,86 @@ async function loadShopOrderByOrderId(orderId) {
 function buildReturnArriveText(repair, nick, opts = {}) {
   const tracking = String(repair.returnTrackingId || '').trim() || '未填写'
   const internal = String(repair.returnNoteInternal || '').trim() || '无'
-  const model = String(repair.model || (repair.device && repair.device.model) || '').trim() || '未知型号'
   const expired = isWarrantyExpiredRepair(repair)
   const paid = isRepairFeePaid(repair)
   // returnAddress / contact：用户填写的「收件地址」，不是用户寄出包裹的发件地
   const address = formatAddress(repair)
   const express = resolveRepairExpressLabel(repair)
   const rePush = opts.manual ? '（重推）' : ''
+  const eta = String(
+    repair.returnArriveEta ||
+    repair.returnExpectedArrive ||
+    (repair.returnLogistics && (repair.returnLogistics.eta || repair.returnLogistics.arriveTime)) ||
+    ''
+  ).trim()
 
+  // 「寄回维修订单」用 warning 上色（企微无纯红）；不要塞进 ###，否则不换行
   // 过保未付：只要催款 + 用户寄回运单，不要地址
   if (expired && !paid) {
-    return [
-      `### 【待收款】${rePush}`,
+    return wecomMarkdownLines(`【<font color="warning">寄回维修订单</font>】待收款${rePush}`, [
       '要做：联系用户付维修费',
-      `用户：${nick}　｜　${model}`,
+      `用户：${nick}`,
+      formatModelLine(repair),
       `用户寄回运单：${tracking}`,
       `内部备注：${internal}`
-    ].join('\n')
+    ])
   }
 
-  // 过保已付 / 支付触发：可回寄，突出用户填写的收货地址 + 寄出快递
+  // 过保已付
   if (expired && paid) {
-    return [
-      `### 【可回寄】过保${rePush}`,
+    return wecomMarkdownLines(`【<font color="warning">寄回维修订单</font>】过保${rePush}`, [
       '要做：按收货地址把修好的寄回给用户',
-      `用户：${nick}　｜　${model}`,
+      `用户：${nick}`,
+      formatModelLine(repair),
       `用户寄回运单：${tracking}`,
       `寄出快递：${express}`,
-      `收货地址（用户填写）：${address}`,
+      `预计到达时间：${eta}`,
+      `用户收货地址（用户填写）：${address}`,
       `内部备注：${internal}`
-    ].join('\n')
+    ])
   }
 
   // 在保
-  return [
-    `### 【可回寄】在保${rePush}`,
+  return wecomMarkdownLines(`【<font color="warning">寄回维修订单</font>】在保${rePush}`, [
     '要做：按收货地址寄回给用户',
-    `用户：${nick}　｜　${model}`,
+    `用户：${nick}`,
+    formatModelLine(repair),
     `用户寄回运单：${tracking}`,
     `质保：${formatWarranty(repair)}`,
     `寄出快递：${express}`,
     `收货地址（用户填写）：${address}`,
     `内部备注：${internal}`
-  ].join('\n')
+  ])
 }
 
 function buildDiagnosisText(repair, nick, opts = {}) {
-  const model = String(repair.model || (repair.device && repair.device.model) || '').trim() || '未知型号'
   const diagnosis = String(opts.adminDiagnosis || repair.adminDiagnosis || '').trim() || '（无）'
   const needsBoard = !!opts.needsBoard
-  const sn = String(repair.replacementOldSn || (repair.device && repair.device.sn) || '').trim()
   const address = formatAddress(repair)
   const express = resolveRepairExpressLabel(repair)
 
   if (needsBoard) {
-    return [
-      '### 【诊断·主板】先换绑 SN',
+    // 「主板寄出订单」红色（warning）；「邮寄并且绑定新主板」橙色强调
+    return wecomMarkdownLines('【<font color="warning">主板寄出订单</font>】', [
+      '先换绑 SN',
+      '<font color="warning">邮寄并且绑定新主板</font>',
       '要做：控制中心完成 SN 替换后再发货',
-      `用户：${nick}　｜　${model}${sn ? `　｜　SN ${sn}` : ''}`,
+      `用户昵称：${nick}`,
+      formatModelLine(repair),
       `结论：${diagnosis}`,
       `寄出快递：${express}`,
       `收货地址（用户填写）：${address}`
-    ].join('\n')
+    ])
   }
 
-  return [
-    '### 【诊断】备料发货',
+  return wecomMarkdownLines('【配件寄出订单】', [
     '要做：按结论备料并寄出',
-    `用户：${nick}　｜　${model}`,
+    `用户：${nick}`,
+    formatModelLine(repair),
     `结论：${diagnosis}`,
     `寄出快递：${express}`,
     `收货地址（用户填写）：${address}`
-  ].join('\n')
+  ])
 }
 
 async function sendMarkdown(webhook, content) {
@@ -590,7 +681,55 @@ async function resendReturnArrive(repairId) {
       }
     })
   } catch (e) { /* ignore */ }
-  return { ok: true, sent: 1, dailyOrder: `${meta.label} · 第 ${meta.seq} 单` }
+  return { ok: true, sent: 1, kind: 'return', dailyOrder: `${meta.label} · 第 ${meta.seq} 单` }
+}
+
+/**
+ * 报修工单卡「重新推送企微」：按当前进度智能选文案
+ * - 已填寄回运单 → 寄回提醒
+ * - 已有诊断结论 → 诊断书
+ * - 否则 → 新报修待办
+ */
+async function resendRepairWecom(repairId) {
+  await assertAdmin()
+  if (!repairId) return { ok: false, errMsg: '缺少 repairId' }
+
+  const doc = await db.collection('shouhou_repair').doc(String(repairId)).get()
+  const repair = doc && doc.data
+  if (!repair) return { ok: false, errMsg: '维修单不存在' }
+
+  const tracking = String(repair.returnTrackingId || '').trim()
+  if (tracking) {
+    const r = await resendReturnArrive(repairId)
+    return r && r.ok ? { ...r, kind: r.kind || 'return' } : r
+  }
+
+  const diagnosis = String(repair.adminDiagnosis || '').trim()
+  if (diagnosis || repair.diagnosisDone === true) {
+    const r = await notifyDiagnosisSaved({
+      repairId,
+      repairSnapshot: repair,
+      force: true
+    })
+    return r && r.ok ? { ...r, kind: 'diagnosis' } : r
+  }
+
+  const nick = await resolveNickname(repair)
+  const model = repairModelWithVariant(repair)
+  const fault = String(
+    repair.description ||
+    repair.faultDesc ||
+    repair.problemDesc ||
+    repair.problem ||
+    repair.fault ||
+    ''
+  ).trim()
+  const r = await notifyAdminTodo({
+    kind: 'repair_pending',
+    nick,
+    oneLine: [model, fault].filter(Boolean).join(' · ')
+  })
+  return r && r.ok ? { ...r, kind: 'repair_pending' } : r
 }
 
 /** 保存诊断书后立刻推群（可由 deviceReplacement 内部调用，不强制校验管理员） */
@@ -759,23 +898,152 @@ async function notifyAdminTodo(event = {}) {
   return { ok: true, sent: 1, kind, webhookHost: 'admin-todo' }
 }
 
-/** 寄回运单物流已签收 → 管理待办群提醒「故障配件已签收，请注意查收」 */
+/**
+ * 耗材低库存 / 紧缺上报
+ * 文字用 markdown；照片用独立 image 消息（群机器人 markdown 内嵌图经常不显示）
+ */
+function buildInventoryLowText(event = {}, opts = {}) {
+  const name = String(event.name || event.nick || '未知耗材').trim() || '未知耗材'
+  const status = String(event.statusText || event.status || event.summary || '').trim() || '未知'
+  const barcode = String(event.barcode || '').trim()
+  const lines = [
+    '### 【耗材上报】',
+    `耗材昵称：${name}`,
+    `当前状态：<font color="warning">${status}</font>`,
+    barcode ? `条码：${barcode}` : ''
+  ]
+  if (opts.photoFailed) {
+    lines.push('')
+    lines.push('（照片发送失败，请到小程序查看出入库）')
+  } else if (opts.noPhoto) {
+    lines.push('')
+    lines.push('（暂无照片）')
+  }
+  return lines.filter(Boolean).join('\n')
+}
+
+function downloadUrlBuffer(urlStr, redirectsLeft = 3) {
+  return new Promise((resolve, reject) => {
+    let u
+    try {
+      u = new URL(urlStr)
+    } catch (e) {
+      reject(new Error('照片地址无效'))
+      return
+    }
+    const lib = u.protocol === 'http:' ? require('http') : https
+    const req = lib.get(
+      {
+        protocol: u.protocol,
+        hostname: u.hostname,
+        port: u.port || (u.protocol === 'http:' ? 80 : 443),
+        path: u.pathname + (u.search || ''),
+        timeout: 15000,
+        headers: { 'User-Agent': 'wecomNotify/1.0' }
+      },
+      (res) => {
+        const code = res.statusCode || 0
+        if (code >= 300 && code < 400 && res.headers.location && redirectsLeft > 0) {
+          res.resume()
+          downloadUrlBuffer(res.headers.location, redirectsLeft - 1).then(resolve).catch(reject)
+          return
+        }
+        if (code < 200 || code >= 300) {
+          res.resume()
+          reject(new Error(`下载照片失败 HTTP ${code}`))
+          return
+        }
+        const chunks = []
+        let total = 0
+        const max = 2 * 1024 * 1024 // 企微 image 限制 2MB
+        res.on('data', (c) => {
+          total += c.length
+          if (total > max) {
+            res.destroy(new Error('照片超过 2MB，无法推送'))
+            return
+          }
+          chunks.push(c)
+        })
+        res.on('end', () => resolve(Buffer.concat(chunks)))
+        res.on('error', reject)
+      }
+    )
+    req.on('timeout', () => {
+      req.destroy(new Error('下载照片超时'))
+    })
+    req.on('error', reject)
+  })
+}
+
+async function sendImage(webhook, buffer) {
+  if (!buffer || !buffer.length) throw new Error('空图片')
+  if (buffer.length > 2 * 1024 * 1024) throw new Error('照片超过 2MB')
+  const crypto = require('crypto')
+  const base64 = buffer.toString('base64')
+  const md5 = crypto.createHash('md5').update(buffer).digest('hex')
+  return postJson(webhook, {
+    msgtype: 'image',
+    image: { base64, md5 }
+  })
+}
+
+async function notifyInventoryLow(event = {}) {
+  const webhook = getInventoryWebhook()
+  if (!webhook) {
+    return { ok: false, errMsg: '耗材上报 Webhook 未配置' }
+  }
+  const photoUrl = String(event.photoUrl || event.imageUrl || '').trim()
+  let photoOk = false
+  let photoFailed = false
+  let noPhoto = !(photoUrl && /^https?:\/\//i.test(photoUrl))
+
+  // 文字先发：主流程（出入库保存）只依赖这段成功，避免等照片导致上游超时误报失败
+  await sendMarkdown(webhook, buildInventoryLowText(event, { noPhoto: noPhoto && !photoFailed }))
+
+  if (!noPhoto) {
+    try {
+      const buf = await Promise.race([
+        downloadUrlBuffer(photoUrl),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('下载照片超时')), 8000)
+        })
+      ])
+      await sendImage(webhook, buf)
+      photoOk = true
+    } catch (e) {
+      photoFailed = true
+      console.warn('[wecomNotify] inventory photo send failed', e)
+      try {
+        await sendMarkdown(
+          webhook,
+          `耗材照片推送失败：${String((e && e.message) || e).slice(0, 80)}\n链接：${photoUrl}`
+        )
+      } catch (e2) { /* ignore */ }
+    }
+  }
+
+  return {
+    ok: true,
+    sent: photoOk ? 2 : 1,
+    photoOk,
+    photoFailed,
+    webhookHost: 'inventory'
+  }
+}
+
+/** 寄回运单物流已签收 → 管理待办群提醒（已签收就直接推，不再二次判断） */
 async function processReturnSignedAdminNotifies(limit = 15) {
   let rows = []
   try {
     const res = await db.collection('shouhou_repair')
       .where({
         needReturn: true,
-        returnSignedAdminNotifySent: _.neq(true),
-        returnTrackingId: _.exists(true).and(_.neq(''))
+        returnLogisticsSigned: true,
+        returnSignedAdminNotifySent: _.neq(true)
       })
-      .limit(Math.min(50, Math.max(5, limit * 2)))
+      .limit(Math.min(50, Math.max(5, limit)))
       .get()
-    rows = (res.data || []).filter((item) => {
-      if (item.returnCompleted === true) return true
-      if (String(item.status || '').toUpperCase() === 'RETURN_RECEIVED') return true
-      return !!String(item.returnTrackingId || '').trim()
-    }).slice(0, limit)
+    rows = res.data || []
   } catch (e) {
     console.warn('[wecomNotify] query return signed candidates failed', e)
     return { ok: false, scanned: 0, sent: 0, errMsg: (e && e.message) || String(e) }
@@ -786,51 +1054,6 @@ async function processReturnSignedAdminNotifies(limit = 15) {
   for (const repair of rows) {
     const id = repair._id
     try {
-      let signed = repair.returnCompleted === true ||
-        String(repair.status || '').toUpperCase() === 'RETURN_RECEIVED' ||
-        repair.returnLogisticsSigned === true
-
-      if (!signed) {
-        const tracking = String(repair.returnTrackingId || '').trim()
-        if (!tracking) continue
-        const phone = (repair.contact && repair.contact.phone) || ''
-        let logistics = null
-        try {
-          const lr = await cloud.callFunction({
-            name: 'queryLogistics',
-            data: { trackingId: tracking, phone }
-          })
-          logistics = (lr && lr.result) || null
-        } catch (e) {
-          console.warn('[wecomNotify] queryLogistics for return signed failed', id, e)
-        }
-        const statusCode = String(
-          (logistics && logistics.data && logistics.data.status) ||
-          (logistics && logistics.status) ||
-          ''
-        )
-        const statusText = String(
-          (logistics && logistics.data && (logistics.data.status_text || logistics.data.statusText)) ||
-          (logistics && logistics.statusText) ||
-          ''
-        )
-        signed = statusCode === '3' || /签收|送达/.test(statusText)
-        if (signed) {
-          try {
-            await db.collection('shouhou_repair').doc(String(id)).update({
-              data: {
-                returnLogisticsSigned: true,
-                returnLogisticsStatus: statusCode || '3',
-                returnLogisticsStatusText: statusText || '已签收',
-                returnLogisticsCheckedAt: db.serverDate()
-              }
-            })
-          } catch (e2) { /* ignore */ }
-        }
-      }
-
-      if (!signed) continue
-
       const nick = await resolveNickname(repair)
       await notifyAdminTodo({
         kind: 'return_signed',
@@ -967,9 +1190,27 @@ exports.main = async (event = {}) => {
       return { ok: false, errMsg: (e && (e.errMsg || e.message)) || String(e) }
     }
   }
+  if (action === 'notifyInventoryLow' || action === 'inventoryLow') {
+    try {
+      return await notifyInventoryLow(event)
+    } catch (e) {
+      return { ok: false, errMsg: (e && (e.errMsg || e.message)) || String(e) }
+    }
+  }
   if (action === 'resendReturnArrive') {
     try {
       return await resendReturnArrive(event.repairId || event.id)
+    } catch (e) {
+      const msg = (e && e.message) || String(e)
+      if (msg === 'FORBIDDEN' || msg === 'UNAUTHORIZED') {
+        return { ok: false, errMsg: '无管理员权限' }
+      }
+      return { ok: false, errMsg: msg }
+    }
+  }
+  if (action === 'resendRepairWecom' || action === 'resendRepairNotify') {
+    try {
+      return await resendRepairWecom(event.repairId || event.id)
     } catch (e) {
       const msg = (e && e.message) || String(e)
       if (msg === 'FORBIDDEN' || msg === 'UNAUTHORIZED') {
@@ -985,6 +1226,7 @@ exports.main = async (event = {}) => {
       hasDiagnosisWebhook: !!getDiagnosisWebhook(),
       hasShopWebhook: !!getShopWebhook(),
       hasAdminTodoWebhook: !!getAdminTodoWebhook(),
+      hasInventoryWebhook: !!getInventoryWebhook(),
       delayMs: DELAY_MS
     }
   }

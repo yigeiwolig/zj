@@ -4,7 +4,12 @@
     "ignore": [
       { "type": "suffix", "value": ".backup" },
       { "type": "suffix", "value": ".map" },
-      { "type": "suffix", "value": ".mp3" }
+      { "type": "suffix", "value": ".mp3" },
+      { "type": "suffix", "value": ".md" },
+      { "type": "suffix", "value": ".ps1" },
+      { "type": "folder", "value": "uploads" },
+      { "type": "folder", "value": "tools" },
+      { "type": "folder", "value": "package-app/pages/inventory" }
     ],
     "include": []
   },
@@ -26,7 +31,10 @@
     "localPlugins": false,
     "useCompilerPlugins": false,
     "minified": true,
-    "uploadWithSourceMap": true,
+    "uploadWithSourceMap": false,
+    "ignoreUploadUnusedFiles": true,
+    "ignoreDevUnusedFiles": true,
+    "ignoreCodeQuality": true,
     "compileWorklet": false,
     "enhance": true,
     "minifyWXSS": true,

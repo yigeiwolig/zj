@@ -2,6 +2,25 @@ const cloud = require('wx-server-sdk')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
+function normalizeControlVariant(raw) {
+  const s = String(raw || '').trim().toLowerCase()
+  if (!s) return ''
+  if (
+    s === 'button' || s === 'btn' ||
+    s === 'bluetooth' || s === 'ble' || s === 'bt' ||
+    s.indexOf('按钮') >= 0 || s.indexOf('按键') >= 0 || s.indexOf('蓝牙') >= 0
+  ) return 'button'
+  if (s === 'remote' || s === '遥控' || s.indexOf('遥控') >= 0) return 'remote'
+  return ''
+}
+
+function controlVariantLabel(raw) {
+  const key = normalizeControlVariant(raw)
+  if (key === 'button') return '按钮版'
+  if (key === 'remote') return '遥控版'
+  return ''
+}
+
 async function softWecomAdminTodo(kind, oneLine) {
   try {
     await cloud.callFunction({
@@ -166,9 +185,11 @@ exports.main = async (event) => {
       const imgReceipt = String(event.imgReceipt || '').trim()
       const imgChat = String(event.imgChat || '').trim()
       const fullDeviceName = String(event.fullDeviceName || sn).trim()
+      const controlVariant = normalizeControlVariant(event.controlVariant)
 
       if (!sn) return { success: false, msg: '请先连接设备' }
       if (!productModel) return { success: false, msg: '请选择型号' }
+      if (!controlVariant) return { success: false, msg: '请选择按钮版或遥控版' }
       if (!imgReceipt) return { success: false, msg: '请上传购买截图' }
       if (bindType === 'used' && !imgChat) return { success: false, msg: '请上传聊天记录' }
       if (!buyDate) return { success: false, msg: '请选择购买日期' }
@@ -179,6 +200,7 @@ exports.main = async (event) => {
           sn,
           fullDeviceName,
           productModel,
+          controlVariant,
           buyDate,
           bindType,
           imgReceipt,
@@ -187,7 +209,7 @@ exports.main = async (event) => {
           createTime: db.serverDate()
         }
       })
-      await softWecomAdminTodo('bind_audit', `${productModel} / ${sn}`)
+      await softWecomAdminTodo('bind_audit', `${productModel}${controlVariantLabel(controlVariant) ? ` (${controlVariantLabel(controlVariant)})` : ''} / ${sn}`)
       return { success: true, msg: '提交成功' }
     }
 
@@ -204,8 +226,10 @@ exports.main = async (event) => {
     const productModel = String(event.productModel || '').trim()
     const buyDate = String(event.buyDate || '').trim()
     const imgReceipt = String(event.imgReceipt || '').trim()
+    const controlVariant = normalizeControlVariant(event.controlVariant)
 
     if (!productModel) return { success: false, msg: '请选择型号' }
+    if (!controlVariant) return { success: false, msg: '请选择按钮版或遥控版' }
     if (!imgReceipt) return { success: false, msg: '请上传购买截图' }
     if (!buyDate) return { success: false, msg: '请选择购买日期' }
 
@@ -218,6 +242,7 @@ exports.main = async (event) => {
         sn: '',
         fullDeviceName: '',
         productModel,
+        controlVariant,
         buyDate,
         bindType: 'fault',
         imgReceipt,
@@ -226,7 +251,7 @@ exports.main = async (event) => {
         createTime: db.serverDate()
       }
     })
-    await softWecomAdminTodo('fault_audit', productModel)
+    await softWecomAdminTodo('fault_audit', `${productModel}${controlVariantLabel(controlVariant) ? ` (${controlVariantLabel(controlVariant)})` : ''}`)
     return { success: true, msg: '提交成功' }
   } catch (err) {
     console.error('[submitFaultBind]', err)

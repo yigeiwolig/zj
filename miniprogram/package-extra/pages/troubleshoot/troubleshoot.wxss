@@ -1,0 +1,371 @@
+page {
+  background: #FFFFFF;
+  color: #000000;
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.ts-page {
+  min-height: 100vh;
+  background: #FFFFFF;
+}
+
+.ts-main-view {
+  min-height: 100vh;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: center center;
+  position: relative;
+}
+
+.ts-main-view.is-sunk {
+  transform: scale(0.95);
+}
+
+/* 导航栏 */
+.ts-nav {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.ts-nav-back {
+  width: 140rpx;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding-left: 32rpx;
+  font-size: 32rpx;
+  font-weight: 400;
+  color: #1C1C1E; /* 深邃灰黑 */
+}
+
+.ts-nav-title {
+  flex: 1;
+  text-align: center;
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #000;
+}
+
+.ts-nav-right {
+  width: 140rpx;
+}
+
+.ts-content {
+  padding-bottom: 80rpx;
+  background: transparent;
+  min-height: 100vh;
+}
+
+/* 页面头部 */
+.ts-header {
+  padding: 40rpx 40rpx 48rpx;
+}
+
+.ts-title {
+  display: block;
+  font-size: 56rpx;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -1rpx;
+  color: #000;
+}
+
+.ts-subtitle {
+  display: block;
+  margin-top: 16rpx;
+  font-size: 30rpx;
+  line-height: 1.5;
+  color: #8E8E93;
+}
+
+/* 媒体区域：黑色大圆角卡片 */
+.ts-notice-bar {
+  margin: 0 40rpx 32rpx;
+  padding: 24rpx 32rpx;
+  background: #F2F2F7;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.ts-notice-text {
+  font-size: 28rpx;
+  color: #8E8E93;
+  line-height: 1.4;
+}
+
+.ts-media-box {
+  margin: 0 40rpx;
+  border-radius: 32rpx;
+  overflow: hidden;
+  background: #000000;
+  box-shadow: inset 0 0 0 1rpx rgba(0, 0, 0, 0.05);
+}
+
+.ts-video {
+  width: 100%;
+  height: 600rpx;
+  display: block;
+}
+
+.ts-image {
+  width: 100%;
+  display: block;
+}
+
+/* 列表态 */
+.ts-list {
+  margin: 0 40rpx;
+  background: #F2F2F7;
+  border-radius: 28rpx;
+  overflow: hidden;
+}
+
+.ts-list-row {
+  display: flex;
+  align-items: center;
+  padding: 32rpx 36rpx;
+  position: relative;
+  background: #F2F2F7;
+}
+
+.ts-list-row::after {
+  content: '';
+  position: absolute;
+  left: 36rpx;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: #E5E5EA;
+}
+
+.ts-list-row:last-child::after {
+  display: none;
+}
+
+.ts-list-row-hover {
+  background: #E5E5EA;
+}
+
+.ts-list-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.ts-list-title {
+  font-size: 34rpx;
+  color: #000;
+  font-weight: 500;
+}
+
+.ts-list-subtitle {
+  font-size: 26rpx;
+  color: #8E8E93;
+}
+
+.ts-chevron {
+  font-size: 40rpx;
+  color: #C7C7CC;
+  font-weight: 300;
+  margin-left: 16rpx;
+}
+
+/* 结果页展示 */
+.ts-result-box {
+  margin: 64rpx 40rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.ts-result-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #000;
+  margin-top: 32rpx;
+  margin-bottom: 48rpx;
+}
+
+/* 页面内主按钮 */
+.ts-page-actions {
+  margin: 64rpx 40rpx 0;
+}
+
+.ts-primary-btn {
+  width: 100%;
+  height: 100rpx;
+  border-radius: 24rpx;
+  background: #1C1C1E; /* 深邃黑 */
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+  font-weight: 600;
+}
+
+.ts-primary-btn:active {
+  opacity: 0.8;
+}
+
+/* 页面内文字链接 */
+.ts-page-footer {
+  margin-top: 48rpx;
+  display: flex;
+  justify-content: center;
+  gap: 80rpx;
+}
+
+.ts-text-link {
+  font-size: 30rpx;
+  color: #1C1C1E;
+  font-weight: 400;
+  padding: 16rpx;
+}
+
+.ts-text-link:active {
+  opacity: 0.5;
+}
+
+/* --- iOS 风格 Action Sheet (底部弹窗) --- */
+.ts-sheet-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ts-sheet-mask.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ts-sheet-panel {
+  position: fixed;
+  left: 16rpx;
+  right: 16rpx;
+  bottom: 0;
+  background: transparent;
+  z-index: 101;
+  transform: translateY(100%);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+}
+
+.ts-sheet-panel.is-visible {
+  transform: translateY(0);
+}
+
+.ts-sheet-header {
+  text-align: center;
+  margin-bottom: 24rpx;
+}
+
+.ts-sheet-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24rpx 0;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.ts-sheet-title-text {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #8E8E93;
+}
+
+.ts-sheet-title {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #8E8E93;
+}
+
+.ts-sheet-group {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 28rpx;
+  overflow: hidden;
+}
+
+.ts-sheet-btn {
+  height: 112rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  color: #1C1C1E;
+  font-weight: 400;
+  background: transparent;
+  position: relative;
+}
+
+.ts-sheet-btn::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: rgba(0,0,0,0.05);
+  transform: scaleY(0.5);
+}
+
+.ts-sheet-btn:last-child::after {
+  display: none;
+}
+
+.ts-sheet-btn--hover {
+  background: rgba(0,0,0,0.05);
+}
+
+.ts-sheet-btn--bold {
+  font-weight: 600;
+}
+
+/* 异常态 */
+.ts-loading, .ts-error, .ts-empty {
+  padding: 240rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #8E8E93;
+  font-size: 32rpx;
+}
+
+.ts-spinner {
+  width: 48rpx;
+  height: 48rpx;
+  border: 4rpx solid rgba(28, 28, 30, 0.2);
+  border-top-color: #1C1C1E;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.ts-error-title {
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #000;
+  margin-bottom: 16rpx;
+}
+
+.ts-error-copy {
+  margin-bottom: 32rpx;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

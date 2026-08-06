@@ -16,6 +16,9 @@
     "showES6CompileOption": false,
     "checkInvalidKey": true,
     "ignoreDevUnusedFiles": false,
+    "ignoreUploadUnusedFiles": false,
+    "ignoreCodeQuality": true,
+    "uploadWithSourceMap": false,
     "bigPackageSizeSupport": true
   }
 }

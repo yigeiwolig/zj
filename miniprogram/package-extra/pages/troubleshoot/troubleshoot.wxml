@@ -1,0 +1,124 @@
+<view class="ts-page">
+  <view class="ts-main-view {{sheetVisible ? 'is-sunk' : ''}}">
+    <view class="ts-nav" style="height: {{navBarHeight}}px; padding-top: {{statusBarHeight}}px;">
+      <view class="ts-nav-back" bindtap="goBack">取消</view>
+      <text class="ts-nav-title">{{currentNode ? '排查助手' : '自助排查'}}</text>
+      <view class="ts-nav-right"></view>
+    </view>
+
+    <view class="ts-content" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
+    
+    <view class="ts-loading" wx:if="{{loading}}">
+      <view class="ts-spinner"></view>
+    </view>
+
+    <view class="ts-error" wx:elif="{{errorText}}">
+      <text class="ts-error-title">无法加载</text>
+      <text class="ts-error-copy">{{errorText}}</text>
+      <view class="ts-primary-btn" bindtap="retryLoad">重试</view>
+    </view>
+
+    <!-- 列表页 -->
+    <block wx:elif="{{!currentNode}}">
+      <view class="ts-header">
+        <text class="ts-title">排查助手</text>
+        <text class="ts-subtitle">选择现象，按提示逐步确认</text>
+      </view>
+
+      <view class="ts-list" wx:if="{{trees.length}}">
+        <view class="ts-list-row" wx:for="{{trees}}" wx:key="_id" data-id="{{item._id}}" bindtap="startTree" hover-class="ts-list-row-hover">
+          <view class="ts-list-content">
+            <text class="ts-list-title">{{item.title}}</text>
+            <text class="ts-list-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
+          </view>
+          <text class="ts-chevron">›</text>
+        </view>
+      </view>
+      <view class="ts-empty" wx:else>暂无排查方案</view>
+    </block>
+
+    <!-- 步骤页 -->
+    <block wx:else>
+      <view class="ts-header">
+        <text class="ts-title">{{currentNode.title}}</text>
+        <text class="ts-subtitle" wx:if="{{currentNode.body}}">{{currentNode.body}}</text>
+      </view>
+
+      <!-- 提示框 -->
+      <view class="ts-notice-bar" wx:if="{{hasVideo || (currentNode.media.url && currentNode.media.type === 'image')}}">
+        <icon type="info" size="16" color="#8E8E93"></icon>
+        <text class="ts-notice-text">请对照下方演示，检查您的设备状态</text>
+      </view>
+
+      <!-- 视频区域：黑色大圆角卡片 -->
+      <view class="ts-media-box" wx:if="{{hasVideo}}">
+        <video
+          id="troubleshoot-video"
+          class="ts-video"
+          src="{{currentNode.media.url}}"
+          poster="{{currentNode.media.poster}}"
+          controls
+          show-center-play-btn
+          enable-progress-gesture
+          object-fit="contain"
+          bindended="onVideoEnded"
+          bindtimeupdate="onVideoTimeUpdate"
+          binderror="onVideoError"
+        ></video>
+      </view>
+      <view class="ts-media-box" wx:elif="{{currentNode.media.url && currentNode.media.type === 'image'}}">
+        <image class="ts-image" src="{{currentNode.media.url}}" mode="widthFix" />
+      </view>
+
+      <!-- 结果页展示 -->
+      <view class="ts-result-box" wx:if="{{currentNode.type === 'result'}}">
+        <icon type="{{currentNode.result === 'ok' ? 'success' : 'warn'}}" size="64"></icon>
+        <text class="ts-result-title">{{currentNode.result === 'ok' ? '问题已排除' : '建议申请售后'}}</text>
+        <view class="ts-primary-btn" bindtap="onResultAction">
+          {{currentNode.resultCta || (currentNode.result === 'ok' ? '完成' : '去故障报修')}}
+        </view>
+        <view class="ts-page-footer">
+          <text class="ts-text-link" wx:if="{{historyCount}}" bindtap="previousStep">上一步</text>
+          <text class="ts-text-link" bindtap="returnToList">退出排查</text>
+        </view>
+      </view>
+
+      <!-- 播放完毕后的悬浮入口 -->
+      <block wx:elif="{{currentNode.type !== 'result'}}">
+        <view class="ts-page-actions" wx:if="{{showOptions}}">
+          <view class="ts-primary-btn" bindtap="showSheet">选择观察结果</view>
+        </view>
+        <view class="ts-page-footer" wx:if="{{showOptions}}">
+          <text class="ts-text-link" wx:if="{{historyCount}}" bindtap="previousStep">上一步</text>
+          <text class="ts-text-link" bindtap="returnToList">退出排查</text>
+        </view>
+      </block>
+    </block>
+  </view>
+  </view>
+
+  <!-- iOS 风格 Action Sheet (用于选择现象) -->
+  <block wx:if="{{currentNode && currentNode.type !== 'result'}}">
+    <view class="ts-sheet-mask {{sheetVisible ? 'is-visible' : ''}}" bindtap="hideSheet" catchtouchmove="true"></view>
+    <view class="ts-sheet-panel {{sheetVisible ? 'is-visible' : ''}}">
+      <view class="ts-sheet-group">
+        <view class="ts-sheet-header-inner">
+          <text class="ts-sheet-title-text">观察到什么现象？</text>
+        </view>
+        <view 
+          class="ts-sheet-btn" 
+          wx:for="{{currentNode.options}}" 
+          wx:key="index" 
+          data-index="{{index}}" 
+          bindtap="chooseOption" 
+          hover-class="ts-sheet-btn--hover"
+        >
+          {{item.label}}
+        </view>
+      </view>
+      <view class="ts-sheet-group" style="margin-top: 16rpx;">
+        <view class="ts-sheet-btn ts-sheet-btn--bold" bindtap="hideSheet" hover-class="ts-sheet-btn--hover">重看视频</view>
+      </view>
+    </view>
+  </block>
+</view>

@@ -8,6 +8,39 @@ const SERVER_DATE_FLAG = '__SERVER_DATE__'
 /** 录单备件且勾选需要寄回：约 3 天后提醒用户寄回故障件 */
 const USER_RETURN_REMIND_DELAY_MS = 3 * 24 * 60 * 60 * 1000
 
+function parseYmdLocal(raw) {
+  const s = String(raw || '').trim()
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) {
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0)
+  }
+  const d = new Date(s)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function remainingDaysFromExpiry(expiryRaw) {
+  const exp = typeof expiryRaw === 'string' ? parseYmdLocal(expiryRaw) : expiryRaw
+  if (!exp || Number.isNaN(exp.getTime())) return null
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0)
+  const expNoon = new Date(exp.getFullYear(), exp.getMonth(), exp.getDate(), 12, 0, 0, 0)
+  return Math.max(0, Math.round((expNoon.getTime() - today.getTime()) / 86400000))
+}
+
+function buildLiveWarrantyEntry(d) {
+  if (!d || !d.expiryDate) return null
+  const rem = remainingDaysFromExpiry(d.expiryDate)
+  return {
+    expiryDate: d.expiryDate,
+    remainingDays: rem != null ? rem : (Number(d.remainingDays) || 0),
+    totalDays: Number(d.totalDays) || 0,
+    productModel: String(d.productModel || '').trim(),
+    controlVariant: String(d.controlVariant || '').trim(),
+    sn: String(d.sn || '').trim(),
+    _isActive: !!d.isActive
+  }
+}
+
 async function assertAdmin() {
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
@@ -393,24 +426,87 @@ async function enrichReturnRequiredMeta(items) {
   const list = items || []
   const openids = [...new Set(list.map((i) => i._openid).filter(Boolean))]
   const nicknameDict = {}
-  for (const openid of openids) {
+  for (let i = 0; i < openids.length; i += 20) {
+    const batch = openids.slice(i, i + 20)
     try {
-      const validRes = await db.collection('valid_users').where({ _openid: openid }).limit(1).get()
-      if (validRes.data && validRes.data[0] && validRes.data[0].nickname) {
-        nicknameDict[openid] = validRes.data[0].nickname
-      }
+      const validRes = await db.collection('valid_users')
+        .where({ _openid: _.in(batch) })
+        .field({ _openid: true, nickname: true })
+        .get()
+      ;(validRes.data || []).forEach((u) => {
+        if (u && u._openid && u.nickname) nicknameDict[u._openid] = u.nickname
+      })
     } catch (e) { /* ignore */ }
   }
 
-  const sns = [...new Set(list.map((i) => i && i.device && i.device.sn).filter(Boolean))]
+  const sns = [...new Set(list.map((i) => {
+    if (!i) return ''
+    return String((i.device && i.device.sn) || i.sn || '').trim()
+  }).filter(Boolean))]
+  // sn → 实时质保（配置回溯后以 sn 集合为准，不能只用工单快照）
   const snExpiryMap = {}
   if (sns.length) {
     try {
-      const snRes = await db.collection('sn').where({ sn: _.in(sns), isActive: true }).get()
+      // 不强制 isActive：故障核验/待激活档案也要能刷出正确到期日
+      const snRes = await db.collection('sn').where({ sn: _.in(sns) }).get()
       ;(snRes.data || []).forEach((d) => {
-        if (d && d.sn && d.expiryDate && !snExpiryMap[d.sn]) snExpiryMap[d.sn] = d.expiryDate
+        const entry = buildLiveWarrantyEntry(d)
+        if (!entry || !d.sn) return
+        const existing = snExpiryMap[d.sn]
+        if (existing && existing._isActive && !d.isActive) return
+        snExpiryMap[d.sn] = entry
+      })
+      Object.keys(snExpiryMap).forEach((k) => {
+        if (snExpiryMap[k]) delete snExpiryMap[k]._isActive
       })
     } catch (e) { /* ignore */ }
+  }
+
+  // 工单缺 SN / SN 对不上时：按 openid + 型号从 sn 档案兜底（配置回溯后仍显示旧剩余天数的主因）
+  const warrantyByRepairId = {}
+  const needFallback = list.filter((i) => {
+    if (!i || !i._id) return false
+    const sn = String((i.device && i.device.sn) || i.sn || '').trim()
+    return !(sn && snExpiryMap[sn] && snExpiryMap[sn].expiryDate)
+  })
+  if (needFallback.length) {
+    const openids = [...new Set(needFallback.map((i) =>
+      String(i._openid || i.openid || (i.device && i.device.openid) || '').trim()
+    ).filter(Boolean))]
+    const snByOpenid = {}
+    for (let i = 0; i < openids.length; i += 20) {
+      const batch = openids.slice(i, i + 20)
+      try {
+        const snRes = await db.collection('sn').where({ openid: _.in(batch) }).get()
+        ;(snRes.data || []).forEach((d) => {
+          const oid = String(d.openid || '').trim()
+          if (!oid) return
+          if (!snByOpenid[oid]) snByOpenid[oid] = []
+          snByOpenid[oid].push(d)
+        })
+      } catch (e) { /* ignore */ }
+    }
+    needFallback.forEach((item) => {
+      const oid = String(item._openid || item.openid || (item.device && item.device.openid) || '').trim()
+      const model = String((item.device && item.device.productModel) || item.model || '').trim()
+      const candidates = (snByOpenid[oid] || []).filter((d) => d && d.expiryDate)
+      if (!candidates.length) return
+      let match = null
+      if (model) {
+        match = candidates.find((d) => String(d.productModel || '').trim() === model) || null
+      }
+      if (!match) {
+        const active = candidates.filter((d) => d.isActive)
+        match = (active.length === 1 ? active[0] : null) || (candidates.length === 1 ? candidates[0] : null)
+      }
+      if (!match) return
+      const entry = buildLiveWarrantyEntry(match)
+      if (!entry) return
+      delete entry._isActive
+      warrantyByRepairId[item._id] = entry
+      const snKey = String(match.sn || '').trim()
+      if (snKey && !snExpiryMap[snKey]) snExpiryMap[snKey] = entry
+    })
   }
 
   // 换主板/换机完成状态：旧流程只写了设备档案（replacementRepairId 指向工单），
@@ -469,11 +565,151 @@ async function enrichReturnRequiredMeta(items) {
   // 二次兜底已移除：按 openid 模糊匹配容易张冠李戴（同一用户多工单）。
   // 寄出单号主链路统一写 shouhou_repair.trackingId；无 repairId 的旧商城订单不再自动猜。
 
-  return { nicknameDict, snExpiryMap, replacementMap, trackingMap }
+  // 注意：列表接口必须快，不能在这里串行调用物流接口（会触发 3s 超时）。
+  // 签收状态改为前端按需查询并回写（_refreshReturnLogisticsStatuses）。
+
+  return { nicknameDict, snExpiryMap, warrantyByRepairId, replacementMap, trackingMap }
+}
+
+/** 用 sn 实时质保覆盖工单快照字段（配置回溯后必须看 sn） */
+function applyLiveWarrantyToRepairs(items, snExpiryMap, warrantyByRepairId) {
+  const map = snExpiryMap || {}
+  const byId = warrantyByRepairId || {}
+  return (items || []).map((item) => {
+    if (!item) return item
+    const deviceSn = String((item.device && item.device.sn) || item.sn || '').trim()
+    const live = (deviceSn && map[deviceSn]) || (item._id && byId[item._id]) || null
+    if (!live || !live.expiryDate) return item
+    const expiryDate = live.expiryDate
+    const rem = live.remainingDays != null
+      ? Number(live.remainingDays)
+      : remainingDaysFromExpiry(expiryDate)
+    const remainingDays = Number.isFinite(rem) ? Math.max(0, rem) : 0
+    const totalDays = Number(live.totalDays) || Number(item.totalDays) || 0
+    const liveSn = String(live.sn || deviceSn || '').trim()
+    return {
+      ...item,
+      expiryDate,
+      remainingDays,
+      totalDays: totalDays || item.totalDays,
+      warrantyExpired: remainingDays <= 0,
+      device: {
+        ...(item.device || {}),
+        sn: (item.device && item.device.sn) || liveSn || deviceSn,
+        expiryDate,
+        days: remainingDays,
+        totalDays: totalDays || (item.device && item.device.totalDays) || 0,
+        productModel: live.productModel || (item.device && item.device.productModel) || item.model || '',
+        controlVariant: live.controlVariant || (item.device && item.device.controlVariant) || item.controlVariant || ''
+      }
+    }
+  })
+}
+
+async function syncReturnLogisticsSigned(items) {
+  const list = items || []
+  const CACHE_MS = 10 * 60 * 1000
+  for (const item of list) {
+    if (!item || !item._id) continue
+    if (item.returnLogisticsSigned === true || item.returnCompleted === true) {
+      // 已签收但还没推过企微 → 直接推
+      if (item.returnLogisticsSigned === true && item.returnSignedAdminNotifySent !== true) {
+        await pushReturnSignedWecom(item)
+      }
+      continue
+    }
+    if (String(item.status || '').toUpperCase() === 'RETURN_RECEIVED') continue
+    const tracking = String(item.returnTrackingId || '').trim()
+    if (!tracking) continue
+
+    const checkedAt = item.returnLogisticsCheckedAt
+    if (checkedAt) {
+      const t = new Date(checkedAt).getTime()
+      if (Number.isFinite(t) && Date.now() - t < CACHE_MS) {
+        const text = String(item.returnLogisticsStatusText || '')
+        const code = String(item.returnLogisticsStatus || '')
+        if (code === '3' || /签收|送达|代收/.test(text)) {
+          item.returnLogisticsSigned = true
+          await pushReturnSignedWecom(item)
+        }
+        continue
+      }
+    }
+
+    try {
+      const phone = (item.contact && item.contact.phone) || ''
+      const lr = await cloud.callFunction({
+        name: 'queryLogistics',
+        data: {
+          trackingId: tracking,
+          receiverPhone: phone,
+          phone,
+          expressCompany: item.returnExpressCompany || item.expressCompany || ''
+        }
+      })
+      const result = (lr && lr.result) || {}
+      if (!result.success || !result.data) continue
+      const statusCode = String(result.data.status || '')
+      const statusText = String(result.data.status_text || result.data.statusText || '')
+      const signed = statusCode === '3' || /签收|送达|代收/.test(statusText)
+      const patch = {
+        returnLogisticsStatus: statusCode,
+        returnLogisticsStatusText: statusText,
+        returnLogisticsCheckedAt: db.serverDate()
+      }
+      if (signed) {
+        patch.returnLogisticsSigned = true
+        item.returnLogisticsSigned = true
+        item.returnLogisticsStatus = statusCode || '3'
+        item.returnLogisticsStatusText = statusText || '已签收'
+      } else {
+        item.returnLogisticsStatus = statusCode
+        item.returnLogisticsStatusText = statusText
+      }
+      try {
+        await db.collection('shouhou_repair').doc(String(item._id)).update({ data: patch })
+      } catch (e2) {
+        console.warn('[adminUpdateRepair] persist return logistics failed', item._id, e2)
+      }
+      if (signed) {
+        await pushReturnSignedWecom(item)
+      }
+    } catch (e) {
+      console.warn('[adminUpdateRepair] sync return logistics failed', item._id, e)
+    }
+  }
+}
+
+/** 签收后立刻推企微（只推一次） */
+async function pushReturnSignedWecom(item) {
+  if (!item || !item._id) return
+  if (item.returnSignedAdminNotifySent === true) return
+  const model = item.model || (item.device && item.device.productModel) || ''
+  const tracking = String(item.returnTrackingId || '').trim()
+  const oneLine = [model, tracking].filter(Boolean).join(' · ')
+  try {
+    await cloud.callFunction({
+      name: 'wecomNotify',
+      data: {
+        action: 'notifyAdminTodo',
+        kind: 'return_signed',
+        oneLine
+      }
+    })
+    await db.collection('shouhou_repair').doc(String(item._id)).update({
+      data: {
+        returnSignedAdminNotifySent: true,
+        returnSignedAdminNotifyAt: db.serverDate()
+      }
+    })
+    item.returnSignedAdminNotifySent = true
+  } catch (e) {
+    console.warn('[adminUpdateRepair] return signed wecom push failed', item._id, e)
+  }
 }
 
 async function listRepairs(listType) {
-  const limit = 200
+  const limit = 120
   if (listType === 'pending') {
     const res = await db.collection('shouhou_repair')
       .where({
@@ -486,7 +722,14 @@ async function listRepairs(listType) {
       .get()
     const filtered = filterPendingRepairs(res.data)
     const enriched = await enrichPendingWithWarrantyDeduction(filtered)
-    return { data: enriched }
+    // 与需寄回一致：附带 sn 实时质保，避免待处理卡仍显示建单快照
+    const meta = await enrichReturnRequiredMeta(enriched)
+    const withLiveWarranty = applyLiveWarrantyToRepairs(
+      enriched,
+      meta.snExpiryMap || {},
+      meta.warrantyByRepairId || {}
+    )
+    return { data: withLiveWarranty, ...meta }
   }
 
   if (listType === 'returnRequired') {
@@ -500,10 +743,338 @@ async function listRepairs(listType) {
       .limit(limit)
       .get()
     const meta = await enrichReturnRequiredMeta(res.data)
-    return { data: res.data || [], ...meta }
+    const withLiveWarranty = applyLiveWarrantyToRepairs(
+      res.data || [],
+      meta.snExpiryMap || {},
+      meta.warrantyByRepairId || {}
+    )
+    return { data: withLiveWarranty, ...meta }
+  }
+
+  // 寄回回溯：
+  // 1) 误完结 → 撤销完结
+  // 2) 误备单且未勾需要寄回 → 撤销寄出回待处理
+  // 3) 误把「需寄回+运单」撤回待处理 → 恢复需寄回（查运单记录）
+  // SHIPPED+needReturn 本身在「需寄回确认」，不进回溯列表
+  if (listType === 'returnCompletedRecent' || listType === 'returnRollbackRecent') {
+    const toMs = (raw) => {
+      if (!raw) return 0
+      try {
+        if (typeof raw === 'object' && raw.$date) return new Date(raw.$date).getTime() || 0
+        return new Date(raw).getTime() || 0
+      } catch (e) {
+        return 0
+      }
+    }
+
+    const [completedRes, shippedNoReturnRes, mistakenPendingRes] = await Promise.all([
+      db.collection('shouhou_repair')
+        .where({ needReturn: true, returnCompleted: true })
+        .orderBy('createTime', 'desc')
+        .limit(80)
+        .get(),
+      db.collection('shouhou_repair')
+        .where({ status: 'SHIPPED', needReturn: _.neq(true), returnCompleted: _.neq(true) })
+        .orderBy('createTime', 'desc')
+        .limit(80)
+        .get(),
+      db.collection('shouhou_repair')
+        .where({ status: _.in(['PENDING', 'ADMIN_REVIEWED']), shipRollbackAt: _.exists(true) })
+        .orderBy('createTime', 'desc')
+        .limit(80)
+        .get()
+    ])
+
+    const completed = (completedRes.data || []).map((row) => ({ ...row, rollbackKind: 'complete' }))
+    const shipped = (shippedNoReturnRes.data || []).map((row) => ({ ...row, rollbackKind: 'ship' }))
+
+    const mistakenRows = mistakenPendingRes.data || []
+    const restoreCandidates = []
+    for (let i = 0; i < mistakenRows.length; i++) {
+      const row = mistakenRows[i]
+      if (!row || !row._id) continue
+      if (row.needReturn === true) continue
+      const tracking = await resolveOutboundTracking(row)
+      const savedTracking = String(row.shipRollbackTrackingId || '').trim()
+      // 只要走过寄出回溯（有 shipRollbackAt），就允许恢复到需寄回；并尽量找回运单号
+      restoreCandidates.push({
+        ...row,
+        trackingId: tracking || savedTracking || row.trackingId || '',
+        rollbackKind: 'restore',
+        needReturn: true
+      })
+    }
+
+    const merged = completed.concat(shipped).concat(restoreCandidates)
+    merged.sort((a, b) => {
+      const ta = toMs(a.returnCompleteTime) || toMs(a.shipRollbackAt) || toMs(a.solveTime) || toMs(a.updateTime) || toMs(a.createTime)
+      const tb = toMs(b.returnCompleteTime) || toMs(b.shipRollbackAt) || toMs(b.solveTime) || toMs(b.updateTime) || toMs(b.createTime)
+      return tb - ta
+    })
+    return { data: merged.slice(0, 40) }
   }
 
   throw new Error('Unknown listType')
+}
+
+/** 查备件寄出运单：工单字段 → shop_orders.repairId */
+async function resolveOutboundTracking(repair) {
+  if (!repair) return ''
+  const direct = String(
+    repair.trackingId ||
+    repair.spareTrackingId ||
+    repair.expressNo ||
+    repair.shipTrackingId ||
+    repair.shipRollbackTrackingId ||
+    ''
+  ).trim()
+  if (direct) return direct
+  const rid = String(repair._id || '').trim()
+  if (!rid) return ''
+  try {
+    const res = await db.collection('shop_orders').where({ repairId: rid }).limit(10).get()
+    const rows = res.data || []
+    for (let i = 0; i < rows.length; i++) {
+      const tid = String(rows[i].trackingId || '').trim()
+      if (tid) return tid
+    }
+  } catch (e) { /* ignore */ }
+  return ''
+}
+
+/** 确认收货后「修回+新件同寄」：归档上一轮，同一运单寄出修好件+新配件，并强制继续需寄回 */
+async function reshipRepairedPlusSpare(docId, adminOpenid, ev) {
+  const trackingId = String((ev && ev.trackingId) || '').trim()
+  if (!trackingId) throw new Error('请填写运单号')
+  const shipRemark = String((ev && (ev.shipRemark || ev.note)) || '').trim()
+
+  const doc = await db.collection('shouhou_repair').doc(String(docId)).get()
+  if (!doc.data) throw new Error('维修单不存在')
+  const repair = doc.data
+
+  if (repair.needReturn !== true) {
+    throw new Error('非需寄回工单，无法走此分支')
+  }
+  if (repair.returnCompleted === true) {
+    throw new Error('工单已完结，请先寄回回溯后再操作')
+  }
+
+  const returnTid = String(repair.returnTrackingId || '').trim()
+  const isWholeUnitRepair = String(repair.returnStatus || '').toUpperCase() === 'PENDING_RETURN'
+  const userSent =
+    !!returnTid ||
+    String(repair.status || '').toUpperCase() === 'USER_SENT' ||
+    String(repair.returnStatus || '').toUpperCase() === 'USER_SENT' ||
+    repair.returnLogisticsSigned === true
+  if (!userSent) {
+    throw new Error('用户尚未寄回，无法确认收货后重寄')
+  }
+
+  const prevCycles = Array.isArray(repair.repairCycles) ? repair.repairCycles.length : 0
+  const archived = {
+    cycleIndex: prevCycles + 1,
+    outboundTrackingId: String(repair.trackingId || '').trim(),
+    outboundContains: Array.isArray(repair.outboundContains)
+      ? repair.outboundContains
+      : (repair.outboundMode ? [String(repair.outboundMode)] : (isWholeUnitRepair ? ['whole_unit_return'] : ['new_spare'])),
+    outboundMode: String(repair.outboundMode || (isWholeUnitRepair ? 'whole_unit_return' : 'new_spare')),
+    returnTrackingId: returnTid,
+    returnStatusBefore: String(repair.returnStatus || ''),
+    returnReceivedAt: db.serverDate(),
+    closedReason: 'reship_repaired_plus_spare',
+    closedAt: db.serverDate(),
+    closedBy: adminOpenid || ''
+  }
+
+  const updateObj = {
+    repairCycles: _.push(archived),
+    lastReturnReceivedAt: db.serverDate(),
+    // 清空上一轮寄回（整机寄回维修也从此进入「再寄故障件」轮次）
+    returnTrackingId: _.remove(),
+    returnTrackingTime: _.remove(),
+    returnStatus: _.remove(),
+    returnLogisticsSigned: false,
+    returnLogisticsStatus: _.remove(),
+    returnLogisticsStatusText: _.remove(),
+    returnLogisticsCheckedAt: _.remove(),
+    returnSignedAdminNotifySent: false,
+    // 修回+新件：同一运单号
+    trackingId,
+    solveTime: db.serverDate(),
+    reshipAt: db.serverDate(),
+    reshipBy: adminOpenid || '',
+    shipRemark: shipRemark || '修回+新件同寄',
+    outboundContains: ['repaired_return', 'new_spare'],
+    outboundMode: 'repaired_plus_spare',
+    status: 'SHIPPED',
+    needReturn: true,
+    returnCompleted: false,
+    returnCompleteTime: _.remove(),
+    userReturnRemindAt: new Date(Date.now() + USER_RETURN_REMIND_DELAY_MS),
+    userReturnRemindScheduledAt: db.serverDate(),
+    userReturnRemindSent: false,
+    userReturnRemindLastError: ''
+  }
+
+  await db.collection('shouhou_repair').doc(String(docId)).update({ data: updateObj })
+  return {
+    success: true,
+    trackingId,
+    outboundMode: 'repaired_plus_spare',
+    needReturn: true,
+    cycleIndex: archived.cycleIndex
+  }
+}
+
+/** 误完结后撤销：拉回需寄回；有运单则保持 SHIPPED */
+async function undoReturnComplete(docId, adminOpenid) {
+  const doc = await db.collection('shouhou_repair').doc(String(docId)).get()
+  if (!doc.data) throw new Error('维修单不存在')
+  const repair = doc.data
+  if (repair.needReturn !== true) {
+    throw new Error('该工单不是需寄回单，无法撤销完结')
+  }
+  if (repair.returnCompleted !== true) {
+    throw new Error('该工单尚未完结，无需撤销')
+  }
+
+  const outboundTracking = await resolveOutboundTracking(repair)
+  const terminal = ['COMPLETED', 'RETURN_RECEIVED', 'DELETED', 'CANCELLED', 'REPAIR_COMPLETED_SENT']
+  let nextStatus = String(repair.statusBeforeComplete || '').trim().toUpperCase()
+  if (!nextStatus || terminal.includes(nextStatus)) {
+    nextStatus = String(repair.returnTrackingId || '').trim() ? 'USER_SENT' : 'SHIPPED'
+  }
+  if (outboundTracking && ['PENDING', 'ADMIN_REVIEWED'].includes(nextStatus)) {
+    nextStatus = 'SHIPPED'
+  }
+
+  const patch = {
+    returnCompleted: false,
+    returnCompleteTime: _.remove(),
+    status: nextStatus,
+    needReturn: true,
+    returnCompleteRollbackAt: db.serverDate(),
+    returnCompleteRollbackBy: adminOpenid || ''
+  }
+  if (outboundTracking && !String(repair.trackingId || '').trim()) {
+    patch.trackingId = outboundTracking
+  }
+
+  const snapReturnStatus = String(repair.returnStatusBeforeComplete || '').trim()
+  if (snapReturnStatus) {
+    patch.returnStatus = snapReturnStatus
+  } else if (nextStatus === 'USER_SENT' && !repair.returnStatus) {
+    patch.returnStatus = 'USER_SENT'
+  }
+
+  const curStatus = String(repair.status || '').toUpperCase()
+  if (curStatus === 'RETURN_RECEIVED' || repair.returnLogisticsSigned === true) {
+    patch.returnLogisticsSigned = false
+    patch.returnSignedAdminNotifySent = false
+    patch.returnSignedAdminNotifyAt = _.remove()
+  }
+
+  await db.collection('shouhou_repair').doc(String(docId)).update({ data: patch })
+  return {
+    success: true,
+    status: nextStatus,
+    trackingId: outboundTracking || repair.trackingId || '',
+    returnStatus: patch.returnStatus || repair.returnStatus || '',
+    backTo: 'returnRequired'
+  }
+}
+
+/** 误点录单备件寄出后撤销（仅未勾需要寄回） */
+async function undoShip(docId, adminOpenid) {
+  const doc = await db.collection('shouhou_repair').doc(String(docId)).get()
+  if (!doc.data) throw new Error('维修单不存在')
+  const repair = doc.data
+  const st = String(repair.status || '').toUpperCase()
+  if (st !== 'SHIPPED') {
+    throw new Error('仅「备单寄出 / SHIPPED」状态可撤销寄出')
+  }
+  if (repair.returnCompleted === true) {
+    throw new Error('该单已完结，请先用「撤销完结」')
+  }
+  if (repair.returnStatus === 'USER_SENT' || String(repair.returnTrackingId || '').trim()) {
+    throw new Error('用户已填写寄回运单，无法撤销备单寄出')
+  }
+
+  const outboundTracking = await resolveOutboundTracking(repair)
+  if (repair.needReturn === true || outboundTracking) {
+    throw new Error('该单已录运单或已勾选需要寄回，请到「需寄回确认」处理；不要撤回待处理')
+  }
+
+  let nextStatus = String(repair.statusBeforeShip || '').trim().toUpperCase()
+  if (!nextStatus || !['PENDING', 'ADMIN_REVIEWED'].includes(nextStatus)) {
+    nextStatus = repair.diagnosisDone === true || String(repair.adminDiagnosis || '').trim()
+      ? 'ADMIN_REVIEWED'
+      : 'PENDING'
+  }
+
+  const prevTracking = String(repair.trackingId || '').trim()
+  const patch = {
+    status: nextStatus,
+    trackingId: _.remove(),
+    solveTime: _.remove(),
+    shipRemark: _.remove(),
+    needReturn: false,
+    shipRollbackHadNeedReturn: false,
+    userReturnRemindAt: _.remove(),
+    userReturnRemindScheduledAt: _.remove(),
+    userReturnRemindSent: true,
+    userReturnRemindLastError: 'cancelled_undo_ship',
+    shipRollbackAt: db.serverDate(),
+    shipRollbackBy: adminOpenid || ''
+  }
+  if (prevTracking) patch.shipRollbackTrackingId = prevTracking
+
+  await db.collection('shouhou_repair').doc(String(docId)).update({ data: patch })
+  return {
+    success: true,
+    status: nextStatus,
+    needReturn: false,
+    backTo: 'pending'
+  }
+}
+
+/** 把误撤回待处理、且曾有运单/需寄回的单，恢复到需寄回确认 */
+async function restoreNeedReturnShip(docId, adminOpenid) {
+  const doc = await db.collection('shouhou_repair').doc(String(docId)).get()
+  if (!doc.data) throw new Error('维修单不存在')
+  const repair = doc.data
+  const st = String(repair.status || '').toUpperCase()
+  if (!['PENDING', 'ADMIN_REVIEWED', 'SHIPPED'].includes(st)) {
+    throw new Error('当前状态无法恢复为需寄回')
+  }
+  if (repair.returnCompleted === true) {
+    throw new Error('该单已完结，请先用「撤销完结」')
+  }
+
+  const tracking = await resolveOutboundTracking(repair)
+  const tid = tracking || String(repair.trackingId || '').trim() || String(repair.shipRollbackTrackingId || '').trim()
+  // 有 shipRollbackAt 说明曾被误撤，即使暂时找不到运单也允许恢复到需寄回（可再录单号）
+  if (!tid && !repair.shipRollbackAt && repair.shipRollbackHadNeedReturn !== true && repair.needReturn !== true) {
+    throw new Error('未查到备件运单记录，无法自动恢复；请确认是否录过运单号')
+  }
+
+  const patch = {
+    status: 'SHIPPED',
+    needReturn: true,
+    returnCompleted: false,
+    shipRestoreAt: db.serverDate(),
+    shipRestoreBy: adminOpenid || ''
+  }
+  if (tid) patch.trackingId = tid
+
+  await db.collection('shouhou_repair').doc(String(docId)).update({ data: patch })
+  return {
+    success: true,
+    status: 'SHIPPED',
+    needReturn: true,
+    trackingId: tid || '',
+    backTo: 'returnRequired'
+  }
 }
 
 exports.main = async (event) => {
@@ -522,7 +1093,7 @@ exports.main = async (event) => {
   const docId = id || repairId
 
   // 列表查询优先处理（兼容 op=list + listType）
-  if (listType === 'pending' || listType === 'returnRequired') {
+  if (listType === 'pending' || listType === 'returnRequired' || listType === 'returnCompletedRecent' || listType === 'returnRollbackRecent') {
     try {
       await assertAdmin()
       const listed = await listRepairs(listType)
@@ -531,6 +1102,7 @@ exports.main = async (event) => {
         data: listed.data,
         nicknameDict: listed.nicknameDict || {},
         snExpiryMap: listed.snExpiryMap || {},
+        warrantyByRepairId: listed.warrantyByRepairId || {},
         replacementMap: listed.replacementMap || {},
         trackingMap: listed.trackingMap || {}
       }
@@ -543,8 +1115,9 @@ exports.main = async (event) => {
     }
   }
 
+  let adminOpenid = ''
   try {
-    await assertAdmin()
+    adminOpenid = await assertAdmin()
   } catch (e) {
     const msg = String((e && e.message) || e || '')
     if (msg.includes('UNAUTHORIZED') || msg.includes('FORBIDDEN')) {
@@ -554,6 +1127,38 @@ exports.main = async (event) => {
   }
 
   try {
+    if (action === 'undoReturnComplete' && docId) {
+      try {
+        return await undoReturnComplete(String(docId), adminOpenid)
+      } catch (undoErr) {
+        return { success: false, errMsg: (undoErr && undoErr.message) || String(undoErr) }
+      }
+    }
+
+    if (action === 'undoShip' && docId) {
+      try {
+        return await undoShip(String(docId), adminOpenid)
+      } catch (undoErr) {
+        return { success: false, errMsg: (undoErr && undoErr.message) || String(undoErr) }
+      }
+    }
+
+    if (action === 'restoreNeedReturnShip' && docId) {
+      try {
+        return await restoreNeedReturnShip(String(docId), adminOpenid)
+      } catch (undoErr) {
+        return { success: false, errMsg: (undoErr && undoErr.message) || String(undoErr) }
+      }
+    }
+
+    if (action === 'reshipRepairedPlusSpare' && docId) {
+      try {
+        return await reshipRepairedPlusSpare(String(docId), adminOpenid, ev)
+      } catch (reshipErr) {
+        return { success: false, errMsg: (reshipErr && reshipErr.message) || String(reshipErr) }
+      }
+    }
+
     if (action === 'get' && docId) {
       const doc = await db.collection('shouhou_repair').doc(docId).get()
       if (!doc.data) return { success: false, errMsg: '维修单不存在' }
@@ -600,20 +1205,6 @@ exports.main = async (event) => {
     let updateObj = {}
     if (action === 'ship') {
       const shipRemark = String(ev.shipRemark || ev.note || '').trim()
-      updateObj = {
-        status: 'SHIPPED',
-        solveTime: db.serverDate()
-      }
-      // 只在本次真的传了单号时才写；空值不允许覆盖掉已录入的单号
-      const newTracking = String(trackingId || '').trim()
-      if (newTracking) updateObj.trackingId = newTracking
-      if (shipRemark) updateObj.shipRemark = shipRemark
-
-      // 以管理员开关为准同步「需要寄回」，避免 UI 已关但库里残留 true
-      if (Object.prototype.hasOwnProperty.call(ev, 'needReturn')) {
-        updateObj.needReturn = ev.needReturn === true
-      }
-
       const repairDoc = await db.collection('shouhou_repair').doc(docId).get()
       if (!repairDoc.data) return { success: false, errMsg: '维修单不存在' }
       try {
@@ -633,6 +1224,22 @@ exports.main = async (event) => {
         repair.replacementDetectSource === 'manual_board_replacement'
       ) {
         return { success: false, errMsg: '该工单待换机，请维修专员先完成 SN 更换后再录单发货' }
+      }
+
+      const prevStatus = String(repair.status || '').trim().toUpperCase()
+      updateObj = {
+        status: 'SHIPPED',
+        solveTime: db.serverDate(),
+        statusBeforeShip: ['PENDING', 'ADMIN_REVIEWED'].includes(prevStatus) ? prevStatus : (hasDiagnosis ? 'ADMIN_REVIEWED' : 'PENDING')
+      }
+      // 只在本次真的传了单号时才写；空值不允许覆盖掉已录入的单号
+      const newTracking = String(trackingId || '').trim()
+      if (newTracking) updateObj.trackingId = newTracking
+      if (shipRemark) updateObj.shipRemark = shipRemark
+
+      // 以管理员开关为准同步「需要寄回」，避免 UI 已关但库里残留 true
+      if (Object.prototype.hasOwnProperty.call(ev, 'needReturn')) {
+        updateObj.needReturn = ev.needReturn === true
       }
 
       const finalNeedReturn = Object.prototype.hasOwnProperty.call(ev, 'needReturn')

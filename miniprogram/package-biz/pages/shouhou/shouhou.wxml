@@ -712,6 +712,31 @@
               未找到已绑定设备
             </view>
           </view>
+
+          <view class="repair-device-section">
+            <view class="repair-label">
+              控制版本
+              <text class="required-star">*</text>
+            </view>
+            <view class="ctrl-variant-seg {{repairControlVariant === 'remote' ? 'is-remote' : (repairControlVariant === 'button' ? 'is-button' : '')}}"
+              bindtouchstart="onCtrlVariantTouchStart"
+              bindtouchend="onCtrlVariantTouchEnd"
+              data-scope="repair"
+            >
+              <view class="ctrl-variant-thumb-wrap"><view class="ctrl-variant-thumb"></view></view>
+              <view
+                class="ctrl-variant-item {{repairControlVariant === 'button' ? 'is-on' : ''}}"
+                catchtap="onRepairControlVariantChange"
+                data-value="button"
+              >按钮版</view>
+              <view
+                class="ctrl-variant-item {{repairControlVariant === 'remote' ? 'is-on' : ''}}"
+                catchtap="onRepairControlVariantChange"
+                data-value="remote"
+              >遥控版</view>
+            </view>
+          </view>
+
           <view class="repair-video-section" wx:if="{{tempVideoPath || tempImagePath}}">
             <view class="repair-label">故障素材</view>
             <view class="repair-video-wrapper">

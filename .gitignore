@@ -19,6 +19,27 @@ package-lock.json
 *.bak
 *.zip
 *.rar
+.tmp_*
+tmp_*
 
 # 云函数打包文件
 cloudfunctions/**/*.zip
+
+# Arduino / 固件编译中间产物（保留 .ino 与可用 .hex 便于恢复烧录）
+**/build/
+**/build2/
+**/build_bp/core/
+**/build_bp/libraries/
+**/build_bp/sketch/
+**/build_bp/*.elf
+**/build_bp/*.eep
+**/build_bp/*.with_bootloader.*
+**/build_bp/compile_commands.json
+**/build_bp/includes.cache
+**/build_bp/libraries.cache
+**/build_bp/build.options.json
+firmware/_compile_*/
+*.o
+*.d
+*.elf
+*.eep

@@ -31,6 +31,17 @@ function normModel(s) {
   return String(s || '').trim().toUpperCase()
 }
 
+function isF3MaxModel(model) {
+  return normModel(model) === 'F3 MAX'
+}
+
+/** 全新机（库里尚无 sn 档案）预注册 F3 MAX → 自动盖 imu */
+function resolveNewRegisterSensorStamp(productModel, existingSnDoc) {
+  if (!isF3MaxModel(productModel)) return ''
+  if (existingSnDoc && existingSnDoc._id) return ''
+  return 'imu'
+}
+
 async function assertAdmin(db) {
   const wxContext = cloud.getWXContext()
   const openid = wxContext.OPENID
@@ -52,7 +63,7 @@ async function findPreRegister(db, _, normalizedSn) {
   return res.data[0] || null
 }
 
-async function upsertPreRegister(db, _, normalizedSn, productModel, adminOpenid) {
+async function upsertPreRegister(db, _, normalizedSn, productModel, adminOpenid, sensorStamp) {
   const existing = await db.collection('guanliyuanSN').where({ sn: _.in(snCandidates(normalizedSn)) }).limit(1).get()
   const payload = {
     sn: normalizedSn,
@@ -60,6 +71,10 @@ async function upsertPreRegister(db, _, normalizedSn, productModel, adminOpenid)
     registeredBy: adminOpenid,
     registeredAt: db.serverDate(),
     source: 'scan_control_center'
+  }
+  // 仅全新登记写入印章；已有预注册记录不改章（存量不补盖）
+  if (sensorStamp && existing.data.length === 0) {
+    payload.sensorStamp = sensorStamp
   }
   if (existing.data.length > 0) {
     await db.collection('guanliyuanSN').doc(existing.data[0]._id).update({ data: payload })
@@ -69,7 +84,7 @@ async function upsertPreRegister(db, _, normalizedSn, productModel, adminOpenid)
   return addRes._id
 }
 
-async function upsertInactiveSn(db, normalizedSn, productModel, deviceName) {
+async function upsertInactiveSn(db, normalizedSn, productModel, deviceName, sensorStamp) {
   const _ = db.command
   const existing = await findSnRecord(db, _, normalizedSn)
   const base = {
@@ -82,6 +97,7 @@ async function upsertInactiveSn(db, normalizedSn, productModel, deviceName) {
     updateTime: db.serverDate()
   }
   if (existing) {
+    // 系统已有档案：只更新型号等，不盖章、不覆盖已有 sensorStamp
     await db.collection('sn').doc(existing._id).update({
       data: {
         sn: normalizedSn,
@@ -99,8 +115,10 @@ async function upsertInactiveSn(db, normalizedSn, productModel, deviceName) {
     })
     return existing._id
   }
+  const addData = { ...base, preRegistered: true, createTime: db.serverDate() }
+  if (sensorStamp) addData.sensorStamp = sensorStamp
   const addRes = await db.collection('sn').add({
-    data: { ...base, preRegistered: true, createTime: db.serverDate() }
+    data: addData
   })
   return addRes._id
 }
@@ -171,14 +189,18 @@ async function handleRegister(db, _, normalizedSn, productModel, deviceName, adm
     return { success: false, msg: '该设备有待审核绑定，请先处理后再预登记' }
   }
 
-  await upsertPreRegister(db, _, normalizedSn, productModel, adminOpenid)
-  await upsertInactiveSn(db, normalizedSn, productModel, deviceName)
+  // 全新 F3 MAX 才自动盖 imu；库里已有 sn 档案则不盖
+  const sensorStamp = resolveNewRegisterSensorStamp(productModel, device)
+
+  await upsertPreRegister(db, _, normalizedSn, productModel, adminOpenid, sensorStamp)
+  await upsertInactiveSn(db, normalizedSn, productModel, deviceName, sensorStamp)
 
   return {
     success: true,
     msg: '绑定成功',
     sn: normalizedSn,
-    productModel
+    productModel,
+    sensorStamp: sensorStamp || (device && device.sensorStamp) || ''
   }
 }
 

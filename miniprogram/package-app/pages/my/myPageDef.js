@@ -23,6 +23,8 @@ const adminRepairApi = require('../../../utils/adminRepairApi.js');
 const userRepairApi = require('../../../utils/userRepairApi.js');
 const regionFallback = require('../../../utils/regionFallback.js');
 const { PRODUCT_DETAIL_OPTIONS, normalizeProductDetailModel } = require('../../../utils/productModels.js');
+const { normalizeControlVariant, controlVariantLabel } = require('../../../utils/controlVariant.js');
+const { normalizeSensorStamp, sensorStampLabel } = require('../../../utils/sensorStamp.js');
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const productFeatureFlags = require('../../../utils/productFeatureFlags.js');
 const { isBlockedDebugBleDevice } = require('../../../utils/blockedDebugBle.js');
@@ -159,6 +161,7 @@ module.exports = function createMyPageConfig(hubView) {
     adminSetDaysIndex: 1,   // 选中的天数索引（默认365天）
     adminAuditModelIndex: 0, // 审核时可改设备型号
     adminAuditModelOptions: PRODUCT_DETAIL_OPTIONS,
+    adminAuditControlVariant: '', // 审核时可改控制版本
     auditWarrantyPreview: {},
     warrantyOptions: ['180天 (半年)', '365天 (一年)', '500天', '720天 (两年)'], // 选项文案
     warrantyValues: [180, 365, 500, 720], // 对应的值
@@ -2518,17 +2521,17 @@ module.exports = function createMyPageConfig(hubView) {
       const sn = String(
         ds.sn ||
         detail.sn ||
+        detail.trackingId ||
         (item && (item.trackingId || item.returnTrackingId)) ||
         ''
       ).trim().toUpperCase();
       const expressCompany = String(
-        ds.company || detail.company || (item && item.expressCompany) || ''
+        ds.company || detail.company || detail.expressCompany || (item && item.expressCompany) || ''
       ).trim();
       const phone = String(
         ds.phone || detail.phone || (item && item.contact && item.contact.phone) || ''
       ).trim();
       const tailRequired = String(ds.tailRequired || detail.tailRequired || '').trim();
-      const defaultTail = tailRequired || (phone && phone.length >= 4 ? phone.slice(-4) : '');
       if (!sn) {
         this.showMyDialog({
           title: '提示',
@@ -2540,24 +2543,33 @@ module.exports = function createMyPageConfig(hubView) {
         return;
       }
 
-      // 显示物流查询弹窗并开始加载
-      this.setData({
-        showLogisticsModal: true,
-        logisticsModalClosing: false,
-        currentTrackingId: sn,
-        currentLogisticsCompany: expressCompany || '',
-        logisticsData: null,
-        logisticsLoading: true,
-        logisticsError: null,
-        logisticsExpectedTail: defaultTail,
-        logisticsBlockDisplay: false
-      });
-      this.updateModalState();
-
-      this.fetchLogisticsByTail({
+      const payload = {
+        sn,
         trackingId: sn,
-        expressCompany: expressCompany || '',
-        receiverPhone: defaultTail || phone || ''
+        company: expressCompany,
+        expressCompany,
+        phone,
+        tailRequired
+      };
+
+      // 枢纽内嵌面板：物流弹窗挂在 products 页，向上抛事件打开
+      if (this.data.hubInShell && typeof this.triggerEvent === 'function') {
+        this.triggerEvent('logistics', payload);
+        return;
+      }
+
+      // 独立「我的」页：打开本页 logistics-modal 组件
+      const modal = this.selectComponent && this.selectComponent('#pageLogisticsModal');
+      if (modal && typeof modal.open === 'function') {
+        modal.open(payload);
+        return;
+      }
+
+      this.showMyDialog({
+        title: '无法打开物流',
+        content: '物流弹窗组件未就绪，请稍后重试',
+        showCancel: false,
+        confirmText: '知道了'
       });
     } catch (err) {
       console.error('[viewLogisticsDetail] failed', err);
@@ -2568,6 +2580,16 @@ module.exports = function createMyPageConfig(hubView) {
         confirmText: '知道了'
       });
     }
+  },
+
+  onLogisticsModalChange(e) {
+    const open = !!(e && e.detail && e.detail.open);
+    if (this.data.showLogisticsModal === open) {
+      this.updateModalState();
+      return;
+    }
+    this.setData({ showLogisticsModal: open, logisticsModalClosing: false });
+    this.updateModalState();
   },
 
   fetchLogisticsByTail({ trackingId, expressCompany = '', receiverPhone = '' }) {
@@ -2711,10 +2733,15 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 关闭物流查询弹窗
   closeLogisticsModal() {
+    const modal = this.selectComponent && this.selectComponent('#pageLogisticsModal');
+    if (modal && typeof modal.onClose === 'function') {
+      modal.onClose();
+      return;
+    }
     this._closeWithAnimation('showLogisticsModal', 'logisticsModalClosing', {
       currentTrackingId: '',
       currentLogisticsCompany: '',
-      logisticsData: null, // 关闭时清空数据
+      logisticsData: null,
       logisticsError: null,
       logisticsLoading: false,
       logisticsExpectedTail: '',
@@ -6270,21 +6297,47 @@ module.exports = function createMyPageConfig(hubView) {
         return;
       }
       const warrantyValues = this.data.warrantyValues || [180, 365, 500, 720];
+      const modelOptions = this.data.adminAuditModelOptions || PRODUCT_DETAIL_OPTIONS;
       const list = (r.data || []).map((item) => {
         let warrantyIndex = warrantyValues.indexOf(Number(item.totalDays));
         if (warrantyIndex < 0) warrantyIndex = 1;
+        const canonical = normalizeProductDetailModel(item.productModel) || '';
+        let modelIndex = modelOptions.indexOf(canonical);
+        if (modelIndex < 0 && item.productModel) {
+          modelIndex = modelOptions.findIndex(
+            (m) => String(m).toUpperCase() === String(item.productModel).toUpperCase()
+          );
+        }
+        if (modelIndex < 0) modelIndex = 0;
+        const productModel = modelOptions[modelIndex] || item.productModel || '';
+        const totalDays = Number(item.totalDays) || warrantyValues[warrantyIndex] || 365;
+        const buyDate = String(item.buyDate || '').trim();
+        const controlVariant = normalizeControlVariant(item.controlVariant) || '';
+        const sensorStamp = normalizeSensorStamp(item.sensorStamp);
+        const sensorStampLabelText = item.sensorStampLabel ||
+          (productModel && String(productModel).toUpperCase() === 'F3 MAX'
+            ? sensorStampLabel(sensorStamp)
+            : '');
+        const preview = this._previewConfigRollbackExpiry(buyDate, totalDays);
         return {
           _id: item._id,
           sn: item.sn,
-          productModel: item.productModel || '',
+          productModel,
+          modelIndex,
+          controlVariant,
+          sensorStamp,
+          sensorStampLabel: sensorStampLabelText,
+          buyDate,
           bindType: item.bindType || 'normal',
           isAdminApply: !!item.isAdminApply,
           status: item.status || 'PENDING',
           approved: !!item.approved,
           hasDevice: !!item.hasDevice,
-          totalDays: Number(item.totalDays) || 0,
-          expiryDate: item.expiryDate || '',
-          remainingDays: Number(item.remainingDays) || 0,
+          totalDays,
+          expiryDate: item.expiryDate || preview.expiryDate || '',
+          remainingDays: item.expiryDate
+            ? (Number(item.remainingDays) || 0)
+            : (preview.remainingDays || 0),
           timeText: formatTime(item.createTime),
           warrantyIndex
         };
@@ -6296,53 +6349,240 @@ module.exports = function createMyPageConfig(hubView) {
     });
   },
 
-  onConfigRollbackWarrantyChange(e) {
+  _previewConfigRollbackExpiry(buyDateStr, days) {
+    const dayCount = Number(days);
+    const raw = String(buyDateStr || '').trim();
+    if (!raw || !dayCount || dayCount <= 0) {
+      return { expiryDate: '', remainingDays: 0 };
+    }
+    const parts = raw.split(/[-/]/).map((n) => Number(n));
+    if (parts.length < 3 || parts.some((n) => !Number.isFinite(n))) {
+      return { expiryDate: '', remainingDays: 0 };
+    }
+    const base = new Date(parts[0], parts[1] - 1, parts[2]);
+    if (isNaN(base.getTime())) return { expiryDate: '', remainingDays: 0 };
+    const expiry = new Date(parts[0], parts[1] - 1, parts[2] + dayCount);
+    const pad = (n) => (n < 10 ? '0' + n : '' + n);
+    const expiryDate = `${expiry.getFullYear()}-${pad(expiry.getMonth() + 1)}-${pad(expiry.getDate())}`;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const remainingDays = Math.ceil((expiry - today) / 86400000);
+    return {
+      expiryDate,
+      remainingDays: remainingDays > 0 ? remainingDays : 0
+    };
+  },
+
+  _patchConfigRollbackItem(idx, fields) {
+    const item = (this.data.configRollbackHistory || [])[idx];
+    if (!item) return;
+    const next = { ...item, ...fields };
+    const days = Number(next.totalDays) || 0;
+    const preview = this._previewConfigRollbackExpiry(next.buyDate, days);
+    if (preview.expiryDate) {
+      next.expiryDate = preview.expiryDate;
+      next.remainingDays = preview.remainingDays;
+    }
+    this.setData({ [`configRollbackHistory[${idx}]`]: next });
+  },
+
+  onConfigRollbackFieldChange(e) {
     if (this.data.configRollbackSubmitting) return;
-    const idx = Number(e.currentTarget.dataset.index);
-    const pickedIndex = Number(e.detail && e.detail.value);
+    const idx = Number(e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.index);
+    const field = String((e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.field) || '');
+    const value = e.detail && e.detail.value;
+    if (Number.isNaN(idx) || idx < 0 || !field) return;
+    const item = (this.data.configRollbackHistory || [])[idx];
+    if (!item) return;
+
+    if (field === 'model') {
+      const modelIndex = Number(value);
+      const options = this.data.adminAuditModelOptions || PRODUCT_DETAIL_OPTIONS;
+      this._patchConfigRollbackItem(idx, {
+        modelIndex,
+        productModel: options[modelIndex] || ''
+      });
+      return;
+    }
+    if (field === 'buyDate') {
+      this._patchConfigRollbackItem(idx, { buyDate: String(value || '').trim() });
+      return;
+    }
+    if (field === 'warranty') {
+      const warrantyIndex = Number(value);
+      const warrantyValues = this.data.warrantyValues || [180, 365, 500, 720];
+      this._patchConfigRollbackItem(idx, {
+        warrantyIndex,
+        totalDays: warrantyValues[warrantyIndex] || 365
+      });
+    }
+  },
+
+  onCtrlVariantTouchStart(e) {
+    const t = e && e.touches && e.touches[0];
+    this._ctrlVariantTouch = t ? { x: t.clientX, y: t.clientY } : null;
+  },
+
+  onCtrlVariantTouchEnd(e) {
+    const start = this._ctrlVariantTouch;
+    this._ctrlVariantTouch = null;
+    if (!start) return;
+    const t = e && e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) <= Math.abs(dy)) return;
+    const value = dx < 0 ? 'remote' : 'button';
+    const scope = String((e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.scope) || '');
+    if (scope === 'admin') {
+      if (this.data.adminAuditControlVariant === value) return;
+      this.setData({ adminAuditControlVariant: value });
+      return;
+    }
+    if (this.data.controlVariant === value) return;
+    this.setData({ controlVariant: value });
+  },
+
+  onConfigRollbackVariantTouchEnd(e) {
+    const start = this._ctrlVariantTouch;
+    this._ctrlVariantTouch = null;
+    if (!start || this.data.configRollbackSubmitting) return;
+    const t = e && e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) <= Math.abs(dy)) return;
+    const value = dx < 0 ? 'remote' : 'button';
+    const idx = Number(e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.index);
+    if (Number.isNaN(idx) || idx < 0) return;
+    const item = (this.data.configRollbackHistory || [])[idx];
+    if (!item || item.controlVariant === value) return;
+    this._patchConfigRollbackItem(idx, { controlVariant: value });
+  },
+
+  onConfigRollbackVariantTap(e) {
+    if (this.data.configRollbackSubmitting) return;
+    const idx = Number(e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.index);
+    const value = normalizeControlVariant(
+      e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.value
+    );
+    if (Number.isNaN(idx) || idx < 0 || !value) return;
+    const item = (this.data.configRollbackHistory || [])[idx];
+    if (!item || item.controlVariant === value) return;
+    this._patchConfigRollbackItem(idx, { controlVariant: value });
+  },
+
+  onControlVariantChange(e) {
+    const value = normalizeControlVariant(
+      e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.value
+    );
+    if (!value || this.data.controlVariant === value) return;
+    this.setData({ controlVariant: value });
+  },
+
+  onAdminControlVariantChange(e) {
+    const value = normalizeControlVariant(
+      e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.value
+    );
+    if (!value || this.data.adminAuditControlVariant === value) return;
+    this.setData({ adminAuditControlVariant: value });
+  },
+
+  saveConfigRollbackItem(e) {
+    if (this.data.configRollbackSubmitting) return;
+    const idx = Number(e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.index);
+    const item = (this.data.configRollbackHistory || [])[idx];
+    if (!item) {
+      this.showAutoToast('提示', '记录无效');
+      return;
+    }
+    const sn = String(item.sn || '').trim();
+    if (!sn) {
+      this.showAutoToast('提示', '设备 SN 无效');
+      return;
+    }
+    const modelOptions = this.data.adminAuditModelOptions || PRODUCT_DETAIL_OPTIONS;
+    const productModel = String(modelOptions[item.modelIndex] || item.productModel || '').trim();
+    const controlVariant = normalizeControlVariant(item.controlVariant);
+    const buyDate = String(item.buyDate || '').trim();
     const warrantyValues = this.data.warrantyValues || [180, 365, 500, 720];
     const warrantyOptions = this.data.warrantyOptions || [];
-    const item = (this.data.configRollbackHistory || [])[idx];
-    const days = warrantyValues[pickedIndex];
-    if (!item || !days) return;
+    const warrantyIndex = Number(item.warrantyIndex);
+    const days = warrantyValues[warrantyIndex] || Number(item.totalDays) || 0;
 
-    if (Number(item.totalDays) === Number(days)) return;
+    if (!productModel) {
+      this.showAutoToast('提示', '请选择设备型号');
+      return;
+    }
+    if (!controlVariant) {
+      this.showAutoToast('提示', '请选择控制版本');
+      return;
+    }
+    if (!buyDate) {
+      this.showAutoToast('提示', '请选择购买日期');
+      return;
+    }
+    if (!days) {
+      this.showAutoToast('提示', '请选择质保时长');
+      return;
+    }
 
     this.showMyDialog({
-      title: '确认修改质保',
-      content: `SN：${item.sn}\n\n质保 ${item.totalDays}天 → ${warrantyOptions[pickedIndex] || days + '天'}\n\n将按原购买时间重新计算到期日。`,
+      title: '确认保存配置',
+      content: `SN：${sn}\n型号：${productModel}\n版本：${controlVariantLabel(controlVariant)}\n购买日：${buyDate}\n质保：${warrantyOptions[warrantyIndex] || (days + '天')}\n\n将按购买日重算到期日并写入设备档案。`,
       showCancel: true,
-      confirmText: '确认修改',
+      confirmText: '确认保存',
       cancelText: '取消',
       success: (res) => {
         if (!(res && res.confirm)) return;
         this.setData({ configRollbackSubmitting: true });
-        this.showMyLoading('修改中...');
+        this.showMyLoading('保存中...');
         wx.cloud.callFunction({
           name: 'adminAuditDevice',
-          data: { action: 'rollback_warranty', sn: item.sn, claimId: item._id, customDays: days }
+          data: {
+            action: 'rollback_warranty',
+            sn,
+            claimId: item._id,
+            customDays: days,
+            productModel,
+            controlVariant,
+            customDate: buyDate,
+            buyDate
+          }
         }).then((callRes) => {
           const r = (callRes && callRes.result) || {};
           this.hideMyLoading();
           this.setData({ configRollbackSubmitting: false });
           if (!r.success) {
-            this.showAutoToast('修改失败', r.errMsg || r.msg || '请稍后重试');
+            this.showAutoToast('保存失败', r.errMsg || r.msg || '请稍后重试');
             return;
           }
-          // 本地同步更新该行
+          const nextModel = r.productModel || productModel;
+          let nextModelIndex = modelOptions.indexOf(nextModel);
+          if (nextModelIndex < 0) nextModelIndex = item.modelIndex;
+          const nextVariant = normalizeControlVariant(r.controlVariant) || controlVariant;
+          const nextBuyDate = String(r.buyDate || buyDate).trim();
+          let nextWarrantyIndex = warrantyValues.indexOf(Number(r.totalDays || days));
+          if (nextWarrantyIndex < 0) nextWarrantyIndex = warrantyIndex;
           this.setData({
-            [`configRollbackHistory[${idx}].totalDays`]: r.totalDays || days,
-            [`configRollbackHistory[${idx}].expiryDate`]: r.expiryDate || '',
-            [`configRollbackHistory[${idx}].remainingDays`]: r.remainingDays || 0,
-            [`configRollbackHistory[${idx}].warrantyIndex`]: pickedIndex
+            [`configRollbackHistory[${idx}]`]: {
+              ...item,
+              productModel: nextModel,
+              modelIndex: nextModelIndex,
+              controlVariant: nextVariant,
+              buyDate: nextBuyDate,
+              totalDays: r.totalDays || days,
+              expiryDate: r.expiryDate || '',
+              remainingDays: r.remainingDays || 0,
+              warrantyIndex: nextWarrantyIndex
+            }
           });
-          this.showAutoToast('已修改', r.msg || `质保已改为 ${days} 天`);
-          // 用户设备列表里显示的剩余天数也要刷新
+          this.showAutoToast('已保存', r.msg || '配置已更新');
           try { this.loadMyDevices(); } catch (err2) {}
         }).catch((err) => {
           this.hideMyLoading();
           this.setData({ configRollbackSubmitting: false });
-          this.showAutoToast('修改失败', (err && (err.message || err.errMsg)) || '网络异常');
+          this.showAutoToast('保存失败', (err && (err.message || err.errMsg)) || '网络异常');
         });
       }
     });
@@ -7563,9 +7803,18 @@ module.exports = function createMyPageConfig(hubView) {
   _enrichAuditItem(item) {
     if (!item) return item;
     const openid = this._resolveApplicantOpenid(item);
+    const productModel = String(item.productModel || '').trim();
+    const sensorStamp = normalizeSensorStamp(item.sensorStamp);
+    let sensorStampLabelText = item.sensorStampLabel || '';
+    if (!sensorStampLabelText && productModel.toUpperCase() === 'F3 MAX') {
+      sensorStampLabelText = sensorStampLabel(sensorStamp);
+    }
     return Object.assign({}, item, {
       openid,
-      userOpenid: openid
+      userOpenid: openid,
+      sensorStamp,
+      sensorStampLabel: sensorStampLabelText,
+      controlVariantLabel: item.controlVariantLabel || controlVariantLabel(item.controlVariant)
     });
   },
 
@@ -7615,7 +7864,7 @@ module.exports = function createMyPageConfig(hubView) {
     const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};
     const userOpenid = String(ds.openid || '').trim();
     const productModel = String(ds.model || '').trim();
-    let url = '/package-app/pages/scan/scan';
+    let url = '/package-extra/pages/scan/scan';
     const params = [];
     if (userOpenid) params.push(`pendingSnUser=${encodeURIComponent(userOpenid)}`);
     if (productModel) params.push(`pendingSnModel=${encodeURIComponent(productModel)}`);
@@ -7641,7 +7890,8 @@ module.exports = function createMyPageConfig(hubView) {
       currentAuditItem: item,
       adminSetDate: item.buyDate, // 默认填用户写的日期
       adminSetDaysIndex: 1,        // 默认选 365天
-      adminAuditModelIndex: modelIndex
+      adminAuditModelIndex: modelIndex,
+      adminAuditControlVariant: normalizeControlVariant(item && item.controlVariant) || ''
     }, () => {
       this.refreshAuditWarrantyPreview();
     });
@@ -7681,7 +7931,8 @@ module.exports = function createMyPageConfig(hubView) {
       adminSetDaysIndex,
       warrantyValues,
       adminAuditModelIndex,
-      adminAuditModelOptions
+      adminAuditModelOptions,
+      adminAuditControlVariant
     } = this.data;
     if (!currentAuditItem) return;
     if (!adminSetDate) {
@@ -7693,6 +7944,11 @@ module.exports = function createMyPageConfig(hubView) {
     const productModel = String(options[adminAuditModelIndex] || '').trim();
     if (!productModel) {
       this.showAutoToast('提示', '请选择设备型号');
+      return;
+    }
+    const controlVariant = normalizeControlVariant(adminAuditControlVariant);
+    if (!controlVariant) {
+      this.showAutoToast('提示', '请选择控制版本');
       return;
     }
     const isFault = currentAuditItem.bindType === 'fault';
@@ -7710,6 +7966,7 @@ module.exports = function createMyPageConfig(hubView) {
           customDate: adminSetDate,
           customDays: days,
           productModel,
+          controlVariant,
           applicantOpenid
         },
         success: res => {
@@ -9843,7 +10100,7 @@ module.exports = function createMyPageConfig(hubView) {
       this.openBindModal();
     } else {
       // 视频被拒，跳去 case 页面
-      wx.navigateTo({ url: '/package-app/pages/case/case', animationType: 'none' });
+      wx.navigateTo({ url: '/package-extra/pages/case/case', animationType: 'none' });
       // 可以在这里存个标记，让 case 页面知道是要重传
       wx.setStorageSync('reupload_video', true);
     }

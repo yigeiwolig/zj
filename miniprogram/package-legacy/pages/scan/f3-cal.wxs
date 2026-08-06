@@ -1,0 +1,49 @@
+function mmNum(text) {
+  if (!text || text === '—') return '—';
+  var s = '' + text;
+  var idx = s.indexOf(' mm');
+  if (idx > 0) return s.substring(0, idx);
+  idx = s.indexOf('mm');
+  if (idx > 0) {
+    s = s.substring(0, idx);
+    while (s.length > 0 && s.charAt(s.length - 1) === ' ') {
+      s = s.substring(0, s.length - 1);
+    }
+    return s;
+  }
+  return s;
+}
+
+function progressWidth(countdown, total) {
+  total = total || 5;
+  countdown = +countdown || 0;
+  if (countdown >= total) return 0;
+  if (countdown <= 0) return 100;
+  return Math.round((total - countdown) / total * 100);
+}
+
+function getWaveClassByX(index, translateX) {
+  var current = -(+translateX || 0) / 20;
+  var centerIndex = Math.round(current);
+  var diff = Math.abs((+index || 0) - centerIndex);
+  if (diff === 0) return 'active';
+  if (diff === 1) return 'near-1';
+  if (diff === 2) return 'near-2';
+  if (diff === 3) return 'near-3';
+  return '';
+}
+
+function writeStatusText(status) {
+  if (status === 'writing') return '写入中…';
+  if (status === 'ok') return '已写入';
+  if (status === 'fail') return '未写入';
+  if (status === 'skip') return '—';
+  return '待写入';
+}
+
+module.exports = {
+  mmNum: mmNum,
+  progressWidth: progressWidth,
+  getWaveClassByX: getWaveClassByX,
+  writeStatusText: writeStatusText
+};

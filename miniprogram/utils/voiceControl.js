@@ -22,11 +22,45 @@ const CLOSE_PHRASES = [
   '收起来', '折起来', '降下', '落下', '收起', '关一下', '关关', '关停', '关'
 ];
 
+/** 运行时词库：内置 + 用户自定义（自定义覆盖同词冲突） */
 const CMD_MAP = {};
-OPEN_PHRASES.forEach((p) => { CMD_MAP[p] = OPEN_CMD; });
-CLOSE_PHRASES.forEach((p) => { CMD_MAP[p] = CLOSE_CMD; });
+let KEYWORD_LIST = [];
+let _customOpen = [];
+let _customClose = [];
 
-const KEYWORD_LIST = Object.keys(CMD_MAP).sort((a, b) => b.length - a.length);
+function rebuildKeywordIndex() {
+  Object.keys(CMD_MAP).forEach((k) => { delete CMD_MAP[k]; });
+  OPEN_PHRASES.forEach((p) => { CMD_MAP[p] = OPEN_CMD; });
+  CLOSE_PHRASES.forEach((p) => { CMD_MAP[p] = CLOSE_CMD; });
+  _customOpen.forEach((p) => { CMD_MAP[p] = OPEN_CMD; });
+  _customClose.forEach((p) => { CMD_MAP[p] = CLOSE_CMD; });
+  KEYWORD_LIST = Object.keys(CMD_MAP).sort((a, b) => b.length - a.length);
+}
+
+rebuildKeywordIndex();
+
+/**
+ * 注入用户自定义口令（已规范化的短语数组）
+ * @param {{ open?: string[], close?: string[] }} opts
+ */
+function setCustomVoiceKeywords(opts) {
+  const open = Array.isArray(opts && opts.open) ? opts.open.filter(Boolean) : [];
+  const close = Array.isArray(opts && opts.close) ? opts.close.filter(Boolean) : [];
+  _customOpen = open.slice();
+  _customClose = close.slice();
+  rebuildKeywordIndex();
+  return {
+    open: _customOpen.slice(),
+    close: _customClose.slice()
+  };
+}
+
+function getCustomVoiceKeywords() {
+  return {
+    open: _customOpen.slice(),
+    close: _customClose.slice()
+  };
+}
 
 const FILLER_PATTERN = /[嗯啊呃诶嘿喂哦噢额呢吧呀啦嘛哇哈]+/g;
 const NOISE_PHRASES = ['风声', '噪音', '音乐', '电视', '说话', '背景', '杂音', '嗡嗡', '哒哒'];
@@ -64,6 +98,8 @@ const RESTART_DELAY_MS = 40;
 const RESTART_ERROR_DELAY_MS = 60;
 const RECOGNIZE_STALL_MS = 7000;
 const HEALTH_CHECK_MS = 2000;
+/** 点一下说话：单次聆听时长（骑行短口令够用，减少噪音窗口） */
+const TAP_SPEAK_DURATION_MS = 4000;
 
 function normalizeVoiceText(text) {
   let s = String(text || '')
@@ -87,7 +123,15 @@ function denoiseVoiceText(text) {
 }
 
 function hasCommandHint(text) {
-  return CORE_HINT.test(text || '');
+  const s = text || '';
+  if (!s) return false;
+  if (CORE_HINT.test(s)) return true;
+  // 自定义口令也可能不含内置提示字，需一并视为有效指令线索
+  for (let i = 0; i < KEYWORD_LIST.length; i++) {
+    const kw = KEYWORD_LIST[i];
+    if (kw && kw.length >= 2 && s.indexOf(kw) >= 0) return true;
+  }
+  return false;
 }
 
 function isNoiseDominant(rawText, denoised) {
@@ -342,13 +386,13 @@ function createVoiceRecognizer(handlers) {
   }
 
   function truncateCurrentUtterance() {
-    if (!continuous || !sessionActive || truncating) return;
+    // 常听 / 点一下说话：命中口令后都立刻截断本轮，避免噪音窗口继续识别
+    if (!sessionActive || truncating) return;
     truncating = true;
     skipFinalDispatch = true;
     resetStreamState();
     if (!managerRecording) {
       truncating = false;
-      skipFinalDispatch = false;
       return;
     }
     safeManagerStop();
@@ -435,19 +479,27 @@ function createVoiceRecognizer(handlers) {
     const skip = skipFinalDispatch;
     skipFinalDispatch = false;
     truncating = false;
+    let fired = false;
 
     if (!skip) {
       const finalPiece = res && res.result != null ? String(res.result).trim() : '';
       if (finalPiece) updateStreamText(finalPiece);
       const dispatchText = finalPiece || denoiseVoiceText(streamText);
-      if (!tryDispatchFromText(dispatchText, 'final')) {
-        tryDispatchFromPending('final');
+      fired = tryDispatchFromText(dispatchText, 'final');
+      if (!fired) {
+        fired = tryDispatchFromPending('final');
       }
     }
 
-    if (handlers.onStop) handlers.onStop(res);
+    if (handlers.onStop) handlers.onStop(res, { fired: !!fired || !!skip });
+
     if (continuous && sessionActive) {
       scheduleRestart(RESTART_DELAY_MS);
+    } else {
+      // 点一下说话：本轮结束，释放会话，等待下次点击
+      sessionActive = false;
+      clearHealthWatch();
+      clearRestartTimer();
     }
   };
 
@@ -463,12 +515,19 @@ function createVoiceRecognizer(handlers) {
     }
     // 连接已关闭 / 用户取消，勿再 restart 或 stop
     if (code === -30012 || code === -30002 || code === -30003) {
+      sessionActive = false;
+      clearHealthWatch();
+      clearRestartTimer();
       return;
     }
 
     if (continuous && sessionActive) {
       resetStreamState();
       scheduleRestart(code === -30011 ? 120 : Math.max(RESTART_ERROR_DELAY_MS, 100));
+    } else {
+      sessionActive = false;
+      clearHealthWatch();
+      clearRestartTimer();
     }
   };
 
@@ -512,9 +571,12 @@ module.exports = {
   CMD_MAP,
   OPEN_CMD,
   CLOSE_CMD,
+  TAP_SPEAK_DURATION_MS,
   denoiseVoiceText,
   matchVoiceCommand,
   tryFastPartialCommand,
+  setCustomVoiceKeywords,
+  getCustomVoiceKeywords,
   warmupVoicePlugin,
   createVoiceRecognizer
 };

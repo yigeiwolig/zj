@@ -1,1 +1,6 @@
 <include src="my-layout.wxml" />
+<logistics-modal
+  id="pageLogisticsModal"
+  portal-to-page="{{true}}"
+  bind:modalchange="onLogisticsModalChange"
+/>

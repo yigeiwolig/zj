@@ -61,6 +61,36 @@ function listReturnRequired() {
   });
 }
 
+/** 近期已完结的需寄回单 + 备单寄出（寄回回溯） */
+function listReturnCompletedRecent() {
+  return call({ op: 'list', listType: 'returnRollbackRecent' });
+}
+
+/** 撤销误完结，拉回需寄回列表 */
+function undoReturnComplete(id) {
+  return call({ action: 'undoReturnComplete', id: String(id || '') });
+}
+
+/** 撤销误点录单备件寄出，回到待处理 */
+function undoShip(id) {
+  return call({ action: 'undoShip', id: String(id || '') });
+}
+
+/** 误撤后恢复到需寄回确认（会查运单记录） */
+function restoreNeedReturnShip(id) {
+  return call({ action: 'restoreNeedReturnShip', id: String(id || '') });
+}
+
+/** 确认收货后：修回+新件同寄，并继续需寄回 */
+function reshipRepairedPlusSpare(id, trackingId, extra = {}) {
+  return call({
+    action: 'reshipRepairedPlusSpare',
+    id: String(id || ''),
+    trackingId: String(trackingId || ''),
+    shipRemark: extra.shipRemark || extra.note || ''
+  });
+}
+
 function getRepair(id) {
   return call({ action: 'get', id });
 }
@@ -87,6 +117,11 @@ module.exports = {
   call,
   listPending,
   listReturnRequired,
+  listReturnCompletedRecent,
+  undoReturnComplete,
+  undoShip,
+  restoreNeedReturnShip,
+  reshipRepairedPlusSpare,
   getRepair,
   patchRepair,
   deleteRepair

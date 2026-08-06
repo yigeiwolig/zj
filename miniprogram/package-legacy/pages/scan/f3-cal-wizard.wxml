@@ -1,0 +1,216 @@
+<wxs src="./f3-cal.wxs" module="f3cal" />
+
+<view class="f3-cal-wrap">
+<view class="f3-cal-dialog {{f3CalStep === 'preflight' ? 'f3-cal-dialog--preflight' : ''}} {{f3CalStep === 'wheel' ? 'f3-cal-dialog--wheel' : ''}}">
+  <view class="f3-cal-head" wx:if="{{f3CalStep !== 'preflight'}}">
+    <view class="f3-cal-head-main">
+      <text class="f3-cal-head-step" wx:if="{{f3CalStepNo}}">步骤 {{f3CalStepNo}} / {{f3CalStepTotal}}</text>
+      <text class="f3-cal-head-title">{{f3CalTitle || '自动校准'}}</text>
+      <text class="f3-cal-head-sub" wx:if="{{f3CalDesc && f3CalStep !== 'wheel' && f3CalStep !== 'cardboard' && f3CalStep !== 'compress' && f3CalStep !== 'done' && f3CalStep !== 'writing' && f3CalStep !== 'writeResult' && f3CalStep !== 'restoring' && f3CalStep !== 'sample1' && f3CalStep !== 'sample2'}}">{{f3CalDesc}}</text>
+    </view>
+    <view class="f3-cal-head-close" wx:if="{{f3CalStep && f3CalStep !== 'done' && f3CalStep !== 'writing' && f3CalStep !== 'writeResult' && f3CalStep !== 'error'}}" catchtap="onF3CalCancel">×</view>
+  </view>
+
+  <block wx:if="{{f3CalStep === 'preflight'}}">
+    <view class="f3-cal-preflight-close" catchtap="onF3CalCancel">×</view>
+    <view class="f3-cal-preflight">
+      <view class="f3-cal-preflight-icon">
+        <view class="telemetry-gauge telemetry-gauge--preflight">
+          <view class="gauge-bg"></view>
+          <view class="gauge-bar"></view>
+          <view class="orbit-container">
+            <view class="orbit-dot"></view>
+          </view>
+          <view class="gauge-center-lamp">
+            <view class="lamp-core"></view>
+          </view>
+        </view>
+        <text class="f3-cal-preflight-icon-label">牌照架 · 已关闭</text>
+      </view>
+      <text class="f3-cal-preflight-step">步骤 1 / {{f3CalStepTotal || 6}}</text>
+      <text class="f3-cal-preflight-title">准备校准</text>
+      <view class="f3-cal-preflight-copy">
+        <text class="f3-cal-preflight-line">请将车辆扶正、站稳</text>
+        <text class="f3-cal-preflight-line">保持牌照架为不翻转状态</text>
+        <text class="f3-cal-preflight-line f3-cal-preflight-line--status" wx:if="{{f3CalPreflightClosing}}">{{f3CalStatusText || '正在归位…'}}</text>
+      </view>
+      <view class="f3-cal-btn f3-cal-btn--primary f3-cal-btn--preflight {{f3CalPreflightClosing ? 'f3-cal-btn--disabled' : ''}}" catchtap="onF3CalPreflightConfirm">{{f3CalPreflightClosing ? '归位中…' : '确定'}}</view>
+    </view>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'sample1' || f3CalStep === 'sample2' || f3CalStep === 'restoring'}}">
+    <view class="f3-cal-stage">
+      <block wx:if="{{f3CalStep !== 'restoring'}}">
+        <view class="f3-cal-hero">
+          <text class="f3-cal-hero-k">实时高度</text>
+          <view class="f3-cal-hero-value-wrap">
+            <text class="f3-cal-hero-num">{{f3cal.mmNum(f3CalLiveText)}}</text>
+            <text class="f3-cal-hero-unit" wx:if="{{f3CalLiveText && f3CalLiveText !== '—'}}">mm</text>
+          </view>
+        </view>
+
+        <view class="f3-cal-progress-block">
+          <view class="f3-cal-progress-track">
+            <view class="f3-cal-progress-fill" style="width: {{f3cal.progressWidth(f3CalCountdown)}}%;"></view>
+          </view>
+          <view class="f3-cal-progress-meta">
+            <text class="f3-cal-progress-left">{{f3CalCountdown}} 秒后完成</text>
+            <text class="f3-cal-progress-right">{{f3CalStep === 'sample2' ? '取最小值' : '取平均值'}}</text>
+          </view>
+        </view>
+
+        <view class="f3-cal-chip" wx:if="{{f3CalMedianText}}">
+          <text class="f3-cal-chip-k">{{f3CalStep === 'sample2' ? '当前最小' : '当前平均'}}</text>
+          <text class="f3-cal-chip-v">{{f3CalMedianText}}</text>
+        </view>
+      </block>
+
+      <view class="f3-cal-loading" wx:else>
+        <view class="f3-cal-loading-spin"></view>
+        <text class="f3-cal-loading-text">短尾复位中</text>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'wheel'}}">
+    <view class="f3-cal-stage f3-cal-stage--wheel">
+      <view class="f3-cal-wheel-panel">
+        <view class="f3-cal-wheel-metric">
+          <text class="f3-cal-wheel-metric-k">实时高度</text>
+          <view class="f3-cal-wheel-metric-v">
+            <text class="f3-cal-wheel-metric-num">{{f3cal.mmNum(f3CalLiveText)}}</text>
+            <text class="f3-cal-wheel-metric-unit" wx:if="{{f3CalLiveText && f3CalLiveText !== '—'}}">mm</text>
+          </view>
+        </view>
+        <view class="f3-cal-wheel-metric-sep"></view>
+        <view class="f3-cal-wheel-metric">
+          <text class="f3-cal-wheel-metric-k">微调步数</text>
+          <view class="f3-cal-wheel-metric-v">
+            <text class="f3-cal-wheel-metric-num f3-cal-wheel-metric-num--ang">{{f3CalWheelSteps}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="f3-cal-wheel-plate-stage">
+        <view class="f3-cal-wheel-plate-rail">
+          <view class="f3-cal-wheel-plate-stick" style="margin-left: {{f3CalFoldGap}}rpx;"></view>
+        </view>
+        <text class="f3-cal-wheel-plate-caption">滑动发送微调指令</text>
+      </view>
+
+      <text class="f3-cal-wheel-hint" wx:if="{{f3CalWheelHint}}">{{f3CalWheelHint}}</text>
+      <text class="f3-cal-wheel-foot" wx:if="{{f3CalTargetText}}">首次基准 {{f3CalTargetText}}</text>
+
+      <view class="f3-cal-ruler-wave-area" catchtouchstart="onF3CalRulerTouchStart" catchtouchmove="onF3CalRulerTouchMove" catchtouchend="onF3CalRulerTouchEnd" catchtouchcancel="onF3CalRulerTouchEnd">
+        <view class="mask-fade left"></view>
+        <view class="mask-fade right"></view>
+        <view class="wave-track" style="transform: translateX({{f3CalTranslateX}}px); transition: {{f3CalRulerTransition || 'none'}};">
+          <block wx:for="{{f3CalPadTicks}}" wx:for-item="tick" wx:for-index="padIdx" wx:key="padIdx">
+            <view class="bar {{f3cal.getWaveClassByX(-50 + padIdx, f3CalTranslateX)}}" style="{{padIdx === 0 ? 'margin-left: -1000px;' : ''}}"></view>
+          </block>
+          <block wx:for="{{f3CalTicks}}" wx:for-item="tick" wx:for-index="tickIdx" wx:key="tickIdx">
+            <view class="bar {{f3cal.getWaveClassByX(tickIdx, f3CalTranslateX)}}"></view>
+          </block>
+          <block wx:for="{{f3CalPadTicks}}" wx:for-item="tick" wx:for-index="padIdx2" wx:key="padIdx2">
+            <view class="bar {{f3cal.getWaveClassByX((f3CalTicks.length || 91) + padIdx2, f3CalTranslateX)}}"></view>
+          </block>
+        </view>
+      </view>
+
+      <view class="f3-cal-wheel-controls">
+        <view class="f3-cal-wheel-nudge" catchtap="onF3CalFoldNudge" data-dir="down">调小</view>
+        <text class="f3-cal-wheel-controls-tip">滑动波轮</text>
+        <view class="f3-cal-wheel-nudge" catchtap="onF3CalFoldNudge" data-dir="up">调大</view>
+      </view>
+
+      <view class="f3-cal-btn f3-cal-btn--primary f3-cal-btn--wheel" catchtap="onF3CalReady">我已经准备好了</view>
+    </view>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'cardboard'}}">
+    <view class="f3-cal-stage f3-cal-stage--guide">
+      <view class="f3-cal-guide-steps">
+        <text class="f3-cal-guide-line">① 拿一块纸板或平板</text>
+        <text class="f3-cal-guide-line">② 贴在牌照架最下沿，保持水平</text>
+        <text class="f3-cal-guide-line">③ 大致对齐即可，不用精确量距</text>
+      </view>
+      <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalCardboardKnow">已放好，继续</view>
+    </view>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'compress'}}">
+    <view class="f3-cal-stage f3-cal-stage--guide">
+      <view class="f3-cal-guide-steps">
+        <text class="f3-cal-guide-line">① 按压后尾，或载人压下避震</text>
+        <text class="f3-cal-guide-line">② 模拟轮胎可能碰到的最低高度</text>
+        <text class="f3-cal-guide-line">③ 保持按压，点继续后回正短尾再采集</text>
+      </view>
+      <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalCompressStart">已压好，继续</view>
+    </view>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'writing'}}">
+    <view class="f3-cal-stage f3-cal-stage--writing">
+      <view class="f3-cal-loading">
+        <view class="f3-cal-loading-spin"></view>
+        <text class="f3-cal-loading-text">写入中</text>
+        <text class="f3-cal-loading-sub">正在写入设备并回读校验</text>
+      </view>
+      <view class="f3-cal-write-list">
+        <view class="f3-cal-write-row f3-cal-write-row--{{f3CalWriteDangerStatus}}">
+          <view class="f3-cal-write-row-main">
+            <text class="f3-cal-write-label">危险高度</text>
+            <text class="f3-cal-write-mm" wx:if="{{f3CalWriteDangerMm}}">{{f3CalWriteDangerMm}}</text>
+          </view>
+          <text class="f3-cal-write-state">{{f3cal.writeStatusText(f3CalWriteDangerStatus)}}</text>
+        </view>
+        <view class="f3-cal-write-row f3-cal-write-row--{{f3CalWriteBaseStatus}}" wx:if="{{f3CalWriteBaseStatus !== 'skip'}}">
+          <view class="f3-cal-write-row-main">
+            <text class="f3-cal-write-label">检测高度</text>
+            <text class="f3-cal-write-mm" wx:if="{{f3CalWriteBaseMm}}">{{f3CalWriteBaseMm}}</text>
+          </view>
+          <text class="f3-cal-write-state">{{f3cal.writeStatusText(f3CalWriteBaseStatus)}}</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'writeResult'}}">
+    <view class="f3-cal-stage f3-cal-stage--done">
+      <view class="f3-cal-done-icon {{f3CalWriteOk ? '' : 'f3-cal-done-icon--fail'}}">{{f3CalWriteOk ? '✓' : '!'}}</view>
+      <text class="f3-cal-done-title">{{f3CalWriteResultTitle}}</text>
+      <text class="f3-cal-tip f3-cal-tip--muted" wx:if="{{f3CalWriteResultSub}}">{{f3CalWriteResultSub}}</text>
+      <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalWriteResultClose">确定</view>
+    </view>
+  </block>
+
+  <block wx:if="{{f3CalStep === 'done'}}">
+    <view class="f3-cal-stage f3-cal-stage--done">
+      <view class="f3-cal-done-icon">✓</view>
+      <text class="f3-cal-done-title" wx:if="{{f3CalResultText}}">{{f3CalResultText}}</text>
+      <text class="f3-cal-tip f3-cal-tip--muted" wx:if="{{f3CalStatusText}}">{{f3CalStatusText}}</text>
+      <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalDoneClose">完成</view>
+    </view>
+  </block>
+</view>
+</view>
+
+<view class="f3-cal-hold-mask" wx:if="{{f3CalShowHoldModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="f3-cal-hold-dialog" catchtap="noop">
+    <view class="f3-cal-hold-close" catchtap="onF3CalHoldDismiss">×</view>
+    <text class="f3-cal-hold-step">步骤 {{f3CalStepNo || 4}} / {{f3CalStepTotal || 6}}</text>
+    <text class="f3-cal-hold-title">纸板标定</text>
+    <text class="f3-cal-hold-desc">请勿移动、晃动纸板。确认后将回正短尾并开始 5 秒采集。</text>
+    <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalHoldConfirm">开始采集</view>
+  </view>
+</view>
+
+<view class="f3-cal-hold-mask" wx:if="{{f3CalShowVolatilityModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="f3-cal-hold-dialog" catchtap="noop">
+    <view class="f3-cal-hold-close" catchtap="onF3CalVolatilityDismiss">×</view>
+    <text class="f3-cal-hold-step">步骤 2 / {{f3CalStepTotal || 6}}</text>
+    <text class="f3-cal-hold-title">数据波动过大</text>
+    <text class="f3-cal-hold-desc">5 秒内高度跳动超过 50 mm，请扶正车辆、保持牌照架稳定后重新检测。</text>
+    <view class="f3-cal-btn f3-cal-btn--primary" catchtap="onF3CalVolatilityRetry">重新检测</view>
+  </view>
+</view>

@@ -38,14 +38,13 @@
         </view>
 
         <view class="rr-card-body" wx:if="{{!simple}}">
-          <view class="rr-ticket-chip-row">
-            <text class="rr-ticket-chip {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? 'user-sent' : (item.returnTrackingId ? 'returned' : (item.returnStatus === 'PENDING_RETURN' ? 'pending' : 'pending-part'))}}">
-              {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN' ? '用户寄回故障配件' : (item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? '用户寄回维修' : (item.returnTrackingId ? '已寄回' : (item.returnStatus === 'PENDING_RETURN' ? '待寄回维修' : '待寄回故障配件')))}}
-            </text>
-          </view>
-
           <view class="rr-card-body-inner">
           <view class="rr-kv">
+            <view class="rr-ticket-chip-row">
+              <view class="rr-ticket-chip {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? 'user-sent' : (item.returnTrackingId ? 'returned' : (item.returnStatus === 'PENDING_RETURN' ? 'pending' : 'pending-part'))}}">
+                {{item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') && item.returnStatus !== 'PENDING_RETURN' ? '用户寄回故障配件' : (item.returnTrackingId && (item.status === 'USER_SENT' || item.returnStatus === 'USER_SENT') ? '用户寄回维修' : (item.returnTrackingId ? '已寄回' : (item.returnStatus === 'PENDING_RETURN' ? '待寄回维修' : '待寄回故障配件')))}}
+              </view>
+            </view>
             <view class="rr-kv-row">
               <text class="rr-kv-k">用户昵称</text>
               <text class="rr-kv-v">{{item.userNickname || '匿名用户'}}</text>
@@ -65,6 +64,14 @@
             <view class="rr-kv-row">
               <text class="rr-kv-k">主板状态</text>
               <text class="rr-kv-v {{item.motherboardStatusClass}}">{{item.motherboardStatusText || '未更换主板'}}</text>
+            </view>
+            <view class="rr-kv-row" wx:if="{{item.outboundModeLabel}}">
+              <text class="rr-kv-k">寄出方式</text>
+              <text class="rr-kv-v rr-outbound-mode">{{item.outboundModeLabel}}</text>
+            </view>
+            <view class="rr-kv-row" wx:if="{{item.repairCycleCount > 0}}">
+              <text class="rr-kv-k">已完成轮次</text>
+              <text class="rr-kv-v">第 {{item.repairCycleCount}} 轮已归档 · 当前进行中</text>
             </view>
           </view>
 

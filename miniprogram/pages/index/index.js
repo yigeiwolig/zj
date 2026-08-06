@@ -3905,6 +3905,12 @@ Page({
     }
   },
 
+  goInventory() {
+    wx.navigateTo({
+      url: '/package-biz/pages/inventory/inventory'
+    });
+  },
+
   _continueDebugUserFlowAfterIndexModals() {
     if (!debugUserFlow.isActive()) return;
     try {

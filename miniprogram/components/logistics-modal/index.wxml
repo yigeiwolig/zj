@@ -1,0 +1,74 @@
+<root-portal enable="{{portalToPage}}">
+  <view
+    class="logistics-modal-mask {{closing ? 'closing' : ''}}"
+    wx:if="{{show || closing}}"
+    bindtap="onClose"
+    catchtouchmove="noop">
+    <view class="logistics-modal-box" catchtap="noop">
+      <view class="logistics-header">
+        <view class="brand-tag">MT-摩改社保障你的物流</view>
+        <view class="close-btn" bindtap="onClose">✕</view>
+      </view>
+      <view class="logistics-modal-content">
+        <view class="logistics-card-container">
+          <view class="logistics-info-card">
+            <view class="card-header-row">
+              <view class="company-info">
+                <view class="company-icon-placeholder">MT</view>
+                <text class="company-name">{{logisticsData.express_company_name || '查询中...'}}</text>
+              </view>
+              <view class="logistics-status-right">
+                <view class="logistics-exception-btn" catchtap="onLogisticsException">物流校准</view>
+                <view class="status-badge {{logisticsData.status === '3' ? 'success' : ''}}" wx:if="{{logisticsData.status_text}}">
+                  {{logisticsData.status_text}}
+                </view>
+              </view>
+            </view>
+            <view class="card-body-row">
+              <text class="tracking-number">{{currentTrackingId}}</text>
+              <view class="copy-btn" bindtap="onCopyTrackingId" data-sn="{{currentTrackingId}}">复制</view>
+            </view>
+          </view>
+        </view>
+        <view class="logistics-loading" wx:if="{{logisticsLoading}}">
+          <view class="mt-loader"></view>
+        </view>
+        <view class="logistics-error" wx:if="{{logisticsError && !logisticsLoading}}">
+          <text class="error-icon">⚠️</text>
+          <text class="error-text">{{logisticsError}}</text>
+        </view>
+        <scroll-view
+          scroll-y
+          class="logistics-scroll"
+          enable-back-to-top="{{true}}"
+          show-scrollbar="{{false}}"
+          wx:if="{{logisticsData && !logisticsLoading && !logisticsBlockDisplay}}">
+          <view class="timeline-container" wx:if="{{logisticsData.path_list && logisticsData.path_list.length}}">
+            <view class="timeline-item" wx:for="{{logisticsData.path_list}}" wx:key="index">
+              <view class="timeline-axis">
+                <view class="dot {{index === 0 ? 'active' : ''}}"></view>
+                <view class="line" wx:if="{{index < logisticsData.path_list.length - 1}}"></view>
+              </view>
+              <view class="timeline-content-wrapper {{index === 0 ? 'active' : ''}}">
+                <view class="timeline-header">
+                  <text class="time-full" wx:if="{{item._dateStr}}">{{item._dateStr}} {{item.time}}</text>
+                  <text class="time-full" wx:else>{{item.time}}</text>
+                </view>
+                <view class="timeline-body">
+                  <text class="desc-text" selectable="true">{{item.desc}}</text>
+                </view>
+              </view>
+            </view>
+          </view>
+          <view class="logistics-empty" wx:else>
+            <text>暂无物流轨迹信息</text>
+          </view>
+        </scroll-view>
+        <view class="logistics-error" wx:if="{{logisticsBlockDisplay && !logisticsLoading}}">
+          <text class="error-icon">⚠️</text>
+          <text class="error-text">尾号校验不通过，已隐藏物流轨迹。请点击“物流校准”输入尾号后查询。</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</root-portal>

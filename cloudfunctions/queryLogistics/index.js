@@ -19,15 +19,27 @@ async function isAdmin(openid) {
 
 /** 仅允许管理员或运单所属用户查询，防止刷探数 API */
 async function assertLogisticsAccess(trackingId, callerOpenid) {
-  if (!callerOpenid) {
-    throw new Error('请先登录后再查询物流')
-  }
-  if (await isAdmin(callerOpenid)) return
-
   const tn = String(trackingId || '').trim().toUpperCase()
   if (!tn) {
     throw new Error('运单号不能为空')
   }
+
+  // 云函数互调 / 定时器无 OPENID：仅放行「维修寄回运单」（用于签收状态同步）
+  if (!callerOpenid) {
+    const repairs = await db.collection('shouhou_repair')
+      .where(_.or([
+        { returnTrackingId: tn },
+        { returnTrackingId: String(trackingId || '').trim() },
+        { trackingId: tn },
+        { trackingId: String(trackingId || '').trim() }
+      ]))
+      .limit(1)
+      .get()
+    if (repairs.data && repairs.data.length) return
+    throw new Error('请先登录后再查询物流')
+  }
+
+  if (await isAdmin(callerOpenid)) return
 
   const orders = await db.collection('shop_orders')
     .where({ _openid: callerOpenid, trackingId: _.exists(true) })
@@ -437,12 +449,12 @@ async function queryLogistics(trackingId, expressCompany, phone) {
 // 🔹 主入口函数
 exports.main = async (event, context) => {
   try {
-    const { trackingId, expressCompany, receiverPhone } = event
+    const { trackingId, expressCompany, receiverPhone, phone } = event
     
-    // 标准化输入参数
+    // 标准化输入参数（兼容 phone / receiverPhone）
     const normalizedTrackingId = String(trackingId || '').trim().toUpperCase()
     const normalizedCompany = expressCompany ? String(expressCompany).trim() : ''
-    const normalizedPhone = receiverPhone ? String(receiverPhone).trim() : ''
+    const normalizedPhone = String(receiverPhone || phone || '').trim()
     
     if (!normalizedTrackingId) {
       return {

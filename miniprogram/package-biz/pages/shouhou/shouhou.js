@@ -3,6 +3,12 @@ const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const { normalizeProductDetailModel } = require('../../../utils/productModels.js');
+const {
+  normalizeControlVariant,
+  controlVariantLabel,
+  formatModelWithControlVariant,
+  isValidControlVariant
+} = require('../../../utils/controlVariant.js');
 const syncPartsHelper = require('../../../utils/syncPartsHelper.js');
 const { startGuideBtnCountdown, clearGuideBtnCountdown } = require('../../../utils/guideBtnCountdown.js');
 const { notifyAdminTodo } = require('../../../utils/wecomAdminTodo.js');
@@ -336,6 +342,7 @@ Page({
     // 故障设备选择
     myDevices: [],            // 当前用户已绑定的设备列表
     selectedDeviceIndex: null, // 选中的故障设备索引（null 表示未选）
+    repairControlVariant: '',  // button | remote
     showDevicePicker: false,   // 是否显示自定义故障设备选择器
     devicePickerActive: false, // 底部设备选择器是否处于上滑展开态
     tempDeviceIndex: null,     // 选择器中临时高亮的索引
@@ -1279,8 +1286,8 @@ Page({
   onReady() {
     this.ctx = wx.createCameraContext();
     
-    // 🔴 物理防线：确保录屏、截屏出来的全是黑屏
-    if (wx.setVisualEffectOnCapture) {
+    // 物理防线：非管理员才锁黑屏（管理员任意界面可截图/录屏）
+    if (wx.setVisualEffectOnCapture && !screenshotExempt.isScreenshotBanExempt(this)) {
       try {
         wx.setVisualEffectOnCapture({
           visualEffect: 'hidden',
@@ -1292,6 +1299,8 @@ Page({
       } catch (e) {
         console.warn('⚠️ setVisualEffectOnCapture 不可用:', e);
       }
+    } else if (screenshotExempt.isScreenshotBanExempt(this)) {
+      screenshotExempt.allowScreenCaptureIfExempt();
     }
     
     // 🔴 截屏/录屏封禁
@@ -5350,10 +5359,19 @@ Page({
 
       // 如果用户有绑定设备，则要求选择具体故障设备
       const { myDevices, selectedDeviceIndex } = this.data;
-      if (myDevices && myDevices.length > 0 && (selectedDeviceIndex === null || selectedDeviceIndex === undefined)) {
-        this.showAutoToast('提示', '请选择故障设备');
-        return;
-      }
+    if (myDevices && myDevices.length > 0 && (selectedDeviceIndex === null || selectedDeviceIndex === undefined)) {
+      this.showAutoToast('提示', '请选择故障设备');
+      return;
+    }
+    if (!isValidControlVariant(this.data.repairControlVariant)) {
+      this.showMyDialog({
+        title: '提示',
+        content: '请选择控制版本：按钮版或遥控版',
+        showCancel: false,
+        confirmText: '知道了'
+      });
+      return;
+    }
       
       // 手机号格式验证
       if (!/^1[3-9]\d{9}$/.test(orderInfo.phone)) {
@@ -7921,6 +7939,8 @@ Page({
           ...device,
           displaySn,
           snPending,
+          controlVariant: normalizeControlVariant(device.controlVariant),
+          controlVariantLabel: controlVariantLabel(device.controlVariant),
             productModel: device.productModel || device.name || '未知型号',  // 🔴 确保 productModel 有值
             warrantyExpired
           };
@@ -7932,6 +7952,9 @@ Page({
         // 如果只有 1 个设备，自动选中
         if (devicesWithDisplaySn.length === 1) {
           nextState.selectedDeviceIndex = 0;
+          const only = devicesWithDisplaySn[0];
+          const prefill = normalizeControlVariant(only && only.controlVariant);
+          if (prefill) nextState.repairControlVariant = prefill;
         }
         this.setData(nextState);
         console.log('[loadRepairDevices] 加载到设备列表:', devicesWithDisplaySn);
@@ -8024,6 +8047,9 @@ Page({
     }
     this.setData({ selectedDeviceIndex: idx }, () => {
       this._expiredFeeAcked = false;
+      const dev = (this.data.myDevices || [])[idx];
+      const prefill = normalizeControlVariant(dev && dev.controlVariant);
+      if (prefill) this.setData({ repairControlVariant: prefill });
       if (this._repairTermsAcked && this._isSelectedRepairDeviceExpired()) {
         this._maybeShowExpiredFeeThen(() => {});
       }
@@ -8031,11 +8057,40 @@ Page({
     this.closeDevicePicker();
   },
 
+  onRepairControlVariantChange(e) {
+    const value = normalizeControlVariant(
+      (e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.value) || ''
+    );
+    this.setData({ repairControlVariant: value });
+  },
+
+  onCtrlVariantTouchStart(e) {
+    const t = e && e.touches && e.touches[0];
+    this._ctrlVariantTouch = t ? { x: t.clientX, y: t.clientY } : null;
+  },
+
+  onCtrlVariantTouchEnd(e) {
+    const start = this._ctrlVariantTouch;
+    this._ctrlVariantTouch = null;
+    if (!start) return;
+    const t = e && e.changedTouches && e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    if (Math.abs(dx) < 40 || Math.abs(dx) <= Math.abs(dy)) return;
+    const value = dx < 0 ? 'remote' : 'button';
+    if (this.data.repairControlVariant === value) return;
+    this.setData({ repairControlVariant: value });
+  },
+
   // 监听设备选择
   onDeviceChange(e) {
     const index = Number(e.detail.value);
     this.setData({ selectedDeviceIndex: index }, () => {
       this._expiredFeeAcked = false;
+      const dev = (this.data.myDevices || [])[index];
+      const prefill = normalizeControlVariant(dev && dev.controlVariant);
+      if (prefill) this.setData({ repairControlVariant: prefill });
     });
   },
 
@@ -8123,6 +8178,16 @@ Page({
     // 如果用户有绑定设备，则要求选择具体故障设备
     if (myDevices && myDevices.length > 0 && (selectedDeviceIndex === null || selectedDeviceIndex === undefined)) {
       failValidate('请选择故障设备');
+      return;
+    }
+    if (!isValidControlVariant(this.data.repairControlVariant)) {
+      this._unlockRepairSubmit();
+      this.showMyDialog({
+        title: '提示',
+        content: '请选择控制版本：按钮版或遥控版',
+        showCancel: false,
+        confirmText: '知道了'
+      });
       return;
     }
     // 🔴 修改：检查省市区和详细地址
@@ -8248,12 +8313,15 @@ Page({
               deviceId: dev._id,
               sn: dev.sn,
               displaySn: dev.displaySn || ('MT' + (dev.sn || '')),
-              productModel: dev.productModel || currentModelName
+              productModel: dev.productModel || currentModelName,
+              controlVariant: normalizeControlVariant(dev.controlVariant)
             };
           }
         }
         // 🔴 维修单型号优先使用“用户选中的故障设备型号”，避免与当前页面型号不一致
         const repairModelName = (selectedDevice && selectedDevice.productModel) || currentModelName;
+        const repairControlVariant = normalizeControlVariant(this.data.repairControlVariant);
+        const repairModelNotify = formatModelWithControlVariant(repairModelName, repairControlVariant);
         
         console.log('[submitRepairTicket] 准备写入数据库，数据:', {
           model: repairModelName,
@@ -8284,6 +8352,7 @@ Page({
             data: {
               type: 'repair',
               model: repairModelName,
+              controlVariant: repairControlVariant,
               description: repairDescription.trim(),
               ...mediaPayload,
               contact: finalContact,
@@ -8296,7 +8365,7 @@ Page({
             },
             success: (addRes) => {
               console.log('[submitRepairTicket] 数据库写入成功（超时分支），_id:', addRes._id);
-              notifyAdminTodo('repair_pending', repairModelName || '');
+              notifyAdminTodo('repair_pending', repairModelNotify || '');
               this.hideMyLoading();
               this.setData({ showOrderModal: false });
               setTimeout(() => {
@@ -8346,6 +8415,7 @@ Page({
             data: {
               type: 'repair',
               model: repairModelName,
+              controlVariant: repairControlVariant,
               description: repairDescription.trim(),
               ...mediaPayload,
               contact: finalContact,
@@ -8358,7 +8428,7 @@ Page({
             },
             success: (addRes) => {
               clearTimeout(writeTimeout);
-              notifyAdminTodo('repair_pending', repairModelName || '');
+              notifyAdminTodo('repair_pending', repairModelNotify || '');
               this.hideMyLoading();
               this.setData({ showOrderModal: false });
               setTimeout(() => {
@@ -8431,6 +8501,7 @@ Page({
               // 不设置 _openid，系统会自动设置
               type: 'repair', // 类型标记
               model: repairModelName,
+              controlVariant: repairControlVariant,
               description: repairDescription.trim(),
               ...mediaPayload,
               contact: finalContact, // 存入联系人信息（包含完整地址）
@@ -8447,7 +8518,7 @@ Page({
             clearTimeout(writeTimeout);
             
             console.log('[submitRepairTicket] 数据库写入成功，_id:', addRes._id);
-            notifyAdminTodo('repair_pending', repairModelName || '');
+            notifyAdminTodo('repair_pending', repairModelNotify || '');
             // 隐藏自定义加载动画
             this.hideMyLoading();
             
@@ -8518,6 +8589,7 @@ Page({
             data: {
               type: 'repair',
               model: repairModelName,
+              controlVariant: repairControlVariant,
               description: repairDescription.trim(),
               ...mediaPayload,
               contact: finalContact,
@@ -8531,7 +8603,7 @@ Page({
               // 清除写入超时定时器
               clearTimeout(writeTimeout);
               
-              notifyAdminTodo('repair_pending', repairModelName || '');
+              notifyAdminTodo('repair_pending', repairModelNotify || '');
               this.hideMyLoading();
               this.setData({ showOrderModal: false });
               setTimeout(() => {

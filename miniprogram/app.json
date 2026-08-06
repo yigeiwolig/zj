@@ -12,13 +12,26 @@
         "pages/my/my",
         "pages/orders/orders",
         "pages/profile/profile",
-        "pages/products/products",
+        "pages/products/products"
+      ]
+    },
+    {
+      "root": "package-legacy",
+      "name": "package-legacy",
+      "pages": [
+        "pages/scan/scan"
+      ]
+    },
+    {
+      "root": "package-extra",
+      "name": "package-extra",
+      "pages": [
         "pages/case/case",
         "pages/scan/scan",
+        "pages/faq/faq",
         "pages/voice-control/voice-control",
         "pages/can-learn/can-learn",
         "pages/can-learn-admin/can-learn-admin",
-        "pages/faq/faq",
         "pages/troubleshoot/troubleshoot",
         "pages/troubleshoot-admin/troubleshoot-admin"
       ]
@@ -37,7 +50,8 @@
         "pages/call/call",
         "pages/kf-select/kf-select",
         "pages/home/home",
-        "pages/invest/invest"
+        "pages/invest/invest",
+        "pages/inventory/inventory"
       ]
     }
   ],
@@ -73,7 +87,7 @@
   },
   "plugins": {
     "WechatSI": {
-      "version": "0.3.5",
+      "version": "0.3.9",
       "provider": "wx069ba97219f66d99"
     }
   },

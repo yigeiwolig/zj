@@ -1017,8 +1017,13 @@
       </view>
 
       <view wx:if="{{isAdmin && !isAdminMode}}" class="admin-quick-gen">
-        <view class="admin-quick-gen-btn {{isGeneratingAccessCode ? 'is-loading' : ''}}" catchtap="generateAccessCode">
-          {{isGeneratingAccessCode ? '生成中…' : '生成访问口令'}}
+        <view class="admin-quick-gen-row">
+          <view class="admin-quick-gen-btn {{isGeneratingAccessCode ? 'is-loading' : ''}}" catchtap="generateAccessCode">
+            {{isGeneratingAccessCode ? '生成中…' : '生成访问口令'}}
+          </view>
+          <view class="admin-quick-gen-btn admin-quick-gen-btn--dark" catchtap="goInventory">
+            出入库
+          </view>
         </view>
       </view>
     </view>
