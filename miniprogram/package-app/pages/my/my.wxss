@@ -278,8 +278,16 @@
 
 .hub-admin-profile-body,
 .hub-admin-orders-body--shell {
-  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
+}
+
+/* 底栏 fixed 盖在 scroll-view 上：必须用真实占位把内容顶到底栏上方 */
+.hub-admin-tab-spacer {
+  width: 100%;
+  height: calc(280rpx + env(safe-area-inset-bottom));
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 .admin-profile-toolbar {
@@ -815,7 +823,8 @@
   font-size: 24rpx;
   line-height: 1.5;
   color: #3a3a3c;
-  word-break: break-all;
+  /* break-all 会把「南海区」「7栋207」从中间劈开，按词断行更好读 */
+  word-break: break-word;
 }
 
 .admin-header-row--hub {
@@ -2231,7 +2240,7 @@
   flex: 1 1 auto;
   height: auto;
   min-height: 0;
-  max-height: 58vh;
+  max-height: 62vh !important;
   box-sizing: border-box;
 }
 
@@ -2513,78 +2522,247 @@
 
 /* --- 审核列表 Swiper --- */
 .audit-swiper {
-  height: 420rpx; /* 高度根据卡片内容定 */
+  height: 640rpx;
   margin-bottom: 40rpx;
 }
 
 /* --- 审核卡片 --- */
 .audit-card {
-  /* 加上 margin 让左右露出来的部分有间隙 */
-  margin: 0 15rpx; 
+  margin: 0 15rpx;
   height: 100%;
   box-sizing: border-box;
-  background: #fff; 
-  padding: 30rpx; 
-  border-radius: 20rpx; 
-  border: 2rpx solid #000; /* 加个黑边框区别一下 */
+  background: #fff;
+  padding: 24rpx 28rpx 24rpx;
+  border-radius: 20rpx;
+  border: 2rpx solid #111;
   display: flex;
   flex-direction: column;
+  gap: 16rpx;
+}
+
+.audit-card-head {
+  flex-shrink: 0;
+}
+
+.audit-card-title-row {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 8rpx;
 }
-.audit-row { 
-  display: flex; 
-  justify-content: space-between; 
-  margin-bottom: 10rpx; 
+
+.audit-model {
+  font-weight: 700;
+  font-size: 32rpx;
+  color: #1d1d1f;
+  min-width: 0;
 }
-.audit-model { 
-  font-weight: 700; 
-  font-size: 30rpx; 
+
+.audit-type-pill {
+  flex-shrink: 0;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #007aff;
+  background: rgba(0, 122, 255, 0.1);
 }
-.audit-sn { 
-  font-family: monospace; 
-  color: #0071E3; 
+
+.audit-type-pill.is-fault {
+  color: #ff9500;
+  background: rgba(255, 149, 0, 0.12);
 }
-.audit-date { 
-  font-size: 24rpx; 
-  color: #999; 
+
+.audit-sn {
+  display: block;
+  font-family: monospace;
+  font-size: 24rpx;
+  color: #0071E3;
+  margin-bottom: 10rpx;
+  word-break: break-all;
 }
-.audit-type {
+
+.audit-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx 20rpx;
+}
+
+.audit-meta {
+  font-size: 22rpx;
+  color: #8e8e93;
+  line-height: 1.4;
+}
+
+.audit-imgs {
+  display: flex;
+  gap: 16rpx;
+  flex: 1;
+  min-height: 0;
+}
+
+.audit-thumb-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.audit-thumb-wrap.is-single {
+  flex: 1;
+  max-width: 100%;
+}
+
+.audit-thumb-label {
+  font-size: 20rpx;
+  color: #8e8e93;
+  line-height: 1;
+}
+
+.audit-thumb {
+  width: 100%;
+  height: 280rpx;
+  border-radius: 12rpx;
+  background: #f2f2f7;
+  border: 1rpx solid #ececf0;
+}
+
+.audit-actions {
+  display: flex;
+  gap: 16rpx;
+  flex-shrink: 0;
+  padding-top: 4rpx;
+}
+
+.audit-btn {
+  flex: 1;
+  text-align: center;
+  padding: 18rpx;
+  border-radius: 14rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.audit-btn.reject {
+  background: #f2f2f7;
+  color: #FF3B30;
+}
+
+.audit-btn.approve {
+  background: #000;
+  color: #fff;
+}
+
+.ts-report-swiper {
+  height: 620rpx;
+  margin-bottom: 0;
+}
+
+.ts-report-stack {
+  padding: 0 24rpx 8rpx;
+  box-sizing: border-box;
+}
+
+.ts-report-card {
+  margin: 0 0 24rpx;
+  height: 640rpx;
+  padding: 28rpx;
+  box-sizing: border-box;
+  background: #fff;
+  border-radius: 20rpx;
+  border: 2rpx solid #111;
+  display: flex;
+  flex-direction: column;
+}
+
+.ts-report-step-swiper {
+  width: 100%;
+  height: 400rpx;
+  flex-shrink: 0;
+}
+
+.ts-report-step-page {
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.ts-report-step-hint {
+  display: block;
+  margin: 8rpx 0 4rpx;
+  font-size: 22rpx;
+  color: #888;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.audit-btn.is-disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.ts-report-video-empty {
+  height: 260rpx;
+  min-height: 260rpx;
+  margin-top: 12rpx;
+  border-radius: 12rpx;
+  background: #f5f5f5;
+  color: #bbb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26rpx;
+  flex-shrink: 0;
+}
+
+.ts-report-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.ts-report-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #111;
+}
+
+.ts-report-model {
+  font-size: 24rpx;
+  color: #888;
+}
+
+.ts-report-step {
+  padding: 16rpx 0;
+  border-top: 1rpx solid rgba(0, 0, 0, 0.06);
+}
+
+.ts-report-q {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #111;
+}
+
+.ts-report-a {
+  display: block;
+  margin-top: 8rpx;
   font-size: 24rpx;
   color: #666;
 }
 
-.audit-imgs { 
-  display: flex; 
-  gap: 20rpx; 
-  margin: 20rpx 0; 
-}
-.audit-thumb { 
-  width: 100rpx; 
-  height: 100rpx; 
-  border-radius: 10rpx; 
-  background: #eee; 
-}
-
-.audit-actions { 
-  display: flex; 
-  gap: 20rpx; 
-  margin-top: 20rpx; 
-}
-.audit-btn { 
-  flex: 1; 
-  text-align: center; 
-  padding: 16rpx; 
-  border-radius: 10rpx; 
-  font-size: 26rpx; 
-  font-weight: 600; 
-}
-.audit-btn.reject { 
-  background: #f0f0f0; 
-  color: #FF3B30; 
-}
-.audit-btn.approve { 
-  background: #000; 
-  color: #fff; 
+.ts-report-video {
+  width: 100%;
+  height: 260rpx;
+  flex-shrink: 0;
+  margin-top: 12rpx;
+  border-radius: 12rpx;
+  background: #111;
 }
 
 /* 管理员：审核弹窗（居中，底栏固定可见） */
@@ -2620,13 +2798,11 @@
 }
 
 .audit-setup-body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: 62vh;
-  overflow-y: auto;
+  width: 100%;
   padding: 8rpx 40rpx 16rpx;
   box-sizing: border-box;
-  -webkit-overflow-scrolling: touch;
 }
 
 .audit-setup-scroll {
@@ -2680,6 +2856,46 @@
   color: #636366;
   line-height: 1.45;
   margin-top: 6rpx;
+}
+
+.audit-setup-proofs {
+  margin-bottom: 24rpx;
+  padding: 20rpx;
+  border-radius: 16rpx;
+  background: #f7f7f8;
+}
+
+.audit-setup-proofs-label {
+  display: block;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 14rpx;
+}
+
+.audit-setup-proofs-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.audit-setup-proof-item {
+  flex: 1;
+  min-width: 0;
+}
+
+.audit-setup-proof-tag {
+  display: block;
+  font-size: 22rpx;
+  color: #8e8e93;
+  margin-bottom: 8rpx;
+}
+
+.audit-setup-proof-img {
+  width: 100%;
+  height: 360rpx;
+  border-radius: 12rpx;
+  background: #fff;
+  border: 1rpx solid #e5e5ea;
 }
 
 .audit-fault-banner,
@@ -3440,9 +3656,11 @@
 .goods-detail-list { flex: 1; margin: 20rpx 0; }
 .section-mini-title { font-size: 20rpx; color: #bbb; letter-spacing: 2rpx; margin-bottom: 15rpx; }
 .mini-tag { font-size: 20rpx; color: #bbb; letter-spacing: 2rpx; margin-bottom: 15rpx; }
-.g-item { 
+.g-item {
   display: flex; align-items: center; padding: 15rpx 0; border-bottom: 1rpx solid #f0f0f0;
 }
+/* 最后一件商品不再画线，避免和下方金额明细的分隔线叠成两条 */
+.g-item:last-child { border-bottom: none; }
 .g-info { flex: 1; display: flex; flex-direction: column; }
 .g-n { font-size: 28rpx; font-weight: 600; }
 .g-s { font-size: 20rpx; color: #888; }
@@ -3465,18 +3683,69 @@
 .total-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  /* 左边日期一行、右边实付两行，底部对齐才不会显得日期往下掉 */
+  align-items: flex-end;
   margin-bottom: 30rpx;
 }
 .time-text { font-size: 22rpx; color: #ccc; }
-.price-box { font-size: 24rpx; color: #333; }
+.price-box { font-size: 24rpx; color: #333; text-align: right; }
 .price-num { font-size: 36rpx; font-weight: 800; margin-left: 10rpx; }
+
+/* 订单卡片金额构成：商品小计 / 运费 / 优惠抵扣 */
+.amount-breakdown {
+  padding-top: 18rpx;
+  margin-bottom: 22rpx;
+  border-top: 1rpx solid #f0f0f2;
+}
+
+.amount-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 8rpx;
+}
+
+.amount-row:first-child {
+  margin-top: 0;
+}
+
+.amount-label {
+  font-size: 24rpx;
+  color: #8e8e93;
+}
+
+.amount-val {
+  font-size: 24rpx;
+  color: #3a3a3c;
+}
+
+.amount-val--cut {
+  color: #ff3b30;
+}
+
+.amount-test-pay {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #8e8e93;
+  text-align: right;
+}
 
 /* 按钮组右对齐 */
 .action-row-right {
   display: flex;
   justify-content: flex-end; /* 靠右排布 */
   gap: 20rpx; /* 按钮间距 */
+}
+
+.action-row-right--shipped {
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.action-row-right--shipped .btn-mini {
+  padding: 14rpx 28rpx;
+  font-size: 24rpx;
 }
 
 /* 小按钮样式 */
@@ -12595,6 +12864,119 @@
   color: #86868b;
   font-weight: 500;
   padding: 4rpx 0;
+}
+
+/* 已寄回、等待管理员：白底细黄框，标题层级清楚，按钮统一 */
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card {
+  border: 2rpx solid #e2b036;
+  background: #fff;
+  box-shadow: 0 10rpx 28rpx rgba(15, 23, 42, 0.06);
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-reminder-inner {
+  padding: 0 8rpx 12rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-card-header.rr-ticket-header {
+  padding: 32rpx 28rpx 12rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-ticket-header-main {
+  gap: 8rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-waiting-kicker {
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #b8860b;
+  letter-spacing: 1rpx;
+  line-height: 1.2;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-ticket-status.is-hero {
+  align-self: flex-start;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-ticket-status.is-hero .rr-ticket-status-text {
+  font-size: 36rpx;
+  line-height: 1.25;
+  font-weight: 800;
+  color: #111;
+  letter-spacing: -0.4rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-card-body.rr-ticket-body {
+  padding: 8rpx 28rpx 8rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-ticket-kv-row {
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #f2f2f4;
+  align-items: center;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-ticket-kv-row:last-child {
+  border-bottom: none;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-ticket-kv-row .rr-label {
+  font-size: 24rpx;
+  color: #8e8e93;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-ticket-kv-row .rr-value,
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-ticket-kv-row .rr-value--mono {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #1d1d1f !important;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-ticket-footer {
+  padding: 18rpx 28rpx 28rpx;
+  background: #fff;
+  border-top: 1rpx solid #f2f2f4;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-user-actions-row {
+  gap: 14rpx;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-user-actions-row .rr-simple-btn {
+  height: 76rpx;
+  padding: 0 12rpx;
+  line-height: 76rpx;
+  border-radius: 14rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-simple-btn.secondary {
+  background: #fff;
+  color: #111;
+  border: 1rpx solid #d8d8dc;
+  box-shadow: none;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-simple-btn.secondary:active {
+  background: #f5f5f7;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-simple-btn.primary {
+  background: #111;
+  color: #fff;
+  border: 1rpx solid #111;
+  box-shadow: none;
+  font-weight: 700;
+}
+
+.return-required-card.new-style.rr-reminder-card.rr-stamp-card.rr-waiting-admin-card .rr-simple-btn.primary:active {
+  background: #2c2c2e;
+  border-color: #2c2c2e;
+  color: #fff;
 }
 
 /* 内部诊断书 · 底部抽屉（仅管理员） */

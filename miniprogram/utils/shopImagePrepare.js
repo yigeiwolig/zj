@@ -83,14 +83,15 @@ const PRESETS = {
     sizeHint: '800×800',
     desc: '头像'
   },
-  /** 我的-凭证：.upload-box 16:9 + aspectFill */
+  /** 我的-凭证：订单/聊天截图多为竖图，保留原比例不裁切 */
   proof: {
-    displayAspect: [16, 9],
+    displayMode: 'free',
     maxWidth: 1200,
-    maxHeight: 675,
+    maxHeight: 2400,
     quality: 82,
-    maxBytes: 420 * 1024,
-    sizeHint: '1280×720',
+    maxBytes: 650 * 1024,
+    ratioLabel: '原比例',
+    sizeHint: '宽≤1200',
     desc: '凭证截图'
   },
   /** 附近门店：.p-image-box 展开 16:9 + aspectFill */
@@ -131,15 +132,16 @@ const PRESETS = {
     sizeHint: '1280×720',
     desc: '案例封面'
   },
-  /** 维修说明配图预览区：16:9 + aspectFill */
+  /** 维修故障素材：故障照多为竖图/细节图，保留原比例不裁切 */
   shouhou: {
-    displayAspect: [16, 9],
+    displayMode: 'free',
     maxWidth: 1280,
-    maxHeight: 720,
+    maxHeight: 2400,
     quality: 82,
-    maxBytes: 420 * 1024,
-    sizeHint: '1280×720',
-    desc: '维修说明配图'
+    maxBytes: 650 * 1024,
+    ratioLabel: '原比例',
+    sizeHint: '宽≤1280',
+    desc: '维修故障配图'
   },
   /** 枢纽首页「产品上新」：.new-card-media 75% 比例盒 + aspectFill */
   hubHome: {

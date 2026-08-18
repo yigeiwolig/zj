@@ -87,7 +87,7 @@
           wx:if="{{item.photoUrl}}"
           class="inv-thumb"
           src="{{item.photoUrl}}"
-          mode="aspectFill"
+          mode="aspectFit"
           data-url="{{item.photoUrl}}"
           bindtap="previewPhoto"
         />
@@ -331,7 +331,7 @@
 
         <text class="inv-label">{{inboundIsRestock ? '照片（沿用已有，可点更换）' : '照片（必须）'}}</text>
         <view class="inv-photo-box" bindtap="takeInboundPhoto">
-          <image wx:if="{{inboundPhotoLocal || inboundPhotoUrl}}" class="inv-photo" src="{{inboundPhotoLocal || inboundPhotoUrl}}" mode="aspectFill" />
+          <image wx:if="{{inboundPhotoLocal || inboundPhotoUrl}}" class="inv-photo" src="{{inboundPhotoLocal || inboundPhotoUrl}}" mode="aspectFit" />
           <view wx:else class="inv-photo-empty">
             <text class="inv-photo-plus">+</text>
             <text>{{inboundIsRestock ? '可选拍照' : '拍照 / 选图'}}</text>
@@ -441,7 +441,7 @@
 
       <text class="inv-label">照片</text>
       <view class="inv-photo-box" bindtap="takeEditPhoto">
-        <image wx:if="{{editPhotoLocal || editPhotoUrl}}" class="inv-photo" src="{{editPhotoLocal || editPhotoUrl}}" mode="aspectFill" />
+        <image wx:if="{{editPhotoLocal || editPhotoUrl}}" class="inv-photo" src="{{editPhotoLocal || editPhotoUrl}}" mode="aspectFit" />
         <view wx:else class="inv-photo-empty">
           <text class="inv-photo-plus">+</text>
           <text>更换照片</text>

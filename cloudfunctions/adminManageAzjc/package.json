@@ -1,0 +1,9 @@
+{
+  "name": "adminManageAzjc",
+  "version": "1.0.0",
+  "description": "管理员维护安装教程 azjc（跨创建者删除/更新）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

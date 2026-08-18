@@ -1435,6 +1435,7 @@ const methods = {
       let r = ((this.properties && this.properties.repairId) || '').toString().trim();
       if (r) return r;
       try {
+        if (!wx.getStorageSync('guided_parts_active')) return '';
         r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
       } catch (e) {}
       return r;
@@ -1453,6 +1454,7 @@ const methods = {
         orderSource: 'shop',
         userNickname: userNickname,
         repairId: repairId,
+        isGuidedPartsPurchase: !!repairId,
         couponIds
       },
       success: (res) => {

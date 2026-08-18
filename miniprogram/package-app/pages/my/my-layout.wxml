@@ -117,7 +117,7 @@
     <swiper 
       class="order-swiper" 
       bindchange="onOrderChange" 
-      circular 
+      circular="{{false}}"
       touch-angle="18"
       previous-margin="60rpx" 
       next-margin="60rpx"
@@ -190,6 +190,21 @@
               </block>
             </view>
             <view class="card-footer-new card-footer-new--guided-ship">
+              <view class="amount-breakdown">
+                <view class="amount-row" wx:if="{{item.goodsSubtotal !== undefined && item.goodsSubtotal !== null}}">
+                  <text class="amount-label">商品小计</text>
+                  <text class="amount-val">¥{{item.goodsSubtotal}}</text>
+                </view>
+                <view class="amount-row">
+                  <text class="amount-label">运费</text>
+                  <text class="amount-val">{{item.shippingFee > 0 ? '¥' + item.shippingFee : (item.shippingMethod === 'sf' ? '未记录' : '包邮')}}</text>
+                </view>
+                <view class="amount-row" wx:if="{{item.couponDiscountYuan > 0}}">
+                  <text class="amount-label">优惠抵扣</text>
+                  <text class="amount-val amount-val--cut">-¥{{item.couponDiscountYuan}}</text>
+                </view>
+                <text class="amount-test-pay" wx:if="{{item.adminTestPay}}">管理员测付 ¥{{item.paidAmount}}</text>
+              </view>
               <view class="total-row total-row--guided-ship">
                 <text class="time-text guided-ship-order-time">下单：{{item.createTimeShort}}</text>
                 <view class="price-box">
@@ -200,7 +215,7 @@
                     data-id="{{item.id}}"
                     data-price="{{item.amount}}"
                     data-status="{{item.realStatus}}">
-                    ¥{{isAdmin ? 0.01 : item.amount}}
+                    ¥{{item.amount}}
                   </text>
                 </view>
               </view>
@@ -232,7 +247,7 @@
               </view>
             </view>
             <view class="goods-detail-list">
-              <view class="mini-tag">购物清单</view>
+              <view class="mini-tag">{{item.isShouhouParts ? '售后配件清单' : '购物清单'}}</view>
               <block wx:for="{{item.goodsList}}" wx:for-item="g" wx:key="index">
                 <view class="g-item">
                   <view class="g-info">
@@ -245,6 +260,21 @@
               </block>
             </view>
             <view class="card-footer-new">
+              <view class="amount-breakdown">
+                <view class="amount-row" wx:if="{{item.goodsSubtotal !== undefined && item.goodsSubtotal !== null}}">
+                  <text class="amount-label">商品小计</text>
+                  <text class="amount-val">¥{{item.goodsSubtotal}}</text>
+                </view>
+                <view class="amount-row">
+                  <text class="amount-label">运费</text>
+                  <text class="amount-val">{{item.shippingFee > 0 ? '¥' + item.shippingFee : (item.shippingMethod === 'sf' ? '未记录' : '包邮')}}</text>
+                </view>
+                <view class="amount-row" wx:if="{{item.couponDiscountYuan > 0}}">
+                  <text class="amount-label">优惠抵扣</text>
+                  <text class="amount-val amount-val--cut">-¥{{item.couponDiscountYuan}}</text>
+                </view>
+                <text class="amount-test-pay" wx:if="{{item.adminTestPay}}">管理员测付 ¥{{item.paidAmount}}</text>
+              </view>
               <view class="total-row">
                 <text class="time-text">{{item.createTime}}</text>
                 <view class="price-box">
@@ -255,7 +285,7 @@
                     data-id="{{item.id}}"
                     data-price="{{item.amount}}"
                     data-status="{{item.realStatus}}">
-                    ¥{{isAdmin ? 0.01 : item.amount}}
+                    ¥{{item.amount}}
                   </text>
                 </view>
               </view>
@@ -265,7 +295,7 @@
                 data-id="{{item.id}}"
                 data-orderid="{{item.orderId}}"
                 data-express="{{item.shippingMethod}}">
-                录入运单号并物料发出
+                {{item.isShouhouParts ? '录入运单号并发货（售后配件）' : '录入运单号并物料发出'}}
               </view>
             </view>
           </block>
@@ -319,154 +349,11 @@
     <block wx:if="{{adminAfterSalesTab === 'repairs'}}">
     <view class="section-label repair-section-label" wx:if="{{repairList.length > 0}}">PENDING REPAIRS / 待处理报修</view>
     <view class="admin-panel-empty" wx:if="{{repairList.length === 0}}">暂无待处理报修</view>
-    <view class="repair-list-admin">
-      <block wx:for="{{repairList}}" wx:key="_id">
-        <view class="repair-admin-card">
-          <!-- 故障素材预览：视频/图片都支持 -->
-          <block wx:if="{{item.mediaPreviewUrl}}">
-            <block wx:if="{{item.isImageMedia}}">
-            <image
-              src="{{item.mediaPreviewUrl}}"
-              mode="aspectFill"
-              class="repair-image"
-              bindtap="previewImage"
-              data-url="{{item.mediaPreviewUrl}}"
-              lazy-load="true"
-            />
-            </block>
-            <video wx:else src="{{item.mediaPreviewUrl}}" class="repair-video" controls preload="metadata"></video>
-          </block>
-          <view wx:else class="repair-media-empty">素材加载失败</view>
-          
-          <!-- 信息 -->
-          <view class="repair-info">
-            <view class="r-title-row">
-              <view class="r-title">
-                <text>{{item.displayModel || item.model}}</text>
-                <text
-                  wx:if="{{item.controlVariant === 'remote'}}"
-                  class="ctrl-variant-mark"
-                > (遥控版)</text>
-                <text
-                  wx:elif="{{item.controlVariantLabel}}"
-                  class="ctrl-variant-mark"
-                > ({{item.controlVariantLabel}})</text>
-                <text> - {{item.contact.name}}</text>
-              </view>
-              <view class="status-tag status-tag--ship-only" style="margin-left: 16rpx;" wx:if="{{item.shippingMethod}}">
-                <view class="status-ship-badge status-ship-badge--{{item.shippingMethod === 'sf' ? 'sf' : 'zto'}}">
-                  <text class="status-ship-badge-text">{{item.shippingMethod === 'sf' ? 'SF' : '中'}}</text>
-                </view>
-                <text class="status-shipping-text">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
-              </view>
-            </view>
-            <view class="r-desc">"{{item.description}}"</view>
-            <view class="r-addr-row">
-              <text class="r-addr">{{item.contact.address}}</text>
-              <view 
-                class="r-copy-btn" 
-                bindtap="copyRepairAddress"
-                data-name="{{item.contact.name}}"
-                data-phone="{{item.contact.phone}}"
-                data-address="{{item.contact.address}}"
-              >
-                <text class="r-copy-text">复制商家地址</text>
-              </view>
-            </view>
-            <!-- 🔴 新增：质保状态显示，无质保时显示「用户质保已过期」 -->
-            <view class="r-warranty-status expired" wx:if="{{item.warrantyExpired === true || (item.expiryDate && item.remainingDays === 0)}}">
-              <text class="warranty-expired-tag">用户质保已过期</text>
-              <text class="warranty-expired-info" wx:if="{{item.expiryDate}}">到期日：{{item.expiryDate}}</text>
-            </view>
-            <view class="r-warranty-status normal" wx:elif="{{item.remainingDays !== undefined && item.remainingDays > 0}}">
-              <text class="warranty-normal-tag">剩余质保：{{item.remainingDays}}天</text>
-              <text class="warranty-normal-meta" wx:if="{{item.expiryDate || item.totalDays}}">
-                <text wx:if="{{item.totalDays}}">总{{item.totalDays}}天</text>
-                <text wx:if="{{item.totalDays && item.expiryDate}}"> · </text>
-                <text wx:if="{{item.expiryDate}}">到期{{item.expiryDate}}</text>
-              </text>
-            </view>
-            <view class="r-warranty-deducted-banner" wx:if="{{item.hadWarrantyDeducted}}">
-              <text class="r-warranty-deducted-text">该用户曾被扣质保，仅可要求寄回维修（不可录单备件免费支持）</text>
-            </view>
-          </view>
-          
-          <!-- 需要寄回开关 -->
-          <view class="repair-return-switch">
-            <text class="switch-label">需要寄回</text>
-            <switch 
-              checked="{{item.needReturn}}" 
-              bindchange="toggleReturnRequired" 
-              data-id="{{item._id}}"
-              color="#007AFF"
-            />
-          </view>
-          
-          <!-- 状态显示 -->
-          <view class="repair-status-info" wx:if="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT'}}">
-            <text class="repair-status-text">用户已寄出快递</text>
-            <text class="repair-tracking-id" wx:if="{{item.returnTrackingId}}">运单号：{{item.returnTrackingId}}</text>
-          </view>
-          
-          <!-- 操作按钮 -->
-          <view class="repair-actions">
-            <!-- 如果用户已寄出，显示维修完成按钮 -->
-            <view class="r-btn complete" wx:if="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT'}}" bindtap="adminCompleteRepair" data-id="{{item._id}}">维修完成</view>
-            <!-- 如果维修完成已寄出，显示状态 -->
-            <view class="repair-status-info" wx:if="{{item.status === 'REPAIR_COMPLETED_SENT'}}">
-              <text class="repair-status-text">维修完成已寄出</text>
-              <text class="repair-tracking-id" wx:if="{{item.trackingId}}">运单号：{{item.trackingId}}</text>
-            </view>
-            <!-- 其他状态：主按钮 + 次要操作（竖向排列，便于点击） -->
-            <block wx:if="{{item.returnStatus !== 'USER_SENT' && item.status !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
-              <!-- 曾扣质保：仅保留诊断书 + 需要寄回 -->
-              <block wx:if="{{item.hadWarrantyDeducted}}">
-                <view class="repair-actions-primary">
-                  <view class="r-btn diagnosis" bindtap="openDiagnosisDialog" data-id="{{item._id}}">填写诊断书</view>
-                </view>
-                <view class="repair-diagnosis-meta" wx:if="{{item.diagnosisDone || (item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement')}}">
-                  <text class="r-diagnosis-pill" wx:if="{{item.diagnosisDone}}">已诊断</text>
-                  <text class="r-diagnosis-pill warn" wx:if="{{item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement'}}">待换机</text>
-                </view>
-                <view class="repair-actions-secondary repair-actions-grid">
-                  <view class="r-btn return grid-full" bindtap="requestUserReturn" data-id="{{item._id}}">需要寄回产品维修</view>
-                </view>
-              </block>
-              <block wx:else>
-                <view class="repair-actions-primary">
-                  <view class="r-btn diagnosis" bindtap="openDiagnosisDialog" data-id="{{item._id}}">填写诊断书</view>
-                  <view class="r-btn ship" bindtap="resolveRepair" data-id="{{item._id}}" data-type="ship">录单备件寄出</view>
-                </view>
-                <view class="repair-diagnosis-meta" wx:if="{{item.diagnosisDone || (item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement')}}">
-                  <text class="r-diagnosis-pill" wx:if="{{item.diagnosisDone}}">已诊断</text>
-                  <text class="r-diagnosis-pill warn" wx:if="{{item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement'}}">待换机</text>
-                </view>
-                <view class="repair-actions-secondary repair-actions-grid">
-                  <view class="r-btn purchase grid-half" bindtap="openPurchasePartsModal" data-item="{{item}}">请购买配件</view>
-                  <view class="r-btn tutorial grid-half" bindtap="resolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
-                  <view class="r-btn return grid-full" bindtap="requestUserReturn" data-id="{{item._id}}">需要寄回产品维修</view>
-                </view>
-              </block>
-              <view class="repair-actions-wecom">
-                <view class="r-btn wecom-resend" catchtap="resendRepairWecomNotify" data-id="{{item._id}}">重新推送企微</view>
-              </view>
-              <view class="repair-actions-delete">
-                <view
-                  class="r-btn delete"
-                  bindtap="adminDeleteRepair"
-                  data-id="{{item._id}}"
-                  data-model="{{item.displayModel || item.model}}"
-                  data-name="{{item.contact.name}}"
-                >删除工单</view>
-              </view>
-            </block>
-            <view class="repair-actions-wecom" wx:elif="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT' || item.status === 'REPAIR_COMPLETED_SENT'}}">
-              <view class="r-btn wecom-resend" catchtap="resendRepairWecomNotify" data-id="{{item._id}}">重新推送企微</view>
-            </view>
-          </view>
-        </view>
-      </block>
-    </view>
+    <pending-repair-list
+      wx:if="{{repairList.length > 0}}"
+      list="{{repairList}}"
+      bind:action="onPendingRepairListAction"
+    />
     </block>
 
     <view class="admin-returns-inline" wx:if="{{adminAfterSalesTab === 'returns'}}">
@@ -478,37 +365,38 @@
         bind:action="onReturnRequiredListAction"
       />
     </view>
-    </view>
 
     <block wx:if="{{auditList.length > 0}}">
     <view class="section-label">PENDING AUDITS / 待审核申请</view>
     <swiper
       class="audit-swiper"
-      circular
+      circular="{{false}}"
       previous-margin="60rpx"
       next-margin="60rpx"
     >
       <swiper-item wx:for="{{auditList}}" wx:key="_id">
         <view class="audit-card">
-          <view class="audit-row">
-            <text class="audit-model">{{item.productModel}}</text>
-            <text class="audit-sn">SN: {{item.bindType == 'fault' ? '无设备核验' : item.sn}}</text>
+          <view class="audit-card-head">
+            <view class="audit-card-title-row">
+              <text class="audit-model">{{item.productModel}}</text>
+              <text class="audit-type-pill {{item.bindType == 'fault' ? 'is-fault' : ''}}">{{item.bindType == 'fault' ? '故障核验' : (item.bindType == 'new' ? '全新' : '二手')}}</text>
+            </view>
+            <text class="audit-sn">{{item.bindType == 'fault' ? '无设备核验' : item.sn}}</text>
+            <view class="audit-meta-row">
+              <text class="audit-meta">购买日 {{item.buyDate}}</text>
+              <text class="audit-meta" wx:if="{{item.controlVariantLabel}}">{{item.controlVariantLabel}}</text>
+              <text class="audit-meta" wx:if="{{isAdmin && item.sensorStampLabel}}">{{item.sensorStampLabel}}</text>
+            </view>
           </view>
-          <view class="audit-row">
-            <text class="audit-date">用户填: {{item.buyDate}}</text>
-            <text class="audit-type">{{item.bindType == 'fault' ? '故障核验' : (item.bindType == 'new' ? '全新' : '二手')}}</text>
-          </view>
-          <view class="audit-row" wx:if="{{item.controlVariantLabel}}">
-            <text class="audit-variant">控制版本：</text>
-            <text class="audit-variant">{{item.controlVariantLabel}}</text>
-          </view>
-          <view class="audit-row" wx:if="{{isAdmin && item.sensorStampLabel}}">
-            <text class="audit-variant">传感器：</text>
-            <text class="audit-variant">{{item.sensorStampLabel}}</text>
-          </view>
-          <view class="audit-imgs">
-            <image src="{{item.imgReceipt}}" mode="aspectFill" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgReceipt}}" lazy-load="true" binderror="onMyAuditImageError" data-index="{{index}}" data-field="imgReceipt"></image>
-            <image wx:if="{{item.imgChat}}" src="{{item.imgChat}}" mode="aspectFill" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgChat}}" lazy-load="true" binderror="onMyAuditImageError" data-index="{{index}}" data-field="imgChat"></image>
+          <view class="audit-imgs" wx:if="{{item.imgReceipt || item.imgChat}}">
+            <view class="audit-thumb-wrap {{!item.imgChat ? 'is-single' : ''}}" wx:if="{{item.imgReceipt}}">
+              <text class="audit-thumb-label">购买截图</text>
+              <image src="{{item.imgReceipt}}" mode="aspectFit" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgReceipt}}" lazy-load="true" binderror="onMyAuditImageError" data-index="{{index}}" data-field="imgReceipt"></image>
+            </view>
+            <view class="audit-thumb-wrap" wx:if="{{item.imgChat}}">
+              <text class="audit-thumb-label">聊天记录</text>
+              <image src="{{item.imgChat}}" mode="aspectFit" class="audit-thumb" bindtap="previewImage" data-url="{{item.imgChat}}" lazy-load="true" binderror="onMyAuditImageError" data-index="{{index}}" data-field="imgChat"></image>
+            </view>
           </view>
           <view class="audit-actions">
             <view class="audit-btn reject" catchtap="handleReject" data-id="{{item._id}}">拒绝</view>
@@ -517,6 +405,48 @@
         </view>
       </swiper-item>
     </swiper>
+    </block>
+
+    <block wx:if="{{adminAfterSalesTab === 'repairs' && tsReportGroups.length > 0}}">
+      <view class="section-label">TROUBLESHOOT / 排查问题</view>
+      <view class="section-label-sub">同一问题一张卡，左右滑动查看该用户的排查步骤</view>
+      <view class="ts-report-stack">
+        <view class="ts-report-card" wx:for="{{tsReportGroups}}" wx:key="reportId">
+          <view class="ts-report-head">
+            <text class="ts-report-title">{{item.treeTitle || '自助排查'}}</text>
+            <text class="ts-report-model">{{item.userLabel}}</text>
+          </view>
+          <swiper
+            class="ts-report-step-swiper"
+            circular="{{false}}"
+            bindchange="onTsReportStepChange"
+            data-id="{{item.reportId}}"
+          >
+            <swiper-item wx:for="{{item.steps}}" wx:for-item="step" wx:key="stepIndex">
+              <view class="ts-report-step-page">
+                <text class="ts-report-q">{{step.title || item.treeTitle}}</text>
+                <text class="ts-report-a">答案：{{step.answer || '—'}}</text>
+                <video wx:if="{{step.videoUrl}}" class="ts-report-video" src="{{step.videoUrl}}" controls object-fit="contain"></video>
+                <view class="ts-report-video-empty" wx:else>暂无视频</view>
+              </view>
+            </swiper-item>
+          </swiper>
+          <text class="ts-report-step-hint" wx:if="{{item.stepHint}}">{{item.stepHint}}</text>
+          <view class="audit-actions">
+            <view
+              class="audit-btn reject"
+              catchtap="handleTsReportDeleteVideo"
+              data-id="{{item.reportId}}"
+              data-step="{{item.currentStepIndex}}"
+            >删除</view>
+            <view
+              class="audit-btn approve"
+              catchtap="handleTsReportAskRepair"
+              data-id="{{item.reportId}}"
+            >维修中心申报</view>
+          </view>
+        </view>
+      </view>
     </block>
 
     <block wx:if="{{isAdmin && pendingSnEntryList.length > 0}}">
@@ -542,6 +472,8 @@
       </view>
     </view>
     </block>
+    <view class="hub-admin-tab-spacer"></view>
+    </view>
     </scroll-view>
 
   </block>
@@ -563,7 +495,7 @@
       wx:if="{{orders.length > 0}}"
       class="order-swiper order-swiper--hub" 
       bindchange="onOrderChange" 
-      circular 
+      circular="{{false}}"
       touch-angle="18"
       previous-margin="60rpx" 
       next-margin="60rpx"
@@ -622,6 +554,21 @@
 
           <!-- 底部 -->
           <view class="card-footer-new">
+            <!-- 金额构成：让用户看清实付是怎么算出来的 -->
+            <view class="amount-breakdown">
+              <view class="amount-row" wx:if="{{item.goodsSubtotal !== undefined && item.goodsSubtotal !== null}}">
+                <text class="amount-label">商品小计</text>
+                <text class="amount-val">¥{{item.goodsSubtotal}}</text>
+              </view>
+              <view class="amount-row">
+                <text class="amount-label">运费</text>
+                <text class="amount-val">{{item.shippingFee > 0 ? '¥' + item.shippingFee : (item.shippingMethod === 'sf' ? '未记录' : '包邮')}}</text>
+              </view>
+              <view class="amount-row" wx:if="{{item.couponDiscountYuan > 0}}">
+                <text class="amount-label">优惠抵扣</text>
+                <text class="amount-val amount-val--cut">-¥{{item.couponDiscountYuan}}</text>
+              </view>
+            </view>
             <view class="total-row">
               <text class="time-text">{{item.createTime}}</text>
               <view class="price-box">
@@ -634,7 +581,7 @@
                   data-id="{{item.id}}" 
                   data-price="{{item.amount}}"
                   data-status="{{item.realStatus}}">
-                  ¥{{isAdmin ? 0.01 : item.amount}}
+                  ¥{{item.amount}}
                 </text>
               </view>
             </view>
@@ -660,9 +607,8 @@
               
             </view>
 
-            <!-- 3. 运输中：查看物流 + 按订单来源查看对应教程（先确认收货再跳转） -->
-            <view wx:if="{{item.realStatus === 'SHIPPED'}}" class="action-row-right">
-              <!-- 左侧：查看物流 -->
+            <!-- 3. 运输中：查看物流 + 确认收货 + 教程（教程会先走确认收货） -->
+            <view wx:if="{{item.realStatus === 'SHIPPED'}}" class="action-row-right action-row-right--shipped">
               <view 
                 class="btn-mini outline" 
                 catchtap="viewLogisticsDetail" 
@@ -671,14 +617,19 @@
                 data-phone="{{item.userPhone || ''}}">
                 查看物流
               </view>
-              <!-- 右侧：shouhou 下单显示售后教程，shop 普通下单显示安装教程 -->
               <view 
                 class="btn-mini black" 
+                catchtap="confirmOrderReceipt" 
+                data-id="{{item.id}}">
+                确认收货
+              </view>
+              <view 
+                class="btn-mini outline" 
                 catchtap="viewTutorialAndSign" 
                 data-id="{{item.id}}" 
                 data-model="{{item.goodsList && item.goodsList[0] ? (item.goodsList[0].spec || item.goodsList[0].name) : ''}}"
                 data-dest="{{item.tutorialDest || 'azjc'}}">
-                {{item.guidedPartsPurchase ? '查看售后教程' : '查看安装教程'}}
+                {{item.tutorialDest === 'shouhou' ? '查看售后教程' : '查看安装教程'}}
               </view>
             </view>
 
@@ -885,8 +836,9 @@
         </view>
         <view class="rr-card-header rr-ticket-header">
           <view class="rr-ticket-header-main">
-            <view class="rr-card-title">{{afterSalesState.returnTicket.titleText}}</view>
-            <view class="rr-ticket-status {{afterSalesState.returnTicket.statusClass}}">
+            <view class="rr-waiting-kicker" wx:if="{{afterSalesState.returnTicket.statusHero}}">配件已寄出</view>
+            <view class="rr-card-title" wx:if="{{afterSalesState.returnTicket.showTitle !== false}}">{{afterSalesState.returnTicket.titleText}}</view>
+            <view class="rr-ticket-status {{afterSalesState.returnTicket.statusClass}} {{afterSalesState.returnTicket.statusHero ? 'is-hero' : ''}}">
               <text class="rr-ticket-status-text">{{afterSalesState.returnTicket.statusText}}</text>
             </view>
           </view>
@@ -899,14 +851,14 @@
               <view class="alert-main-col">
                 <text class="alert-kicker">{{myReturnRequiredRepair.isOverdue ? '已超时' : '重要提醒'}}</text>
                 <view class="alert-lead" wx:if="{{!myReturnRequiredRepair.isOverdue && myReturnRequiredRepair.countdownDays !== null}}">
-                  请在 <text class="highlight-days">{{myReturnRequiredRepair.countdownDays}} 天</text> 内寄回故障配件
+                  请在 <text class="highlight-days">{{myReturnRequiredRepair.countdownDays}} 天</text> 内寄出故障配件
                 </view>
-                <view class="alert-lead" wx:elif="{{myReturnRequiredRepair.isOverdue}}">请尽快寄回故障配件</view>
-                <view class="alert-lead" wx:else>请尽快寄回故障配件</view>
+                <view class="alert-lead" wx:elif="{{myReturnRequiredRepair.isOverdue}}">请尽快寄出故障配件</view>
+                <view class="alert-lead" wx:else>请尽快寄出故障配件</view>
                 <view class="alert-rules">
                   <view class="alert-rule" wx:if="{{!myReturnRequiredRepair.isOverdue}}">
                     <text class="alert-rule-dot">·</text>
-                    <text class="alert-rule-text">逾期未寄回：扣除半年质保（<text class="highlight-penalty">180天</text>）</text>
+                    <text class="alert-rule-text">逾期未寄出：扣除半年质保（<text class="highlight-penalty">180天</text>）</text>
                   </view>
                   <view class="alert-rule" wx:else>
                     <text class="alert-rule-dot">·</text>
@@ -935,7 +887,7 @@
               <text class="rr-value">{{myReturnRequiredRepair.shipRemark}}</text>
             </view>
             <view class="rr-ticket-kv-row" wx:if="{{myReturnRequiredRepair.returnNote}}">
-              <text class="rr-label">寄回说明</text>
+              <text class="rr-label">管理员备注</text>
               <text class="rr-value">{{myReturnRequiredRepair.returnNote}}</text>
             </view>
             <view class="rr-ticket-kv-row" wx:if="{{myReturnRequiredRepair.trackingId}}">
@@ -943,7 +895,7 @@
               <text class="rr-value rr-value--mono">{{myReturnRequiredRepair.trackingId}}</text>
             </view>
             <view class="rr-ticket-kv-row" wx:if="{{myReturnRequiredRepair.returnTrackingId}}">
-              <text class="rr-label">寄回运单</text>
+              <text class="rr-label">寄出运单</text>
               <text class="rr-value rr-value--mono">{{myReturnRequiredRepair.returnTrackingId}}</text>
             </view>
           </view>
@@ -1001,7 +953,7 @@
               查备件物流
             </view>
             <view class="rr-simple-btn secondary" bindtap="copyReturnAddress">复制商家地址</view>
-            <view class="rr-simple-btn primary" bindtap="openReturnAddressModal">填写寄回信息</view>
+            <view class="rr-simple-btn primary" bindtap="openReturnAddressModal">填写寄出信息</view>
           </view>
         </view>
       </block>
@@ -1029,9 +981,9 @@
               data-sn="{{myReturnRequiredRepair.returnTrackingId}}"
               data-phone="{{myReturnRequiredRepair.contact.phone}}"
               data-tail-required="2427">
-              查寄回物流
+              查寄出物流
             </view>
-            <view class="rr-simple-btn primary" bindtap="openReturnAddressModal">修改寄回单号</view>
+            <view class="rr-simple-btn primary" bindtap="openReturnAddressModal">修改寄出单号</view>
           </view>
         </view>
       </block>
@@ -1355,14 +1307,13 @@
     <!-- A. 故障核验审核（无蓝牙，先建档案；是否待录入 SN 由售后诊断书判定） -->
     <view
       class="modal-content audit-setup-modal"
-      wx:if="{{currentAuditItem && currentAuditItem.bindType == 'fault'}}"
-      catchtouchmove="noop">
+      wx:if="{{currentAuditItem && currentAuditItem.bindType == 'fault'}}">
       <view class="modal-header">
         <text>故障核验审核</text>
         <view class="close-modal" bindtap="closeAuditModal">✕</view>
       </view>
 
-      <view class="audit-setup-body">
+      <scroll-view scroll-y class="audit-setup-body" style="height: {{auditSetupScrollPx}}px;" enhanced show-scrollbar>
         <view class="audit-fault-banner">
           <text class="audit-fault-banner-title">无蓝牙故障核验</text>
           <text class="audit-fault-banner-desc">确认购买日期与质保后保存档案。是否需录入新机 SN，须等售后在报修卡填写诊断书（主板/控制器）后再出现。</text>
@@ -1382,6 +1333,20 @@
             <text>{{currentAuditItem.sensorStampLabel}}</text>
           </view>
           <text class="audit-setup-user-date">用户填写购买日期：{{currentAuditItem.buyDate}}</text>
+        </view>
+
+        <view class="audit-setup-proofs" wx:if="{{currentAuditItem.imgReceipt || currentAuditItem.imgChat}}">
+          <text class="audit-setup-proofs-label">用户上传凭证</text>
+          <view class="audit-setup-proofs-row">
+            <view class="audit-setup-proof-item" wx:if="{{currentAuditItem.imgReceipt}}">
+              <text class="audit-setup-proof-tag">购买截图</text>
+              <image src="{{currentAuditItem.imgReceipt}}" mode="aspectFit" class="audit-setup-proof-img" bindtap="previewImage" data-url="{{currentAuditItem.imgReceipt}}" lazy-load="true" />
+            </view>
+            <view class="audit-setup-proof-item" wx:if="{{currentAuditItem.imgChat}}">
+              <text class="audit-setup-proof-tag">聊天记录</text>
+              <image src="{{currentAuditItem.imgChat}}" mode="aspectFit" class="audit-setup-proof-img" bindtap="previewImage" data-url="{{currentAuditItem.imgChat}}" lazy-load="true" />
+            </view>
+          </view>
         </view>
 
         <view class="audit-setup-form">
@@ -1443,7 +1408,7 @@
             <text class="audit-warranty-preview-value">{{auditWarrantyPreview.firmwareVer}}</text>
           </view>
         </view>
-      </view>
+      </scroll-view>
 
       <view class="audit-setup-footer">
         <view class="audit-setup-submit" bindtap="confirmApprove">确认保存</view>
@@ -1453,14 +1418,13 @@
     <!-- B. 蓝牙绑定审核（用户已连蓝牙，有真实 SN） -->
     <view
       class="modal-content audit-setup-modal"
-      wx:elif="{{currentAuditItem}}"
-      catchtouchmove="noop">
+      wx:elif="{{currentAuditItem}}">
       <view class="modal-header">
         <text>蓝牙绑定审核</text>
         <view class="close-modal" bindtap="closeAuditModal">✕</view>
       </view>
 
-      <view class="audit-setup-body">
+      <scroll-view scroll-y class="audit-setup-body" style="height: {{auditSetupScrollPx}}px;" enhanced show-scrollbar>
         <view class="audit-bt-banner">
           <text class="audit-bt-banner-title">蓝牙连接绑定</text>
           <text class="audit-bt-banner-desc">用户已通过蓝牙连接设备，审核通过后激活该 SN</text>
@@ -1481,6 +1445,20 @@
             <text>{{currentAuditItem.sensorStampLabel}}</text>
           </view>
           <text class="audit-setup-user-date">用户填写购买日期：{{currentAuditItem.buyDate}}</text>
+        </view>
+
+        <view class="audit-setup-proofs" wx:if="{{currentAuditItem.imgReceipt || currentAuditItem.imgChat}}">
+          <text class="audit-setup-proofs-label">用户上传凭证</text>
+          <view class="audit-setup-proofs-row">
+            <view class="audit-setup-proof-item" wx:if="{{currentAuditItem.imgReceipt}}">
+              <text class="audit-setup-proof-tag">购买截图</text>
+              <image src="{{currentAuditItem.imgReceipt}}" mode="aspectFit" class="audit-setup-proof-img" bindtap="previewImage" data-url="{{currentAuditItem.imgReceipt}}" lazy-load="true" />
+            </view>
+            <view class="audit-setup-proof-item" wx:if="{{currentAuditItem.imgChat}}">
+              <text class="audit-setup-proof-tag">聊天记录</text>
+              <image src="{{currentAuditItem.imgChat}}" mode="aspectFit" class="audit-setup-proof-img" bindtap="previewImage" data-url="{{currentAuditItem.imgChat}}" lazy-load="true" />
+            </view>
+          </view>
         </view>
 
         <view class="audit-setup-form">
@@ -1538,7 +1516,7 @@
             <text class="audit-warranty-preview-value {{auditWarrantyPreview.isExpired ? 'is-warn' : ''}}">{{auditWarrantyPreview.isExpired ? '已过期' : (auditWarrantyPreview.remainingDays + ' 天')}}</text>
           </view>
         </view>
-      </view>
+      </scroll-view>
 
       <view class="audit-setup-footer">
         <view class="audit-setup-submit" bindtap="confirmApprove">确认通过并激活</view>
@@ -1562,7 +1540,7 @@
   </view>
 
   <!-- ================= 自动消失提示（无按钮，2秒后自动消失，带收缩退出动画） ================= -->
-  <view class="auto-toast-mask {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
+  <view class="auto-toast-mask auto-toast-mask--portal-top {{autoToastClosing ? 'closing' : ''}}" wx:if="{{autoToast.show}}" catchtouchmove="noop" bindtap="dismissTransientModals">
     <view class="auto-toast-box" catchtouchmove="noop" bindtap="dismissTransientModals">
       <view class="at-title">{{autoToast.title}}</view>
       <view class="at-content">{{autoToast.content}}</view>
@@ -1590,7 +1568,7 @@
   </view>
 
   <!-- ================= 全局自定义 Loading (白色背景进度条) ================= -->
-  <view class="loading-mask" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop">
+  <view class="loading-mask loading-mask--portal-top" wx:if="{{showLoadingAnimation}}" catchtouchmove="noop">
     <view class="loader" catchtouchmove="noop">
       <text class="loader-label">{{loadingText}}</text>
       <view class="loading-bar"></view>
@@ -1869,8 +1847,8 @@
     <view class="bottom-modal-content after-sales-return-modal {{afterSalesState.returnAddressModal.modeKey || ''}} {{!afterSalesState.returnAddressModal.showAddressSection ? 'tracking-only' : ''}}" catchtap="noop" catchtouchmove="noop">
       <!-- 弹窗头部 -->
       <view class="bottom-modal-header">
-        <!-- 🔴 场景A：管理员录单备件寄出，显示"录入寄回运单号"；场景B：管理员手动标记，显示"填写修好后寄回地址" -->
-        <view class="bottom-modal-title">{{afterSalesState.returnAddressModal.titleText || '录入寄回运单号'}}</view>
+        <!-- 🔴 场景A：管理员录单备件寄出，显示「录入寄出运单号」；场景B：管理员手动标记，显示「填写修好后寄回地址」 -->
+        <view class="bottom-modal-title">{{afterSalesState.returnAddressModal.titleText || '录入寄出运单号'}}</view>
         <view class="bottom-modal-close" catchtap="closeReturnAddressModal">✕</view>
       </view>
       
@@ -1967,25 +1945,25 @@
           <view class="ra-form-item ra-tracking-item">
             <block wx:if="{{afterSalesState.returnAddressModal.modeKey === 'as-mode-return-required'}}">
               <view class="ra-tracking-label-row">
-                <text class="ra-label ra-tracking-label">{{afterSalesState.returnAddressModal.trackingLabel || '录入寄回运单号'}}</text>
+                <text class="ra-label ra-tracking-label">{{afterSalesState.returnAddressModal.trackingLabel || '录入寄出运单号'}}</text>
               </view>
               <input 
                 class="ra-input ra-tracking-input-box" 
                 type="text" 
-                placeholder="请输入寄回运单号"
+                placeholder="请输入寄出运单号"
                 value="{{returnTrackingIdInput}}"
                 bindinput="onReturnTrackingIdInput"
               />
             </block>
             <block wx:else>
               <view class="ra-tracking-label-row">
-                <text class="ra-label ra-tracking-label">{{afterSalesState.returnAddressModal.trackingLabel || '录入寄回运单号'}}</text>
+                <text class="ra-label ra-tracking-label">{{afterSalesState.returnAddressModal.trackingLabel || '录入寄出运单号'}}</text>
                 <text class="ra-tracking-required">必填</text>
               </view>
               <input 
                 class="ra-input" 
                 type="text" 
-                placeholder="请输入寄回运单号"
+                placeholder="请输入寄出运单号"
                 value="{{returnTrackingIdInput}}"
                 bindinput="onReturnTrackingIdInput"
               />
@@ -2143,7 +2121,7 @@
                       <text class="plus-icon">+</text>
                       <text>购买截图</text>
                     </view>
-                    <image wx:if="{{previewImgReceipt}}" src="{{previewImgReceipt}}" mode="aspectFill" class="uploaded-img" lazy-load="true" />
+                    <image wx:if="{{previewImgReceipt}}" src="{{previewImgReceipt}}" mode="aspectFit" class="uploaded-img" lazy-load="true" />
                   </view>
                 </view>
                 <view class="upload-box" wx:if="{{bindType == 'used'}}" bindtap="chooseProofImage" data-type="chat">
@@ -2152,7 +2130,7 @@
                       <text class="plus-icon">+</text>
                       <text>聊天记录</text>
                     </view>
-                    <image wx:if="{{previewImgChat}}" src="{{previewImgChat}}" mode="aspectFill" class="uploaded-img" lazy-load="true" />
+                    <image wx:if="{{previewImgChat}}" src="{{previewImgChat}}" mode="aspectFit" class="uploaded-img" lazy-load="true" />
                   </view>
                 </view>
               </view>
@@ -2181,12 +2159,12 @@
     wx:if="{{showModal && showFaultBindForm && !profileGuideDemoBind}}"
     class="modal hub-bind-modal-portal show {{bindModalClosing ? 'is-closing' : ''}}"
     catchtouchmove="noop">
-    <view class="modal-content fault-bind-mode bind-audit-open {{bindSheetFromBottom ? 'hub-sheet--from-bottom' : ''}}" catchtouchmove="noop">
+    <view class="modal-content fault-bind-mode bind-audit-open {{bindSheetFromBottom ? 'hub-sheet--from-bottom' : ''}}">
       <view class="modal-header">
         <text>故障核验</text>
         <view class="close-modal" bindtap="closeBindModal">✕</view>
       </view>
-      <scroll-view scroll-y="true" class="modal-scroll-area fault-body">
+      <scroll-view scroll-y class="modal-scroll-area fault-body" enhanced show-scrollbar>
         <view class="fault-bind-form">
           <view class="fault-status-banner">
             <view class="fault-status-icon">!</view>
@@ -2381,7 +2359,7 @@
     </view>
   </root-portal>
 
-  <hub-tab-bar wx:if="{{showHubTabBar && !hubInShell}}" active="{{hubTabIndex}}" bind:switch="onHubTabSwitch" />
+  <hub-tab-bar wx:if="{{showHubTabBar && !hubInShell}}" active="{{hubTabIndex}}" show-kf="{{showHubKfTab}}" bind:switch="onHubTabSwitch" />
 
 </view>
 

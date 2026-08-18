@@ -1,6 +1,7 @@
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const hubNav = require('../../../utils/hubNav.js');
+const hubKfTabGate = require('../../../utils/hubKfTabGate.js');
 const hubProfileBadge = require('../../../utils/hubProfileBadge.js');
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const shareApp = require('../../../utils/shareApp.js');
@@ -45,6 +46,8 @@ const HUB_HOME_CONFIG_DOC = 'hubHomeConfig';
 const FEATURE_FLAGS_LOCAL_KEY = '__products_feature_flags__';
 /** 功能列表里「产品上新」卡片 id：仅控制进入 pagenew，不控制 MT 新品推荐弹窗 */
 const FEATURE_ID_PAGENEW = 3;
+/** 功能列表里「产品选购」卡片 id，即 MT 商城 */
+const FEATURE_ID_SHOP = 4;
 
 /** 新品弹窗：云端未返回前先占位，保证蒙层第一时间出现 */
 const NEW_ARRIVAL_LOADING_ITEM = {
@@ -118,6 +121,8 @@ Page({
     hubCartBadge: 0,
     /** 底栏「我的」红点：售后待办/未读进度 */
     hubProfileBadge: false,
+    /** 底栏是否显示「客服」（首次进入小程序隐藏） */
+    showHubKfTab: false,
     showHubTabBar: true,
     /** 嵌入订单/我的面板内有全屏弹窗时隐藏底栏 */
     hubShellModalOpen: false,
@@ -792,9 +797,6 @@ Page({
         this._syncHubPanelsAuth();
         this._updateHubShopEmbedScrollHeight();
         this._rebuildHubLayout();
-        if (isAuthorized && this.data.hubTabIndex === 0) {
-          this._maybeShowDirectCodeTutorialNotice();
-        }
       });
       try {
         wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized, ts: Date.now() });
@@ -861,12 +863,16 @@ Page({
     if (!Object.keys(flagsToApply).length) {
       this.setData({ featureFlagsUnsynced: !!pendingLocalOnly });
       this._featureFlagsLoaded = true;
+      this._enforceShopFeatureGate();
       return;
     }
 
     const list = this._applyFeatureFlagsToList(this.data.list, flagsToApply);
     this._syncGlobalFlagsFromList(pendingLocalOnly ? this._applyFeatureFlagsToList(list, cloudFlags || {}) : list);
-    this._setListAndHub(list, { featureFlagsUnsynced: !!pendingLocalOnly }, () => this._syncNewArrivalModalWithPagenewFlag());
+    this._setListAndHub(list, { featureFlagsUnsynced: !!pendingLocalOnly }, () => {
+      this._syncNewArrivalModalWithPagenewFlag();
+      this._enforceShopFeatureGate();
+    });
     if (!pendingLocalOnly) {
       this._saveFeatureFlagsLocalCache(list, true);
     }
@@ -1178,6 +1184,8 @@ Page({
   async onLoad(options) {
     this.calcNavBarInfo();
     this._deckCurrentIndex = 0;
+    const showHubKfTab = hubKfTabGate.resolveShowHubKfTab();
+    this.setData({ showHubKfTab });
     if (options && String(options.hubTab) === 'shop') {
       this.setData({
         hubTabIndex: 1,
@@ -1189,12 +1197,15 @@ Page({
         hubSwiperDuration: 0
       });
     } else {
-      const panelIndex = hubNav.resolveHubTabParam(options && options.hubTab);
+      let panelIndex = hubNav.resolveHubTabParam(options && options.hubTab);
+      if (!Number.isNaN(panelIndex) && panelIndex === hubNav.PANEL_INDEX.kf && !showHubKfTab) {
+        panelIndex = hubNav.PANEL_INDEX.home;
+      }
       if (!Number.isNaN(panelIndex)) {
         const patch = {
           hubTabIndex: panelIndex,
           hubTrackTranslatePct: hubNav.panelIndexToTranslatePct(panelIndex),
-          hubBottomBarIndex: hubNav.panelIndexToBottomBarActive(panelIndex),
+          hubBottomBarIndex: hubNav.panelIndexToBottomBarActive(panelIndex, showHubKfTab),
           hubSwiperDuration: 0,
           showHubTabBar: panelIndex !== 1
         };
@@ -1243,6 +1254,7 @@ Page({
 
     // 先用 app 预拉 / 本地缓存还原开关，避免默认「产品上新=true」误开弹窗
     this._hydrateFeatureFlagsSync();
+    this._enforceShopFeatureGate();
 
     const adminCached = this._readAdminPrivilegeCache();
     if (adminCached === true) {
@@ -1252,14 +1264,20 @@ Page({
     const pendingNewArrivalFromIndex = this._hasPendingNewArrivalFromIndex();
 
     // 等功能开关从云端就绪后再决定是否弹「产品上新」（关入口则完全不弹）
-    this.checkAdminPrivilege().then(() => {
+    this._adminPrivilegePromise = this.checkAdminPrivilege().then(() => {
       this._syncHubPanelsAuth();
+      // 管理员身份晚到：若首页教学已误开，关掉并记完成
+      if (this.data.hubTabIndex === 0) {
+        this._maybeShowHomeGuide(false);
+      }
       return this.loadProductFeatureFlags();
     }).then(() => {
+      this._enforceShopFeatureGate();
       if (pendingNewArrivalFromIndex) {
         return this._tryOpenNewArrivalAfterFeatureFlags();
       }
     }).catch(() => {
+      this._enforceShopFeatureGate();
       if (pendingNewArrivalFromIndex) {
         this._tryOpenNewArrivalAfterFeatureFlags();
       }
@@ -1283,58 +1301,109 @@ Page({
       this.setData({ hasEntered: true });
     }, 200);
 
+    // 入口页若没拿到定位：主页再静默补一次（本页生命周期内只试一次）
+    this._retryLocationOnHubIfNeeded();
+
     setTimeout(() => {
       this._preloadCasePageOnce();
       this._preloadScanPageOnce();
     }, 600);
+    // 维修中心同属大页，错开预载，避免三个分包同时抢带宽
+    setTimeout(() => {
+      this._preloadShouhouPageOnce();
+    }, 1200);
+  },
+
+  /** 预载页面代码，返回 Promise */
+  _ensurePagePreloaded(url) {
+    return new Promise((resolve) => {
+      if (typeof wx.preloadPage !== 'function') {
+        resolve(false);
+        return;
+      }
+      wx.preloadPage({
+        url,
+        success: () => resolve(true),
+        fail: () => resolve(false)
+      });
+    });
   },
 
   /** 预载案例库页代码，减轻 navigateTo timeout */
   _preloadCasePageOnce() {
     if (this._casePagePreloaded) return;
-    if (typeof wx.preloadPage !== 'function') return;
-    wx.preloadPage({
-      url: '/package-extra/pages/case/case',
-      success: () => { this._casePagePreloaded = true; },
-      fail: () => {}
+    this._ensurePagePreloaded('/package-extra/pages/case/case').then((ok) => {
+      if (ok) this._casePagePreloaded = true;
     });
   },
 
   /** 预载控制中心页，减轻 navigateTo timeout */
   _preloadScanPageOnce() {
     if (this._scanPagePreloaded) return;
-    if (typeof wx.preloadPage !== 'function') return;
-    wx.preloadPage({
-      url: '/package-extra/pages/scan/scan',
-      success: () => { this._scanPagePreloaded = true; },
-      fail: () => {}
+    this._ensurePagePreloaded('/package-extra/pages/scan/scan').then((ok) => {
+      if (ok) this._scanPagePreloaded = true;
+    });
+  },
+
+  /** 预载维修中心页，减轻 navigateTo timeout */
+  _preloadShouhouPageOnce() {
+    if (this._shouhouPagePreloaded) return;
+    this._ensurePagePreloaded('/package-biz/pages/shouhou/shouhou').then((ok) => {
+      if (ok) this._shouhouPagePreloaded = true;
     });
   },
 
   _navigateToPage(url, options = {}) {
-    const retries = options.retries != null ? options.retries : 0;
+    const retries = options.retries != null ? options.retries : 2;
+    const showLoading = options.showLoading !== false;
+    const preloadFirst = options.preloadFirst !== false;
+    let loadingShown = false;
+
+    const hideLoading = () => {
+      if (loadingShown) {
+        loadingShown = false;
+        this.hideMyLoading();
+      }
+    };
+
     const attempt = (left) => {
       wx.navigateTo({
         url,
         animationType: 'none',
-        success: options.onSuccess,
+        success: (res) => {
+          hideLoading();
+          if (options.onSuccess) options.onSuccess(res);
+        },
         fail: (err) => {
           const msg = (err && err.errMsg) || '';
           const isTimeout = msg.indexOf('timeout') >= 0;
           if (isTimeout && left > 0) {
-            const retry = () => attempt(left - 1);
-            if (typeof wx.preloadPage === 'function') {
-              wx.preloadPage({ url, complete: () => setTimeout(retry, 150) });
-            } else {
-              setTimeout(retry, 200);
-            }
+            this._ensurePagePreloaded(url).then(() => {
+              setTimeout(() => attempt(left - 1), 350);
+            });
             return;
           }
+          hideLoading();
           if (options.onFail) options.onFail(err);
         }
       });
     };
-    attempt(retries);
+
+    const start = () => {
+      if (showLoading && !loadingShown) {
+        loadingShown = true;
+        this.showMyLoading('加载中...');
+      }
+      attempt(retries);
+    };
+
+    if (preloadFirst) {
+      this._ensurePagePreloaded(url).then(() => {
+        setTimeout(start, 100);
+      });
+      return;
+    }
+    start();
   },
 
   /** index 是否刚通过入场动画写入的一次性标记（未消费） */
@@ -1576,14 +1645,10 @@ Page({
     }
   },
 
-  // 🆕 弹窗底部“立即跳转”：等同于点击“产品选购”功能卡片
+    // 🆕 弹窗底部“立即跳转”：等同于点击“产品选购”功能卡片
   handleNewArrivalJump() {
     wx.vibrateShort({ type: 'medium' }); // 增强震动反馈
     const go = () => {
-      if (!this._isFeatureEnabledForUser(4)) {
-        this._notifyFeatureClosed(4);
-        return;
-      }
       this._openHubShopPanel();
     };
     if (this.data.showNewArrivalModal && !this.data.newArrivalClosing) {
@@ -1690,6 +1755,8 @@ Page({
     this.loadHubHomeConfig().catch(() => {});
     this._refreshHubCartBadge();
     this._refreshHubProfileBadge();
+    // 页面常驻在栈里，从子页回来时开关可能已经变了，重新校一次
+    this._enforceShopFeatureGate();
     // 直接粘贴口令进主页：先弹「请先看教程」；客服领取路径不弹
     const showingDirectNotice = this._maybeShowDirectCodeTutorialNotice();
     // 主页功能引导（管理员不自动弹）；教程提醒优先
@@ -1965,6 +2032,90 @@ Page({
   },
 
   // 🔴 获取位置和设备信息的辅助函数（必须解析出详细地址，带超时保护）
+  _hasUsableLastLocation() {
+    try {
+      const loc = wx.getStorageSync('last_location') || {};
+      const city = String(loc.city || '').trim();
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      return !!city || (Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0);
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /** 入口定位失败进主页后：再请求一次定位并写回 last_location（供可疑会话等使用） */
+  _retryLocationOnHubIfNeeded() {
+    if (this._hubLocationRetryDone) return;
+    if (this._hasUsableLastLocation()) {
+      this._hubLocationRetryDone = true;
+      return;
+    }
+    this._hubLocationRetryDone = true;
+    setTimeout(() => {
+      this._fetchAndCacheHubLocation().catch((err) => {
+        console.warn('[products] 主页补定位失败:', err);
+      });
+    }, 600);
+  },
+
+  async _fetchAndCacheHubLocation() {
+    const locationRes = await Promise.race([
+      new Promise((resolve, reject) => {
+        wx.getLocation({
+          type: 'gcj02',
+          isHighAccuracy: true,
+          success: resolve,
+          fail: reject
+        });
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('主页补定位超时')), 5000))
+    ]);
+    const lat = Number(locationRes && locationRes.latitude);
+    const lng = Number(locationRes && locationRes.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new Error('主页补定位无有效坐标');
+    }
+
+    let addressData = {};
+    try {
+      const { reverseGeocodeWithRetry } = require('../../../utils/reverseGeocode.js');
+      addressData = await Promise.race([
+        reverseGeocodeWithRetry(lat, lng, {
+          maxRetries: 2,
+          timeout: 5000,
+          retryDelay: 500
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('主页逆地理超时')), 8000))
+      ]);
+    } catch (geoErr) {
+      console.warn('[products] 主页逆地理失败，仅缓存坐标:', geoErr);
+    }
+
+    const sysInfo = wx.getSystemInfoSync();
+    const locData = {
+      latitude: lat,
+      longitude: lng,
+      province: (addressData && addressData.province) || '',
+      city: (addressData && addressData.city) || '',
+      district: (addressData && addressData.district) || '',
+      address: (addressData && (addressData.address || addressData.full_address)) || '',
+      full_address: (addressData && (addressData.full_address || addressData.address)) || '',
+      deviceInfo: sysInfo.system || '',
+      phoneModel: sysInfo.model || '',
+      updatedAt: Date.now(),
+      from: 'products_hub_retry'
+    };
+    try {
+      wx.setStorageSync('last_location', locData);
+    } catch (e) {}
+    console.log('[products] 主页补定位已写入 last_location', {
+      province: locData.province,
+      city: locData.city
+    });
+    return locData;
+  },
+
   async _getLocationAndDeviceInfo() {
     const sysInfo = wx.getSystemInfoSync();
     const deviceInfo = {
@@ -2207,21 +2358,61 @@ Page({
     const numId = this._normalizeFeatureId(e.currentTarget.dataset.id);
     if (numId == null) return;
     wx.vibrateShort({ type: 'light' });
-    if (!this._isFeatureEnabledForUser(numId)) {
-      this._notifyFeatureClosed(numId);
+    // 商城：普通用户看开关；管理员可直接进（便于管理/测付）
+    if (numId === FEATURE_ID_SHOP) {
+      this._openHubShopPanel();
       return;
     }
-    if (numId === 4) {
-      this._openHubShopPanel();
+    if (!this._isFeatureEnabledForUser(numId)) {
+      this._notifyFeatureClosed(numId);
       return;
     }
     this.executeNavigation(numId);
   },
 
+  /**
+   * MT 商城对普通用户是否开放（仅看「产品选购」开关）。
+   * 管理员进店请用 _canEnterShop()。
+   */
+  _isShopOpen() {
+    return this._resolveFeatureOpenState(FEATURE_ID_SHOP);
+  },
+
+  /** 当前账号能否进商城：管理员放行，普通用户看开关 */
+  _canEnterShop() {
+    if (this.data.isAuthorized) return true;
+    return this._isShopOpen();
+  },
+
+  _notifyShopClosed() {
+    this._notifyFeatureClosed(FEATURE_ID_SHOP);
+  },
+
   /** 产品选购 / 顶栏「MT商城」：切到枢纽内商城屏 */
   _openHubShopPanel() {
-    this.rememberReturnFocus(4);
+    if (!this._canEnterShop()) {
+      this._notifyShopClosed();
+      return false;
+    }
+    this.rememberReturnFocus(FEATURE_ID_SHOP);
     this._setHubTabIndex(1);
+    return true;
+  },
+
+  /** 「产品选购」关闭时：普通用户不允许停在商城屏；管理员可留在商城 */
+  _enforceShopFeatureGate() {
+    if (this.data.hubTabIndex !== 1) return false;
+    if (this._canEnterShop()) return false;
+    // 已经站在商城屏上才会被踢，静默传送会让人莫名其妙，所以一律给提示
+    this._notifyShopClosed();
+    const hubTrackTranslatePct = hubNav.panelIndexToTranslatePct(0);
+    this.setData({
+      hubTabIndex: 0,
+      hubTrackTranslatePct,
+      hubBottomBarIndex: 0,
+      showHubTabBar: true
+    });
+    return true;
   },
 
   onHubSearchTap() {
@@ -2657,7 +2848,7 @@ Page({
         this.rememberReturnFocus(numId);
         this._preloadCasePageOnce();
         this._navigateToPage('/package-extra/pages/case/case', {
-          retries: 2,
+          retries: 4,
           onFail: (err) => {
             console.error('[products] navigateTo fail:', '/package-extra/pages/case/case', err);
             this.showAutoToast('提示', '页面打开失败，请稍后重试');
@@ -2669,7 +2860,7 @@ Page({
         this.rememberReturnFocus(numId);
         this._preloadScanPageOnce();
         this._navigateToPage('/package-extra/pages/scan/scan', {
-          retries: 2,
+          retries: 4,
           onFail: (err) => {
             console.error('[products] navigateTo fail:', '/package-extra/pages/scan/scan', err);
             this.showAutoToast('提示', '页面打开失败，请稍后重试');
@@ -2677,7 +2868,17 @@ Page({
         });
         return;
       case 9: target = '/package-biz/pages/ota/ota'; break;         // OTA升级
-      case 6: target = '/package-biz/pages/shouhou/shouhou'; break; // 维修中心
+      case 6: // 维修中心（页面较大，预载 + 超时重试）
+        this.rememberReturnFocus(numId);
+        this._preloadShouhouPageOnce();
+        this._navigateToPage('/package-biz/pages/shouhou/shouhou', {
+          retries: 4,
+          onFail: (err) => {
+            console.error('[products] navigateTo fail:', '/package-biz/pages/shouhou/shouhou', err);
+            this.showAutoToast('提示', '页面打开失败，请稍后重试');
+          }
+        });
+        return;
       case 12: target = '/package-biz/pages/home/home'; break;       // 附近门店
       case 13: target = '/package-extra/pages/faq/faq'; break;         // 常见问题
       case 2: target = '/package-app/pages/profile/profile'; break;
@@ -2816,9 +3017,14 @@ Page({
         if (!stillOk()) return;
         this._showCustomModal({
           title: '提示',
-          content: '请前往个人中心-我的订单\n确认收货后解锁教程',
+          content: '请到「订单」确认收货后\n再解锁安装教程',
           showCancel: false,
-          confirmText: '知道了'
+          confirmText: '去订单',
+          success: (res) => {
+            if (res && res.cancel) return;
+            const hubNav = require('../../../utils/hubNav.js');
+            hubNav.switchTab('orders');
+          }
         });
         return;
       }
@@ -2902,10 +3108,6 @@ Page({
       return;
     }
     if (segment === 'shop') {
-      if (!this._isFeatureEnabledForUser(4)) {
-        this._notifyFeatureClosed(4);
-        return;
-      }
       this._openHubShopPanel();
     }
   },
@@ -2933,7 +3135,7 @@ Page({
 
   onHubAdminChange(e) {
     const isAdmin = !!(e.detail && e.detail.isAdmin);
-    this.setData({ hubShellIsAdmin: isAdmin }, () => {
+    this.setData({ hubShellIsAdmin: isAdmin, hubShellModalOpen: false }, () => {
       this._syncHubPanelsAdmin(isAdmin);
       this._rebuildHubLayout();
     });
@@ -3031,6 +3233,12 @@ Page({
 
   _setHubTabIndex(idx) {
     if (idx == null) return;
+    if (idx === hubNav.PANEL_INDEX.kf && !this.data.showHubKfTab) return;
+    // 横滑 / 深链进商城：普通用户看「产品选购」开关；管理员可直接进
+    if (idx === 1 && !this._canEnterShop()) {
+      this._notifyShopClosed();
+      return;
+    }
     const expectedPct = hubNav.panelIndexToTranslatePct(idx);
     const curPct = this.data.hubTrackTranslatePct || 0;
     if (idx === this.data.hubTabIndex && expectedPct === curPct) return;
@@ -3040,7 +3248,7 @@ Page({
     if (idx >= 2) {
       this._dismissHubShopOverlays();
     }
-    const hubBottomBarIndex = hubNav.panelIndexToBottomBarActive(idx);
+    const hubBottomBarIndex = hubNav.panelIndexToBottomBarActive(idx, this.data.showHubKfTab);
     const prevTrackPct = this.data.hubTrackTranslatePct || 0;
     const hubTrackTranslatePct = hubNav.panelIndexToTranslatePct(idx);
     const trackMoves = prevTrackPct !== hubTrackTranslatePct;
@@ -3107,6 +3315,7 @@ Page({
   onHubTabSwitch(e) {
     const tab = e.detail && e.detail.tab;
     if (!tab) return;
+    if (tab === 'kf' && !this.data.showHubKfTab) return;
     const map = { home: 0, orders: 2, kf: 3, profile: 4 };
     const idx = map[tab];
     if (idx == null) return;
@@ -3482,10 +3691,7 @@ Page({
     if (this.data.showDirectCodeTutorialNotice || this.data.directCodeTutorialNoticeClosing) {
       return true;
     }
-    // 管理员进主页：直接弹出预览，便于验收（不影响普通用户已读标记）
-    if (this.data.isAuthorized) {
-      return this._openDirectCodeTutorialNotice({ preview: true });
-    }
+    // 仅「直接粘贴口令进主页」且未看过时弹一次；管理员请用 previewDirectCodeTutorialNotice 手动预览
     if (!accessEntryPath.consumePendingDirectCodeTutorialNotice()) return false;
     return this._openDirectCodeTutorialNotice({ preview: false });
   },

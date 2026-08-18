@@ -5,6 +5,7 @@
   "backgroundColor": "#F2F2F7",
   "pageOrientation": "auto",
   "usingComponents": {
-    "custom-toast": "/components/custom-toast/index"
+    "custom-toast": "/components/custom-toast/index",
+    "device-bind-modal": "/components/device-bind-modal/index"
   }
 }

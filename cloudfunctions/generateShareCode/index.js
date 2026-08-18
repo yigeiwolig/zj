@@ -11,19 +11,16 @@ const db = cloud.database()
  */
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
-  const { orderId, creatorNickname } = event // 🔴 新增：接收分享用户昵称
+  const { orderId, creatorNickname } = event // orderId 可选：闲鱼/直接进入教程的用户无小程序订单
   
-  if (!orderId) {
-    return { success: false, errMsg: '缺少订单号' }
-  }
-
   const openid = wxContext.OPENID
   if (!openid) {
     return { success: false, errMsg: '无法获取用户身份' }
   }
 
+  const resolvedOrderId = orderId ? String(orderId).trim() : 'AZJC_DIRECT'
+
   try {
-    // 1. 检查用户是否已生成过分享码
     const existingRes = await db.collection('chakan')
       .where({
         creatorOpenid: openid
@@ -81,7 +78,8 @@ exports.main = async (event, context) => {
         code: shareCode,
         creatorOpenid: openid,
         creatorNickname: creatorNickname || '', // 🔴 保存分享用户昵称
-        creatorOrderId: orderId,
+        creatorOrderId: resolvedOrderId,
+        source: resolvedOrderId === 'AZJC_DIRECT' ? 'azjc_direct' : 'order',
         createdAt: db.serverDate(),
         expiresAt: expiresAt,
         totalViews: 3,

@@ -839,6 +839,9 @@ function openAngleSlideBleCommands(model) {
       return { increase: '往上收', decrease: '往下' };
     }
     if (isMtUltraCardModel(model)) {
+      if (isF1UltraModel(model)) {
+        return { increase: '往上收', decrease: '往下' };
+      }
       return { increase: '往下', decrease: '往上收' };
     }
     return { increase: '往上收', decrease: '往下' };
@@ -3957,14 +3960,7 @@ Page({
           showConfirm: true
         },
         {
-          text: '请长按按钮3秒',
-          data: null,
-          sendTimes: 0,
-          interval: 0,
-          delayNext: 3000
-        },
-        {
-          text: '断开细红线',
+          text: '拔掉细红线',
           data: null,
           sendTimes: 0,
           interval: 0,

@@ -3,7 +3,8 @@
   "usingComponents": {
     "custom-toast": "/components/custom-toast/index",
     "hub-tab-bar": "/components/hub-tab-bar/index",
-    "return-required-list": "/package-app/components/return-required-list/index"
+    "return-required-list": "/package-app/components/return-required-list/index",
+    "pending-repair-list": "/package-app/components/pending-repair-list/index"
   },
   "styleIsolation": "apply-shared"
 }

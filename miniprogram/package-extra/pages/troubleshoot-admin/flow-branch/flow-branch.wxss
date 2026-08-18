@@ -1,0 +1,282 @@
+.tv-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.tv-card {
+  width: 280rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 18rpx;
+  border: 2rpx solid rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.04);
+  box-sizing: border-box;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+}
+
+.tv-card.is-entry {
+  border-color: #111;
+}
+
+.tv-card.is-end {
+  border-color: #8e8e93;
+}
+
+.tv-card.is-source {
+  border-color: #111;
+  box-shadow: 0 0 0 4rpx rgba(0, 0, 0, 0.12);
+}
+
+.tv-card.is-link-target {
+  border-color: #34c759;
+  background: #f3fff6;
+}
+
+.tv-card-top {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+  min-height: 36rpx;
+}
+
+.tv-card-top-space {
+  flex: 1;
+}
+
+.tv-del {
+  font-size: 22rpx;
+  color: #d93025;
+  font-weight: 650;
+  padding: 6rpx 10rpx;
+}
+
+.tv-badge {
+  display: inline-block;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background: #111;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 700;
+}
+
+.tv-badge--end {
+  background: #8e8e93;
+}
+
+.tv-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 750;
+  color: #111;
+  line-height: 1.35;
+  margin-bottom: 12rpx;
+  word-break: break-word;
+}
+
+.tv-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.tv-answer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: #f5f5f7;
+  border-radius: 14rpx;
+  padding: 14rpx 16rpx;
+  border: 2rpx solid transparent;
+  box-sizing: border-box;
+}
+
+.tv-answer-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.tv-answer.is-connectable {
+  border-color: #111;
+  background: #f0f0f2;
+}
+
+.tv-answer.is-picked {
+  background: #111;
+}
+
+.tv-answer.is-picked .tv-answer-text {
+  color: #fff;
+}
+
+.tv-answer-text {
+  font-size: 26rpx;
+  font-weight: 650;
+  color: #111;
+}
+
+/* 答案右侧小圆点：表示从此处往下接支路 */
+.tv-answer-port {
+  width: 12rpx;
+  height: 12rpx;
+  margin-left: 10rpx;
+  border-radius: 50%;
+  background: #111;
+  flex-shrink: 0;
+}
+
+.tv-answer.is-picked .tv-answer-port {
+  background: #fff;
+}
+
+.tv-card-actions {
+  margin-top: 14rpx;
+  padding-top: 12rpx;
+  border-top: 1rpx solid rgba(0, 0, 0, 0.06);
+}
+
+.tv-action {
+  display: block;
+  text-align: center;
+  font-size: 24rpx;
+  font-weight: 650;
+  color: #111;
+  padding: 6rpx;
+}
+
+/* ===== 连线区：父卡底 → 竖干 → 横梁 → 各支下拉 ===== */
+.tv-branch-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.tv-stem {
+  width: 4rpx;
+  height: 28rpx;
+  background: #b0b0b5;
+  border-radius: 4rpx;
+  flex-shrink: 0;
+}
+
+.tv-rail-wrap {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* 横梁：把各支中心连成一条线，接到父卡竖干 */
+.tv-rail {
+  position: absolute;
+  top: 0;
+  height: 4rpx;
+  background: #b0b0b5;
+  border-radius: 4rpx;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.tv-kids {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  justify-content: center;
+  box-sizing: border-box;
+  gap: 0;
+  width: 100%;
+}
+
+.tv-kid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.tv-kid + .tv-kid {
+  margin-left: 16rpx;
+}
+
+.tv-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 0 8rpx;
+  position: relative;
+  z-index: 2;
+}
+
+.tv-drop-line {
+  width: 4rpx;
+  height: 22rpx;
+  background: #b0b0b5;
+  border-radius: 4rpx;
+  flex-shrink: 0;
+}
+
+.tv-drop-arrow {
+  width: 0;
+  height: 0;
+  margin-top: -2rpx;
+  border-left: 8rpx solid transparent;
+  border-right: 8rpx solid transparent;
+  border-top: 10rpx solid #b0b0b5;
+  flex-shrink: 0;
+}
+
+.tv-wire-label {
+  margin: 6rpx 0;
+  max-width: 260rpx;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  background: #111;
+  color: #fff;
+  font-size: 20rpx;
+  font-weight: 650;
+  text-align: center;
+  word-break: break-word;
+  position: relative;
+  z-index: 3;
+}
+
+.tv-slot {
+  width: 280rpx;
+  min-height: 120rpx;
+  border: 2rpx dashed #c7c7cc;
+  border-radius: 20rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  color: #8e8e93;
+  font-size: 22rpx;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 16rpx;
+  box-sizing: border-box;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.tv-slot--solo {
+  margin-top: 14rpx;
+  width: 280rpx;
+}
+
+.tv-slot-plus {
+  font-size: 36rpx;
+  font-weight: 300;
+  line-height: 1;
+  color: #111;
+}

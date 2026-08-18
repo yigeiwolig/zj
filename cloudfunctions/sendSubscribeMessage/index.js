@@ -104,6 +104,11 @@ const PROGRESS_COPY = {
     phrase37: '未通过',
     thing6: '请到「案例库」查看原因可再投'
   },
+  ts_ask_repair: {
+    thing2: '排查售后已回复',
+    phrase37: '待申报',
+    thing6: '请到「常见问题」或维修中心申报'
+  },
   referral_reward: {
     thing2: '邀请奖励已到账',
     phrase37: '已到账',
@@ -136,6 +141,7 @@ const SCENE_TEMPLATE = {
   shop_queued: 'progress',
   case_approved: 'progress',
   case_rejected: 'progress',
+  ts_ask_repair: 'progress',
   referral_reward: 'progress',
   shipped: 'ship',
   completed_sent: 'ship',

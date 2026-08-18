@@ -91,7 +91,7 @@
             <text class="rr-info-value rr-replace-none-text">暂无单号</text>
           </view>
           <view class="rr-info-row rr-tracking-row" wx:if="{{item.returnTrackingId}}">
-            <text class="rr-info-label">寄回运单号</text>
+            <text class="rr-info-label">用户寄出运单</text>
             <view class="rr-info-value-wrapper">
               <text class="rr-info-value">{{item.returnTrackingId}}</text>
               <view
@@ -166,7 +166,7 @@
             data-tail-required="2427">
             查寄出物流
           </view>
-          <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查寄回物流</view>
+          <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" bindtap="viewLogisticsDetail" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查寄出物流</view>
           <!-- 寄回维修流程未走完不给“已完成”；仅故障配件寄回场景保留人工完结 -->
           <view class="rr-btn complete" wx:if="{{item.returnStatus !== 'PENDING_RETURN'}}" bindtap="completeReturnRequired" data-id="{{item._id}}">完结此单</view>
         </block>

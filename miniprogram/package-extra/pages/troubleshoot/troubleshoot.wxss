@@ -1,46 +1,149 @@
+/* 苹果 Apple iOS 高阶精致 UI 设计 */
 page {
   background: #FFFFFF;
   color: #000000;
-  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "PingFang SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 .ts-page {
   min-height: 100vh;
   background: #FFFFFF;
+  overflow: visible;
 }
 
 .ts-main-view {
   min-height: 100vh;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  transform-origin: center center;
-  position: relative;
+  transform-origin: center top;
+  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+  overflow: hidden;
 }
 
 .ts-main-view.is-sunk {
-  transform: scale(0.95);
+  transform: scale(0.93);
+  border-radius: 40rpx;
 }
 
-/* 导航栏 */
+/* 顶栏 */
 .ts-nav {
   position: fixed;
   inset: 0 0 auto;
   z-index: 30;
   display: flex;
   align-items: center;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  justify-content: space-between;
+  padding-left: 32rpx;
+  box-sizing: border-box;
+  background: #FFFFFF;
 }
 
-.ts-nav-back {
-  width: 140rpx;
-  height: 100%;
+.ts-nav-side {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  min-width: 88rpx;
   display: flex;
   align-items: center;
-  padding-left: 32rpx;
-  font-size: 32rpx;
-  font-weight: 400;
-  color: #1C1C1E; /* 深邃灰黑 */
+}
+
+.ts-nav-side--right {
+  justify-content: flex-end;
+}
+
+.ts-nav-btn {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #8E8E93;
+}
+
+.ts-nav-btn--bold {
+  font-weight: 600;
+  color: #000000;
+}
+
+.ts-nav-center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ts-mt-mark {
+  display: flex;
+  align-items: flex-end;
+  line-height: 1;
+}
+
+.ts-mt-m,
+.ts-mt-t {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #000000;
+  letter-spacing: 0;
+}
+
+.ts-mt-t {
+  margin-left: -2rpx;
+}
+
+.ts-mt-chip {
+  flex-shrink: 0;
+  min-width: 48rpx;
+  height: 32rpx;
+  padding: 0 10rpx;
+  border-radius: 8rpx;
+  background: #000000;
+  color: #FFFFFF;
+  font-size: 18rpx;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ts-mt-chip--sheet {
+  margin: 0 auto 8rpx;
+}
+
+.ts-mt-chip--result {
+  margin-bottom: 24rpx;
+}
+
+.ts-step-pill {
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+  background: #F2F2F7;
+  padding: 8rpx 22rpx;
+  border-radius: 24rpx;
+}
+
+.ts-step-code {
+  font-size: 20rpx;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #000000;
+  line-height: 1;
+}
+
+.ts-progress-track {
+  width: 64rpx;
+  height: 6rpx;
+  border-radius: 3rpx;
+  background: #E5E5EA;
+  overflow: hidden;
+}
+
+.ts-progress-fill {
+  height: 100%;
+  border-radius: 3rpx;
+  background: #000000;
+  transition: width 0.3s ease;
 }
 
 .ts-nav-title {
@@ -48,91 +151,626 @@ page {
   text-align: center;
   font-size: 34rpx;
   font-weight: 600;
-  color: #000;
+  color: #000000;
 }
 
-.ts-nav-right {
-  width: 140rpx;
-}
-
+/* 页面内容区 */
 .ts-content {
-  padding-bottom: 80rpx;
-  background: transparent;
   min-height: 100vh;
+  box-sizing: border-box;
+  background: #FFFFFF;
 }
 
-/* 页面头部 */
-.ts-header {
-  padding: 40rpx 40rpx 48rpx;
+.ts-content:not(.ts-content--step) {
+  background: #F2F2F7;
+  padding-bottom: calc(48rpx + env(safe-area-inset-bottom));
 }
 
-.ts-title {
+.ts-content--step {
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.ts-step-wrap {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.ts-step-scroll {
+  flex: 1;
+  height: 0;
+  min-height: 0;
+}
+
+.ts-step-inner {
+  padding: 24rpx 40rpx 48rpx;
+  box-sizing: border-box;
+}
+
+/* 标题区 */
+.ts-hero {
+  margin: 8rpx 0 32rpx;
+}
+
+.ts-hero-title {
+  display: block;
+}
+
+.ts-hero-line {
   display: block;
   font-size: 56rpx;
-  font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -1rpx;
-  color: #000;
+  font-weight: 800;
+  letter-spacing: -1.2rpx;
+  line-height: 1.16;
+  color: #000000;
 }
 
-.ts-subtitle {
-  display: block;
-  margin-top: 16rpx;
-  font-size: 30rpx;
-  line-height: 1.5;
-  color: #8E8E93;
-}
-
-/* 媒体区域：黑色大圆角卡片 */
-.ts-notice-bar {
-  margin: 0 40rpx 32rpx;
-  padding: 24rpx 32rpx;
-  background: #F2F2F7;
+.ts-hero-desc-box {
+  margin-top: 18rpx;
+  padding: 20rpx 24rpx;
+  background: #F9F9FB;
   border-radius: 20rpx;
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
 }
 
-.ts-notice-text {
+.ts-hero-desc {
   font-size: 28rpx;
-  color: #8E8E93;
-  line-height: 1.4;
+  line-height: 1.55;
+  color: #48484A;
+  font-weight: 400;
 }
 
-.ts-media-box {
-  margin: 0 40rpx;
+.ts-list-head {
+  padding: 24rpx 64rpx 0;
+}
+
+.ts-list-head .ts-hero-title {
+  display: block;
+  font-size: 68rpx;
+  font-weight: 700;
+  letter-spacing: -1.2rpx;
+  line-height: 1.12;
+  color: #000000;
+}
+
+.ts-list-kicker {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 22rpx;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #8E8E93;
+}
+
+/* 视频卡片 */
+.ts-video-card {
+  position: relative;
+  width: 100%;
+  margin-bottom: 36rpx;
   border-radius: 32rpx;
   overflow: hidden;
   background: #000000;
-  box-shadow: inset 0 0 0 1rpx rgba(0, 0, 0, 0.05);
+  box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.12);
 }
 
 .ts-video {
   width: 100%;
-  height: 600rpx;
+  height: 100%;
   display: block;
+  background: #000000;
 }
 
-.ts-image {
-  width: 100%;
-  display: block;
+.ts-play-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16rpx;
+  background: rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(2px);
 }
 
-/* 列表态 */
-.ts-list {
-  margin: 0 40rpx;
+.ts-video-tag {
+  position: absolute;
+  top: 20rpx;
+  left: 20rpx;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  padding: 8rpx 16rpx 8rpx 8rpx;
+  border-radius: 16rpx;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px);
+  color: #FFFFFF;
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+.ts-video-tag-mt {
+  min-width: 44rpx;
+  height: 28rpx;
+  padding: 0 8rpx;
+  border-radius: 8rpx;
+  background: #FFFFFF;
+  color: #000000;
+  font-size: 16rpx;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ts-play-btn {
+  width: 128rpx;
+  height: 128rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 16rpx 40rpx rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.ts-play-tri {
+  width: 0;
+  height: 0;
+  margin-left: 8rpx;
+  border-style: solid;
+  border-width: 18rpx 0 18rpx 28rpx;
+  border-color: transparent transparent transparent #000000;
+}
+
+.ts-play-text {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #FFFFFF;
+  text-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.5);
+}
+
+/* 排查要点清单 (Grouped Card + 时间线) */
+.ts-checklist-card {
+  margin-top: 8rpx;
+  padding: 32rpx;
+  background: #FFFFFF;
+  border-radius: 32rpx;
+  border: 2rpx solid #000000;
+}
+
+.ts-checklist-header {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 28rpx;
+  padding-bottom: 16rpx;
+  border-bottom: 2rpx solid #000000;
+}
+
+.ts-checklist-label {
+  font-size: 26rpx;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #000000;
+}
+
+.ts-checklist-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.ts-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24rpx;
+  position: relative;
+}
+
+.ts-check-axis {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ts-check-badge {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 800;
+  box-sizing: border-box;
+  z-index: 2;
+  background: #000000;
+  color: #FFFFFF;
+}
+
+.ts-check-line {
+  width: 3rpx;
+  min-height: 48rpx;
+  flex: 1;
+  background: #000000;
+  margin: 6rpx 0;
+}
+
+.ts-check-content {
+  flex: 1;
+  padding-bottom: 28rpx;
+}
+
+.ts-check-row:last-child .ts-check-content {
+  padding-bottom: 0;
+}
+
+.ts-check-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  line-height: 1.35;
+  color: #000000;
+}
+
+.ts-check-detail {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 26rpx;
+  line-height: 1.5;
+  color: #000000;
+}
+
+.ts-scroll-spacer {
+  height: 32rpx;
+}
+
+/* 底部固定区 */
+.ts-footer {
+  flex-shrink: 0;
+  padding: 20rpx 48rpx calc(32rpx + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  border-top: 1rpx solid rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.ts-footer-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 24rpx 32rpx;
   background: #F2F2F7;
-  border-radius: 28rpx;
+  border-radius: 40rpx;
+}
+
+.ts-footer-banner-icon {
+  font-size: 20rpx;
+  color: #000000;
+}
+
+.ts-footer-banner-text {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #48484A;
+}
+
+.ts-btn {
+  width: 100%;
+  min-height: 100rpx;
+  padding: 28rpx 36rpx;
+  box-sizing: border-box;
+  border-radius: 50rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.ts-btn--primary {
+  background: #000000;
+  color: #FFFFFF;
+}
+
+.ts-btn--secondary {
+  background: #FFFFFF;
+  color: #000000;
+  border: 2rpx solid #E5E5EA;
+}
+
+.ts-btn--shadow {
+  box-shadow: 0 12rpx 32rpx rgba(0, 0, 0, 0.15);
+}
+
+.ts-btn-arrow {
+  margin-left: 12rpx;
+  font-size: 36rpx;
+  line-height: 1;
+}
+
+.ts-btn--pressed {
+  transform: scale(0.98);
+}
+
+/* 遮罩 & 弹层：先离屏再滑入，关闭时先滑出再卸载 */
+.ts-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.ts-sheet-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity 0.36s ease;
+}
+
+.ts-sheet-root.is-in .ts-sheet-mask {
+  opacity: 1;
+}
+
+.ts-sheet-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 90vh;
+  transform: translate3d(0, 100%, 0);
+  transition: transform 0.42s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+
+.ts-sheet-root.is-in .ts-sheet-panel {
+  transform: translate3d(0, 0, 0);
+}
+
+.ts-sheet-root:not(.is-in) .ts-sheet-panel {
+  transition-duration: 0.36s;
+  transition-timing-function: cubic-bezier(0.4, 0, 1, 1);
+}
+
+.ts-sheet-card {
+  max-height: 90vh;
+  padding: 12rpx 40rpx calc(36rpx + env(safe-area-inset-bottom));
+  background: #F2F2F7;
+  border-radius: 40rpx 40rpx 0 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.ts-sheet-card--choice {
+  min-height: 52vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.ts-sheet-handle {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: #D1D1D6;
+  margin: 12rpx auto 24rpx;
+}
+
+.ts-sheet-head {
+  padding: 8rpx 0 28rpx;
+  text-align: center;
+}
+
+.ts-sheet-kicker {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: 22rpx;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8E8E93;
+}
+
+.ts-sheet-title {
+  display: block;
+  font-size: 38rpx;
+  font-weight: 800;
+  color: #000000;
+  line-height: 1.3;
+}
+
+.ts-sheet-desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 26rpx;
+  color: #8E8E93;
+  line-height: 1.45;
+}
+
+.ts-sheet-options {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+  padding: 8rpx 0 16rpx;
+}
+
+.ts-sheet-opt-btn {
+  width: 100%;
+  min-height: 104rpx;
+  padding: 28rpx 36rpx;
+  box-sizing: border-box;
+  border-radius: 36rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: transform 0.15s ease;
+}
+
+.ts-sheet-opt-btn.is-primary {
+  background: #000000;
+  color: #FFFFFF;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.12);
+}
+
+.ts-sheet-opt-btn.is-secondary {
+  background: #FFFFFF;
+  color: #1C1C1E;
+  border: 2rpx solid #E5E5EA;
+}
+
+.ts-sheet-opt-btn--hover {
+  transform: scale(0.98);
+  opacity: 0.9;
+}
+
+.ts-sheet-opt-text {
+  font-size: 32rpx;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.ts-sheet-opt-arrow {
+  font-size: 36rpx;
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.ts-sheet-later {
+  display: block;
+  margin-top: auto;
+  padding: 28rpx 0 8rpx;
+  text-align: center;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #007AFF;
+  line-height: 1.4;
+}
+
+.ts-sheet-cancel {
+  margin-top: 24rpx;
+  min-height: 88rpx;
+  border-radius: 40rpx;
+  background: #FFFFFF;
+  color: #666;
+  font-size: 28rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid #D1D1D6;
+  box-sizing: border-box;
+}
+
+.ts-record-preview {
+  width: 100%;
+  height: 280rpx;
+  margin-bottom: 20rpx;
+  border-radius: 16rpx;
+  background: #111;
+}
+
+/* 结果页 */
+.ts-result {
+  padding: 60rpx 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ts-result-card {
+  width: 100%;
+  padding: 48rpx 32rpx;
+  background: #F9F9FB;
+  border-radius: 36rpx;
+  border: 1rpx solid #E5E5EA;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  margin-bottom: 48rpx;
+}
+
+.ts-result-mark {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 52rpx;
+  font-weight: 800;
+  margin-bottom: 32rpx;
+}
+
+.ts-result-mark.is-ok {
+  background: #000000;
+  color: #FFFFFF;
+}
+
+.ts-result-mark.is-warn {
+  background: #FF9500;
+  color: #FFFFFF;
+}
+
+.ts-result-title {
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #000000;
+  text-align: center;
+  margin-bottom: 16rpx;
+  line-height: 1.35;
+  padding: 0 12rpx;
+}
+
+.ts-result-desc {
+  font-size: 28rpx;
+  line-height: 1.5;
+  color: #636366;
+  text-align: center;
+}
+
+.ts-result-actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.ts-footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 48rpx;
+}
+
+.ts-footer-link {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #8E8E93;
+  padding: 12rpx;
+}
+
+/* 主树列表页样式 */
+.ts-list {
+  margin: 20rpx 40rpx 0;
+  background: #fff;
+  border-radius: 22rpx;
   overflow: hidden;
 }
 
 .ts-list-row {
   display: flex;
   align-items: center;
+  gap: 20rpx;
   padding: 32rpx 36rpx;
   position: relative;
-  background: #F2F2F7;
 }
 
 .ts-list-row::after {
@@ -141,8 +779,8 @@ page {
   left: 36rpx;
   right: 0;
   bottom: 0;
-  height: 1px;
-  background: #E5E5EA;
+  height: 1rpx;
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .ts-list-row:last-child::after {
@@ -150,7 +788,7 @@ page {
 }
 
 .ts-list-row-hover {
-  background: #E5E5EA;
+  background: rgba(0, 0, 0, 0.03);
 }
 
 .ts-list-content {
@@ -161,209 +799,89 @@ page {
 }
 
 .ts-list-title {
-  font-size: 34rpx;
-  color: #000;
-  font-weight: 500;
+  font-size: 32rpx;
+  color: #111;
+  font-weight: 600;
 }
 
 .ts-list-subtitle {
-  font-size: 26rpx;
-  color: #8E8E93;
+  font-size: 24rpx;
+  color: #888;
 }
 
 .ts-chevron {
-  font-size: 40rpx;
-  color: #C7C7CC;
-  font-weight: 300;
-  margin-left: 16rpx;
-}
-
-/* 结果页展示 */
-.ts-result-box {
-  margin: 64rpx 40rpx 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.ts-result-title {
   font-size: 36rpx;
-  font-weight: 600;
-  color: #000;
-  margin-top: 32rpx;
-  margin-bottom: 48rpx;
+  color: #C8C8C8;
+  margin-left: 8rpx;
 }
 
-/* 页面内主按钮 */
-.ts-page-actions {
-  margin: 64rpx 40rpx 0;
-}
-
-.ts-primary-btn {
-  width: 100%;
-  height: 100rpx;
-  border-radius: 24rpx;
-  background: #1C1C1E; /* 深邃黑 */
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 34rpx;
-  font-weight: 600;
-}
-
-.ts-primary-btn:active {
-  opacity: 0.8;
-}
-
-/* 页面内文字链接 */
-.ts-page-footer {
-  margin-top: 48rpx;
-  display: flex;
-  justify-content: center;
-  gap: 80rpx;
-}
-
-.ts-text-link {
-  font-size: 30rpx;
-  color: #1C1C1E;
-  font-weight: 400;
-  padding: 16rpx;
-}
-
-.ts-text-link:active {
-  opacity: 0.5;
-}
-
-/* --- iOS 风格 Action Sheet (底部弹窗) --- */
-.ts-sheet-mask {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 100;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.ts-sheet-mask.is-visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.ts-sheet-panel {
-  position: fixed;
-  left: 16rpx;
-  right: 16rpx;
-  bottom: 0;
-  background: transparent;
-  z-index: 101;
-  transform: translateY(100%);
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
-}
-
-.ts-sheet-panel.is-visible {
-  transform: translateY(0);
-}
-
-.ts-sheet-header {
-  text-align: center;
-  margin-bottom: 24rpx;
-}
-
-.ts-sheet-header-inner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24rpx 0;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-
-.ts-sheet-title-text {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: #8E8E93;
-}
-
-.ts-sheet-title {
-  font-size: 26rpx;
-  font-weight: 500;
-  color: #8E8E93;
-}
-
-.ts-sheet-group {
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 28rpx;
-  overflow: hidden;
-}
-
-.ts-sheet-btn {
-  height: 112rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 40rpx;
-  color: #1C1C1E;
-  font-weight: 400;
-  background: transparent;
-  position: relative;
-}
-
-.ts-sheet-btn::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: rgba(0,0,0,0.05);
-  transform: scaleY(0.5);
-}
-
-.ts-sheet-btn:last-child::after {
-  display: none;
-}
-
-.ts-sheet-btn--hover {
-  background: rgba(0,0,0,0.05);
-}
-
-.ts-sheet-btn--bold {
-  font-weight: 600;
-}
-
-/* 异常态 */
-.ts-loading, .ts-error, .ts-empty {
-  padding: 240rpx 0;
+.ts-loading,
+.ts-error,
+.ts-empty {
+  padding: 240rpx 40rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
+  color: #888;
+  font-size: 30rpx;
+}
+
+.ts-loading-text {
+  margin-top: 20rpx;
+  font-size: 26rpx;
   color: #8E8E93;
-  font-size: 32rpx;
 }
 
 .ts-spinner {
   width: 48rpx;
   height: 48rpx;
-  border: 4rpx solid rgba(28, 28, 30, 0.2);
-  border-top-color: #1C1C1E;
+  border: 4rpx solid rgba(0, 0, 0, 0.1);
+  border-top-color: #000;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
+}
+
+.ts-submit-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  background: rgba(0, 0, 0, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ts-submit-card {
+  min-width: 240rpx;
+  padding: 40rpx 48rpx 36rpx;
+  background: #fff;
+  border-radius: 28rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 16rpx 48rpx rgba(0, 0, 0, 0.12);
+}
+.ts-submit-text {
+  margin-top: 20rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #111;
 }
 
 .ts-error-title {
-  font-size: 40rpx;
-  font-weight: 600;
-  color: #000;
+  font-size: 36rpx;
+  font-weight: 650;
+  color: #111;
   margin-bottom: 16rpx;
 }
 
 .ts-error-copy {
   margin-bottom: 32rpx;
+  color: #888;
+  text-align: center;
+}
+
+.ts-error .ts-btn {
+  width: 280rpx;
 }
 
 @keyframes spin {

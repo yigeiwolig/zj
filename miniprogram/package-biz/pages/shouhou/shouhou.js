@@ -33,9 +33,14 @@ var qqmapsdkDistrict = new QQMapWX({
 const TEST_VIDEO_URL = "https://wxsnsdy.tc.qq.com/105/20210/snsdyvideodownload?filekey=30280201010421301f0201690402534804102ca905ce620b1241b726bc41dcff44e00204012882540400&bizid=1023&hy=SH&fileparam=302c020101042530230204136ffd93020457e3c4ff02024ef202031e8d7f02030f42400204045a320a0201000400";
 
 const SHOUHOU_GUIDE_SHOW_COUNT_KEY = 'mt_shouhou_guide_show_count_v1';
-/** 前 N 次自动弹出不可跳过 */
-const SHOUHOU_GUIDE_NO_SKIP_TIMES = 5;
+/** 自动弹出最多次数；超过后不再自动弹教程 */
+const SHOUHOU_GUIDE_MAX_AUTO_TIMES = 3;
+/** 前 N 次自动弹出不可跳过（与最多次数一致） */
+const SHOUHOU_GUIDE_NO_SKIP_TIMES = 3;
 const SHOUHOU_FIRST_VISIT_GUIDE_DONE_KEY = 'mt_shouhou_first_visit_guide_done_v1'; // 旧键，不再用作永久跳过
+/** A卡（数字化告知）/ B卡（过保说明）：用户点确认后本地持久，避免每次进页都弹 */
+const SHOUHOU_ENTRY_NOTICE_A_ACKED_KEY = 'mt_shouhou_entry_notice_a_acked_v1';
+const SHOUHOU_ENTRY_NOTICE_B_ACKED_KEY = 'mt_shouhou_entry_notice_b_acked_v1';
 
 /** 进入维修中心：全员售后说明 */
 /** A 卡：全员进入维修中心时展示（对齐参考稿） */
@@ -293,6 +298,11 @@ Page({
     activeTab: 'order', // order 或 tutorial
     serviceType: 'parts', // parts 或 repair
 
+    /** 故障报修门闸：本页拉起绑定弹窗（蓝牙 / 无设备核验） */
+    showDeviceBindModal: false,
+    /** 已有待审绑定、尚无激活设备：报修页设备栏提示用 */
+    repairBindPending: false,
+
     // 数据列表
     currentPartsList: [],
     currentVideoList: [],
@@ -508,6 +518,8 @@ Page({
 
     // 维修中心分步功能引导
     showShUsageGuide: false,
+    // 进页先挡住型号卡片，避免说明弹窗还没出来就被点进去
+    entryGateBlocking: true,
     shUsageGuideStep: 1,
     shGuideStepTag: '',
     shGuideTitle: '',
@@ -621,6 +633,16 @@ Page({
     if (this._openRepairTabFromQuery) {
       this._shouhouSkipAutoGuideFromQuery = true;
     }
+    // 只有从「我的 → 去购买配件」进来才算引导购配件会话，否则清掉残留 repairId，避免自助下单被误标
+    const guidedFromQuery = !!(options && (options.guidedParts === '1' || options.guidedParts === 1));
+    const guidedFromGlobal = !!(app && app.globalData && (app.globalData.shouhouGuidedParts || app.globalData.shouhouRepairId));
+    this._isGuidedPartsSession = guidedFromQuery || guidedFromGlobal;
+    if (app && app.globalData) {
+      app.globalData.shouhouGuidedParts = false;
+    }
+    if (!this._isGuidedPartsSession) {
+      this._clearGuidedPartsContext();
+    }
     if (modelToOpen) {
       this._shouhouSkipAutoGuideFromQuery = true;
       const baseModel = modelToOpen.split(/\s*-\s*/)[0].trim();
@@ -641,7 +663,7 @@ Page({
         if (self._openModelFromQuery && MODEL_TO_GROUP[self._openModelFromQuery]) {
           const name = self._openModelFromQuery;
           self._openModelFromQuery = null;
-          self.enterModelByModelName(name);
+          self.enterModelByModelName(name, null, { force: true });
           if (self._openRepairTabFromQuery) {
             self._openRepairTabFromQuery = false;
             setTimeout(() => self._enterRepairAfterBindReturn(name), 300);
@@ -1311,7 +1333,7 @@ Page({
       this.db = wx.cloud.database();
     }
     
-    // 检查管理员权限（须等完成后再决定是否弹教学，管理员免教）
+    // 检查管理员权限（教学引导会读 isAuthorized；说明弹窗不再等它）
     this._adminPrivilegePromise = this.checkAdminPrivilege();
     
     // 缓存系统信息，避免拖拽时重复调用
@@ -1321,6 +1343,12 @@ Page({
     
     // 布局就绪后再算导航与详情顶距（onLoad 时 getMenuButtonBoundingClientRect 偶发不准）
     this.calcNavBarInfo();
+    // 说明弹窗尽早启动（不等 nextTick），并配合 entryGate 挡住手快点卡片
+    this._hydrateEntryNoticeAckedFromStorage();
+    if (!this._openModelFromQuery) {
+      this._maybeShowShouhouUsageGuide();
+      this._armEntryNoticeWatchdog();
+    }
     wx.nextTick(() => {
       try {
         this._syncDetailSafeTop();
@@ -1330,12 +1358,14 @@ Page({
         const modelName = this._openModelFromQuery;
         this._openModelFromQuery = null;
         if (modelName && MODEL_TO_GROUP[modelName]) {
-          this.enterModelByModelName(modelName);
+          this.enterModelByModelName(modelName, null, { force: true });
           return;
         }
       }
-      this._maybeShowShouhouUsageGuide();
-      this._armEntryNoticeWatchdog();
+      if (!this._entryNoticeAShown && !this._entryNoticeBShown && !this.data.showAftersaleNoticeModal && !this.data.showExpiredRoastModal) {
+        this._maybeShowShouhouUsageGuide();
+        this._armEntryNoticeWatchdog();
+      }
     });
   },
 
@@ -1531,9 +1561,19 @@ Page({
     return false;
   },
 
-  _ensureRepairDevicesLoaded() {
+  _ensureRepairDevicesLoaded(force) {
     const list = this.data.myDevices || [];
-    if (list.length > 0) return Promise.resolve(list);
+    if (!force && list.length > 0) {
+      // 仅 1 台时保证已选中
+      if (list.length === 1 && (this.data.selectedDeviceIndex === null || this.data.selectedDeviceIndex === undefined)) {
+        const only = list[0];
+        const patch = { selectedDeviceIndex: 0 };
+        const prefill = normalizeControlVariant(only && only.controlVariant);
+        if (prefill) patch.repairControlVariant = prefill;
+        this.setData(patch);
+      }
+      return Promise.resolve(list);
+    }
     return this.loadRepairDevices();
   },
 
@@ -1981,12 +2021,15 @@ Page({
   },
 
   enterModel(e) {
+    if (this._isEntryGateBlockingTap()) return;
     const { name, series } = e.currentTarget.dataset;
     this.enterModelByModelName(name, series);
   },
 
   // 按型号名直接进入对应卡（用于从「我的」页「去购买配件」带 model 参数跳转）
-  enterModelByModelName(modelName, series) {
+  // opts.force：程序化跳转（带参进页/回流）不受进页说明门禁拦截
+  enterModelByModelName(modelName, series, opts) {
+    if (!(opts && opts.force) && this._isEntryGateBlockingTap()) return;
     const name = normalizeProductDetailModel(modelName || '');
     const seriesVal = series || (MODEL_TO_GROUP[name] || '');
     const openTutorialTab = !!this._openTutorialTabFromQuery;
@@ -2187,18 +2230,19 @@ Page({
   },
 
   toggleService(e) {
-    if (this.data.showShUsageGuide) return;
+    // Stuck guide with no visible UI must not permanently block 故障报修
+    if (this.data.showShUsageGuide) {
+      if (!this.data.shGuideShowBubble && !this.data.shGuideShowSpot && !this.data.shGuideMaskDim) {
+        try { this.closeShUsageGuide(false); } catch (err) { /* ignore */ }
+      } else {
+        return;
+      }
+    }
     const type = e.currentTarget.dataset.type;
     if (type === this.data.serviceType) return;
     
     if (type === 'repair') {
-      // 管理员：无绑定设备也可进入故障报修
-      if (this.data.isAuthorized) {
-        this.setData({ serviceType: 'repair' }, () => this.reCalcFinalPrice());
-        this.checkDeviceBeforeRepair({ fallbackToParts: true, allowSwitch: false });
-        return;
-      }
-      // 普通用户：先校验绑定，通过后再切换（未绑定只弹窗，不跳转）
+      // 管理员与普通用户同一套门闸：未绑定须先提交绑定/核验，待审可进报修
       this.checkDeviceBeforeRepair({ fallbackToParts: false, allowSwitch: true });
       return;
     }
@@ -2207,7 +2251,30 @@ Page({
     this.setData({ serviceType: type }, () => this.reCalcFinalPrice());
   },
 
-  /** 未绑定设备：弹窗选择去绑定或稍后绑定（不自动跳转） */
+  /** 是否有待审绑定/核验（已提交但设备尚未激活） */
+  _isPendingBindApplyStatus(status) {
+    const st = String(status == null ? '' : status).trim().toUpperCase();
+    return !st || st === 'PENDING' || st === '0';
+  },
+
+  async _hasPendingDeviceBind(openid) {
+    if (!openid) return false;
+    try {
+      const db = wx.cloud.database();
+      const _ = db.command;
+      const applyRes = await db.collection('my_read').where(_.or([
+        { openid },
+        { _openid: openid }
+      ])).limit(50).get();
+      const pending = (applyRes.data || []).find((row) => this._isPendingBindApplyStatus(row && row.status));
+      return !!pending;
+    } catch (err) {
+      console.warn('[shouhou] _hasPendingDeviceBind failed', err);
+      return false;
+    }
+  },
+
+  /** 未绑定且无待审：必须先在本页提交绑定（蓝牙 / 无设备），不跳「我的」 */
   _showRepairBindDevicePrompt(options = {}) {
     const { revertToParts = false } = options;
     if (revertToParts && this.data.serviceType === 'repair') {
@@ -2215,40 +2282,155 @@ Page({
     }
     this._showCustomModal({
       title: '提示',
-      content: '您尚未绑定设备，暂无法提交故障报修。绑定后可正常提交工单并享受质保服务。',
+      content: '您尚未绑定设备，暂无法申报维修。请先完成蓝牙绑定或无设备核验提交；提交后即可继续故障报修。',
       showCancel: true,
       cancelText: '稍后绑定',
       confirmText: '去绑定',
       success: (res) => {
         if (res && res.confirm) {
-          const app = getApp();
-          if (app && app.globalData) {
-            app.globalData.fromRepairBind = {
-              model: String(this.data.currentModelName || '').trim(),
-              ts: Date.now()
-            };
-          }
-          wx.navigateTo({
-            url: '/package-app/pages/products/products?hubTab=2&openBind=1',
-            animationType: 'none',
-            fail: () => {
-              this._showCustomToast('跳转失败，请手动前往「我的」页面', 'none');
-            }
-          });
+          this._openDeviceBindModalFromRepair();
         }
       }
     });
   },
 
-  /** 从绑定页回流：切到故障报修并刷新设备；此处只可能弹 B、永不弹 A */
-  _enterRepairAfterBindReturn(modelName) {
+  /** 真机：等 custom-toast 卸掉后再拉绑定弹窗；组件未就绪则重试 */
+  _openDeviceBindModalFromRepair() {
+    // 避免门闸短缓存 hasDevice:false 在绑完回流后再次误拦
+    this._repairDeviceCache = null;
+
+    try {
+      const toast = this._getCustomToast && this._getCustomToast();
+      if (toast) {
+        // 清掉「去绑定」确认回调，避免 hide 动画期间二次触发
+        toast._modalSuccess = null;
+        toast._modalFail = null;
+        if (typeof toast.hideModal === 'function') toast.hideModal();
+        if (typeof toast.hideLoading === 'function') toast.hideLoading();
+      }
+    } catch (e) { /* ignore */ }
+
+    const toastGone = () => {
+      try {
+        const toast = this._getCustomToast && this._getCustomToast();
+        if (!toast || !toast.data) return true;
+        const m = toast.data.modal;
+        return !(m && m.show) && !toast.data.modalClosing;
+      } catch (e) {
+        return true;
+      }
+    };
+
+    const tryOpen = (left) => {
+      if (!toastGone() && left > 0) {
+        setTimeout(() => tryOpen(left - 1), 60);
+        return;
+      }
+
+      const comp = this.selectComponent('#repairDeviceBindModal');
+      const applyOpen = () => {
+        const c = this.selectComponent('#repairDeviceBindModal');
+        if (c && typeof c.openBindModal === 'function') {
+          try {
+            c.openBindModal();
+            return true;
+          } catch (e) {
+            console.warn('[shouhou] openBindModal failed', e);
+          }
+        }
+        return false;
+      };
+
+      if (!comp) {
+        if (left <= 0) {
+          console.warn('[shouhou] repairDeviceBindModal missing, fallback navigate');
+          try {
+            const app = getApp();
+            if (app && app.globalData) {
+              app.globalData.fromRepairBind = {
+                model: String(this.data.currentModelName || '').trim(),
+                ts: Date.now()
+              };
+            }
+          } catch (e) { /* ignore */ }
+          wx.navigateTo({
+            url: '/package-app/pages/products/products?hubTab=2&openBind=1',
+            animationType: 'none',
+            fail: () => this._showCustomToast('打开绑定失败，请前往「我的」绑定', 'none')
+          });
+          return;
+        }
+        setTimeout(() => tryOpen(left - 1), 80);
+        return;
+      }
+
+      if (this.data.showDeviceBindModal) {
+        this.setData({ showDeviceBindModal: true }, () => {
+          if (!applyOpen() && left > 0) setTimeout(() => tryOpen(left - 1), 80);
+        });
+        return;
+      }
+      this.setData({ showDeviceBindModal: true }, () => {
+        setTimeout(() => {
+          if (!applyOpen() && left > 0) setTimeout(() => tryOpen(left - 1), 80);
+        }, 30);
+      });
+    };
+    // onConfirm 已等 420ms；再等 toast 完全卸掉再开，避免真机「点了没反应」
+    setTimeout(() => tryOpen(12), 40);
+  },
+
+  onDeviceBindModalClose() {
+    this.setData({ showDeviceBindModal: false });
+  },
+
+  /** 本页绑定成功（自动激活）或已提交待审：放行故障报修 */
+  onDeviceBindModalSuccess(e) {
+    const detail = (e && e.detail) || {};
+    const mode = String(detail.mode || '');
+    this.setData({ showDeviceBindModal: false });
+    this._repairDeviceCache = null;
+    const name = String(this.data.currentModelName || '').trim();
+    if (mode === 'pending') {
+      const openid = this.data.myOpenid || '';
+      if (openid) {
+        this._repairDeviceCache = {
+          ts: Date.now(),
+          openid,
+          hasDevice: true,
+          pendingBind: true
+        };
+      }
+      this.setData({ repairBindPending: true });
+      this._showCustomToast('绑定已提交，可继续报修', 'success');
+    } else {
+      this.setData({ repairBindPending: false });
+    }
+    // skipDeviceCheck: just finished bind; avoid immediately re-prompting
+    this._enterRepairAfterBindReturn(name, { skipDeviceCheck: true });
+  },
+
+  /** 从绑定回流：切到故障报修并刷新设备；此处只可能弹 B、永不弹 A */
+  _enterRepairAfterBindReturn(modelName, options = {}) {
+    const skipDeviceCheck = !!(options && options.skipDeviceCheck);
     const name = String(modelName || this.data.currentModelName || '').trim();
     const applyRepair = () => {
       this.setData({ serviceType: 'repair' }, () => {
         this.reCalcFinalPrice();
         this.loadRepairDevices();
-        this.checkDeviceBeforeRepair({ fallbackToParts: false, allowSwitch: false });
-        // 去绑定（含控制中心蓝牙）回流：过保只在报修处弹 B
+        if (skipDeviceCheck) {
+          // 刚绑完：清掉 hasDevice:false 短缓存，并乐观放行，避免立刻再弹「去绑定」
+          const openid = this.data.myOpenid || '';
+          this._repairDeviceCache = openid
+            ? { ts: Date.now(), openid, hasDevice: true, pendingBind: true }
+            : null;
+          if (openid) {
+            this.checkUnfinishedReturn(openid, { fallbackToParts: false, allowSwitch: false });
+          }
+        } else {
+          this._repairDeviceCache = null;
+          this.checkDeviceBeforeRepair({ fallbackToParts: false, allowSwitch: false });
+        }
         setTimeout(() => {
           this._resolveEntryNoticeAndMaybeShow({ thenStartGuide: false, surface: 'repair' });
         }, 280);
@@ -2256,7 +2438,7 @@ Page({
     };
     if (name && typeof this.enterModelByModelName === 'function') {
       if (!this.data.inDetail || this.data.currentModelName !== name) {
-        this.enterModelByModelName(name);
+        this.enterModelByModelName(name, null, { force: true });
         setTimeout(applyRepair, 280);
         return;
       }
@@ -2265,6 +2447,7 @@ Page({
   },
 
   // 🔴 检查设备绑定（在切换到故障报修时调用）
+  // 规则：已激活设备 → 放行；无激活但有待审绑定 → 放行；都没有 → 本页拉起绑定
   async checkDeviceBeforeRepair(options = {}) {
     const { fallbackToParts = false, allowSwitch = true } = options;
     if (this._repairCheckInFlight) return;
@@ -2273,7 +2456,6 @@ Page({
       const db = wx.cloud.database();
       const now = Date.now();
       const cache = this._repairDeviceCache;
-      const adminBypassDevice = !!this.data.isAuthorized;
       
       // 1. 获取当前用户 openid
       let openid = this.data.myOpenid || '';
@@ -2298,11 +2480,6 @@ Page({
         return;
       }
 
-      if (adminBypassDevice) {
-        this.checkUnfinishedReturn(openid, { fallbackToParts, allowSwitch });
-        return;
-      }
-
       // 2. 命中短缓存（30 秒）时直接使用，避免重复云查询
       if (
         cache &&
@@ -2317,23 +2494,41 @@ Page({
         return;
       }
 
-      // 2. 检查是否绑定了设备（使用 openid 字段，必须检查 isActive: true）
+      // 3. 已激活设备 → 放行
       const deviceRes = await db.collection('sn').where({
         openid: openid,
-        isActive: true  // 🔴 只有已激活的设备才算绑定成功
+        isActive: true
       }).count();
+
+      if (deviceRes.total > 0) {
+        this._repairDeviceCache = {
+          ts: Date.now(),
+          openid,
+          hasDevice: true
+        };
+        if (this.data.repairBindPending) this.setData({ repairBindPending: false });
+        this.checkUnfinishedReturn(openid, { fallbackToParts, allowSwitch });
+        return;
+      }
+
+      // 4. 无激活设备，但已有待审绑定/核验 → 仍允许报修
+      const pendingBind = await this._hasPendingDeviceBind(openid);
       this._repairDeviceCache = {
         ts: Date.now(),
         openid,
-        hasDevice: deviceRes.total > 0
+        hasDevice: !!pendingBind,
+        pendingBind: !!pendingBind
       };
+      if (!!pendingBind !== !!this.data.repairBindPending) {
+        this.setData({ repairBindPending: !!pendingBind });
+      }
 
-      if (deviceRes.total === 0) {
+      if (!pendingBind) {
         this._showRepairBindDevicePrompt({ revertToParts: fallbackToParts });
         return;
       }
       
-      // 3. 绑定了设备，继续检查是否有未完成的寄回订单
+      // 5. 待审可报修：继续检查是否有未完成的寄回订单
       this.checkUnfinishedReturn(openid, { fallbackToParts, allowSwitch });
     } catch (err) {
       console.error('[checkDeviceBeforeRepair] 检查设备失败:', err);
@@ -5292,7 +5487,8 @@ Page({
     }
     
     const proceed = () => {
-      this._ensureRepairDevicesLoaded().then(() => {
+      // 打开确认工单前强制刷新设备，避免审核刚通过仍显示「未找到」
+      this._ensureRepairDevicesLoaded(true).then(() => {
         this._maybeShowExpiredFeeThen(() => this._openOrderModal());
       });
     };
@@ -5517,6 +5713,7 @@ Page({
       city: this.data.selectedCity,
       district: this.data.selectedDistrict
     };
+    const guidedRepairId = this._resolveGuidedRepairId();
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
@@ -5528,14 +5725,8 @@ Page({
         shippingMethod: method,
         orderSource: 'shouhou',
         userNickname: userNickname, // 🔴 传递用户昵称
-        repairId: (() => {
-          let r = (this.data.repairId || '').toString().trim();
-          if (r) return r;
-          try {
-            r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
-          } catch (e) {}
-          return r;
-        })() // 🔴 引导购配件订单标记
+        repairId: guidedRepairId,
+        isGuidedPartsPurchase: !!guidedRepairId
       },
       success: res => {
         this.hideMyLoading();
@@ -5556,12 +5747,7 @@ Page({
               this._cartClearedAfterPay = false;
 
               const orderId = payment.outTradeNo;
-              let repairId = (this.data.repairId || '').toString().trim();
-              if (!repairId) {
-                try {
-                  repairId = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
-                } catch (e) {}
-              }
+              const repairId = this._resolveGuidedRepairId();
               this._pendingPayCtx = {
                 orderId,
                 repairId,
@@ -5596,6 +5782,37 @@ Page({
         this._showCustomToast('下单失败', 'none');
       }
     });
+  },
+
+  _clearGuidedPartsContext() {
+    this._isGuidedPartsSession = false;
+    try {
+      wx.removeStorageSync('guided_parts_repair_id');
+      wx.removeStorageSync('guided_parts_active');
+    } catch (e) {}
+    try {
+      const app = getApp();
+      if (app && app.globalData) {
+        app.globalData.shouhouRepairId = null;
+        app.globalData.shouhouGuidedParts = false;
+      }
+    } catch (e) {}
+    if (this.data.repairId) {
+      this.setData({ repairId: null });
+    }
+  },
+
+  /** 仅引导购配件会话才返回维修单 ID；自助买配件一律空串 */
+  _resolveGuidedRepairId() {
+    if (!this._isGuidedPartsSession) return '';
+    let r = (this.data.repairId || '').toString().trim();
+    if (r) return r;
+    try {
+      const active = wx.getStorageSync('guided_parts_active');
+      if (!active) return '';
+      r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+    } catch (e) {}
+    return r || '';
   },
 
   // 7. 兼容旧入口：统一走 submitRealOrder（含运费重算与校验）
@@ -5633,6 +5850,7 @@ Page({
       city: this.data.selectedCity,
       district: this.data.selectedDistrict
     };
+    const guidedRepairId = this._resolveGuidedRepairId();
     wx.cloud.callFunction({
       name: 'createOrder',
       data: {
@@ -5643,14 +5861,8 @@ Page({
         shippingMethod: this.data.shippingMethod || 'zto',
         orderSource: 'shouhou',
         userNickname: userNickname, // 🔴 传递用户昵称
-        repairId: (() => {
-          let r = (this.data.repairId || '').toString().trim();
-          if (r) return r;
-          try {
-            r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
-          } catch (e) {}
-          return r;
-        })() // 🔴 引导购配件订单标记（含本地存储兜底）
+        repairId: guidedRepairId,
+        isGuidedPartsPurchase: !!guidedRepairId
       },
       success: res => {
         this.hideMyLoading();
@@ -5674,27 +5886,21 @@ Page({
               totalPrice: 0
             });
             // 🔴 如果是从「去购买配件」来的，更新维修单配件购买状态，并刷新我的页面
-            let repairId = (this.data.repairId || '').toString().trim();
-            if (!repairId) {
-              try {
-                repairId = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
-              } catch (e) {}
-            }
+            const repairId = this._resolveGuidedRepairId();
             const orderIdPatch = payment.outTradeNo;
             if (orderIdPatch && repairId && wx.cloud) {
               wx.cloud.database().collection('shop_orders').where({ orderId: orderIdPatch }).update({
-                data: { repairId }
+                data: { repairId, isGuidedPartsPurchase: true }
               }).catch(() => {});
             }
             try {
               wx.removeStorageSync('guided_parts_repair_id');
+              wx.removeStorageSync('guided_parts_active');
             } catch (e) {}
-            
             if (repairId) {
+              this._isGuidedPartsSession = false;
               // 🔴 调用云函数写入 shouhouguoqi 集合
-              // 获取实际地址（优先使用 addressData，如果没有则使用 orderInfo）
               const actualAddress = addressData || this.data.orderInfo || {};
-              
               wx.cloud.callFunction({
                 name: 'writeShouhouguoqi',
                 data: {
@@ -5713,7 +5919,7 @@ Page({
                 },
                 fail: (err) => {
                   console.error('[shouhou doPayment] 调用云函数失败:', err);
-            }
+                }
               });
             }
             if (orderIdPatch) {
@@ -5826,6 +6032,7 @@ Page({
     });
     try {
       wx.removeStorageSync('guided_parts_repair_id');
+      wx.removeStorageSync('guided_parts_active');
     } catch (e) {}
   },
 
@@ -5834,12 +6041,35 @@ Page({
     this._paidDialogShown = true;
     this.showMyDialog({
       title: '支付成功',
-      content: '是否前往个人中心查看订单？',
+      content: '是否前往订单查看这笔售后单？',
       showCancel: true,
-      confirmText: '去个人中心',
+      confirmText: '去看订单',
       cancelText: '继续选购',
       callback: () => {
-        wx.navigateTo({ url: '/package-app/pages/profile/profile', animationType: 'none' });
+        this._goToHubOrdersAfterPay();
+      }
+    });
+  },
+
+  /** 支付成功后回枢纽「订单」Tab（与商城下单后一致），而不是个人中心 */
+  _goToHubOrdersAfterPay() {
+    const hubNav = require('../../../utils/hubNav.js');
+    const pageBack = require('../../../utils/pageBack.js');
+    const pages = pageBack.getPages();
+    const productsIdx = pageBack.findRouteIndex('products/products');
+    if (productsIdx >= 0) {
+      hubNav.switchTab('orders');
+      if (productsIdx < pages.length - 1) {
+        setTimeout(() => {
+          pageBack.safePop(pages.length - 1 - productsIdx);
+        }, 120);
+      }
+      return;
+    }
+    wx.reLaunch({
+      url: '/package-app/pages/products/products?hubTab=1',
+      fail: () => {
+        wx.navigateTo({ url: '/package-app/pages/orders/orders', animationType: 'none' });
       }
     });
   },
@@ -7908,70 +8138,127 @@ Page({
 
   // 加载当前用户的设备列表（用于选择哪个设备故障）
   loadRepairDevices() {
-    const db = wx.cloud.database();
+    return wx.cloud.callFunction({
+      name: 'userUpdateRepair',
+      data: { action: 'listMyDevices' }
+    }).then((res) => {
+      const result = (res && res.result) || {};
+      const raw = Array.isArray(result.devices) ? result.devices : [];
+      const devicesWithDisplaySn = raw.map((device) => {
+        const controlVariant = normalizeControlVariant(device.controlVariant);
+        return {
+          ...device,
+          controlVariant,
+          controlVariantLabel: controlVariantLabel(controlVariant),
+          productModel: device.productModel || device.name || '未知型号',
+          displaySn: device.displaySn || '未知设备',
+          warrantyExpired: !!device.warrantyExpired
+        };
+      });
 
-    return wx.cloud.callFunction({ name: 'login' }).then(res => {
-      const openid = res.result && res.result.openid;
-      if (!openid) {
-        console.warn('[loadRepairDevices] 未获取到 openid');
-        return [];
+      const nextState = {
+        myDevices: devicesWithDisplaySn
+      };
+      // 只有 1 个设备：直接选中并预填控制版本
+      if (devicesWithDisplaySn.length === 1) {
+        nextState.selectedDeviceIndex = 0;
+        const only = devicesWithDisplaySn[0];
+        const prefill = normalizeControlVariant(only && only.controlVariant);
+        if (prefill) nextState.repairControlVariant = prefill;
+      } else if (
+        this.data.selectedDeviceIndex !== null &&
+        this.data.selectedDeviceIndex !== undefined &&
+        !devicesWithDisplaySn[this.data.selectedDeviceIndex]
+      ) {
+        nextState.selectedDeviceIndex = null;
       }
 
-      return db.collection('sn').where({
-        openid: openid,
-        isActive: true
-      }).get().then(devRes => {
-        const devices = devRes.data || [];
-        // 为每个设备添加 displaySn 字段（和 case 页保持一致），并计算质保是否过期
-        const now = new Date();
-        const devicesWithDisplaySn = devices.map(device => {
-          let warrantyExpired = false;
-          if (device.expiryDate) {
-            const exp = new Date(device.expiryDate);
-            const diff = Math.ceil((exp - now) / 86400000);
-            warrantyExpired = diff <= 0;
-          }
-          const snPending = !!device.snPending || String(device.sn || '').startsWith('PENDING-FAULT-');
-          const displaySn = snPending
-            ? '待录入'
-            : (device.displaySn || ('MT' + (device.sn || '')));
-          return {
-          ...device,
-          displaySn,
-          snPending,
-          controlVariant: normalizeControlVariant(device.controlVariant),
-          controlVariantLabel: controlVariantLabel(device.controlVariant),
-            productModel: device.productModel || device.name || '未知型号',  // 🔴 确保 productModel 有值
-            warrantyExpired
-          };
-        });
+      this.setData(nextState);
+      console.log('[loadRepairDevices] 云端设备数:', devicesWithDisplaySn.length, devicesWithDisplaySn);
+      return devicesWithDisplaySn;
+    }).catch((err) => {
+      console.error('[loadRepairDevices] 云函数失败，回退直查:', err);
+      return this._loadRepairDevicesFallback();
+    });
+  },
 
-        const nextState = {
-          myDevices: devicesWithDisplaySn
-        };
-        // 如果只有 1 个设备，自动选中
-        if (devicesWithDisplaySn.length === 1) {
-          nextState.selectedDeviceIndex = 0;
-          const only = devicesWithDisplaySn[0];
-          const prefill = normalizeControlVariant(only && only.controlVariant);
-          if (prefill) nextState.repairControlVariant = prefill;
-        }
-        this.setData(nextState);
-        console.log('[loadRepairDevices] 加载到设备列表:', devicesWithDisplaySn);
-        // 🔴 调试：打印每个设备的 productModel
-        devicesWithDisplaySn.forEach((dev, idx) => {
-          console.log(`[loadRepairDevices] 设备 ${idx}:`, {
-            displaySn: dev.displaySn,
-            productModel: dev.productModel,
-            name: dev.name
+  /** 云函数不可用时的客户端回退查询 */
+  _loadRepairDevicesFallback() {
+    const db = wx.cloud.database();
+    const _ = db.command;
+
+    const runQuery = (openid) => {
+      if (!openid) {
+        console.warn('[loadRepairDevices] 未获取到 openid');
+        this.setData({ myDevices: [], selectedDeviceIndex: null });
+        return Promise.resolve([]);
+      }
+      return db.collection('sn').where(_.or([
+        { openid, isActive: true },
+        { _openid: openid, isActive: true }
+      ])).limit(50).get().then((devRes) => {
+        let devices = devRes.data || [];
+        if (!devices.length) {
+          return db.collection('sn').where({ openid }).limit(50).get().then((r2) => {
+            devices = (r2.data || []).filter((d) => d && d.isActive !== false && d.isActive !== 0);
+            return this._applyRepairDevices(devices);
           });
-        });
-        return devicesWithDisplaySn;
+        }
+        return this._applyRepairDevices(devices);
       });
-    }).catch(err => {
-      console.error('[loadRepairDevices] 失败:', err);
+    };
+
+    const cached = this.data.myOpenid || '';
+    if (cached) return runQuery(cached);
+    return wx.cloud.callFunction({ name: 'login' }).then((res) => {
+      const openid = res.result && res.result.openid;
+      if (openid) this.setData({ myOpenid: openid });
+      return runQuery(openid);
+    }).catch((err) => {
+      console.error('[loadRepairDevices] fallback 失败:', err);
       return [];
     });
+  },
+
+  _applyRepairDevices(devices) {
+    const now = new Date();
+    const devicesWithDisplaySn = (devices || []).map((device) => {
+      let warrantyExpired = false;
+      if (device.expiryDate) {
+        const exp = new Date(device.expiryDate);
+        const diff = Math.ceil((exp - now) / 86400000);
+        warrantyExpired = diff <= 0;
+      }
+      const snPending = !!device.snPending || String(device.sn || '').startsWith('PENDING-FAULT-') || String(device.sn || '').startsWith('FAULT-CLAIM-');
+      const rawSn = String(device.sn || '').trim();
+      const displaySn = snPending
+        ? (String(device.sn || '').startsWith('FAULT-CLAIM-') ? '质保档案（待诊断）' : '待录入')
+        : (device.displaySn || (rawSn.toUpperCase().startsWith('MT') ? rawSn : ('MT' + rawSn)));
+      return {
+        ...device,
+        displaySn,
+        snPending,
+        controlVariant: normalizeControlVariant(device.controlVariant),
+        controlVariantLabel: controlVariantLabel(device.controlVariant),
+        productModel: device.productModel || device.name || '未知型号',
+        warrantyExpired
+      };
+    });
+
+    const nextState = { myDevices: devicesWithDisplaySn };
+    if (devicesWithDisplaySn.length === 1) {
+      nextState.selectedDeviceIndex = 0;
+      const prefill = normalizeControlVariant(devicesWithDisplaySn[0].controlVariant);
+      if (prefill) nextState.repairControlVariant = prefill;
+    } else if (
+      this.data.selectedDeviceIndex !== null &&
+      this.data.selectedDeviceIndex !== undefined &&
+      !devicesWithDisplaySn[this.data.selectedDeviceIndex]
+    ) {
+      nextState.selectedDeviceIndex = null;
+    }
+    this.setData(nextState);
+    return devicesWithDisplaySn;
   },
 
   // 打开自定义故障设备选择器
@@ -8678,29 +8965,33 @@ Page({
     // 回流时补弹售后告知 / 卸掉透明引导遮罩，避免卡片点不进去
     this._ensureEntryNoticeOrUnblock();
     
-    // 🔴 从「去购买配件」带来的 repairId：globalData + 本地存储（切 Tab / 重进小程序不丢）
-    const GUIDED_KEY = 'guided_parts_repair_id';
-    let rid = '';
-    try {
-      rid = (app && app.globalData && app.globalData.shouhouRepairId) || wx.getStorageSync(GUIDED_KEY) || '';
-    } catch (e) {
-      rid = (app && app.globalData && app.globalData.shouhouRepairId) || '';
-    }
-    if (rid) {
-      rid = String(rid).trim();
-      this.setData({ repairId: rid });
-      if (app && app.globalData) {
-        app.globalData.shouhouRepairId = null;
+    // 引导购配件：仅在本会话是引导入口时才恢复 repairId；否则清残留，防止自助买配件被挂上旧维修单
+    if (this._isGuidedPartsSession) {
+      const GUIDED_KEY = 'guided_parts_repair_id';
+      let rid = '';
+      try {
+        rid = (app && app.globalData && app.globalData.shouhouRepairId) || wx.getStorageSync(GUIDED_KEY) || '';
+      } catch (e) {
+        rid = (app && app.globalData && app.globalData.shouhouRepairId) || '';
       }
-      // 不在此处 removeStorage，支付成功后再清，避免中途丢 repairId
+      if (rid) {
+        rid = String(rid).trim();
+        this.setData({ repairId: rid });
+        if (app && app.globalData) {
+          app.globalData.shouhouRepairId = null;
+        }
+        // 不在此处 removeStorage，支付成功后再清，避免中途丢 repairId
+      }
+    } else {
+      this._clearGuidedPartsContext();
     }
-    
+
     // 🔴 从「去购买配件」带 model 进入：onShow 比 onReady 更早/稳定，在此处打开对应型号卡
     if (this._openModelFromQuery) {
       const modelName = this._openModelFromQuery;
       this._openModelFromQuery = null;
       if (modelName && MODEL_TO_GROUP[modelName]) {
-        this.enterModelByModelName(modelName);
+        this.enterModelByModelName(modelName, null, { force: true });
       }
     }
     // 🔴 检查录屏状态
@@ -8904,7 +9195,7 @@ Page({
 
   _shGuideBlockingModal() {
     const d = this.data;
-    return !!(d.showModal || d.showVideoPreview || d.showRepairTermsModal || d.showExpiredFeeModal ||
+    return !!(d.showModal || d.showDeviceBindModal || d.showVideoPreview || d.showRepairTermsModal || d.showExpiredFeeModal ||
       d.showAftersaleNoticeModal || d.aftersaleNoticeClosing ||
       d.showExpiredRoastModal || d.expiredRoastClosing ||
       d.showAftersaleNoticeDebugStack || d.aftersaleNoticeDebugClosing ||
@@ -8974,26 +9265,75 @@ Page({
    * 进页 / 报修回流弹卡决策：
    * - 主页 surface=main：未过保弹 A；已过保只弹 B（不弹 A）
    * - 报修处 surface=repair：永不弹 A；过保才弹 B
-   * - 主页自动进页时 thenStartGuide=true：先弹 A/B，用户点确认后才进入前 5 次教学引导
-   * - A、B 各最多弹一次（本页实例内）；先弹过 A 仍允许稍后在绑定回流时补弹 B
+   * - 主页自动进页时 thenStartGuide=true：先弹 A/B，用户点确认后才进入教学引导（最多自动 3 次；管理员不弹）
+   * - A、B：用户点确认后写入本地存储，之后不再弹（同页实例内展示过也会先挡住重复弹）
    */
   _maybeShowShouhouUsageGuide() {
-    if (this._shouhouSkipAutoGuideFromQuery) return;
+    if (this._shouhouSkipAutoGuideFromQuery) {
+      this._clearEntryGate();
+      return;
+    }
     // 带 serviceType=repair 直进时，交给报修回流逻辑弹 B，主页不抢弹 A/教学
-    if (this._openRepairTabFromQuery) return;
-    // 先 A/B，确认后再 _startShouhouUsageGuide（前 5 次教学）
+    if (this._openRepairTabFromQuery) {
+      this._clearEntryGate();
+      return;
+    }
+    // 先 A/B，确认后再 _startShouhouUsageGuide（最多自动 3 次）
     this._resolveEntryNoticeAndMaybeShow({ thenStartGuide: true, surface: 'main' });
   },
 
+  _hydrateEntryNoticeAckedFromStorage() {
+    try {
+      if (wx.getStorageSync(SHOUHOU_ENTRY_NOTICE_A_ACKED_KEY)) {
+        this._entryNoticeAShown = true;
+      }
+      if (wx.getStorageSync(SHOUHOU_ENTRY_NOTICE_B_ACKED_KEY)) {
+        this._entryNoticeBShown = true;
+      }
+    } catch (e) { /* ignore */ }
+  },
+
+  _persistEntryNoticeAAcked() {
+    this._entryNoticeAShown = true;
+    try { wx.setStorageSync(SHOUHOU_ENTRY_NOTICE_A_ACKED_KEY, 1); } catch (e) { /* ignore */ }
+  },
+
+  _persistEntryNoticeBAcked() {
+    this._entryNoticeBShown = true;
+    try { wx.setStorageSync(SHOUHOU_ENTRY_NOTICE_B_ACKED_KEY, 1); } catch (e) { /* ignore */ }
+  },
+
+  _clearEntryGate() {
+    if (this.data.entryGateBlocking) {
+      this.setData({ entryGateBlocking: false });
+    }
+  },
+
+  _isEntryGateBlockingTap() {
+    return !!(
+      this.data.entryGateBlocking ||
+      this.data.showAftersaleNoticeModal ||
+      this.data.aftersaleNoticeClosing ||
+      this.data.showExpiredRoastModal ||
+      this.data.expiredRoastClosing ||
+      this.data.showAftersaleNoticeDebugStack
+    );
+  },
+
   _resolveEntryNoticeAndMaybeShow({ thenStartGuide = false, surface = 'main' } = {}) {
+    this._hydrateEntryNoticeAckedFromStorage();
     const showGuideAfter = () => {
+      this._clearEntryGate();
       if (thenStartGuide) this._continueAfterEntryNotices(thenStartGuide);
     };
     if (this._entryNoticeResolving) {
-      this._scheduleEntryNoticeRetry({ thenStartGuide, surface, delay: 480 });
+      this._scheduleEntryNoticeRetry({ thenStartGuide, surface, delay: 280 });
       return;
     }
-    if (this.data.showAftersaleNoticeDebugStack) return;
+    if (this.data.showAftersaleNoticeDebugStack) {
+      this._clearEntryGate();
+      return;
+    }
     if (this._shGuideBlockingModal()) {
       this._clearStuckEntryOverlays();
       this._scheduleEntryNoticeRetry({ thenStartGuide, surface });
@@ -9003,13 +9343,13 @@ Page({
       if (!this.data.shGuideShowBubble && !this.data.shGuideShowSpot && !this.data.shGuideMaskDim) {
         this.closeShUsageGuide(false);
       } else {
+        this._clearEntryGate();
         this._scheduleEntryNoticeRetry({ thenStartGuide, surface });
         return;
       }
     }
 
     const isRepairSurface = surface === 'repair';
-    // 报修处：若 B 已弹过则结束；主页：A 或 B 任一已处理过保路径则不再弹 A
     if (isRepairSurface && this._entryNoticeBShown) {
       showGuideAfter();
       return;
@@ -9020,63 +9360,74 @@ Page({
     }
 
     this._entryNoticeResolving = true;
-    const afterAdmin = () => {
-      this._userHasExpiredBoundDevice()
+    // 进页立刻挡卡片，不再等 login/管理员/设备列表
+    if (!this.data.entryGateBlocking) {
+      this.setData({ entryGateBlocking: true });
+    }
+
+    const showMainNotice = (isExpired) => {
+      this._entryNoticeResolving = false;
+      if (this._shGuideBlockingModal() || this.data.showShUsageGuide) {
+        this._clearStuckEntryOverlays();
+        this._scheduleEntryNoticeRetry({ thenStartGuide, surface: 'main' });
+        return;
+      }
+      if (this._entryNoticeAShown || this._entryNoticeBShown) {
+        showGuideAfter();
+        return;
+      }
+      if (isExpired) {
+        this._showExpiredRoastModal({ thenStartGuide });
+        return;
+      }
+      this._showAftersaleNoticeModal({ thenStartGuide });
+    };
+
+    if (isRepairSurface) {
+      // 报修处：仍需判断过保，但加超时，避免一直卡住
+      const repairRace = Promise.race([
+        this._userHasExpiredBoundDevice().then((v) => !!v),
+        new Promise((resolve) => setTimeout(() => resolve(false), 600))
+      ]);
+      repairRace
         .then((isExpired) => {
           this._entryNoticeResolving = false;
           if (this._shGuideBlockingModal() || this.data.showShUsageGuide) {
             this._clearStuckEntryOverlays();
-            this._scheduleEntryNoticeRetry({
-              thenStartGuide,
-              surface: isRepairSurface ? 'repair' : 'main'
-            });
+            this._scheduleEntryNoticeRetry({ thenStartGuide, surface: 'repair' });
             return;
           }
-
-          if (isRepairSurface) {
-            // 报修处永不弹 A
-            if (isExpired && !this._entryNoticeBShown) {
-              this._showExpiredRoastModal({ thenStartGuide });
-              return;
-            }
-            showGuideAfter();
-            return;
-          }
-
-          // 主页：过保只弹 B；未过保弹 A
-          if (isExpired) {
-            if (!this._entryNoticeBShown) {
-              this._showExpiredRoastModal({ thenStartGuide });
-              return;
-            }
-            showGuideAfter();
-            return;
-          }
-          if (!this._entryNoticeAShown) {
-            this._showAftersaleNoticeModal({ thenStartGuide });
+          if (isExpired && !this._entryNoticeBShown) {
+            this._showExpiredRoastModal({ thenStartGuide });
             return;
           }
           showGuideAfter();
         })
         .catch(() => {
           this._entryNoticeResolving = false;
-          if (isRepairSurface) {
-            showGuideAfter();
-            return;
-          }
-          if (!this._entryNoticeAShown && !this._entryNoticeBShown) {
-            this._showAftersaleNoticeModal({ thenStartGuide });
-            return;
-          }
           showGuideAfter();
         });
-    };
-    const p = this._adminPrivilegePromise;
-    if (p && typeof p.then === 'function') {
-      Promise.resolve(p).then(afterAdmin).catch(afterAdmin);
       return;
     }
-    afterAdmin();
+
+    // 主页：最多等约 280ms 过保结果；超时先弹 A，避免手快点进卡片
+    // 不再等待 _adminPrivilegePromise（那会拖到 login + 白名单查询完成）
+    let settled = false;
+    const finish = (isExpired) => {
+      if (settled) return;
+      settled = true;
+      showMainNotice(!!isExpired);
+    };
+    const timer = setTimeout(() => finish(false), 280);
+    this._userHasExpiredBoundDevice()
+      .then((isExpired) => {
+        clearTimeout(timer);
+        finish(isExpired);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        finish(false);
+      });
   },
 
   /** 管理员调试：两张卡上下同时展示，方便对比文案 */
@@ -9144,9 +9495,11 @@ Page({
       aftersaleNoticeClosing: false,
       aftersaleNoticeBtnLocked: true,
       aftersaleNoticeBtnText: SHOUHOU_AFTERSALE_NOTICE.btnText,
-      aftersaleOrderPolicy: SHOUHOU_AFTERSALE_NOTICE
+      aftersaleOrderPolicy: SHOUHOU_AFTERSALE_NOTICE,
+      entryGateBlocking: false
     }, () => {
-      this._entryNoticeAShown = true;
+      // 弹出即持久记住，避免每次进维修中心再弹
+      this._persistEntryNoticeAAcked();
       startGuideBtnCountdown(this, {
         lockedKey: 'aftersaleNoticeBtnLocked',
         textKey: 'aftersaleNoticeBtnText',
@@ -9167,13 +9520,18 @@ Page({
     clearGuideBtnCountdown(this, '_aftersaleNoticeBtnTimer');
     const thenGuide = this._aftersaleNoticeThenGuide;
     this._aftersaleNoticeThenGuide = false;
+    // 点确认后永久不再弹（本地存储）
+    this._persistEntryNoticeAAcked();
+    try {
+      console.log('[shouhou] entry notice A acked, storage=', wx.getStorageSync(SHOUHOU_ENTRY_NOTICE_A_ACKED_KEY));
+    } catch (e) { /* ignore */ }
     this.setData({ aftersaleNoticeClosing: true });
     setTimeout(() => {
       this.setData({
         showAftersaleNoticeModal: false,
         aftersaleNoticeClosing: false
       }, () => {
-        // A 确认后：前 5 次教学引导在此刻才启动（不与 A 叠弹）
+        // A 确认后：教学引导在此刻才启动（不与 A 叠弹；最多自动 3 次）
         this._continueAfterEntryNotices(thenGuide);
       });
     }, 280);
@@ -9197,9 +9555,11 @@ Page({
       expiredRoastClosing: false,
       expiredRoastBtnLocked: false,
       expiredRoastBtnText: SHOUHOU_EXPIRED_ROAST_NOTICE.btnText,
-      expiredPaidPolicy: SHOUHOU_EXPIRED_ROAST_NOTICE
+      expiredPaidPolicy: SHOUHOU_EXPIRED_ROAST_NOTICE,
+      entryGateBlocking: false
     }, () => {
-      this._entryNoticeBShown = true;
+      // 弹出即持久记住，避免每次进页再弹
+      this._persistEntryNoticeBAcked();
     });
   },
 
@@ -9209,13 +9569,14 @@ Page({
     clearGuideBtnCountdown(this, '_expiredRoastBtnTimer');
     const thenGuide = this._expiredRoastThenGuide;
     this._expiredRoastThenGuide = false;
+    this._persistEntryNoticeBAcked();
     this.setData({ expiredRoastClosing: true });
     setTimeout(() => {
       this.setData({
         showExpiredRoastModal: false,
         expiredRoastClosing: false
       }, () => {
-        // B 确认后：同样再进教学引导（前 5 次）
+        // B 确认后：同样再进教学引导（最多自动 3 次）
         this._continueAfterEntryNotices(thenGuide);
       });
     }, 280);
@@ -9243,7 +9604,13 @@ Page({
       }
       this._startShouhouUsageGuide(forceReplay);
     };
-    setTimeout(() => tryStart(8), 80);
+    // 先等管理员身份，避免管理员在 isAuthorized 未就绪时被当成普通用户弹教程
+    const kick = () => setTimeout(() => tryStart(8), 80);
+    if (this._adminPrivilegePromise && typeof this._adminPrivilegePromise.then === 'function') {
+      this._adminPrivilegePromise.then(kick).catch(kick);
+    } else {
+      kick();
+    }
   },
 
   _getShouhouGuideShowCount() {
@@ -9292,10 +9659,14 @@ Page({
   },
 
   _startShouhouUsageGuide(forceReplay) {
-    // 白名单管理员：不自动弹引导（手动入口本身也不对管理员展示）
-    if (!forceReplay && this.data.isAuthorized && !debugUserFlow.shouldForceUserGuides()) return;
+    // 白名单管理员：不弹教程（含自动；手动调试 force 除外）
+    if (this.data.isAuthorized && !debugUserFlow.shouldForceUserGuides()) return;
     if (this._shGuideBlockingModal()) return;
     if (this.data.showShUsageGuide) return;
+    // 自动弹出：最多 3 次，之后不再自动弹
+    if (!forceReplay && this._getShouhouGuideShowCount() >= SHOUHOU_GUIDE_MAX_AUTO_TIMES) {
+      return;
+    }
     if (this._shUsageGuideStartTimer) {
       clearTimeout(this._shUsageGuideStartTimer);
       this._shUsageGuideStartTimer = null;
@@ -9309,7 +9680,7 @@ Page({
     this.setData({ shHomeScrollTop: 0 });
     this._shUsageGuideForceReplay = !!forceReplay;
 
-    // 自动弹出：累计次数，前 5 次隐藏「跳过」；手动点「使用教程」始终可跳过
+    // 自动弹出：累计次数，前 3 次隐藏「跳过」；手动点「使用教程」始终可跳过
     let showSkip = !!forceReplay;
     if (!forceReplay) {
       const next = this._bumpShouhouGuideShowCount();
@@ -9321,7 +9692,7 @@ Page({
       this._shUsageGuideStartTimer = null;
       if (this._shGuideBlockingModal()) return;
       this._showShGuideStep(1);
-    }, forceReplay ? 320 : 720);
+    }, forceReplay ? 200 : 220);
   },
 
   _prepareShGuideStep(step) {

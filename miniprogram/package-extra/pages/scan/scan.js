@@ -183,6 +183,7 @@ class BLEHelper {
     this.onDataReceived = null;      
     this.onError = null;
     this._autoConnectDelayMs = 400;
+    this.preferredDeviceId = '';
   }
 
   initBluetoothAdapter() {
@@ -246,6 +247,10 @@ class BLEHelper {
   _pickAutoConnectCandidate() {
     const allowed = (this.bleList || []).filter(isConnectableMtBleDevice);
     if (!allowed.length) return null;
+    if (this.preferredDeviceId) {
+      const preferred = allowed.find((d) => d.deviceId === this.preferredDeviceId);
+      if (preferred) return preferred;
+    }
     allowed.sort((a, b) => (b.RSSI || -999) - (a.RSSI || -999));
     return allowed[0];
   }
@@ -846,6 +851,10 @@ function openAngleSlideBleCommands(model) {
       return { increase: '往上收', decrease: '往下' };
     }
     if (isMtUltraCardModel(model)) {
+      // F1 Ultra 机械方向与 F2 Ultra 相反：同一拨向发对面指令
+      if (isF1UltraModel(model)) {
+        return { increase: '往上收', decrease: '往下' };
+      }
       return { increase: '往下', decrease: '往上收' };
     }
     return { increase: '往上收', decrease: '往下' };
@@ -896,6 +905,8 @@ function buildSettingChangeResultText(model, key, targetVal) {
         return targetVal === 'left' ? '堵转检测已开启' : '堵转检测已关闭';
       }
       return targetVal === 'left' ? '主动故障检测已开启' : '主动故障检测已关闭';
+    case 'bootPinDetect':
+      return targetVal === 'left' ? '开机插销检测已开启' : '开机插销检测已关闭';
     case 'selfRepair':
       if (isMtUltra) {
         return targetVal === 'left' ? '电机工作检测已开启' : '电机工作检测已关闭';
@@ -916,6 +927,8 @@ function buildSettingChangeResultText(model, key, targetVal) {
       return targetVal === 'left' ? '隐蔽模式退出已允许按钮' : '隐蔽模式退出已设为仅小程序';
     case 'powerOffLock':
       return targetVal === 'left' ? '断电锁死已开启' : '断电锁死已关闭';
+    case 'multiRetry':
+      return targetVal === 'left' ? '已发送多次重试' : '多次重试待命';
     case 'heightMon':
       return targetVal === 'left' ? '高度检测已开启' : '高度检测已关闭';
     default:
@@ -932,6 +945,8 @@ const NEUTRAL_SETTING_STATE = {
   smoothMode: 'center',
   stealthBtnExit: 'center',
   powerOffLock: 'center',
+  bootPinDetect: 'center',
+  multiRetry: 'center',
   heightMon: 'center'
 };
 
@@ -1149,6 +1164,12 @@ function resolveMtUltraMagSettingSendText(key, targetVal, model) {
   if (key === 'powerOffLock') {
     return targetVal === 'left' ? 'P1' : (targetVal === 'right' ? 'P0' : '');
   }
+  if (key === 'bootPinDetect') {
+    return targetVal === 'left' ? '开启自检' : (targetVal === 'right' ? '关闭自检' : '');
+  }
+  if (key === 'multiRetry') {
+    return targetVal === 'left' ? 'UR' : '';
+  }
   if (key === 'heightMon' && isF3MaxModel(model)) {
     // 旧测高开关已废弃
     return '';
@@ -1181,7 +1202,7 @@ const F2_DELAY_POWER_OFF_OPTIONS = [
 ];
 
 const F2_ULTRA_FACTORY_RESET_STEPS = [
-  { text: '正在关闭堵转检测', data: '关闭堵转检测', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '正在开启堵转检测', data: '开启堵转检测', sendTimes: 2, interval: 500, delayNext: 2000 },
   { text: '正在关闭电机检测', data: '关闭电机检测', sendTimes: 2, interval: 500, delayNext: 2000 },
   { text: '正在设置开机位置上翻', data: '开机下翻', sendTimes: 2, interval: 500, delayNext: 2000 },
   { text: '正在设置关机位置收回', data: '打开收回', sendTimes: 2, interval: 500, delayNext: 2000 },
@@ -1196,6 +1217,158 @@ const F2_ULTRA_FACTORY_RESET_STEPS = [
 const F3_MAX_FACTORY_RESET_STEPS = F2_ULTRA_FACTORY_RESET_STEPS.filter(
   (step) => step.data !== '开启平滑' && step.data !== '延时断电0'
 );
+
+/** F1 PRO 管理员出厂设置：初始化 → 断线重连 → 按钮动画 → 打开角度 → 折叠校准 */
+const F1_PRO_FACTORY_RESET_STEPS = [
+  {
+    text: '初始化角度中',
+    data: '初始化角度',
+    sendTimes: 2,
+    interval: 500,
+    delayNext: 0,
+    showConfirm: true
+  },
+  {
+    kind: 'waitBleReconnect',
+    text: '去掉负极',
+    data: null
+  },
+  {
+    kind: 'buttonAnimOnce',
+    text: '请点击按钮，使按钮变红',
+    data: null
+  },
+  {
+    kind: 'embedOpenAngle',
+    text: '请从左往右边波动，调整到170°左右的预设角度',
+    data: null,
+    showConfirm: true
+  },
+  {
+    kind: 'textAutoSend',
+    text: '正在进入折叠间隙校准…',
+    data: '调整折叠角度',
+    sendTimes: 1,
+    interval: 300,
+    delayNext: 1500
+  },
+  {
+    kind: 'foldFineTune',
+    text: '请调节折叠间隙',
+    subText: '调大间隙直到电机没声音',
+    data: null,
+    showConfirm: true,
+    isFinal: true
+  }
+];
+
+/** F1 ULTRA 管理员出厂设置：8 步初始化 → 初始化角度 → 断线重连 → 按钮变红 → 确认 */
+const F1_ULTRA_FACTORY_RESET_STEPS = [
+  { text: '正在开启堵转检测', data: '开启堵转检测', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '正在设置电机工作检测为执行', data: '开启电机检测', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '正在设置开机位置为上翻', data: '开机上翻', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '正在设置关机位置为收回', data: '打开收回', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '正在设置隐蔽模式允许按钮', data: '允许按钮退出', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '正在开启平滑模式', data: '开启平滑', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '正在关闭出行模式', data: '关闭出行', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '正在设置延时断电为关闭', data: '延时断电0', sendTimes: 2, interval: 500, delayNext: 2000 },
+  { text: '正在自动校准，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true, showConfirm: true },
+  {
+    kind: 'buttonAnimOnce',
+    text: '点击按钮时，按钮变红',
+    data: null
+  },
+  {
+    text: '断开细红线',
+    data: null,
+    sendTimes: 0,
+    interval: 0,
+    delayNext: 3000
+  },
+  {
+    text: '是否有自动折回面板，自动断电',
+    data: null,
+    sendTimes: 0,
+    interval: 0,
+    delayNext: 0,
+    isFinal: true
+  }
+];
+
+/** F1 MAX 管理员出厂设置：收回 → 初始化 → 断线重连 → 角度/折叠校准 → 再次断线重连 → 按钮变红 → 细红线 → 确认 */
+const F1_MAX_FACTORY_RESET_STEPS = [
+  {
+    text: '正在设置关机位置为收回',
+    data: '打开收回',
+    sendTimes: 2,
+    interval: 500,
+    delayNext: 2000
+  },
+  {
+    text: '初始化角度中',
+    data: '初始化角度',
+    sendTimes: 2,
+    interval: 500,
+    delayNext: 0,
+    showConfirm: true
+  },
+  {
+    kind: 'waitBleReconnect',
+    text: '去掉负极',
+    data: null
+  },
+  {
+    kind: 'buttonAnimOnce',
+    text: '请点击按钮，使按钮变红',
+    data: null
+  },
+  {
+    kind: 'embedOpenAngle',
+    text: '请从左往右边波动，调整到170°左右的预设角度',
+    data: null,
+    showConfirm: true
+  },
+  {
+    kind: 'textAutoSend',
+    text: '正在进入折叠间隙校准…',
+    data: '调整折叠角度',
+    sendTimes: 1,
+    interval: 300,
+    delayNext: 1500
+  },
+  {
+    kind: 'foldFineTune',
+    text: '请调节折叠间隙',
+    subText: '调大间隙直到电机没声音',
+    data: null,
+    showConfirm: true
+  },
+  {
+    kind: 'waitBleReconnect',
+    text: '去掉负极',
+    data: null
+  },
+  {
+    kind: 'buttonAnimOnce',
+    text: '点击按钮时，按钮变红',
+    data: null
+  },
+  {
+    text: '去掉细红线',
+    data: null,
+    sendTimes: 0,
+    interval: 0,
+    delayNext: 3000
+  },
+  {
+    text: '是否有自动折回面板，自动断电',
+    data: null,
+    sendTimes: 0,
+    interval: 0,
+    delayNext: 0,
+    isFinal: true
+  }
+];
 
 function f2DelayPowerOffIndexByMinutes(minutes) {
   const idx = F2_DELAY_POWER_OFF_OPTIONS.findIndex((o) => o.minutes === minutes);
@@ -1334,6 +1507,8 @@ const OPEN_ANGLE_RULER_SENSITIVITY = 1;
 const F3_OPEN_ANGLE_BLE_STEP_GAP_MS = 320;
 /** 同款 Ultra 固件：打开角度上限 180° */
 const OPEN_ANGLE_ULTRA_MAX_DEG = 180;
+/** 打开角度页：断连拦截层的状态巡检间隔（只在该页开着时跑） */
+const OPEN_ANGLE_BLE_WATCH_MS = 600;
 /** 折叠舵机角（固件 item4）：0~180，默认 150 对应 foldGap=20 */
 const FOLD_SERVO_ANGLE_DEFAULT = 150;
 const FOLD_SERVO_ANGLE_MIN = 0;
@@ -1367,6 +1542,11 @@ const {
 const screenshotExempt = require('../../../utils/screenshotAdminExempt.js');
 const { parseF2StatusLine, buildF2FaultModalPayload, buildF2AdvUiUpdates, buildF2FlapPanelUpdates, buildF2ConnectModalQueue, buildF2HwMonitorUpdates, buildF3HeightMonitorUpdates, buildF3HeightSettingsUpdates, packetMatchesBleVerify, F2_FAULT_ACK_CMD, buildTravelModeTip, formatF3HeightMm } = require('../../../utils/f2FaultReport.js');
 const f2VoiceBridge = require('../../../utils/f2VoiceBridge.js');
+const {
+  geoDistanceMeters,
+  geoFoldJudgeStep,
+  createGeoFoldState
+} = require('../../../utils/geoFoldLogic.js');
 const { startGuideBtnCountdown, clearGuideBtnCountdown, GUIDE_BTN_LOCK_SEC } = require('../../../utils/guideBtnCountdown.js');
 
 function enrichBindTarget(target) {
@@ -1429,6 +1609,120 @@ const REMOTE_ASSIST_STORAGE_KEY = 'remote_assist_local_v1';
 const LEGACY_SCAN_PAGE_URL = '/package-legacy/pages/scan/scan';
 const CARD_SWIPE_MS = 260;
 
+/* ==========================================================
+ * 定点折叠（测试版）：以设点为圆心、baseRadius 为半径的圆
+ * 碰到圆周任意一边（距离 ≤ 半径）即算进圈，与方位无关
+ * 目前仅 F2 ULTRA 开放；抗漂移：设点校准 / 瞬移过滤 / 距离平滑
+ * ========================================================== */
+const GEO_FOLD_CFG_KEY = 'mt_geo_fold_cfg_v2';
+const GEO_FOLD_LOG_MAX = 12;
+const GEO_FOLD_REFIRE_COOLDOWN_MS = 15000;
+/** 设点：至少几条合格样本、最大尝试次数、精度/聚簇阈值 */
+const GEO_FOLD_SET_NEED = 3;
+const GEO_FOLD_SET_MAX_TRIES = 6;
+const GEO_FOLD_SET_GAP_MS = 700;
+const GEO_FOLD_SET_MAX_ACC_M = 30;
+const GEO_FOLD_SET_CLUSTER_M = 25;
+
+/** 每项档位：value 为实际参与计算的数值，label 为按钮文字 */
+const GEO_FOLD_OPTIONS = {
+  // 目标圈半径（米）：真正的「到点」判定圈，不是提前量
+  baseRadius: [
+    { value: 20, label: '20m' },
+    { value: 30, label: '30m' },
+    { value: 50, label: '50m' },
+    { value: 80, label: '80m' },
+    { value: 100, label: '100m' }
+  ],
+  // 提前发令（秒）：预计还要 leadSec 秒进入目标圈时提前触发
+  leadSec: [
+    { value: 0, label: '关' },
+    { value: 1, label: '1s' },
+    { value: 2, label: '2s' },
+    { value: 3, label: '3s' },
+    { value: 5, label: '5s' }
+  ],
+  // 判定节流间隔（毫秒）；连续定位也按此间隔判一次
+  pollMs: [
+    { value: 1000, label: '1s' },
+    { value: 2000, label: '2s' },
+    { value: 3000, label: '3s' },
+    { value: 5000, label: '5s' }
+  ],
+  // 连续命中几次才触发
+  confirmHits: [
+    { value: 1, label: '1次' },
+    { value: 2, label: '2次' },
+    { value: 3, label: '3次' }
+  ],
+  // 速度上限（km/h），超过则不触发；0 = 不限
+  maxSpeedKmh: [
+    { value: 0, label: '不限' },
+    { value: 10, label: '10' },
+    { value: 20, label: '20' },
+    { value: 30, label: '30' },
+    { value: 60, label: '60' }
+  ],
+  // 定位精度门槛（米），超过视为无效样本；0 = 不限
+  accuracyLimit: [
+    { value: 0, label: '不限' },
+    { value: 30, label: '30m' },
+    { value: 50, label: '50m' },
+    { value: 80, label: '80m' }
+  ]
+};
+
+const GEO_FOLD_DEFAULT_CFG = {
+  baseRadius: 50,
+  leadSec: 2,
+  pollMs: 2000,
+  confirmHits: 3,
+  maxSpeedKmh: 0,
+  accuracyLimit: 30,
+  // 到点执行的指令：关闭 = 收起，打开 = 翻开
+  triggerCmd: '关闭',
+  // 只在靠近（或已在圈内）时才算命中，过滤路过/远离
+  requireApproaching: true,
+  // 触发一次后自动停止跟踪，避免回程再折
+  autoStopAfterFire: true,
+  // 触发瞬间震动提示
+  vibrateOnFire: true
+};
+
+function normalizeGeoFoldCfg(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const pick = (key) => {
+    const list = GEO_FOLD_OPTIONS[key] || [];
+    const hit = list.find((opt) => Number(opt.value) === Number(src[key]));
+    return hit ? hit.value : GEO_FOLD_DEFAULT_CFG[key];
+  };
+  return {
+    baseRadius: pick('baseRadius'),
+    leadSec: pick('leadSec'),
+    pollMs: pick('pollMs'),
+    confirmHits: pick('confirmHits'),
+    maxSpeedKmh: pick('maxSpeedKmh'),
+    accuracyLimit: pick('accuracyLimit'),
+    triggerCmd: src.triggerCmd === '打开' ? '打开' : '关闭',
+    requireApproaching: src.requireApproaching !== false,
+    autoStopAfterFire: src.autoStopAfterFire !== false,
+    vibrateOnFire: src.vibrateOnFire !== false
+  };
+}
+
+function normalizeGeoFoldPoint(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const lat = Number(raw.lat);
+  const lng = Number(raw.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return { lat, lng, name: String(raw.name || '').slice(0, 40) };
+}
+
+function geoFoldClockText(ts) {
+  const d = new Date(ts || Date.now());
+  const pad = (n) => (n < 10 ? `0${n}` : String(n));
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 
 Page({
   data: {
@@ -1548,7 +1842,14 @@ Page({
     /** CAN Learn 测试：灯带总灯珠数 */
     canLearnNumLeds: String(DEFAULT_NUM_LEDS),
     
-    // 新增：自动校准中弹窗
+    // 新增：自动校准前确认 / 校准中弹窗
+    showAutoCalGuideModal: false,
+    autoCalGuideStage: 'check',
+    autoCalGuideBtnDisabled: false,
+    autoCalGuideText: '请单击按钮，观察后方是否转动',
+    autoCalGuideHint: '',
+    autoCalGuideBtnPressing: false,
+    autoCalGuideBtnLightOn: false,
     showCalibratingModal: false,
     calibratingModalClosing: false, // 校准弹窗退出动画中
     calibratingBtnDisabled: true, // 校准弹窗按钮禁用状态
@@ -1650,6 +1951,9 @@ Page({
     // 打开角度：标尺 & 数值显示相关
     isCalibrated: false,
     openAngleUiActive: false,     // 仅点预设后棍子/数字才动；波轮始终可拨
+    // 打开角度页：蓝牙掉线拦截层（除左上角返回键外全页不可操作）
+    openAngleBleLostVisible: false,
+    openAngleBleLostRetrying: false,
     currentAngle: 0,
     ticks: [],                    // 波浪尺刻度数组
     activeIndex: 0,               // 当前高亮刻度索引
@@ -1718,7 +2022,26 @@ Page({
     showF2DemoModal: false,
     f2DemoRunning: false,
     f2DemoStatusText: '',
-    
+
+    // === 定点折叠（测试版，仅 F2 ULTRA） ===
+    showGeoFoldModal: false,
+    geoFoldOptions: GEO_FOLD_OPTIONS,
+    geoFoldCfg: { ...GEO_FOLD_DEFAULT_CFG },
+    geoFoldPoint: null,
+    geoFoldPointText: '未设点',
+    geoFoldTracking: false,
+    geoFoldStatusText: '未开始',
+    geoFoldDistanceText: '--',
+    geoFoldRadiusText: '--',
+    geoFoldEtaText: '--',
+    geoFoldSpeedText: '--',
+    geoFoldAccuracyText: '--',
+    geoFoldTrendText: '--',
+    geoFoldHitText: '0 / 3',
+    geoFoldSampleCount: 0,
+    geoFoldLastAt: '--',
+    geoFoldLogs: [],
+    geoFoldCapturingPoint: false, 
     // 滑块状态（连接后由设备状态包覆盖）
     settingState: {
       faultDetect: 'left',
@@ -1729,6 +2052,8 @@ Page({
       smoothMode: 'right',
       stealthBtnExit: 'left',
       powerOffLock: 'right',
+      bootPinDetect: 'left',
+      multiRetry: 'right',
       heightMon: 'right'
     },
 
@@ -1788,6 +2113,9 @@ Page({
     f3MpuOk: false,
     f3ImuLiveDegText: '—',
     f3ImuLiveVibeText: '—',
+    f3ImuPeakDeg: 0,
+    f3ImuMaxLeftDeg: 0,
+    f3ImuMaxRightDeg: 0,
     f3ImuUpText: '未标定',
     f3ImuLeanText: '未标定',
     f3ImuVibeText: '—',
@@ -1874,12 +2202,19 @@ Page({
       { text: '正在打开开机牌上翻', data: '开机上翻', sendTimes: 2, interval: 500, delayNext: 2000 },
       { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true }
     ],
+    factoryResetBleWaitHint: '',
+    factoryResetBtnAnimLightOn: false,
+    factoryResetBtnAnimPressing: false,
+    factoryResetBtnAnimText: '',
+    factoryResetOpenAngleReady: false,
+    showFactoryResetReconnectModal: false,
     stealthAnimPressing: false, // 按钮是否按下
     stealthAnimLight: false,    // 灯光状态（用于闪烁）
     stealthAnimText: '请在车把上\n长按按键 3 秒', // 提示文字
     stealthAnimTextColor: 'black', // 文字颜色
     stealthAnimTextScale: 1, // 文字缩放（用于动画）
     stealthTutorialBtnDisabled: true, // 按钮是否禁用
+    stealthTutorialConfirmText: '知道了',
     stealthTutorialTimer: null, // 动画定时器
     stealthBlinkInterval: null, // 闪烁定时器
     stealthTextBlinkInterval: null, // 文字闪烁定时器（用于退出模式后5次）
@@ -2101,6 +2436,11 @@ Page({
       this._activeBleDeviceId = device.deviceId || '';
       this._bleReconnectStoppedByUser = false;
       this._clearBleReconnectTimers();
+
+      if (this.data.showFactoryResetReconnectModal && this.data.showFactoryResetModal) {
+        this.setData({ showFactoryResetReconnectModal: false });
+        if (this.ble) this.ble.preferredDeviceId = '';
+      }
 
       // 记录本次连接对应的机型卡片（避免滑走卡片后状态包被错误过滤）
       this._bleSessionModel = this._bleStatusTargetModel();
@@ -2369,6 +2709,7 @@ Page({
       'showStealthTutorial',
       'powerOffLockGuideStep',
       'showFactoryResetModal',
+      'showFactoryResetReconnectModal',
       'showAngleHint',
       'showNewProductHint',
       'showBluetoothAlert',
@@ -2399,6 +2740,7 @@ Page({
       // 如果编辑模式但没有当前模型，可能是状态异常，重置为主模式
       this.setData({ detailMode: 'main' });
     }
+    this._resumeOpenAngleBleWatch();
     
     // 🔴 如果高级设置弹窗是打开的，重新显示提示 Toast
     if (this.data.showSettingsModal) {
@@ -2592,6 +2934,9 @@ Page({
   onHide() {
     this._stopRemoteAssistPollers();
     this._stopF2DemoMode(false);
+    // 小程序后台拿不到稳定定位，切后台一律停跟踪并告知原因
+    this._stopGeoFoldTracking('页面切到后台');
+    this._clearOpenAngleBleWatchTimer();
     this._stopFlapGaugeSpinImmediate();
     this._clearF3CalTimer();
     this._clearMainControlScrollIdle();
@@ -2664,6 +3009,8 @@ Page({
     }
     f2VoiceBridge.clearBridge();
     this._stopF2DemoMode(false);
+    this._stopGeoFoldTracking('页面卸载');
+    this._clearOpenAngleBleWatchTimer();
     this._stopRemoteAssistPollers();
   },
 
@@ -3320,6 +3667,7 @@ Page({
     }
     this.setData(merged, () => {
       this._syncUiBleConnected();
+      this._syncOpenAngleBleLostMask();
       if (merged.isConnected) {
         this._ensureF2StatusBleListener(true);
       }
@@ -4045,7 +4393,8 @@ Page({
       stealthAnimText: isEnter ? '请在车把上\n长按按键 3 秒' : '长按车把按钮\n8 秒',
       stealthAnimTextColor: 'black', // 文字颜色：黑色
       stealthAnimTextScale: 1, // 文字缩放：正常
-      stealthTutorialBtnDisabled: true // 按钮禁用
+      stealthTutorialBtnDisabled: true, // 按钮禁用
+      stealthTutorialConfirmText: this._pendingStealthTutorialAction === 'auto_calibrate' ? '已恢复' : '知道了'
     });
     
     // 第一帧停留时间：进入模式5秒，退出模式2秒
@@ -4058,6 +4407,8 @@ Page({
   // 2. 关闭教学弹窗
   closeStealthTutorial() {
     this.stopStealthAnim();
+    const nextAction = this._pendingStealthTutorialAction || '';
+    this._pendingStealthTutorialAction = '';
     this.setData({ 
       showStealthTutorial: false,
       stealthTutorialMode: 'enter',
@@ -4066,8 +4417,45 @@ Page({
       stealthAnimText: '请在车把上\n长按按键 3 秒',
       stealthAnimTextColor: 'black',
       stealthAnimTextScale: 1,
-      stealthTutorialBtnDisabled: true
+      stealthTutorialBtnDisabled: true,
+      stealthTutorialConfirmText: '知道了'
     });
+    if (nextAction === 'auto_calibrate') {
+      setTimeout(() => {
+        if (this._ensureBleControlReady()) this._startAutoCalibrateRun();
+      }, 80);
+    }
+  },
+
+  _stopAutoCalGuideAnim() {
+    if (this._autoCalGuideAnimTimer) {
+      clearTimeout(this._autoCalGuideAnimTimer);
+      this._autoCalGuideAnimTimer = null;
+    }
+  },
+
+  _startAutoCalGuideAnim() {
+    this._stopAutoCalGuideAnim();
+    const loop = () => {
+      if (!this.data.showAutoCalGuideModal) return;
+      this.setData({
+        autoCalGuideBtnPressing: false,
+        autoCalGuideBtnLightOn: false
+      });
+      this._autoCalGuideAnimTimer = setTimeout(() => {
+        if (!this.data.showAutoCalGuideModal) return;
+        this.setData({ autoCalGuideBtnPressing: true });
+        this._autoCalGuideAnimTimer = setTimeout(() => {
+          if (!this.data.showAutoCalGuideModal) return;
+          this.setData({
+            autoCalGuideBtnPressing: false,
+            autoCalGuideBtnLightOn: true
+          });
+          this._autoCalGuideAnimTimer = setTimeout(loop, 1200);
+        }, 220);
+      }, 700);
+    };
+    loop();
   },
 
   // ===============================================
@@ -4122,6 +4510,8 @@ Page({
 
     if (isF3MaxModel(currentModel)) {
       steps = F3_MAX_FACTORY_RESET_STEPS.slice();
+    } else if (isF1UltraModel(currentModel)) {
+      steps = F1_ULTRA_FACTORY_RESET_STEPS.slice();
     } else if (isMtUltraCardModel(currentModel)) {
       steps = F2_ULTRA_FACTORY_RESET_STEPS.slice();
     } else if (isF2MaxSeries) {
@@ -4134,48 +4524,7 @@ Page({
         { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true, isFinal: true }
       ];
     } else if (isF1Max) {
-      // F1 MAX：
-      // 在“初始化角度（折叠点归零）”之前，先设置“关机位置=收回”（发送“打开收回”）
-      // 之后再进入原有初始化流程，第一步仍需用户点击确认
-      steps = [
-        {
-          text: '正在设置关机位置为收回',
-          data: '打开收回',
-          sendTimes: 2,
-          interval: 500,
-          delayNext: 2000
-        },
-        {
-          text: '初始化角度中',
-          data: '初始化角度',
-          sendTimes: 2,
-          interval: 500,
-          delayNext: 0,          // 等待用户点击确认
-          showConfirm: true
-        },
-        {
-          text: '请长按按钮3秒',
-          data: null,
-          sendTimes: 0,
-          interval: 0,
-          delayNext: 3000
-        },
-        {
-          text: '断开细红线',
-          data: null,
-          sendTimes: 0,
-          interval: 0,
-          delayNext: 3000
-        },
-        {
-          text: '请观察主板是不是还继续亮灯',
-          data: null,
-          sendTimes: 0,
-          interval: 0,
-          delayNext: 0,
-          isFinal: true
-        }
-      ];
+      steps = F1_MAX_FACTORY_RESET_STEPS.slice();
     } else if (isF2ProSeries) {
       // F2 PRO：
       // 文案拆成多句，每句单独显示 3 秒，
@@ -4189,12 +4538,23 @@ Page({
           delayNext: 0,          // 🔴 不自动跳到下一步，等待用户点击确认
           showConfirm: true      // 初始化角度阶段也需要确认键
         },
+        {
+          kind: 'multiSend',
+          text: '正在自动调整折叠角度…',
+          cmds: [
+            { data: '90度',        sendTimes: 1, interval: 500, delay: 0 },
+            { data: '调整折叠角度', sendTimes: 1, interval: 500, delay: 800 },
+            { data: '往上收',       sendTimes: 5, interval: 500, delay: 800 }
+          ],
+          delayNext: 1500
+        },
         { 
           text: '请长按按钮3秒',
           data: null,
           sendTimes: 0,
           interval: 0,
-          delayNext: 3000
+          delayNext: 0,
+          showConfirm: true
         },
         { 
           text: '断开细红线',
@@ -4213,31 +4573,251 @@ Page({
         }
       ];
     } else if (isF1Pro) {
-      // F1 PRO：只发送一次“初始化角度”，并立即显示带确认键
-      steps = [
-        {
-          text: '初始化角度中',
-          data: '初始化角度',
-          sendTimes: 2,
-          interval: 500,
-          delayNext: 0,
-          isFinal: true
-        }
-      ];
+      steps = F1_PRO_FACTORY_RESET_STEPS.slice();
     } else {
       // 兜底：使用默认步骤（不太可能走到这里）
       steps = this.data.factoryResetSteps || [];
     }
 
+    this._cleanupFactoryResetFlow();
+
     // 重置步骤并显示弹窗
     this.setData({
       showFactoryResetModal: true,
       factoryResetStep: 0,
-      factoryResetSteps: steps
+      factoryResetSteps: steps,
+      factoryResetBleWaitHint: '',
+      factoryResetOpenAngleReady: false
     });
 
     // 执行所有步骤
     this.executeFactoryResetStep(0);
+  },
+
+  _getFactoryResetStep() {
+    const steps = this.data.factoryResetSteps || [];
+    const idx = this.data.factoryResetStep || 0;
+    return steps[idx] || null;
+  },
+
+  _isFactoryResetOpenAngleStep() {
+    if (!this.data.showFactoryResetModal) return false;
+    const step = this._getFactoryResetStep();
+    return !!(step && step.kind === 'embedOpenAngle');
+  },
+
+  _isFactoryResetFoldTuneStep() {
+    if (!this.data.showFactoryResetModal) return false;
+    const step = this._getFactoryResetStep();
+    return !!(step && step.kind === 'foldFineTune');
+  },
+
+  _isFactoryResetBleAdjustStep() {
+    return this._isFactoryResetOpenAngleStep() || this._isFactoryResetFoldTuneStep();
+  },
+
+  _cleanupFactoryResetFlow() {
+    this._stopFactoryResetBleReconnectWatch();
+    this._stopFactoryResetAdjustBleWatch();
+    this._stopFactoryResetButtonAnim();
+    if (this._factoryResetAutoStepTimer) {
+      clearTimeout(this._factoryResetAutoStepTimer);
+      this._factoryResetAutoStepTimer = null;
+    }
+    this._frBleReconnectSawDisconnect = false;
+    this.setData({
+      factoryResetBleWaitHint: '',
+      factoryResetBtnAnimLightOn: false,
+      factoryResetBtnAnimPressing: false,
+      factoryResetBtnAnimText: '',
+      factoryResetOpenAngleReady: false,
+      showFactoryResetReconnectModal: false
+    });
+  },
+
+  _stopFactoryResetAdjustBleWatch() {
+    if (this._frAdjustBleWatchTimer) {
+      clearInterval(this._frAdjustBleWatchTimer);
+      this._frAdjustBleWatchTimer = null;
+    }
+  },
+
+  _startFactoryResetAdjustBleWatch() {
+    this._stopFactoryResetAdjustBleWatch();
+    const tick = () => {
+      if (!this.data.showFactoryResetModal || !this._isFactoryResetBleAdjustStep()) {
+        this._stopFactoryResetAdjustBleWatch();
+        return;
+      }
+      const linked = this._canSendBleCommand();
+      if (linked) {
+        if (this.data.showFactoryResetReconnectModal) {
+          this.setData({ showFactoryResetReconnectModal: false });
+          if (this.ble) this.ble.preferredDeviceId = '';
+        }
+        return;
+      }
+      if (!this.data.showFactoryResetReconnectModal) {
+        this.setData({ showFactoryResetReconnectModal: true });
+      }
+      this._bleReconnectStoppedByUser = false;
+      if (this._lastBleDevice && this.ble) {
+        this.ble.preferredDeviceId = this._lastBleDevice.deviceId || '';
+      }
+      this._triggerFactoryResetAdjustReconnect();
+    };
+    tick();
+    this._frAdjustBleWatchTimer = setInterval(tick, 500);
+  },
+
+  _triggerFactoryResetAdjustReconnect() {
+    if (this.data.isConnected || this.data.uiBleConnected) return;
+    if (this.data.isScanning || this.data.isConnecting || this.data.isBleAutoReconnecting) return;
+    this._bleReconnectStoppedByUser = false;
+    if (this._lastBleDevice) {
+      this._requestBleAutoReconnect('factory_reset_adjust');
+      return;
+    }
+    this.handleConnect();
+  },
+
+  _stopFactoryResetBleReconnectWatch() {
+    if (this._frBleReconnectTimer) {
+      clearInterval(this._frBleReconnectTimer);
+      this._frBleReconnectTimer = null;
+    }
+  },
+
+  _startFactoryResetBleReconnectWatch() {
+    this._stopFactoryResetBleReconnectWatch();
+    this._frBleReconnectSawDisconnect = !this._canSendBleCommand();
+    this._bleReconnectStoppedByUser = false;
+    this.setData({ bleReconnectAttempt: 0 });
+    const tick = () => {
+      if (!this.data.showFactoryResetModal) {
+        this._stopFactoryResetBleReconnectWatch();
+        return;
+      }
+      const step = this._getFactoryResetStep();
+      if (!step || step.kind !== 'waitBleReconnect') {
+        this._stopFactoryResetBleReconnectWatch();
+        return;
+      }
+      const linked = this._canSendBleCommand();
+      if (!this._frBleReconnectSawDisconnect) {
+        if (!linked) {
+          this._frBleReconnectSawDisconnect = true;
+          this._triggerFactoryResetAutoScan();
+        }
+        return;
+      }
+      if (linked) {
+        this._stopFactoryResetBleReconnectWatch();
+        this.executeFactoryResetStep((this.data.factoryResetStep || 0) + 1);
+        return;
+      }
+      this._triggerFactoryResetAutoScan();
+    };
+    tick();
+    this._frBleReconnectTimer = setInterval(tick, 500);
+  },
+
+  _triggerFactoryResetAutoScan() {
+    if (this.data.isConnected || this.data.uiBleConnected) return;
+    if (this.data.isScanning || this.data.isConnecting || this.data.isBleAutoReconnecting) return;
+    this._bleReconnectStoppedByUser = false;
+    if (this._lastBleDevice && this.ble) {
+      this.ble.preferredDeviceId = this._lastBleDevice.deviceId || '';
+    }
+    if (this._lastBleDevice) {
+      this._requestBleAutoReconnect('factory_reset');
+      return;
+    }
+    this.handleConnect();
+  },
+
+  _stopFactoryResetButtonAnim() {
+    if (this._frBtnAnimTimer) {
+      clearTimeout(this._frBtnAnimTimer);
+      this._frBtnAnimTimer = null;
+    }
+  },
+
+  _startFactoryResetButtonAnimOnce() {
+    this._stopFactoryResetButtonAnim();
+    const step = this._getFactoryResetStep();
+    const introText = (step && step.text) ? step.text : '请点击按钮，使按钮变红';
+    this.setData({
+      factoryResetBtnAnimLightOn: false,
+      factoryResetBtnAnimPressing: false,
+      factoryResetBtnAnimText: introText
+    });
+    this._frBtnAnimTimer = setTimeout(() => {
+      this.setData({ factoryResetBtnAnimPressing: true });
+      this._frBtnAnimTimer = setTimeout(() => {
+        this.setData({
+          factoryResetBtnAnimLightOn: true,
+          factoryResetBtnAnimText: '按钮已变红',
+          factoryResetBtnAnimPressing: false
+        });
+        this._frBtnAnimTimer = setTimeout(() => {
+          this._frBtnAnimTimer = null;
+          if (this.data.showFactoryResetModal && (this._getFactoryResetStep() || {}).kind === 'buttonAnimOnce') {
+            this.executeFactoryResetStep((this.data.factoryResetStep || 0) + 1);
+          }
+        }, 800);
+      }, 300);
+    }, 1000);
+  },
+
+  _initFactoryResetOpenAngle() {
+    const maxDeg = 180;
+    const count = (maxDeg - 0) / 2 + 1;
+    const extendedCount = Math.max(count + 100, 200);
+    const ticks = new Array(Math.floor(extendedCount)).fill(0);
+    const startUiDeg = 90;
+    this.setData({
+      factoryResetOpenAngleReady: true,
+      openAngleUiActive: true,
+      currentAngle: startUiDeg,
+      angleMode: '',
+      angleRotation: 0,
+      activeIndex: 0,
+      translateX: 0,
+      transition: 'none',
+      ticks
+    });
+    this.updateRuler(startUiDeg, false);
+    this.lastVibrateIndex = this._openAngleIndexFromTranslate(0);
+  },
+
+  _onFactoryResetStepEnter(step) {
+    if (!step) return;
+    if (step.kind === 'waitBleReconnect') {
+      this._startFactoryResetBleReconnectWatch();
+      return;
+    }
+    if (step.kind === 'buttonAnimOnce') {
+      this._startFactoryResetButtonAnimOnce();
+      return;
+    }
+    if (step.kind === 'embedOpenAngle') {
+      this._initFactoryResetOpenAngle();
+      this._startFactoryResetAdjustBleWatch();
+      return;
+    }
+    if (step.kind === 'foldFineTune') {
+      this._foldAdjustActive = true;
+      this._startFactoryResetAdjustBleWatch();
+    }
+  },
+
+  onFactoryResetFoldAdjust(e) {
+    if (!this._isFactoryResetFoldTuneStep()) return;
+    const action = e.currentTarget.dataset.action;
+    this.handleAdjust({
+      currentTarget: { dataset: { action, mode: 'fold' } }
+    });
   },
 
   // 执行出厂设置步骤
@@ -4249,43 +4829,79 @@ Page({
     }
     const steps = this.data.factoryResetSteps || [];
     if (stepIndex >= steps.length) {
-      // 所有步骤完成，保持弹窗显示，等待用户点击确认
       console.log('✅ [出厂设置] 所有步骤完成');
       return;
     }
 
     const step = steps[stepIndex] || {};
-    
-    // 更新当前步骤
-    this.setData({
-      factoryResetStep: stepIndex
-    });
-
-    this.setData({
-      factoryResetStep: stepIndex
-    });
+    this.setData({ factoryResetStep: stepIndex });
+    this._onFactoryResetStepEnter(step);
 
     const data = step.data;
     const sendTimes = step.sendTimes != null ? step.sendTimes : 2;
     const interval = step.interval != null ? step.interval : 500;
     const delayNext = step.delayNext != null ? step.delayNext : 2000;
+    const kind = step.kind;
 
-    if (data) {
+    if (data && kind !== 'textAutoSend') {
       console.log(`📤 [出厂设置] 步骤 ${stepIndex + 1}: ${data}（连续${sendTimes}次，间隔${interval}ms）`);
       this.sendDataMultiple(data, sendTimes, interval);
-    } else {
+    } else if (!data && !kind) {
       console.log(`ℹ️ [出厂设置] 步骤 ${stepIndex + 1}: 仅提示，无需发送数据`);
     }
 
-    // 如果是 F1 MAX / F2 PRO 系列的第一步（需要确认），或标记为 isFinal 的步骤：
-    // 不自动进入下一步，等待用户点击“确认”
+    if (kind === 'waitBleReconnect' || kind === 'buttonAnimOnce' || kind === 'embedOpenAngle' || kind === 'foldFineTune') {
+      return;
+    }
+
+    if (kind === 'textAutoSend') {
+      if (data) {
+        console.log(`📤 [出厂设置] 步骤 ${stepIndex + 1}: ${data}（连续${sendTimes}次，间隔${interval}ms）`);
+        this.sendDataMultiple(data, sendTimes, interval);
+        if (data === '调整折叠角度') this._foldAdjustActive = true;
+      }
+      if (this._factoryResetAutoStepTimer) clearTimeout(this._factoryResetAutoStepTimer);
+      this._factoryResetAutoStepTimer = setTimeout(() => {
+        this._factoryResetAutoStepTimer = null;
+        if (this.data.showFactoryResetModal && this.data.factoryResetStep === stepIndex) {
+          this.executeFactoryResetStep(stepIndex + 1);
+        }
+      }, delayNext);
+      return;
+    }
+
+    if (kind === 'multiSend') {
+      const cmds = step.cmds || [];
+      if (this._factoryResetAutoStepTimer) clearTimeout(this._factoryResetAutoStepTimer);
+      let totalDelay = 0;
+      cmds.forEach((cmd) => {
+        const cmdInterval = cmd.interval != null ? cmd.interval : 500;
+        const cmdTimes = cmd.sendTimes != null ? cmd.sendTimes : 1;
+        const cmdDelay = cmd.delay != null ? cmd.delay : 0;
+        setTimeout(() => {
+          if (!this.data.showFactoryResetModal || this.data.factoryResetStep !== stepIndex) return;
+          console.log(`📤 [出厂设置/multiSend] ${cmd.data} ×${cmdTimes}`);
+          this.sendDataMultiple(cmd.data, cmdTimes, cmdInterval);
+        }, totalDelay + cmdDelay);
+        totalDelay += cmdDelay + cmdTimes * cmdInterval;
+      });
+      this._factoryResetAutoStepTimer = setTimeout(() => {
+        this._factoryResetAutoStepTimer = null;
+        if (this.data.showFactoryResetModal && this.data.factoryResetStep === stepIndex) {
+          this.executeFactoryResetStep(stepIndex + 1);
+        }
+      }, totalDelay + (step.delayNext != null ? step.delayNext : 2000));
+      return;
+    }
+
     if (step.showConfirm || step.isFinal || delayNext <= 0 || stepIndex >= steps.length - 1) {
       console.log('ℹ️ [出厂设置] 当前步骤等待用户确认或已是最后一步');
       return;
     }
 
-    // 其他步骤：延迟后自动执行下一步
-    setTimeout(() => {
+    if (this._factoryResetAutoStepTimer) clearTimeout(this._factoryResetAutoStepTimer);
+    this._factoryResetAutoStepTimer = setTimeout(() => {
+      this._factoryResetAutoStepTimer = null;
       this.executeFactoryResetStep(stepIndex + 1);
     }, delayNext);
   },
@@ -4296,8 +4912,8 @@ Page({
     const currentIndex = this.data.factoryResetStep || 0;
     const currentStep = steps[currentIndex] || {};
 
-    // 如果是最终步骤（isFinal），点击确认关闭弹窗
     if (currentStep.isFinal || currentIndex >= steps.length - 1) {
+      this._cleanupFactoryResetFlow();
       this.setData({
         showFactoryResetModal: false,
         factoryResetStep: 0
@@ -4306,21 +4922,18 @@ Page({
       return;
     }
 
-    // 其他带确认键的步骤（例如：初始化角度中）：
-    // 点击确认后进入下一步
     const nextIndex = currentIndex + 1;
     console.log(`ℹ️ [出厂设置] 用户确认步骤 ${currentIndex + 1}，进入步骤 ${nextIndex + 1}`);
     this.executeFactoryResetStep(nextIndex);
   },
 
-  // 🔴 新增：用户主动中断出厂设置（右上角 X）
   cancelFactoryReset() {
     console.log('⏹ [出厂设置] 用户点击关闭，立即中断所有步骤');
+    this._cleanupFactoryResetFlow();
     this.setData({
       showFactoryResetModal: false,
       factoryResetStep: 0
     });
-    // 不需要额外清理定时器：executeFactoryResetStep 会在下次检查到 showFactoryResetModal=false 后自动停止
   },
 
   // 步骤2：按钮按下
@@ -5021,8 +5634,9 @@ Page({
       this._bleReconnectTimer = null;
     }
 
+    const inFactoryAdjust = this.data.showFactoryResetModal && this._isFactoryResetBleAdjustStep();
     const attempt = (this.data.bleReconnectAttempt || 0) + 1;
-    if (attempt > 5) {
+    if (attempt > 5 && !inFactoryAdjust) {
       this.stopBleAutoReconnect(false, false);
       this.setData({ showDisconnectTip: true });
       setTimeout(() => this.setData({ showDisconnectTip: false }), 2000);
@@ -5031,6 +5645,7 @@ Page({
 
     console.log('[BLE] schedule auto reconnect', { reason, attempt });
 
+    const effectiveAttempt = inFactoryAdjust ? Math.min(attempt, 5) : attempt;
     this.setData({
       isBleAutoReconnecting: true,
       isScanning: true,
@@ -5042,7 +5657,7 @@ Page({
     const sinceLost = Date.now() - (this._lastBleLinkLostAt || 0);
     const lostCooldown = sinceLost < 4000 ? (4000 - sinceLost) : 0;
     const delayMs = Math.max(
-      attempt === 1 ? 800 : Math.min(3000, 500 + (attempt - 1) * 400),
+      effectiveAttempt === 1 ? 800 : Math.min(3000, 500 + (effectiveAttempt - 1) * 400),
       lostCooldown
     );
     this._bleReconnectTimer = setTimeout(() => {
@@ -5058,6 +5673,9 @@ Page({
       this._rejectBlockedDebugBleDevice(dev, 'reconnect');
       this._startBleScanSession();
       return;
+    }
+    if (dev && dev.deviceId && this.ble) {
+      this.ble.preferredDeviceId = dev.deviceId;
     }
     this.ble.initBluetoothAdapter()
       .then(() => {
@@ -5645,6 +6263,18 @@ Page({
     if (info.device) this._lastBleDevice = info.device;
     this._activeBleDeviceId = '';
 
+    const inFactoryAdjust = this.data.showFactoryResetModal && this._isFactoryResetBleAdjustStep();
+    if (inFactoryAdjust) {
+      this._bleReconnectStoppedByUser = false;
+      if (this._lastBleDevice && this.ble) {
+        this.ble.preferredDeviceId = this._lastBleDevice.deviceId || '';
+      }
+      if (this._isFactoryResetOpenAngleStep()) {
+        this._rulerTouchActive = false;
+      }
+      this.setData({ showFactoryResetReconnectModal: true });
+    }
+
     this._bleSessionModel = null;
     this._publishBleToVoiceBridge(false);
     this._teardownF2FaultBleListener();
@@ -5662,7 +6292,7 @@ Page({
       isConnected: false,
       isConnecting: false,
       isScanning: false,
-      showDisconnectTip: !unexpected && !this.data.isBleAutoReconnecting
+      showDisconnectTip: !unexpected && !this.data.isBleAutoReconnecting && !inFactoryAdjust
     }, () => {
       this._scheduleRemoteStatePush();
       if (shouldReconnect) {
@@ -6234,8 +6864,10 @@ Page({
           }
           return;
         }
+        this._disarmOpenAngleBleWatch();
         this.setData({ detailMode: 'main' });
       } else {
+        this._disarmOpenAngleBleWatch();
         this._closeDetailAnimated();
         // 断开连接可选
         // if (this.data.isConnected) this.ble.disconnect(); 
@@ -6511,6 +7143,7 @@ Page({
     }
     // 打开角度场景：直接退出编辑，避免“关钥匙倒计时弹窗”导致卡住感
     if (this.data.editType === 'open' && !this._isFoldEditActive()) {
+      this._disarmOpenAngleBleWatch();
       if (this.data.keyLoopTimer) {
         clearTimeout(this.data.keyLoopTimer);
       }
@@ -6681,6 +7314,8 @@ Page({
        this.setData({ showAngleHint: false });
        this.stopOpenAngleTutorialLoop();
     }
+
+    this._armOpenAngleBleWatch();
   },
 
   // ===============================================
@@ -6788,6 +7423,110 @@ Page({
   },
 
   // ===============================================
+  // 打开角度页：蓝牙掉线拦截
+  // 调角度全程依赖蓝牙，断了却没提示会让用户以为拨了就生效了
+  // ===============================================
+  _isOpenAngleEditActive() {
+    return !!this.data.showDetail
+      && this.data.detailMode === 'edit'
+      && this.data.editType === 'open';
+  },
+
+  /**
+   * 进入打开角度页时武装拦截。
+   * 只有「进来时是连着的」才武装：管理员本就没连蓝牙也能进这页，
+   * 对他弹「正在重连」是错的。
+   */
+  _armOpenAngleBleWatch() {
+    this._clearOpenAngleBleWatchTimer();
+    this._openAngleBleWatchArmed = this._canSendBleCommand();
+    this._syncOpenAngleBleLostMask();
+    if (!this._openAngleBleWatchArmed) return;
+    this._startOpenAngleBleWatchTimer();
+  },
+
+  /** 连接状态散落在多处 setData，巡检兜底比逐个挂钩子可靠 */
+  _startOpenAngleBleWatchTimer() {
+    if (this._openAngleBleWatchTimer) return;
+    this._openAngleBleWatchTimer = setInterval(() => {
+      if (!this._isOpenAngleEditActive()) {
+        this._disarmOpenAngleBleWatch();
+        return;
+      }
+      this._syncOpenAngleBleLostMask();
+    }, OPEN_ANGLE_BLE_WATCH_MS);
+  },
+
+  _clearOpenAngleBleWatchTimer() {
+    if (this._openAngleBleWatchTimer) {
+      clearInterval(this._openAngleBleWatchTimer);
+      this._openAngleBleWatchTimer = null;
+    }
+  },
+
+  /**
+   * 回到前台：onHide 只停了巡检，武装状态要保留。
+   * 这里不能走 _armOpenAngleBleWatch 重新判定——回来时可能正断着，
+   * 那样会把武装状态判掉，反而永远不弹拦截层。
+   */
+  _resumeOpenAngleBleWatch() {
+    if (!this._openAngleBleWatchArmed) return;
+    if (!this._isOpenAngleEditActive()) {
+      this._disarmOpenAngleBleWatch();
+      return;
+    }
+    this._syncOpenAngleBleLostMask();
+    this._startOpenAngleBleWatchTimer();
+  },
+
+  _disarmOpenAngleBleWatch() {
+    this._openAngleBleWatchArmed = false;
+    this._clearOpenAngleBleWatchTimer();
+    if (this.data.openAngleBleLostVisible || this.data.openAngleBleLostRetrying) {
+      this.setData({ openAngleBleLostVisible: false, openAngleBleLostRetrying: false });
+    }
+  },
+
+  _syncOpenAngleBleLostMask() {
+    if (!this._openAngleBleWatchArmed || !this._isOpenAngleEditActive()) {
+      if (this.data.openAngleBleLostVisible || this.data.openAngleBleLostRetrying) {
+        this.setData({ openAngleBleLostVisible: false, openAngleBleLostRetrying: false });
+      }
+      return;
+    }
+    const visible = !this._canSendBleCommand();
+    const retrying = visible && (
+      !!this.data.isBleAutoReconnecting || !!this.data.isConnecting || !!this.data.isScanning
+    );
+    if (visible === this.data.openAngleBleLostVisible
+      && retrying === this.data.openAngleBleLostRetrying) {
+      return;
+    }
+    this.setData({ openAngleBleLostVisible: visible, openAngleBleLostRetrying: retrying });
+    if (visible) {
+      // 断在半个手势里：清掉波轮手势状态，恢复后不要接着补发剩下的格数
+      this._rulerTouchActive = false;
+      this._clearOpenAngleBleState();
+    }
+  },
+
+  /** 拦截层里的「重新连接」：自动重连放弃后手动再来一轮 */
+  retryOpenAngleBleLink() {
+    if (this._canSendBleCommand()) {
+      this._syncOpenAngleBleLostMask();
+      return;
+    }
+    if (!this._lastBleDevice) {
+      this._showCustomToast('找不到上次连接的设备，请返回重新连接', 'none', 2600);
+      return;
+    }
+    this._bleReconnectStoppedByUser = false;
+    this.setData({ bleReconnectAttempt: 0 });
+    this._requestBleAutoReconnect('open_angle_manual');
+    this._syncOpenAngleBleLostMask();
+  },
+
+  // ===============================================
   // 触摸开始：记录起点；全系列单次手势最多 ±3 格
   // ===============================================
   onTouchStart(e) {
@@ -6802,8 +7541,14 @@ Page({
     this.lastVibrateIndex = startIndex;
     this._rulerGestureStartIndex = startIndex;
     this._rulerGestureEndIndex = startIndex;
-    this._rulerGestureMinIndex = startIndex - tickLimit;
-    this._rulerGestureMaxIndex = startIndex + tickLimit;
+    // 出厂设置打开角度：只允许从左往右滑（index 减小），禁止往回拨
+    if (this._isFactoryResetOpenAngleStep()) {
+      this._rulerGestureMinIndex = startIndex - tickLimit;
+      this._rulerGestureMaxIndex = startIndex;
+    } else {
+      this._rulerGestureMinIndex = startIndex - tickLimit;
+      this._rulerGestureMaxIndex = startIndex + tickLimit;
+    }
   },
 
   /**
@@ -6858,6 +7603,8 @@ Page({
     const delta = (touchX - this._rulerLastTouchX) * OPEN_ANGLE_RULER_SENSITIVITY;
     this._rulerLastTouchX = touchX;
     if (Math.abs(delta) < 0.35) return;
+    // 出厂设置打开角度：只跟手从左往右（delta>0），右往左直接忽略
+    if (this._isFactoryResetOpenAngleStep() && delta < 0) return;
 
     // 波轮连续跟手：只限本手势 ±3 格，不按角度 0/上限锁死位移
     let newTranslateX = this._rulerTranslateX + delta;
@@ -6883,10 +7630,10 @@ Page({
     if (visualIndex === this.lastVibrateIndex) return;
 
     const currentModel = this.data.currentModel;
-    const isOpenMode = this.data.editType === 'open';
+    const isFactoryOpenAngle = this._isFactoryResetOpenAngleStep();
+    const isOpenMode = this.data.editType === 'open' || isFactoryOpenAngle;
     // 波轮拨完就发蓝牙；预设只锁棍子/数字 UI，不挡发送
-    const canSend = isOpenMode
-      && this._canSendBleCommand();
+    const canSend = isOpenMode && this._canSendBleCommand();
     const slideCmds = isOpenMode ? openAngleSlideBleCommands(currentModel) : null;
     const stepGap = openAngleBleStepGapMs(currentModel);
 
@@ -6900,7 +7647,8 @@ Page({
 
   onRulerTouchEnd() {
     this._rulerTouchActive = false;
-    if (this.data.editType !== 'open') return;
+    const isFactoryOpenAngle = this._isFactoryResetOpenAngleStep();
+    if (this.data.editType !== 'open' && !isFactoryOpenAngle) return;
     this._rulerLastTouchX = null;
     this._rulerGestureMinIndex = null;
     this._rulerGestureMaxIndex = null;
@@ -7387,6 +8135,7 @@ Page({
     }
 
     const currentModel = this.data.currentModel;
+    const isAdmin = !!this.data.isAdmin;
 
     // F3：未连蓝牙也可打开向导调弹窗
     if (isF3MaxModel(currentModel)) {
@@ -7394,7 +8143,7 @@ Page({
       return;
     }
 
-    if (!this._canControlDevice()) {
+    if (!isAdmin && !this._canControlDevice()) {
       this.setData({ showConnectBluetoothTip: true });
       setTimeout(() => {
         this.setData({ showConnectBluetoothTip: false });
@@ -7408,17 +8157,49 @@ Page({
       return;
     }
 
-    if (!this._ensureBleControlReady()) return;
+    if (!isAdmin && !this._ensureBleControlReady()) return;
 
-    console.log('📤 [蓝牙] 发送"自动调平"');
-    this.sendDataMultiple('自动调平', 2, 500);
     this.setData({
+      showAutoCalGuideModal: true,
+      autoCalGuideStage: 'check',
+      autoCalGuideBtnDisabled: false,
+      autoCalGuideText: '请单击按钮，观察后方是否转动',
+      autoCalGuideHint: '按钮点击后应变红',
+      autoCalGuideBtnPressing: false,
+      autoCalGuideBtnLightOn: false
+    });
+    this._startAutoCalGuideAnim();
+  },
+
+  _startAutoCalibrateRun() {
+    this._stopAutoCalGuideAnim();
+    if (this._canSendBleCommand()) {
+      console.log('📤 [蓝牙] 发送"自动调平"');
+      this.sendDataMultiple('自动调平', 2, 500);
+    } else {
+      console.log('ℹ️ [自动校准] 当前未连蓝牙，仅展示流程');
+    }
+    this.setData({
+      showAutoCalGuideModal: false,
       showCalibratingModal: true,
       calibratingBtnDisabled: true
     });
     setTimeout(() => {
       this.setData({ calibratingBtnDisabled: false });
     }, 3000);
+  },
+
+  onAutoCalGuideMoved() {
+    if (this.data.autoCalGuideBtnDisabled) return;
+    this._startAutoCalibrateRun();
+  },
+
+  onAutoCalGuideNotMoved() {
+    if (this.data.autoCalGuideBtnDisabled) return;
+    this._pendingStealthTutorialAction = 'auto_calibrate';
+    this._stopAutoCalGuideAnim();
+    this.setData({ showAutoCalGuideModal: false });
+    this.openStealthTutorialWithMode('exit');
   },
   
   // 🔴 关闭校准弹窗（带收缩退出动画）
@@ -8472,6 +9253,646 @@ Page({
       );
       wx.vibrateShort({ type: 'light' });
     }
+  },
+
+  // ===============================================
+  // 定点折叠（测试版，F1 / F2 Ultra）
+  // ===============================================
+  _geoFoldSupported() {
+    return isF2UltraFirmwareModel(this.data.currentModel);
+  },
+
+  _loadGeoFoldConfig() {
+    if (this._geoFoldCfgLoaded) return;
+    this._geoFoldCfgLoaded = true;
+    let stored = null;
+    try {
+      stored = wx.getStorageSync(GEO_FOLD_CFG_KEY);
+      // 兼容旧版 v1 本地配置（点位可沿用；触发算法已换）
+      if (!stored) stored = wx.getStorageSync('mt_geo_fold_cfg_v1');
+    } catch (e) {
+      stored = null;
+    }
+    const cfg = normalizeGeoFoldCfg(stored && stored.cfg);
+    const point = normalizeGeoFoldPoint(stored && stored.point);
+    this.setData({
+      geoFoldCfg: cfg,
+      geoFoldPoint: point,
+      geoFoldPointText: this._geoFoldPointText(point),
+      geoFoldHitText: `0 / ${cfg.confirmHits}`,
+      geoFoldRadiusText: `${cfg.baseRadius} m`
+    });
+  },
+
+  _persistGeoFoldConfig() {
+    try {
+      wx.setStorageSync(GEO_FOLD_CFG_KEY, {
+        cfg: this.data.geoFoldCfg,
+        point: this.data.geoFoldPoint
+      });
+    } catch (e) { /* ignore */ }
+  },
+
+  _geoFoldPointText(point) {
+    if (!point) return '未设点';
+    const coord = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+    return point.name ? `${point.name}（${coord}）` : coord;
+  },
+
+  _geoFoldLog(text) {
+    this._geoFoldLogSeq = (this._geoFoldLogSeq || 0) + 1;
+    const logs = [
+      { id: this._geoFoldLogSeq, ts: geoFoldClockText(), text: String(text || '') },
+      ...(this.data.geoFoldLogs || [])
+    ].slice(0, GEO_FOLD_LOG_MAX);
+    this.setData({ geoFoldLogs: logs });
+  },
+
+  openGeoFoldModal() {
+    if (!this._geoFoldSupported()) return;
+    this._loadGeoFoldConfig();
+    this.setData({ showGeoFoldModal: true });
+  },
+
+  closeGeoFoldModal() {
+    this.setData({ showGeoFoldModal: false });
+  },
+
+  /** 档位切换：data-key 参数名，data-value 档位值 */
+  onGeoFoldOptionTap(e) {
+    const ds = (e.currentTarget && e.currentTarget.dataset) || {};
+    const key = ds.key;
+    const list = key ? GEO_FOLD_OPTIONS[key] : null;
+    if (!list) return;
+    const value = Number(ds.value);
+    // 只认档位表里的值，避免写错 data-value 时塞进一个离谱参数
+    if (!list.some((opt) => Number(opt.value) === value)) return;
+    if (Number(this.data.geoFoldCfg[key]) === value) return;
+    const cfg = { ...this.data.geoFoldCfg, [key]: value };
+    const patch = { geoFoldCfg: cfg };
+    if (key === 'confirmHits') {
+      patch.geoFoldHitText = `${(this._geoFoldState && this._geoFoldState.hits) || 0} / ${cfg.confirmHits}`;
+    }
+    if (key === 'baseRadius') {
+      patch.geoFoldRadiusText = `${cfg.baseRadius} m`;
+    }
+    this.setData(patch, () => {
+      this._persistGeoFoldConfig();
+      // 判定节流改了：连续定位下下次回调自然生效；轮询模式要立刻重排
+      if (key === 'pollMs' && this.data.geoFoldTracking && this._geoFoldUsePoll) {
+        this._clearGeoFoldTimer();
+        this._scheduleGeoFoldTick(0);
+      }
+    });
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  /** 开关型参数：data-key 参数名，data-val 1 开 / 0 关 */
+  onGeoFoldSwitchTap(e) {
+    const ds = (e.currentTarget && e.currentTarget.dataset) || {};
+    const key = ds.key;
+    if (!['requireApproaching', 'autoStopAfterFire', 'vibrateOnFire'].includes(key)) return;
+    const next = String(ds.val) === '1';
+    if (!!this.data.geoFoldCfg[key] === next) return;
+    const cfg = { ...this.data.geoFoldCfg, [key]: next };
+    this.setData({ geoFoldCfg: cfg }, () => this._persistGeoFoldConfig());
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  /** 到点执行的指令：收起 / 翻开 */
+  onGeoFoldCmdTap(e) {
+    const cmd = (e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.cmd) || '';
+    if (cmd !== '打开' && cmd !== '关闭') return;
+    if (this.data.geoFoldCfg.triggerCmd === cmd) return;
+    const cfg = { ...this.data.geoFoldCfg, triggerCmd: cmd };
+    this.setData({ geoFoldCfg: cfg }, () => this._persistGeoFoldConfig());
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  _ensureGeoFoldLocationAuth() {
+    return new Promise((resolve, reject) => {
+      wx.getSetting({
+        success: (res) => {
+          const auth = res.authSetting || {};
+          if (auth['scope.userLocation'] === true) {
+            resolve();
+            return;
+          }
+          if (auth['scope.userLocation'] === false) {
+            reject({ type: 'denied' });
+            return;
+          }
+          wx.authorize({
+            scope: 'scope.userLocation',
+            success: () => resolve(),
+            fail: () => reject({ type: 'denied' })
+          });
+        },
+        fail: () => resolve()
+      });
+    });
+  },
+
+  _handleGeoFoldAuthFail() {
+    this._showCustomToast('需要定位权限才能使用定点折叠', 'none', 2400);
+    wx.showModal({
+      title: '需要定位权限',
+      content: '定点折叠依赖手机定位判断是否到达设定点，请在设置中开启位置信息。',
+      confirmText: '去设置',
+      success: (res) => {
+        if (res.confirm) wx.openSetting({});
+      }
+    });
+  },
+
+  _getGeoFoldLocationOnce() {
+    return new Promise((resolve, reject) => {
+      wx.getLocation({
+        type: 'gcj02',
+        isHighAccuracy: true,
+        highAccuracyExpireTime: 5000,
+        success: resolve,
+        fail: reject
+      });
+    });
+  },
+
+  /**
+   * 设点质量门禁：连采多次，精度合格且彼此聚在一起，再取平均坐标。
+   * 避免「随手一点」把漂移中的粗定位写进目标点。
+   */
+  _captureStableGeoFoldPoint() {
+    return new Promise((resolve, reject) => {
+      const good = [];
+      let tries = 0;
+      const tick = () => {
+        tries += 1;
+        this._getGeoFoldLocationOnce()
+          .then((res) => {
+            const lat = Number(res.latitude);
+            const lng = Number(res.longitude);
+            const acc = Math.max(0, Number(res.accuracy) || 999);
+            if (Number.isFinite(lat) && Number.isFinite(lng) && acc <= GEO_FOLD_SET_MAX_ACC_M) {
+              good.push({ lat, lng, acc });
+              if (good.length >= GEO_FOLD_SET_NEED) {
+                const recent = good.slice(-GEO_FOLD_SET_NEED);
+                let clustered = true;
+                for (let i = 1; i < recent.length; i++) {
+                  const d = geoDistanceMeters(
+                    recent[0].lat, recent[0].lng,
+                    recent[i].lat, recent[i].lng
+                  );
+                  if (d > GEO_FOLD_SET_CLUSTER_M) {
+                    clustered = false;
+                    break;
+                  }
+                }
+                if (clustered) {
+                  const n = recent.length;
+                  const latAvg = recent.reduce((s, p) => s + p.lat, 0) / n;
+                  const lngAvg = recent.reduce((s, p) => s + p.lng, 0) / n;
+                  const accBest = Math.min(...recent.map((p) => p.acc));
+                  const accAvg = recent.reduce((s, p) => s + p.acc, 0) / n;
+                  resolve({
+                    lat: latAvg,
+                    lng: lngAvg,
+                    accuracy: accBest,
+                    accuracyAvg: accAvg,
+                    samples: n
+                  });
+                  return;
+                }
+              }
+            }
+            if (tries >= GEO_FOLD_SET_MAX_TRIES) {
+              reject({
+                type: 'unstable',
+                goodCount: good.length,
+                bestAcc: good.length ? Math.min(...good.map((g) => g.acc)) : null
+              });
+              return;
+            }
+            this.setData({
+              geoFoldStatusText: `校准设点 ${tries}/${GEO_FOLD_SET_MAX_TRIES}…`
+            });
+            setTimeout(tick, GEO_FOLD_SET_GAP_MS);
+          })
+          .catch(() => {
+            if (tries >= GEO_FOLD_SET_MAX_TRIES) {
+              reject({ type: 'fail' });
+              return;
+            }
+            setTimeout(tick, GEO_FOLD_SET_GAP_MS);
+          });
+      };
+      tick();
+    });
+  },
+
+  useCurrentAsGeoFoldPoint() {
+    if (!this._geoFoldSupported()) return;
+    if (this.data.geoFoldTracking) {
+      this._showCustomToast('请先停止跟踪再设点', 'none', 1800);
+      return;
+    }
+    if (this._geoFoldCapturingPoint) return;
+    this._geoFoldCapturingPoint = true;
+    this.setData({ geoFoldCapturingPoint: true });
+    this._showCustomToast('正在校准定位，请稍候…', 'none', 1600);
+    this._ensureGeoFoldLocationAuth()
+      .then(() => this._captureStableGeoFoldPoint())
+      .then((fixed) => {
+        const point = normalizeGeoFoldPoint({
+          lat: fixed.lat,
+          lng: fixed.lng,
+          name: '当前位置'
+        });
+        if (!point) {
+          this._showCustomToast('定位结果异常', 'none', 2000);
+          return;
+        }
+        this.setData({
+          geoFoldPoint: point,
+          geoFoldPointText: this._geoFoldPointText(point),
+          geoFoldStatusText: '未开始'
+        }, () => this._persistGeoFoldConfig());
+        this._geoFoldLog(
+          `已设点×${fixed.samples}（精度约 ±${Math.round(fixed.accuracy)}m）`
+        );
+        this._showCustomToast('已用稳定定位设点', 'success', 1800);
+      })
+      .catch((err) => {
+        if (err && err.type === 'denied') {
+          this._handleGeoFoldAuthFail();
+          return;
+        }
+        if (err && err.type === 'unstable') {
+          const tip = err.bestAcc != null
+            ? `定位不稳（最好 ±${Math.round(err.bestAcc)}m），请到开阔处重试`
+            : '定位不稳，请到开阔处重试';
+          this._showCustomToast(tip, 'none', 2600);
+          this._geoFoldLog('设点失败：样本精度/聚簇不合格');
+          this.setData({ geoFoldStatusText: '设点失败（定位不稳）' });
+          return;
+        }
+        this._showCustomToast('获取位置失败，请重试', 'none', 2000);
+        this.setData({ geoFoldStatusText: '设点失败' });
+      })
+      .then(() => {
+        this._geoFoldCapturingPoint = false;
+        this.setData({ geoFoldCapturingPoint: false });
+      }, () => {
+        this._geoFoldCapturingPoint = false;
+        this.setData({ geoFoldCapturingPoint: false });
+      });
+  },
+
+  chooseGeoFoldPoint() {
+    if (!this._geoFoldSupported()) return;
+    if (this.data.geoFoldTracking) {
+      this._showCustomToast('请先停止跟踪再设点', 'none', 1800);
+      return;
+    }
+    this._ensureGeoFoldLocationAuth()
+      .then(() => {
+        wx.chooseLocation({
+          success: (res) => {
+            const point = normalizeGeoFoldPoint({
+              lat: res.latitude,
+              lng: res.longitude,
+              name: res.name || res.address || '地图选点'
+            });
+            if (!point) {
+              this._showCustomToast('选点结果异常', 'none', 2000);
+              return;
+            }
+            this.setData({
+              geoFoldPoint: point,
+              geoFoldPointText: this._geoFoldPointText(point)
+            }, () => this._persistGeoFoldConfig());
+            this._geoFoldLog(`地图选点：${point.name || '未命名'}`);
+          },
+          fail: (err) => {
+            const msg = String((err && err.errMsg) || '');
+            if (msg.indexOf('cancel') !== -1) return;
+            this._showCustomToast('打开地图失败', 'none', 2000);
+          }
+        });
+      })
+      .catch(() => this._handleGeoFoldAuthFail());
+  },
+
+  clearGeoFoldPoint() {
+    if (this.data.geoFoldTracking) {
+      this._showCustomToast('请先停止跟踪', 'none', 1800);
+      return;
+    }
+    this.setData({
+      geoFoldPoint: null,
+      geoFoldPointText: '未设点'
+    }, () => this._persistGeoFoldConfig());
+    this._geoFoldLog('已清除设点');
+  },
+
+  toggleGeoFoldTracking() {
+    if (this.data.geoFoldTracking) {
+      this._stopGeoFoldTracking('手动停止');
+      return;
+    }
+    this._startGeoFoldTracking();
+  },
+
+  _resetGeoFoldRuntime() {
+    this._geoFoldState = createGeoFoldState();
+    this._geoFoldCooldownUntil = 0;
+    this._geoFoldLastJudgeAt = 0;
+  },
+
+  _startGeoFoldTracking() {
+    if (!this._geoFoldSupported()) return;
+    if (this._geoFoldCapturingPoint) {
+      this._showCustomToast('正在校准设点，请稍候', 'none', 1800);
+      return;
+    }
+    if (!this.data.geoFoldPoint) {
+      this._showCustomToast('请先设置一个点位', 'none', 2000);
+      return;
+    }
+    // 弹窗盖住了页面里的「去连蓝牙」提示条，这里直接用 toast 说明
+    if (!this._canSendBleCommand()) {
+      this._showCustomToast('请先连接蓝牙再开始跟踪', 'none', 2200);
+      return;
+    }
+
+    this._ensureGeoFoldLocationAuth()
+      .then(() => {
+        this._resetGeoFoldRuntime();
+        this.setData({
+          geoFoldTracking: true,
+          geoFoldStatusText: '跟踪中',
+          geoFoldSampleCount: 0,
+          geoFoldHitText: `0 / ${this.data.geoFoldCfg.confirmHits}`,
+          geoFoldEtaText: '--',
+          geoFoldRadiusText: `${this.data.geoFoldCfg.baseRadius} m`,
+          geoFoldTrendText: '--'
+        });
+        this._geoFoldLog('开始跟踪');
+        return this._startGeoFoldLocationStream();
+      })
+      .then((mode) => {
+        if (!this.data.geoFoldTracking) return;
+        if (mode === 'stream') {
+          this._geoFoldUsePoll = false;
+          this._geoFoldLog('连续定位已开启');
+        } else {
+          this._geoFoldUsePoll = true;
+          this._geoFoldLog('改用轮询定位');
+          this._scheduleGeoFoldTick(0);
+        }
+      })
+      .catch((err) => {
+        if (err && err.type === 'denied') {
+          this._handleGeoFoldAuthFail();
+          return;
+        }
+        this._showCustomToast('无法开启定位跟踪', 'none', 2200);
+        this._stopGeoFoldTracking('定位启动失败');
+      });
+  },
+
+  /** 优先连续定位；不支持时回落轮询 getLocation */
+  _startGeoFoldLocationStream() {
+    return new Promise((resolve) => {
+      if (typeof wx.startLocationUpdate !== 'function' || typeof wx.onLocationChange !== 'function') {
+        resolve('poll');
+        return;
+      }
+      this._stopGeoFoldLocationStream(false);
+      this._geoFoldLocHandler = (res) => {
+        this._onGeoFoldLocationChange(res);
+      };
+      try {
+        wx.onLocationChange(this._geoFoldLocHandler);
+      } catch (e) {
+        this._geoFoldLocHandler = null;
+        resolve('poll');
+        return;
+      }
+      wx.startLocationUpdate({
+        success: () => resolve('stream'),
+        fail: () => {
+          this._stopGeoFoldLocationStream(false);
+          resolve('poll');
+        }
+      });
+    });
+  },
+
+  _stopGeoFoldLocationStream(silent) {
+    if (this._geoFoldLocHandler && typeof wx.offLocationChange === 'function') {
+      try {
+        wx.offLocationChange(this._geoFoldLocHandler);
+      } catch (e) { /* ignore */ }
+    }
+    this._geoFoldLocHandler = null;
+    if (typeof wx.stopLocationUpdate === 'function') {
+      try {
+        wx.stopLocationUpdate({
+          complete: () => {},
+          fail: () => {}
+        });
+      } catch (e) { /* ignore */ }
+    }
+    if (!silent) {
+      // no-op；停止时日志由上层写
+    }
+  },
+
+  _onGeoFoldLocationChange(res) {
+    if (!this.data.geoFoldTracking || this._geoFoldUsePoll) return;
+    const now = Date.now();
+    const minInterval = this.data.geoFoldCfg.pollMs || 2000;
+    if (now - (this._geoFoldLastJudgeAt || 0) < minInterval) return;
+    this._geoFoldLastJudgeAt = now;
+    this._handleGeoFoldSample(res);
+  },
+
+  /** keepStatus：触发后停止时保留「已触发」文案，别被「已停止」盖掉 */
+  _stopGeoFoldTracking(reason, keepStatus) {
+    this._clearGeoFoldTimer();
+    this._stopGeoFoldLocationStream(true);
+    this._geoFoldUsePoll = false;
+    this._geoFoldState = createGeoFoldState();
+    if (!this.data.geoFoldTracking) return;
+    const patch = { geoFoldTracking: false };
+    if (!keepStatus) {
+      patch.geoFoldStatusText = reason ? `已停止（${reason}）` : '已停止';
+    }
+    this.setData(patch);
+    if (reason) this._geoFoldLog(`停止跟踪：${reason}`);
+  },
+
+  _clearGeoFoldTimer() {
+    if (this._geoFoldTimer) {
+      clearTimeout(this._geoFoldTimer);
+      this._geoFoldTimer = null;
+    }
+  },
+
+  /** 用 setTimeout 串行调度，避免定位慢时多次采样叠在一起 */
+  _scheduleGeoFoldTick(delay) {
+    this._clearGeoFoldTimer();
+    if (!this.data.geoFoldTracking || !this._geoFoldUsePoll) return;
+    const wait = delay != null ? delay : (this.data.geoFoldCfg.pollMs || 2000);
+    this._geoFoldTimer = setTimeout(() => {
+      this._geoFoldTimer = null;
+      this._geoFoldSampleOnce();
+    }, wait);
+  },
+
+  _geoFoldSampleOnce() {
+    if (!this.data.geoFoldTracking || !this._geoFoldUsePoll) return;
+    this._getGeoFoldLocationOnce()
+      .then((res) => {
+        this._handleGeoFoldSample(res);
+        this._scheduleGeoFoldTick();
+      })
+      .catch(() => {
+        this._geoFoldLog('定位失败，稍后重试');
+        this._scheduleGeoFoldTick();
+      });
+  },
+
+  _handleGeoFoldSample(res) {
+    if (!this.data.geoFoldTracking) return;
+    const point = this.data.geoFoldPoint;
+    if (!point) {
+      this._stopGeoFoldTracking('设点丢失');
+      return;
+    }
+    if (!this._geoFoldState) this._geoFoldState = createGeoFoldState();
+    const cfg = this.data.geoFoldCfg;
+    const now = Date.now();
+    const judge = geoFoldJudgeStep(
+      this._geoFoldState,
+      {
+        latitude: res.latitude,
+        longitude: res.longitude,
+        accuracy: res.accuracy,
+        speed: res.speed,
+        t: now
+      },
+      cfg,
+      point
+    );
+
+    const sampleCount = (this.data.geoFoldSampleCount || 0) + 1;
+    const accuracy = Math.max(0, Number(res.accuracy) || 0);
+
+    if (judge.action === 'bad_coord') {
+      this._geoFoldLog('定位坐标异常，样本作废');
+      return;
+    }
+    if (judge.action === 'accuracy_reject') {
+      this.setData({
+        geoFoldAccuracyText: `±${Math.round(accuracy)} m（超限）`,
+        geoFoldSampleCount: sampleCount,
+        geoFoldLastAt: geoFoldClockText()
+      });
+      this._geoFoldLog(`精度 ±${Math.round(accuracy)}m 超限，样本作废`);
+      return;
+    }
+    if (judge.action === 'teleport_reject') {
+      this.setData({
+        geoFoldAccuracyText: `±${Math.round(accuracy)} m`,
+        geoFoldTrendText: '定位跳变',
+        geoFoldHitText: `0 / ${cfg.confirmHits}`,
+        geoFoldSampleCount: sampleCount,
+        geoFoldLastAt: geoFoldClockText(),
+        geoFoldDistanceText: `${Math.round(judge.distance)} m`
+      });
+      this._geoFoldLog(`丢弃瞬移点（原始距点 ${Math.round(judge.rawDistance)}m）`);
+      return;
+    }
+
+    const radius = judge.radius || cfg.baseRadius;
+    let trendText = '跟踪中';
+    if (judge.inZone) trendText = '已碰圆边/在圈内';
+    else if (judge.leadOk) trendText = '提前接近中';
+    else if (judge.hit) trendText = '靠近中';
+
+    const etaText = judge.inZone
+      ? '已到达'
+      : (judge.etaSec != null ? `${judge.etaSec.toFixed(1)} s` : '--');
+    const distDrift = Math.abs(judge.rawDistance - judge.distance);
+    const distText = distDrift >= 8
+      ? `${Math.round(judge.distance)} m（原始 ${Math.round(judge.rawDistance)}）`
+      : `${Math.round(judge.rawDistance)} m`;
+    const radiusText = judge.leadOk
+      ? `圆 ${radius} m · 提前命中`
+      : `圆 ${radius} m（碰边即算）`;
+
+    this.setData({
+      geoFoldDistanceText: distText,
+      geoFoldRadiusText: radiusText,
+      geoFoldEtaText: etaText,
+      geoFoldSpeedText: `${(judge.speedKmh || 0).toFixed(1)} km/h`,
+      geoFoldAccuracyText: `±${Math.round(accuracy)} m`,
+      geoFoldTrendText: trendText,
+      geoFoldHitText: `${judge.hits || 0} / ${cfg.confirmHits}`,
+      geoFoldSampleCount: sampleCount,
+      geoFoldLastAt: geoFoldClockText()
+    });
+
+    if ((judge.inZone || judge.leadOk) && !judge.hit && cfg.maxSpeedKmh > 0 && (judge.speedKmh || 0) > cfg.maxSpeedKmh) {
+      this._geoFoldLog(`满足距离但车速 ${judge.speedKmh.toFixed(0)}km/h 超限`);
+      return;
+    }
+    if (judge.leadOk && judge.hits === 1) {
+      this._geoFoldLog(`提前命中：距圆边约 ${Math.round(Math.max(0, judge.distance - radius))}m`);
+    } else if (judge.inZone && judge.hits === 1) {
+      this._geoFoldLog(`碰到圆边：距点 ${Math.round(judge.rawDistance)}m / 半径 ${radius}m`);
+    }
+    if (judge.fired) {
+      if (Date.now() < (this._geoFoldCooldownUntil || 0)) return;
+      this._fireGeoFold(false);
+    }
+  },
+
+  _fireGeoFold(isSimulate) {
+    const cfg = this.data.geoFoldCfg;
+    const cmd = cfg.triggerCmd;
+    const cmdLabel = cmd === '打开' ? '翻开' : '收起';
+
+    if (!this._canSendBleCommand()) {
+      this._geoFoldLog(`触发失败：蓝牙未连接（${cmdLabel}）`);
+      this._showCustomToast('蓝牙未连接，未能执行', 'none', 2400);
+      this._stopGeoFoldTracking('蓝牙断开');
+      return;
+    }
+
+    if (cfg.vibrateOnFire) {
+      wx.vibrateLong();
+    }
+    this.setData({
+      geoFoldStatusText: isSimulate ? `已模拟触发（${cmdLabel}）` : `已触发（${cmdLabel}）`
+    });
+    this._geoFoldLog(isSimulate ? `模拟触发：${cmdLabel}` : `到达触发：${cmdLabel}`);
+    if (this._geoFoldState) this._geoFoldState.hits = 0;
+    // 不自动停止时留个冷却，别让舵机连着挨打
+    this._geoFoldCooldownUntil = Date.now() + GEO_FOLD_REFIRE_COOLDOWN_MS;
+
+    this.handleF2RemoteControl({ currentTarget: { dataset: { cmd } } });
+
+    if (cfg.autoStopAfterFire) {
+      this._stopGeoFoldTracking(isSimulate ? '模拟后自动停止' : '触发后自动停止', true);
+    }
+  },
+
+  /** 不看位置，直接走一遍触发链路，用来单独验证蓝牙下发 */
+  simulateGeoFoldTrigger() {
+    if (!this._geoFoldSupported()) return;
+    this._fireGeoFold(true);
   },
 
   _sendF2DemoCommand(cmd) {
@@ -10470,10 +11891,9 @@ Page({
       }
     }
 
-    // 已用顶部 Toast 提示看灯，不再弹窗阻塞首条指令
     const settingsPatch = {
       showSettingsModal: true,
-      hasShownSettingsIndicatorModal: true,
+      hasShownSettingsIndicatorModal: false,
       delayPowerOffIndex,
       settingsModalCompact: !(isF2UltraFirmwareModel(model) || isF3MaxModel(model))
     };
@@ -10763,6 +12183,24 @@ Page({
         : (currentModel && currentModel.name === 'F1'
           ? (currentModel.type === 'Pro' ? 'F1 PRO' : 'F1 MAX')
           : ''));
+
+    if (!isMtUltra && !this.data.hasShownSettingsIndicatorModal && sendText) {
+      this.setData({
+        settingState: newState,
+        ...stealthUi,
+        hasShownSettingsIndicatorModal: true,
+        showIndicatorCheckModal: true,
+        indicatorCheckModalClosing: false,
+        pendingSendData: {
+          type: 'settings',
+          sendText,
+          key,
+          targetVal,
+          label: sendLabel
+        }
+      });
+      return;
+    }
 
     const enablingPowerOffLock = key === 'powerOffLock'
       && targetVal === 'left'
@@ -11639,7 +13077,9 @@ Page({
       if (verify.key === 'shutdown' || verify.key === 'faultDetect' || verify.key === 'selfRepair'
         || verify.key === 'powerOn'
         || verify.key === 'smoothMode' || verify.key === 'stealthBtnExit'
-        || verify.key === 'powerOffLock'
+      || verify.key === 'powerOffLock'
+      || verify.key === 'bootPinDetect'
+      || verify.key === 'multiRetry'
         || verify.key === 'heightMon') {
         delete updates.f2TravelReadbackText;
         delete updates.f2DelayPowerReadbackText;
@@ -11925,12 +13365,16 @@ Page({
       label: label || '高级设置'
     });
     // 无回读校验的设置项（如 F3 MAX 隐蔽退出方式）：发送后直接提示成功
-    if (!verify && key === 'stealthBtnExit' && isF3MaxModel(this.data.currentModel)) {
+    if (!verify && (key === 'stealthBtnExit' || key === 'multiRetry' || key === 'bootPinDetect') && isF3MaxModel(this.data.currentModel)) {
       const successText = buildSettingChangeResultText(this.data.currentModel, key, targetVal);
       if (successText) {
         setTimeout(() => {
           if (this._canControlDevice()) {
             this._showCustomToast(successText, 'success', 2200);
+          }
+          if (key === 'multiRetry') {
+            const st = { ...this.data.settingState, multiRetry: 'right' };
+            this.setData({ settingState: st });
           }
         }, 280);
       }
@@ -12156,6 +13600,8 @@ Page({
     this._f3LastIevFilt = null;
     this._f3LastIev = null;
     this._f3BumpUntil = 0;
+    // 连上后传感器尚未稳定，禁止本机过坑判定/发 BK
+    this._f3BumpArmAt = Date.now() + 6000;
     if (this._f3BumpClearTimer) {
       clearTimeout(this._f3BumpClearTimer);
       this._f3BumpClearTimer = null;
@@ -12559,6 +14005,15 @@ Page({
           : `${updates.f3AttitudeSide} ${Math.abs(deg).toFixed(1)}°`;
       }
     }
+    // IPK 是固件在两次 BLE 状态包之间以 50Hz 捕获的峰值，避免过弯后快速回正漏掉最大倾角。
+    if (parsed.ipk !== null && parsed.ipk !== undefined) {
+      const peak = Number(parsed.ipk) / 10;
+      if (Number.isFinite(peak)) {
+        updates.f3ImuPeakDeg = peak;
+        if (peak < 0) updates.f3ImuMaxLeftDeg = Math.max(Number(this.data.f3ImuMaxLeftDeg) || 0, -peak);
+        if (peak > 0) updates.f3ImuMaxRightDeg = Math.max(Number(this.data.f3ImuMaxRightDeg) || 0, peak);
+      }
+    }
     if (parsed.iev !== null && parsed.iev !== undefined) {
       const ievRaw = Number(parsed.iev) / 100;
       if (!Number.isFinite(ievRaw)) {
@@ -12598,9 +14053,10 @@ Page({
         const spike = iev - cruise;
         const thr = this._f3BumpThrParams(this.data.f3BumpSens);
         const need = Math.max(thr.floorNeed, cruise * 1.55) * thr.needMul;
-        const isSpike = spike >= need && rising >= thr.riseNeed;
+        const armed = !(this._f3BumpArmAt) || nowMs >= this._f3BumpArmAt;
+        const isSpike = armed && spike >= need && rising >= thr.riseNeed;
         if (isSpike) {
-          this._f3BumpUntil = nowMs + 500;
+          this._f3BumpUntil = nowMs + 1000;
           updates.f3BumpActive = true;
           updates.f3AttitudeHint = '过坑冲击';
           // 控制面板若收起，过坑红灯看不见；强制展开
@@ -12619,7 +14075,7 @@ Page({
             if (Date.now() >= (this._f3BumpUntil || 0) && this.data.f3BumpActive) {
               this.setData({ f3BumpActive: false });
             }
-          }, 550);
+          }, 1100);
         } else if (nowMs > (this._f3BumpUntil || 0)) {
           updates.f3BumpActive = false;
         } else {

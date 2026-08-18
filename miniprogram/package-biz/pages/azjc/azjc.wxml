@@ -30,10 +30,25 @@
     </view>
   </view>
 
+  <!-- 普通用户：复制安装教程查看码给安装人员 -->
+  <view
+    class="azjc-install-code-bar"
+    wx:if="{{showUserInstallCode && userInstallShareCode && !isShareCodeUser && !isAdmin && !isVideoFullScreen && !showShareCodeStats}}"
+  >
+    <view class="azjc-install-code-main">
+      <view class="azjc-install-code-left">
+        <text class="azjc-install-code-label">安装教程查看码</text>
+        <text class="azjc-install-code-value">{{userInstallShareCode}}</text>
+      </view>
+      <view class="azjc-install-code-copy" catchtap="copyUserInstallShareCode">复制</view>
+    </view>
+    <text class="azjc-install-code-hint">发给安装人员，在小程序首页输入 MT 码查看教程</text>
+  </view>
+
   <!-- 核心：舞台容器，通过 translate 控制位移 -->
   <view 
     wx:if="{{!showShareCodeStats}}"
-    class="stage-wrapper" 
+    class="stage-wrapper {{showUserInstallCode && userInstallShareCode && !isShareCodeUser && !isAdmin ? 'stage-wrapper--install-code' : ''}}" 
     style="transform: translateY(-{{stepIndex * winHeight}}px); height: {{winHeight}}px;"
     bindtouchstart="touchStart"
     bindtouchend="touchEnd">
@@ -89,14 +104,16 @@
     <!-- STEP 03: 教程详情 (100vh，内部可局部滚动) -->
     <view class="step-view" id="step3">
       <view class="view-content" style="padding-bottom: 0;">
-        <view class="mode-switch">
-          <view class="m-btn {{mode === 'v' ? 'active' : ''}}" bindtap="switchMode" data-mode="v">分段视频</view>
-          <view class="m-btn {{mode === 'g' ? 'active' : ''}}" bindtap="switchMode" data-mode="g">图文详情</view>
-        </view>
         <!-- 管理员模式工具栏 -->
         <view class="admin-tools-row" wx:if="{{isAdmin}}">
           <view class="show-all-switch" bindtap="toggleShowAll">
             <text class="show-all-text">{{showAll ? '✓ 显示全部' : '显示全部'}}</text>
+          </view>
+          <view class="show-all-switch" bindtap="refreshAzjcData">
+            <text class="show-all-text">刷新数据</text>
+          </view>
+          <view class="show-all-switch" bindtap="runDuplicateVideoCheck">
+            <text class="show-all-text">查重视频</text>
           </view>
           <view class="show-all-switch" bindtap="toggleShareCodeStats">
             <text class="show-all-text">{{showShareCodeStats ? '返回教程' : '查看数据'}}</text>
@@ -109,10 +126,9 @@
   wx:if="{{!(isAdmin && showShareCodeStats)}}"
   id="tutorialScroll"
   class="tutorial-scroll">
-          <!-- 视频模式 -->
-          <view class="tutorial-body" wx:if="{{mode === 'v'}}">
+          <view class="tutorial-body {{isAdmin && showAll ? 'tutorial-body--compact' : ''}}">
             <view
-              class="v-card v-card--chapter video-card video-card--tutorial-chapter {{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'dragging' : ''}}"
+              class="v-card v-card--chapter video-card video-card--tutorial-chapter {{item.important ? 'video-card--important' : ''}} {{isAdmin && showAll ? 'video-card--compact' : ''}} {{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'dragging' : ''}}"
               wx:for="{{filteredChapters}}"
               wx:key="_id"
               style="{{isAdmin && isDragging && dragIndex === index && dragType === 'chapters' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
@@ -127,15 +143,19 @@
               id="video-card-{{index}}">
               <!-- 列表内嵌视频：原生 controls + 居中播放；全屏入口在下方白区（与 shouhou 一致） -->
               <view class="v-chapter-cover-wrap" wx:if="{{item.url}}">
-                <view class="v-chapter-cover-tap">
+                <view class="v-chapter-cover-tap" catchtap="onChapterCoverTap" data-index="{{index}}" mark:listIdx="{{index}}">
                   <video
+                    wx:if="{{chapterInlineMountIndex === index}}"
                     id="azjc-inline-{{index}}"
                     class="v-chapter-inline-video"
                     src="{{item.url}}"
                     poster="{{item.coverUrl || ''}}"
+                    preload="metadata"
                     data-index="{{index}}"
                     mark:listIdx="{{index}}"
                     object-fit="contain"
+                    http-cache="{{true}}"
+                    play-strategy="{{1}}"
                     show-fullscreen-btn="{{false}}"
                     show-center-play-btn="{{true}}"
                     show-casting-button="{{false}}"
@@ -150,6 +170,18 @@
                     bindpause="onChapterInlinePause"
                     bindended="onChapterInlineEnded"
                   ></video>
+                  <view wx:else class="v-chapter-cover-placeholder">
+                    <image
+                      wx:if="{{item.coverUrl}}"
+                      class="v-chapter-cover-img"
+                      src="{{item.coverUrl}}"
+                      mode="aspectFill"
+                      lazy-load="{{true}}"
+                      binderror="onChapterCoverError"
+                      data-index="{{index}}"
+                    ></image>
+                    <text class="v-chapter-cover-ph-play">▶</text>
+                  </view>
                 </view>
               </view>
               <view class="v-player" wx:else>
@@ -174,69 +206,50 @@
                     </view>
                   </view>
                 </view>
-                <view class="admin-actions" wx:if="{{isAdmin}}">
+                <view class="admin-actions {{showAll ? 'admin-actions--compact' : ''}}" wx:if="{{isAdmin}}">
                   <view class="admin-edit-btn" bindtap="editItem" data-type="chapters" data-index="{{index}}">编辑</view>
-                  <view class="admin-edit-btn" catchtap="uploadChapterVideo" data-index="{{index}}" mark:listIdx="{{index}}">上传视频</view>
+                  <view class="admin-edit-btn" catchtap="uploadChapterVideo" data-index="{{index}}" mark:listIdx="{{index}}">替换视频</view>
+                  <view class="admin-important-btn {{item.important ? 'on' : ''}}" catchtap="toggleChapterImportant" data-index="{{index}}" mark:listIdx="{{index}}">{{item.important ? '取消重要' : '设为重要'}}</view>
                   <view class="admin-del-btn" bindtap="deleteItem" data-type="chapters" data-index="{{index}}">删除</view>
-                  <view class="admin-match-code">
-                    <text class="match-code-text">{{item.matchCode || '未设置'}}</text>
+                  <view class="admin-match-code" wx:if="{{showAll}}">
+                    <text class="match-code-text">{{item.matchCodeText || '未设置'}}</text>
+                  </view>
+                </view>
+                <view class="azjc-combo-row" wx:if="{{isAdmin && currentComboLabel && !showAll}}">
+                  <text class="azjc-combo-label">{{currentComboLabel}}</text>
+                  <view
+                    class="azjc-combo-switch-btn"
+                    catchtap="openComboSwitch"
+                    hover-class="azjc-combo-switch-btn--active"
+                    hover-start-time="10"
+                    hover-stay-time="70">
+                    <text class="azjc-combo-switch-btn-text">切换查看</text>
                   </view>
                 </view>
               </view>
             </view>
             
-            <!-- 视频模式下添加按钮 -->
-            <view class="add-card-btn" wx:if="{{isAdmin && mode === 'v'}}" bindtap="uploadMedia" data-type="video">+ 添加视频章节</view>
+            <view class="add-card-btn" wx:if="{{isAdmin}}" bindtap="uploadMedia" data-type="video">+ 添加视频章节</view>
           </view>
-          <!-- 图文模式 -->
-          <view class="tutorial-body" wx:else>
-            <view
-              class="g-article g-article--tutorial {{isAdmin && isDragging && dragIndex === index && dragType === 'graphics' ? 'dragging' : ''}}"
-              wx:for="{{filteredGraphics}}"
-              wx:key="_id"
-              style="{{isAdmin && isDragging && dragIndex === index && dragType === 'graphics' ? 'transform: translateY(' + dragOffsetY + 'px) scale(1.02);' : ''}}"
-              bindtouchstart="{{isAdmin ? 'onDragStart' : 'onGraphicTap'}}"
-              catchtouchmove="{{isAdmin && isDragging ? 'onDragMove' : ''}}"
-              bindtouchend="{{isAdmin ? 'onDragEnd' : ''}}"
-              bindtouchcancel="{{isAdmin ? 'onDragEnd' : ''}}"
-              data-index="{{index}}"
-              data-type="graphics">
-              <view class="g-media" wx:if="{{item.img || item.previewLocal}}">
-                <image
-                  class="g-media-real"
-                  src="{{item.previewLocal || item.img}}"
-                  mode="widthFix"
-                  lazy-load="{{false}}"
-                  show-menu-by-longpress="{{false}}"
-                  bindload="onAzjcGraphicImageLoad"
-                  binderror="onAzjcGraphicImageError"
-                  data-index="{{index}}"
-                ></image>
-              </view>
-              <view class="g-media g-media-placeholder" wx:else></view>
-              <view class="g-info">
-                <text class="g-title">{{item.title || '安装流程图解 0' + (index+1)}}</text>
-                <text class="g-desc" wx:if="{{item.desc && item.desc !== '点击编辑详细描述'}}">{{item.desc}}</text>
-                <view class="admin-actions" wx:if="{{isAdmin}}">
-                  <view class="admin-edit-btn" bindtap="editItem" data-type="graphics" data-index="{{index}}">编辑</view>
-                  <view class="admin-del-btn" bindtap="deleteItem" data-type="graphics" data-index="{{index}}">删除</view>
-                  <view class="admin-match-code">
-                    <text class="match-code-text">{{item.matchCode || '未设置'}}</text>
-                  </view>
-                </view>
-              </view>
-            </view>
-            
-            <!-- 图文模式下添加按钮 -->
-            <view class="add-card-btn" wx:if="{{isAdmin && mode === 'g'}}" bindtap="uploadMedia" data-type="image">+ 添加图文步骤</view>
-          </view>
-          <view style="height: 100rpx;"></view>
+          <view class="tutorial-bottom-spacer"></view>
         </view>
       </view>
     </view>
 
   </view>
 
+
+  <!-- 教程内容页：回到顶部并重新选择产品/车型 -->
+  <view
+    wx:if="{{stepIndex === 2 && !isVideoFullScreen && !showShareCodeStats && !showXianyuVerifyModal && !showWatchNotice}}"
+    class="azjc-back-top"
+    catchtap="backToTopAndReselect"
+    hover-class="azjc-back-top--active"
+    hover-start-time="10"
+    hover-stay-time="70">
+    <text class="azjc-back-top-arrow">↑</text>
+    <text class="azjc-back-top-text">回到顶部</text>
+  </view>
 
   <!-- 匹配码选择弹窗 -->
   <view class="match-code-modal {{matchCodePickerClosing ? 'closing' : ''}}" wx:if="{{showMatchCodePicker}}" catchtouchmove="noop">
@@ -248,24 +261,119 @@
       </view>
       <view class="match-code-body">
         <view class="picker-group">
-          <text class="picker-label">产品号码：</text>
-          <picker mode="selector" range="{{availableProducts}}" range-key="name" value="{{matchCodeProductIndex}}" bindchange="onProductNumChange">
-            <view class="picker-display">{{currentProductName}} ({{matchCodeProductNum}})</view>
-          </picker>
+          <text class="picker-label">产品号码：<text class="picker-hint">可多选</text></text>
+          <view class="mc-options">
+            <view
+              class="mc-option {{item.checked ? 'mc-option--on' : ''}}"
+              wx:for="{{availableProducts}}"
+              wx:key="key"
+              catchtap="toggleMatchCodeProduct"
+              data-num="{{item.num}}"
+            >{{item.name}} ({{item.num}})</view>
+          </view>
         </view>
         <view class="picker-group">
-          <text class="picker-label">车型号码：</text>
-          <picker mode="selector" range="{{availableTypes}}" range-key="name" value="{{matchCodeTypeIndex}}" bindchange="onTypeNumChange">
-            <view class="picker-display">{{currentTypeName}} ({{matchCodeTypeNum}})</view>
-          </picker>
+          <text class="picker-label">车型号码：<text class="picker-hint">可多选</text></text>
+          <view class="mc-options">
+            <view
+              class="mc-option {{item.checked ? 'mc-option--on' : ''}}"
+              wx:for="{{availableTypes}}"
+              wx:key="key"
+              catchtap="toggleMatchCodeType"
+              data-num="{{item.num}}"
+            >{{item.name}} ({{item.num}})</view>
+          </view>
         </view>
         <view class="match-code-preview">
-          <text>匹配码：{{matchCodeProductNum}}+{{matchCodeTypeNum}}</text>
+          <text class="mc-preview-label">匹配码（{{matchCodeSelectedCount}} 个组合）</text>
+          <text class="mc-preview-codes">{{matchCodePreviewText}}</text>
         </view>
+        <view class="mc-note">选中的产品和车型会两两组合，这条内容在每个组合下的顺序各自独立。</view>
       </view>
       <view class="match-code-footer">
         <view class="match-code-btn cancel" catchtap="hideMatchCodePicker">取消</view>
         <view class="match-code-btn confirm" catchtap="confirmMatchCode">确认</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 快速切换产品+车型 -->
+  <view class="match-code-modal {{comboSwitchClosing ? 'closing' : ''}}" wx:if="{{showComboSwitchModal}}" catchtouchmove="noop">
+    <view class="match-code-overlay" catchtap="hideComboSwitch"></view>
+    <view class="match-code-content">
+      <view class="match-code-header">
+        <text class="match-code-title">切换查看</text>
+        <text class="match-code-close" catchtap="hideComboSwitch">×</text>
+      </view>
+      <view class="match-code-body">
+        <view class="mc-note azjc-combo-switch-note">会改成上面已选的产品和车型，教程列表跟着换成对应内容。</view>
+        <view class="picker-group">
+          <text class="picker-label">产品型号</text>
+          <view class="mc-options">
+            <view
+              class="mc-option {{comboSwitchPIndex === index ? 'mc-option--on' : ''}}"
+              wx:for="{{products}}"
+              wx:key="index"
+              catchtap="selectComboSwitchProduct"
+              data-index="{{index}}"
+            >{{item.name}}</view>
+          </view>
+        </view>
+        <view class="picker-group">
+          <text class="picker-label">车型分类</text>
+          <view class="mc-options">
+            <view
+              class="mc-option {{comboSwitchTIndex === index ? 'mc-option--on' : ''}}"
+              wx:for="{{types}}"
+              wx:key="index"
+              catchtap="selectComboSwitchType"
+              data-index="{{index}}"
+            >{{item.name || item}}</view>
+          </view>
+        </view>
+        <view class="match-code-preview">
+          <text class="mc-preview-label">将查看</text>
+          <text class="mc-preview-codes">{{comboSwitchPreview}}</text>
+        </view>
+      </view>
+      <view class="match-code-footer">
+        <view class="match-code-btn cancel" catchtap="hideComboSwitch">取消</view>
+        <view class="match-code-btn confirm" catchtap="confirmComboSwitch">确认查看</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="match-code-modal {{duplicateCheckClosing ? 'closing' : ''}}" wx:if="{{showDuplicateCheckModal}}" catchtouchmove="noop">
+    <view class="match-code-overlay" catchtap="hideDuplicateCheckModal"></view>
+    <view class="match-code-content duplicate-check-content">
+      <view class="match-code-header">
+        <text class="match-code-title">重复视频结果</text>
+        <text class="match-code-close" catchtap="hideDuplicateCheckModal">×</text>
+      </view>
+      <view class="match-code-body">
+        <view class="duplicate-check-summary">
+          先按编码精确查重，再跑疑似查重。共 {{duplicateVideoGroupCount}} 组，涉及 {{duplicateVideoItemCount}} 条记录；其中精确重复 {{duplicateVideoExactGroupCount}} 组，疑似重复 {{duplicateVideoSuspectGroupCount}} 组
+        </view>
+        <scroll-view class="duplicate-check-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+          <view class="duplicate-check-group" wx:for="{{duplicateVideoRows}}" wx:key="key">
+            <view class="duplicate-check-group-head">
+              <text class="duplicate-check-group-title">{{item.title}}</text>
+              <view class="duplicate-check-group-side">
+                <text class="duplicate-check-kind duplicate-check-kind--{{item.kind}}">{{item.kindLabel}}</text>
+                <text class="duplicate-check-group-count">{{item.count}} 条</text>
+              </view>
+            </view>
+            <view class="duplicate-check-rule">{{item.ruleText}}</view>
+            <view class="duplicate-check-key">{{item.key}}</view>
+            <view class="duplicate-check-item" wx:for="{{item.items}}" wx:key="_id">
+              <text class="duplicate-check-item-title">{{item.title}}</text>
+              <text class="duplicate-check-item-meta">{{item.matchCodeText}}</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+      <view class="match-code-footer">
+        <view class="match-code-btn confirm" catchtap="hideDuplicateCheckModal">我知道了</view>
       </view>
     </view>
   </view>
@@ -285,11 +393,10 @@
         </view>
         <view class="edit-item">
           <text class="edit-label">匹配码：</text>
-          <text class="edit-value">{{editItemData.matchCode || '未设置'}}</text>
+          <text class="edit-value">{{editItemData.matchCodeText || editItemData.matchCode || '未设置'}}</text>
         </view>
       </view>
       <view class="edit-footer">
-        <view class="edit-btn" wx:if="{{editItemType === 'graphics'}}" bindtap="replaceGraphicImage">更换配图</view>
         <view class="edit-btn" bindtap="saveEdit">编辑标题</view>
         <view class="edit-btn" bindtap="editMatchCode">编辑匹配码</view>
         <view class="edit-btn cancel" catchtap="hideEditModal">取消</view>
@@ -308,7 +415,7 @@
     <view class="stats-search-wrap">
       <input
         class="stats-search-input"
-        placeholder="搜分享码或「普通安装」"
+        placeholder="搜访客昵称、分享码或普通安装"
         value="{{statsSearchKeyword}}"
         bindinput="onStatsSearchInput"
         confirm-type="search"
@@ -316,24 +423,15 @@
     </view>
     <view class="stats-loading" wx:if="{{loadingShareCodeStats}}">加载中...</view>
     <scroll-view wx:elif="{{shareCodeStatsDisplayRows.length > 0}}" scroll-y class="stats-list" scroll-top="{{statsScrollTop}}" enable-flex="{{true}}">
-      <view class="user-stat-card" wx:for="{{shareCodeStatsDisplayRows}}" wx:key="rowKey">
-        <!-- 顶部：人员信息 -->
-        <view class="user-stat-people">
-          <view class="user-stat-person">
-            <view class="user-stat-role">访客</view>
-            <view class="user-stat-name">{{item.viewerNickname}}</view>
-          </view>
-          <view class="user-stat-divider"></view>
-          <view class="user-stat-person">
-            <view class="user-stat-role user-stat-role--installer">安装方</view>
-            <view class="user-stat-code">{{item.shareCode || '—'}}</view>
-            <view class="user-stat-installer-name">安装员：{{item.creatorNickname}}</view>
+      <view class="user-stat-card {{statsExpandedMap[item.rowKey] ? 'user-stat-card--open' : 'user-stat-card--fold'}}" wx:for="{{shareCodeStatsDisplayRows}}" wx:key="rowKey">
+        <view class="user-stat-people" catchtap="toggleStatsCardExpand" data-key="{{item.rowKey}}">
+          <text class="user-stat-name">{{item.viewerNickname}}</text>
+          <view class="user-stat-fold-btn">
+            <text class="user-stat-fold-icon">{{statsExpandedMap[item.rowKey] ? '▲' : '▼'}}</text>
           </view>
         </view>
 
-        <!-- 底部：数据块 (按钮样式) -->
-        <view class="user-stat-data">
-          <!-- 4个小数据块 -->
+        <view class="user-stat-data" wx:if="{{statsExpandedMap[item.rowKey]}}">
           <view class="user-stat-grid">
             <view class="user-stat-btn">
               <text class="user-stat-btn-k">进入</text>
@@ -353,22 +451,31 @@
             </view>
           </view>
 
-          <!-- 整行的数据块 -->
-          <view class="user-stat-btn user-stat-btn--full">
-            <text class="user-stat-btn-k">最近进入</text>
-            <text class="user-stat-btn-v">{{item.lastViewTime}}</text>
-          </view>
-          <view class="user-stat-btn user-stat-btn--full">
-            <text class="user-stat-btn-k">地区</text>
-            <text class="user-stat-btn-v">{{item.regionText}}</text>
-          </view>
-          <view class="user-stat-btn user-stat-btn--full">
-            <text class="user-stat-btn-k">地址</text>
-            <text class="user-stat-btn-v">{{item.addressDisplay}}</text>
-          </view>
-          <view class="user-stat-btn user-stat-btn--full">
-            <text class="user-stat-btn-k">坐标</text>
-            <text class="user-stat-btn-v">{{item.geoText}}</text>
+          <view class="user-stat-detail">
+            <view class="user-stat-btn user-stat-btn--full">
+              <text class="user-stat-btn-k">安装方</text>
+              <text class="user-stat-btn-v">{{item.shareCode || '—'}}</text>
+            </view>
+            <view class="user-stat-btn user-stat-btn--full">
+              <text class="user-stat-btn-k">安装员</text>
+              <text class="user-stat-btn-v">{{item.creatorNickname}}</text>
+            </view>
+            <view class="user-stat-btn user-stat-btn--full">
+              <text class="user-stat-btn-k">最近进入</text>
+              <text class="user-stat-btn-v">{{item.lastViewTime}}</text>
+            </view>
+            <view class="user-stat-btn user-stat-btn--full">
+              <text class="user-stat-btn-k">地区</text>
+              <text class="user-stat-btn-v">{{item.regionText}}</text>
+            </view>
+            <view class="user-stat-btn user-stat-btn--full">
+              <text class="user-stat-btn-k">地址</text>
+              <text class="user-stat-btn-v">{{item.addressDisplay}}</text>
+            </view>
+            <view class="user-stat-btn user-stat-btn--full">
+              <text class="user-stat-btn-k">坐标</text>
+              <text class="user-stat-btn-v">{{item.geoText}}</text>
+            </view>
           </view>
         </view>
       </view>
@@ -397,6 +504,8 @@
       vslide-gesture="{{false}}"
       vslide-gesture-in-fullscreen="{{false}}"
       object-fit="contain"
+      http-cache="{{true}}"
+      play-strategy="{{1}}"
       paused="{{fullScreenVideoPaused}}"
       bindplay="onFullScreenNativePlay"
       bindpause="onFullScreenNativePause"
@@ -499,12 +608,35 @@
   </view>
 </view>
 
+<view class="custom-modal-mask {{showWatchNotice ? 'active' : ''}}" wx:if="{{showWatchNotice}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box azjc-watch-notice-modal" catchtouchmove="noop" catchtap="noop">
+    <view class="azjc-watch-notice-brand">
+      <view class="v-mt-brand azjc-watch-notice-mt">
+        <text class="v-mt-m">M</text>
+        <view class="v-mt-t-block">
+          <text class="v-mt-t">T</text>
+          <view class="v-mt-mark"></view>
+        </view>
+      </view>
+    </view>
+    <view class="azjc-watch-notice-kicker">安装须知</view>
+    <view class="azjc-watch-notice-title">请先观看教程后再安装</view>
+    <view class="azjc-watch-notice-body">
+      <text class="azjc-watch-notice-p">为确保安装质量与使用安全，请在施工前完整观看本安装教程。</text>
+      <text class="azjc-watch-notice-p"><text class="azjc-watch-notice-em">红色边框</text>标注的视频为<text class="azjc-watch-notice-em">关键步骤</text>，请务必仔细观看。即使您已具备安装经验，也请按照教程完成操作，请勿跳过或自行更改安装方式。</text>
+      <text class="azjc-watch-notice-p">如因未按教程安装，或擅自变更安装步骤导致的故障，将被认定为<text class="azjc-watch-notice-em">人为原因</text>，不属于产品本身质量问题。</text>
+      <text class="azjc-watch-notice-p">为便于后续售后核查，系统将记录您的<text class="azjc-watch-notice-em">视频观看时长</text>。感谢理解与配合。</text>
+    </view>
+    <view class="azjc-watch-notice-btn" bindtap="closeWatchNotice">我已知晓</view>
+  </view>
+</view>
+
 <!-- 闲鱼订单截图验证 -->
 <view class="custom-modal-mask {{showXianyuVerifyModal ? 'active' : ''}}" wx:if="{{showXianyuVerifyModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box xianyu-verify-modal" catchtouchmove="noop" catchtap="noop">
     <view class="xianyu-verify-head">
       <view class="xianyu-verify-title">闲鱼订单验证</view>
-      <view class="xianyu-verify-lead">请上传订单详情页截图</view>
+      <view class="xianyu-verify-lead">请上传完整的闲鱼订单详情页截图</view>
     </view>
 
     <scroll-view class="xianyu-verify-scroll" scroll-y enhanced show-scrollbar="{{false}}">
@@ -517,6 +649,15 @@
           show-menu-by-longpress="{{true}}" />
       </view>
 
+      <view class="xianyu-verify-howto">
+        <view class="xianyu-verify-howto-title">请上传完整订单详情页</view>
+        <view class="xianyu-verify-howto-text">闲鱼「交易成功 / 已发货」页均可。截图里必须能看到「卖家昵称」。若详情被收起，点顶部状态旁的下拉箭头展开后再截。</view>
+        <image
+          class="xianyu-verify-howto-img"
+          src="/images/xianyu-order-expand-tip.png"
+          mode="widthFix"
+          show-menu-by-longpress="{{true}}" />
+      </view>
     </scroll-view>
 
     <view

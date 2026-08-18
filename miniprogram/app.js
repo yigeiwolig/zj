@@ -83,6 +83,9 @@ App({
     shouhouOpenModel: '',
     // ?? ???????????????['??????,'??????']??shouhou ????
     shouhouPreselectParts: [],
+
+    /** 底栏是否显示「客服」（首次进入小程序为 false） */
+    showHubKfTab: false,
     
     // ????????
     updatePageVisit: function(pageRoute) {
@@ -397,6 +400,13 @@ App({
   // ======================== ???? ========================
   onLaunch: function (options) {
     this.checkIsPC();
+
+    try {
+      const hubKfTabGate = require('./utils/hubKfTabGate.js');
+      this.globalData.showHubKfTab = hubKfTabGate.recordLaunch();
+    } catch (e) {
+      this.globalData.showHubKfTab = true;
+    }
 
     // 2. 记录分享码入口（供后续页面消费）
     if (options && options.query && options.query.shareCode) {
@@ -1028,22 +1038,14 @@ App({
   // 记录分享码会话统计（azjc 页面调用）
   async recordShareCodeSession(sessionStats, isUpdate = false, poolId = null) {
     if (!poolId && (!this.globalData.isShareCodeUser || !this.globalData.shareCodeInfo)) {
-      return;
+      return { success: false, skipped: true };
     }
 
     try {
-      let openid = ''
-      try {
-        const loginRes = await wx.cloud.callFunction({ name: 'login' })
-        openid = loginRes.result.openid || ''
-      } catch (e) {
-        console.error('[app] 获取 openid 失败:', e);
-      }
-
       const baseInfo = poolId ? { _id: poolId, code: 'POOL' } : this.globalData.shareCodeInfo;
       if (!baseInfo || !baseInfo._id) {
         console.error('[app] 缺少分享码 _id:', baseInfo);
-        return;
+        return { success: false, error: '缺少分享码 _id' };
       }
 
       const durationMs = sessionStats && typeof sessionStats.durationMs === 'number'
@@ -1100,11 +1102,14 @@ App({
         }
       });
       if (!(cloudRes.result && cloudRes.result.success)) {
-        console.error('[app] 记录分享会话失败', cloudRes.result?.error || '未知错误');
+        const errMsg = cloudRes.result?.error || '未知错误';
+        console.error('[app] 记录分享会话失败', errMsg);
+        return { success: false, error: errMsg };
       }
+      return { success: true };
     } catch (err) {
       console.error('[app] 记录分享会话异常', err)
-      console.error('[app] 错误详情:', JSON.stringify(err, null, 2))
+      return { success: false, error: (err && err.message) || '记录分享会话异常' };
     }
   },
 

@@ -26,9 +26,13 @@ function getAdminPayConfig() {
   const appId = process.env.WX_PAY_APP_ID
   const appSecret = process.env.WX_APP_SECRET || process.env.WX_PAY_APP_SECRET || ''
   if (!mchId || !appId) {
-    throw new Error('缺少 WX_PAY_MCH_ID / WX_PAY_APP_ID')
+    return null
   }
   return { mchId, appId, appSecret }
+}
+
+function missingPayEnvMessage() {
+  return '云函数 adminUpdateOrder 未配置 WX_PAY_MCH_ID / WX_PAY_APP_ID（可与 createOrder 配成一样）；本地已记发货，但未同步微信订单中心'
 }
 
 // 📦 微信官方物流编码映射表 (常用快递)
@@ -49,8 +53,11 @@ const EXPRESS_MAP = {
 // 🔹 获取 AccessToken
 async function getAccessToken() {
   const CONFIG = getAdminPayConfig()
+  if (!CONFIG) {
+    throw new Error(missingPayEnvMessage())
+  }
   if (!CONFIG.appSecret) {
-    throw new Error('未配置 WX_APP_SECRET 环境变量')
+    throw new Error('未配置 WX_APP_SECRET 环境变量（请在 adminUpdateOrder 与 createOrder 保持一致）')
   }
   return new Promise((resolve, reject) => {
     const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${CONFIG.appId}&secret=${CONFIG.appSecret}`
@@ -99,6 +106,9 @@ function buildItemDesc(order) {
 // 🔹 同步发货信息到微信订单中心
 async function syncShippingToOrderCenter(outTradeNo, trackingId, shippingCompany, userOpenId, orderDetail) {
   const CONFIG = getAdminPayConfig()
+  if (!CONFIG) {
+    throw new Error(missingPayEnvMessage())
+  }
   const accessToken = await getAccessToken()
   
   // 1. 自动转换快递公司名称为代码
@@ -214,31 +224,42 @@ exports.main = async (event, context) => {
         return { success: false, errMsg: '数据异常：订单缺少用户OpenID，无法同步微信' }
       }
 
-      // 2. 🔴 关键步骤：同步到微信发货 (强制阻塞)
-      // 如果这一步报错，直接跳到 catch，不更新数据库
-      try {
-        await syncShippingToOrderCenter(outTradeNo, trackingId, expressCompany, userOpenId, order)
-        console.log('✅ 微信发货同步成功')
-      } catch (wxErr) {
-        console.error('❌ 微信发货同步失败:', wxErr)
-        // 返回失败给前端，让管理员知道出错了
-        return { success: false, errMsg: '发货失败: ' + wxErr.message }
-      }
-
-      // 3. 微信同步成功后，更新本地数据库状态
+      // 先写本地发货状态，避免因云函数未配支付环境变量导致整单卡死
       await db.collection('shop_orders').where({
         orderId: outTradeNo
       }).update({
         data: {
           status: 'SHIPPED',
           trackingId: trackingId,
-          expressCompany: expressCompany, // 建议存入数据库
+          expressCompany: expressCompany,
           lastLogistics: '卖家已发货',
           updateTime: db.serverDate()
         }
       })
 
-      return { success: true, msg: '发货成功，已同步至微信' }
+      // 再尽量同步微信订单中心（用户端确认收货依赖这一步）
+      const payConfig = getAdminPayConfig()
+      if (!payConfig) {
+        console.warn('[adminUpdateOrder] 跳过微信发货同步：未配置支付环境变量')
+        return {
+          success: true,
+          wxSynced: false,
+          msg: missingPayEnvMessage()
+        }
+      }
+
+      try {
+        await syncShippingToOrderCenter(outTradeNo, trackingId, expressCompany, userOpenId, order)
+        console.log('✅ 微信发货同步成功')
+        return { success: true, wxSynced: true, msg: '发货成功，已同步至微信' }
+      } catch (wxErr) {
+        console.error('❌ 微信发货同步失败:', wxErr)
+        return {
+          success: true,
+          wxSynced: false,
+          msg: '本地已发货，但同步微信失败：' + (wxErr && wxErr.message ? wxErr.message : String(wxErr))
+        }
+      }
     }
 
     // ===========================================

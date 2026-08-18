@@ -145,6 +145,78 @@ async function cleanupOrphanRepairs(openid) {
   return { success: true, cleaned }
 }
 
+/** 列出当前用户可用设备（云端查，避免客户端权限/字段不一致漏设备） */
+async function listMyDevices(openid) {
+  const _ = db.command
+  const seen = new Set()
+  const merged = []
+
+  const pushRows = (rows) => {
+    (rows || []).forEach((row) => {
+      if (!row || !row._id) return
+      const snKey = String(row.sn || row._id).trim().toUpperCase()
+      if (!snKey || seen.has(snKey)) return
+      // 明确未激活的不要；缺 isActive 但已挂 openid 的旧数据仍给用
+      if (row.isActive === false || row.isActive === 0 || row.isActive === 'false') return
+      if (row.isActive !== true && row.isActive !== 1 && row.isActive !== 'true') {
+        // 无激活标记时：必须已绑定到该用户才算
+        const oid = String(row.openid || row._openid || '').trim()
+        if (oid !== openid) return
+      }
+      seen.add(snKey)
+      merged.push(row)
+    })
+  }
+
+  const q1 = await db.collection('sn').where({ openid, isActive: true }).limit(50).get()
+  pushRows(q1.data)
+  try {
+    const q2 = await db.collection('sn').where({ _openid: openid, isActive: true }).limit(50).get()
+    pushRows(q2.data)
+  } catch (e) {
+    /* ignore */
+  }
+  // 兜底：只按 openid 拉，再在内存过滤（兼容 isActive 类型不统一）
+  if (!merged.length) {
+    const q3 = await db.collection('sn').where({ openid }).limit(50).get()
+    pushRows(q3.data)
+  }
+
+  const now = Date.now()
+  const devices = merged.map((device) => {
+    let warrantyExpired = false
+    let remainingDays = null
+    if (device.expiryDate) {
+      const exp = new Date(device.expiryDate)
+      const diff = Math.ceil((exp.getTime() - now) / 86400000)
+      remainingDays = diff
+      warrantyExpired = diff <= 0
+    }
+    const snPending = !!device.snPending || String(device.sn || '').startsWith('PENDING-FAULT-') || String(device.sn || '').startsWith('FAULT-CLAIM-')
+    const rawSn = String(device.sn || '').trim()
+    const displaySn = snPending
+      ? (String(device.sn || '').startsWith('FAULT-CLAIM-') ? '质保档案（待诊断）' : '待录入')
+      : (device.displaySn || (rawSn.toUpperCase().startsWith('MT') ? rawSn : ('MT' + rawSn)))
+    return {
+      _id: device._id,
+      sn: device.sn,
+      name: device.name || '',
+      productModel: device.productModel || device.name || '未知型号',
+      controlVariant: device.controlVariant || '',
+      expiryDate: device.expiryDate || '',
+      isActive: device.isActive,
+      snPending,
+      faultAwaitingDiagnosis: !!device.faultAwaitingDiagnosis,
+      bindSource: device.bindSource || '',
+      displaySn,
+      warrantyExpired,
+      remainingDays
+    }
+  })
+
+  return { success: true, devices }
+}
+
 exports.main = async (event) => {
   const openid = cloud.getWXContext().OPENID
   if (!openid) {
@@ -157,6 +229,14 @@ exports.main = async (event) => {
       return await cleanupOrphanRepairs(openid)
     } catch (e) {
       return { success: false, errMsg: (e && e.message) || String(e) }
+    }
+  }
+
+  if (event && event.action === 'listMyDevices') {
+    try {
+      return await listMyDevices(openid)
+    } catch (e) {
+      return { success: false, errMsg: (e && e.message) || String(e), devices: [] }
     }
   }
 

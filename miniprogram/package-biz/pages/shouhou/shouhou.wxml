@@ -23,6 +23,14 @@
     </view>
   </view>
 
+  <!-- 进页门禁：说明弹窗出来前挡住型号卡片，防止手快点进去 -->
+  <view
+    class="sh-entry-gate"
+    wx:if="{{entryGateBlocking && !inDetail}}"
+    catchtouchmove="noop"
+    catchtap="noop"
+  ></view>
+
   <scroll-view
     class="sh-home-scroll"
     scroll-y="{{true}}"
@@ -153,7 +161,10 @@
       <!-- A. 配件选择区 -->
       <view wx:if="{{serviceType === 'parts'}}" id="shGuidePartsSection" class="parts-section {{partsTableMode ? 'parts-section--table-mode' : ''}}">
         <view class="parts-section-header">
-          <view class="section-label">配件清单</view>
+          <view class="parts-section-title-row">
+            <view class="section-label">配件清单</view>
+            <text class="parts-section-note">（售后配件非特别标注无质保）</text>
+          </view>
           <view wx:if="{{isAdmin}}" class="admin-tools-row">
             <view class="parts-table-mode-toggle {{partsTableMode ? 'on' : ''}}" catchtap="togglePartsTableMode">
               {{partsTableMode ? '卡片模式' : '表格模式'}}
@@ -240,7 +251,7 @@
           <view wx:if="{{tempVideoPath || tempImagePath}}" class="upload-selected" catchtap="openRepairMediaPreview">
             <view class="upload-preview-container">
               <!-- 图片模式 -->
-              <image wx:if="{{tempImagePath}}" src="{{tempImagePath}}" mode="aspectFill" class="upload-preview-img" lazy-load="true"></image>
+              <image wx:if="{{tempImagePath}}" src="{{tempImagePath}}" mode="aspectFit" class="upload-preview-img" lazy-load="true"></image>
               <!-- 视频模式 -->
               <block wx:else>
                 <image wx:if="{{tempVideoThumb && tempVideoThumb !== 'AUTO_GENERATE'}}" src="{{tempVideoThumb}}" mode="aspectFill" class="upload-preview-img" lazy-load="true"></image>
@@ -600,7 +611,7 @@
         </view>
       </block>
       <view wx:if="{{!myDevices || myDevices.length === 0}}" class="dp-empty">
-        暂无已绑定设备
+        {{repairBindPending ? '设备绑定审核中，可先提交报修' : '暂无已绑定设备'}}
       </view>
     </scroll-view>
   </view>
@@ -686,30 +697,37 @@
               故障设备
               <text class="required-star">*</text>
             </view>
-            <!-- 有设备列表时，使用自定义选择器入口 -->
-            <view 
-              wx:if="{{myDevices && myDevices.length > 0}}" 
-              class="ios-select" 
+            <!-- 无设备 -->
+            <view wx:if="{{!myDevices || myDevices.length === 0}}" class="ios-select repair-no-device">
+              {{repairBindPending ? '设备绑定审核中，可先提交报修' : '未找到已绑定设备'}}
+            </view>
+            <!-- 只有 1 台：直接展示，不弹选择器 -->
+            <view wx:elif="{{myDevices.length === 1}}" class="ios-select ios-select-readonly">
+              <text class="ios-select-sn">{{myDevices[0].displaySn}}</text>
+              <view class="ios-select-model-wrapper">
+                <text class="ios-select-model {{myDevices[0].expiryDate ? (myDevices[0].warrantyExpired ? 'ios-select-model-expired' : 'ios-select-model-active') : ''}}">
+                  {{myDevices[0].productModel || '未知型号'}}
+                </text>
+              </view>
+            </view>
+            <!-- 多台：自定义选择器 -->
+            <view
+              wx:else
+              class="ios-select"
               bindtap="openDevicePicker"
             >
-                <!-- 未选择时：显示红色提示文字（居中） -->
-                <block wx:if="{{selectedDeviceIndex === null}}">
+              <block wx:if="{{selectedDeviceIndex === null}}">
                 <text class="ios-select-placeholder-text">请选择故障设备</text>
-                </block>
-                <!-- 已选择时：左边显示 SN，右边显示型号 -->
-                <block wx:else>
-                  <text class="ios-select-sn">{{myDevices[selectedDeviceIndex].displaySn}}</text>
+              </block>
+              <block wx:else>
+                <text class="ios-select-sn">{{myDevices[selectedDeviceIndex].displaySn}}</text>
                 <view class="ios-select-model-wrapper">
                   <text class="ios-select-model {{myDevices[selectedDeviceIndex].expiryDate ? (myDevices[selectedDeviceIndex].warrantyExpired ? 'ios-select-model-expired' : 'ios-select-model-active') : ''}}">
                     {{myDevices[selectedDeviceIndex].productModel || '未知型号'}}
                   </text>
                 </view>
-                </block>
-                <text class="ios-select-arrow">⌵</text>
-              </view>
-            <!-- 没有设备列表时的提示（与 case 页风格一致） -->
-            <view wx:else class="ios-select repair-no-device">
-              未找到已绑定设备
+              </block>
+              <text class="ios-select-arrow">⌵</text>
             </view>
           </view>
 
@@ -741,7 +759,7 @@
             <view class="repair-label">故障素材</view>
             <view class="repair-video-wrapper">
               <!-- 图片模式 -->
-              <image wx:if="{{tempImagePath}}" src="{{tempImagePath}}" mode="aspectFill" class="repair-video-thumb" lazy-load="true"></image>
+              <image wx:if="{{tempImagePath}}" src="{{tempImagePath}}" mode="aspectFit" class="repair-video-thumb" lazy-load="true"></image>
               <!-- 视频模式 -->
               <block wx:else>
                 <!-- 如果有提取的封面图，显示图片 -->
@@ -1289,3 +1307,12 @@
 
 <!-- 全局自定义弹窗组件 -->
 <custom-toast id="custom-toast" />
+
+<!-- 故障报修：本页拉起绑定（蓝牙 / 无设备核验），须在 custom-toast 之后，避免真机层叠被挡 -->
+<device-bind-modal
+  id="repairDeviceBindModal"
+  show="{{showDeviceBindModal}}"
+  preferredModel="{{currentModelName}}"
+  bind:success="onDeviceBindModalSuccess"
+  bind:close="onDeviceBindModalClose"
+/>

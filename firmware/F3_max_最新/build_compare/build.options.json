@@ -1,0 +1,10 @@
+{
+  "additionalFiles": "",
+  "builtInToolsFolders": "",
+  "compiler.optimization_flags": "",
+  "customBuildProperties": "build.warn_data_percentage=75",
+  "fqbn": "arduino:avr:nano:cpu=atmega328old",
+  "hardwareFolders": "C:\\Users\\32529\\Desktop\\MILXY\\arduino-cli\\Arduino15\\packages",
+  "otherLibrariesFolders": "C:\\Users\\32529\\Desktop\\MILXY\\arduino-cli\\libraries,C:\\Users\\32529\\Desktop\\MILXY\\arduino-cli\\Arduino\\libraries",
+  "sketchLocation": "C:\\Users\\32529\\Desktop\\zj\\firmware\\F3_max_最新"
+}

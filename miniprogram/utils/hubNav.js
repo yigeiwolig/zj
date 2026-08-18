@@ -5,6 +5,7 @@
  */
 const hubPageAnim = require('./hubPageAnim.js');
 const pageBack = require('./pageBack.js');
+const hubKfTabGate = require('./hubKfTabGate.js');
 
 const HUB_PANEL_COUNT = 5;
 const HUB_PANEL_STEP = 100 / HUB_PANEL_COUNT;
@@ -41,12 +42,16 @@ function resolveHubTabParam(raw) {
   return NaN;
 }
 
-/** 面板下标 → 底栏高亮：0首页 1订单 2客服 3我的 */
-function panelIndexToBottomBarActive(panelIdx) {
+/** 面板下标 → 底栏高亮：0首页 1订单 2客服 3我的（无客服时「我的」为 2） */
+function panelIndexToBottomBarActive(panelIdx, showKf = true) {
   if (panelIdx <= 1) return TAB_INDEX.home;
   if (panelIdx === PANEL_INDEX.orders) return TAB_INDEX.orders;
-  if (panelIdx === PANEL_INDEX.kf) return TAB_INDEX.kf;
-  if (panelIdx === PANEL_INDEX.profile) return TAB_INDEX.profile;
+  if (panelIdx === PANEL_INDEX.kf) {
+    return showKf ? TAB_INDEX.kf : TAB_INDEX.home;
+  }
+  if (panelIdx === PANEL_INDEX.profile) {
+    return showKf ? TAB_INDEX.profile : 2;
+  }
   return TAB_INDEX.home;
 }
 
@@ -111,7 +116,7 @@ function setProductsHubTab(idx, animate, extraPatch) {
     }
     return true;
   }
-  const hubBottomBarIndex = panelIndexToBottomBarActive(idx);
+  const hubBottomBarIndex = panelIndexToBottomBarActive(idx, hubKfTabGate.resolveShowHubKfTab());
   const patch = {
     hubTabIndex: idx,
     hubTrackTranslatePct: panelIndexToTranslatePct(idx),
@@ -220,6 +225,7 @@ function openShopCheckout() {
 
 /** 打开客服面板（枢纽内横滑，与订单 Tab 一致） */
 function openKf(options = {}) {
+  if (!hubKfTabGate.resolveShowHubKfTab()) return false;
   const scene = options.scene ? String(options.scene) : '';
   const extraPatch = scene ? { hubKfHighlightScene: scene } : {};
   if (setProductsHubTab(PANEL_INDEX.kf, true, extraPatch)) {
@@ -250,6 +256,7 @@ function switchTab(tab, options = {}) {
   if (cur === tab && tab !== 'kf') return;
 
   if (tab === 'kf') {
+    if (!hubKfTabGate.resolveShowHubKfTab()) return;
     openKf(options);
     return;
   }

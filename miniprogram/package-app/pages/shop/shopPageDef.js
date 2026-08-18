@@ -1091,9 +1091,11 @@ module.exports = function createShopPageConfig(opts = {}) {
       }
     } else {
       try {
-        const sid = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
-        if (sid) {
-          this.setData({ fromRepair: true, repairId: sid });
+        if (wx.getStorageSync('guided_parts_active')) {
+          const sid = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+          if (sid) {
+            this.setData({ fromRepair: true, repairId: sid });
+          }
         }
       } catch (e) {}
     }
@@ -1112,7 +1114,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     // 是否允许从全局快照恢复详情 UI（直达/维修引导不恢复，避免打乱业务）
     let guidedRepair = false;
     try {
-      guidedRepair = !!(wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+      guidedRepair = !!(wx.getStorageSync('guided_parts_active') && (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim());
     } catch (e) {}
     this._allowShopSnapshotRestore =
       !(options && options.jumpNumber) &&
@@ -1358,9 +1360,11 @@ module.exports = function createShopPageConfig(opts = {}) {
     hubNav.tryPlayEnterAnimOnShow(this);
     this._syncHeroAutoForCurrent();
     try {
-      const sid = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
-      if (sid && !this.data.repairId) {
-        this.setData({ fromRepair: true, repairId: sid });
+      if (wx.getStorageSync('guided_parts_active')) {
+        const sid = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+        if (sid && !this.data.repairId) {
+          this.setData({ fromRepair: true, repairId: sid });
+        }
       }
     } catch (e) {}
     // 先展示页面，再延后重任务，减轻“点进来卡一下”
@@ -1612,6 +1616,7 @@ module.exports = function createShopPageConfig(opts = {}) {
         if (this.data.isAuthorized !== cache.isAuthorized) {
           this.setData({ isAuthorized: cache.isAuthorized });
         }
+        if (cache.isAuthorized) this._suppressShopGuidesForAdmin();
         return;
       }
     } catch (e) {}
@@ -1635,6 +1640,7 @@ module.exports = function createShopPageConfig(opts = {}) {
         screenshotExempt.markGuanliyuanCache(true);
         screenshotExempt.allowScreenCaptureIfExempt();
         this.setData({ isAuthorized: true });
+        this._suppressShopGuidesForAdmin();
         try { wx.setStorageSync(ADMIN_CACHE_KEY, { isAuthorized: true, ts: Date.now() }); } catch (e) {}
     } else {
         this.setData({ isAuthorized: false });
@@ -1643,6 +1649,24 @@ module.exports = function createShopPageConfig(opts = {}) {
     } catch (err) {
       console.error('[shop.js] ❌ 权限检查失败:', err);
       // 网络抖动时保留当前态，避免权限闪烁
+    }
+  },
+
+  /** 管理员进商城：不弹升级换新 / 选购引导；若已弹出则立刻关掉 */
+  _suppressShopGuidesForAdmin() {
+    this._shopExchangePolicyShownThisSession = true;
+    this._shopBudgetGuideShownThisSession = true;
+    if (this._shopExchangePolicyShowTimer) {
+      clearTimeout(this._shopExchangePolicyShowTimer);
+      this._shopExchangePolicyShowTimer = null;
+    }
+    if (this._shopBudgetGuideShowTimer) {
+      clearTimeout(this._shopBudgetGuideShowTimer);
+      this._shopBudgetGuideShowTimer = null;
+    }
+    const kind = this.data.dialog && this.data.dialog.kind;
+    if (this.data.dialog && this.data.dialog.show && (kind === 'shop-exchange' || kind === 'shop-budget')) {
+      if (typeof this.closeCustomDialog === 'function') this.closeCustomDialog();
     }
   },
 
@@ -7177,6 +7201,12 @@ module.exports = function createShopPageConfig(opts = {}) {
   },
 
   _maybeShowShopExchangePolicyModal() {
+    // 管理员不弹升级换新 / 选购引导（仅普通用户首次进入需要）
+    if (this.data.isAuthorized || this.data.isAdmin) {
+      this._shopExchangePolicyShownThisSession = true;
+      this._shopBudgetGuideShownThisSession = true;
+      return;
+    }
     if (this._shopExchangePolicyShownThisSession) return;
     if (this._hasShopGuideSeen(SHOP_EXCHANGE_POLICY_SEEN_KEY)) {
       this._shopExchangePolicyShownThisSession = true;
@@ -7207,6 +7237,10 @@ module.exports = function createShopPageConfig(opts = {}) {
   },
 
   _maybeShowShopBudgetGuideModal() {
+    if (this.data.isAuthorized || this.data.isAdmin) {
+      this._shopBudgetGuideShownThisSession = true;
+      return;
+    }
     if (this._shopBudgetGuideShownThisSession) return;
     if (this._hasShopGuideSeen(SHOP_BUDGET_GUIDE_SEEN_KEY)) {
       this._shopBudgetGuideShownThisSession = true;
@@ -7395,9 +7429,9 @@ module.exports = function createShopPageConfig(opts = {}) {
     }
     this.showMyDialog({
       title: '支付成功',
-      content: '是否前往个人中心查看订单？',
+      content: '是否前往订单查看这笔订单？',
       showCancel: true,
-      confirmText: '去个人中心',
+      confirmText: '去看订单',
       cancelText: '继续选购',
       success: () => {
         this._goToHubOrdersAfterPay();
@@ -7713,9 +7747,21 @@ module.exports = function createShopPageConfig(opts = {}) {
           let r = (this.data.repairId || '').toString().trim();
           if (r) return r;
           try {
+            if (!wx.getStorageSync('guided_parts_active')) return '';
             r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
           } catch (e) {}
           return r;
+        })(),
+        isGuidedPartsPurchase: (() => {
+          let r = (this.data.repairId || '').toString().trim();
+          if (!r) {
+            try {
+              if (wx.getStorageSync('guided_parts_active')) {
+                r = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+              }
+            } catch (e) {}
+          }
+          return !!r;
         })(),
         couponIds: typeof this.getSelectedCouponIdsForOrder === 'function'
           ? this.getSelectedCouponIdsForOrder()
@@ -7749,7 +7795,9 @@ module.exports = function createShopPageConfig(opts = {}) {
             let repairId = (this.data.repairId || '').toString().trim();
             if (!repairId) {
               try {
-                repairId = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+                if (wx.getStorageSync('guided_parts_active')) {
+                  repairId = (wx.getStorageSync('guided_parts_repair_id') || '').toString().trim();
+                }
               } catch (e) {}
             }
             const orderIdPatch = payment.outTradeNo;
@@ -7824,6 +7872,7 @@ module.exports = function createShopPageConfig(opts = {}) {
     });
     try {
       wx.removeStorageSync('guided_parts_repair_id');
+      wx.removeStorageSync('guided_parts_active');
     } catch (e) {}
   },
 

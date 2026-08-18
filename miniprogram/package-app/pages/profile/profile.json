@@ -2,7 +2,8 @@
   "usingComponents": {
     "hub-tab-bar": "/components/hub-tab-bar/index",
     "custom-toast": "/components/custom-toast/index",
-    "return-required-list": "/package-app/components/return-required-list/index"
+    "return-required-list": "/package-app/components/return-required-list/index",
+    "pending-repair-list": "/package-app/components/pending-repair-list/index"
   },
   "enablePullDownRefresh": true,
   "backgroundTextStyle": "dark"

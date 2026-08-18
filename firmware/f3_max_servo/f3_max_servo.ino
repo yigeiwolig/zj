@@ -3869,7 +3869,7 @@ static bool bootFoldBlinkDelayPoll(unsigned long ms, unsigned long &holdSince) {
   return false;
 }
 
-// 开机下翻：慢闪 5 次；期间长按 Pin5 取消本次下翻并上翻
+// 开机下翻：慢闪 5 次；期间长按 Pin5 跳过下翻，直达 item4
 static bool bootBlinkFoldBootPrompt() {
   unsigned long holdSince = 0;
   for (uint8_t i = 0; i < 5; i++) {
@@ -3884,7 +3884,7 @@ static bool bootBlinkFoldBootPrompt() {
 #else
       digitalWrite(8, LOW);
 #endif
-      KDBG_L("BOOT_FOLD_CANCEL");
+      KDBG_L("BOOT_OPEN_SKIP");
       return true;
     }
 #if F3_MAX_BUILD
@@ -3893,7 +3893,7 @@ static bool bootBlinkFoldBootPrompt() {
     digitalWrite(8, LOW);
 #endif
     if (bootFoldBlinkDelayPoll((unsigned long)BOOT_FOLD_SLOW_HALF_MS, holdSince)) {
-      KDBG_L("BOOT_FOLD_CANCEL");
+      KDBG_L("BOOT_OPEN_SKIP");
       return true;
     }
   }
@@ -4125,8 +4125,9 @@ void setup() {
       bootStallEn = (!(keyRst && rk == 0xA7) && userServoSpeed >= SERVO_SPEED_MAX_PCT);
       if (keyRst || powerOnFlip == 0) {
         bootMoveToFold();
+      } else if (bootBlinkFoldBootPrompt()) {
+        bootMoveToFold();
       } else {
-        bootBlinkFoldBootPrompt();
         bootPowerOnOpenDown();
       }
     }

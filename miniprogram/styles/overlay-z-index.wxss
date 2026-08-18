@@ -26,11 +26,20 @@
 }
 
 .hub-embed-portal-layer .loading-mask--portal-top {
-  z-index: 100000070 !important;
+  z-index: 100000120 !important;
 }
 
 .hub-embed-portal-layer .auto-toast-mask--portal-top,
 .hub-embed-portal-layer .center-toast-mask--portal-top,
 .hub-embed-portal-layer .action-sheet-mask--portal-top {
-  z-index: 100000080 !important;
+  z-index: 100000120 !important;
+}
+
+/* 绑定弹窗 100000100；确认弹窗必须再压上去，否则提示被挡住 */
+.hub-embed-portal-layer .custom-dialog-mask.z-over-fill-repair {
+  z-index: 100000200 !important;
+}
+
+.hub-embed-portal-layer .custom-dialog-mask.z-over-fill-repair .custom-dialog-box {
+  z-index: 100000201 !important;
 }

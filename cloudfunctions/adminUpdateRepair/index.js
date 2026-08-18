@@ -77,6 +77,57 @@ function filterPendingRepairs(items) {
   })
 }
 
+function isPendingBindApplyStatus(status) {
+  const st = String(status == null ? '' : status).trim().toUpperCase()
+  return !st || st === 'PENDING' || st === '0'
+}
+
+/**
+ * 用户侧可「待审绑定 + 已报修」并行提交；管理端先审绑定，
+ * 有 my_read 待审时暂不展示该用户的维修卡，绑定通过后再出现。
+ */
+async function findOpenidsWithPendingBind(openids) {
+  const set = new Set()
+  const ids = [...new Set((openids || []).filter(Boolean))]
+  const chunkSize = 20
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize)
+    try {
+      const res = await db.collection('my_read')
+        .where(_.or([
+          { openid: _.in(chunk) },
+          { _openid: _.in(chunk) }
+        ]))
+        .field({ openid: true, _openid: true, status: true })
+        .limit(200)
+        .get()
+      ;(res.data || []).forEach((row) => {
+        if (!row || !isPendingBindApplyStatus(row.status)) return
+        if (row.openid) set.add(row.openid)
+        if (row._openid) set.add(row._openid)
+      })
+    } catch (e) {
+      console.warn('[adminUpdateRepair] findOpenidsWithPendingBind failed:', e)
+    }
+  }
+  return set
+}
+
+async function hideRepairsAwaitingBindAudit(items) {
+  const list = items || []
+  if (!list.length) return list
+  const openids = list.map((item) => (item && (item._openid || item.openid)) || '').filter(Boolean)
+  if (!openids.length) return list
+  const pendingBind = await findOpenidsWithPendingBind(openids)
+  if (!pendingBind.size) return list
+  return list.filter((item) => {
+    if (!item) return false
+    const oid = item._openid || item.openid
+    if (!oid) return true
+    return !pendingBind.has(oid)
+  })
+}
+
 function isWarrantyDeductedRecord(item) {
   return !!(item && (item.warrantyDeducted === true || item.isWarrantyDeducted === true))
 }
@@ -609,6 +660,11 @@ function applyLiveWarrantyToRepairs(items, snExpiryMap, warrantyByRepairId) {
 async function syncReturnLogisticsSigned(items) {
   const list = items || []
   const CACHE_MS = 10 * 60 * 1000
+  // 用户寄回件收件为仓库，查物流需用仓库手机号尾号（与小程序 logistics 弹窗一致）
+  const RETURN_RECEIVE_PHONE_TAIL = '2427'
+  const isSignedStatus = (code, text) => (
+    String(code || '').trim() === '3' || /签收|送达|代收|妥投/.test(String(text || ''))
+  )
   for (const item of list) {
     if (!item || !item._id) continue
     if (item.returnLogisticsSigned === true || item.returnCompleted === true) {
@@ -628,7 +684,7 @@ async function syncReturnLogisticsSigned(items) {
       if (Number.isFinite(t) && Date.now() - t < CACHE_MS) {
         const text = String(item.returnLogisticsStatusText || '')
         const code = String(item.returnLogisticsStatus || '')
-        if (code === '3' || /签收|送达|代收/.test(text)) {
+        if (isSignedStatus(code, text)) {
           item.returnLogisticsSigned = true
           await pushReturnSignedWecom(item)
         }
@@ -637,13 +693,12 @@ async function syncReturnLogisticsSigned(items) {
     }
 
     try {
-      const phone = (item.contact && item.contact.phone) || ''
       const lr = await cloud.callFunction({
         name: 'queryLogistics',
         data: {
           trackingId: tracking,
-          receiverPhone: phone,
-          phone,
+          receiverPhone: RETURN_RECEIVE_PHONE_TAIL,
+          phone: RETURN_RECEIVE_PHONE_TAIL,
           expressCompany: item.returnExpressCompany || item.expressCompany || ''
         }
       })
@@ -651,7 +706,7 @@ async function syncReturnLogisticsSigned(items) {
       if (!result.success || !result.data) continue
       const statusCode = String(result.data.status || '')
       const statusText = String(result.data.status_text || result.data.statusText || '')
-      const signed = statusCode === '3' || /签收|送达|代收/.test(statusText)
+      const signed = isSignedStatus(statusCode, statusText)
       const patch = {
         returnLogisticsStatus: statusCode,
         returnLogisticsStatusText: statusText,
@@ -721,7 +776,8 @@ async function listRepairs(listType) {
       .limit(limit)
       .get()
     const filtered = filterPendingRepairs(res.data)
-    const enriched = await enrichPendingWithWarrantyDeduction(filtered)
+    const visible = await hideRepairsAwaitingBindAudit(filtered)
+    const enriched = await enrichPendingWithWarrantyDeduction(visible)
     // 与需寄回一致：附带 sn 实时质保，避免待处理卡仍显示建单快照
     const meta = await enrichReturnRequiredMeta(enriched)
     const withLiveWarranty = applyLiveWarrantyToRepairs(

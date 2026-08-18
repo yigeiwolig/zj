@@ -62,7 +62,7 @@
     },
     "package-app/pages/products/products": {
       "network": "all",
-      "packages": ["package-app"]
+      "packages": ["package-biz", "package-extra"]
     }
   },
   "usingComponents": {

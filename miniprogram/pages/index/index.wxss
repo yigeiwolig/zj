@@ -1096,7 +1096,41 @@ input, textarea { text-align: left; }
 }
 
 .xianyu-notice-card .first-time-desc-wrap {
-  margin-bottom: 36rpx;
+  margin-bottom: 44rpx;
+}
+
+.entry-source-btns {
+  gap: 28rpx !important;
+  padding-top: 4rpx;
+}
+
+.entry-code-sample {
+  font-weight: 700;
+  color: #111;
+  letter-spacing: 1rpx;
+}
+
+.entry-source-btn--xianyu {
+  background: #000;
+  color: #fff;
+  box-shadow: 0 16rpx 32rpx rgba(0, 0, 0, 0.18);
+}
+
+.entry-source-btn--xianyu.is-disabled {
+  background: #111;
+  color: rgba(255, 255, 255, 0.55);
+  box-shadow: none;
+}
+
+.entry-source-btn--wechat {
+  background: #e5e5ea;
+  color: #3a3a3c;
+  box-shadow: none;
+}
+
+.entry-source-btn--wechat.is-disabled {
+  background: #ececef;
+  color: #aeaeb2;
 }
 
 .xianyu-notice-panel {
@@ -1198,7 +1232,7 @@ input, textarea { text-align: left; }
 
 .xianyu-notice-progress {
   width: 100%;
-  margin-bottom: 16rpx;
+  margin-bottom: 8rpx;
 }
 
 .xianyu-notice-progress-track {
@@ -1888,6 +1922,33 @@ input, textarea { text-align: left; }
   color: #4b5563;
 }
 
+.admin-card-summary-openid-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin-top: 10rpx;
+  min-width: 0;
+}
+
+.admin-card-summary-openid-k {
+  flex-shrink: 0;
+  font-size: 20rpx;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.admin-card-summary-openid-v {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 20rpx;
+  line-height: 1.4;
+  color: #374151;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-card-summary-meta {
   display: block;
   margin-top: 10rpx;
@@ -2420,6 +2481,10 @@ input, textarea { text-align: left; }
 
 .access-code-item-status--used {
   color: #86868B;
+}
+
+.access-code-item-status--expired {
+  color: #FF3B30;
 }
 
 .access-code-item-actions {

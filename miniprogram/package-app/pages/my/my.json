@@ -3,6 +3,7 @@
     "hub-tab-bar": "/components/hub-tab-bar/index",
     "custom-toast": "/components/custom-toast/index",
     "return-required-list": "/package-app/components/return-required-list/index",
+    "pending-repair-list": "/package-app/components/pending-repair-list/index",
     "logistics-modal": "/components/logistics-modal/index"
   },
   "enablePullDownRefresh": true,

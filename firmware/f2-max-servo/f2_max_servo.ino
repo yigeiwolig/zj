@@ -361,14 +361,25 @@ void servoFinalizePosition(int angle) {
   servoStopHold();
 }
 
+static int servoAttachSeedAngle() {
+  if (lastWrittenAngle >= 0 && lastWrittenAngle <= 180) return lastWrittenAngle;
+  if (item4 >= 0 && item4 <= 180) return item4;
+  return 90;
+}
+
 void servoPrepareMove() {
   if (item == 3) return;
   servoCancelPwmHold();
-  servoMotionOn();
   if (servoPwmOff) {
+    int seed = servoAttachSeedAngle();
+    // attach 前先写入指令角，避免第一帧 PWM 落在库默认 90°
+    servo.write(seed);
     servo.attach(4);
+    servo.write(seed);
     servoPwmOff = 0;
+    lastWrittenAngle = seed;
   }
+  servoMotionOn();
 }
 
 void servoAttachForMove() {
@@ -1501,14 +1512,19 @@ void tickAccRetractJudge() {
 }
 
 int readServoAngle() {
-  if (forceServoMove || openEaseActive || reboundAttempt >= 1) {
+  // 仅在 PWM 有效时信任 servo.read()（库指令角）；断 PWM 后 read 仍可能是默认 90°
+  if (!servoPwmOff && (forceServoMove || openEaseActive || reboundAttempt >= 1)) {
     int live = servo.read();
     if (live >= 0 && live <= 180) return live;
   }
   if (lastWrittenAngle >= 0 && lastWrittenAngle <= 180) return lastWrittenAngle;
-  int cur = servo.read();
-  if (cur < 0 || cur > 180) cur = 0;
-  return cur;
+  if (!servoPwmOff) {
+    int live = servo.read();
+    if (live >= 0 && live <= 180) return live;
+  }
+  // 无历史角：回退折叠位，绝不回退库默认 90°
+  if (item4 >= 0 && item4 <= 180) return item4;
+  return -1;
 }
 
 // 舵机已 attach 时读物理角；PWM 已断则回退逻辑角
@@ -2695,6 +2711,8 @@ static unsigned long btn5UpSince = 0;
 static unsigned long btn5ExitSince = 0;
 static uint8_t btn5EnterDone = 0;
 static uint8_t btn5SuppressExit = 0;
+static uint8_t bootPin5Gate = 0;
+static uint8_t bootSuppressBtn5Click = 0;
 
 static bool btn5PinDown() {
   return digitalRead(BTN5_PIN) == LOW;
@@ -2748,6 +2766,8 @@ void btn5ServiceTick() {
   unsigned long now = millis();
   bool down = btn5PinDown();
 
+  if (bootPin5Gate) return;
+
   // 任意故障锁定：按键完全无效（含隐蔽模式长按退出）
   if (isSelfCheckFaultLatched()) {
     btn5DownSince = 0;
@@ -2800,6 +2820,14 @@ void btn5ServiceTick() {
 
   if (btn5UpSince == 0) btn5UpSince = now;
   if (now - btn5UpSince < BTN5_RELEASE_DEBOUNCE_MS) return;
+
+  if (bootSuppressBtn5Click) {
+    bootSuppressBtn5Click = 0;
+    btn5DownSince = 0;
+    btn5UpSince = 0;
+    btn5EnterDone = 0;
+    return;
+  }
 
   unsigned long held = now - btn5DownSince;
   if (!btn5EnterDone && held >= BTN5_ENTER_MS) {
@@ -3323,7 +3351,14 @@ static void waitBootServoReach(int target) {
   if (start < 0 || start > 180) start = lastWrittenAngle;
   if (start < 0 || start > 180) start = target;
 
-  unsigned long minMoveMs = (unsigned long)abs(target - start) * 28UL + 450UL;
+  unsigned long span = (unsigned long)abs(target - start);
+  // 冷启动无真实角度：指令角已是目标时，仍按开合行程留足到位时间
+  if (span <= 3) {
+    int other = (item == 1) ? item4 : bianlaing;
+    if (other >= 0 && other <= 180) span = (unsigned long)abs(target - other);
+    if (span < 40) span = 40;
+  }
+  unsigned long minMoveMs = span * 28UL + 450UL;
   if (minMoveMs < 450UL) minMoveMs = 450UL;
   if (minMoveMs > 6500UL) minMoveMs = 6500UL;
   unsigned long moveStart = millis();
@@ -3356,11 +3391,7 @@ static void waitBootServoReach(int target) {
       if (servoPwmOff) {
         servoPrepareMove();
       }
-#if F2_VARSERVO
-      servo.write(target, 255);
-#else
       servo.write(target);
-#endif
       servoTrackItem = item;
       servoTrackAngle = target;
     }
@@ -3383,19 +3414,13 @@ static void bootMoveToTarget(int target, uint8_t itemState) {
   invalidateServoHold();
   smoothMotionAbort();
   servoCancelPwmHold();
-  servoPrepareMove();
-  int start = readServoAngleLive();
-  if (start < 0 || start > 180) {
-    start = (itemState == 1) ? item4 : bianlaing;
+  if (lastWrittenAngle < 0 || lastWrittenAngle > 180) {
+    lastWrittenAngle = target;
   }
-  lastWrittenAngle = start;
+  servoPrepareMove();
+  lastWrittenAngle = target;
   forceServoMove = 1;
-
-#if F2_VARSERVO
-  servo.write(target, 255);
-#else
   servo.write(target);
-#endif
   servoTrackItem = item;
   servoTrackAngle = target;
   waitBootServoReach(target);
@@ -3424,8 +3449,10 @@ static void bootBlinkLeadOff() {
   delayWithBlePoll(500);
 }
 
-// 开机下翻：5 次稍快闪烁（比自检 500ms 快闪）；闪灯期间长按 Pin5 可取消下翻
-static bool bootFoldBlinkDelayPoll(unsigned long ms, unsigned long &holdSince) {
+#define BOOT_BLINK_CANCEL_MS 80UL
+
+// 开机下翻：5 次稍快闪烁；闪灯期间按 Pin5 取消下翻（直达 item4）
+static bool bootFoldBlinkDelayPoll(unsigned long ms, unsigned long &pressSince) {
   unsigned long endAt = millis() + ms;
   unsigned long lastStatusInDelay = 0;
   while ((long)(millis() - endAt) < 0) {
@@ -3439,76 +3466,88 @@ static bool bootFoldBlinkDelayPoll(unsigned long ms, unsigned long &holdSince) {
     watchdogFeed();
     updatePin9Power();
     if (btn5PinDown()) {
-      if (holdSince == 0) holdSince = now;
-      else if (now - holdSince >= BTN5_ENTER_MS) {
+      if (pressSince == 0) pressSince = now;
+      else if (now - pressSince >= BOOT_BLINK_CANCEL_MS) {
         return true;
       }
     } else {
-      holdSince = 0;
+      pressSince = 0;
     }
   }
   return false;
 }
 
-// 开机下翻：慢闪 5 次；期间长按 Pin5 取消本次下翻并上翻
+static void bootWaitPin5Release() {
+  unsigned long deadline = millis() + 8000UL;
+  while (btn5PinDown() && (long)(millis() - deadline) < 0) {
+    pollBleSerial();
+    watchdogFeed();
+    updatePin9Power();
+    delay(16);
+  }
+}
+
+// 开机下翻：慢闪 5 次；期间按 Pin5 跳过下翻，直达 item4
 static bool bootBlinkFoldBootPrompt() {
-  unsigned long holdSince = 0;
+  unsigned long pressSince = 0;
   for (uint8_t i = 0; i < 5; i++) {
     digitalWrite(8, HIGH);
-    if (bootFoldBlinkDelayPoll((unsigned long)BOOT_FOLD_SLOW_HALF_MS, holdSince)) {
+    if (bootFoldBlinkDelayPoll((unsigned long)BOOT_FOLD_SLOW_HALF_MS, pressSince)) {
       digitalWrite(8, LOW);
-      keyDbgLine(F("BOOT_FOLD_CANCEL"));
+      keyDbgLine(F("BOOT_OPEN_SKIP"));
       return true;
     }
     digitalWrite(8, LOW);
-    if (bootFoldBlinkDelayPoll((unsigned long)BOOT_FOLD_SLOW_HALF_MS, holdSince)) {
-      keyDbgLine(F("BOOT_FOLD_CANCEL"));
+    if (bootFoldBlinkDelayPoll((unsigned long)BOOT_FOLD_SLOW_HALF_MS, pressSince)) {
+      digitalWrite(8, LOW);
+      keyDbgLine(F("BOOT_OPEN_SKIP"));
       return true;
     }
   }
+  digitalWrite(8, LOW);
   return false;
 }
 
-// 开机下翻展开：与出行接钥匙 requestFlapOpen 同路径，不依赖 canUserFlapControl（钥匙可关）
+// 开机下翻展开：平滑开则用 smoothMotionBegin，与后续折回同一套曲线
 static void bootFlapOpenForce() {
   keyDbgKv(F("BOOT_OPEN_START"), bianlaing, item);
   abortOpenMotion();
   reboundWaitUntil = 0;
   reboundRetryClose = 0;
   foldAdjustActive = 0;
-
-  int cur = readServoAngleLive();
+  pin2SeenHighSinceBoot = 1;
+  int cur = item4;
   if (cur < 0 || cur > 180) {
     cur = lastWrittenAngle;
-    if (cur < 0 || cur > 180) cur = item4;
+    if (cur < 0 || cur > 180) cur = 0;
   }
-
-  item = 1;
-  pin2SeenHighSinceBoot = 1;
-  invalidateServoHold();
-  foldHoldActive = 0;
   lastWrittenAngle = cur;
-  forceServoMove = 1;
 
   if (pdSmooth == 1) {
+    item = 1;
+    forceServoMove = 1;
+    invalidateServoHold();
+    foldHoldActive = 0;
     smoothMotionBegin(bianlaing);
-  } else {
-    writeServoDirect(bianlaing);
-  }
-
-  waitServoReach(bianlaing);
-  waitServoSettle(bianlaing);
-  forceServoMove = 0;
-
-  if (!isSelfCheckFaultLatched()) {
-    servoTrackItem = 1;
-    servoTrackAngle = bianlaing;
-    if (!smoothMotionRunning() && !openEaseActive) {
-      int live = readServoAngleLive();
-      if (live >= 0 && live <= 180) lastWrittenAngle = live;
+    unsigned long deadline = millis() + 15000UL;
+    while (smoothMotionRunning() && !isSelfCheckFaultLatched() &&
+           (long)(millis() - deadline) < 0) {
+      tickSmoothServoMotion(bianlaing);
+      pollBleSerial();
+      watchdogFeed();
+      tickStealthKeyWindow();
+      updatePin9Power();
+      delayWithBlePoll(16);
+    }
+    forceServoMove = 0;
+    if (!isSelfCheckFaultLatched()) {
       servoFinalizePosition(bianlaing);
       lastWrittenAngle = bianlaing;
+      servoTrackItem = 1;
+      servoTrackAngle = bianlaing;
     }
+  } else {
+    bootMoveToTarget(bianlaing, 1);
   }
   keyDbgKv(F("BOOT_OPEN_DONE"), item, lastWrittenAngle);
 }
@@ -3768,14 +3807,27 @@ void setup() {
     statusLedUpdate();
   } else if (powerOnFlip == 0) {
     // 折回（界面左）：不闪，直接折回
+    bootPin5Gate = 1;
     keyDbgLine(F("BOOT_FOLD_START"));
     bootMoveToFold();
+    bootPin5Gate = 0;
     keyDbgKv(F("BOOT_FOLD_DONE"), item, lastWrittenAngle);
   } else {
-    // 下翻（界面右）：慢闪 5 次 → 灯常亮 → 出行式下翻展开
+    // 下翻（界面右）：慢闪 5 次 → 按键取消折回 item4 / 否则下翻展开
+    bootPin5Gate = 1;
     keyDbgLine(F("BOOT_FOLD_PROMPT"));
-    bootBlinkFoldBootPrompt();
-    bootTravelStyleOpenDown();
+    if (bootBlinkFoldBootPrompt()) {
+      bootWaitPin5Release();
+      digitalWrite(8, LOW);
+      keyDbgLine(F("BOOT_FOLD_START"));
+      bootMoveToFold();
+      bootSuppressBtn5Click = 1;
+      keyDbgKv(F("BOOT_FOLD_DONE"), item, lastWrittenAngle);
+      statusLedUpdate();
+    } else {
+      bootTravelStyleOpenDown();
+    }
+    bootPin5Gate = 0;
   }
 
   statusLedUpdate();

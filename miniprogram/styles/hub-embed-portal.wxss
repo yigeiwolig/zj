@@ -128,6 +128,25 @@
   visibility: visible !important;
 }
 
+/* 审核弹窗：真机 scroll-view 需明确高度，不可依赖 flex height:0 */
+.hub-embed-portal-layer .modal-content.audit-setup-modal {
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: 86vh !important;
+  overflow: hidden !important;
+}
+
+.hub-embed-portal-layer .audit-setup-body {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.hub-embed-portal-layer .audit-setup-footer {
+  flex-shrink: 0 !important;
+}
+
 /* 绑定设备弹窗：挂 root-portal 根节点；样式写在页面级，避免组件样式隔离导致真机空白 */
 @keyframes hubBindModalMaskIn {
   from { opacity: 0; }

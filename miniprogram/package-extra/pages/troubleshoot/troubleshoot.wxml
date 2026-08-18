@@ -1,32 +1,48 @@
-<view class="ts-page">
-  <view class="ts-main-view {{sheetVisible ? 'is-sunk' : ''}}">
-    <view class="ts-nav" style="height: {{navBarHeight}}px; padding-top: {{statusBarHeight}}px;">
-      <view class="ts-nav-back" bindtap="goBack">取消</view>
-      <text class="ts-nav-title">{{currentNode ? '排查助手' : '自助排查'}}</text>
-      <view class="ts-nav-right"></view>
-    </view>
+  <view class="ts-page">
+  <view class="ts-main-view {{sheetAnimIn ? 'is-sunk' : ''}}">
 
-    <view class="ts-content" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
-    
+  <!-- 顶栏：取消 | MT | 右侧留白避开胶囊 -->
+  <view
+    class="ts-nav"
+    style="height: {{navTotalHeight}}px; padding-top: {{statusBarHeight}}px;"
+  >
+    <view class="ts-nav-side ts-nav-side--left" bindtap="goBack">
+      <text class="ts-nav-btn">取消</text>
+    </view>
+    <view class="ts-nav-center" style="top: {{statusBarHeight}}px; height: {{navBarHeight}}px;">
+      <view class="ts-mt-mark">
+        <text class="ts-mt-m">M</text>
+        <text class="ts-mt-t">T</text>
+      </view>
+    </view>
+    <view class="ts-nav-side ts-nav-side--right" style="width: {{navRightPad}}px; min-width: {{navRightPad}}px;"></view>
+  </view>
+
+  <view class="ts-content {{currentNode && currentNode.type !== 'result' ? 'ts-content--step' : ''}}" style="padding-top: {{navTotalHeight}}px;">
+
+    <!-- 加载中 -->
     <view class="ts-loading" wx:if="{{loading}}">
       <view class="ts-spinner"></view>
+      <text class="ts-loading-text">正在初始化排查流程...</text>
     </view>
 
+    <!-- 加载失败 -->
     <view class="ts-error" wx:elif="{{errorText}}">
       <text class="ts-error-title">无法加载</text>
       <text class="ts-error-copy">{{errorText}}</text>
-      <view class="ts-primary-btn" bindtap="retryLoad">重试</view>
+      <view class="ts-btn ts-btn--primary" bindtap="retryLoad">重试</view>
     </view>
 
-    <!-- 列表页 -->
+    <!-- 主树列表（未进入具体步骤时） -->
     <block wx:elif="{{!currentNode}}">
-      <view class="ts-header">
-        <text class="ts-title">排查助手</text>
-        <text class="ts-subtitle">选择现象，按提示逐步确认</text>
+      <view class="ts-list-head">
+        <text class="ts-list-kicker">MT</text>
+        <text class="ts-hero-title">选择故障现象</text>
+        <text class="ts-hero-desc">请选择对应现象，跟随引导精准诊断</text>
       </view>
-
       <view class="ts-list" wx:if="{{trees.length}}">
         <view class="ts-list-row" wx:for="{{trees}}" wx:key="_id" data-id="{{item._id}}" bindtap="startTree" hover-class="ts-list-row-hover">
+          <view class="ts-mt-chip">MT</view>
           <view class="ts-list-content">
             <text class="ts-list-title">{{item.title}}</text>
             <text class="ts-list-subtitle" wx:if="{{item.subtitle}}">{{item.subtitle}}</text>
@@ -37,88 +53,186 @@
       <view class="ts-empty" wx:else>暂无排查方案</view>
     </block>
 
-    <!-- 步骤页 -->
+    <!-- 步骤排查页 -->
     <block wx:else>
-      <view class="ts-header">
-        <text class="ts-title">{{currentNode.title}}</text>
-        <text class="ts-subtitle" wx:if="{{currentNode.body}}">{{currentNode.body}}</text>
+      <view class="ts-step-wrap" wx:if="{{currentNode.type !== 'result'}}" style="height: calc(100vh - {{navTotalHeight}}px);">
+        <scroll-view class="ts-step-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+          <view class="ts-step-inner">
+            
+            <!-- 标题区 -->
+            <view class="ts-hero">
+              <view class="ts-hero-title">
+                <text wx:for="{{displayTitleLines}}" wx:key="index" class="ts-hero-line">{{item}}</text>
+              </view>
+              <view class="ts-hero-desc-box" wx:if="{{stepBody}}">
+                <text class="ts-hero-desc">{{stepBody}}</text>
+              </view>
+            </view>
+
+            <!-- 视频卡片 -->
+            <view class="ts-video-card" wx:if="{{hasVideo}}" style="height: {{mediaHeightPx}}px;">
+              <video
+                id="troubleshoot-video"
+                class="ts-video"
+                src="{{currentNode.media.url}}"
+                poster="{{currentNode.media.poster}}"
+                autoplay="{{false}}"
+                controls="{{videoPlaying}}"
+                show-center-play-btn="{{false}}"
+                show-play-btn="{{videoPlaying}}"
+                enable-progress-gesture="{{videoPlaying}}"
+                object-fit="contain"
+                bindplay="onVideoPlay"
+                bindpause="onVideoPause"
+                bindended="onVideoEnded"
+                bindtimeupdate="onVideoTimeUpdate"
+                binderror="onVideoError"
+              ></video>
+              
+              <!-- 视频未播放时的悬浮封面与精美播放按钮 -->
+              <view class="ts-play-overlay" wx:if="{{!videoPlaying}}" catchtap="playDemoVideo">
+                <view class="ts-video-tag">
+                  <text class="ts-video-tag-mt">MT</text>
+                  <text>操作演示</text>
+                </view>
+                <view class="ts-play-btn">
+                  <view class="ts-play-tri"></view>
+                </view>
+                <text class="ts-play-text">点击播放演示</text>
+              </view>
+            </view>
+            <view class="ts-video-card" wx:elif="{{currentNode.media.url && currentNode.media.type === 'image'}}" style="height: {{mediaHeightPx}}px;">
+              <image class="ts-video" src="{{currentNode.media.url}}" mode="aspectFit" />
+            </view>
+
+            <!-- 排查要点清单（精美 Group Card + 时间线步骤） -->
+            <view class="ts-checklist-card" wx:if="{{keyPointsView.length}}">
+              <view class="ts-checklist-header">
+                <view class="ts-mt-chip">MT</view>
+                <text class="ts-checklist-label">排查要点清单</text>
+              </view>
+              
+              <view class="ts-checklist-body">
+                <view
+                  class="ts-check-row {{item.active ? 'is-active' : 'is-inactive'}}"
+                  wx:for="{{keyPointsView}}"
+                  wx:key="index"
+                >
+                  <!-- 步骤轴与连接线 -->
+                  <view class="ts-check-axis">
+                    <view class="ts-check-badge">
+                      <text>{{index + 1}}</text>
+                    </view>
+                    <view class="ts-check-line" wx:if="{{index < keyPointsView.length - 1}}"></view>
+                  </view>
+                  
+                  <!-- 步骤内容 -->
+                  <view class="ts-check-content">
+                    <text class="ts-check-title">{{item.title}}</text>
+                    <text class="ts-check-detail" wx:if="{{item.detail}}">{{item.detail}}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
+
+            <view class="ts-scroll-spacer"></view>
+          </view>
+        </scroll-view>
+
+        <!-- 底部吸底操作栏 -->
+        <view class="ts-footer">
+          <!-- 视频播放引导 -->
+          <view class="ts-footer-banner" wx:if="{{hasVideo && !showOptions && !recordMode}}">
+            <view class="ts-footer-banner-icon">▶</view>
+            <text class="ts-footer-banner-text">{{videoPlaying ? '先跟着视频操作，看完后再选择结果' : '点击播放视频，按照指引进行对照'}}</text>
+          </view>
+          
+          <!-- 已解锁答案选择 -->
+          <view
+            class="ts-btn ts-btn--primary ts-btn--shadow"
+            wx:if="{{showOptions && !sheetVisible && !recordMode && footerOptions.length}}"
+            bindtap="showChoiceSheet"
+            hover-class="ts-btn--pressed"
+          >
+            <text>选择排查结果</text>
+            <text class="ts-btn-arrow">›</text>
+          </view>
+        </view>
       </view>
 
-      <!-- 提示框 -->
-      <view class="ts-notice-bar" wx:if="{{hasVideo || (currentNode.media.url && currentNode.media.type === 'image')}}">
-        <icon type="info" size="16" color="#8E8E93"></icon>
-        <text class="ts-notice-text">请对照下方演示，检查您的设备状态</text>
-      </view>
+      <!-- 结果页 -->
+      <view class="ts-result" wx:else>
+        <view class="ts-result-card">
+          <view class="ts-mt-chip ts-mt-chip--result">MT</view>
+          <view class="ts-result-mark {{currentNode.result === 'ok' ? 'is-ok' : 'is-warn'}}">
+            <text wx:if="{{currentNode.result === 'ok'}}">✓</text>
+            <text wx:else>!</text>
+          </view>
+          <text class="ts-result-title">{{resultTitle}}</text>
+          <text class="ts-result-desc" wx:if="{{resultDesc}}">{{resultDesc}}</text>
+        </view>
 
-      <!-- 视频区域：黑色大圆角卡片 -->
-      <view class="ts-media-box" wx:if="{{hasVideo}}">
-        <video
-          id="troubleshoot-video"
-          class="ts-video"
-          src="{{currentNode.media.url}}"
-          poster="{{currentNode.media.poster}}"
-          controls
-          show-center-play-btn
-          enable-progress-gesture
-          object-fit="contain"
-          bindended="onVideoEnded"
-          bindtimeupdate="onVideoTimeUpdate"
-          binderror="onVideoError"
-        ></video>
-      </view>
-      <view class="ts-media-box" wx:elif="{{currentNode.media.url && currentNode.media.type === 'image'}}">
-        <image class="ts-image" src="{{currentNode.media.url}}" mode="widthFix" />
-      </view>
-
-      <!-- 结果页展示 -->
-      <view class="ts-result-box" wx:if="{{currentNode.type === 'result'}}">
-        <icon type="{{currentNode.result === 'ok' ? 'success' : 'warn'}}" size="64"></icon>
-        <text class="ts-result-title">{{currentNode.result === 'ok' ? '问题已排除' : '建议申请售后'}}</text>
-        <view class="ts-primary-btn" bindtap="onResultAction">
-          {{currentNode.resultCta || (currentNode.result === 'ok' ? '完成' : '去故障报修')}}
-        </view>
-        <view class="ts-page-footer">
-          <text class="ts-text-link" wx:if="{{historyCount}}" bindtap="previousStep">上一步</text>
-          <text class="ts-text-link" bindtap="returnToList">退出排查</text>
+        <view class="ts-result-actions">
+          <view class="ts-btn ts-btn--primary ts-btn--shadow" bindtap="onResultAction">
+            <text>{{resultCtaText}}</text>
+          </view>
+          <view class="ts-footer-links">
+            <text class="ts-footer-link" wx:if="{{historyCount}}" bindtap="previousStep">返回上一步</text>
+            <text class="ts-footer-link" bindtap="returnToList">退出排查</text>
+          </view>
         </view>
       </view>
-
-      <!-- 播放完毕后的悬浮入口 -->
-      <block wx:elif="{{currentNode.type !== 'result'}}">
-        <view class="ts-page-actions" wx:if="{{showOptions}}">
-          <view class="ts-primary-btn" bindtap="showSheet">选择观察结果</view>
-        </view>
-        <view class="ts-page-footer" wx:if="{{showOptions}}">
-          <text class="ts-text-link" wx:if="{{historyCount}}" bindtap="previousStep">上一步</text>
-          <text class="ts-text-link" bindtap="returnToList">退出排查</text>
-        </view>
-      </block>
     </block>
   </view>
   </view>
 
-  <!-- iOS 风格 Action Sheet (用于选择现象) -->
-  <block wx:if="{{currentNode && currentNode.type !== 'result'}}">
-    <view class="ts-sheet-mask {{sheetVisible ? 'is-visible' : ''}}" bindtap="hideSheet" catchtouchmove="true"></view>
-    <view class="ts-sheet-panel {{sheetVisible ? 'is-visible' : ''}}">
-      <view class="ts-sheet-group">
-        <view class="ts-sheet-header-inner">
-          <text class="ts-sheet-title-text">观察到什么现象？</text>
-        </view>
-        <view 
-          class="ts-sheet-btn" 
-          wx:for="{{currentNode.options}}" 
-          wx:key="index" 
-          data-index="{{index}}" 
-          bindtap="chooseOption" 
-          hover-class="ts-sheet-btn--hover"
+  <!-- 底部弹层：先挂载再滑入，关闭时先滑出再卸载 -->
+  <view class="ts-sheet-root {{sheetAnimIn ? 'is-in' : ''}}" wx:if="{{sheetMounted}}" catchtouchmove="true">
+    <view class="ts-sheet-mask" bindtap="onSheetMaskTap"></view>
+    <view class="ts-sheet-panel">
+    <!-- 视频播完后弹出：问题 + 选项 -->
+    <view class="ts-sheet-card ts-sheet-card--choice" wx:if="{{!recordMode}}">
+      <view class="ts-sheet-handle"></view>
+      <view class="ts-mt-chip ts-mt-chip--sheet">MT</view>
+      <view class="ts-sheet-head">
+        <text class="ts-sheet-title">{{displayTitle || '请选择设备实际状态'}}</text>
+        <text class="ts-sheet-desc">按视频操作完成后，设备是否已恢复正常？请选择对应结果</text>
+      </view>
+      <view class="ts-sheet-options">
+        <view
+          class="ts-sheet-opt-btn {{index === 0 ? 'is-primary' : 'is-secondary'}}"
+          wx:for="{{footerOptions}}"
+          wx:key="index"
+          data-index="{{index}}"
+          bindtap="chooseOption"
+          hover-class="ts-sheet-opt-btn--hover"
         >
-          {{item.label}}
+          <text class="ts-sheet-opt-text">{{item.label}}</text>
+          <text class="ts-sheet-opt-arrow">›</text>
         </view>
       </view>
-      <view class="ts-sheet-group" style="margin-top: 16rpx;">
-        <view class="ts-sheet-btn ts-sheet-btn--bold" bindtap="hideSheet" hover-class="ts-sheet-btn--hover">重看视频</view>
-      </view>
+      <text class="ts-sheet-later" bindtap="hideChoiceSheet">稍后再选择</text>
     </view>
-  </block>
+
+    <!-- 录制视频遮罩卡片 -->
+    <view class="ts-sheet-card ts-sheet-card--record" wx:else>
+      <view class="ts-sheet-handle"></view>
+      <view class="ts-sheet-head">
+        <text class="ts-sheet-title">请录制对应视频相同的操作</text>
+        <text class="ts-sheet-desc">当前选项：{{pendingAnswerLabel}}</text>
+      </view>
+      <video wx:if="{{recordTempPath}}" class="ts-record-preview" src="{{recordTempPath}}" controls object-fit="contain"></video>
+      <view class="ts-btn ts-btn--primary" bindtap="startUserRecord">{{recordTempPath ? '重新录制' : '开始录制视频'}}</view>
+      <view class="ts-btn ts-btn--secondary" wx:if="{{recordTempPath}}" bindtap="confirmUserRecord" style="margin-top: 16rpx;">确认并继续</view>
+      <view class="ts-sheet-cancel" bindtap="cancelUserRecord" hover-class="ts-btn--pressed">重新选择答案</view>
+    </view>
+    </view>
+  </view>
+
+  <view class="ts-submit-mask" wx:if="{{submitting}}" catchtouchmove="true">
+    <view class="ts-submit-card">
+      <view class="ts-spinner"></view>
+      <text class="ts-submit-text">提交中</text>
+    </view>
+  </view>
 </view>

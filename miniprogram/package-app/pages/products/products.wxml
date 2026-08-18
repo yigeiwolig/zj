@@ -342,7 +342,7 @@
   </view>
 
   <view class="hub-tab-bar-wrap {{showHubTabBar && !hubShellModalOpen ? 'hub-tab-bar-wrap--show' : ''}}">
-    <hub-tab-bar active="{{hubBottomBarIndex}}" anim="{{hubPanelsAnim}}" profile-dot="{{hubProfileBadge}}" bind:switch="onHubTabSwitch" />
+    <hub-tab-bar active="{{hubBottomBarIndex}}" anim="{{hubPanelsAnim}}" show-kf="{{showHubKfTab}}" profile-dot="{{hubProfileBadge}}" bind:switch="onHubTabSwitch" />
   </view>
 </view>
 
@@ -516,13 +516,13 @@
   <view class="direct-code-notice-mask {{directCodeTutorialNoticeClosing ? 'is-closing' : ''}}" catchtouchmove="noop" catchtap="noop">
     <view class="direct-code-notice-box {{directCodeTutorialNoticeClosing ? 'is-closing' : ''}}" catchtap="noop" catchtouchmove="noop">
       <view class="direct-code-notice-kicker">使用提示</view>
-      <view class="direct-code-notice-title">处处都有卡片教学</view>
+      <view class="direct-code-notice-title">先看本页教程</view>
       <view class="direct-code-notice-content">
         <view class="direct-code-notice-lead">
-          做这个小程序，是为了让操作更顺手，不是多添麻烦。
+          几乎每个功能页都有分步图文。
         </view>
         <view class="direct-code-notice-body">
-          几乎每个功能页都配了分步图文。卡住时，先打开当前页教程，按图走一般就能搞定。
+          不确定怎么操作时，打开教程按图走即可。
         </view>
       </view>
       <view

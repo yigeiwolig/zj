@@ -12,6 +12,11 @@ Component({
     profileDot: {
       type: Boolean,
       value: false
+    },
+    /** 是否显示「客服」Tab（首次进入小程序隐藏） */
+    showKf: {
+      type: Boolean,
+      value: true
     }
   },
   methods: {

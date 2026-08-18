@@ -2,7 +2,6 @@ const weworkKf = require('../../../utils/weworkCustomerService.js');
 const kfFeedbackApi = require('../../../utils/kfFeedbackApi.js');
 const {
   getGuideIntroKeys,
-  markGuideIntroSeen,
   markGuidePermSkip,
   resolveGuideAutoEntry
 } = require('../../../utils/usageGuideIntro.js');
@@ -74,10 +73,11 @@ Component({
 
   lifetimes: {
     attached() {
-      this.checkAdminPrivilege();
-      if (this.properties.active) {
-        this._maybeShowKfGuide(false);
-      }
+      this.checkAdminPrivilege().finally(() => {
+        if (this.properties.active) {
+          this._maybeShowKfGuide(false);
+        }
+      });
     },
     detached() {
       if (this._kfGuideStartTimer) {
@@ -97,6 +97,10 @@ Component({
     shellAdmin(isAdmin) {
       if (isAdmin) {
         this.loadAdminMessages();
+        // 升为管理员后收掉已弹出的引导
+        if (this.data.showKfGuide || this.data.showKfGuideIntro) {
+          this.closeKfGuide(false);
+        }
       }
     },
     active(val) {
@@ -129,13 +133,20 @@ Component({
         }
         const isAdmin = !!(r.data && r.data.length);
         this.setData({ isAdmin });
-        if (isAdmin) this.loadAdminMessages();
+        if (isAdmin) {
+          this.loadAdminMessages();
+          if (this.data.showKfGuide || this.data.showKfGuideIntro) {
+            this.closeKfGuide(false);
+          }
+        }
       } catch (e) {}
     },
 
     kfGuideNoop() {},
 
     _maybeShowKfGuide(forceReplay) {
+      // 管理员不自动弹客服引导（与主页引导一致）
+      if (!forceReplay && (this.properties.shellAdmin || this.data.isAdmin)) return;
       if (this.data.showKfGuide || this.data.showKfGuideIntro) return;
       if (this._kfGuideStartTimer) clearTimeout(this._kfGuideStartTimer);
       if (forceReplay) {
@@ -143,11 +154,10 @@ Component({
         return;
       }
       const entry = resolveGuideAutoEntry(KF_GUIDE_INTRO_KEYS);
-      if (entry === 'none') return;
-      if (entry === 'intro') {
-        this.setData({ showKfGuideIntro: true });
-        return;
-      }
+      // 仅真正的「首次」自动播；看过 / 跳过都不再自动弹
+      // （以前完成只记 introSeen，下次仍弹「查看教程」；中途切走则什么都不记，导致每次都从第 1 步重来）
+      if (entry !== 'steps') return;
+      markGuidePermSkip(KF_GUIDE_INTRO_KEYS);
       this._startKfGuideSteps();
     },
 
@@ -161,9 +171,8 @@ Component({
     },
 
     kfGuideIntroStart() {
-      this.setData({ showKfGuideIntro: false }, () => {
-        this._startKfGuideSteps();
-      });
+      // 旧版「再次进入先问看不看」已废弃；兜底当跳过处理
+      this.kfGuideSkip();
     },
 
     _showKfGuideStep(stepNo, retryCount) {
@@ -259,7 +268,7 @@ Component({
       if (this.data.kfGuideBtnLocked) return;
       const cur = Number(this.data.kfGuideStep) || 0;
       if (cur >= KF_GUIDE_STEPS.length) {
-        markGuideIntroSeen(KF_GUIDE_INTRO_KEYS);
+        markGuidePermSkip(KF_GUIDE_INTRO_KEYS);
         this.closeKfGuide(false);
         return;
       }

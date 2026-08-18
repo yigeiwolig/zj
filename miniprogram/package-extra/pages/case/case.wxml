@@ -136,7 +136,7 @@
           <view class="pending-actions-large">
             <view class="act-btn-lg reject" bindtap="rejectPending" data-id="{{item._id}}">拒绝</view>
             <view class="act-btn-lg pass" bindtap="markAsProcessed" data-id="{{item._id}}">已采纳</view>
-            <view class="act-btn-lg download" bindtap="downloadPending" data-fileid="{{item.videoFileID}}" data-id="{{item._id}}">⬇ 下载到相册</view>
+            <view class="act-btn-lg download" bindtap="downloadPending" data-id="{{item._id}}">⬇ 下载到相册</view>
           </view>
 
         </view>

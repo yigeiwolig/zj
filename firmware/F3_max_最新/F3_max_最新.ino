@@ -216,6 +216,7 @@ const uint8_t F3_EE_PWR_LOCK = 15;
 const uint8_t F3_EE_HEIGHT_ON = 30; // 旧测高开关 EEPROM 位；TOF 已删，仅兼容忽略 H0/H1
 const uint8_t F3_EE_STEALTH_ON = 31;
 const uint8_t F3_FOLD_USER_DELTA = 10;   // 日常折叠 = 锁止位 item4 − 10°
+const uint8_t F3_FOLD_BOOT_PROBE_DELTA = 15; // 开机先探 item4 − 15°
 static uint8_t f3PowerOffLockOn = 0;
 uint8_t stealthEntryBusy = 0; // 非 static：供 f3_mpu_park.ino extern 使用
 
@@ -894,6 +895,16 @@ static void f3WriteLeds(uint8_t redOn, uint8_t greenOn) {
 }
 
 void f3StatusLedUpdate() {
+  // 折叠角调整：强制绿灯，屏蔽一切报错闪灯
+  if (foldAdjustActive || f3HeightCfgModeActive()) {
+    f3WriteLeds(0, 1);
+    return;
+  }
+  // 开机自检：红绿常亮；自检转动失败则交给 tickFaultAlarm 闪灯
+  if (inBootSettle() && !faultIndicatorActive()) {
+    f3WriteLeds(1, 1);
+    return;
+  }
   // 关钥匙 10 秒倒计时：红绿指示灯全部关闭（故障闪灯暂停）
   if (isKeyOffCountdownActive()) {
     f3WriteLeds(0, 0);
@@ -916,11 +927,6 @@ void f3StatusLedUpdate() {
     return;
   }
 #endif
-  // 折叠角调整 / 测高标定：绿灯常亮（优先于折叠超时闪灯、ACK 闪烁）
-  if (foldAdjustActive || f3HeightCfgModeActive()) {
-    f3WriteLeds(0, 1);
-    return;
-  }
 #if F3_HEIGHT_ENABLE
   if (f3FoldCloseFault) return;
 #endif
@@ -1009,12 +1015,15 @@ static int16_t f3StallCloseThr = 870;
 static uint8_t f3StallHitsOpen = 3;
 static uint8_t f3StallHitsClose = 3;
 const uint8_t BOOT_STALL_HITS_NEED = 3;
-const unsigned long MOTOR_MIN_RUN_BEFORE_STALL_MS = 250UL;
-const unsigned long BOOT_STALL_CYCLE_MS = 2000UL; // 堵转重试：item4-2 → item4-10 一轮至少 2s
+const unsigned long MOTOR_MIN_RUN_BEFORE_STALL_MS = 400UL; // 指令后电流尖峰过完再判堵转
+const unsigned long BOOT_STALL_CYCLE_MS = 300UL; // 开机堵转重试间隔
 const unsigned long REBOUND_RETRY_WAIT_MS = 800UL;
 const unsigned long STALL_ARM_MS = 200UL;
-// 灭→亮开窗后前 0.4s 堵转：视为未解锁，走开机同款 item4-2 ↔ 折叠位解锁重试
-const unsigned long EARLY_OPEN_LOCK_STALL_MS = 400UL;
+// 堵转计数保护：刚计入后 500ms 内忽略二次触发（A0 抖动）
+const unsigned long STALL_REBOUND_GUARD_MS = 500UL;
+// 灭→亮开窗后前 0.2s 堵转=未解锁→回 item；之后中段堵转→先回 item-15 再重试
+// 亮→灭（变量→item）不开启未解锁判断
+const unsigned long EARLY_OPEN_LOCK_STALL_MS = 200UL;
 const int AUTO_LEVEL_FOLD_THR = 900;
 const int AUTO_LEVEL_OPEN_THR = 900;
 const uint8_t STALL_REBOUND_MAX = 2;
@@ -1141,6 +1150,7 @@ int lastMotorA0 = -1;
 unsigned long lastMotorSampleMs = 0;
 unsigned long bootSettleUntil = 0;
 static uint8_t bootStallEn = 0;
+static uint8_t bootStallProbe15 = 0; // 1=堵转恢复目标用 item-15
 #define bootStallFinish() do { if (bootStallEn != 2) bootStallEn = 0; } while (0)
 unsigned long btnDetectStartMs = 0;
 unsigned long flapSettleUntil = 0;
@@ -1311,10 +1321,8 @@ void tickFlapServoHold(int target) {
       if (!reboundAttempt) {
         reboundWaitUntil = 0;
       }
-    } else if (item == 1 && target == bianlaing && reboundAttempt > 0) {
-      reboundAttempt = 0;
-      reboundRetryOpen = 0;
     }
+    // 打开到位勿清 reboundAttempt：堵转时指令角也会到 bianlaing，清零会死循环重试
     return;
   }
 
@@ -1667,7 +1675,8 @@ static int f3FoldMotionTarget() {
   // 断电锁死开启且钥匙已关：全程都以 item4 为目标（含本来已在 item4-10）
   if (f3PowerOffLockOn && pin2KeyOffStable()) return (int)item4;
   if (keyOffRetractBusy) return f3KeyOffFoldTarget();
-  return f3FoldUserTarget();
+  // 打开遇阻回退：item-15；日常折叠：item-10（item4 始终足够大，不做负角钳位）
+  return (int)item4 - (reboundRetryOpen ? (int)F3_FOLD_BOOT_PROBE_DELTA : (int)F3_FOLD_USER_DELTA);
 }
 #endif
 
@@ -1865,9 +1874,9 @@ void finishBtnDetectWindow() {
   btnDetectStartMs = 0;
   openStartMs = 0;
   clearBtnDetectSamples();
-  if (item == 0 && reboundWaitUntil == 0) {
-    reboundAttempt = 0;
-  }
+  // 遇阻流程中勿清；窗正常结束（开/收到位）才清次数
+  if (reboundWaitUntil || reboundRetryOpen || reboundRetryClose || reboundFaultLatched) return;
+  reboundAttempt = 0;
 }
 
 // 打开/折叠角度微调：仅动舵机，不做堵转/测距/故障上报
@@ -1914,12 +1923,12 @@ bool tickMotionA0Realtime(bool forceSample) {
     return false;
   }
 
-  // 检测窗内持续采样；打开须能在 0.4s 内判到未解锁，故开检更早
+  // 打开：尽早可判（含 0.4s 未解锁）；收回：保持原灵敏，不开 0.4s 未解锁逻辑
   unsigned long armMs = STALL_ARM_MS;
   unsigned long runMs = MOTOR_MIN_RUN_BEFORE_STALL_MS;
   if (item == 1) {
-    armMs = 80UL;
-    runMs = 120UL;
+    armMs = 40UL;
+    runMs = 80UL;
   } else if (item == 0) {
     armMs = 160UL;
     runMs = 220UL;
@@ -2095,7 +2104,7 @@ bool isStealthEntryWindow() {
 
 // 关钥匙后前 10 秒：可长按进隐蔽（F3 无延时断电分钟）
 bool canUserFlapControl() {
-  if (isSelfCheckFaultLatched()) return false;
+  if (inBootSettle() || isSelfCheckFaultLatched()) return false;
   if (item == 3 || autoLevelBusy) return false;
   return digitalRead(2) == HIGH;
 }
@@ -2731,13 +2740,11 @@ void writeServo(int angle) {
       if (item != 1) return;
       if (isSelfCheckFaultLatched()) return;
       servoFinalizePosition(angle);
-    if (servoAtAngle(angle) && !openEaseActive && item == 1) {
       servoTrackItem = item;
       servoTrackAngle = angle;
       foldHoldActive = 0;
-      reboundAttempt = 0;
-    }
-    return;
+      // 勿在此处清 reboundAttempt（同 tickFlapServoHold）
+      return;
   }
 
   if (!forceServoMove && servoMoveCommitted(angle)) {
@@ -2759,7 +2766,8 @@ void writeServo(int angle) {
 // 翻板非阻塞：折叠微调走 tickFlapServoHold
 void updateServoOutput() {
   if (item != 0 && item != 1) return;
-  if (isSelfCheckFaultLatched()) return;
+  // 故障锁定时仍允许折叠角微调（item4）
+  if (isSelfCheckFaultLatched() && !foldAdjustActive) return;
   if (reboundWaitUntil > 0 && !forceServoMove) return;
   int target;
   if (item == 1) {
@@ -2820,8 +2828,10 @@ void requestFlapOpen(bool stallRetry) {
   }
 
   abortOpenMotion();
-  reboundWaitUntil = 0;
-  if (!stallRetry) reboundRetryOpen = 0;
+  if (!stallRetry) {
+    reboundWaitUntil = 0;
+    reboundRetryOpen = 0;
+  }
 
   foldAdjustActive = 0;
   int cur = readServoAngleLive();
@@ -2913,8 +2923,8 @@ void resetOpenGuard() {
 }
 
 void beginOpenAttempt(bool preserveStallCount) {
-  reboundWaitUntil = 0;
   if (!preserveStallCount) {
+    reboundWaitUntil = 0;
     // 不在此处清 reboundFaultLatched：堵转锁必须重启才解除
     reboundAttempt = 0;
   }
@@ -2927,8 +2937,11 @@ void beginOpenAttempt(bool preserveStallCount) {
 void foldToRetract() {
   if (item == 3) return;
   abortOpenMotion();
-  reboundWaitUntil = 0;
-  if (!reboundRetryOpen && !stallRetryClosing) reboundAttempt = 0;
+  // 遇阻躲开收回时保留 wait/次数，避免保护窗被清掉后连计或死循环重试
+  if (!reboundRetryOpen && !stallRetryClosing) {
+    reboundWaitUntil = 0;
+    reboundAttempt = 0;
+  }
   stealthActive = 0;
   foldAdjustActive = 0;
   int cur = readServoAngleLive();
@@ -2948,19 +2961,18 @@ void foldToRetract() {
   lastStatusSend = 0;
 }
 
-// 未解锁/开机未到位 / 堵转终报回原位：强制推到锁止角 item4
-static void faultRetreatToItem4() {
-  item = 0;
+// 堵转终报：推到指定角并锁定（开失败→item-15；收失败→变量/绿灯亮）
+static void faultRetreatToAngle(int t, uint8_t toItem) {
+  item = toItem ? 1 : 0;
   abortOpenMotion();
   reboundWaitUntil = 0;
   reboundRetryOpen = 0;
   reboundRetryClose = 0;
   foldAdjustActive = 0;
-  foldHoldActive = 1;
+  foldHoldActive = toItem ? 0 : 1;
   invalidateServoHold();
   servoCancelPwmHold();
   servoPrepareMove();
-  int t = item4;
   if (t < 0) t = 0;
   if (t > 180) t = 180;
   unsigned long t0 = millis();
@@ -2977,45 +2989,62 @@ static void faultRetreatToItem4() {
   }
   servoFinalizePosition(t);
   lastWrittenAngle = t;
-  servoTrackItem = 0;
+  servoTrackItem = item;
   servoTrackAngle = t;
   statusLedUpdate();
 }
 
+// 未解锁/开机未到位 / 打开方向堵转终报：强制推到锁止角 item4
+static void faultRetreatToItem4() {
+  faultRetreatToAngle((int)item4, 0);
+}
+
 void triggerStallRebound(unsigned long detectElapsed) {
+  if (foldAdjustActive) return; // 微调折叠角期间不报堵转
   if (reboundFaultLatched) return;
   stuckCount = 0;
+  if (reboundRetryOpen || reboundRetryClose || reboundWaitUntil) return;
 
-  // 灭→亮前 0.4s 堵转：机械未解锁 → 与开机相同，item4-2 ↔ 日常折叠位反复试
-  // detectElapsed 由调用方在清窗前传入
-  if (item == 1 && detectElapsed > 0 && detectElapsed < EARLY_OPEN_LOCK_STALL_MS) {
+  // 仅 item-10→变量（打开）：前 0.2s 堵转=未解锁 → 回 item 并报错
+  // 变量→item（收回）不走此分支
+  if (item == 1 && detectElapsed && detectElapsed < EARLY_OPEN_LOCK_STALL_MS) {
     abortOpenMotion();
     clearOpenMonitor();
-    bootStallRecoverLoop();
+    reboundAttempt = STALL_REBOUND_MAX;
+    reboundFaultLatched = 1;
+    bootStallEn = 0;
+    savePendingFaultReport(1);
+    faultRetreatToItem4();
+    enterFaultLockState();
     return;
   }
 
   if (reboundAttempt + 1 >= STALL_REBOUND_MAX) {
     reboundAttempt = STALL_REBOUND_MAX;
     reboundFaultLatched = 1;
-    bootStallEn = 0; // 勿沿用开机狂闪标记，否则会变成纯红快闪
+    bootStallEn = 0;
     savePendingFaultReport(2);
-    // 终报后回到收回原位（折叠失败勿停半途继续收；收回失败亦先回稳）
-    faultRetreatToItem4();
+    if (item == 0) {
+      // 收回两次仍堵 → 停在变量（绿灯亮）
+      faultRetreatToAngle((int)bianlaing, 1);
+    } else {
+      // 打开中段两次仍堵 → 停在 item-15
+      faultRetreatToAngle((int)item4 - (int)F3_FOLD_BOOT_PROBE_DELTA, 0);
+    }
     enterFaultLockState();
     return;
   }
   reboundAttempt++;
+  reboundWaitUntil = millis() + STALL_REBOUND_GUARD_MS;
+  stallIgnoreUntil = reboundWaitUntil;
   abortOpenMotion();
   clearOpenMonitor();
-  stallIgnoreUntil = millis() + 800UL;
   if (item == 1) {
-    // 打开中段碰胎 → 先收回，再尝试打开
+    // 打开中段堵转：先回到 item-15，再试打开（最多 2 次）
     reboundRetryOpen = 1;
     reboundRetryClose = 0;
     foldToRetract();
   } else if (item == 0) {
-    // 收回途中遇阻 → 先翻开躲开，再尝试收回
     reboundRetryClose = 1;
     reboundRetryOpen = 0;
     requestFlapOpen(true);
@@ -3203,10 +3232,6 @@ static void printStatusLine(Stream &out, int ang, int accPin, int btnPin, uint8_
     out.print(item);
 #endif
   }
-#if F3_MAX_BUILD && !F3_FLASH_TIGHT
-  out.print(F("|POL:"));
-  out.print(f3PowerOffLockOn ? 1 : 0);
-#endif
   out.println();
 }
 
@@ -3305,6 +3330,11 @@ void resetSelfCheckMonitor() {
 //   ERR2/卡住堵转、遇阻重试 → 红-绿-红-绿 互斥交替（一亮一灭）
 // 倒计时期间强制灭灯。
 void tickFaultAlarm() {
+  // 折叠角调整期间：不报错闪灯，保持绿灯
+  if (foldAdjustActive) {
+    f3WriteLeds(0, 1);
+    return;
+  }
   if (isKeyOffCountdownActive()) {
     f3WriteLeds(0, 0);
     return;
@@ -3350,6 +3380,8 @@ static unsigned long btn5UpSince = 0;
 static unsigned long btn5ExitSince = 0;
 static uint8_t btn5EnterDone = 0;
 static uint8_t btn5SuppressExit = 0;
+static uint8_t bootPin5Gate = 0;
+static uint8_t bootSuppressBtn5Click = 0;
 
 static bool btn5PinDown() {
   return digitalRead(BTN5_PIN) == LOW;
@@ -3412,8 +3444,10 @@ void btn5ServiceTick() {
   unsigned long now = millis();
   bool down = btn5PinDown();
 
-  // 任意故障锁定：按键完全无效（含隐蔽模式长按退出）
-  if (isSelfCheckFaultLatched()) {
+  if (bootPin5Gate) return;
+
+  // 开机黄灯自检 / 故障锁定：按键完全无效
+  if (inBootSettle() || isSelfCheckFaultLatched()) {
     btn5DownSince = 0;
     btn5UpSince = 0;
     btn5ExitSince = 0;
@@ -3464,6 +3498,14 @@ void btn5ServiceTick() {
 
   if (btn5UpSince == 0) btn5UpSince = now;
   if (now - btn5UpSince < BTN5_RELEASE_DEBOUNCE_MS) return;
+
+  if (bootSuppressBtn5Click) {
+    bootSuppressBtn5Click = 0;
+    btn5DownSince = 0;
+    btn5UpSince = 0;
+    btn5EnterDone = 0;
+    return;
+  }
 
   unsigned long held = now - btn5DownSince;
   if (!btn5EnterDone && held >= BTN5_ENTER_MS) {
@@ -3703,22 +3745,20 @@ static void moveServoToFoldAngle(int angle) {
   if (angle < 0) angle = 0;
   if (angle > 180) angle = 180;
   if (item == 3) return;
+  // 直接推到 item4：不经故障锁、不绕 updateServoOutput 丢步
   item = 0;
-  statusLedUpdate();
-  forceServoMove = 1;
+  foldAdjustActive = 1;
   foldHoldActive = 0;
-  invalidateServoHold();
-  int cur = readServoAngleLive();
-  if (cur < 0 || cur > 180) {
-    cur = lastWrittenAngle;
-#if F3_MAX_BUILD
-    if (cur < 0 || cur > 180) cur = f3FoldMotionTarget();
-#else
-    if (cur < 0 || cur > 180) cur = item4;
-#endif
-  }
-  lastWrittenAngle = cur;
-  writeServoDirect(angle);
+  openEaseActive = 0;
+  flapSettleUntil = 0;
+  abortOpenMotion();
+  forceServoMove = 1;
+  servoPrepareMove();
+  servo.write(angle);
+  lastWrittenAngle = angle;
+  servoTrackItem = 0;
+  servoTrackAngle = angle;
+  statusLedUpdate();
 }
 
 static void applyFoldAdjustStep(int delta) {
@@ -3768,6 +3808,14 @@ static bool handleBlePersistSetting(char *cmd) {
       EEPROM.put(5, accRetractOn);
     }
     bleNotifySettingSaved();
+    return true;
+  }
+  // 多次重试：清故障后按 item↔item-10 再跑一轮开机堵转恢复
+  if (cmd[0] == 'U' && cmd[1] == 'R' && cmd[2] == 0) {
+    reboundFaultLatched = 0;
+    clearPendingFaultReport();
+    bootStallEn = 1;
+    bootStallRecoverLoop();
     return true;
   }
 #endif
@@ -3880,6 +3928,24 @@ void handleBleCommand(char *cmd) {
     return;
   }
 
+  // 折叠角微调（item4）：故障锁定时也允许，并立刻写舵机
+  if (cmdIsP(cmd, CMD_ADJ_FOLD) || cmdIsP(cmd, CMD_ADJ_BIG) ||
+      cmdIsP(cmd, CMD_ADJ_SMALL) || cmdIsP(cmd, CMD_INIT_ANGLE)) {
+    foldAdjustActive = 1;
+    if (cmdIsP(cmd, CMD_INIT_ANGLE)) {
+      item4 = 150;
+      EEPROM.put(3, item4);
+    } else if (cmdIsP(cmd, CMD_ADJ_BIG)) {
+      if (item4 > 0) { item4--; EEPROM.put(3, item4); }
+    } else if (cmdIsP(cmd, CMD_ADJ_SMALL)) {
+      if (item4 < 180) { item4++; EEPROM.put(3, item4); }
+    }
+    if (item != 3) moveServoToFoldAngle(item4);
+    lastStatusSend = 0;
+    sendStatusPacket();
+    return;
+  }
+
   if (isSelfCheckFaultLatched()) return;
 
   if (cmdIsP(cmd, CMD_STEALTH_ON)) {
@@ -3982,38 +4048,6 @@ void handleBleCommand(char *cmd) {
     EEPROM.put(1, bianlaing);
     lastStatusSend = 0;
 #endif
-  } else if (cmdIsP(cmd, CMD_INIT_ANGLE)) {
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3PrepareUserServoAngleCmd();
-#endif
-    item4 = 150;
-    invalidateServoHold();
-    writeServoDirect(item4);
-    EEPROM.put(3, item4);
-    lastStatusSend = 0;
-    sendStatusPacket();
-  } else if (cmdIsP(cmd, CMD_ADJ_FOLD)) {
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3EnterAngleAdjustCmd();
-#endif
-    if (item != 3) {
-      moveServoToFoldAngle(item4);
-    }
-    statusLedUpdate();
-    lastStatusSend = 0;
-    sendStatusPacket();
-  } else if (cmdIsP(cmd, CMD_ADJ_BIG)) {
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3EnterAngleAdjustCmd();
-#endif
-    applyFoldAdjustStep(-1);
-    statusLedUpdate();
-  } else if (cmdIsP(cmd, CMD_ADJ_SMALL)) {
-#if F3_MAX_BUILD && F3_HEIGHT_ENABLE
-    f3EnterAngleAdjustCmd();
-#endif
-    applyFoldAdjustStep(1);
-    statusLedUpdate();
   }
 }
 
@@ -4025,13 +4059,13 @@ static uint8_t bootDriveToAngle(int target) {
   unsigned long minMoveMs = (unsigned long)abs(target - start) * 28UL + 450UL;
   if (minMoveMs < 900UL) minMoveMs = 900UL;
   else if (minMoveMs > 1800UL) minMoveMs = 1800UL;
-  unsigned long moveStart = millis();
-  unsigned long lastCmdMs = 0, lastA0Ms = 0;
-  uint8_t stallHits = 0;
   forceServoMove = 1;
   if (servoPwmOff) servoPrepareMove();
   servo.write(target);
   lastWrittenAngle = target;
+  unsigned long moveStart = millis();
+  unsigned long lastCmdMs = 0, lastA0Ms = 0;
+  uint8_t stallHits = 0;
   while ((millis() - moveStart) < minMoveMs) {
     watchdogFeed();
     updatePin9Power();
@@ -4064,15 +4098,21 @@ static void bootStallRecoverLoop() {
   f3FoldCloseFault = 0;
   f3DgdLatch = f3DgdSafeCnt = f3DgdUnsafeCnt = 0;
 #endif
-  // 与开机一致：先到 item4-2，再推日常折叠位（item4-10）
-  int retreatT = (int)item4 - 2;
-  if (retreatT < 0) retreatT = 0;
+  // 堵住：item ↔ (item-15 探位 或 日常 item-10) 反复试
+  int itemT = (int)item4;
   int foldT = f3FoldUserTarget();
+  if (bootStallProbe15) {
+    foldT = itemT - (int)F3_FOLD_BOOT_PROBE_DELTA;
+    if (foldT < 0) foldT = 0;
+  }
+  if (itemT < 0) itemT = 0;
+  if (itemT > 180) itemT = 180;
 
   uint8_t nt = 0;
   for (;;) {
-    unsigned long t0 = millis();
-    (void)bootDriveToAngle(retreatT);
+    (void)bootDriveToAngle(itemT);
+    // 回到 item 后间隔再试（约 2s），避免连打
+    delayWithBlePoll(BOOT_STALL_CYCLE_MS);
     if (!bootDriveToAngle(foldT)) {
       reboundFaultLatched = 0;
       clearPendingFaultReport();
@@ -4086,8 +4126,6 @@ static void bootStallRecoverLoop() {
       lastStatusSend = 0;
       return;
     }
-    unsigned long dt = millis() - t0;
-    if (dt < BOOT_STALL_CYCLE_MS) delayWithBlePoll(BOOT_STALL_CYCLE_MS - dt);
     if (++nt >= 20) break;
   }
 
@@ -4115,6 +4153,7 @@ static int waitBootServoReach(int target) {
     watchdogFeed();
     updatePin9Power();
 
+    // MOTOR_MIN_RUN：发指令后至少再等这段才开始堵转采样（避开启动电流）
     if (bootStallEn && (now - moveStart) >= MOTOR_MIN_RUN_BEFORE_STALL_MS &&
         (lastA0Ms == 0 || (now - lastA0Ms) >= BTN_DETECT_SAMPLE_MS)) {
       lastA0Ms = now;
@@ -4165,6 +4204,8 @@ static void bootMoveToTarget(int target, uint8_t itemState) {
   forceServoMove = 1;
 
   servo.write(target);
+  // 发角后先过电流尖峰，再进入到位/堵转判断
+  delayWithBlePoll(80UL);
   target = waitBootServoReach(target);
   forceServoMove = 0;
   if (!isSelfCheckFaultLatched()) {
@@ -4208,8 +4249,10 @@ static void bootBlinkLeadOff() {
   delayWithBlePoll(500);
 }
 
-// 开机下翻：5 次稍快闪烁（比自检 500ms 快闪）；闪灯期间长按 Pin5 可取消下翻
-static bool bootFoldBlinkDelayPoll(unsigned long ms, unsigned long &holdSince) {
+#define BOOT_BLINK_CANCEL_MS 80UL
+
+// 开机下翻：5 次稍快闪烁；闪灯期间按 Pin5 取消下翻（直达 item4）
+static bool bootFoldBlinkDelayPoll(unsigned long ms, unsigned long &pressSince) {
   unsigned long endAt = millis() + ms;
   unsigned long lastStatusInDelay = 0;
   while ((long)(millis() - endAt) < 0) {
@@ -4223,33 +4266,43 @@ static bool bootFoldBlinkDelayPoll(unsigned long ms, unsigned long &holdSince) {
     watchdogFeed();
     updatePin9Power();
     if (btn5PinDown()) {
-      if (holdSince == 0) holdSince = now;
-      else if (now - holdSince >= BTN5_ENTER_MS) {
+      if (pressSince == 0) pressSince = now;
+      else if (now - pressSince >= BOOT_BLINK_CANCEL_MS) {
         return true;
       }
     } else {
-      holdSince = 0;
+      pressSince = 0;
     }
   }
   return false;
 }
 
-// 开机下翻：慢闪 5 次；期间长按 Pin5 取消本次下翻并上翻
+static void bootWaitPin5Release() {
+  unsigned long deadline = millis() + 8000UL;
+  while (btn5PinDown() && (long)(millis() - deadline) < 0) {
+    pollBleSerial();
+    watchdogFeed();
+    updatePin9Power();
+    delay(16);
+  }
+}
+
+// 开机下翻：慢闪 5 次；期间按 Pin5 跳过下翻，直达 item4
 static bool bootBlinkFoldBootPrompt() {
-  unsigned long holdSince = 0;
+  unsigned long pressSince = 0;
   for (uint8_t i = 0; i < 5; i++) {
 #if F3_MAX_BUILD
     f3BootLedOn();
 #else
     digitalWrite(8, HIGH);
 #endif
-    if (bootFoldBlinkDelayPoll((unsigned long)BOOT_FOLD_SLOW_HALF_MS, holdSince)) {
+    if (bootFoldBlinkDelayPoll((unsigned long)BOOT_FOLD_SLOW_HALF_MS, pressSince)) {
 #if F3_MAX_BUILD
       f3BootLedOff();
 #else
       digitalWrite(8, LOW);
 #endif
-      KDBG_L("BOOT_FOLD_CANCEL");
+      KDBG_L("BOOT_OPEN_SKIP");
       return true;
     }
 #if F3_MAX_BUILD
@@ -4257,25 +4310,35 @@ static bool bootBlinkFoldBootPrompt() {
 #else
     digitalWrite(8, LOW);
 #endif
-    if (bootFoldBlinkDelayPoll((unsigned long)BOOT_FOLD_SLOW_HALF_MS, holdSince)) {
-      KDBG_L("BOOT_FOLD_CANCEL");
+    if (bootFoldBlinkDelayPoll((unsigned long)BOOT_FOLD_SLOW_HALF_MS, pressSince)) {
+#if F3_MAX_BUILD
+      f3BootLedOff();
+#else
+      digitalWrite(8, LOW);
+#endif
+      KDBG_L("BOOT_OPEN_SKIP");
       return true;
     }
   }
+#if F3_MAX_BUILD
+  f3BootLedOff();
+#else
+  digitalWrite(8, LOW);
+#endif
   return false;
 }
 
-// 开机下翻展开：不依赖 canUserFlapControl（钥匙可关）
+// 开机下翻展开：走 updateServoOutput（支持 openEase 缓动），不依赖 canUserFlapControl
 static void bootFlapOpenForce() {
   KDBG_KV("BOOT_OPEN_START", bianlaing, item);
   abortOpenMotion();
   reboundWaitUntil = 0;
   foldAdjustActive = 0;
 
-  int cur = readServoAngleLive();
+  int cur = item4;
   if (cur < 0 || cur > 180) {
     cur = lastWrittenAngle;
-    if (cur < 0 || cur > 180) cur = item4;
+    if (cur < 0 || cur > 180) cur = 0;
   }
 
   item = 1;
@@ -4285,8 +4348,7 @@ static void bootFlapOpenForce() {
   lastWrittenAngle = cur;
   forceServoMove = 1;
 
-  writeServoDirect(bianlaing);
-  waitBootServoReach(bianlaing);
+  waitServoReach(bianlaing);
   forceServoMove = 0;
 
   if (!isSelfCheckFaultLatched()) {
@@ -4322,9 +4384,19 @@ static void bootPowerOnOpenDown() {
   statusLedUpdate();
 }
 
-// 开机折回：不论当前在哪，先满速折向日常折叠位 item4-10
+// 开机折回：开机插销检测(selfCheckOn)开 → item→item-15→item-10；关 → 直达 item-10
 void bootMoveToFold() {
 #if F3_MAX_BUILD
+  // 仅明确关闭自检(0)才跳过探位；脏值/1 都走开机插销检测
+  if (selfCheckOn == 0) bootStallEn = 0;
+  else {
+    int probeT = (int)item4 - (int)F3_FOLD_BOOT_PROBE_DELTA;
+    if (probeT < 0) probeT = 0;
+    bootStallProbe15 = 1;
+    bootMoveToTarget(probeT, 0);
+    bootStallProbe15 = 0;
+    if (bootStallEn == 2) return;
+  }
   bootMoveToTarget(f3FoldUserTarget(), 0);
 #else
   bootMoveToTarget(item4, 0);
@@ -4464,8 +4536,13 @@ void setup() {
   KDBG_L("BOOT_GUARD_ON");
   watchdogBegin();
 
-  // 上电先稳压 + 指示灯，再发开机目标角
+  // 黄灯自检窗：先亮灯 + 初始化传感器，期间按键无效
   bootPwrSettleWait();
+  statusLedUpdate();
+  f3SensorInit();
+#if F3_IMU_ENABLE
+  f3ImuInit();
+#endif
 
   if (bootStealthRestore) {
     item = 3;
@@ -4486,14 +4563,25 @@ void setup() {
       uint8_t rk = keyOnRstMk;
       uint8_t keyRst = (rk == 0xA5 || rk == 0xA7);
       if (keyRst) keyOnRstMk = 0;
-      // 隐蔽退出软复位(0xA7)不开开机堵转；其余上电/开钥匙复位都开
+      // 隐蔽退出软复位(0xA7)不开开机堵转；开机插销检测关在 bootMoveToFold 内清 bootStallEn
       bootStallEn = (!(keyRst && rk == 0xA7) && userServoSpeed >= SERVO_SPEED_MAX_PCT);
+      bootPin5Gate = 1;
       if (keyRst || powerOnFlip == 0) {
         bootMoveToFold();
+      } else if (bootBlinkFoldBootPrompt()) {
+        bootWaitPin5Release();
+#if F3_MAX_BUILD
+        f3BootLedOff();
+#else
+        digitalWrite(8, LOW);
+#endif
+        bootMoveToFold();
+        bootSuppressBtn5Click = 1;
+        statusLedUpdate();
       } else {
-        bootBlinkFoldBootPrompt();
         bootPowerOnOpenDown();
       }
+      bootPin5Gate = 0;
     }
     bootStallFinish();
   }
@@ -4502,16 +4590,13 @@ void setup() {
 
   releasePin9KeyOffHold();
   pendingKeyOffFold = 0;
-  bootSettleUntil = millis() + BOOT_SETTLE_MS;
+  bootSettleUntil = millis() + BOOT_SETTLE_MS; // ~6s 红绿常亮自检
+  statusLedUpdate();
   KDBG_KV("SETUP_DONE", item, digitalRead(2));
   KDBG_L("BOOT_GUARD_OFF");
 
   btn5Init();
 
-  f3SensorInit();
-#if F3_IMU_ENABLE
-  f3ImuInit();
-#endif
 #if F3_MAX_BUILD && F3_HEIGHT_ENABLE
   if (item == 1 && (f3HfCfg & 1)) f3ArmFoldCloseWatch();
 #endif
@@ -4619,7 +4704,6 @@ static const uint8_t F3_EE_UP16 = 43;
 static const uint8_t F3_EE_VIBE16 = 45;
 static const uint8_t F3_EE_LIT_MODE = 47;
 static const uint8_t F3_EE_GRAV_OK = 48;   // 0xC1=已存扶正重力基准
-static const uint8_t F3_EE_SIGN_AXIS = 49;
 static const uint8_t F3_EE_GX16 = 50;      // int16 = g*1000
 static const uint8_t F3_EE_GY16 = 52;
 static const uint8_t F3_EE_GZ16 = 54;
@@ -4630,7 +4714,7 @@ static const uint8_t F3_EE_STALL_CLOSE16 = 64;
 static const uint8_t F3_EE_STALL_HO = 66;
 static const uint8_t F3_EE_STALL_HC = 67;
 static const uint8_t F3_EE_GRAV_MARK = 0xC1;
-static const unsigned long F3_BUMP_HOLD_MS = 500UL; // 过坑红灯/锁键时长
+static const unsigned long F3_BUMP_HOLD_MS = 1000UL; // 过坑红灯/锁键时长
 
 static const float F3_ACC_LSB = 4096.0f;
 static const unsigned long F3_IMU_MS = 25UL;          // 略降频，减 I2C 压力
@@ -4648,7 +4732,6 @@ static uint8_t f3LitMode = 0;
 static uint8_t f3LitOut = 0;
 
 static float f3Gx = 0, f3Gy = 0, f3Gz = 1; // 扶正标定重力（倾角显示用）
-static uint8_t f3SignAxis = 0; // 0/1/2：水平向，用于左右符号
 static uint8_t f3GravOk = 0;
 static float f3AFast = 1, f3ASlow = 1;
 static float f3Event = 0;
@@ -4880,7 +4963,6 @@ static void f3ImuSaveGravEeprom() {
   EEPROM.put(F3_EE_GX16, (int16_t)(f3Gx * 1000.0f));
   EEPROM.put(F3_EE_GY16, (int16_t)(f3Gy * 1000.0f));
   EEPROM.put(F3_EE_GZ16, (int16_t)(f3Gz * 1000.0f));
-  EEPROM.update(F3_EE_SIGN_AXIS, f3SignAxis);
   EEPROM.update(F3_EE_GRAV_OK, F3_EE_GRAV_MARK);
 }
 
@@ -4894,8 +4976,6 @@ static uint8_t f3ImuLoadGravEeprom() {
   f3Gx = gx / 1000.0f;
   f3Gy = gy / 1000.0f;
   f3Gz = gz / 1000.0f;
-  f3SignAxis = EEPROM.read(F3_EE_SIGN_AXIS);
-  if (f3SignAxis > 2) f3SignAxis = 0;
   f3GravOk = 1;
   f3AFast = 1;
   f3ASlow = 1;
@@ -4926,14 +5006,6 @@ static void f3ImuCalibrateGravity() {
   f3Gx = fx / n;
   f3Gy = fy / n;
   f3Gz = fz / n;
-  f3SignAxis = 0;
-  {
-    float m = f3Gx < 0 ? -f3Gx : f3Gx;
-    float t = f3Gy < 0 ? -f3Gy : f3Gy;
-    if (t < m) { m = t; f3SignAxis = 1; }
-    t = f3Gz < 0 ? -f3Gz : f3Gz;
-    if (t < m) f3SignAxis = 2;
-  }
   f3GravOk = 1;
   f3AFast = 1;
   f3ASlow = 1;
@@ -4954,7 +5026,7 @@ void f3ImuInit() {
   f3MpuWho = 0;
   f3GravOk = 0;
   f3VibeX100 = F3_VIBE_FIXED_X100;
-  f3ImuCoolUntil = millis() + 600UL;
+  f3ImuCoolUntil = millis() + BOOT_SETTLE_MS; // 与开机自检同窗，避免误过坑
   f3ImuLoadGravEeprom();
 
   delay(80);
@@ -4993,35 +5065,33 @@ static float f3CurrentRollDeg(float ax, float ay, float az) {
   float n = sqrt(ax * ax + ay * ay + az * az);
   if (n < 0.3f) return f3RollDeg;
   float ux = ax / n, uy = ay / n, uz = az / n;
-  // 符号：G×a；幅角用 asin(|G×a|) 近似，避免拉入庞大的 acos
   float cx = f3Gy * uz - f3Gz * uy;
   float cy = f3Gz * ux - f3Gx * uz;
   float cz = f3Gx * uy - f3Gy * ux;
   float sn = sqrt(cx * cx + cy * cy + cz * cz);
   if (sn > 1.f) sn = 1.f;
-  float mag = sn * 57.29578f; // 小角度够用，省 asin 近似代码
-  float s = (f3SignAxis == 0) ? cx : ((f3SignAxis == 1) ? cy : cz);
-  return (s >= 0.f) ? mag : -mag;
+  // 符号取 G×a 主分量，避免选错轴导致右倾符号钉死成左倾
+  float s = cx, am = cx < 0.f ? -cx : cx, t = cy < 0.f ? -cy : cy;
+  if (t > am) { am = t; s = cy; }
+  t = cz < 0.f ? -cz : cz;
+  if (t > am) s = cz;
+  return (s >= 0.f) ? (sn * 57.29578f) : (-sn * 57.29578f);
 }
 
-// 一维卡尔曼：平滑倾角。
-// 旧逻辑在骑行(vibeOn)时 R≈48 且 |新息|>5° 直接丢弃 → 过弯倾角永远钉死在静止偏置（常见 +2~3°）。
+// 一维卡尔曼：平滑倾角（骑行时提高 Q、放宽新息，避免过弯钉死）
 static void f3RollKalmanUpdate(float z, uint8_t vibeOn) {
-  f3RollP += vibeOn ? 0.55f : 0.08f; // 骑行时允许更快跟踪真实侧倾
+  f3RollP += vibeOn ? 0.55f : 0.08f;
   float R = vibeOn ? 8.5f : 4.5f;
   float K = f3RollP / (f3RollP + R);
   float innov = z - f3RollDeg;
   if (vibeOn) {
-    float a = innov < 0.f ? -innov : innov;
-    // 只挡冲击毛刺；过弯可达几十度，绝不能 5° 就丢弃
-    if (a > 60.f) return;
     if (innov > 14.f) innov = 14.f;
-    if (innov < -14.f) innov = -14.f;
+    else if (innov < -14.f) innov = -14.f;
   }
   f3RollDeg += K * innov;
   f3RollP = (1.f - K) * f3RollP;
   if (f3RollP < 0.2f) f3RollP = 0.2f;
-  if (f3RollP > 30.f) f3RollP = 30.f;
+  else if (f3RollP > 30.f) f3RollP = 30.f;
 }
 
 // 过坑门槛：0更敏 … 10更钝（越大越不灵敏）
@@ -5090,7 +5160,6 @@ void f3ImuServiceTick() {
     f3Gx = ax / n;
     f3Gy = ay / n;
     f3Gz = az / n;
-    f3SignAxis = 0;
     f3GravOk = 1;
     f3AFast = 1;
     f3ASlow = 1;
@@ -5160,7 +5229,8 @@ void f3ImuServiceTick() {
   }
 
   // 倾角：一维卡尔曼（骑行时必须能跟上侧倾，不能把新息锁死）
-  {
+  // 过坑锁窗内加速度乱跳，冻结倾角，避免 IRD/姿态狂抖
+  if (!f3BumpFlapLocked()) {
     uint8_t vibeOn = (f3RideOn || (f3IevInited && (f3IevFiltX / 10U) != 0)) ? 1 : 0;
     float rd = f3CurrentRollDeg(ax, ay, az);
     f3RollKalmanUpdate(rd, vibeOn);
@@ -5179,16 +5249,14 @@ void f3ImuServiceTick() {
 }
 
 void f3ImuAppendStatus(Stream &out) {
-  out.print(F("|MOK:")); out.print(f3MpuOk ? 1 : 0);
   out.print(F("|IRD:")); out.print((int)(f3RollDeg * 10.0f));
   out.print(F("|IEV:")); out.print((int)(f3Event * 100.0f));
   out.print(F("|IMS:")); out.print(f3MpuOk ? f3ImuState : 0);
-  out.print(F("|BS:")); out.print(f3BumpSens);
 }
 
 uint8_t f3ImuTryHandleBleCmd(char *cmd) {
   if (!cmd || !cmd[0]) return 0;
-  // BK：小程序检出过坑 → 同步车把红灯锁 2s（故障报警中忽略）
+  // BK：小程序检出过坑 → 同步车把红灯锁 1s（故障报警中忽略）
   if (cmd[0] == 'B' && cmd[1] == 'K' && cmd[2] == 0) {
     if (!faultIndicatorActive()) f3BumpUntil = millis() + F3_BUMP_HOLD_MS;
     return 1;

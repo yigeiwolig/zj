@@ -13,7 +13,56 @@ function isAccessCodeFormat(raw) {
 }
 
 function isEmptyOpenid(value) {
-  return !value || value === '' || value === null || value === undefined;
+  return !value || String(value).trim() === '' || value === null || value === undefined;
+}
+
+const ACCESS_CODE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function toMs(raw) {
+  if (!raw && raw !== 0) return 0;
+  if (typeof raw === 'number') {
+    if (!Number.isFinite(raw) || raw <= 0) return 0;
+    return raw < 1e12 ? raw * 1000 : raw;
+  }
+  if (raw instanceof Date) {
+    const t = raw.getTime();
+    return Number.isFinite(t) ? t : 0;
+  }
+  if (typeof raw === 'object') {
+    if (raw.$date) return toMs(raw.$date);
+    if (typeof raw.seconds === 'number') return toMs(raw.seconds * 1000);
+    if (typeof raw.getTime === 'function') {
+      try {
+        const t = raw.getTime();
+        return Number.isFinite(t) ? t : 0;
+      } catch (e) {}
+    }
+  }
+  const t = new Date(raw).getTime();
+  return Number.isFinite(t) ? t : 0;
+}
+
+function idTimeMs(id) {
+  const s = String(id || '');
+  if (s.length < 8 || !/^[0-9a-fA-F]{8}/.test(s)) return 0;
+  const sec = parseInt(s.slice(0, 8), 16);
+  if (!Number.isFinite(sec) || sec < 1500000000 || sec > 4000000000) return 0;
+  return sec * 1000;
+}
+
+function getAccessCodeExpiresAtMs(doc) {
+  if (!doc) return 0;
+  const explicit = toMs(doc.expiresAt);
+  if (explicit > 0) return explicit;
+  const created = toMs(doc.createTime) || idTimeMs(doc._id);
+  return created > 0 ? created + ACCESS_CODE_TTL_MS : 0;
+}
+
+function isAccessCodeExpired(doc) {
+  if (!doc || !isEmptyOpenid(doc._openid)) return false;
+  const expiresAtMs = getAccessCodeExpiresAtMs(doc);
+  if (expiresAtMs > 0) return Date.now() > expiresAtMs;
+  return true;
 }
 
 exports.main = async (event, context) => {
@@ -172,7 +221,10 @@ exports.main = async (event, context) => {
 
     try {
       if (isAccessCodeLogin) {
-        const codeRes = await db.collection('valid_users').where({ accessCode: normalizedAccessCode }).limit(1).get();
+        let codeRes = await db.collection('valid_users').where({ accessCode: normalizedAccessCode }).limit(1).get();
+        if (!codeRes.data || codeRes.data.length === 0) {
+          codeRes = await db.collection('valid_users').where({ nickname: normalizedAccessCode }).limit(1).get();
+        }
         if (codeRes.data.length > 0) {
           const record = codeRes.data[0];
           resolvedNickname = record.nickname || resolvedNickname;
@@ -181,10 +233,17 @@ exports.main = async (event, context) => {
             targetValidUserDocId = record._id;
             console.log('[verifyNickname] 访问口令老用户回归');
           } else if (isEmptyOpenid(record._openid)) {
-            isWhitelisted = true;
-            targetValidUserDocId = record._id;
-            isNewBinding = true;
-            console.log('[verifyNickname] 访问口令命中空位，准备绑定');
+            if (isAccessCodeExpired(record)) {
+              try {
+                await db.collection('valid_users').doc(record._id).remove();
+              } catch (e) {}
+              console.log('[verifyNickname] 访问口令已过期，自动收回');
+            } else {
+              isWhitelisted = true;
+              targetValidUserDocId = record._id;
+              isNewBinding = true;
+              console.log('[verifyNickname] 访问口令命中空位，准备绑定');
+            }
           } else {
             accessCodeUsedByOther = true;
             console.log('[verifyNickname] 访问口令已被其他用户使用');

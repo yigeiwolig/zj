@@ -30,6 +30,12 @@ const productFeatureFlags = require('../../../utils/productFeatureFlags.js');
 const { isBlockedDebugBleDevice } = require('../../../utils/blockedDebugBle.js');
 const { sendRepairProgressNotify, withRepairProgressSubscribe, requestRepairProgressSubscribe } = require('../../../utils/subscribeMessage.js');
 const controlCenterDebug = require('../../../utils/controlCenterDebug.js');
+const hubKfTabGate = require('../../../utils/hubKfTabGate.js');
+
+function resolveMyHubTabIndex(hubView, showHubKfTab) {
+  if (hubView === 'orders') return 1;
+  return showHubKfTab ? 3 : 2;
+}
 
 // 维修寄回统一时间常量（避免文案与逻辑不一致）
 const RETURN_OVERDUE_DAYS = 30;     // 超过30天未寄回视为超时
@@ -45,16 +51,34 @@ function formatShippingMethodLabel(method) {
 
 function formatShippingFeeText(method, fee) {
   const f = Number(fee) || 0;
-  if (f <= 0) return '包邮';
-  return `运费 ¥${f}`;
+  if (f > 0) return `运费 ¥${f}`;
+  const m = String(method || '').toLowerCase();
+  if (m === 'sf') return '运费未记录';
+  return '包邮';
+}
+
+function pickOrderShippingFee(item) {
+  const audit = (item && item.pricingAudit) || {};
+  const candidates = [
+    item && item.shipping && item.shipping.fee,
+    audit.shippingFee,
+    item && item.shippingFee,
+    item && item.address && item.address.shippingFee
+  ];
+  for (let i = 0; i < candidates.length; i++) {
+    const n = Number(candidates[i]);
+    if (candidates[i] != null && candidates[i] !== '' && !Number.isNaN(n)) return n;
+  }
+  return 0;
 }
 
 module.exports = function createMyPageConfig(hubView) {
-  const hubTabIndex = hubView === 'orders' ? 1 : 3;
+  const initialShowHubKfTab = hubKfTabGate.resolveShowHubKfTab();
   return {
   data: {
     hubView: hubView || 'profile',
-    hubTabIndex,
+    hubTabIndex: resolveMyHubTabIndex(hubView, initialShowHubKfTab),
+    showHubKfTab: initialShowHubKfTab,
     showHubTabBar: true,
     hubInShell: false,
     hubPageEnterAnim: false,
@@ -153,6 +177,8 @@ module.exports = function createMyPageConfig(hubView) {
     // 审核列表 (管理员用)
     auditList: [],
     pendingSnEntryList: [],
+    tsReportList: [],
+    tsReportGroups: [],
 
     // 【新增】管理员审核弹窗数据
     showAuditModal: false,
@@ -163,6 +189,7 @@ module.exports = function createMyPageConfig(hubView) {
     adminAuditModelOptions: PRODUCT_DETAIL_OPTIONS,
     adminAuditControlVariant: '', // 审核时可改控制版本
     auditWarrantyPreview: {},
+    auditSetupScrollPx: 420,
     warrantyOptions: ['180天 (半年)', '365天 (一年)', '500天', '720天 (两年)'], // 选项文案
     warrantyValues: [180, 365, 500, 720], // 对应的值
 
@@ -362,6 +389,7 @@ module.exports = function createMyPageConfig(hubView) {
   _closeAllPopups() {
     try { wx.hideToast(); } catch (e) {}
     try { wx.hideLoading(); } catch (e) {}
+    this._clearAutoToastTimers();
     const patch = {};
     if (this.data.showShareCodeGenerateModal) patch.showShareCodeGenerateModal = false;
     if (this.data.showModal) patch.showModal = false;
@@ -370,21 +398,31 @@ module.exports = function createMyPageConfig(hubView) {
       patch['autoToast.show'] = false;
       if (this.data.autoToastClosing) patch.autoToastClosing = false;
     }
-    if (Object.keys(patch).length) this.setData(patch);
+    if (Object.keys(patch).length) {
+      this.setData(patch, () => this.updateModalState());
+    } else {
+      this.updateModalState();
+    }
   },
 
   dismissTransientModals() {
+    this._clearAutoToastTimers();
     const patch = {};
     if (this.data.showShareCodeGenerateModal) patch.showShareCodeGenerateModal = false;
     if (this.data.showCopySuccessModal) patch.showCopySuccessModal = false;
     if (this.data.dialog && this.data.dialog.show) {
       // 点遮罩关闭：中止操作，不触发「取消=不需要寄回」那种双选项回调
       patch['dialog.show'] = false;
-      patch['dialog.callback'] = null;
+      this._dialogCallback = null;
       if (this._shippingRepairId) this._shippingRepairId = '';
     }
     if (this.data.autoToast && this.data.autoToast.show) patch['autoToast.show'] = false;
-    if (Object.keys(patch).length) this.setData(patch);
+    if (this.data.autoToastClosing) patch.autoToastClosing = false;
+    if (Object.keys(patch).length) {
+      this.setData(patch, () => this.updateModalState());
+    } else {
+      this.updateModalState();
+    }
   },
 
   _closeWithAnimation(showKey, closingKey, extraPatch = {}, duration = 360) {
@@ -464,7 +502,9 @@ module.exports = function createMyPageConfig(hubView) {
     this.calcNavBarInfo();
     this.setData({
       ...this.syncMemberTierFromDevices(this.data.deviceList),
-      showAdminDevTools: isDevtoolsEnv()
+      showAdminDevTools: isDevtoolsEnv(),
+      showHubKfTab: hubKfTabGate.resolveShowHubKfTab(),
+      hubTabIndex: resolveMyHubTabIndex(this.data.hubView, hubKfTabGate.resolveShowHubKfTab())
     });
 
     // 权限与订单数据统一在 onShow 拉取，避免与 onShow 重复触发第二次 login / loadMyDevices
@@ -1023,6 +1063,9 @@ module.exports = function createMyPageConfig(hubView) {
       }
       if (hv === 'profile') {
         loadPromises.push(this.loadMyActivitiesPromise());
+        if (!this.data.isAdmin) {
+          try { this.checkTsRepairNotice(); } catch (e) {}
+        }
         if (this.data.isAdmin) {
           this.loadAuditList();
           this.loadPendingSnEntryList();
@@ -1298,16 +1341,25 @@ module.exports = function createMyPageConfig(hubView) {
             },
             success: r => {
               this.hideMyLoading();
-              
-              // ✅ [替换]
-              this.showAutoToast('物料发出成功', '物料运单号已录入，用户端已同步。');
+              const result = (r && r.result) || {};
+              if (result.success === false || result.error) {
+                this.showAutoToast('发货失败', result.errMsg || result.msg || '请稍后重试');
+                return;
+              }
+              if (result.wxSynced === false) {
+                this.showAutoToast('本地已发货', result.msg || '运单已写入，但未同步微信订单中心');
+              } else {
+                this.showAutoToast('物料发出成功', result.msg || '物料运单号已录入，用户端已同步。');
+              }
               this.loadMyOrders(); // 刷新订单列表
             },
             fail: err => {
               this.hideMyLoading();
-              this.showAutoToast('失败', err.toString());
+              this.showAutoToast('失败', (err && (err.errMsg || err.message)) || String(err));
             }
           })
+        } else if (res.confirm) {
+          this.showAutoToast('提示', '请输入运单号');
         }
       }
     });
@@ -1381,12 +1433,20 @@ module.exports = function createMyPageConfig(hubView) {
           const userNickname = item.userNickname || ''; // 🔴 获取用户昵称
           const rid = item.repairId ? String(item.repairId).trim() : '';
           const orderSource = (item.orderSource || '').toString().trim();
-          const guidedPartsPurchase = orderSource ? (orderSource === 'shouhou') : (rid.length > 0);
+          // 只有明确标记才算「引导购配件」。自助售后配件也是 orderSource=shouhou，但不能再靠 repairId 猜，
+          // 否则本地残留 guided_parts_repair_id 会把自助单误标成引导单。
+          const guidedPartsPurchase = item.isGuidedPartsPurchase === true;
+          const isShouhouParts = !guidedPartsPurchase && orderSource === 'shouhou';
+          // 只有「去购买配件」引导单才进售后教程；自助买配件 / 商城单都走安装教程
           const tutorialDest = guidedPartsPurchase ? 'shouhou' : 'azjc';
+          const statusTextBase = this.getStatusText(item.status);
+          const statusText = guidedPartsPurchase && item.status === 'PAID'
+            ? '引导购配件·待发出'
+            : (isShouhouParts && item.status === 'PAID' ? '售后配件·待发出' : statusTextBase);
           const orderRemark = [item.remark, item.buyerMessage, item.note, item.sellerNote, item.adminNote]
             .map(s => (s != null && String(s).trim() ? String(s).trim() : ''))
             .find(Boolean) || '';
-          const shippingFeeNum = Number(item.shipping && item.shipping.fee != null ? item.shipping.fee : 0) || 0;
+          const shippingFeeNum = pickOrderShippingFee(item);
           const goodsSubtotalNum = (item.goodsList || []).reduce((sum, g) => {
             const directTotal = Number(g && g.total);
             if (!Number.isNaN(directTotal) && directTotal > 0) return sum + directTotal;
@@ -1395,33 +1455,46 @@ module.exports = function createMyPageConfig(hubView) {
             return sum + unit * qty;
           }, 0);
           const payAmountNum = Number(item.totalFee) || 0;
+          const audit = item.pricingAudit || {};
+          const auditFull = Number(audit.serverFullTotal);
+          const reconstructedTotal = Math.round((goodsSubtotalNum + shippingFeeNum) * 100) / 100;
+          const orderTotalNum = (!Number.isNaN(auditFull) && auditFull > 0.011)
+            ? auditFull
+            : (reconstructedTotal > 0.011 ? reconstructedTotal : payAmountNum);
           const rawPreCouponTotal = Number(item.preCouponTotalYuan);
           const preCouponTotalNum = (!Number.isNaN(rawPreCouponTotal) && rawPreCouponTotal > 0)
             ? rawPreCouponTotal
-            : Math.max(payAmountNum, Math.round((goodsSubtotalNum + shippingFeeNum) * 100) / 100);
+            : Math.max(payAmountNum, orderTotalNum);
           const rawCouponDiscount = Number(item.couponDiscountYuan);
           const couponDiscountNum = (!Number.isNaN(rawCouponDiscount) && rawCouponDiscount > 0)
             ? rawCouponDiscount
             : Math.max(0, Math.round((preCouponTotalNum - payAmountNum) * 100) / 100);
-          const isAdminLikeOrder = !!(this.data.isAdmin || payAmountNum <= 0.01);
+          const adminTestPay = !!audit.adminTestPay;
+          const isAdminLikeOrder = !!(adminTestPay || (payAmountNum > 0 && payAmountNum <= 0.011 && orderTotalNum > 1));
           const normalizedCouponIds = isAdminLikeOrder
             ? []
             : (Array.isArray(item.couponIds) ? item.couponIds.filter(Boolean) : []);
           const normalizedCouponDiscount = isAdminLikeOrder ? 0 : couponDiscountNum;
           const normalizedPreCouponTotal = isAdminLikeOrder
-            ? Math.max(payAmountNum, Math.round((goodsSubtotalNum + shippingFeeNum) * 100) / 100)
+            ? orderTotalNum
             : preCouponTotalNum;
+          const displayAmount = (payAmountNum > 0.011)
+            ? payAmountNum
+            : (orderTotalNum > 0.011 ? orderTotalNum : payAmountNum);
           return {
             id: item._id,
             orderId: item.orderId,
             transactionId: item.transactionId || '', // 🔴 【必须加上】确认收货组件必填字段
             realStatus: item.status, 
-            statusText: this.getStatusText(item.status),
+            statusText,
             repairId: rid,
             orderSource,
             guidedPartsPurchase,
+            isShouhouParts,
             tutorialDest,
-            amount: payAmountNum,
+            amount: displayAmount,
+            paidAmount: payAmountNum,
+            adminTestPay,
             userName: userName,
             userNickname: userNickname, // 🔴 保存用户昵称
             userNameFontSize: this.calculateNameFontSize(userName, 30), // 🔴 订单卡片昵称默认30rpx
@@ -1437,8 +1510,9 @@ module.exports = function createMyPageConfig(hubView) {
             shippingFee: shippingFeeNum,
             shippingFeeText: formatShippingFeeText(
               item.shipping && item.shipping.method,
-              item.shipping && item.shipping.fee
+              shippingFeeNum
             ),
+            goodsSubtotal: Math.round(goodsSubtotalNum * 100) / 100,
             couponDiscountYuan: normalizedCouponDiscount,
             preCouponTotalYuan: normalizedPreCouponTotal,
             couponIds: normalizedCouponIds,
@@ -1552,12 +1626,29 @@ module.exports = function createMyPageConfig(hubView) {
       const realAwaitingReplace =
         item.awaitingSnReplacement === true &&
         String(item.replacementDetectSource || '').trim() === 'manual_board_replacement';
+      const st = String(item.status || '').toUpperCase();
+      const rs = String(item.returnStatus || '').toUpperCase();
+      let pendingStatusText = '待处理';
+      let pendingStatusClass = 'pending';
+      if (st === 'REPAIR_COMPLETED_SENT') {
+        pendingStatusText = '已寄出';
+        pendingStatusClass = 'done';
+      } else if (rs === 'USER_SENT' || st === 'USER_SENT') {
+        pendingStatusText = '用户已寄出';
+        pendingStatusClass = 'sent';
+      } else if (item.diagnosisDone === true) {
+        pendingStatusText = '已诊断';
+        pendingStatusClass = 'diagnosed';
+      }
       return {
         ...item,
         imageFileID,
         videoFileID,
         displayModel,
         mediaType,
+        repairTimeText: this.formatTime(item.createTime) || '—',
+        pendingStatusText,
+        pendingStatusClass,
         // 仅手动「更换主板」才算待换机；旧关键词误标在展示层直接抹掉
         awaitingSnReplacement: realAwaitingReplace,
         expiryDate: expiryDate || null,
@@ -1740,7 +1831,35 @@ module.exports = function createMyPageConfig(hubView) {
           if (item.purchasePartsStatus === 'completed') return false;
           return true;
         });
-        await finish(filtered);
+        // 与云端一致：有待审绑定时先不展示维修卡
+        let visible = filtered;
+        try {
+          const openids = filtered.map((i) => i && i._openid).filter(Boolean);
+          if (openids.length) {
+            const uniq = [...new Set(openids)];
+            const applyRes = await db.collection('my_read')
+              .where({
+                _openid: _.in(uniq.slice(0, 20))
+              })
+              .field({ _openid: true, openid: true, status: true })
+              .limit(100)
+              .get();
+            const pendingSet = new Set();
+            (applyRes.data || []).forEach((row) => {
+              const st = String(row && row.status != null ? row.status : '').trim().toUpperCase();
+              const pending = !st || st === 'PENDING' || st === '0';
+              if (!pending) return;
+              if (row._openid) pendingSet.add(row._openid);
+              if (row.openid) pendingSet.add(row.openid);
+            });
+            if (pendingSet.size) {
+              visible = filtered.filter((item) => !pendingSet.has(item._openid));
+            }
+          }
+        } catch (e) {
+          console.warn('[loadPendingRepairs] pending-bind filter skipped', e);
+        }
+        await finish(visible);
       })
       .catch((err) => {
         console.error('❌ [loadPendingRepairs] 加载维修工单失败:', err);
@@ -2183,6 +2302,12 @@ module.exports = function createMyPageConfig(hubView) {
       return
     }
 
+    // 管理员：无需唤起微信确认收货，直接进教程（可选同步已签收）
+    if (this.data.isAuthorized) {
+      this.confirmReceiptAndViewTutorial(id, modelName, dest);
+      return;
+    }
+
     // 3. 校验必要参数
     if (!order.transactionId) {
       this.showAutoToast('提示', '缺少支付单号，无法确认');
@@ -2221,6 +2346,96 @@ module.exports = function createMyPageConfig(hubView) {
         });
       }
     })
+  },
+
+  /** 运输中：仅确认收货（不跳转教程） */
+  confirmOrderReceipt(e) {
+    const id = e.currentTarget.dataset.id;
+    const order = this.data.orders.find((item) => item.id === id);
+    if (!order) {
+      this.showAutoToast('提示', '订单数据异常');
+      return;
+    }
+    if (order.realStatus === 'SIGNED' || order.realStatus === 'COMPLETED') {
+      this.showAutoToast('提示', '该订单已确认收货');
+      return;
+    }
+
+    // 管理员：无需唤起微信确认收货组件，直接同步本地状态
+    if (this.data.isAuthorized) {
+      this._syncOrderSignedLocal(id);
+      return;
+    }
+
+    if (!order.transactionId) {
+      this.showAutoToast('提示', '缺少支付单号，无法确认');
+      return;
+    }
+
+    wx.openBusinessView({
+      businessType: 'weappOrderConfirm',
+      extraData: {
+        merchant_trade_no: order.orderId,
+        transaction_id: order.transactionId
+      },
+      success: (res) => {
+        if (res.extraData && res.extraData.status === 'success') {
+          this._syncOrderSignedLocal(id);
+        } else {
+          this.showMyDialog({
+            title: '提示',
+            content: '请完成确认收货后再试',
+            showCancel: false,
+            confirmText: '知道了',
+            success: () => {}
+          });
+        }
+      },
+      fail: (err) => {
+        console.error('[confirmOrderReceipt] 组件唤起失败:', err);
+        this.showMyDialog({
+          title: '提示',
+          content: '无法唤起确认收货组件，请检查订单是否已发货',
+          showCancel: false,
+          confirmText: '知道了',
+          success: () => {}
+        });
+      }
+    });
+  },
+
+  /** 微信确认收货成功后：同步本地订单为已签收 */
+  _syncOrderSignedLocal(id) {
+    this.showMyLoading('确认收货中...');
+    wx.cloud.callFunction({
+      name: 'adminUpdateOrder',
+      data: {
+        id: id,
+        action: 'sign'
+      },
+      success: (r) => {
+        this.hideMyLoading();
+        if (r.result && r.result.success !== false) {
+          const newOrders = this.data.orders.map((item) => {
+            if (item.id === id) {
+              item.realStatus = 'SIGNED';
+              item.statusText = '已确认收货';
+            }
+            return item;
+          });
+          this.setData({ orders: newOrders });
+          this.showAutoToast('成功', '已确认收货');
+        } else {
+          console.error('[confirmOrderReceipt] 云函数返回失败:', r);
+          this.showAutoToast('操作失败', (r.result && r.result.errMsg) || '同步状态失败');
+        }
+      },
+      fail: (err) => {
+        this.hideMyLoading();
+        console.error('[confirmOrderReceipt] 云函数调用失败:', err);
+        this.showAutoToast('网络异常', err.errMsg || '请稍后重试');
+      }
+    });
   },
 
   // 🔴 新增：确认收货并查看教程的统一处理函数
@@ -4036,6 +4251,88 @@ module.exports = function createMyPageConfig(hubView) {
     }, 420);
   },
 
+  /** 加载需寄回列表后，后台补查用户寄回运单是否已签收（不阻塞列表展示） */
+  _enrichReturnLogisticsSigned(list, maps) {
+    const rows = Array.isArray(list) ? list.slice() : [];
+    const nicknameDict = (maps && maps.nicknameDict) || {};
+    const snExpiryMap = (maps && maps.snExpiryMap) || {};
+    const replacementMap = (maps && maps.replacementMap) || {};
+    const trackingMap = (maps && maps.trackingMap) || {};
+    const RETURN_RECEIVE_PHONE_TAIL = '2427';
+    const CACHE_MS = 10 * 60 * 1000;
+    const isSignedStatus = (code, text) => (
+      String(code || '').trim() === '3' || /签收|送达|代收|妥投/.test(String(text || ''))
+    );
+    const toMs = (raw) => {
+      if (!raw) return 0;
+      try {
+        if (typeof raw === 'object' && raw.$date) return new Date(raw.$date).getTime() || 0;
+        return new Date(raw).getTime() || 0;
+      } catch (e) {
+        return 0;
+      }
+    };
+    const renormalize = (row) => this._normalizeReturnRequiredRow(
+      row, nicknameDict, snExpiryMap, replacementMap, trackingMap
+    );
+    const needCheck = [];
+    rows.forEach((row, idx) => {
+      if (!row || row.returnStatus !== 'PENDING_RETURN' || !row.returnTrackingId) return;
+      if (row.returnLogisticsSigned === true || row.returnCompleted === true) return;
+      if (String(row.status || '').toUpperCase() === 'RETURN_RECEIVED') return;
+      const checkedAtMs = toMs(row.returnLogisticsCheckedAt);
+      if (checkedAtMs && Date.now() - checkedAtMs < CACHE_MS) {
+        if (isSignedStatus(row.returnLogisticsStatus, row.returnLogisticsStatusText)) {
+          rows[idx] = renormalize({ ...row, returnLogisticsSigned: true });
+        }
+        return;
+      }
+      needCheck.push(idx);
+    });
+    if (!needCheck.length) return Promise.resolve(rows);
+
+    const gen = (this._returnLogisticsEnrichGen || 0) + 1;
+    this._returnLogisticsEnrichGen = gen;
+
+    const runSequential = async () => {
+      for (let i = 0; i < needCheck.length; i++) {
+        if (this._returnLogisticsEnrichGen !== gen) return rows;
+        const idx = needCheck[i];
+        const row = rows[idx];
+        if (!row) continue;
+        try {
+          const res = await wx.cloud.callFunction({
+            name: 'queryLogistics',
+            data: {
+              trackingId: String(row.returnTrackingId || '').trim(),
+              receiverPhone: RETURN_RECEIVE_PHONE_TAIL,
+              phone: RETURN_RECEIVE_PHONE_TAIL,
+              expressCompany: row.returnExpressCompany || row.expressCompany || ''
+            }
+          });
+          const result = (res && res.result) || {};
+          if (!result.success || !result.data) continue;
+          const statusCode = String(result.data.status || '');
+          const statusText = String(result.data.status_text || result.data.statusText || '');
+          const signed = isSignedStatus(statusCode, statusText);
+          const patch = {
+            returnLogisticsStatus: statusCode,
+            returnLogisticsStatusText: statusText,
+            returnLogisticsCheckedAt: adminRepairApi.SERVER_DATE
+          };
+          if (signed) patch.returnLogisticsSigned = true;
+          if (this._canAdminRepairCloud()) {
+            adminRepairApi.patchRepair(row._id, patch).catch(() => {});
+          }
+          rows[idx] = renormalize({ ...row, ...patch });
+        } catch (e) { /* ignore single row */ }
+      }
+      return rows;
+    };
+
+    return runSequential();
+  },
+
   _normalizeReturnRequiredRow(item, nicknameDict, snExpiryMap, replacementMap, trackingMap) {
     const contactRaw = item && item.contact;
     const contact = {
@@ -4081,12 +4378,6 @@ module.exports = function createMyPageConfig(hubView) {
       (orderTracking && orderTracking.expressCompany) ||
       ''
     ).trim();
-    // 真正寄出时间：repairCompleteTime / solveTime；没有就不伪装成 createTime
-    const shipTimeRaw = item.repairCompleteTime || item.solveTime || null;
-    const shipTimeText = shipTimeRaw
-      ? this.formatTime(shipTimeRaw)
-      : (outboundTrackingId ? '已有单号（时间未记录）' : '未寄出');
-
     // 换主板完成：工单自身的 replacementNewSn，或云端从 sn 集合反查（旧流程只写了设备档案）
     const resolvedReplacement = (replacementMap && replacementMap[item._id]) || null;
     const replacementNewSn = String(
@@ -4126,7 +4417,7 @@ module.exports = function createMyPageConfig(hubView) {
     const logisticsSigned =
       item.returnLogisticsSigned === true ||
       String(item.returnLogisticsStatus || '').trim() === '3' ||
-      /签收|送达/.test(String(item.returnLogisticsStatusText || ''));
+      /签收|送达|代收|妥投/.test(String(item.returnLogisticsStatusText || ''));
     const adminReceived =
       item.returnCompleted === true ||
       String(item.status || '').toUpperCase() === 'RETURN_RECEIVED';
@@ -4141,6 +4432,23 @@ module.exports = function createMyPageConfig(hubView) {
       userReturnShipState = 'transit';
       userReturnShipText = '运输中';
       userReturnShipClass = 'rr-ship-state--transit';
+    }
+
+    // 用户寄回维修：「商品发出」行展示用户寄回状态；其他场景仍展示商家寄出时间
+    const isUserReturnRepair = item.returnStatus === 'PENDING_RETURN';
+    const shipTimeRaw = item.repairCompleteTime || item.solveTime || null;
+    const outboundShipTimeText = shipTimeRaw
+      ? this.formatTime(shipTimeRaw)
+      : (outboundTrackingId ? '已有单号（时间未记录）' : '未寄出');
+    let shipTimeText = outboundShipTimeText;
+    if (isUserReturnRepair) {
+      if (adminReceived || logisticsSigned) {
+        shipTimeText = '管理员已签收';
+      } else if (returnSn) {
+        shipTimeText = '快递在途中';
+      } else {
+        shipTimeText = '用户未寄回';
+      }
     }
 
     return {
@@ -4164,6 +4472,46 @@ module.exports = function createMyPageConfig(hubView) {
       motherboardStatusText,
       motherboardStatusClass
     };
+  },
+
+  onPendingRepairListAction(e) {
+    const detail = (e && e.detail) || {};
+    const { type, index, id, resolveType, model, name, url, phone, address } = detail;
+    const repairId = detail.repairId || id;
+    const item = (index != null ? this.data.repairList[index] : null) || detail.item || null;
+    const synthetic = {
+      currentTarget: {
+        dataset: {
+          index,
+          id: repairId,
+          repairId,
+          item,
+          type: resolveType,
+          model,
+          name,
+          url,
+          phone,
+          address
+        }
+      },
+      detail
+    };
+    const handlers = {
+      previewImage: () => this.previewImage(synthetic),
+      copyRepairAddress: () => this.copyRepairAddress(synthetic),
+      adminCompleteRepair: () => this.adminCompleteRepair(synthetic),
+      openDiagnosisDialog: () => this.openDiagnosisDialog(synthetic),
+      resolveRepair: () => this.resolveRepair(synthetic),
+      openPurchasePartsModal: () => {
+        this.openPurchasePartsModal({
+          currentTarget: { dataset: { item: item || (index != null ? this.data.repairList[index] : null) } }
+        });
+      },
+      requestUserReturn: () => this.requestUserReturn(synthetic),
+      resendRepairWecomNotify: () => this.resendRepairWecomNotify(synthetic),
+      adminDeleteRepair: () => this.adminDeleteRepair(synthetic)
+    };
+    if (handlers[type]) handlers[type]();
   },
 
   onReturnRequiredListAction(e) {
@@ -4474,14 +4822,33 @@ module.exports = function createMyPageConfig(hubView) {
     if (!silent) this.showMyLoading('加载中...');
 
     const applyList = (rows, nicknameDict, snExpiryMap, replacementMap, trackingMap) => {
+      const maps = {
+        nicknameDict: nicknameDict || {},
+        snExpiryMap: snExpiryMap || {},
+        replacementMap: replacementMap || {},
+        trackingMap: trackingMap || {}
+      };
       const filtered = (rows || []).map((item) =>
-        this._normalizeReturnRequiredRow(item, nicknameDict || {}, snExpiryMap || {}, replacementMap || {}, trackingMap || {})
+        this._normalizeReturnRequiredRow(
+          item,
+          maps.nicknameDict,
+          maps.snExpiryMap,
+          maps.replacementMap,
+          maps.trackingMap
+        )
       );
       this.hideMyLoading();
       this.setData({
         returnRequiredList: filtered,
         returnRequiredCount: filtered.length
       });
+      this._enrichReturnLogisticsSigned(filtered, maps).then((enriched) => {
+        if (!enriched || !enriched.length) return;
+        this.setData({
+          returnRequiredList: enriched,
+          returnRequiredCount: enriched.length
+        });
+      }).catch(() => {});
     };
 
     if (this._canAdminRepairCloud()) {
@@ -5914,8 +6281,12 @@ module.exports = function createMyPageConfig(hubView) {
     for (let i = pages.length - 2; i >= 0; i--) {
       const p = pages[i];
       if ((p.route || '').indexOf('shouhou/shouhou') >= 0) {
+        try {
+          p._repairDeviceCache = null;
+        } catch (e) { /* ignore */ }
         if (typeof p._enterRepairAfterBindReturn === 'function') {
-          p._enterRepairAfterBindReturn(model);
+          // skipDeviceCheck：避免回流命中「未绑定」30s 短缓存又弹一次去绑定
+          p._enterRepairAfterBindReturn(model, { skipDeviceCheck: true });
         }
         wx.navigateBack({ delta: pages.length - 1 - i });
         return;
@@ -5931,19 +6302,26 @@ module.exports = function createMyPageConfig(hubView) {
     });
   },
 
-  /** 需等管理员审核：提示后留在「我的」，清除回流标记 */
+  /** 绑定已提交待审：可继续报修（不再要求等审完） */
   _notifyRepairBindPendingAudit(options = {}) {
-    const title = options.title || '已提交，请等待审核';
+    const title = options.title || '已提交，可继续报修';
     const content = options.content
-      || '管理员尚未录入该设备信息。请等待审核通过后，再回到维修中心提交故障报修资料。';
-    this._clearFromRepairBind();
+      || '设备绑定/核验申请已提交。管理员会先审核绑定；您现在可以直接回维修中心提交故障报修。';
+    const goRepair = () => this._returnToRepairCenterAfterBind();
     this.showMyDialog({
       title,
       content,
-      confirmText: '知道了',
-      success: () => {
+      showCancel: true,
+      cancelText: '稍后',
+      confirmText: '继续报修',
+      success: (res) => {
         if (typeof this.closeBindModal === 'function') this.closeBindModal();
         if (typeof this.resetBluetoothState === 'function') this.resetBluetoothState();
+        if (res && res.confirm) {
+          goRepair();
+          return;
+        }
+        this._clearFromRepairBind();
       }
     });
   },
@@ -6118,24 +6496,26 @@ module.exports = function createMyPageConfig(hubView) {
       this.showAfterSalesDialog(options);
       return;
     }
+    // 回调挂实例上，避免 Component setData 丢函数
+    this._dialogCallback = options.success || null;
     this.setData({
       'dialog.show': true,
       'dialog.title': options.title || '提示',
       'dialog.content': options.content || '',
       'dialog.showCancel': options.showCancel || false,
       'dialog.confirmText': options.confirmText || '确定',
-      'dialog.cancelText': options.cancelText || '取消',
-      'dialog.callback': options.success || null // 存下回调函数
+      'dialog.cancelText': options.cancelText || '取消'
     });
     this.updateModalState();
   },
 
   // [交互] 点击弹窗确定（带收缩退出动画）
   onDialogConfirm() {
-    const cb = this.data.dialog.callback;
-    this.setData({ dialogClosing: true, 'dialog.callback': null });
+    const cb = this._dialogCallback;
+    this._dialogCallback = null;
+    this.setData({ dialogClosing: true });
     setTimeout(() => {
-      this.setData({ 
+      this.setData({
         'dialog.show': false,
         dialogClosing: false
       });
@@ -6146,10 +6526,11 @@ module.exports = function createMyPageConfig(hubView) {
 
   // [交互] 点击取消（带收缩退出动画；有回调时传 confirm:false，供双选项弹窗使用）
   closeCustomDialog() {
-    const cb = this.data.dialog.callback;
-    this.setData({ dialogClosing: true, 'dialog.callback': null });
+    const cb = this._dialogCallback;
+    this._dialogCallback = null;
+    this.setData({ dialogClosing: true });
     setTimeout(() => {
-      this.setData({ 
+      this.setData({
         'dialog.show': false,
         dialogClosing: false
       });
@@ -6181,6 +6562,21 @@ module.exports = function createMyPageConfig(hubView) {
   },
 
   // 【新增】自动消失提示（无按钮，2秒后自动消失，带收缩退出动画）
+  _clearAutoToastTimers() {
+    if (this._autoToastShowTimer) {
+      clearTimeout(this._autoToastShowTimer);
+      this._autoToastShowTimer = null;
+    }
+    if (this._autoToastHideTimer) {
+      clearTimeout(this._autoToastHideTimer);
+      this._autoToastHideTimer = null;
+    }
+    if (this._autoToastCloseAnimTimer) {
+      clearTimeout(this._autoToastCloseAnimTimer);
+      this._autoToastCloseAnimTimer = null;
+    }
+  },
+
   showAutoToast(title = '提示', content = '', options = {}) {
     if (this._isAfterSalesContext()) {
       this.showAfterSalesToast(title, content);
@@ -6196,10 +6592,12 @@ module.exports = function createMyPageConfig(hubView) {
       try { wx.hideToast(); } catch (e) {}
       try { wx.hideLoading(); } catch (e) {}
     }
+    this._clearAutoToastTimers();
     // 如果已有toast在显示，先关闭它
     if (this.data.autoToast.show) {
       this._closeAutoToastWithAnimation();
-      setTimeout(() => {
+      this._autoToastShowTimer = setTimeout(() => {
+        this._autoToastShowTimer = null;
         this._showAutoToastInternal(title, content);
       }, 420);
     } else {
@@ -6209,6 +6607,7 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 内部方法：显示自动提示
   _showAutoToastInternal(title, content) {
+    this._clearAutoToastTimers();
     this.setData({
       'autoToast.show': true,
       'autoToast.title': title,
@@ -6217,16 +6616,29 @@ module.exports = function createMyPageConfig(hubView) {
     });
     this.updateModalState();
     // 2秒后自动消失（带退出动画）
-    setTimeout(() => {
+    this._autoToastHideTimer = setTimeout(() => {
+      this._autoToastHideTimer = null;
       this._closeAutoToastWithAnimation();
     }, 2000);
   },
 
   // 关闭自动提示（带收缩退出动画）
   _closeAutoToastWithAnimation() {
-    if (!this.data.autoToast.show) return;
+    if (!this.data.autoToast.show) {
+      this.updateModalState();
+      return;
+    }
+    if (this._autoToastHideTimer) {
+      clearTimeout(this._autoToastHideTimer);
+      this._autoToastHideTimer = null;
+    }
+    if (this._autoToastCloseAnimTimer) {
+      clearTimeout(this._autoToastCloseAnimTimer);
+      this._autoToastCloseAnimTimer = null;
+    }
     this.setData({ autoToastClosing: true });
-    setTimeout(() => {
+    this._autoToastCloseAnimTimer = setTimeout(() => {
+      this._autoToastCloseAnimTimer = null;
       this.setData({ 
         'autoToast.show': false,
         autoToastClosing: false
@@ -6842,6 +7254,8 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 显示输入弹窗
   showInputDialog(options) {
+    // 回调不能放 setData：枢纽订单面板是 Component，函数会被丢掉，点确定等于空操作
+    this._inputDialogCallback = options.success || null;
     this.setData({
       'inputDialog.show': true,
       'inputDialog.title': options.title || '输入',
@@ -6849,8 +7263,7 @@ module.exports = function createMyPageConfig(hubView) {
       'inputDialog.value': options.value || '',
       'inputDialog.showRemark': !!options.showRemark,
       'inputDialog.remarkPlaceholder': options.remarkPlaceholder || '请输入备注',
-      'inputDialog.remarkValue': options.remarkValue || '',
-      'inputDialog.callback': options.success || null
+      'inputDialog.remarkValue': options.remarkValue || ''
     });
     this.updateModalState();
   },
@@ -6860,7 +7273,7 @@ module.exports = function createMyPageConfig(hubView) {
   closePermissionModal() {
     this.setData({ permissionModalClosing: true });
     setTimeout(() => {
-      this.setData({ 
+      this.setData({
         showPermissionModal: false,
         permissionModalClosing: false
       });
@@ -6870,9 +7283,10 @@ module.exports = function createMyPageConfig(hubView) {
   closeInputDialog() {
     // 录单备件弹窗取消时解锁，避免下一次点不动
     if (this._shippingRepairId) this._shippingRepairId = '';
+    this._inputDialogCallback = null;
     this.setData({ inputDialogClosing: true });
     setTimeout(() => {
-      this.setData({ 
+      this.setData({
         'inputDialog.show': false,
         'inputDialog.value': '',
         'inputDialog.remarkValue': '',
@@ -6895,12 +7309,13 @@ module.exports = function createMyPageConfig(hubView) {
 
   // 输入弹窗确认（带收缩退出动画）
   onInputDialogConfirm() {
-    const callback = this.data.inputDialog.callback;
+    const callback = this._inputDialogCallback;
     const value = this.data.inputDialog.value;
     const remark = this.data.inputDialog.remarkValue;
+    this._inputDialogCallback = null;
     this.setData({ inputDialogClosing: true });
     setTimeout(() => {
-      this.setData({ 
+      this.setData({
         'inputDialog.show': false,
         'inputDialog.value': '',
         'inputDialog.remarkValue': '',
@@ -7335,12 +7750,30 @@ module.exports = function createMyPageConfig(hubView) {
       this.showAutoToast('提示', '请选择购买日期', { preserveBindModal: true });
       return;
     }
+    if (!normalizeControlVariant(this.data.controlVariant)) {
+      this.showMyDialog({
+        title: '提示',
+        content: '请选择按钮版或遥控版',
+        confirmText: '知道了'
+      });
+      return;
+    }
 
     // 蓝牙绑定提交：再要一次授权，审核通过后可推服务通知
     this._askRepairSubscribeThen(() => this._submitAuditNow());
   },
 
   _submitAuditNow() {
+    const controlVariant = normalizeControlVariant(this.data.controlVariant);
+    if (!controlVariant) {
+      this.showMyDialog({
+        title: '提示',
+        content: '请选择按钮版或遥控版',
+        confirmText: '知道了'
+      });
+      return;
+    }
+
     this.showMyLoading('提交中...');
 
     wx.cloud.callFunction({
@@ -7352,6 +7785,7 @@ module.exports = function createMyPageConfig(hubView) {
         productModel: this.data.modelOptions[this.data.modelIndex],
         buyDate: this.data.buyDate,
         bindType: this.data.bindType || 'new',
+        controlVariant,
         imgReceipt: this.data.imgReceipt,
         imgChat: this.data.imgChat || ''
       }
@@ -7368,8 +7802,8 @@ module.exports = function createMyPageConfig(hubView) {
       }
       if (this._isFromRepairBindFlow()) {
         this._notifyRepairBindPendingAudit({
-          title: '已提交，请等待审核',
-          content: '管理员尚未录入该设备信息。请等待审核通过后，再回到维修中心提交故障报修资料。'
+          title: '已提交，可继续报修',
+          content: '设备绑定申请已提交。管理员会先审核绑定；您现在可以直接继续提交故障报修。'
         });
         return;
       }
@@ -7391,9 +7825,28 @@ module.exports = function createMyPageConfig(hubView) {
   openFaultBindForm() {
     if (this.data.profileGuideDemoBind || (this.data.profileGuideActive && !this._profileGuideAllowBindOpen)) return;
     if (!this.data.myOpenid) {
-      this.showAutoToast('提示', '请稍候，正在加载账户信息', { preserveBindModal: true });
+      this.showMyDialog({
+        title: '提示',
+        content: '请稍候，正在加载账户信息',
+        confirmText: '知道了'
+      });
       return;
     }
+    // 先提醒：必须是控制器故障，否则拒绝申报
+    this.showMyDialog({
+      title: '无设备核验须知',
+      content: '请务必确认：当前必须是控制器故障。若并非控制器故障仍点提交，我们将拒绝申报。',
+      showCancel: true,
+      confirmText: '确认是控制器故障',
+      cancelText: '取消',
+      success: (res) => {
+        if (!res || !res.confirm) return;
+        this._proceedOpenFaultBindForm();
+      }
+    });
+  },
+
+  _proceedOpenFaultBindForm() {
     this._checkFaultBindEligibility().then((blocked) => {
       if (blocked) return;
       this.setData({
@@ -7402,6 +7855,7 @@ module.exports = function createMyPageConfig(hubView) {
         bindType: 'fault',
         modelIndex: null,
         buyDate: '',
+        controlVariant: '',
         imgReceipt: '',
         imgChat: '',
         previewImgReceipt: '',
@@ -7434,32 +7888,61 @@ module.exports = function createMyPageConfig(hubView) {
           title: '无法提交',
           content: result.msg || '暂时无法提交',
           confirmText: '知道了'
-        })
-        return true
+        });
+        return true;
       }
       if (!result.success) {
-        this.showAutoToast('提示', result.msg || '校验失败，请稍后重试', { preserveBindModal: true })
-        return true
+        this.showMyDialog({
+          title: '提示',
+          content: result.msg || '校验失败，请稍后重试',
+          confirmText: '知道了'
+        });
+        return true;
       }
-      return false
+      return false;
     }).catch((err) => {
-      console.error('[faultBind] eligibility check failed', err)
-      this.showAutoToast('提示', '校验失败，请稍后重试', { preserveBindModal: true })
-      return true
-    })
+      console.error('[faultBind] eligibility check failed', err);
+      this.showMyDialog({
+        title: '提示',
+        content: '校验失败，请稍后重试',
+        confirmText: '知道了'
+      });
+      return true;
+    });
   },
 
   submitFaultAudit() {
     if (this.data.modelIndex == null || this.data.modelIndex === '') {
-      this.showAutoToast('提示', '请选择型号', { preserveBindModal: true });
+      this.showMyDialog({
+        title: '提示',
+        content: '请选择型号',
+        confirmText: '知道了'
+      });
+      return;
+    }
+    const controlVariant = normalizeControlVariant(this.data.controlVariant);
+    if (!controlVariant) {
+      this.showMyDialog({
+        title: '提示',
+        content: '请选择按钮版或遥控版',
+        confirmText: '知道了'
+      });
       return;
     }
     if (!this.data.imgReceipt) {
-      this.showAutoToast('提示', '请上传购买截图', { preserveBindModal: true });
+      this.showMyDialog({
+        title: '提示',
+        content: '请上传购买截图',
+        confirmText: '知道了'
+      });
       return;
     }
     if (!this.data.buyDate) {
-      this.showAutoToast('提示', '请选择购买日期', { preserveBindModal: true });
+      this.showMyDialog({
+        title: '提示',
+        content: '请选择购买日期',
+        confirmText: '知道了'
+      });
       return;
     }
 
@@ -7475,6 +7958,7 @@ module.exports = function createMyPageConfig(hubView) {
           action: 'submit',
           productModel: this.data.modelOptions[this.data.modelIndex],
           buyDate: this.data.buyDate,
+          controlVariant,
           imgReceipt: this.data.imgReceipt
         }
       }).then((res) => {
@@ -7490,8 +7974,8 @@ module.exports = function createMyPageConfig(hubView) {
         }
         if (this._isFromRepairBindFlow()) {
           this._notifyRepairBindPendingAudit({
-            title: '已提交，请等待审核',
-            content: '无设备核验申请已提交。请等待管理员审核通过后，再回到维修中心提交故障报修资料。'
+            title: '已提交，可继续报修',
+            content: '无设备核验申请已提交。管理员会先审核绑定；您现在可以直接继续提交故障报修。'
           });
           return;
         }
@@ -7622,6 +8106,7 @@ module.exports = function createMyPageConfig(hubView) {
     const tab = e.detail && e.detail.tab;
     if (!tab) return;
     if (tab === 'kf') {
+      if (!this.data.showHubKfTab) return;
       const weworkKf = require('../../../utils/weworkCustomerService.js');
       weworkKf.openKfPicker();
       return;
@@ -7737,6 +8222,7 @@ module.exports = function createMyPageConfig(hubView) {
   // 2. 加载待审核列表 (管理员用，走云函数以拿到 openid)
   loadAuditList() {
     if (!this.data.isAdmin) return;
+    try { this.loadTsReportList(); } catch (e) {}
 
     wx.cloud.callFunction({
       name: 'adminAuditDevice',
@@ -7753,6 +8239,194 @@ module.exports = function createMyPageConfig(hubView) {
     }).catch((err) => {
       console.warn('[my] loadAuditList cloud error', err);
       this._loadAuditListFallback();
+    });
+  },
+
+  loadTsReportList() {
+    if (!this.data.isAdmin) return;
+    wx.cloud.callFunction({
+      name: 'troubleshootManage',
+      data: { action: 'listReports', status: 'pending' }
+    }).then((res) => {
+      const r = (res && res.result) || {};
+      const list = (r.ok && Array.isArray(r.list)) ? r.list : [];
+      const groups = [];
+      list.forEach((report) => {
+        const rawSteps = Array.isArray(report.steps) ? report.steps : [];
+        const openid = String(report.openid || report._openid || '');
+        const userTail = openid ? openid.slice(-4) : '';
+        const userLabel = [report.model, userTail ? `用户${userTail}` : '用户']
+          .filter(Boolean)
+          .join(' · ');
+        const steps = [];
+        rawSteps.forEach((step, stepIndex) => {
+          const videoUrl = String((step && step.videoUrl) || '').trim();
+          if (!videoUrl) return;
+          steps.push({
+            stepIndex,
+            title: (step && step.title) || '',
+            answer: (step && step.answer) || '',
+            videoUrl
+          });
+        });
+        if (!steps.length) return;
+        groups.push({
+          reportId: report._id,
+          treeTitle: report.treeTitle || '自助排查',
+          userLabel,
+          model: report.model || '',
+          currentStep: 0,
+          currentStepIndex: steps[0].stepIndex,
+          stepHint: steps.length > 1 ? `步骤 1 / ${steps.length} · 左右滑切换步骤` : '',
+          steps
+        });
+      });
+      this.setData({ tsReportGroups: groups, tsReportList: groups });
+    }).catch((err) => {
+      console.warn('[my] loadTsReportList', err);
+      this.setData({ tsReportGroups: [], tsReportList: [] });
+    });
+  },
+
+  onTsReportStepChange(e) {
+    const id = String((e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.id) || '');
+    const current = Number((e.detail && e.detail.current) || 0);
+    if (!id) return;
+    const groups = (this.data.tsReportGroups || []).map((item) => {
+      if (item.reportId !== id) return item;
+      const steps = item.steps || [];
+      const safe = Math.max(0, Math.min(current, Math.max(0, steps.length - 1)));
+      const cur = steps[safe] || {};
+      return Object.assign({}, item, {
+        currentStep: safe,
+        currentStepIndex: cur.stepIndex,
+        stepHint: steps.length > 1 ? `步骤 ${safe + 1} / ${steps.length} · 左右滑切换步骤` : ''
+      });
+    });
+    this.setData({ tsReportGroups: groups });
+  },
+
+  handleTsReportDeleteVideo(e) {
+    const ds = (e.currentTarget && e.currentTarget.dataset) || {};
+    const id = String(ds.id || '');
+    let stepIndex = Number(ds.step);
+    if (!id) return;
+    const group = (this.data.tsReportGroups || []).find((item) => item.reportId === id);
+    if (!group) return;
+    if (Number.isNaN(stepIndex)) {
+      const cur = group.steps[Number(group.currentStep) || 0];
+      stepIndex = cur ? Number(cur.stepIndex) : NaN;
+    }
+    if (Number.isNaN(stepIndex)) return;
+    this.showMyDialog({
+      title: '删除视频',
+      content: '只删除当前步骤的视频，同一问题的卡片还在。确定吗？',
+      showCancel: true,
+      confirmText: '删除',
+      cancelText: '取消',
+      success: (res) => {
+        if (!res || !res.confirm) return;
+        this.showMyLoading('处理中...');
+        wx.cloud.callFunction({
+          name: 'troubleshootManage',
+          data: { action: 'deleteReportVideo', reportId: id, stepIndex }
+        }).then((callRes) => {
+          this.hideMyLoading();
+          const r = (callRes && callRes.result) || {};
+          if (!r.ok) {
+            this.showMyDialog({ title: '失败', content: r.errMsg || '删除失败' });
+            return;
+          }
+          const next = (this.data.tsReportGroups || []).map((item) => {
+            if (item.reportId !== id) return item;
+            const steps = (item.steps || []).filter((step) => Number(step.stepIndex) !== stepIndex);
+            const currentStep = Math.min(Number(item.currentStep) || 0, Math.max(0, steps.length - 1));
+            const cur = steps[currentStep] || {};
+            return Object.assign({}, item, {
+              steps,
+              currentStep,
+              currentStepIndex: cur.stepIndex,
+              stepHint: steps.length > 1 ? `步骤 ${currentStep + 1} / ${steps.length} · 左右滑切换步骤` : ''
+            });
+          }).filter((item) => (item.steps || []).length > 0);
+          this.setData({ tsReportGroups: next, tsReportList: next });
+          this.showAutoToast('提示', r.dismissed ? '已删除，记录已关闭' : '视频已删除');
+          this.loadTsReportList();
+        }).catch((err) => {
+          this.hideMyLoading();
+          this.showMyDialog({ title: '失败', content: (err && err.errMsg) || '删除失败' });
+        });
+      }
+    });
+  },
+
+  handleTsReportAskRepair(e) {
+    const id = String((e.currentTarget.dataset && e.currentTarget.dataset.id) || '');
+    if (!id) return;
+    this.showMyDialog({
+      title: '维修中心申报',
+      content: '将提醒该用户前往维修中心申报。确定吗？',
+      showCancel: true,
+      confirmText: '确定',
+      cancelText: '取消',
+      success: (res) => {
+        if (!res || !res.confirm) return;
+        this.showMyLoading('处理中...');
+        wx.cloud.callFunction({
+          name: 'troubleshootManage',
+          data: { action: 'askRepair', reportId: id }
+        }).then((callRes) => {
+          this.hideMyLoading();
+          const r = (callRes && callRes.result) || {};
+          if (!r.ok) {
+            this.showMyDialog({ title: '失败', content: r.errMsg || '操作失败' });
+            return;
+          }
+          this.showAutoToast(
+            '提示',
+            (r.notify && r.notify.success) ? '已推送通知，并提醒用户去申报' : '已标记，订阅推送可能未发出（用户需先授权）'
+          );
+          this.loadTsReportList();
+        }).catch((err) => {
+          this.hideMyLoading();
+          this.showMyDialog({ title: '失败', content: (err && err.errMsg) || '操作失败' });
+        });
+      }
+    });
+  },
+
+  checkTsRepairNotice() {
+    if (this.data.isAdmin || this._tsRepairNoticeShown) return;
+    wx.cloud.callFunction({
+      name: 'troubleshootManage',
+      data: { action: 'listMyRepairNotice' }
+    }).then((res) => {
+      const r = (res && res.result) || {};
+      const item = Array.isArray(r.list) && r.list[0];
+      if (!item || !item._id) return;
+      this._tsRepairNoticeShown = true;
+      const model = item.model ? `（${item.model}）` : '';
+      this.showMyDialog({
+        title: '请前往维修中心申报',
+        content: `管理员已查看你的排查记录${model}，请前往维修中心申报。`,
+        showCancel: true,
+        confirmText: '去申报',
+        cancelText: '稍后',
+        success: (dlg) => {
+          wx.cloud.callFunction({
+            name: 'troubleshootManage',
+            data: { action: 'ackRepairNotice', reportId: item._id }
+          }).catch(() => {});
+          if (!dlg || !dlg.confirm) return;
+          const query = ['serviceType=repair'];
+          if (item.model) query.push(`model=${encodeURIComponent(item.model)}`);
+          wx.navigateTo({
+            url: `/package-biz/pages/shouhou/shouhou?${query.join('&')}`
+          });
+        }
+      });
+    }).catch((err) => {
+      console.warn('[my] checkTsRepairNotice', err);
     });
   },
 
@@ -7876,6 +8550,19 @@ module.exports = function createMyPageConfig(hubView) {
   },
 
   // 3. 打开审核弹窗（点击"审核设置"按钮）
+  _computeAuditSetupScrollPx() {
+    try {
+      const win = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      const h = Number(win.windowHeight) || 667;
+      // 弹窗 max 86vh，减去标题栏、底栏与安全区，留给 scroll-view 的可滚动高度
+      const safeBottom = Number(win.safeAreaInsets && win.safeAreaInsets.bottom) || 0;
+      const scrollPx = Math.max(280, Math.floor(h * 0.86 - 120 - safeBottom - 48));
+      return scrollPx;
+    } catch (e) {
+      return 420;
+    }
+  },
+
   openAuditModal(e) {
     const item = this._enrichAuditItem(e.currentTarget.dataset.item);
     const options = this.data.adminAuditModelOptions || PRODUCT_DETAIL_OPTIONS;
@@ -7888,6 +8575,7 @@ module.exports = function createMyPageConfig(hubView) {
     this.setData({
       showAuditModal: true,
       currentAuditItem: item,
+      auditSetupScrollPx: this._computeAuditSetupScrollPx(),
       adminSetDate: item.buyDate, // 默认填用户写的日期
       adminSetDaysIndex: 1,        // 默认选 365天
       adminAuditModelIndex: modelIndex,
@@ -8041,16 +8729,21 @@ module.exports = function createMyPageConfig(hubView) {
     const needUserPayNow = isAdminMarkedReturn && hasRepairQuote && item.repairPaid !== true;
     const paidRepairWaiting = isAdminMarkedReturn && hasRepairQuote && item.repairPaid === true;
 
+    // 已填寄回运单：用户件已寄出，主状态是等管理员处理（不要再显示「需寄回」标题）
+    const waitingAdminAfterReturn = hasTracking && !needUserPayNow;
+
     return {
       titleText: needUserPayNow
         ? '寄回配件维修（待支付）'
         : (isAdminMarkedReturn ? '需寄回配件维修' : '需寄回故障配件'),
+      showTitle: !waitingAdminAfterReturn,
       statusText: needUserPayNow
         ? '待支付'
-        : (paidRepairWaiting ? '等待寄出' : (hasTracking ? '等待管理员处理' : '待处理')),
+        : (hasTracking ? '等待管理员处理' : (paidRepairWaiting ? '等待寄出' : '待处理')),
       statusClass: needUserPayNow
         ? 'pending'
         : (paidRepairWaiting || hasTracking ? 'waiting' : 'pending'),
+      statusHero: waitingAdminAfterReturn,
       showCountdownAlert:
         item.needReturn &&
         item.status === 'SHIPPED' &&
@@ -8061,7 +8754,9 @@ module.exports = function createMyPageConfig(hubView) {
       showPaymentSection: isAdminMarkedReturn && hasRepairQuote,
       footerMode: hasTracking ? 'edit_only' : 'fill_and_copy',
       showShippingTip: !hasTracking,
-      cardModeClass: paidRepairWaiting ? 'rr-paid-card' : ''
+      cardModeClass: waitingAdminAfterReturn
+        ? 'rr-waiting-admin-card'
+        : (paidRepairWaiting ? 'rr-paid-card' : '')
     };
   },
 
@@ -8072,11 +8767,11 @@ module.exports = function createMyPageConfig(hubView) {
     const hasTracking = !!String(repair.returnTrackingId || '').trim();
     return {
       modeKey: isAdminMarkedReturn ? 'as-mode-return-required' : 'as-mode-ship-only',
-      titleText: isAdminMarkedReturn ? '填写修好后寄回地址' : '录入寄回运单号',
+      titleText: isAdminMarkedReturn ? '填写修好后寄回地址' : '录入寄出运单号',
       showAddressSection: isAdminMarkedReturn,
       needAddressInput: isAdminMarkedReturn && !hasReturnAddress,
       showAddressInfo: isAdminMarkedReturn && hasReturnAddress,
-      trackingLabel: hasTracking ? '修改寄回运单号' : '录入寄回运单号',
+      trackingLabel: hasTracking ? '修改寄出运单号' : '录入寄出运单号',
       submitText: hasTracking ? '修改单号' : '提交单号'
     };
   },
@@ -8106,28 +8801,30 @@ module.exports = function createMyPageConfig(hubView) {
   },
 
   showAfterSalesDialog(options = {}) {
+    this._afterSalesDialogCallback = options.success || null;
     this.setData({
       'afterSalesDialog.show': true,
       'afterSalesDialog.title': options.title || '提示',
       'afterSalesDialog.content': options.content || '',
       'afterSalesDialog.confirmText': options.confirmText || '确定',
       'afterSalesDialog.showCancel': !!options.showCancel,
-      'afterSalesDialog.cancelText': options.cancelText || '取消',
-      'afterSalesDialog.callback': options.success || null
+      'afterSalesDialog.cancelText': options.cancelText || '取消'
     });
     this.updateModalState();
   },
 
   onAfterSalesDialogConfirm() {
-    const cb = this.data.afterSalesDialog.callback;
-    this.setData({ 'afterSalesDialog.show': false, 'afterSalesDialog.callback': null });
+    const cb = this._afterSalesDialogCallback;
+    this._afterSalesDialogCallback = null;
+    this.setData({ 'afterSalesDialog.show': false });
     this.updateModalState();
     if (cb) cb({ confirm: true });
   },
 
   closeAfterSalesDialog() {
-    const cb = this.data.afterSalesDialog.callback;
-    this.setData({ 'afterSalesDialog.show': false, 'afterSalesDialog.callback': null });
+    const cb = this._afterSalesDialogCallback;
+    this._afterSalesDialogCallback = null;
+    this.setData({ 'afterSalesDialog.show': false });
     this.updateModalState();
     if (cb) cb({ confirm: false });
   },
@@ -10282,7 +10979,10 @@ module.exports = function createMyPageConfig(hubView) {
   
   // 🔴 检查是否有弹窗打开，更新 hasModalOpen 状态
   updateModalState() {
-    const hasModal = 
+    const toastOpen = !!(this.data.autoToast && this.data.autoToast.show) ||
+      !!(this.data.afterSalesToast && this.data.afterSalesToast.show);
+    // 真正挡操作的弹层（不含轻提示）
+    const blockShellTabBar =
       this.data.showModal ||
       this.data.bindModalClosing ||
       this.data.showAuditModal ||
@@ -10300,7 +11000,6 @@ module.exports = function createMyPageConfig(hubView) {
       this.data.showPaidRepairConfirmModal ||
       this.data.showProfileGuide ||
       this.data.showProfileGuideIntro ||
-      (this.data.afterSalesToast && this.data.afterSalesToast.show) ||
       (this.data.afterSalesDialog && this.data.afterSalesDialog.show) ||
       this.data.showCopySuccessModal ||
       this.data.showLoadingAnimation ||
@@ -10309,14 +11008,15 @@ module.exports = function createMyPageConfig(hubView) {
       (this.data.inputDialog && this.data.inputDialog.show) ||
       (this.data.diagnosisDialog && this.data.diagnosisDialog.show) ||
       (this.data.returnRequestDialog && this.data.returnRequestDialog.show) ||
-      this.data.returnRequestDialogClosing ||
-      (this.data.autoToast && this.data.autoToast.show);
+      this.data.returnRequestDialogClosing;
+    const hasModal = !!(blockShellTabBar || toastOpen);
     
     if (this.data.hasModalOpen !== hasModal) {
       this.setData({ hasModalOpen: hasModal });
     }
+    // 轻提示不藏底栏；只有真正挡操作的弹层才通知壳层
     if (this.data.hubInShell && typeof this.triggerEvent === 'function') {
-      this.triggerEvent('shellmodal', { open: hasModal });
+      this.triggerEvent('shellmodal', { open: !!blockShellTabBar });
     }
   },
 
@@ -10440,19 +11140,21 @@ module.exports = function createMyPageConfig(hubView) {
     if (model && model.indexOf(' - ') !== -1) {
       model = model.split(' - ')[0].trim();
     }
-    const url = model
-      ? '/package-biz/pages/shouhou/shouhou?model=' + encodeURIComponent(model)
-      : '/package-biz/pages/shouhou/shouhou';
+    const qs = ['guidedParts=1'];
+    if (model) qs.push('model=' + encodeURIComponent(model));
+    const url = '/package-biz/pages/shouhou/shouhou?' + qs.join('&');
     // 用全局变量传 model 和需预选配件，避免开发者工具/真机对 URL 参数解析不一致导致收不到
-    if (model) {
+    {
       const app = getApp();
       if (app && app.globalData) {
-        app.globalData.shouhouOpenModel = model;
+        app.globalData.shouhouGuidedParts = true;
+        if (model) app.globalData.shouhouOpenModel = model;
         app.globalData.shouhouRepairId = repair && repair._id ? repair._id : null; // 支付成功后更新该维修单的 purchasePartsStatus
         // 持久化 repairId：用户若切到商城 Tab 下单，globalData 会丢，仅靠本地存储仍能写入订单并显示黄卡
         if (repair && repair._id) {
           try {
             wx.setStorageSync('guided_parts_repair_id', repair._id);
+            wx.setStorageSync('guided_parts_active', 1);
           } catch (e) {}
         }
         app.globalData.shouhouPreselectParts = [];

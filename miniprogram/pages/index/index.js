@@ -75,6 +75,10 @@ Page({
     xianyuWarningActionReady: false,
     xianyuWarningActionCountdown: 5,
     xianyuWarningProgress: 0,
+    /** 微信看到的：是否已有口令（如 VKxxxxxxx） */
+    showWechatHasCodeModal: false,
+    wechatHasCodeModalEnterReady: false,
+    wechatHasCodeModalClosing: false,
     showFirstTimeModal: false,
     firstTimeModalEnterReady: false, // 下一帧再开过渡，避免 wx:if 首帧「硬切」
     firstTimeModalClosing: false,
@@ -288,7 +292,10 @@ Page({
       firstTimeModalClosing: false,
       showXianyuWarningModal: false,
       xianyuWarningModalEnterReady: false,
-      xianyuWarningModalClosing: false
+      xianyuWarningModalClosing: false,
+      showWechatHasCodeModal: false,
+      wechatHasCodeModalEnterReady: false,
+      wechatHasCodeModalClosing: false
     });
   },
 
@@ -316,6 +323,8 @@ Page({
       this.data.showFirstTimeModal ||
       this.data.showXianyuWarningModal ||
       this.data.xianyuWarningModalClosing ||
+      this.data.showWechatHasCodeModal ||
+      this.data.wechatHasCodeModalClosing ||
       this.data.isShowNicknameUI
     ) {
       return;
@@ -371,30 +380,13 @@ Page({
   },
 
   _startXianyuWarningActionCooldown() {
-    const total = 5;
     this._clearXianyuWarningActionCooldown();
+    // 来源选择弹窗不设冷却，打开即可点
     this.setData({
-      xianyuWarningActionReady: false,
-      xianyuWarningActionCountdown: total,
-      xianyuWarningProgress: 0
+      xianyuWarningActionReady: true,
+      xianyuWarningActionCountdown: 0,
+      xianyuWarningProgress: 100
     });
-    this._xianyuWarningActionCooldownTimer = setInterval(() => {
-      const next = (this.data.xianyuWarningActionCountdown || 0) - 1;
-      if (next <= 0) {
-        this._clearXianyuWarningActionCooldown();
-        this.setData({
-          xianyuWarningActionReady: true,
-          xianyuWarningActionCountdown: 0,
-          xianyuWarningProgress: 100
-        });
-        return;
-      }
-      const progress = Math.round(((total - next) / total) * 100);
-      this.setData({
-        xianyuWarningActionCountdown: next,
-        xianyuWarningProgress: progress
-      });
-    }, 1000);
   },
 
   _clearFirstTimeActionCooldown() {
@@ -545,7 +537,7 @@ Page({
   /** 未授权入口：新用户先闲鱼须知，再加微信引导，否则直接昵称验证（互斥，不叠两层） */
   _showUnauthorizedEntryUI() {
     if (this.data.isAdmin || this.data.isAuthorized) return;
-    if (this.data.showXianyuWarningModal || this.data.showFirstTimeModal) return;
+    if (this.data.showXianyuWarningModal || this.data.showFirstTimeModal || this.data.showWechatHasCodeModal) return;
     if (this._openXianyuWarningModalIfNeeded()) return;
     if (this._openFirstTimeModalIfNeeded()) return;
     this._showNicknameUI();
@@ -932,6 +924,14 @@ Page({
       this._markXianyuWarningDismissed();
       this.setData({
         ...this._xianyuWarningModalPatch(true),
+        isShowNicknameUI: !this.data.isAuthorized,
+        nicknameUiClosing: false
+      });
+    } else if (this.data.showWechatHasCodeModal) {
+      this.setData({
+        showWechatHasCodeModal: false,
+        wechatHasCodeModalEnterReady: false,
+        wechatHasCodeModalClosing: false,
         isShowNicknameUI: !this.data.isAuthorized,
         nicknameUiClosing: false
       });
@@ -2305,6 +2305,7 @@ Page({
       try {
         res = await wx.cloud.callFunction({
           name: 'getSuspiciousUsers',
+          timeout: 20000,
           data: { scope: 'ignored_only' }
         });
       } catch (primaryErr) {
@@ -2886,8 +2887,8 @@ Page({
       this.setData({ isLoadingSuspiciousUsers: true });
     }
     try {
-      await this._backfillLegacyScreenshotRiskQueue();
-      const res = await wx.cloud.callFunction({ name: 'getSuspiciousUsers' });
+      this._backfillLegacyScreenshotRiskQueue();
+      const res = await wx.cloud.callFunction({ name: 'getSuspiciousUsers', timeout: 20000 });
       if (res.result && res.result.success) {
         const version = res.result.version || '';
         if (version && version.indexOf('v2_sessions_fenxi_') !== 0) {
@@ -3268,47 +3269,150 @@ Page({
       nicknameUiClosing: false,
       showFirstTimeModal: false,
       firstTimeModalEnterReady: false,
-      firstTimeModalClosing: false
+      firstTimeModalClosing: false,
+      showWechatHasCodeModal: false,
+      wechatHasCodeModalEnterReady: false,
+      wechatHasCodeModalClosing: false
     });
     this._allowScreenCaptureOnIndex();
     this._startXianyuWarningActionCooldown();
     return true;
   },
 
-  closeXianyuWarningModal() {
+  /** 微信看到的：先完整收起来源弹窗，再弹出「是否有口令」 */
+  onAccessEntryFromWechat() {
     if (this.data.xianyuWarningModalClosing) return;
-    if (!this.data.xianyuWarningActionReady) return;
+    if (this.data.showWechatHasCodeModal || this.data.wechatHasCodeModalClosing) return;
+    if (this._openingWechatHasCodeModal) return;
+    this._openingWechatHasCodeModal = true;
     this._clearXianyuWarningActionCooldown();
     this._markXianyuWarningDismissed();
-    accessEntryPath.markAccessEntryViaKf();
+    // 1) 只播收起动画，先不要挂第二个
+    this.setData({ xianyuWarningModalClosing: true });
+    setTimeout(() => {
+      // 2) 卸掉第一个，遮罩空一拍
+      this.setData({
+        ...this._xianyuWarningModalPatch(true),
+        xianyuWarningModalClosing: false,
+        showWechatHasCodeModal: false,
+        wechatHasCodeModalEnterReady: false,
+        wechatHasCodeModalClosing: false,
+        isShowNicknameUI: false,
+        nicknameUiClosing: false,
+        showFirstTimeModal: false,
+        firstTimeModalEnterReady: false,
+        firstTimeModalClosing: false
+      });
+      // 3) 再挂载第二个（先透明），下一帧再 enter-ready 淡入
+      setTimeout(() => {
+        this.setData({
+          showWechatHasCodeModal: true,
+          wechatHasCodeModalEnterReady: false,
+          wechatHasCodeModalClosing: false
+        });
+        setTimeout(() => {
+          this.setData({ wechatHasCodeModalEnterReady: true });
+          this._openingWechatHasCodeModal = false;
+        }, 48);
+      }, 80);
+    }, 420);
+  },
 
+  /** 微信 · 有口令：先收起询问弹窗，再出填口令层 */
+  onWechatHasAccessCode() {
+    if (this.data.wechatHasCodeModalClosing) return;
+    if (!this.data.showWechatHasCodeModal) return;
+    accessEntryPath.markAccessEntryViaDirectCode();
     const debugOn = debugUserFlow.shouldForceUserGuides();
+    this.setData({ wechatHasCodeModalClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showWechatHasCodeModal: false,
+        wechatHasCodeModalEnterReady: false,
+        wechatHasCodeModalClosing: false
+      });
+      setTimeout(() => {
+        if (debugOn || (!this.data.isAuthorized && !this.data.isAdmin)) {
+          this._showNicknameUI();
+        }
+      }, 60);
+    }, 420);
+  },
+
+  /** 微信 · 没有口令：与闲鱼相同，去售前领取 */
+  onWechatNoAccessCode() {
+    if (this.data.wechatHasCodeModalClosing) return;
+    if (!this.data.showWechatHasCodeModal) return;
+    this.setData({ wechatHasCodeModalClosing: true });
+    this._startPresalesAccessCodeFlow('wechat', { fromWechatHasCodeModal: true });
+  },
+
+  /** 闲鱼看到的：去售前领取口令，再回填 */
+  onAccessEntryFromMarketplace(e) {
+    if (this.data.xianyuWarningModalClosing) return;
+    const source = (e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.source) || 'xianyu';
+    this._clearXianyuWarningActionCooldown();
+    this._markXianyuWarningDismissed();
+    this._startPresalesAccessCodeFlow(source);
+  },
+
+  /** 售前领口令（闲鱼 / 微信无口令共用） */
+  _startPresalesAccessCodeFlow(source, opts = {}) {
+    accessEntryPath.markAccessEntryViaKf();
+    const debugOn = debugUserFlow.shouldForceUserGuides();
+    const titleMap = {
+      douyin: '【访问口令】抖音领取',
+      wechat: '【访问口令】微信领取',
+      xianyu: '【访问口令】闲鱼领取'
+    };
+    const kfTitle = titleMap[source] || titleMap.xianyu;
     // 必须在用户点击的同一调用栈同步打开，否则企微会话/气泡可能失败
-    this._openPresalesKfForAccessCode({
+    weworkKf.openPreSalesKf({
+      title: kfTitle,
+      path: '/pages/index/index.html',
+      showMessageCard: true,
       onFail: () => {
         wx.showToast({ title: '打开客服失败，请用复制微信号', icon: 'none', duration: 2500 });
         this._openFirstTimeModalAnimated(debugOn);
       }
     });
 
-    // 延后关弹窗，避免与 openCustomerServiceChat 抢 webview 路由（DevTools 常见 routeDone 告警）
+    // 延后关弹窗，避免与 openCustomerServiceChat 抢 webview 路由
     setTimeout(() => {
-      if (this.data.xianyuWarningModalClosing) return;
-      this._finishXianyuWarningModal({ openNickname: true, debugOn });
-    }, 320);
+      if (opts.fromWechatHasCodeModal) {
+        this.setData({
+          showWechatHasCodeModal: false,
+          wechatHasCodeModalEnterReady: false,
+          wechatHasCodeModalClosing: false
+        });
+        if (this.data.showFirstTimeModal || this.data.firstTimeModalClosing) return;
+        setTimeout(() => {
+          if (debugOn || (!this.data.isAuthorized && !this.data.isAdmin)) {
+            this._showNicknameUI();
+          }
+        }, 60);
+        return;
+      }
+      if (this.data.showXianyuWarningModal) {
+        this._finishXianyuWarningModal({ openNickname: true, debugOn });
+        return;
+      }
+      if (debugOn || (!this.data.isAuthorized && !this.data.isAdmin)) {
+        this._showNicknameUI();
+      }
+    }, 420);
   },
 
-  /** 微信用户若已有口令：跳过客服，直接去填写 */
-  skipXianyuWarningToAccessCode() {
-    if (this.data.xianyuWarningModalClosing) return;
-    if (!this.data.xianyuWarningActionReady) return;
-    this._clearXianyuWarningActionCooldown();
-    this._markXianyuWarningDismissed();
-    accessEntryPath.markAccessEntryViaDirectCode();
-    this._finishXianyuWarningModal({
-      openNickname: true,
-      debugOn: debugUserFlow.shouldForceUserGuides()
+  /** @deprecated 旧「联系客服」入口，保留兼容 */
+  closeXianyuWarningModal() {
+    this.onAccessEntryFromMarketplace({
+      currentTarget: { dataset: { source: 'xianyu' } }
     });
+  },
+
+  /** @deprecated 旧「我已有口令」入口，保留兼容 */
+  skipXianyuWarningToAccessCode() {
+    this.onAccessEntryFromWechat();
   },
 
   _finishXianyuWarningModal({ openNickname, debugOn }) {
@@ -3320,6 +3424,7 @@ Page({
       });
       // 打开备用加微信页时，勿再叠口令层
       if (this.data.showFirstTimeModal || this.data.firstTimeModalClosing) return;
+      if (this.data.showWechatHasCodeModal || this.data.wechatHasCodeModalClosing) return;
       if (openNickname && (debugOn || (!this.data.isAuthorized && !this.data.isAdmin))) {
         this._showNicknameUI();
       }
@@ -3329,7 +3434,7 @@ Page({
   /** 闲鱼/抖音：打开企业微信售前客服领取访问口令 */
   _openPresalesKfForAccessCode(options = {}) {
     weworkKf.openPreSalesKf({
-      title: '【访问口令】闲鱼/抖音领取',
+      title: options.title || '【访问口令】闲鱼/抖音领取',
       path: '/pages/index/index.html',
       showMessageCard: true,
       onFail: typeof options.onFail === 'function' ? options.onFail : undefined
@@ -3372,6 +3477,9 @@ Page({
       showXianyuWarningModal: false,
       xianyuWarningModalEnterReady: false,
       xianyuWarningModalClosing: false,
+      showWechatHasCodeModal: false,
+      wechatHasCodeModalEnterReady: false,
+      wechatHasCodeModalClosing: false,
       isShowNicknameUI: false,
       nicknameUiClosing: false,
       showWechatQRCode: true,
@@ -3451,18 +3559,6 @@ Page({
     accessEntryPath.markAccessEntryViaDirectCode();
     this.setData({ firstTimeModalClosing: true });
     setTimeout(() => {
-      if (debugUserFlow.shouldForceUserGuides()) {
-        this.setData({
-          showFirstTimeModal: false,
-          firstTimeModalClosing: false,
-          firstTimeModalEnterReady: false,
-          showWechatQRCode: false,
-          isShowNicknameUI: false,
-          nicknameUiClosing: false
-        });
-        this._continueDebugUserFlowAfterIndexModals();
-        return;
-      }
       this.setData({
         showFirstTimeModal: false,
         firstTimeModalClosing: false,
@@ -3821,14 +3917,29 @@ Page({
   },
 
   _decorateAccessCodeList(list) {
+    const now = Date.now();
+    const ttl = 24 * 60 * 60 * 1000;
+    const toMs = (raw) => {
+      if (!raw && raw !== 0) return 0;
+      if (typeof raw === 'number') return raw < 1e12 ? raw * 1000 : raw;
+      const t = new Date(raw).getTime();
+      return Number.isFinite(t) ? t : 0;
+    };
     return (Array.isArray(list) ? list : []).map((item) => {
       const accessCode = extractPlainAccessCode(item.accessCode || item.nickname || '');
+      const bound = !!item.bound;
+      const expiresAt = toMs(item.expiresAt) || toMs(item.expiresAtMs);
+      const created = toMs(item.createTime);
+      const expireAt = expiresAt || (created > 0 ? created + ttl : 0);
+      const expired = !bound && (item.expired === true || (expireAt > 0 && now > expireAt));
       return {
         ...item,
         accessCode,
-        statusClass: item.bound ? 'used' : 'unused'
+        expired,
+        statusLabel: bound ? (item.statusLabel || '已使用') : (expired ? '已过期' : (item.statusLabel || '未使用')),
+        statusClass: bound ? 'used' : (expired ? 'expired' : 'unused')
       };
-    });
+    }).filter((item) => item.bound || !item.expired);
   },
 
   async loadAccessCodeList() {
@@ -3909,19 +4020,6 @@ Page({
     wx.navigateTo({
       url: '/package-biz/pages/inventory/inventory'
     });
-  },
-
-  _continueDebugUserFlowAfterIndexModals() {
-    if (!debugUserFlow.isActive()) return;
-    try {
-      wx.setStorageSync('__products_new_arrival_from_index__', Date.now());
-    } catch (e) { /* ignore */ }
-    wx.showToast({ title: '进入主页调试', icon: 'none', duration: 1200 });
-    setTimeout(() => {
-      wx.reLaunch({
-        url: '/package-app/pages/products/products?debugUserFlow=1'
-      });
-    }, 280);
   },
 
   copyAccessCode(e) {

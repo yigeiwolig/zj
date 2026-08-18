@@ -1,0 +1,149 @@
+<view class="pending-repair-list-root">
+  <block wx:for="{{list}}" wx:key="_id">
+    <view
+      class="pr-card {{expandedMap[item._id] ? 'pr-card--open' : 'pr-card--fold'}} {{!expandedMap[item._id] && index < list.length - 1 ? 'pr-card--stacked' : ''}}"
+      style="z-index: {{expandedMap[item._id] ? 120 : (list.length - index)}};"
+    >
+      <view class="pr-card-head" data-id="{{item._id}}" bindtap="onToggleExpand">
+        <view class="pr-card-head-body">
+          <view class="pr-card-head-left">
+            <text class="pr-card-model">{{item.displayModel || item.model}}</text>
+            <text class="pr-card-sub">{{item.contact.name || '匿名用户'}} · 报修 {{item.repairTimeText || '—'}}</text>
+          </view>
+          <view class="pr-card-head-right">
+            <view class="pr-status-pill pr-status-pill--{{item.pendingStatusClass || 'pending'}}">
+              <view class="pr-status-dot"></view>
+              <text class="pr-status-text">{{item.pendingStatusText || '待处理'}}</text>
+            </view>
+            <view class="pr-card-chevron {{expandedMap[item._id] ? 'pr-card-chevron--open' : ''}}">
+              <text class="pr-card-chevron-icon">›</text>
+            </view>
+          </view>
+        </view>
+        <text class="pr-card-desc-preview" wx:if="{{!expandedMap[item._id] && item.description}}">"{{item.description}}"</text>
+      </view>
+
+      <view class="pr-card-body" wx:if="{{expandedMap[item._id]}}">
+        <view class="pr-card-body-inner">
+          <block wx:if="{{item.mediaPreviewUrl}}">
+            <block wx:if="{{item.isImageMedia}}">
+              <image
+                src="{{item.mediaPreviewUrl}}"
+                mode="aspectFit"
+                class="pr-media pr-media--image"
+                catchtap="onPreviewImage"
+                data-url="{{item.mediaPreviewUrl}}"
+                data-index="{{index}}"
+                lazy-load="true"
+              />
+            </block>
+            <video wx:else src="{{item.mediaPreviewUrl}}" class="pr-media pr-media--video" controls preload="metadata"></video>
+          </block>
+          <view wx:else class="pr-media pr-media--empty">素材加载失败</view>
+
+          <view class="pr-info">
+            <view class="pr-title-row">
+              <view class="pr-title">
+                <text>{{item.displayModel || item.model}}</text>
+                <text wx:if="{{item.controlVariant === 'remote'}}" class="pr-variant-mark"> (遥控版)</text>
+                <text wx:elif="{{item.controlVariantLabel}}" class="pr-variant-mark"> ({{item.controlVariantLabel}})</text>
+                <text> - {{item.contact.name}}</text>
+              </view>
+              <view class="pr-ship-tag" wx:if="{{item.shippingMethod}}">
+                <view class="pr-ship-badge pr-ship-badge--{{item.shippingMethod === 'sf' ? 'sf' : 'zto'}}">
+                  <text>{{item.shippingMethod === 'sf' ? 'SF' : '中'}}</text>
+                </view>
+                <text class="pr-ship-label">{{item.shippingMethod === 'sf' ? '顺丰' : '中通'}}{{item.shippingFeeText === '包邮' ? '包邮' : ''}}</text>
+              </view>
+            </view>
+            <view class="pr-desc">"{{item.description}}"</view>
+            <view class="pr-addr-row">
+              <text class="pr-addr">{{item.contact.address}}</text>
+              <view
+                class="pr-copy-btn"
+                catchtap="onCopyAddress"
+                data-name="{{item.contact.name}}"
+                data-phone="{{item.contact.phone}}"
+                data-address="{{item.contact.address}}"
+              >
+                <text>复制商家地址</text>
+              </view>
+            </view>
+            <view class="pr-warranty pr-warranty--expired" wx:if="{{item.warrantyExpired === true || (item.expiryDate && item.remainingDays === 0)}}">
+              <text class="pr-warranty-tag">用户质保已过期</text>
+              <text class="pr-warranty-meta" wx:if="{{item.expiryDate}}">到期日：{{item.expiryDate}}</text>
+            </view>
+            <view class="pr-warranty pr-warranty--normal" wx:elif="{{item.remainingDays !== undefined && item.remainingDays > 0}}">
+              <text class="pr-warranty-tag">剩余质保：{{item.remainingDays}}天</text>
+              <text class="pr-warranty-meta" wx:if="{{item.expiryDate || item.totalDays}}">
+                <text wx:if="{{item.totalDays}}">总{{item.totalDays}}天</text>
+                <text wx:if="{{item.totalDays && item.expiryDate}}"> · </text>
+                <text wx:if="{{item.expiryDate}}">到期{{item.expiryDate}}</text>
+              </text>
+            </view>
+            <view class="pr-warranty-banner" wx:if="{{item.hadWarrantyDeducted}}">
+              <text>该用户曾被扣质保，仅可要求寄回维修（不可录单备件免费支持）</text>
+            </view>
+          </view>
+
+          <view class="pr-status-block" wx:if="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT'}}">
+            <text class="pr-status-line">用户已寄出快递</text>
+            <text class="pr-tracking" wx:if="{{item.returnTrackingId}}">运单号：{{item.returnTrackingId}}</text>
+          </view>
+
+          <view class="pr-actions">
+            <view class="pr-btn pr-btn--complete" wx:if="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT'}}" catchtap="onCompleteRepair" data-id="{{item._id}}">维修完成</view>
+            <view class="pr-status-block" wx:if="{{item.status === 'REPAIR_COMPLETED_SENT'}}">
+              <text class="pr-status-line">维修完成已寄出</text>
+              <text class="pr-tracking" wx:if="{{item.trackingId}}">运单号：{{item.trackingId}}</text>
+            </view>
+            <block wx:if="{{item.returnStatus !== 'USER_SENT' && item.status !== 'USER_SENT' && item.status !== 'REPAIR_COMPLETED_SENT'}}">
+              <block wx:if="{{item.hadWarrantyDeducted}}">
+                <view class="pr-actions-primary">
+                  <view class="pr-btn pr-btn--diagnosis" catchtap="onOpenDiagnosis" data-id="{{item._id}}">填写诊断书</view>
+                </view>
+                <view class="pr-diagnosis-meta" wx:if="{{item.diagnosisDone || (item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement')}}">
+                  <text class="pr-pill" wx:if="{{item.diagnosisDone}}">已诊断</text>
+                  <text class="pr-pill pr-pill--warn" wx:if="{{item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement'}}">待换机</text>
+                </view>
+                <view class="pr-actions-grid">
+                  <view class="pr-btn pr-btn--return pr-btn--full" catchtap="onRequestReturn" data-id="{{item._id}}">需要寄回产品维修</view>
+                </view>
+              </block>
+              <block wx:else>
+                <view class="pr-actions-primary">
+                  <view class="pr-btn pr-btn--diagnosis" catchtap="onOpenDiagnosis" data-id="{{item._id}}">填写诊断书</view>
+                  <view class="pr-btn pr-btn--ship" catchtap="onResolveRepair" data-id="{{item._id}}" data-type="ship">录单备件寄出</view>
+                </view>
+                <view class="pr-diagnosis-meta" wx:if="{{item.diagnosisDone || (item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement')}}">
+                  <text class="pr-pill" wx:if="{{item.diagnosisDone}}">已诊断</text>
+                  <text class="pr-pill pr-pill--warn" wx:if="{{item.awaitingSnReplacement && item.replacementDetectSource === 'manual_board_replacement'}}">待换机</text>
+                </view>
+                <view class="pr-actions-grid">
+                  <view class="pr-btn pr-btn--purchase" catchtap="onOpenPurchase" data-index="{{index}}" data-id="{{item._id}}">请购买配件</view>
+                  <view class="pr-btn pr-btn--tutorial" catchtap="onResolveRepair" data-id="{{item._id}}" data-type="tutorial">看教程可修</view>
+                  <view class="pr-btn pr-btn--return pr-btn--full" catchtap="onRequestReturn" data-id="{{item._id}}">需要寄回产品维修</view>
+                </view>
+              </block>
+              <view class="pr-actions-wecom">
+                <view class="pr-btn pr-btn--wecom" catchtap="onResendWecom" data-id="{{item._id}}">重新推送企微</view>
+              </view>
+              <view class="pr-actions-delete">
+                <view
+                  class="pr-btn pr-btn--delete"
+                  catchtap="onDeleteRepair"
+                  data-id="{{item._id}}"
+                  data-model="{{item.displayModel || item.model}}"
+                  data-name="{{item.contact.name}}"
+                >删除工单</view>
+              </view>
+            </block>
+            <view class="pr-actions-wecom" wx:elif="{{item.returnStatus === 'USER_SENT' || item.status === 'USER_SENT' || item.status === 'REPAIR_COMPLETED_SENT'}}">
+              <view class="pr-btn pr-btn--wecom" catchtap="onResendWecom" data-id="{{item._id}}">重新推送企微</view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

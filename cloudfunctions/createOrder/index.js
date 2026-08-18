@@ -472,17 +472,18 @@ async function resolveServerPricing(db, event, wxOpenId) {
 
 exports.main = async (event, context) => {
   const wxContext = cloud.getWXContext()
-  const {
-    goods,
-    addressData,
-    shippingMethod,
-    action,
-    userNickname,
-    repairId,
-    isRepairPayment,
-    orderSource,
-    existingOrderId
-  } = event
+    const {
+      goods,
+      addressData,
+      shippingMethod,
+      action,
+      userNickname,
+      repairId,
+      isRepairPayment,
+      isGuidedPartsPurchase,
+      orderSource,
+      existingOrderId
+    } = event
 
   let outTradeNo = `MT${Date.now()}${Math.floor(Math.random() * 1000)}`
   const db = cloud.database()
@@ -520,7 +521,9 @@ exports.main = async (event, context) => {
   try {
     let pricingInput = { ...event }
 
-    if ((orderSource === 'shouhou' || isRepairPayment) && !(repairId && String(repairId).trim())) {
+    // 只有「维修费支付」才必须挂在维修单上。维修中心直接买售后配件（shouhou_parts）
+    // 本来就没有维修单，不能拿 orderSource 一刀切拦掉。
+    if (isRepairPayment && !(repairId && String(repairId).trim())) {
       return { error: true, msg: '缺少维修单信息，请从维修引导重新下单' }
     }
 
@@ -620,6 +623,7 @@ exports.main = async (event, context) => {
           userNickname: userNickname || '',
           isRepairPayment: isRepairPayment || false,
           repairId: repairId || '',
+          isGuidedPartsPurchase: !!(isGuidedPartsPurchase && repairId),
           orderSource: orderSource || '',
           pricingAudit: auditBase,
           createTime: db.serverDate()
@@ -652,6 +656,10 @@ exports.main = async (event, context) => {
       userNickname: userNickname || (repayExistingDoc && repayExistingDoc.userNickname) || '',
       isRepairPayment: repayExistingDoc ? !!repayExistingDoc.isRepairPayment : !!isRepairPayment,
       repairId: (repayExistingDoc && repayExistingDoc.repairId) || repairId || '',
+      // 明确标记：只有「去购买配件」引导单才为 true；自助售后配件为 false
+      isGuidedPartsPurchase: repayExistingDoc
+        ? !!repayExistingDoc.isGuidedPartsPurchase
+        : !!(isGuidedPartsPurchase && repairId),
       orderSource: (repayExistingDoc && repayExistingDoc.orderSource) || orderSource || '',
       pricingAudit: auditBase,
       couponIds: couponIds.length ? couponIds : [],

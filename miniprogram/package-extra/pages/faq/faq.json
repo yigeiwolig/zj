@@ -2,7 +2,7 @@
   "navigationBarTitleText": "帮助与支持",
   "navigationBarBackgroundColor": "#ffffff",
   "navigationBarTextStyle": "black",
-  "backgroundColor": "#F2F2F7",
+  "backgroundColor": "#F5F5F5",
   "navigationStyle": "custom",
   "enablePullDownRefresh": false
 }

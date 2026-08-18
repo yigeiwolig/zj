@@ -1,160 +1,260 @@
 <view class="ta-page">
   <view class="ta-nav" style="height: {{navBarHeight}}px; padding-top: {{statusBarHeight}}px;">
     <view class="ta-back" bindtap="goBack">‹</view>
-    <text class="ta-nav-title">排查方案管理</text>
-    <view class="ta-nav-add" bindtap="openAddTree">新增</view>
+    <text class="ta-nav-title">{{pageTitle}}</text>
+    <view
+      class="ta-nav-add {{connectMode ? 'is-on' : ''}}"
+      bindtap="toggleConnectMode"
+      wx:if="{{selectedTree}}"
+    >{{connectMode ? '取消' : '连接'}}</view>
+    <view class="ta-nav-add" wx:else></view>
   </view>
 
   <view class="ta-content" style="padding-top: {{statusBarHeight + navBarHeight}}px;">
-    <view class="ta-intro">
-      <text class="ta-intro-title">决策树内容</text>
-      <text class="ta-intro-copy">先建主题，再建节点。选项每行写成“文字 | 下一节点ID”；跨主题写“文字 | tree:主题key”。</text>
+    <view class="ta-simple-tip">
+      <text>卡片里写答案并保存：几个答案就自动长出几支，支路画在该卡片正下方</text>
+      <text>点「再加一个答案」只多一支；空白步骤点「写两个答案并往下分叉」一次长出左右两支</text>
+      <text>打开「最后一步」结束该支；树变宽后可左右滑动，操作后会自动滚到当前卡片</text>
+    </view>
+
+    <view class="ta-connect-bar" wx:if="{{connectMode}}">
+      <text>{{connectHint || '先点一个答案'}}</text>
     </view>
 
     <view class="ta-error" wx:if="{{errorText}}">{{errorText}}</view>
     <view class="ta-loading" wx:if="{{loading}}">加载中…</view>
 
-    <scroll-view class="ta-tree-strip" scroll-x wx:if="{{trees.length}}">
-      <view class="ta-tree-strip-inner">
-        <view
-          class="ta-tree-chip {{selectedTree && selectedTree._id === item._id ? 'is-on' : ''}}"
-          wx:for="{{trees}}"
-          wx:key="_id"
-          data-id="{{item._id}}"
-          bindtap="selectTree"
-        >{{item.title}}</view>
-      </view>
-    </scroll-view>
-
-    <view class="ta-empty" wx:if="{{!loading && !trees.length}}">
-      <text>还没有排查主题</text>
-      <view class="ta-primary" bindtap="openAddTree">创建第一个主题</view>
-    </view>
-
-    <block wx:if="{{selectedTree}}">
-      <view class="ta-tree-head">
-        <view class="ta-tree-head-main">
-          <text class="ta-tree-title">{{selectedTree.title}}</text>
-          <text class="ta-tree-meta">
-            key: {{selectedTree.key}} · {{selectedTree.enabled ? '已启用' : '已停用'}}
-          </text>
-          <text class="ta-tree-meta">入口节点：{{selectedTree.entryNodeId || '未设置'}}</text>
+    <block wx:if="{{selectedTree && !loading}}">
+      <view class="ta-pan-hint">分支会紧挨在卡片正下方；太宽时再左右滑</view>
+      <scroll-view
+        class="ta-tree-scroll"
+        scroll-x
+        scroll-y
+        enhanced
+        show-scrollbar
+        enable-flex
+        scroll-with-animation
+        scroll-into-view="{{scrollIntoView}}"
+      >
+        <view class="tv-wrap" wx:if="{{flowTree}}">
+          <flow-branch
+            item="{{flowTree}}"
+            connectMode="{{connectMode}}"
+            connectPhase="{{connectPhase}}"
+            connectSourceId="{{connectSourceId}}"
+            connectOptIndex="{{connectOptIndex}}"
+            bind:cardtap="onFlowCardTap"
+            bind:branchtap="onBranchTap"
+            bind:slotap="onEmptySlotTap"
+            bind:deletetap="onDeleteNode"
+            bind:addanswertap="onAddAnswerBranch"
+            bind:extendtap="onExtendNode"
+          />
         </view>
-        <view class="ta-head-actions">
-          <text bindtap="openEditTree">编辑</text>
-          <text bindtap="previewTree">预览</text>
-          <text class="danger" bindtap="deleteTree">删除</text>
+        <view class="ta-empty ta-empty--small" wx:else>
+          <text>还没有内容</text>
+          <view class="ta-primary" style="margin-top: 20rpx;" bindtap="openAddNode">＋ 写第一步</view>
         </view>
-      </view>
-
-      <view class="ta-section-head">
-        <text>节点（{{nodes.length}}）</text>
-        <view bindtap="openAddNode">＋ 新增节点</view>
-      </view>
-
-      <view class="ta-node-list" wx:if="{{nodes.length}}">
-        <view class="ta-node" wx:for="{{nodes}}" wx:key="_id">
-          <view class="ta-node-top">
-            <text class="ta-node-type">{{item.type}}</text>
-            <text class="ta-node-sort">{{item.sort}}</text>
-          </view>
-          <text class="ta-node-title">{{item.title}}</text>
-          <text class="ta-node-id" selectable>ID：{{item._id}}</text>
-          <text class="ta-node-body" wx:if="{{item.body}}">{{item.body}}</text>
-          <view class="ta-node-options" wx:if="{{item.options.length}}">
-            <text wx:for="{{item.options}}" wx:for-item="opt" wx:key="index">
-              {{opt.label}} → {{opt.nextTreeKey ? ('tree:' + opt.nextTreeKey) : opt.nextNodeId}}
-            </text>
-          </view>
-          <view class="ta-node-actions">
-            <view data-id="{{item._id}}" bindtap="openEditNode">编辑</view>
-            <view class="danger" data-id="{{item._id}}" bindtap="deleteNode">删除</view>
-          </view>
-        </view>
-      </view>
-      <view class="ta-empty ta-empty--small" wx:else>该主题还没有节点</view>
+      </scroll-view>
     </block>
   </view>
 </view>
 
-<!-- 主题编辑 -->
-<view class="ta-mask" wx:if="{{showTreeForm}}" catchtouchmove="true">
-  <view class="ta-sheet">
-    <scroll-view class="ta-sheet-scroll" scroll-y>
-      <text class="ta-sheet-title">{{treeForm._id ? '编辑主题' : '新增主题'}}</text>
-      <text class="ta-label">主题名称</text>
-      <input class="ta-input" value="{{treeForm.title}}" data-field="title" bindinput="onTreeInput" placeholder="例如：点击按钮没反应？" />
-      <text class="ta-label">主题 key</text>
-      <input class="ta-input" value="{{treeForm.key}}" data-field="key" bindinput="onTreeInput" disabled="{{treeForm._id ? true : false}}" placeholder="例如 btn_no_response" />
-      <text class="ta-label">简短说明</text>
-      <textarea class="ta-textarea ta-textarea--short" value="{{treeForm.subtitle}}" data-field="subtitle" bindinput="onTreeInput" />
-      <text class="ta-label">入口节点 ID</text>
-      <input class="ta-input" value="{{treeForm.entryNodeId}}" data-field="entryNodeId" bindinput="onTreeInput" placeholder="先保存节点，再复制 ID 回填" />
-      <text class="ta-label">适用机型（逗号分隔；留空为全部）</text>
-      <input class="ta-input" value="{{treeForm.modelTagsText}}" data-field="modelTagsText" bindinput="onTreeInput" />
-      <text class="ta-label">排序</text>
-      <input class="ta-input" type="number" value="{{treeForm.sort}}" data-field="sort" bindinput="onTreeInput" />
-      <view class="ta-switch-row">
-        <text>用户可见</text>
-        <switch checked="{{treeForm.enabled}}" bindchange="onTreeEnabled" color="#111111" />
-      </view>
-      <view class="ta-sheet-actions">
-        <view class="ta-secondary" bindtap="closeTreeForm">取消</view>
-        <view class="ta-primary {{saving ? 'disabled' : ''}}" bindtap="saveTree">{{saving ? '保存中…' : '保存主题'}}</view>
-      </view>
-    </scroll-view>
-  </view>
-</view>
+<!-- 改这一步 -->
+<view
+  class="ta-mask {{nodeFormAnimIn ? 'is-in' : ''}}"
+  wx:if="{{showNodeForm}}"
+  catchtouchmove="true"
+  bindtap="closeNodeForm"
+>
+  <view
+    class="ta-sheet ta-sheet--node {{nodeFormAnimIn ? 'is-in' : ''}} {{nodeSheetDragging ? 'is-dragging' : ''}}"
+    catchtap="stopTap"
+    style="{{nodeSheetDragStyle}}"
+  >
+    <view
+      class="ta-sheet-grab"
+      catchtouchstart="onNodeSheetTouchStart"
+      catchtouchmove="onNodeSheetTouchMove"
+      catchtouchend="onNodeSheetTouchEnd"
+      catchtouchcancel="onNodeSheetTouchEnd"
+    >
+      <view class="ta-sheet-handle"></view>
+    </view>
+    <view class="ta-sheet-head ta-sheet-head--round">
+      <text class="ta-sheet-title ta-sheet-title--round">{{nodeForm._id ? '改这一步' : '写第一步'}}</text>
+    </view>
 
-<!-- 节点编辑 -->
-<view class="ta-mask" wx:if="{{showNodeForm}}" catchtouchmove="true">
-  <view class="ta-sheet ta-sheet--node">
-    <scroll-view class="ta-sheet-scroll" scroll-y>
-      <text class="ta-sheet-title">{{nodeForm._id ? '编辑节点' : '新增节点'}}</text>
-      <text class="ta-node-id" wx:if="{{nodeForm._id}}" selectable>ID：{{nodeForm._id}}</text>
-      <text class="ta-label">节点类型</text>
-      <picker range="{{nodeTypeRange}}" bindchange="onNodeTypeChange">
-        <view class="ta-picker">{{nodeForm.type}} ›</view>
-      </picker>
-      <text class="ta-label">标题</text>
-      <input class="ta-input" value="{{nodeForm.title}}" data-field="title" bindinput="onNodeInput" />
-      <text class="ta-label">操作说明</text>
-      <textarea class="ta-textarea" value="{{nodeForm.body}}" data-field="body" bindinput="onNodeInput" />
-      <text class="ta-label">教学视频</text>
-      <view class="ta-video-pick" bindtap="chooseNodeVideo">
-        <video
-          wx:if="{{nodeTempVideoPath || nodeForm.media.url}}"
-          class="ta-video"
-          src="{{nodeTempVideoPath || nodeForm.media.url}}"
-          controls="{{false}}"
-          show-center-play-btn="{{false}}"
-        ></video>
-        <text wx:else>＋ 选择或拍摄视频</text>
-      </view>
-      <view class="ta-clear-media" wx:if="{{nodeTempVideoPath || nodeForm.media.url}}" bindtap="clearNodeVideo">移除视频</view>
-      <block wx:if="{{nodeForm.type !== 'result'}}">
-        <text class="ta-label">选项与指向（每行一个）</text>
-        <textarea
-          class="ta-textarea ta-textarea--options"
-          value="{{nodeOptionsText}}"
-          bindinput="onNodeOptionsInput"
-          placeholder="灯闪烁 | 下一节点ID&#10;进入其他主题 | tree:主题key"
-        />
-      </block>
-      <block wx:else>
-        <text class="ta-label">结果类型</text>
-        <picker range="{{nodeResultRange}}" bindchange="onNodeResultChange">
-          <view class="ta-picker">{{nodeForm.result}} ›</view>
-        </picker>
-        <text class="ta-label">结果按钮文案</text>
-        <input class="ta-input" value="{{nodeForm.resultCta}}" data-field="resultCta" bindinput="onNodeInput" placeholder="例如：去故障报修" />
-      </block>
-      <text class="ta-label">排序</text>
-      <input class="ta-input" type="number" value="{{nodeForm.sort}}" data-field="sort" bindinput="onNodeInput" />
-      <view class="ta-sheet-actions">
-        <view class="ta-secondary" bindtap="closeNodeForm">取消</view>
-        <view class="ta-primary {{saving ? 'disabled' : ''}}" bindtap="saveNode">{{saving ? '保存中…' : '保存节点'}}</view>
+    <scroll-view class="ta-sheet-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="ta-form-pad ta-form-pad--round">
+
+        <block wx:if="{{stepKind !== 'end'}}">
+          <view class="ta-round-card">
+            <text class="ta-round-label">内容</text>
+            <input
+              class="ta-round-title"
+              value="{{nodeForm.title}}"
+              data-field="title"
+              bindinput="onNodeInput"
+              placeholder="这一步叫什么？"
+              placeholder-class="ta-ph"
+            />
+            <view class="ta-round-divider"></view>
+            <textarea
+              class="ta-round-area"
+              value="{{nodeForm.body}}"
+              data-field="body"
+              bindinput="onNodeInput"
+              placeholder="补充说明（可选）"
+              placeholder-class="ta-ph"
+              auto-height
+              maxlength="1000"
+            />
+            <view class="ta-round-divider"></view>
+            <view class="ta-round-video-head" wx:if="{{nodeTempVideoPath || nodeForm.media.url}}">
+              <text class="ta-round-label ta-round-label--inline">演示视频</text>
+              <text class="ios-link-danger" catchtap="clearNodeVideo">移除</text>
+            </view>
+            <view
+              class="ta-round-video {{nodeTempVideoPath || nodeForm.media.url ? 'has-media' : ''}}"
+              bindtap="chooseNodeVideo"
+            >
+              <video
+                wx:if="{{nodeTempVideoPath || nodeForm.media.url}}"
+                class="ios-video"
+                src="{{nodeTempVideoPath || nodeForm.media.url}}"
+                controls="{{false}}"
+                show-center-play-btn="{{false}}"
+                autoplay="{{false}}"
+              ></video>
+              <view class="ta-round-video-empty" wx:else>
+                <text class="ta-round-video-icon">▶</text>
+                <text class="ta-round-video-text">添加演示视频</text>
+              </view>
+            </view>
+          </view>
+
+          <view class="ta-round-card">
+            <view class="ta-round-card-bar">
+              <text class="ta-round-label ta-round-label--inline">排查要点</text>
+              <text class="ta-round-add" bindtap="onAddKeyPointRow">＋ 添加</text>
+            </view>
+            <view class="ta-round-rule"></view>
+            <view class="ta-round-empty" wx:if="{{!keyPointRows.length}}">暂无，可跳过</view>
+            <block wx:for="{{keyPointRows}}" wx:key="_rowId">
+              <view class="ta-round-sub {{index ? 'is-split' : ''}}">
+                <view class="ta-round-sub-bar">
+                  <text class="ta-round-badge">{{index + 1}}</text>
+                  <text class="ios-link-danger" data-index="{{index}}" catchtap="onRemoveKeyPointRow">删除</text>
+                </view>
+                <input
+                  class="ta-round-input"
+                  value="{{item.title}}"
+                  data-index="{{index}}"
+                  data-field="title"
+                  bindinput="onKeyPointInput"
+                  bindblur="onKeyPointInput"
+                  placeholder="要点标题"
+                  placeholder-class="ta-ph"
+                />
+                <input
+                  class="ta-round-input ta-round-input--sub"
+                  value="{{item.detail}}"
+                  data-index="{{index}}"
+                  data-field="detail"
+                  bindinput="onKeyPointInput"
+                  bindblur="onKeyPointInput"
+                  placeholder="说明（可选）"
+                  placeholder-class="ta-ph"
+                />
+              </view>
+            </block>
+          </view>
+
+          <view class="ta-round-card">
+            <view class="ta-round-card-bar">
+              <text class="ta-round-label ta-round-label--inline">用户答案</text>
+              <text class="ta-round-add" bindtap="onAddAnswerRow" wx:if="{{answerRows.length < 4}}">＋ 添加</text>
+            </view>
+            <text class="ta-round-tip">右侧开关：选此项时要用户录视频</text>
+            <block wx:for="{{answerRows}}" wx:key="index">
+              <view class="ta-round-answer {{index ? 'is-split' : ''}}">
+                <text class="ta-round-badge">{{index + 1}}</text>
+                <input
+                  class="ta-round-input ta-round-input--flex"
+                  value="{{item.label}}"
+                  data-index="{{index}}"
+                  bindinput="onAnswerLabelInput"
+                  bindblur="onAnswerLabelInput"
+                  placeholder="{{index === 0 ? '好了' : '还不行'}}"
+                  placeholder-class="ta-ph"
+                />
+                <switch
+                  checked="{{item.requireUserVideo}}"
+                  data-index="{{index}}"
+                  bindchange="onAnswerRequireVideo"
+                  color="#34C759"
+                />
+              </view>
+            </block>
+          </view>
+        </block>
+
+        <view class="ta-round-card ta-round-card--end">
+          <view class="ta-end-switch-row">
+            <view class="ta-end-switch-copy">
+              <text class="ta-end-switch-title">结束步骤</text>
+              <text class="ta-end-switch-sub">打开后本支不再往下分叉</text>
+            </view>
+            <switch
+              checked="{{stepKind === 'end'}}"
+              bindchange="onEndStepSwitch"
+              color="#34C759"
+            />
+          </view>
+
+          <block wx:if="{{stepKind === 'end'}}">
+            <view class="ta-round-divider"></view>
+            <view
+              class="ta-round-choice ta-round-choice--nested {{resultKindIndex === 0 ? 'is-on' : ''}}"
+              data-index="0"
+              catchtap="onResultKindTap"
+            >
+              <view class="ta-round-choice-main">
+                <text class="ta-round-choice-title">正常结束</text>
+                <text class="ta-round-choice-sub">感谢选择 MT · 视频不推送</text>
+              </view>
+              <view class="ta-end-check {{resultKindIndex === 0 ? 'is-on' : ''}}"></view>
+            </view>
+            <view
+              class="ta-round-choice ta-round-choice--nested {{resultKindIndex === 1 ? 'is-on' : ''}}"
+              data-index="1"
+              catchtap="onResultKindTap"
+            >
+              <view class="ta-round-choice-main">
+                <text class="ta-round-choice-title">提交售后</text>
+                <text class="ta-round-choice-sub">等待处理 · 视频推管理员</text>
+              </view>
+              <view class="ta-end-check {{resultKindIndex === 1 ? 'is-on' : ''}}"></view>
+            </view>
+          </block>
+        </view>
+
+        <view class="ta-form-spacer ta-form-spacer--slim"></view>
       </view>
     </scroll-view>
+
+    <view class="ta-sheet-foot ta-sheet-foot--round">
+      <view class="ta-primary ta-primary--pill {{saving ? 'disabled' : ''}}" bindtap="saveNode">{{saving ? '保存中…' : '保存'}}</view>
+      <view class="ta-foot-row">
+        <text class="ta-foot-link" bindtap="closeNodeForm">取消</text>
+        <text
+          class="ta-foot-danger"
+          wx:if="{{nodeForm._id}}"
+          bindtap="onDeleteNode"
+          data-id="{{nodeForm._id}}"
+        >删除</text>
+      </view>
+    </view>
   </view>
 </view>

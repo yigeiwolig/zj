@@ -19,18 +19,19 @@
     class="tab-item {{active === 2 ? 'is-active' : ''}}"
     data-tab="kf"
     bindtap="onTap"
+    wx:if="{{showKf}}"
   >
     <text class="tab-item-label">客服</text>
     <view class="tab-item-dot"></view>
   </view>
   <view
-    class="tab-item {{active === 3 ? 'is-active' : ''}}"
+    class="tab-item {{active === (showKf ? 3 : 2) ? 'is-active' : ''}}"
     data-tab="profile"
     bindtap="onTap"
   >
     <view class="tab-item-label-wrap">
       <text class="tab-item-label">我的</text>
-      <view class="tab-item-badge" wx:if="{{profileDot && active !== 3}}"></view>
+      <view class="tab-item-badge" wx:if="{{profileDot && active !== (showKf ? 3 : 2)}}"></view>
     </view>
     <view class="tab-item-dot"></view>
   </view>

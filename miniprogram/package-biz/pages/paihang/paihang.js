@@ -370,7 +370,7 @@ Page({
   closeUserUpload() { this.setData({ showUserUpload: false }); },
 
   chooseDataImg() {
-    shopImagePrepare.chooseAndPrepare('avatar').then((path) => {
+    shopImagePrepare.chooseAndPrepare('proof').then((path) => {
       this.setData({ 'userForm.dataImg': path });
     }).catch((err) => {
       if (!shopImagePrepare.isCropCancelled(err)) console.error('[paihang] chooseDataImg', err);

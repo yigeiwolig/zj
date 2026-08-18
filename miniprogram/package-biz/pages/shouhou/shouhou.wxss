@@ -22,6 +22,17 @@ page {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+.sh-entry-gate {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 40;
+  background: transparent;
 }
 
 .sh-home-scroll {
@@ -913,6 +924,21 @@ page {
   margin-bottom: 20rpx;
 }
 
+.parts-section-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12rpx;
+  flex: 1;
+  min-width: 0;
+}
+
+.parts-section-note {
+  font-size: 22rpx;
+  color: #FF3B30;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
 .parts-table-mode-toggle {
   font-size: 22rpx;
   color: #007AFF;
@@ -1494,7 +1520,7 @@ page {
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .upload-preview-video {
@@ -2697,6 +2723,13 @@ page {
 /* [新增] 智能粘贴弹窗样式 */
 /* ============================================== */
 @import "/styles/overlay-z-index.wxss";
+/* 报修页内嵌绑定弹窗：页面级 portal 样式，避免组件隔离导致真机空白 */
+@import "/styles/hub-embed-portal.wxss";
+
+/* 真机：绑定弹窗必须压过 custom-toast，否则点「去绑定」像没反应 */
+.hub-bind-modal-portal {
+  z-index: 10000000020 !important;
+}
 
 .smart-paste-mask {
   position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -3509,7 +3542,7 @@ page {
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 /* 故障设备选择区域 */
@@ -3519,6 +3552,14 @@ page {
 .repair-no-device {
   font-size: 26rpx;
   color: #999 !important;
+}
+
+.ios-select-readonly {
+  pointer-events: none;
+}
+
+.ios-select-readonly .ios-select-arrow {
+  display: none;
 }
 
 .ctrl-variant-seg {

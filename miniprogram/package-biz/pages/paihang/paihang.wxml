@@ -202,7 +202,7 @@
                 <text class="h-dist">{{item.dist}} KM</text>
               </view>
               <view class="h-right">
-                <image wx:if="{{item.img}}" src="{{item.img}}" mode="aspectFill" class="h-thumb" lazy-load="true"></image>
+                <image wx:if="{{item.img}}" src="{{item.img}}" mode="aspectFit" class="h-thumb" lazy-load="true"></image>
                 <view wx:else class="h-icon">🏍️</view>
               </view>
             </view>
@@ -238,7 +238,7 @@
       <scroll-view scroll-y style="max-height: 70vh;">
         <view class="media-row">
           <view class="upload-box" bindtap="chooseDataImg" hover-class="btn-hover">
-            <image wx:if="{{userForm.dataImg}}" src="{{userForm.dataImg}}" mode="aspectFill" class="uploaded-img" lazy-load="true"></image>
+            <image wx:if="{{userForm.dataImg}}" src="{{userForm.dataImg}}" mode="aspectFit" class="uploaded-img" lazy-load="true"></image>
             <view wx:else class="upload-placeholder"><view class="plus-symbol">+</view><text>数据照片</text></view>
           </view>
           <view class="upload-box" bindtap="chooseVideo" hover-class="btn-hover">

@@ -1,0 +1,115 @@
+<view class="tv-unit" style="width: {{item._tw || 280}}rpx;">
+  <view
+    class="tv-card {{item._isEntry ? 'is-entry' : ''}} {{item.type === 'result' ? 'is-end' : ''}} {{connectMode && connectPhase === 'target' ? 'is-link-target' : ''}} {{connectSourceId === item._id ? 'is-source' : ''}}"
+    data-id="{{item._id}}"
+    bindtap="onCardTap"
+  >
+    <view class="tv-card-top">
+      <text class="tv-badge" wx:if="{{item._isEntry}}">开始</text>
+      <text class="tv-badge tv-badge--end" wx:elif="{{item.type === 'result'}}">结束</text>
+      <view class="tv-card-top-space"></view>
+      <text
+        class="tv-del"
+        wx:if="{{!connectMode}}"
+        data-id="{{item._id}}"
+        catchtap="onDeleteTap"
+      >删除</text>
+    </view>
+    <text class="tv-title">{{item.title}}</text>
+
+    <view class="tv-answers" wx:if="{{item.type !== 'result' && item.branches.length}}">
+      <view
+        class="tv-answer {{connectMode ? 'is-connectable' : ''}} {{connectSourceId === item._id && connectOptIndex === br.optIndex ? 'is-picked' : ''}}"
+        wx:for="{{item.branches}}"
+        wx:for-item="br"
+        wx:key="optIndex"
+        data-node-id="{{item._id}}"
+        data-opt-index="{{br.optIndex}}"
+        data-label="{{br.label}}"
+        catchtap="onBranchTap"
+      >
+        <view class="tv-answer-main">
+          <text class="tv-answer-text">{{br.label || '答案'}}</text>
+        </view>
+        <view class="tv-answer-port" aria-hidden="true"></view>
+      </view>
+    </view>
+
+    <view
+      class="tv-card-actions"
+      wx:if="{{item.type !== 'result' && !connectMode}}"
+    >
+      <text class="tv-action" data-id="{{item._id}}" catchtap="onAddAnswerTap">＋ 再加一个答案</text>
+    </view>
+  </view>
+
+  <!-- 父卡 → 横梁 → 各答案支路 → 子卡：整条链路连上 -->
+  <view
+    class="tv-branch-area"
+    wx:if="{{item.type !== 'result' && item.branches.length}}"
+    style="width: {{item._tw || 280}}rpx;"
+  >
+    <view class="tv-stem"></view>
+
+    <view class="tv-rail-wrap">
+      <view
+        class="tv-rail"
+        wx:if="{{item.branches.length > 1}}"
+        style="left: {{item._railLeft || 0}}rpx; width: {{item._railW || 0}}rpx;"
+      ></view>
+
+      <view class="tv-kids">
+        <view
+          class="tv-kid"
+          wx:for="{{item.branches}}"
+          wx:for-item="br"
+          wx:key="optIndex"
+          style="width: {{br._tw || 280}}rpx;"
+        >
+          <view class="tv-drop">
+            <view class="tv-drop-line"></view>
+            <text class="tv-wire-label">{{br.label || '答案'}}</text>
+            <view class="tv-drop-line"></view>
+            <view class="tv-drop-arrow"></view>
+          </view>
+
+          <flow-branch
+            wx:if="{{br.child}}"
+            item="{{br.child}}"
+            connectMode="{{connectMode}}"
+            connectPhase="{{connectPhase}}"
+            connectSourceId="{{connectSourceId}}"
+            connectOptIndex="{{connectOptIndex}}"
+            bind:cardtap="onCardTap"
+            bind:branchtap="onBranchTap"
+            bind:slotap="onSlotTap"
+            bind:deletetap="onDeleteTap"
+            bind:addanswertap="onAddAnswerTap"
+            bind:extendtap="onExtendTap"
+          />
+          <view
+            class="tv-slot"
+            wx:else
+            data-node-id="{{item._id}}"
+            data-opt-index="{{br.optIndex}}"
+            data-label="{{br.label}}"
+            catchtap="onSlotTap"
+          >
+            <text class="tv-slot-plus">＋</text>
+            <text>往下加一步</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <view
+    class="tv-slot tv-slot--solo"
+    wx:elif="{{item.type !== 'result' && !item.branches.length && !connectMode}}"
+    data-id="{{item._id}}"
+    catchtap="onExtendTap"
+  >
+    <text class="tv-slot-plus">＋</text>
+    <text>写两个答案并往下分叉</text>
+  </view>
+</view>

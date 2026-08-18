@@ -279,22 +279,10 @@ async function fillViewerNicknames(users) {
 
   for (let i = 0; i < openids.length; i += BATCH) {
     const batch = openids.slice(i, i + BATCH);
-    const [validRes, userListRes, buttonRes, logResults] = await Promise.all([
-      db.collection('valid_users').where({ _openid: _.in(batch) }).get(),
-      db.collection('user_list').where({ _openid: _.in(batch) }).get(),
-      db.collection('login_logbutton').where({ _openid: _.in(batch) }).get(),
-      Promise.all(batch.map(async (openid) => {
-        try {
-          const logRes = await db.collection('login_logs')
-            .where({ _openid: openid })
-            .orderBy('updateTime', 'desc')
-            .limit(1)
-            .get();
-          return { openid, log: (logRes.data && logRes.data[0]) || null };
-        } catch (e) {
-          return { openid, log: null };
-        }
-      }))
+    const [validRes, userListRes, buttonRes] = await Promise.all([
+      db.collection('valid_users').where({ _openid: _.in(batch) }).field({ _openid: true, nickname: true }).get(),
+      db.collection('user_list').where({ _openid: _.in(batch) }).field({ _openid: true, nickName: true, nickname: true }).get(),
+      db.collection('login_logbutton').where({ _openid: _.in(batch) }).field({ _openid: true, nickname: true }).get()
     ]);
 
     (validRes.data || []).forEach((row) => {
@@ -313,14 +301,27 @@ async function fillViewerNicknames(users) {
         }
       }
     });
-    logResults.forEach(({ openid, log }) => {
-      if (openid && log && log.nickname) {
-        const nick = String(log.nickname).trim();
-        if (!logMap[openid] || logMap[openid].length < nick.length) {
-          logMap[openid] = nick;
-        }
+
+    const needLogs = batch.filter((openid) => !validMap[openid] && !buttonMap[openid]);
+    if (needLogs.length) {
+      try {
+        const logRes = await db.collection('login_logs')
+          .where({ _openid: _.in(needLogs) })
+          .field({ _openid: true, nickname: true })
+          .limit(100)
+          .get();
+        (logRes.data || []).forEach((log) => {
+          if (!log || !log._openid || !log.nickname) return;
+          const nick = String(log.nickname).trim();
+          if (!nick) return;
+          if (!logMap[log._openid] || logMap[log._openid].length < nick.length) {
+            logMap[log._openid] = nick;
+          }
+        });
+      } catch (e) {
+        // 昵称回退到 user_list / 占位名即可，避免逐条查询拖垮 3s 超时
       }
-    });
+    }
   }
 
   return users.map((u) => {
@@ -604,31 +605,46 @@ exports.main = async (event = {}) => {
       return await fetchIgnoredUsersOnly();
     }
 
-    const [sessionRes, fenxiRes, screenshotRiskRes] = await Promise.all([
-      db.collection('suspicious_user_sessions').orderBy('lastActiveAt', 'desc').limit(500).get(),
-      db.collection('fenxishuju').limit(1000).get(),
-      db.collection('screenshot_risk_queue').where({ status: 'pending' }).orderBy('updateTime', 'desc').limit(500).get()
+    const safeGet = async (label, fn) => {
+      try {
+        return await fn();
+      } catch (err) {
+        const msg = String((err && err.message) || err || '');
+        if (msg.includes('collection not exists') || msg.includes('Db or Table not exist')) {
+          return { data: [] };
+        }
+        if (label === 'sessions-ordered' || label === 'screenshot-ordered') {
+          return null;
+        }
+        throw err;
+      }
+    };
+
+    let [sessionRes, fenxiRes, screenshotRiskRes, screenshotArchiveRes] = await Promise.all([
+      safeGet('sessions-ordered', () => db.collection('suspicious_user_sessions').orderBy('lastActiveAt', 'desc').limit(500).get()),
+      safeGet('fenxi', () => db.collection('fenxishuju').limit(1000).get()),
+      safeGet('screenshot-ordered', () => db.collection('screenshot_risk_queue').where({ status: 'pending' }).orderBy('updateTime', 'desc').limit(500).get()),
+      safeGet('archive', () => db.collection('suspicious_review_archive').limit(1000).get())
     ]);
+    if (!sessionRes) {
+      sessionRes = await safeGet('sessions', () => db.collection('suspicious_user_sessions').limit(500).get());
+    }
+    if (!screenshotRiskRes) {
+      screenshotRiskRes = await safeGet('screenshot', () => db.collection('screenshot_risk_queue').where({ status: 'pending' }).limit(500).get());
+    }
+
     let screenshotArchiveRowsData = [];
     const manualHandledOpenids = new Set();
     const manualHandledRowKeys = new Set();
-    try {
-      const screenshotArchiveRes = await db.collection('suspicious_review_archive').limit(1000).get();
-      const allArchiveRows = Array.isArray(screenshotArchiveRes.data) ? screenshotArchiveRes.data : [];
-      allArchiveRows.forEach((row) => {
-        if (!row || (row.decision !== 'ban' && row.decision !== 'ignore')) return;
-        if (row.sourceType === 'suspicious_manual') {
-          if (row._openid) manualHandledOpenids.add(row._openid);
-          if (row.rowKey) manualHandledRowKeys.add(row.rowKey);
-        }
-      });
-      screenshotArchiveRowsData = allArchiveRows.filter((row) => row && row.sourceType === 'screenshot_archive');
-    } catch (archiveErr) {
-      const archiveMsg = String((archiveErr && archiveErr.message) || archiveErr || '');
-      if (!archiveMsg.includes('collection not exists') && !archiveMsg.includes('Db or Table not exist')) {
-        throw archiveErr;
+    const allArchiveRows = Array.isArray(screenshotArchiveRes && screenshotArchiveRes.data) ? screenshotArchiveRes.data : [];
+    allArchiveRows.forEach((row) => {
+      if (!row || (row.decision !== 'ban' && row.decision !== 'ignore')) return;
+      if (row.sourceType === 'suspicious_manual') {
+        if (row._openid) manualHandledOpenids.add(row._openid);
+        if (row.rowKey) manualHandledRowKeys.add(row.rowKey);
       }
-    }
+    });
+    screenshotArchiveRowsData = allArchiveRows.filter((row) => row && row.sourceType === 'screenshot_archive');
 
     const sessionRows = Array.isArray(sessionRes.data) ? sessionRes.data : [];
     const fenxiRows = Array.isArray(fenxiRes.data) ? fenxiRes.data : [];
@@ -709,19 +725,15 @@ exports.main = async (event = {}) => {
       };
     }).filter(Boolean);
 
-    users = await fillViewerNicknames(users);
-    const screenshotUsersRaw = buildScreenshotSuspiciousRows(
-      Array.isArray(screenshotRiskRes.data) ? screenshotRiskRes.data : []
+    users = users.concat(
+      buildScreenshotSuspiciousRows(Array.isArray(screenshotRiskRes.data) ? screenshotRiskRes.data : []),
+      buildArchivedScreenshotRows(screenshotArchiveRowsData)
     );
-    const screenshotUsers = await fillViewerNicknames(screenshotUsersRaw);
-    users = users.concat(screenshotUsers);
-    const screenshotArchiveRowsRaw = buildArchivedScreenshotRows(
-      screenshotArchiveRowsData
-    );
-    const screenshotArchiveRows = await fillViewerNicknames(screenshotArchiveRowsRaw);
-    users = users.concat(screenshotArchiveRows);
-    const bannedOpenidSet = await fetchBannedOpenidSet(users);
-    users = users.filter((u) => !bannedOpenidSet.has(u.viewerOpenid));
+    const [filledUsers, bannedOpenidSet] = await Promise.all([
+      fillViewerNicknames(users),
+      fetchBannedOpenidSet(users)
+    ]);
+    users = filledUsers.filter((u) => !bannedOpenidSet.has(u.viewerOpenid));
     users.sort(compareBySuspicionLevel);
     return {
       success: true,

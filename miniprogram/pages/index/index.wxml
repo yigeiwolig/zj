@@ -27,38 +27,62 @@
   </view>
 </view>
 
-<!-- 闲鱼/抖音：进入后首个须知弹窗（在加微信引导之前） -->
+<!-- 入口来源：在闲鱼看到 → 售前领口令；在微信看到 → 再问是否有口令 -->
 <view class="custom-modal-mask first-time-modal-mask {{xianyuWarningModalEnterReady ? 'first-time-modal-enter-ready' : ''}} {{xianyuWarningModalClosing ? 'closing' : ''}}" wx:if="{{showXianyuWarningModal}}" catchtouchmove="noop" catchtap="noop">
   <view class="custom-modal-box first-time-modal xianyu-notice-card" catchtouchmove="noop" catchtap="noop">
     <view class="first-time-icon">👋</view>
-    <view class="first-time-title">领取访问口令</view>
+    <view class="first-time-title">你从哪里看到的？</view>
     <view class="first-time-desc-wrap">
-      <view class="first-time-desc-line xianyu-notice-lead-em">闲鱼 / 抖音用户：点「联系客服」领取访问口令</view>
-      <view class="first-time-desc-line">微信用户若已有口令，可直接填写</view>
+      <view class="first-time-desc-line">选一下你是在哪里了解到我们的</view>
     </view>
 
-    <view class="first-time-btns xianyu-notice-btns">
-      <view class="xianyu-notice-progress" wx:if="{{!xianyuWarningActionReady}}">
-        <view class="xianyu-notice-progress-track">
-          <view class="xianyu-notice-progress-fill" style="width: {{xianyuWarningProgress}}%;"></view>
-        </view>
-        <text class="xianyu-notice-wait">{{xianyuWarningActionCountdown}} 秒后可继续</text>
-      </view>
+    <view class="first-time-btns xianyu-notice-btns entry-source-btns">
       <view
-        class="first-time-btn primary {{xianyuWarningActionReady ? '' : 'is-disabled'}}"
-        bindtap="closeXianyuWarningModal"
-        hover-class="{{xianyuWarningActionReady ? 'first-time-btn-active' : ''}}"
+        class="first-time-btn entry-source-btn--xianyu"
+        data-source="xianyu"
+        bindtap="onAccessEntryFromMarketplace"
+        hover-class="first-time-btn-active"
         hover-start-time="10"
         hover-stay-time="70">
-        {{xianyuWarningActionReady ? '联系客服' : '请稍候…'}}
+        闲鱼看到的
       </view>
       <view
-        class="first-time-btn secondary {{xianyuWarningActionReady ? '' : 'is-disabled'}}"
-        bindtap="skipXianyuWarningToAccessCode"
-        hover-class="{{xianyuWarningActionReady ? 'first-time-btn-active' : ''}}"
+        class="first-time-btn entry-source-btn--wechat"
+        bindtap="onAccessEntryFromWechat"
+        hover-class="first-time-btn-active"
         hover-start-time="10"
         hover-stay-time="70">
-        {{xianyuWarningActionReady ? '我已有口令' : '我已有口令…'}}
+        微信看到的
+      </view>
+    </view>
+  </view>
+</view>
+
+<!-- 微信看到的：是否已有访问口令 -->
+<view class="custom-modal-mask first-time-modal-mask {{wechatHasCodeModalEnterReady ? 'first-time-modal-enter-ready' : ''}} {{wechatHasCodeModalClosing ? 'closing' : ''}}" wx:if="{{showWechatHasCodeModal}}" catchtouchmove="noop" catchtap="noop">
+  <view class="custom-modal-box first-time-modal xianyu-notice-card" catchtouchmove="noop" catchtap="noop">
+    <view class="first-time-icon">🔑</view>
+    <view class="first-time-title">是否有口令码？</view>
+    <view class="first-time-desc-wrap">
+      <view class="first-time-desc-line">形如 <text class="entry-code-sample">VKxxxxxxx</text> 的访问口令</view>
+    </view>
+
+    <view class="first-time-btns xianyu-notice-btns entry-source-btns">
+      <view
+        class="first-time-btn entry-source-btn--xianyu"
+        bindtap="onWechatHasAccessCode"
+        hover-class="first-time-btn-active"
+        hover-start-time="10"
+        hover-stay-time="70">
+        有口令
+      </view>
+      <view
+        class="first-time-btn entry-source-btn--wechat"
+        bindtap="onWechatNoAccessCode"
+        hover-class="first-time-btn-active"
+        hover-start-time="10"
+        hover-stay-time="70">
+        没有口令
       </view>
     </view>
   </view>
@@ -109,7 +133,7 @@
 </view>
 
 <!-- 昵称授权窗口：抖音/闲鱼引导关闭后再显示 -->
-<view class="auth-mask {{nicknameUiClosing ? 'closing' : ''}}" wx:if="{{(!isAuthorized && isShowNicknameUI && !showFirstTimeModal && !showXianyuWarningModal) || nicknameUiClosing}}" catchtouchmove="noop">
+<view class="auth-mask {{nicknameUiClosing ? 'closing' : ''}}" wx:if="{{(!isAuthorized && isShowNicknameUI && !showFirstTimeModal && !showXianyuWarningModal && !showWechatHasCodeModal) || nicknameUiClosing}}" catchtouchmove="noop">
   <view class="auth-panel-new {{nicknameUiClosing ? 'closing' : ''}}" catchtouchmove="noop">
     <view class="auth-icon-lock">✨</view>
     <view class="auth-title-new">开启专属体验</view>
@@ -188,7 +212,7 @@
       show-scrollbar="{{false}}">
       <view class="admin-nickname-container">
         <view class="admin-section-title">访问口令</view>
-        <text class="admin-section-desc">一用户一码，生成后复制发给用户；用户首次登录即自动绑定</text>
+        <text class="admin-section-desc">一用户一码，生成后 24 小时内有效；超时未使用将自动收回。用户首次登录即自动绑定</text>
 
         <view class="nickname-option">
           <view class="option-info">
@@ -225,7 +249,7 @@
               </view>
               <view class="access-code-item-actions">
                 <text class="access-code-item-btn" catchtap="copyAccessCode" data-code="{{item.accessCode}}">复制</text>
-                <text wx:if="{{!item.bound}}" class="access-code-item-btn access-code-item-btn--danger" catchtap="revokeAccessCode" data-id="{{item._id}}" data-code="{{item.accessCode}}">作废</text>
+                <text wx:if="{{!item.bound && !item.expired}}" class="access-code-item-btn access-code-item-btn--danger" catchtap="revokeAccessCode" data-id="{{item._id}}" data-code="{{item.accessCode}}">作废</text>
               </view>
             </view>
           </view>
@@ -558,6 +582,11 @@
                 <text class="admin-card-expand-hint">{{adminExpandedCardKeys[item.rowKey] ? '收起 ▲' : '展开 ▼'}}</text>
               </view>
               <text class="admin-card-summary-reason">{{item.triggerReasonText}}</text>
+              <view class="admin-card-summary-openid-row" catchtap="copyAdminNickname" data-text="{{item.viewerOpenid}}">
+                <text class="admin-card-summary-openid-k">_openid</text>
+                <text class="admin-card-summary-openid-v">{{item.viewerOpenid || '—'}}</text>
+                <text class="admin-copy-tag">复制</text>
+              </view>
               <view class="admin-card-summary-stats">
                 <view class="admin-stat-line">
                   <text class="admin-stat-label">进入</text>
@@ -580,6 +609,11 @@
                 <view class="data-chip data-chip-full data-chip-copyable" catchtap="copyAdminNickname" data-text="{{item.viewerNickname}}">
                   <text class="data-chip-k">用户昵称</text>
                   <text class="data-chip-v">{{item.viewerNickname}}</text>
+                  <text class="admin-copy-tag">复制</text>
+                </view>
+                <view class="data-chip data-chip-full data-chip-copyable" catchtap="copyAdminNickname" data-text="{{item.viewerOpenid}}">
+                  <text class="data-chip-k">_openid</text>
+                  <text class="data-chip-v data-chip-mono">{{item.viewerOpenid || '—'}}</text>
                   <text class="admin-copy-tag">复制</text>
                 </view>
                 <view class="data-chip data-chip-full">

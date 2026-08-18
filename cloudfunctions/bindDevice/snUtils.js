@@ -41,8 +41,8 @@ const WARRANTY_DAYS_BY_MODEL = {
   'F1 MAX': 365,
   'F1 ULTRA': 365,
   'F2 PRO': 180,
-  'F2 MAX': 180,
-  'F2 ULTRA': 180,
+  'F2 MAX': 365,
+  'F2 ULTRA': 365,
   'F2 Long': 365,
   'F3 PRO': 180,
   'F3 MAX': 365

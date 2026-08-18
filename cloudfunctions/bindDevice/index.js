@@ -1,7 +1,12 @@
 // cloudfunctions/bindDevice/index.js
 
 const cloud = require('wx-server-sdk')
-const { normalizeSn, snCandidates, buildActivationFields } = require('./snUtils')
+const {
+  normalizeSn,
+  snCandidates,
+  buildActivationFields,
+  warrantyDaysForModel
+} = require('./snUtils')
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV })
 
@@ -32,13 +37,218 @@ function resolvePreRegisterModel(preReg, device, myOpenid) {
   return ''
 }
 
-async function activatePreRegistered(db, _, normalizedSn, productModel, myOpenid, deviceName, device) {
-  const activation = buildActivationFields(productModel)
+/** 解析云库日期字段为 Date；无效则返回 null */
+function toValidDate(value) {
+  if (!value) return null
+  if (value instanceof Date) {
+    return isNaN(value.getTime()) ? null : value
+  }
+  if (typeof value === 'object' && value.$date != null) {
+    const d = new Date(value.$date)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? null : d
+}
+
+/**
+ * 质保起算日（不允许用「当天」兜底）：
+ * 1) 本次激活前已有普通用户蓝牙连接记录 firstBleConnectAt → 按首次连蓝牙日
+ * 2) 否则若有管理员录入日 registeredAt → 按管理员录入日
+ * 3) 都没有 → null（走 NEED_AUDIT）
+ *
+ * 注意：本函数只用「激活前已存在」的 firstBleConnectAt；
+ * 本次连接刚写下的连接时间不参与起算，避免「第一次连就激活」误当成已连过。
+ */
+function resolveWarrantyBaseDate(preReg, priorBleConnectAt) {
+  if (priorBleConnectAt) return priorBleConnectAt
+  return toValidDate(preReg && preReg.registeredAt) || null
+}
+
+async function isAdminOpenid(db, openid) {
+  if (!openid) return false
+  try {
+    const byOpenid = await db.collection('guanliyuan').where({ openid }).limit(1).get()
+    if (byOpenid.data && byOpenid.data.length > 0) return true
+    const bySystemOpenid = await db.collection('guanliyuan').where({ _openid: openid }).limit(1).get()
+    return !!(bySystemOpenid.data && bySystemOpenid.data.length > 0)
+  } catch (err) {
+    console.warn('[bindDevice] isAdminOpenid failed', err)
+    return false
+  }
+}
+
+function formatYmdLocal(d) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function addDaysLocal(d, days) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  x.setDate(x.getDate() + Number(days || 0))
+  return x
+}
+
+function remainingDaysFromExpiry(expiryDateObj) {
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const exp = new Date(
+    expiryDateObj.getFullYear(),
+    expiryDateObj.getMonth(),
+    expiryDateObj.getDate()
+  )
+  return Math.ceil((exp.getTime() - today.getTime()) / 86400000)
+}
+
+/**
+ * 普通用户连蓝牙时打点：只记第一次，不覆盖。
+ * 管理员连接不打点。
+ */
+async function stampFirstBleConnectAt(db, _, {
+  callerIsAdmin,
+  device,
+  normalizedSn,
+  myOpenid,
+  deviceName,
+  extra = {}
+}) {
+  if (callerIsAdmin) return device
+  if (device && toValidDate(device.firstBleConnectAt)) {
+    if (Object.keys(extra).length === 0) return device
+    await db.collection('sn').doc(device._id).update({ data: extra })
+    return { ...device, ...extra }
+  }
+
+  const stamp = {
+    firstBleConnectAt: db.serverDate(),
+    firstBleConnectBy: myOpenid,
+    ...extra
+  }
+
+  if (device && device._id) {
+    await db.collection('sn').doc(device._id).update({
+      data: {
+        sn: normalizedSn,
+        ...stamp
+      }
+    })
+    return { ...device, sn: normalizedSn, ...stamp, firstBleConnectAt: new Date() }
+  }
+
+  const addRes = await db.collection('sn').add({
+    data: {
+      sn: normalizedSn,
+      name: deviceName || normalizedSn,
+      openid: myOpenid,
+      isActive: false,
+      activations: 0,
+      createTime: db.serverDate(),
+      ...stamp
+    }
+  })
+  return {
+    _id: addRes._id,
+    sn: normalizedSn,
+    name: deviceName || normalizedSn,
+    openid: myOpenid,
+    isActive: false,
+    activations: 0,
+    firstBleConnectAt: new Date(),
+    firstBleConnectBy: myOpenid,
+    ...extra
+  }
+}
+
+/** 无管理员录入日、也无历史蓝牙连接：走上传截图审核 */
+async function prepareNeedAudit(db, normalizedSn, myOpenid, deviceName, device, callerIsAdmin) {
+  await stampFirstBleConnectAt(db, null, {
+    callerIsAdmin,
+    device,
+    normalizedSn,
+    myOpenid,
+    deviceName,
+    extra: {
+      openid: myOpenid,
+      name: deviceName || (device && device.name) || normalizedSn
+    }
+  })
+  // 管理员调用且库里还没有档案时，stamp 不会建档，这里补一条
+  if (callerIsAdmin && !(device && device._id)) {
+    await db.collection('sn').add({
+      data: {
+        sn: normalizedSn,
+        name: deviceName || normalizedSn,
+        openid: myOpenid,
+        isActive: false,
+        activations: 0,
+        createTime: db.serverDate()
+      }
+    })
+  }
+  return {
+    success: true,
+    status: 'NEED_AUDIT',
+    msg: '新设备，请提交审核'
+  }
+}
+
+async function activatePreRegistered(
+  db,
+  _,
+  normalizedSn,
+  productModel,
+  myOpenid,
+  deviceName,
+  device,
+  preReg,
+  priorBleConnectAt,
+  callerIsAdmin
+) {
+  // 已激活过：后续连接只更新绑定信息，不重算质保；仍补记首次蓝牙连接
+  if (device && device._id && device.isActive) {
+    await stampFirstBleConnectAt(db, _, {
+      callerIsAdmin,
+      device,
+      normalizedSn,
+      myOpenid,
+      deviceName,
+      extra: {
+        sn: normalizedSn,
+        openid: myOpenid,
+        bindCount: _.inc(1),
+        activations: _.inc(1),
+        lastBindTime: db.serverDate()
+      }
+    })
+    await applyPendingWarranty(db, _, myOpenid, normalizedSn)
+    return {
+      success: true,
+      status: 'AUTO_APPROVED',
+      msg: '绑定成功',
+      fromPreRegister: true,
+      productModel
+    }
+  }
+
+  const baseDate = resolveWarrantyBaseDate(preReg, priorBleConnectAt)
+  if (!baseDate) {
+    return await prepareNeedAudit(db, normalizedSn, myOpenid, deviceName, device, callerIsAdmin)
+  }
+
+  const activation = buildActivationFields(productModel, baseDate)
+  const totalDays = warrantyDaysForModel(productModel)
+  const expiryDateObj = addDaysLocal(baseDate, totalDays)
+  const expiryDate = formatYmdLocal(expiryDateObj)
+  const remainingRaw = remainingDaysFromExpiry(expiryDateObj)
   const bindData = {
     productModel: activation.productModel,
     firmware: activation.firmwareVer,
-    expiryDate: activation.expiryDate,
-    remainingDays: activation.remainingDays,
+    expiryDate,
+    remainingDays: remainingRaw > 0 ? remainingRaw : 0,
+    totalDays,
+    bindTime: baseDate,
     sn: normalizedSn,
     name: deviceName || normalizedSn,
     openid: myOpenid,
@@ -47,23 +257,20 @@ async function activatePreRegistered(db, _, normalizedSn, productModel, myOpenid
     bindCount: 1,
     preRegistered: false,
     snPending: false,
-    lastBindTime: db.serverDate()
+    lastBindTime: db.serverDate(),
+    warrantyBaseSource: priorBleConnectAt ? 'first_ble_connect' : 'admin_registered_at'
+  }
+
+  if (!callerIsAdmin && !priorBleConnectAt) {
+    // 第一次连蓝牙就激活：质保按管理员录入日，同时记下本次为首次蓝牙连接
+    bindData.firstBleConnectAt = db.serverDate()
+    bindData.firstBleConnectBy = myOpenid
+  } else if (priorBleConnectAt) {
+    bindData.firstBleConnectAt = priorBleConnectAt
   }
 
   if (device && device._id) {
-    if (device.isActive) {
-      await db.collection('sn').doc(device._id).update({
-        data: {
-          sn: normalizedSn,
-          openid: myOpenid,
-          bindCount: _.inc(1),
-          activations: _.inc(1),
-          lastBindTime: db.serverDate()
-        }
-      })
-    } else {
-      await db.collection('sn').doc(device._id).update({ data: bindData })
-    }
+    await db.collection('sn').doc(device._id).update({ data: bindData })
   } else {
     await db.collection('sn').add({
       data: { ...bindData, createTime: db.serverDate() }
@@ -76,7 +283,8 @@ async function activatePreRegistered(db, _, normalizedSn, productModel, myOpenid
     status: 'AUTO_APPROVED',
     msg: '绑定成功',
     fromPreRegister: true,
-    productModel
+    productModel,
+    warrantyBaseSource: bindData.warrantyBaseSource
   }
 }
 
@@ -85,13 +293,16 @@ exports.main = async (event, context) => {
   const _ = db.command
   const wxContext = cloud.getWXContext()
   const myOpenid = wxContext.OPENID
-  const normalizedSn = normalizeSn(event.sn)
-  const { deviceName } = event
 
   try {
+    const normalizedSn = normalizeSn(event.sn)
+    const { deviceName } = event
+
     if (!normalizedSn) {
       return { success: false, msg: 'SN 不能为空' }
     }
+
+    const callerIsAdmin = await isAdminOpenid(db, myOpenid)
 
     const pendingBlock = await db.collection('sn').where({
       openid: myOpenid,
@@ -115,8 +326,13 @@ exports.main = async (event, context) => {
     }).limit(1).get()
     if (faultAutoBindRes.data.length > 0) {
       const card = faultAutoBindRes.data[0]
-      await db.collection('sn').doc(card._id).update({
-        data: {
+      await stampFirstBleConnectAt(db, _, {
+        callerIsAdmin,
+        device: card,
+        normalizedSn,
+        myOpenid,
+        deviceName,
+        extra: {
           sn: normalizedSn,
           name: deviceName || normalizedSn,
           faultAutoBind: false,
@@ -139,7 +355,9 @@ exports.main = async (event, context) => {
 
     const preReg = await findPreRegister(db, _, normalizedSn)
     const res = await db.collection('sn').where({ sn: _.in(candidates) }).get()
-    const device = res.data.length > 0 ? res.data[0] : null
+    let device = res.data.length > 0 ? res.data[0] : null
+    // 激活前已存在的首次蓝牙连接（不含本次刚连）
+    const priorBleConnectAt = callerIsAdmin ? null : toValidDate(device && device.firstBleConnectAt)
 
     if (device && device.deviceStatus === 'scrapped') {
       return { success: false, status: 'SCRAPPED', msg: '该设备已报废，无法连接' }
@@ -159,37 +377,76 @@ exports.main = async (event, context) => {
     const productModel = resolvePreRegisterModel(preReg, device, myOpenid)
     if (productModel) {
       if (device && device.openid === myOpenid && device.isActive) {
-        if (device.sn !== normalizedSn) {
-          await db.collection('sn').doc(device._id).update({ data: { sn: normalizedSn } })
-        }
+        await stampFirstBleConnectAt(db, _, {
+          callerIsAdmin,
+          device,
+          normalizedSn,
+          myOpenid,
+          deviceName,
+          extra: device.sn !== normalizedSn ? { sn: normalizedSn } : {}
+        })
         await applyPendingWarranty(db, _, myOpenid, normalizedSn)
         return { success: true, status: 'AUTO_APPROVED', msg: '设备已连接', fromPreRegister: true }
       }
-      return await activatePreRegistered(db, _, normalizedSn, productModel, myOpenid, deviceName, device)
+      return await activatePreRegistered(
+        db,
+        _,
+        normalizedSn,
+        productModel,
+        myOpenid,
+        deviceName,
+        device,
+        preReg,
+        priorBleConnectAt,
+        callerIsAdmin
+      )
     }
 
     if (res.data.length === 0) {
-      await db.collection('sn').add({
-        data: {
-          sn: normalizedSn,
-          name: deviceName,
-          openid: myOpenid,
-          isActive: false,
-          activations: 0,
-          createTime: db.serverDate()
-        }
+      await stampFirstBleConnectAt(db, _, {
+        callerIsAdmin,
+        device: null,
+        normalizedSn,
+        myOpenid,
+        deviceName,
+        extra: {}
       })
+      // 管理员连且无档案时仍建一条待审
+      if (callerIsAdmin) {
+        await db.collection('sn').add({
+          data: {
+            sn: normalizedSn,
+            name: deviceName,
+            openid: myOpenid,
+            isActive: false,
+            activations: 0,
+            createTime: db.serverDate()
+          }
+        })
+      }
       return { success: true, status: 'NEED_AUDIT', msg: '新设备，请提交审核' }
     }
 
     if (device.openid === myOpenid) {
       if (device.isActive) {
-        if (device.sn !== normalizedSn) {
-          await db.collection('sn').doc(device._id).update({ data: { sn: normalizedSn } })
-        }
+        await stampFirstBleConnectAt(db, _, {
+          callerIsAdmin,
+          device,
+          normalizedSn,
+          myOpenid,
+          deviceName,
+          extra: device.sn !== normalizedSn ? { sn: normalizedSn } : {}
+        })
         await applyPendingWarranty(db, _, myOpenid, normalizedSn)
         return { success: true, status: 'AUTO_APPROVED', msg: '设备已连接' }
       }
+      await stampFirstBleConnectAt(db, _, {
+        callerIsAdmin,
+        device,
+        normalizedSn,
+        myOpenid,
+        deviceName
+      })
       return { success: true, status: 'NEED_AUDIT', msg: '审核未通过，请继续' }
     }
 
@@ -203,8 +460,13 @@ exports.main = async (event, context) => {
       if (fresh && fresh.openid && fresh.openid !== '' && fresh.openid !== myOpenid) {
         return { success: false, status: 'LOCKED', msg: '设备已被绑定，请联系原主解绑' }
       }
-      await db.collection('sn').doc(device._id).update({
-        data: {
+      await stampFirstBleConnectAt(db, _, {
+        callerIsAdmin,
+        device: fresh || device,
+        normalizedSn,
+        myOpenid,
+        deviceName,
+        extra: {
           sn: normalizedSn,
           openid: myOpenid,
           bindCount: _.inc(1),
@@ -222,7 +484,14 @@ exports.main = async (event, context) => {
     if (freshDev && freshDev.openid && freshDev.openid !== '' && freshDev.openid !== myOpenid) {
       return { success: false, status: 'LOCKED', msg: '设备已被绑定，请联系原主解绑' }
     }
-    await db.collection('sn').doc(device._id).update({ data: { openid: myOpenid, sn: normalizedSn } })
+    await stampFirstBleConnectAt(db, _, {
+      callerIsAdmin,
+      device: freshDev || device,
+      normalizedSn,
+      myOpenid,
+      deviceName,
+      extra: { openid: myOpenid, sn: normalizedSn }
+    })
     return { success: true, status: 'NEED_AUDIT', msg: '请提交审核' }
   } catch (err) {
     console.error('[bindDevice] 云函数执行失败:', err)

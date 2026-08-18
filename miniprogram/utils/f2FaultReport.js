@@ -35,7 +35,7 @@ function parseF2StatusLine(line) {
     const n = parseInt(m[1], 10);
     return Number.isFinite(n) ? n : null;
   };
-  return {
+  const out = {
     ang: pick(/ANG:(\d+)/),
     acc: pick(/\|ACC:(\d+)/),
     btn: pick(/\|BTN:(\d+)/),
@@ -71,6 +71,7 @@ function parseF2StatusLine(line) {
     ss: pick(/\|SS:(\d+)/),
     bs: pick(/\|BS:(\d+)/),
     ird: pick(/\|IRD:(-?\d+)/),
+    ipk: pick(/\|IPK:(-?\d+)/),
     iev: pick(/\|IEV:(\d+)/),
     cal: pick(/\|CAL:(\d+)/),
     calm: pick(/\|CALM:(\d+)/),
@@ -84,9 +85,11 @@ function parseF2StatusLine(line) {
     mot: pick(/\|MOT:(\d+)/),
     tkf: pick(/\|TKF:(\d+)/),
     pol: pick(/\|POL:(\d+)/),
+    bp: pick(/\|BP:(\d+)/),
     hf: pick(/\|HF:(\d+)/),
     f3w: pick(/\|F3W:(\d+)/),
   };
+  return out;
 }
 
 function buildF2SettingStateFromPacket(parsed, currentState, options) {
@@ -176,6 +179,14 @@ function buildF2SettingStateFromPacket(parsed, currentState, options) {
     }
   }
 
+  if (isF3Max && (parsed.bp === 0 || parsed.bp === 1)) {
+    const v = parsed.bp === 1 ? 'left' : 'right';
+    if (force || base.bootPinDetect !== v) {
+      base.bootPinDetect = v;
+      changed = true;
+    }
+  }
+
   if (isF3Max && parsed.hf !== null && parsed.hf !== undefined) {
     const vMon = (parsed.hf & 1) ? 'left' : 'right';
     if (force || base.heightMon !== vMon) {
@@ -215,6 +226,10 @@ function buildF2SettingVerifyExpectation(key, targetVal, options) {
       return { stb: targetVal === 'left' ? 1 : 0 };
     case 'powerOffLock':
       return { pol: targetVal === 'left' ? 1 : 0 };
+    case 'bootPinDetect':
+      return null; // 固件省闪存无 |BP:| 回读
+    case 'multiRetry':
+      return null;
     case 'heightMon':
       return { hfMon: targetVal === 'left' ? 1 : 0 };
     default:
@@ -231,8 +246,8 @@ function packetMatchesBleVerify(parsed, verify) {
     if (!exp) return true;
     return Object.keys(exp).every((field) => {
       if (field === 'hfMon') return parsed.hf != null && (parsed.hf & 1) === exp.hfMon;
-      // 状态包缺字段时不要当失败（例如 F3 MAX 省闪存无 |STB:|），交给超时/跳过校验处理
-      if (parsed[field] == null) return false;
+      // 状态包缺字段时跳过该项（F3 省闪存无 |POL:|/|PWR:| 等），避免误报「数据发送不成功」
+      if (parsed[field] == null) return true;
       return parsed[field] === exp[field];
     });
   }

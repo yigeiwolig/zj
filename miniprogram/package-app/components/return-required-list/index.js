@@ -16,13 +16,34 @@ Component({
   data: {
     expandedMap: {}
   },
+  observers: {
+    list(list) {
+      const rows = Array.isArray(list) ? list : [];
+      if (!rows.length || this.properties.simple) {
+        if (!rows.length) this.setData({ expandedMap: {} });
+        return;
+      }
+      const expandedMap = Object.assign({}, this.data.expandedMap || {});
+      const validIds = {};
+      rows.forEach((row) => {
+        if (row && row._id) validIds[row._id] = true;
+      });
+      Object.keys(expandedMap).forEach((id) => {
+        if (!validIds[id]) delete expandedMap[id];
+      });
+      this.setData({ expandedMap });
+    }
+  },
   methods: {
     onToggleExpand(e) {
       const id = String((e && e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.id) || '').trim();
       if (!id) return;
-      const next = Object.assign({}, this.data.expandedMap || {});
-      next[id] = !next[id];
-      this.setData({ expandedMap: next });
+      const currentlyOpen = !!((this.data.expandedMap || {})[id]);
+      if (currentlyOpen) {
+        this.setData({ expandedMap: {} });
+        return;
+      }
+      this.setData({ expandedMap: { [id]: true } });
     },
     emitAction(type, e) {
       const ds = (e && e.currentTarget && e.currentTarget.dataset) || {};

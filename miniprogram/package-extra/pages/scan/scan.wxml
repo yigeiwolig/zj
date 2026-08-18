@@ -21,6 +21,25 @@
       <text class="f3-sensor-switch-text">{{f3SensorUiSwitchHint || '正在切换界面…'}}</text>
     </view>
   </view>
+  <!-- 打开角度页：蓝牙掉线拦截（z-index 低于 .header，左上角返回键仍可点） -->
+  <view
+    class="oa-ble-lost-mask"
+    wx:if="{{openAngleBleLostVisible}}"
+    catchtouchstart="noop"
+    catchtouchmove="noop"
+    catchtouchend="noop"
+    catchtouchcancel="noop"
+    catchtap="noop">
+    <view class="oa-ble-lost-card">
+      <view class="oa-ble-lost-spinner" wx:if="{{openAngleBleLostRetrying}}"></view>
+      <view class="oa-ble-lost-warn" wx:else>!</view>
+      <text class="oa-ble-lost-title">{{openAngleBleLostRetrying ? '蓝牙正在重连中' : '蓝牙已断开'}}</text>
+      <text class="oa-ble-lost-desc">请靠近车辆，重连成功后可继续调整角度</text>
+      <view class="oa-ble-lost-btn" wx:if="{{!openAngleBleLostRetrying}}" catchtap="retryOpenAngleBleLink">重新连接</view>
+      <text class="oa-ble-lost-tip">如需退出，请点左上角返回</text>
+    </view>
+  </view>
+
   <!-- 自定义导航栏 -->
   <view class="header" style="padding-top: {{statusBarHeight}}px;">
     <view class="back-icon" catchtap="goBack" style="top: {{statusBarHeight + 10}}px;">
@@ -259,6 +278,26 @@
   <!-- ======================= -->
   <!-- 新增：自动校准中弹窗 -->
   <!-- ======================= -->
+  <view class="password-modal-mask" wx:if="{{showAutoCalGuideModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box" catchtouchmove="noop" catchtap="noop">
+      <view class="pass-title" style="margin-bottom: 40rpx;">自动校准前确认</view>
+      <view class="anim-stage">
+        <view class="ring-btn-wrapper {{autoCalGuideBtnPressing ? 'pressing' : ''}}">
+          <view class="ring-outer {{autoCalGuideBtnLightOn ? 'light-on' : ''}}">
+            <view class="ring-inner"><text class="ring-inner-text">MT</text></view>
+          </view>
+          <view class="sim-finger-tap" wx:if="{{autoCalGuideBtnPressing}}"></view>
+        </view>
+        <text class="anim-desc">{{autoCalGuideText}}</text>
+        <text class="pass-desc" wx:if="{{autoCalGuideHint}}">{{autoCalGuideHint}}</text>
+      </view>
+      <view class="pass-btns auto-cal-guide-btns">
+        <view class="p-btn confirm" catchtap="onAutoCalGuideMoved">转动了</view>
+        <view class="p-btn cancel" catchtap="onAutoCalGuideNotMoved">未转动</view>
+      </view>
+    </view>
+  </view>
+
   <view class="password-modal-mask {{calibratingModalClosing ? 'closing' : ''}}" wx:if="{{showCalibratingModal}}" catchtouchmove="noop" catchtap="noop">
     <view class="password-box" catchtouchmove="noop" catchtap="noop">
       <view class="calibrating-icon-wrap">
@@ -346,7 +385,7 @@
       <view class="anim-stage">
         <view class="ring-btn-wrapper {{animIsPressing ? 'pressing' : ''}}">
            <view class="ring-outer {{animLightOn ? 'light-on' : ''}}">
-             <view class="ring-inner"></view>
+             <view class="ring-inner"><text class="ring-inner-text">MT</text></view>
            </view>
            <view class="sim-finger-tap" wx:if="{{animIsPressing}}"></view>
         </view>
@@ -685,7 +724,7 @@
               </view>
               <view class="f3-att-side left {{f3AttitudeSide === '左倾' ? 'on' : ''}}">左</view>
               <view class="f3-att-stage {{f3BumpActive ? 'bump' : ''}}">
-                <view class="f3-att-cube" style="transform: rotateX(-22deg) rotateZ({{f3AttitudeRollDeg}}deg);">
+                <view class="f3-att-cube" style="transform: rotateX(-22deg) rotateZ({{-f3AttitudeRollDeg}}deg);">
                   <view class="f3-att-face front"></view>
                   <view class="f3-att-face back"></view>
                   <view class="f3-att-face right"></view>
@@ -790,6 +829,13 @@
             <view class="single-btn-wrapper" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
               <view class="single-btn demo-mode-entry-btn" bindtap="openF2DemoModal">
                 <text class="btn-text">演示模式</text>
+              </view>
+            </view>
+
+            <!-- F1 / F2 Ultra：定点折叠（测试版） -->
+            <view class="single-btn-wrapper" wx:if="{{filters.isF2UltraFirmware(currentModel.name, currentModel.type)}}">
+              <view class="single-btn demo-mode-entry-btn" bindtap="openGeoFoldModal">
+                <text class="btn-text">定点折叠（测试）{{geoFoldTracking ? ' · 跟踪中' : ''}}</text>
               </view>
             </view>
 
@@ -1147,6 +1193,32 @@
           </view>
         </view>
 
+        <view class="setting-row" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type)}}">
+          <view class="row-info row-info-wide">
+            <text class="label-main">开机插销检测</text>
+            <text class="label-sub">开：item→item-15→item-10；关：直达 item-10</text>
+          </view>
+          <view class="mag-track" data-key="bootPinDetect" data-state="{{settingState.bootPinDetect}}">
+            <view class="click-pad left" catchtap="handleMagClick" data-key="bootPinDetect" data-val="left"></view>
+            <view class="click-pad right" catchtap="handleMagClick" data-key="bootPinDetect" data-val="right"></view>
+            <view class="track-labels"><text class="t-txt l">开启</text><text class="t-txt r">关闭</text></view>
+            <view class="mag-thumb"></view>
+          </view>
+        </view>
+
+        <view class="setting-row" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type)}}">
+          <view class="row-info row-info-wide">
+            <text class="label-main">多次重试</text>
+            <text class="label-sub">堵转报错后点执行，再跑 item↔item-10</text>
+          </view>
+          <view class="mag-track" data-key="multiRetry" data-state="{{settingState.multiRetry}}">
+            <view class="click-pad left" catchtap="handleMagClick" data-key="multiRetry" data-val="left"></view>
+            <view class="click-pad right" catchtap="handleMagClick" data-key="multiRetry" data-val="right"></view>
+            <view class="track-labels"><text class="t-txt l">执行</text><text class="t-txt r">待命</text></view>
+            <view class="mag-thumb"></view>
+          </view>
+        </view>
+
         <view class="setting-row" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
           <view class="row-info row-info-wide">
             <text class="label-main">隐蔽模式退出</text>
@@ -1387,7 +1459,7 @@
       <view class="anim-stage">
         <view class="ring-btn-wrapper {{openAngleAnimIsPressing ? 'pressing' : ''}}" bindtap="toggleOpenAngleLight">
           <view class="ring-outer {{openAngleAnimLightOn ? 'light-on' : ''}}">
-            <view class="ring-inner"></view>
+            <view class="ring-inner"><text class="ring-inner-text">MT</text></view>
           </view>
           <view class="sim-finger-tap" wx:if="{{openAngleAnimIsPressing}}"></view>
         </view>
@@ -1512,7 +1584,7 @@
         <!-- 模拟车把按钮结构 -->
         <view class="ring-btn-wrapper {{stealthAnimPressing ? 'pressing' : ''}}">
            <view class="ring-outer {{stealthAnimLight ? 'light-on' : ''}}">
-             <view class="ring-inner"></view>
+             <view class="ring-inner"><text class="ring-inner-text">MT</text></view>
            </view>
            <!-- 手指按压提示 -->
            <view class="sim-finger-tap" wx:if="{{stealthAnimPressing}}"></view>
@@ -1522,8 +1594,8 @@
       </view>
 
       <view class="pass-btns">
-        <view class="p-btn confirm full-width {{stealthTutorialBtnDisabled ? 'disabled' : ''}}" bindtap="closeStealthTutorial" wx:if="{{!stealthTutorialBtnDisabled}}">知道了</view>
-        <view class="p-btn confirm full-width disabled" wx:else>知道了</view>
+        <view class="p-btn confirm full-width {{stealthTutorialBtnDisabled ? 'disabled' : ''}}" bindtap="closeStealthTutorial" wx:if="{{!stealthTutorialBtnDisabled}}">{{stealthTutorialConfirmText || '知道了'}}</view>
+        <view class="p-btn confirm full-width disabled" wx:else>{{stealthTutorialConfirmText || '知道了'}}</view>
       </view>
     </view>
   </view>
@@ -1618,19 +1690,217 @@
     </view>
   </view>
 
+  <!-- ======================= -->
+  <!-- F2 ULTRA 定点折叠（测试版） -->
+  <view class="password-modal-mask" wx:if="{{showGeoFoldModal}}" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box geo-fold-box" catchtap="noop">
+      <view class="modal-close-x" bindtap="closeGeoFoldModal">✕</view>
+      <view class="pass-title">定点折叠（测试）</view>
+
+      <scroll-view scroll-y class="geo-fold-scroll" enhanced show-scrollbar="{{false}}">
+        <view class="geo-fold-panel">
+          <view class="geo-fold-panel-title">实时状态</view>
+          <view class="gf-grid">
+            <view class="gf-cell"><text class="gf-k">状态</text><text class="gf-v {{geoFoldTracking ? 'live' : ''}}">{{geoFoldStatusText}}</text></view>
+            <view class="gf-cell"><text class="gf-k">当前距离</text><text class="gf-v">{{geoFoldDistanceText}}</text></view>
+            <view class="gf-cell"><text class="gf-k">目标圈</text><text class="gf-v">{{geoFoldRadiusText}}</text></view>
+            <view class="gf-cell"><text class="gf-k">预计进圈</text><text class="gf-v">{{geoFoldEtaText}}</text></view>
+            <view class="gf-cell"><text class="gf-k">速度</text><text class="gf-v">{{geoFoldSpeedText}}</text></view>
+            <view class="gf-cell"><text class="gf-k">定位精度</text><text class="gf-v">{{geoFoldAccuracyText}}</text></view>
+            <view class="gf-cell"><text class="gf-k">距离趋势</text><text class="gf-v">{{geoFoldTrendText}}</text></view>
+            <view class="gf-cell"><text class="gf-k">连续命中</text><text class="gf-v">{{geoFoldHitText}}</text></view>
+            <view class="gf-cell"><text class="gf-k">采样</text><text class="gf-v">{{geoFoldSampleCount}} 次 · {{geoFoldLastAt}}</text></view>
+          </view>
+        </view>
+
+        <view class="geo-fold-panel">
+          <view class="geo-fold-panel-title">目标点位</view>
+          <view class="gf-point">{{geoFoldPointText}}</view>
+          <view class="gf-btn-row">
+            <view class="gf-mini-btn {{geoFoldCapturingPoint ? 'ghost' : ''}}" catchtap="useCurrentAsGeoFoldPoint">
+              {{geoFoldCapturingPoint ? '校准中…' : '用当前位置'}}
+            </view>
+            <view class="gf-mini-btn" catchtap="chooseGeoFoldPoint">地图选点</view>
+            <view class="gf-mini-btn ghost" catchtap="clearGeoFoldPoint">清除</view>
+          </view>
+          <text class="gf-row-hint">「用当前位置」会连采多次，精度合格且位置聚拢后才写入，减少飘点设偏</text>
+        </view>
+
+        <view class="geo-fold-panel">
+          <view class="geo-fold-panel-title">触发参数</view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">目标圈半径</text>
+            <view class="gf-gears">
+              <view wx:for="{{geoFoldOptions.baseRadius}}" wx:key="value"
+                class="gf-gear {{geoFoldCfg.baseRadius === item.value ? 'on' : ''}}"
+                data-key="baseRadius" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
+            </view>
+            <text class="gf-row-hint">以设点为圆心画圆；碰到圆周任意一边（东/南/西/北都行）即算到达</text>
+          </view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">提前发令</text>
+            <view class="gf-gears">
+              <view wx:for="{{geoFoldOptions.leadSec}}" wx:key="value"
+                class="gf-gear {{geoFoldCfg.leadSec === item.value ? 'on' : ''}}"
+                data-key="leadSec" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
+            </view>
+            <text class="gf-row-hint">连续靠近稳定后，预计还要 N 秒碰到圆边时提前发令</text>
+          </view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">判定间隔</text>
+            <view class="gf-gears">
+              <view wx:for="{{geoFoldOptions.pollMs}}" wx:key="value"
+                class="gf-gear {{geoFoldCfg.pollMs === item.value ? 'on' : ''}}"
+                data-key="pollMs" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
+            </view>
+          </view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">连续命中</text>
+            <view class="gf-gears">
+              <view wx:for="{{geoFoldOptions.confirmHits}}" wx:key="value"
+                class="gf-gear {{geoFoldCfg.confirmHits === item.value ? 'on' : ''}}"
+                data-key="confirmHits" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
+            </view>
+            <text class="gf-row-hint">连续几次可信命中才动作；默认 3 次，抗 GPS 单次乱跳</text>
+          </view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">车速上限</text>
+            <view class="gf-gears">
+              <view wx:for="{{geoFoldOptions.maxSpeedKmh}}" wx:key="value"
+                class="gf-gear {{geoFoldCfg.maxSpeedKmh === item.value ? 'on' : ''}}"
+                data-key="maxSpeedKmh" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
+            </view>
+            <text class="gf-row-hint">单位 km/h，超过就不折，避免高速路过误触发</text>
+          </view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">精度门槛</text>
+            <view class="gf-gears">
+              <view wx:for="{{geoFoldOptions.accuracyLimit}}" wx:key="value"
+                class="gf-gear {{geoFoldCfg.accuracyLimit === item.value ? 'on' : ''}}"
+                data-key="accuracyLimit" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
+            </view>
+            <text class="gf-row-hint">定位精度差于该值的样本直接作废；默认 30m，城区建议不要放太宽</text>
+          </view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">到点动作</text>
+            <view class="gf-gears">
+              <view class="gf-gear {{geoFoldCfg.triggerCmd === '关闭' ? 'on' : ''}}" data-cmd="关闭" catchtap="onGeoFoldCmdTap">收起</view>
+              <view class="gf-gear {{geoFoldCfg.triggerCmd === '打开' ? 'on' : ''}}" data-cmd="打开" catchtap="onGeoFoldCmdTap">翻开</view>
+            </view>
+          </view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">仅靠近时触发</text>
+            <view class="gf-gears">
+              <view class="gf-gear {{geoFoldCfg.requireApproaching ? 'on' : ''}}" data-key="requireApproaching" data-val="1" catchtap="onGeoFoldSwitchTap">开</view>
+              <view class="gf-gear {{!geoFoldCfg.requireApproaching ? 'on' : ''}}" data-key="requireApproaching" data-val="0" catchtap="onGeoFoldSwitchTap">关</view>
+            </view>
+            <text class="gf-row-hint">距离持续变小（或已在圈内）才算命中，过滤 GPS 抖动与路过</text>
+          </view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">触发后停止</text>
+            <view class="gf-gears">
+              <view class="gf-gear {{geoFoldCfg.autoStopAfterFire ? 'on' : ''}}" data-key="autoStopAfterFire" data-val="1" catchtap="onGeoFoldSwitchTap">开</view>
+              <view class="gf-gear {{!geoFoldCfg.autoStopAfterFire ? 'on' : ''}}" data-key="autoStopAfterFire" data-val="0" catchtap="onGeoFoldSwitchTap">关</view>
+            </view>
+            <text class="gf-row-hint">关掉可以在同一点位反复测试</text>
+          </view>
+
+          <view class="gf-row">
+            <text class="gf-row-label">触发震动</text>
+            <view class="gf-gears">
+              <view class="gf-gear {{geoFoldCfg.vibrateOnFire ? 'on' : ''}}" data-key="vibrateOnFire" data-val="1" catchtap="onGeoFoldSwitchTap">开</view>
+              <view class="gf-gear {{!geoFoldCfg.vibrateOnFire ? 'on' : ''}}" data-key="vibrateOnFire" data-val="0" catchtap="onGeoFoldSwitchTap">关</view>
+            </view>
+          </view>
+        </view>
+
+        <view class="geo-fold-panel">
+          <view class="geo-fold-panel-title">日志</view>
+          <view class="gf-log-empty" wx:if="{{geoFoldLogs.length === 0}}">暂无记录</view>
+          <view class="gf-log" wx:for="{{geoFoldLogs}}" wx:key="id">
+            <text class="gf-log-ts">{{item.ts}}</text>
+            <text class="gf-log-text">{{item.text}}</text>
+          </view>
+        </view>
+      </scroll-view>
+
+      <view class="pass-btns geo-fold-actions">
+        <view class="p-btn cancel" catchtap="simulateGeoFoldTrigger">模拟触发</view>
+        <view class="p-btn confirm" catchtap="toggleGeoFoldTracking">{{geoFoldTracking ? '停止跟踪' : '开始跟踪'}}</view>
+      </view>
+      <view class="gf-foot-note">只在本页前台生效：熄屏或切走会自动停止跟踪</view>
+    </view>
+  </view>
+
   <!-- 8. 出厂设置弹窗 -->
   <!-- ======================= -->
   <view class="password-modal-mask" wx:if="{{showFactoryResetModal}}" catchtouchmove="noop" catchtap="noop">
-    <view class="password-box" catchtouchmove="noop" catchtap="noop">
+    <view class="password-box {{factoryResetSteps[factoryResetStep].kind === 'embedOpenAngle' ? 'password-box--factory-wide' : ''}}" catchtouchmove="noop" catchtap="noop">
       <!-- 右上角关闭按钮（中断出厂设置） -->
       <view class="modal-close-x" bindtap="cancelFactoryReset">✕</view>
       <view class="pass-title" style="margin-bottom: 40rpx;">
         出厂设置
       </view>
       
-      <!-- 当前步骤文字 -->
       <view class="factory-reset-content">
-        <text class="factory-reset-text">{{factoryResetSteps[factoryResetStep].text}}</text>
+        <!-- 普通文字步骤 -->
+        <block wx:if="{{factoryResetSteps[factoryResetStep].kind !== 'buttonAnimOnce' && factoryResetSteps[factoryResetStep].kind !== 'embedOpenAngle' && factoryResetSteps[factoryResetStep].kind !== 'foldFineTune'}}">
+          <text class="factory-reset-text">{{factoryResetSteps[factoryResetStep].text}}</text>
+        </block>
+
+        <!-- 按钮变红动画（播一次） -->
+        <block wx:if="{{factoryResetSteps[factoryResetStep].kind === 'buttonAnimOnce'}}">
+          <view class="fr-btn-anim-stage">
+            <view class="ring-btn-wrapper {{factoryResetBtnAnimPressing ? 'pressing' : ''}}">
+              <view class="ring-outer {{factoryResetBtnAnimLightOn ? 'light-on' : ''}}">
+                <view class="ring-inner"><text class="ring-inner-text">MT</text></view>
+              </view>
+            </view>
+            <text class="factory-reset-text">{{factoryResetBtnAnimText}}</text>
+          </view>
+        </block>
+
+        <!-- 嵌入打开角度波轮 -->
+        <block wx:if="{{factoryResetSteps[factoryResetStep].kind === 'embedOpenAngle'}}">
+          <text class="factory-reset-text factory-reset-text--compact">{{factoryResetSteps[factoryResetStep].text}}</text>
+          <view class="fr-open-angle-embed">
+            <view class="fr-open-angle-value">{{openAngleUiActive ? filters.openAngleDisplayDeg(currentModel.name, currentModel.type, currentAngle) : '—'}}</view>
+            <view class="ruler-wave-area fr-ruler-wave-area" catchtouchstart="onTouchStart" catchtouchmove="onTouchMove" catchtouchend="onRulerTouchEnd" catchtouchcancel="onRulerTouchEnd">
+              <view class="mask-fade left"></view>
+              <view class="mask-fade right"></view>
+              <view class="wave-track" style="transform: translateX({{translateX}}px);">
+                <block wx:for="{{[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]}}" wx:key="index">
+                  <view class="bar {{filters.getWaveClassByX(-100 + index, translateX)}}" style="{{index === 0 ? 'margin-left: -2000px;' : ''}}"></view>
+                </block>
+                <block wx:for="{{ticks}}" wx:key="index">
+                  <view class="bar {{filters.getWaveClassByX(index, translateX)}}"></view>
+                </block>
+                <block wx:for="{{[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]}}" wx:key="index">
+                  <view class="bar {{filters.getWaveClassByX((ticks.length || 91) + index, translateX)}}"></view>
+                </block>
+              </view>
+            </view>
+          </view>
+        </block>
+
+        <!-- 折叠间隙微调 -->
+        <block wx:if="{{factoryResetSteps[factoryResetStep].kind === 'foldFineTune'}}">
+          <text class="factory-reset-text">{{factoryResetSteps[factoryResetStep].text}}</text>
+          <text class="factory-reset-sub" wx:if="{{factoryResetSteps[factoryResetStep].subText}}">{{factoryResetSteps[factoryResetStep].subText}}</text>
+          <view class="fr-fold-tune-row">
+            <view class="fr-fold-tune-btn" catchtap="onFactoryResetFoldAdjust" data-action="left">调大</view>
+            <view class="fr-fold-tune-btn" catchtap="onFactoryResetFoldAdjust" data-action="right">调小</view>
+          </view>
+        </block>
         
         <!-- 自动调平时的旋转动画 -->
         <view class="leveling-animation" wx:if="{{factoryResetSteps[factoryResetStep].isLeveling}}">
@@ -1640,9 +1910,15 @@
         </view>
       </view>
 
-      <!-- 确认按钮：在初始化角度阶段和最后一步（isFinal）显示 -->
+      <!-- 确认按钮 -->
       <view class="pass-btns" style="margin-top: 60rpx;" wx:if="{{factoryResetSteps[factoryResetStep].isFinal || factoryResetSteps[factoryResetStep].showConfirm}}">
         <view class="p-btn confirm full-width" bindtap="confirmFactoryReset">确认</view>
+      </view>
+
+      <!-- 调整步骤中蓝牙断开：自动重连遮罩 -->
+      <view class="fr-reconnect-overlay" wx:if="{{showFactoryResetReconnectModal}}" catchtouchmove="noop" catchtap="noop">
+        <view class="fr-reconnect-spin"></view>
+        <text class="fr-reconnect-text">正在重新连接设备</text>
       </view>
     </view>
   </view>

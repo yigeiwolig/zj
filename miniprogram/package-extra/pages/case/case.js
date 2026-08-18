@@ -990,7 +990,10 @@ Page({
       if (adminCheck.data.length > 0) {
         screenshotExempt.markGuanliyuanCache(true);
         screenshotExempt.allowScreenCaptureIfExempt();
-        this.setData({ isAuthorized: true });
+        this.setData({ isAuthorized: true }, () => {
+          // 权限是云端异步查回来的，可能晚于教程弹窗的判定，这里补问一次
+          this._maybeShowCaseUsageGuide();
+        });
       }
     } catch (err) {
       console.error('[case.js] 权限检查失败', err);
@@ -1684,110 +1687,201 @@ Page({
     });
   },
 
-  /** 管理员：下载视频到相册（支持 cloud:// 与 COS/HTTP） */
-  _downloadVideoRefToAlbum(playUrl, originalRef) {
+  /** 管理员：下载视频到相册（支持 cloud:// 与 COS/HTTP，失败自动换域重试） */
+  _collectVideoDownloadCandidates(playUrl, originalRef) {
     const playRef = String(playUrl || '').trim();
-    const origRef = String(originalRef || playRef || '').trim();
-    if (!playRef && !origRef) {
+    const origRef = String(originalRef || '').trim();
+    const seen = new Set();
+    const out = [];
+    const push = (u) => {
+      const s = String(u || '').trim();
+      if (!s || seen.has(s)) return;
+      seen.add(s);
+      out.push(s);
+    };
+    push(origRef);
+    push(playRef);
+    [origRef, playRef].forEach((u) => {
+      if (!u || u.indexOf('cloud://') === 0) return;
+      if (!/^https?:\/\//i.test(u)) return;
+      push(this._swapCosHost(u, { forVideo: true }));
+      const retry = this._buildRetryVideoUrl(u);
+      if (retry) {
+        // 去掉仅用于播放重试的 rt 参数，下载用干净 URL
+        push(String(retry).replace(/([?&])rt=\d+/g, '$1').replace(/[?&]$/, '').replace(/\?$/, ''));
+      }
+    });
+    return out;
+  },
+
+  _downloadHttpVideoToTemp(url) {
+    return new Promise((resolve, reject) => {
+      wx.downloadFile({
+        url,
+        success: (res) => {
+          if (res && res.statusCode === 200 && res.tempFilePath) {
+            resolve(res.tempFilePath);
+            return;
+          }
+          const err = new Error(`download status ${res && res.statusCode}`);
+          err.statusCode = res && res.statusCode;
+          err.errMsg = (res && res.errMsg) || err.message;
+          reject(err);
+        },
+        fail: reject
+      });
+    });
+  },
+
+  _downloadCloudVideoToTemp(fileID) {
+    return new Promise((resolve, reject) => {
+      if (!wx.cloud || !wx.cloud.downloadFile) {
+        reject(new Error('cloud.downloadFile unavailable'));
+        return;
+      }
+      wx.cloud.downloadFile({
+        fileID,
+        success: (res) => {
+          if (res && res.tempFilePath) {
+            resolve(res.tempFilePath);
+            return;
+          }
+          reject(new Error('cloud download empty'));
+        },
+        fail: reject
+      });
+    });
+  },
+
+  async _downloadVideoRefToAlbum(playUrl, originalRef) {
+    const candidates = this._collectVideoDownloadCandidates(playUrl, originalRef);
+    if (!candidates.length) {
       this._showCustomToast('暂无视频地址', 'none');
       return;
     }
     if (this._caseVideoDownloading) return;
     this._caseVideoDownloading = true;
-    getApp().showLoading({ title: '下载中...', mask: true });
+    try {
+      getApp().showLoading({ title: '下载中...', mask: true });
+    } catch (e) {}
 
-    const fail = (err, msg) => {
+    let lastErr = null;
+    try {
+      for (let i = 0; i < candidates.length; i++) {
+        const ref = candidates[i];
+        try {
+          let tempFilePath = '';
+          if (ref.indexOf('cloud://') === 0) {
+            tempFilePath = await this._downloadCloudVideoToTemp(ref);
+          } else if (/^https?:\/\//i.test(ref)) {
+            tempFilePath = await this._downloadHttpVideoToTemp(ref);
+          } else {
+            continue;
+          }
+          this._caseVideoDownloading = false;
+          this.saveVideoToAlbum(tempFilePath);
+          return;
+        } catch (err) {
+          lastErr = err;
+          console.warn('[case] download candidate fail', ref, err);
+        }
+      }
+
       this._caseVideoDownloading = false;
-      getApp().hideLoading();
-      if (err) console.error('❌ [下载] 失败:', err);
-      this._showCustomToast(msg || '下载文件失败', 'none');
-    };
-
-    const done = (tempFilePath) => {
+      try { getApp().hideLoading(); } catch (e) {}
+      const msg = String((lastErr && (lastErr.errMsg || lastErr.message)) || '');
+      if (/url not in domain|不在.*域名|合法域名/i.test(msg)) {
+        this._showCustomToast('下载域名未配置，请在小程序后台添加 COS 下载域名', 'none');
+      } else if (/403|accessdenied|forbidden/i.test(msg)) {
+        this._showCustomToast('视频无下载权限或链接已失效', 'none');
+      } else if (/timeout|timed out|超时/i.test(msg)) {
+        this._showCustomToast('下载超时，请换网络后重试', 'none');
+      } else {
+        this._showCustomToast(msg ? `下载失败: ${msg}` : '下载文件失败', 'none');
+      }
+    } catch (err) {
       this._caseVideoDownloading = false;
-      this.saveVideoToAlbum(tempFilePath);
-    };
-
-    if (origRef.startsWith('cloud://')) {
-      wx.cloud.downloadFile({
-        fileID: origRef,
-        success: (res) => done(res.tempFilePath),
-        fail: (err) => fail(err)
-      });
-      return;
+      try { getApp().hideLoading(); } catch (e) {}
+      console.error('❌ [下载] 失败:', err);
+      this._showCustomToast('下载文件失败', 'none');
     }
-
-    const httpUrl = playRef.startsWith('http') ? playRef : (origRef.startsWith('http') ? origRef : '');
-    if (httpUrl) {
-      wx.downloadFile({
-        url: httpUrl,
-        success: (res) => {
-          if (res.statusCode === 200) done(res.tempFilePath);
-          else fail(null, '下载失败');
-        },
-        fail: (err) => fail(err)
-      });
-      return;
-    }
-
-    if (playRef.startsWith('cloud://')) {
-      wx.cloud.downloadFile({
-        fileID: playRef,
-        success: (res) => done(res.tempFilePath),
-        fail: (err) => fail(err)
-      });
-      return;
-    }
-
-    fail(null, '无法识别的视频地址');
   },
 
   downloadPending(e) {
-    if (!this.data.isAdmin) return;
-    const fileID = e.currentTarget.dataset.fileid;
-    if (!fileID) return;
+    if (!this.data.isAdmin) {
+      this._showCustomToast('请先进入 EDIT 管理模式', 'none');
+      return;
+    }
     const itemId = e.currentTarget.dataset.id;
-    const item = this.data.pendingList.find(i => i._id === itemId);
-    const originalFileID = (item && item.originalFileID) || fileID;
-    this._downloadVideoRefToAlbum(fileID, originalFileID);
+    const item = (this.data.pendingList || []).find((i) => i._id === itemId);
+    if (!item) {
+      this._showCustomToast('找不到该投稿', 'none');
+      return;
+    }
+    // 不要用 data-fileid 传长 URL（易被截断）；直接从列表取
+    const playUrl = item.videoFileID || item.videoUrl || '';
+    const originalRef = item.originalFileID || item.videoFileID || item.videoUrl || '';
+    if (!playUrl && !originalRef) {
+      this._showCustomToast('暂无视频地址', 'none');
+      return;
+    }
+    this._downloadVideoRefToAlbum(playUrl, originalRef);
   },
 
   downloadOfficialCase(e) {
     if (e) {
       e.stopPropagation && e.stopPropagation();
     }
-    if (!this.data.isAdmin) return;
+    if (!this.data.isAdmin) {
+      this._showCustomToast('请先进入 EDIT 管理模式', 'none');
+      return;
+    }
     const id = e.currentTarget.dataset.id;
-    const item = this.data.displayList.find(i => i._id === id);
-    if (!item || !item.videoUrl) {
+    const item = (this.data.displayList || []).find((i) => i._id === id);
+    if (!item || !(item.videoUrl || item.originalVideoRef || item.videoFileID)) {
       this._showCustomToast('暂无视频资源', 'none');
       return;
     }
-    this._downloadVideoRefToAlbum(item.videoUrl, item.originalVideoRef || item.videoFileID);
+    this._downloadVideoRefToAlbum(
+      item.videoUrl,
+      item.originalVideoRef || item.videoFileID || item.videoUrl
+    );
   },
 
   downloadCurrentFullscreenVideo() {
-    if (!this.data.isAdmin) return;
+    if (!this.data.isAdmin) {
+      this._showCustomToast('请先进入 EDIT 管理模式', 'none');
+      return;
+    }
     const v = this.data.currentVideo;
-    if (!v || !v.videoUrl) {
+    if (!v || !(v.videoUrl || v.originalVideoRef || v.videoFileID)) {
       this._showCustomToast('暂无视频资源', 'none');
       return;
     }
-    this._downloadVideoRefToAlbum(v.videoUrl, v.originalVideoRef || v.videoFileID);
+    this._downloadVideoRefToAlbum(
+      v.videoUrl,
+      v.originalVideoRef || v.videoFileID || v.videoUrl
+    );
   },
   
   // 🔴 新增：保存视频到相册的通用方法
   saveVideoToAlbum(tempFilePath) {
+    if (this._isWxDevtools && this._isWxDevtools()) {
+      this._caseVideoDownloading = false;
+      try { getApp().hideLoading(); } catch (e) {}
+      this._showCustomToast('开发者工具不支持保存到相册，请用真机', 'none');
+      return;
+    }
     wx.saveVideoToPhotosAlbum({
       filePath: tempFilePath,
       success: () => {
         this._caseVideoDownloading = false;
-        getApp().hideLoading();
+        try { getApp().hideLoading(); } catch (e) {}
         this._showCustomToast('已保存到相册', 'success');
       },
       fail: (err) => {
         this._caseVideoDownloading = false;
-        getApp().hideLoading();
+        try { getApp().hideLoading(); } catch (e) {}
         console.error('❌ [保存] 保存到相册失败:', err);
         // 如果用户拒绝授权，提示去设置
         if (err.errMsg && err.errMsg.indexOf('auth') > -1) {
@@ -4980,8 +5074,22 @@ Page({
       this.data.showVideoPlayer);
   },
 
+  /**
+   * 管理员账号每次进案例库都问一次，忽略「跳过」与「已看过」记录。
+   * 用 isAuthorized 而不是 isAdmin：弹窗出现在刚进页面时，
+   * 那会儿管理模式还没打开，用 isAdmin 判会永远判不中。
+   */
+  _caseGuideAlwaysAsk() {
+    return !!this.data.isAuthorized;
+  },
+
   _maybeShowCaseUsageGuide() {
     if (this.data.showCaseUsageGuide || this.data.showCaseGuideIntro) return;
+    if (this._caseGuideBlockingModal()) return;
+    if (this._caseGuideAlwaysAsk()) {
+      this.setData({ showCaseGuideIntro: true });
+      return;
+    }
     const entry = resolveGuideAutoEntry(CASE_GUIDE_INTRO_KEYS);
     if (entry === 'none') return;
     if (entry === 'intro') {
@@ -5232,7 +5340,10 @@ Page({
   },
 
   caseUsageGuideSkip() {
-    markGuidePermSkip(CASE_GUIDE_INTRO_KEYS);
+    // 管理员点跳过只关这一次，不写永久跳过，否则下次就不问了
+    if (!this._caseGuideAlwaysAsk()) {
+      markGuidePermSkip(CASE_GUIDE_INTRO_KEYS);
+    }
     this.closeCaseUsageGuide(false);
   },
 

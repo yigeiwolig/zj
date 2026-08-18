@@ -2,6 +2,7 @@ const db = wx.cloud.database();
 const cosUpload = require('../../../utils/cosUpload.js');
 const shopImagePrepare = require('../../../utils/shopImagePrepare.js');
 const azjcAccessDebug = require('../../../utils/azjcAccessDebug.js');
+const { compressVideoForUpload } = require('../../../utils/compressVideoForUpload.js');
 const AZJC_DEFAULT_PRODUCTS = [
   { name: 'F1', series: '智能系列', suffix: 'F1', number: 1 },
   { name: 'F2', series: '性能系列', suffix: 'F2', number: 2 },
@@ -29,6 +30,100 @@ function _azjcLog(标签, 负载) {
   console.log(`[安装教程调试 ${ts}] 【${标签}】 ${extra}`);
 }
 
+/* ===== 匹配码：一条内容可以同时挂多个「产品+车型」组合，每个组合的次序互相独立 =====
+ * 库里的字段：
+ *   matchCodes  ['1+1','2+3']        全部组合；老数据没有这个字段，回落到单个 matchCode
+ *   matchCode   '1+1'                仍然写，保持老代码/老数据可读
+ *   orders      [{code,order}]       每个组合各自的次序；用数组是因为云数据库 update
+ *                                    对嵌套对象是合并而不是替换，删码时对象会残留
+ *   order       0                    仍然写（取首个组合的值），loadVideosAndGraphics
+ *                                    还在用 orderBy('order') 做初始排序
+ */
+
+/** 把 '1+1'、' 01 + 2 ' 这类写法统一成 '1+1'；不合法返回空串 */
+function normalizeMatchCode(code) {
+  const parts = String(code == null ? '' : code).split('+');
+  if (parts.length !== 2) return '';
+  const p = parseInt(parts[0], 10);
+  const t = parseInt(parts[1], 10);
+  if (!Number.isFinite(p) || !Number.isFinite(t)) return '';
+  return `${p}+${t}`;
+}
+
+/** 一条内容挂的全部匹配码（去重、去非法）；老数据只有单码时返回单元素数组 */
+function readMatchCodes(item) {
+  const out = [];
+  const push = (c) => {
+    const code = normalizeMatchCode(c);
+    if (code && out.indexOf(code) < 0) out.push(code);
+  };
+  const list = item && Array.isArray(item.matchCodes) ? item.matchCodes : [];
+  list.forEach(push);
+  if (!out.length) push(item && item.matchCode);
+  return out;
+}
+
+function hasMatchCode(item, code) {
+  if (!code) return false;
+  return readMatchCodes(item).indexOf(code) >= 0;
+}
+
+function normalizeDuplicateVideoKey(input) {
+  let raw = String(input == null ? '' : input).trim();
+  if (!raw) return '';
+  raw = raw.replace(/\?.*$/, '');
+  if (/^cloud:\/\//i.test(raw)) return raw.toLowerCase();
+  raw = raw.replace(/^https?:\/\//i, '');
+  return raw.toLowerCase();
+}
+
+function normalizeSuspectedVideoTitle(input) {
+  let raw = String(input == null ? '' : input).trim().toLowerCase();
+  if (!raw) return '';
+  raw = raw.replace(/^\s*\d+\s*[\.．、)\]】）-]?\s*/g, '');
+  raw = raw.replace(/[\s\-_.,，。:：;；!！?？"'`~()（）\[\]【】/\\]+/g, '');
+  return raw;
+}
+
+function readOrderMap(item) {
+  const map = {};
+  const list = item && Array.isArray(item.orders) ? item.orders : [];
+  list.forEach((e) => {
+    const code = normalizeMatchCode(e && e.code);
+    if (!code) return;
+    const n = Number(e && e.order);
+    if (Number.isFinite(n)) map[code] = n;
+  });
+  return map;
+}
+
+function legacyOrderOf(item) {
+  const n = Number(item && item.order);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** 某条内容在指定组合下的次序；该组合没单独设过就回落到老的 order 字段 */
+function readOrderFor(item, code) {
+  const map = readOrderMap(item);
+  if (Object.prototype.hasOwnProperty.call(map, code)) return map[code];
+  return legacyOrderOf(item);
+}
+
+/**
+ * 生成「只改 code 这一个组合的次序」的 orders 数组，其余组合原样保留。
+ * 老数据只有一个 order，这里先把它补到自己已挂的每个码上，
+ * 否则第一次拖排序会把同一条内容在别的组合里的位置一起冲掉。
+ */
+function buildOrdersWith(item, code, order) {
+  const map = readOrderMap(item);
+  const legacy = legacyOrderOf(item);
+  readMatchCodes(item).forEach((c) => {
+    if (!Object.prototype.hasOwnProperty.call(map, c)) map[c] = legacy;
+  });
+  if (code) map[code] = order;
+  return Object.keys(map).map((c) => ({ code: c, order: map[c] }));
+}
+
 Page({
   data: {
     // 🔴 状态栏高度
@@ -48,6 +143,12 @@ Page({
     tIndex: -1,
     mode: 'v',
     showAll: false, // 显示全部模式（管理员专用）
+    currentComboLabel: '', // 当前选中的「产品+车型」展示文案，如 F1+跨骑车
+    showComboSwitchModal: false,
+    comboSwitchClosing: false,
+    comboSwitchPIndex: -1,
+    comboSwitchTIndex: -1,
+    comboSwitchPreview: '',
     startY: 0,
     scrollToId: 'step1',
     canScroll: false,
@@ -59,14 +160,11 @@ Page({
     // 匹配码选择弹窗
     showMatchCodePicker: false,
     matchCodePickerClosing: false, // 匹配码选择器退出动画中
-    availableProducts: [], // 可用的产品列表（已创建的）
-    availableTypes: [], // 可用的车型列表（已创建的）
-    matchCodeProductNum: 1,
-    matchCodeTypeNum: 1,
-    matchCodeProductIndex: 0,
-    matchCodeTypeIndex: 0,
-    currentProductName: '',
-    currentTypeName: '',
+    availableProducts: [], // 可勾选的产品 [{...p, num, key, checked}]
+    availableTypes: [], // 可勾选的车型 [{...t, num, key, checked}]
+    matchCodePreviewCodes: [], // 勾选后两两组合出的全部匹配码
+    matchCodePreviewText: '',
+    matchCodeSelectedCount: 0,
     tempUploadData: null, // 临时保存上传数据
 
     // 预设数据（将从云数据库加载）
@@ -74,8 +172,9 @@ Page({
     types: [],    // 车型分类 [{name: '', number: 1, _id: ''}]
     
     // 教程数据（从云数据库加载，根据选择的product+type过滤）
-    chapters: [], // 视频分段 [{title: '', url: '', matchCode: '1+1', _id: ''}]
-    graphics: [], // 图文详情 [{title: '', img: '', desc: '', matchCode: '1+1', _id: ''}]
+    // 一条内容可挂多个组合：matchCodes ['1+1','2+3']，orders [{code,order}] 各组合次序独立
+    chapters: [], // 视频分段 [{title, url, matchCode, matchCodes, orders, _id}]
+    graphics: [], // 图文详情 [{title, img, desc, matchCode, matchCodes, orders, _id}]
     
     // 过滤后的显示数据
     filteredChapters: [], // 根据选择的product+type过滤后的视频
@@ -98,6 +197,13 @@ Page({
     editItemData: null,  // 正在编辑的项目数据
     editItemType: '',    // 编辑类型：'chapters' 或 'graphics'
     editItemIndex: -1,
+    showDuplicateCheckModal: false,
+    duplicateCheckClosing: false,
+    duplicateVideoRows: [],
+    duplicateVideoGroupCount: 0,
+    duplicateVideoItemCount: 0,
+    duplicateVideoExactGroupCount: 0,
+    duplicateVideoSuspectGroupCount: 0,
     // 新增：用于布局的精确高度变量
     winHeight: 0,
     scrollViewHeight: 0,
@@ -130,6 +236,8 @@ Page({
     fullScreenCloseCoverStyle: '',
     videoSlideEndTime: 0, // 🔴 视频拖拽结束时间戳（用于阻止后续1秒内的页面滚动）
     videoSlideDirection: '', // 🔴 视频拖拽方向（'down'=向下，'up'=向上）
+    /** 列表内只挂一个原生 video，避免多解码器同时抢 GPU/带宽导致卡顿 */
+    chapterInlineMountIndex: -1,
     /** 列表内嵌视频是否正在播（用于 cover-view 大暂停热区，与 filteredChapters 下标对齐） */
     chapterInlinePlaying: [],
     /** 点击播放后三角消隐动画期间仍为 true，overlay 暂留避免 wx:if 瞬间消失 */
@@ -158,12 +266,18 @@ Page({
     shareCodeStatsDisplayRows: [],
     statsSearchKeyword: '',
     statsScrollTop: 0,
+    statsExpandedMap: {}, // 分享码用户卡展开状态 { rowKey: true }
 
     // 闲鱼订单截图验证（无小程序订单/未绑设备时解锁教程）
     showXianyuVerifyModal: false,
     xianyuVerifying: false,
     xianyuVerifyResult: '',
-    xianyuVerifyResultType: '' // success | error
+    xianyuVerifyResultType: '', // success | error
+    showWatchNotice: false, // 首次进入安装教程须知
+
+    // 普通用户：安装教程查看码（发给安装人员）
+    userInstallShareCode: '',
+    showUserInstallCode: false
   },
 
   _isCloudFileId(u) {
@@ -172,6 +286,34 @@ Page({
 
   _isDirectMediaUrl(u) {
     return typeof u === 'string' && /^https?:\/\//i.test(u);
+  },
+
+  /** 管理员写 azjc：云函数绕过「仅创建者可写」，任意管理员可删/改 */
+  _adminAzjcWrite(action, payload) {
+    return new Promise((resolve, reject) => {
+      if (!wx.cloud || !wx.cloud.callFunction) {
+        reject(new Error('云能力未就绪'));
+        return;
+      }
+      wx.cloud.callFunction({
+        name: 'adminManageAzjc',
+        data: Object.assign({ action }, payload || {}),
+        success: (res) => {
+          const r = (res && res.result) || {};
+          if (r.success) resolve(r);
+          else reject(new Error(r.error || '操作失败'));
+        },
+        fail: reject
+      });
+    });
+  },
+
+  _adminAzjcRemove(_id) {
+    return this._adminAzjcWrite('remove', { _id });
+  },
+
+  _adminAzjcUpdate(_id, data) {
+    return this._adminAzjcWrite('update', { _id, data });
   },
 
   /** COS 返回 https 直链；仅 cloud:// 才走 getTempFileURL */
@@ -235,6 +377,48 @@ Page({
     if (!url || !/^https?:\/\//i.test(url)) return url;
     const base = url.split('?')[0];
     return `${base}?_v=${Date.now()}`;
+  },
+
+  /** 无独立封面时，用 COS 视频截帧当列表图（不挂原生 video） */
+  _azjcVideoSnapshotUrl(videoUrl) {
+    const raw = String(videoUrl || '').trim();
+    if (!raw || !/^https?:\/\//i.test(raw)) return '';
+    if (/ci-process=snapshot/i.test(raw)) return raw;
+    const pathPart = raw.split('#')[0].split('?')[0];
+    if (!pathPart) return '';
+    return `${pathPart}?ci-process=snapshot&time=1&format=jpg`;
+  },
+
+  _azjcDisplayCover(item) {
+    const own = String((item && item.coverUrl) || '').trim();
+    if (own) return own;
+    return this._azjcVideoSnapshotUrl((item && (item.url || item.fileID)) || '');
+  },
+
+  _uploadAzjcCover(thumbPath) {
+    const p = String(thumbPath || '');
+    if (!p || p === 'AUTO_GENERATE') return Promise.resolve('');
+    return cosUpload.uploadImageToCos(p, 'azjc/cover').catch((err) => {
+      console.warn('[azjc] 封面上传失败', err);
+      return '';
+    });
+  },
+
+  /** 4K/高码率原片先压到 1080p，否则真机 video 解码会卡 */
+  _prepareAzjcVideoForUpload(file) {
+    const src = file && file.tempFilePath;
+    if (!src) return Promise.reject(new Error('未选择视频'));
+    const knownSize = file && typeof file.size === 'number' ? file.size : undefined;
+    return compressVideoForUpload(src, {
+      knownSize,
+      width: file.width,
+      height: file.height
+    }).then((r) => {
+      if (r && r.tooHeavy && !r.compressed) {
+        this._showCustomToast('4K 原片小程序会卡，建议剪映导出 1080p 后再传', 'none', 3500);
+      }
+      return r;
+    });
   },
 
   async _buildRetryImageUrl(url) {
@@ -305,7 +489,35 @@ Page({
   closeShareCodeModal() {
     this.setData({
       showShareCodeModal: false
+    }, () => {
+      this._maybeShowWatchNotice();
     });
+  },
+
+  _watchNoticeStorageKey() {
+    return 'azjc_install_notice_v7';
+  },
+
+  _maybeShowWatchNotice() {
+    if (this.data.shareCodeViewsExhausted) return;
+    if (this.data.showXianyuVerifyModal) return;
+    if (this.data.showShareCodeModal) return;
+    if (this.data.showWatchNotice) return;
+    let seen = false;
+    try {
+      seen = !!wx.getStorageSync(this._watchNoticeStorageKey());
+    } catch (e) {
+      seen = false;
+    }
+    if (seen) return;
+    this.setData({ showWatchNotice: true });
+  },
+
+  closeWatchNotice() {
+    try {
+      wx.setStorageSync(this._watchNoticeStorageKey(), 1);
+    } catch (e) { /* ignore */ }
+    this.setData({ showWatchNotice: false });
   },
 
   dismissTransientModals() {
@@ -818,7 +1030,17 @@ Page({
       if (realPendingOrders.length > 0) {
         console.log('[azjc checkAccessPermission] ⚠️ 有未确认收货的订单:', realPendingOrders.length);
         this.hideMyLoading();
-        this.showRejectModal('请前往个人中心-我的订单\n确认收货后解锁教程');
+        this._showCustomModal({
+          title: '提示',
+          content: '请到「订单」确认收货后\n再解锁安装教程',
+          showCancel: false,
+          confirmText: '去订单',
+          success: (res) => {
+            if (res && res.cancel) return;
+            const hubNav = require('../../../utils/hubNav.js');
+            hubNav.switchTab('orders');
+          }
+        });
         return;
       }
 
@@ -905,23 +1127,9 @@ Page({
   },
 
   _formatXianyuVerifyError(result) {
-    if (result && result.error === 'SELLER_MISMATCH') {
-      return '非本公司订单，请重新上传';
-    }
     const base = (result && result.message) || '验证未通过，请重试';
-    if (/卖家昵称不匹配/.test(base)) {
-      return '非本公司订单，请重新上传';
-    }
     if (result && result.error === 'ORDER_UNPAID') {
       return base;
-    }
-    const parsed = result && result.parsed;
-    const nick = parsed && parsed.sellerNickname;
-    const status = parsed && parsed.orderStatus;
-    if (nick) {
-      let msg = `${base}\n识别到卖家昵称：${nick}`;
-      if (status) msg += `\n订单状态：${status}`;
-      return msg;
     }
     if (result && result.error === 'SELLER_LIST_EMPTY') {
       return `${base}\n（云端未配置 sellerNicknames）`;
@@ -929,7 +1137,88 @@ Page({
     if (result && result.error === 'OCR_NOT_CONFIGURED') {
       return `${base}\n（云函数未配置百度 OCR 密钥）`;
     }
+    if (result && result.error === 'IMAGE_TOO_LARGE') {
+      return '截图太大，传不上去\n请只截「卖家昵称」附近那一段，或缩小后再传';
+    }
+    if (result && result.error === 'DOWNLOAD_FAIL') {
+      return '截图处理失败，请换一张清晰截图重试';
+    }
+    const parsed = result && result.parsed;
+    const nick = (parsed && parsed.sellerNickname) || (result && result.sellerNickname) || '';
+    const status = parsed && parsed.orderStatus;
+    if (result && (result.error === 'SELLER_MISMATCH' || /卖家昵称不匹配|非本公司/.test(base))) {
+      let msg = '非本公司订单，请重新上传';
+      if (nick) msg += `\n识别到卖家昵称：${nick}`;
+      if (status) msg += `\n订单状态：${status}`;
+      return msg;
+    }
+    if (result && result.error === 'SELLER_NOT_FOUND') {
+      return (result && result.message) || '未识别到卖家昵称\n请上传能看到「卖家昵称」的完整订单详情图';
+    }
+    if (nick) {
+      let msg = `${base}\n识别到卖家昵称：${nick}`;
+      if (status) msg += `\n订单状态：${status}`;
+      return msg;
+    }
     return base;
+  },
+
+  /** 压缩前读本地文件体积 */
+  _getLocalFileSize(filePath) {
+    return new Promise((resolve) => {
+      try {
+        wx.getFileSystemManager().getFileInfo({
+          filePath,
+          success: (res) => resolve(Number(res && res.size) || 0),
+          fail: () => resolve(0)
+        });
+      } catch (e) {
+        resolve(0);
+      }
+    });
+  },
+
+  _compressImageOnce(src, quality, compressedWidth) {
+    return new Promise((resolve) => {
+      if (!wx.compressImage) {
+        resolve(src);
+        return;
+      }
+      const opts = {
+        src,
+        quality,
+        success: (res) => resolve((res && res.tempFilePath) || src),
+        fail: () => resolve(src)
+      };
+      if (compressedWidth > 0) opts.compressedWidth = compressedWidth;
+      wx.compressImage(opts);
+    });
+  },
+
+  /** 轻量压缩，方便上传云存储（不再塞进 callFunction 入参） */
+  async _prepareXianyuScreenshotForUpload(filePath) {
+    const MAX_FILE_BYTES = 1.5 * 1024 * 1024;
+    const steps = [
+      { quality: 70, compressedWidth: 1280 },
+      { quality: 55, compressedWidth: 1080 },
+      { quality: 45, compressedWidth: 900 },
+      { quality: 35, compressedWidth: 720 }
+    ];
+    let path = filePath;
+    let size = await this._getLocalFileSize(path);
+    for (let i = 0; i < steps.length; i += 1) {
+      if (size > 0 && size <= MAX_FILE_BYTES) break;
+      const step = steps[i];
+      path = await this._compressImageOnce(path, step.quality, step.compressedWidth);
+      size = await this._getLocalFileSize(path);
+    }
+    return { path, size };
+  },
+
+  _uploadXianyuScreenshotToCos(filePath, knownSize) {
+    return cosUpload.uploadImageToCos(filePath, 'xianyu_verify', {
+      knownSize: typeof knownSize === 'number' ? knownSize : undefined
+    });
   },
 
   _verifyXianyuOrderScreenshot(filePath) {
@@ -942,54 +1231,60 @@ Page({
     if (toast && toast.showLoading) {
       toast.showLoading({ title: '识别订单中...' });
     }
-    const fs = wx.getFileSystemManager();
-    fs.readFile({
-      filePath,
-      encoding: 'base64',
-      success: (readRes) => {
-        wx.cloud.callFunction({
+
+    // 走 COS 公网 URL，避免 cloud.downloadFile 在云函数里失败
+    this._prepareXianyuScreenshotForUpload(filePath)
+      .then(({ path, size }) => this._uploadXianyuScreenshotToCos(path, size))
+      .then((imageUrl) => {
+        if (!imageUrl || !/^https?:\/\//i.test(String(imageUrl))) {
+          throw new Error('截图上传失败');
+        }
+        return wx.cloud.callFunction({
           name: 'recognizeXianyuOrder',
-          data: { imageBase64: readRes.data }
-        }).then((cfRes) => {
-          const result = cfRes && cfRes.result ? cfRes.result : {};
-          if (toast && toast.hideLoading) toast.hideLoading();
-          this.setData({ xianyuVerifying: false });
-          if (result.success) {
-            this.setData({
-              showXianyuVerifyModal: false,
-              xianyuVerifyResult: '',
-              xianyuVerifyResultType: ''
-            });
-            this._showCustomToast(result.message || '验证通过', 'success');
-            this.checkAdminPrivilege().then(() => {
-              this.loadDataFromCloud();
-            });
-            return;
-          }
-          this.setData({
-            xianyuVerifyResult: this._formatXianyuVerifyError(result),
-            xianyuVerifyResultType: 'error'
-          });
-        }).catch((err) => {
-          console.error('[azjc] 闲鱼订单识别失败:', err);
-          if (toast && toast.hideLoading) toast.hideLoading();
-          this.setData({
-            xianyuVerifying: false,
-            xianyuVerifyResult: '识别失败，请稍后重试',
-            xianyuVerifyResultType: 'error'
-          });
+          data: { imageUrl: String(imageUrl) }
         });
-      },
-      fail: (err) => {
-        console.error('[azjc] 读取订单截图失败:', err);
+      })
+      .then((cfRes) => {
+        const result = cfRes && cfRes.result ? cfRes.result : {};
         if (toast && toast.hideLoading) toast.hideLoading();
+        this.setData({ xianyuVerifying: false });
+        if (result.success) {
+          this.setData({
+            showXianyuVerifyModal: false,
+            xianyuVerifyResult: '',
+            xianyuVerifyResultType: ''
+          });
+          this._showCustomToast(result.message || '验证通过', 'success');
+          this.checkAdminPrivilege().then(() => {
+            this.loadDataFromCloud();
+          });
+          return;
+        }
         this.setData({
-          xianyuVerifying: false,
-          xianyuVerifyResult: '读取图片失败',
+          xianyuVerifyResult: this._formatXianyuVerifyError(result),
           xianyuVerifyResultType: 'error'
         });
-      }
-    });
+      })
+      .catch((err) => {
+        console.error('[azjc] 闲鱼订单识别失败:', err);
+        if (toast && toast.hideLoading) toast.hideLoading();
+        const msg = String((err && (err.errMsg || err.message)) || '');
+        let tip = '识别失败，请稍后重试';
+        if (/downloadFile|DOWNLOAD_FAIL|下载/i.test(msg)) {
+          tip = '截图处理失败，请换一张清晰截图重试';
+        } else if (/exceed max size|too large|过大/i.test(msg)) {
+          tip = '截图太大，传不上去\n请只截含「卖家昵称」的那一段后再传';
+        } else if (/upload|上传|COS|合法域名/i.test(msg)) {
+          tip = '截图上传失败，请检查网络后重试';
+        } else if (err && err.code === 'READ_FAIL') {
+          tip = '读取图片失败';
+        }
+        this.setData({
+          xianyuVerifying: false,
+          xianyuVerifyResult: tip,
+          xianyuVerifyResultType: 'error'
+        });
+      });
   },
 
   async checkAdminPrivilege() {
@@ -1036,19 +1331,74 @@ Page({
         currentSectionStartTime: 0
       });
     }
-    this.setData({ isAdmin: nextState });
+    this.setData({
+      isAdmin: nextState,
+      showUserInstallCode: nextState ? false : !!this.data.userInstallShareCode
+    });
     this._showCustomToast(nextState ? '管理模式开启' : '已回到用户模式', 'none');
   },
 
+  /** 普通用户进入教程后获取/生成安装教程查看码，供复制给安装人员 */
+  async _loadUserInstallShareCode() {
+    if (this.data.isShareCodeUser || this.data.shareCodeViewsExhausted || this.data.isAdmin) return;
+    try {
+      let creatorNickname = '';
+      try {
+        const userInfo = wx.getStorageSync('userInfo');
+        creatorNickname = (userInfo && userInfo.nickName) || '';
+      } catch (e) { /* ignore */ }
+
+      const res = await wx.cloud.callFunction({
+        name: 'generateShareCode',
+        data: { creatorNickname }
+      });
+      const result = (res && res.result) || {};
+      let code = '';
+      if (result.success && result.code) {
+        code = result.code;
+      } else if (result.existingCode) {
+        code = result.existingCode;
+      }
+      if (code) {
+        this.setData({
+          userInstallShareCode: code,
+          showUserInstallCode: true
+        });
+      }
+    } catch (err) {
+      console.warn('[azjc] 加载安装码失败:', err);
+    }
+  },
+
+  copyUserInstallShareCode() {
+    const code = String(this.data.userInstallShareCode || '').trim();
+    if (!code) {
+      this._showCustomToast('安装码暂不可用', 'none');
+      return;
+    }
+    wx.setClipboardData({
+      data: code,
+      success: () => {
+        this._showCustomToast('安装码已复制', 'success');
+      },
+      fail: () => {
+        this._showCustomToast('复制失败，请手动复制', 'none');
+      }
+    });
+  },
+
   // 从云数据库加载数据
-  loadDataFromCloud: function() {
+  loadDataFromCloud: function(done) {
     // 🔴 如果分享码次数已用完，不加载教程内容（保持页面空白）
     if (this.data.shareCodeViewsExhausted) {
       console.log('[azjc loadDataFromCloud] 分享码次数已用完，跳过加载教程内容');
+      if (typeof done === 'function') done(false);
       return;
     }
 
     this._ensureDirectTutorialRecording();
+    this._loadUserInstallShareCode();
+    this._maybeShowWatchNotice();
 
     // 1. 读取产品型号
     db.collection('azjc').where({
@@ -1085,7 +1435,7 @@ Page({
             this.setData({ products, types });
             
             // 3. 读取视频章节
-            this.loadVideosAndGraphics();
+            this.loadVideosAndGraphics(done);
           },
           fail: (err) => {
             console.error('加载车型数据失败:', err);
@@ -1096,7 +1446,7 @@ Page({
               { name: '电摩/电动自行车', number: 3 }
             ];
             this.setData({ types });
-            this.loadVideosAndGraphics();
+            this.loadVideosAndGraphics(done);
           }
         });
       },
@@ -1123,7 +1473,7 @@ Page({
                   { name: '电摩/电动自行车', number: 3 }
                 ];
             this.setData({ types });
-            this.loadVideosAndGraphics();
+            this.loadVideosAndGraphics(done);
           },
           fail: () => {
             const types = [
@@ -1132,7 +1482,7 @@ Page({
               { name: '电摩/电动自行车', number: 3 }
             ];
             this.setData({ types });
-            this.loadVideosAndGraphics();
+            this.loadVideosAndGraphics(done);
           }
         });
       }
@@ -1189,93 +1539,55 @@ Page({
     }
   },
 
-  // 加载视频和图文数据
-  loadVideosAndGraphics: function() {
-    // 读取视频章节 - 🔴 关键修复：按 order 字段排序
+  // 加载视频章节（图文详情已下线，不再拉取 image 类型）
+  loadVideosAndGraphics: function(done) {
     db.collection('azjc').where({
       type: 'video'
     }).orderBy('order', 'asc').get({
       success: (res) => {
-        if (res.data.length === 0) {
-          // 没有视频数据，继续读取图文
-          this.loadGraphicsData([]);
+        const applyChapters = (chapters) => {
+          this.setData({ chapters, graphics: [], filteredGraphics: [] });
+          this.filterContent();
+          if (typeof done === 'function') done(true);
+        };
+
+        if (!res.data.length) {
+          applyChapters([]);
           return;
         }
-        
+
         const videoUrls = res.data.map((item) => item.url).filter((id) => id);
+        const mapRows = (urlMap) =>
+          res.data.map((item) => {
+            const raw = item.url;
+            const display = (urlMap && urlMap[raw]) || raw;
+            return {
+              title: item.title,
+              url: display,
+              fileID: raw,
+              coverUrl: item.coverUrl || this._azjcVideoSnapshotUrl(display) || '',
+              matchCode: item.matchCode || '',
+              matchCodes: readMatchCodes(item),
+              orders: Array.isArray(item.orders) ? item.orders : [],
+              order: item.order || 0,
+              important: !!item.important,
+              _id: item._id,
+              needRefresh: this._isCloudFileId(raw) && !(urlMap && urlMap[raw])
+            };
+          });
 
         if (videoUrls.length > 0) {
           this._buildAzjcMediaUrlMap(videoUrls).then((urlMap) => {
-            const chapters = res.data.map((item) => {
-              const raw = item.url;
-              const display = urlMap[raw] || raw;
-              return {
-                title: item.title,
-                url: display,
-                fileID: raw,
-                coverUrl: item.coverUrl || '',
-                matchCode: item.matchCode || '',
-                order: item.order || 0,
-                _id: item._id,
-                needRefresh: this._isCloudFileId(raw) && !urlMap[raw]
-              };
-            });
-
-            this.setData({ chapters });
-            this.filterContent();
-            this.loadGraphicsData(chapters);
+            applyChapters(mapRows(urlMap));
           });
         } else {
-          this.loadGraphicsData([]);
+          applyChapters(mapRows(null));
         }
       },
       fail: (err) => {
         console.error('加载视频数据失败:', err);
         this._showCustomToast('加载数据失败', 'none');
-      }
-    });
-  },
-
-  // 加载图文数据 - 🔴 关键修复：按 order 字段排序
-  loadGraphicsData: function(chapters) {
-    db.collection('azjc').where({
-      type: 'image'
-    }).orderBy('order', 'asc').get({
-      success: (imgRes) => {
-        if (imgRes.data.length === 0) {
-          this.setData({
-            chapters: chapters,
-            graphics: []
-          });
-          this.filterContent();
-          return;
-        }
-        
-        const imageUrls = imgRes.data.map((item) => item.img).filter((id) => id);
-
-        if (imageUrls.length > 0) {
-          this._buildAzjcMediaUrlMap(imageUrls).then((urlMap) => {
-            const graphics = imgRes.data.map((item) => ({
-              title: item.title,
-              img: urlMap[item.img] || item.img,
-              fileID: item.img,
-              desc: item.desc || '',
-              matchCode: item.matchCode || '',
-              order: item.order || 0,
-              _id: item._id
-            }));
-
-            this.setData({ graphics });
-            this.filterContent();
-          });
-        } else {
-          this.setData({ graphics: [] });
-          this.filterContent();
-        }
-      },
-      fail: (err) => {
-        console.error('加载图文数据失败:', err);
-        this._showCustomToast('加载数据失败', 'none');
+        if (typeof done === 'function') done(false);
       }
     });
   },
@@ -1327,6 +1639,222 @@ Page({
     }, 450);
   },
 
+  /** 教程页回到顶部：回到「选产品」，清空已选，便于重新判断组合 */
+  backToTopAndReselect() {
+    if (this.data.isVideoFullScreen) return;
+    if (this.data.stepIndex !== 2) return;
+    wx.vibrateShort({ type: 'light' });
+    // 尽量暂停列表内联视频，避免切回选择页后仍在播
+    try {
+      const mounted = Number(this.data.chapterInlineMountIndex);
+      if (mounted >= 0) {
+        wx.createVideoContext(`azjc-inline-${mounted}`, this).pause();
+      }
+    } catch (e) { /* ignore */ }
+
+    this.setData({
+      stepIndex: 0,
+      pIndex: -1,
+      tIndex: -1,
+      canScroll: false,
+      filteredChapters: [],
+      filteredGraphics: [],
+      chapterInlineMountIndex: -1,
+      pageTitle: '请选择产品',
+      showAll: false,
+      currentComboLabel: ''
+    });
+  },
+
+  /** 当前选中的「产品+车型」组合码；没选全返回空串 */
+  _currentMatchCode: function() {
+    const { products, types, pIndex, tIndex } = this.data;
+    if (pIndex < 0 || tIndex < 0) return '';
+    const product = products[pIndex];
+    const type = types[tIndex];
+    if (!product || !type) return '';
+    const pn = product.number != null && product.number !== '' ? Number(product.number) : pIndex + 1;
+    const tn = type.number != null && type.number !== '' ? Number(type.number) : tIndex + 1;
+    return normalizeMatchCode(`${pn}+${tn}`);
+  },
+
+  /** 把 '1+2' 转成「产品名+车型名」，查不到名字时退回原码 */
+  _formatMatchCodeLabel: function(code) {
+    const normalized = normalizeMatchCode(code);
+    if (!normalized) return String(code || '');
+    const parts = normalized.split('+');
+    const pn = Number(parts[0]);
+    const tn = Number(parts[1]);
+    const products = this.data.products || [];
+    const types = this.data.types || [];
+    const product = products.find((row, i) => {
+      const n = row.number != null && row.number !== '' ? Number(row.number) : i + 1;
+      return n === pn;
+    });
+    const type = types.find((row, i) => {
+      const n = row.number != null && row.number !== '' ? Number(row.number) : i + 1;
+      return n === tn;
+    });
+    const pName = (product && product.name) || '';
+    const tName = (type && type.name) || '';
+    if (!pName && !tName) return normalized;
+    return `${pName || ('产品' + pn)}+${tName || ('车型' + tn)}`;
+  },
+
+  /** 更新页面级「当前组合」文案；显示全部或未选全时为空 */
+  _updateCurrentComboLabel: function() {
+    const { stepIndex, showAll, pIndex, tIndex } = this.data;
+    let label = '';
+    if (stepIndex === 2 && !showAll && pIndex >= 0 && tIndex >= 0) {
+      const code = this._currentMatchCode();
+      if (code) label = this._formatMatchCodeLabel(code);
+    }
+    this.setData({ currentComboLabel: label });
+  },
+
+  _updateComboSwitchPreview: function() {
+    const { comboSwitchPIndex, comboSwitchTIndex, products, types } = this.data;
+    let preview = '';
+    if (comboSwitchPIndex >= 0 && comboSwitchTIndex >= 0) {
+      const product = products[comboSwitchPIndex];
+      const type = types[comboSwitchTIndex];
+      if (product && type) {
+        const pn = product.number != null && product.number !== '' ? Number(product.number) : comboSwitchPIndex + 1;
+        const tn = type.number != null && type.number !== '' ? Number(type.number) : comboSwitchTIndex + 1;
+        preview = this._formatMatchCodeLabel(`${pn}+${tn}`);
+      }
+    }
+    if (!preview) preview = '请选择产品和车型';
+    this.setData({ comboSwitchPreview: preview });
+  },
+
+  openComboSwitch: function() {
+    if (!this.data.isAdmin || this.data.showAll || this.data.stepIndex !== 2) return;
+    const { pIndex, tIndex, products, types } = this.data;
+    if (!products.length || !types.length) return;
+    wx.vibrateShort({ type: 'light' });
+    this.setData({
+      showComboSwitchModal: true,
+      comboSwitchClosing: false,
+      comboSwitchPIndex: pIndex >= 0 ? pIndex : 0,
+      comboSwitchTIndex: tIndex >= 0 ? tIndex : 0
+    }, () => this._updateComboSwitchPreview());
+  },
+
+  hideComboSwitch: function() {
+    this.setData({ comboSwitchClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showComboSwitchModal: false,
+        comboSwitchClosing: false,
+        comboSwitchPIndex: -1,
+        comboSwitchTIndex: -1,
+        comboSwitchPreview: ''
+      });
+    }, 420);
+  },
+
+  selectComboSwitchProduct: function(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (!(index >= 0)) return;
+    this.setData({ comboSwitchPIndex: index }, () => this._updateComboSwitchPreview());
+  },
+
+  selectComboSwitchType: function(e) {
+    const index = Number(e.currentTarget.dataset.index);
+    if (!(index >= 0)) return;
+    this.setData({ comboSwitchTIndex: index }, () => this._updateComboSwitchPreview());
+  },
+
+  confirmComboSwitch: function() {
+    const { comboSwitchPIndex, comboSwitchTIndex, products, types } = this.data;
+    if (comboSwitchPIndex < 0 || comboSwitchTIndex < 0) {
+      this._showCustomToast('请选择产品和车型', 'none');
+      return;
+    }
+    if (!products[comboSwitchPIndex] || !types[comboSwitchTIndex]) return;
+    if (comboSwitchPIndex === this.data.pIndex && comboSwitchTIndex === this.data.tIndex) {
+      this.hideComboSwitch();
+      return;
+    }
+    try {
+      const mounted = Number(this.data.chapterInlineMountIndex);
+      if (mounted >= 0) {
+        wx.createVideoContext(`azjc-inline-${mounted}`, this).pause();
+      }
+    } catch (err) { /* ignore */ }
+    wx.vibrateShort({ type: 'medium' });
+    // 和上面两步点选一样：改当前产品/车型，教程按新组合重新过滤
+    this.setData({
+      pIndex: comboSwitchPIndex,
+      tIndex: comboSwitchTIndex,
+      canScroll: true,
+      chapterInlineMountIndex: -1
+    }, () => {
+      this._trackSectionClick(`product-${comboSwitchPIndex}`);
+      this._switchToSection(`product-${comboSwitchPIndex}`);
+      this._trackSectionClick(`type-${comboSwitchTIndex}`);
+      this._switchToSection(`type-${comboSwitchTIndex}`);
+      this.filterContent();
+      this.hideComboSwitch();
+      this._scrollTutorialToTop();
+    });
+  },
+
+  _scrollTutorialToTop: function() {
+    wx.nextTick(() => {
+      const query = wx.createSelectorQuery().in(this);
+      query.select('#tutorialScroll').node();
+      query.exec((res) => {
+        const node = res && res[0] && res[0].node;
+        if (node) node.scrollTop = 0;
+      });
+    });
+  },
+
+  /** 列表渲染用：多个组合拼成「产品名+车型名」给管理员看 */
+  _decorateMatchCode: function(item) {
+    const codes = readMatchCodes(item);
+    return {
+      ...item,
+      matchCodes: codes,
+      matchCodeText: codes.length
+        ? codes.map((c) => this._formatMatchCodeLabel(c)).join('、')
+        : '未设置',
+      coverUrl: this._azjcDisplayCover(item),
+      important: !!item.important
+    };
+  },
+
+  onChapterCoverError(e) {
+    const idx = Number(e.currentTarget.dataset.index);
+    if (!(idx >= 0)) return;
+    this.setData({ [`filteredChapters[${idx}].coverUrl`]: '' });
+  },
+
+  toggleChapterImportant: function(e) {
+    if (!this.data.isAdmin) return;
+    const idx = this._listVideoIndexFromEvent(e);
+    if (idx < 0) return;
+    const row = (this.data.filteredChapters || [])[idx];
+    if (!row || !row._id) return;
+    const next = !row.important;
+    this._adminAzjcUpdate(row._id, { important: next })
+      .then(() => {
+        const chapters = (this.data.chapters || []).map((c) =>
+          c._id === row._id ? { ...c, important: next } : c
+        );
+        this.setData({ chapters }, () => {
+          this.filterContent();
+          this._showCustomToast(next ? '已标为重要视频' : '已取消重要', 'success');
+        });
+      })
+      .catch((err) => {
+        console.error('toggleChapterImportant', err);
+        this._showCustomToast((err && err.message) || '保存失败', 'none');
+      });
+  },
+
   // 根据选择的product+type过滤内容
   filterContent: function() {
     const { products, types, chapters, graphics, pIndex, tIndex, showAll, isAdmin } = this.data;
@@ -1342,27 +1870,24 @@ Page({
     
     // 管理员模式下，如果开启了"显示全部"，显示所有内容
     if (isAdmin && showAll) {
-      const allChapters = [...chapters].sort((a, b) => {
-        // 先按匹配码分组，再按order排序
-        if (a.matchCode !== b.matchCode) {
-          return (a.matchCode || '').localeCompare(b.matchCode || '');
-        }
-        return (a.order || 0) - (b.order || 0);
+      // 一条内容可能挂多个码，这里按它的首个码分组，组内按该码自己的次序排
+      const sortAll = (list) => [...list].sort((a, b) => {
+        const ca = readMatchCodes(a)[0] || '';
+        const cb = readMatchCodes(b)[0] || '';
+        if (ca !== cb) return ca.localeCompare(cb);
+        return readOrderFor(a, ca) - readOrderFor(b, cb);
       });
-      
-      const allGraphics = [...graphics].sort((a, b) => {
-        if (a.matchCode !== b.matchCode) {
-          return (a.matchCode || '').localeCompare(b.matchCode || '');
-        }
-        return (a.order || 0) - (b.order || 0);
-      });
-      
+      const allChapters = sortAll(chapters);
+      const allGraphics = sortAll(graphics);
+
       this.setData({
-        filteredChapters: allChapters.map((item) => ({ ...item })),
-        filteredGraphics: allGraphics.map((item) => ({ ...item })),
+        filteredChapters: allChapters.map((item) => this._decorateMatchCode(item)),
+        filteredGraphics: allGraphics.map((item) => this._decorateMatchCode(item)),
+        chapterInlineMountIndex: -1,
         ...this._chapterInlinePlayingArrays(allChapters.length)
       });
       _azjcLog('过滤·结果', { 模式: '管理员显示全部', 视频条数: allChapters.length });
+      this._updateCurrentComboLabel();
       return;
     }
     
@@ -1371,9 +1896,11 @@ Page({
       this.setData({
         filteredChapters: [],
         filteredGraphics: [],
+        chapterInlineMountIndex: -1,
         ...this._chapterInlinePlayingArrays(0)
       });
       _azjcLog('过滤·结果', { 模式: '暂无教程', 原因: '未选全产品或车型' });
+      this._updateCurrentComboLabel();
       return;
     }
     
@@ -1384,50 +1911,28 @@ Page({
       this.setData({
         filteredChapters: [],
         filteredGraphics: [],
+        chapterInlineMountIndex: -1,
         ...this._chapterInlinePlayingArrays(0)
       });
+      this._updateCurrentComboLabel();
       return;
     }
     
-    const sameMatchCode = (a, b) => {
-      const pa = String(a || '').trim().split('+');
-      const pb = String(b || '').trim().split('+');
-      const n0 = parseInt(pa[0], 10);
-      const n1 = parseInt(pa[1], 10);
-      const m0 = parseInt(pb[0], 10);
-      const m1 = parseInt(pb[1], 10);
-      if (![n0, n1, m0, m1].every((x) => Number.isFinite(x))) return false;
-      return n0 === m0 && n1 === m1;
-    };
-
     // 构建匹配码，如 '1+1', '2+3' 等（与上传/编辑时 number 解析一致）
-    const pn = product.number != null && product.number !== '' ? Number(product.number) : pIndex + 1;
-    const tn = type.number != null && type.number !== '' ? Number(type.number) : tIndex + 1;
-    const matchCode = `${pn}+${tn}`;
-    
-    // 过滤视频：只显示匹配码相同的内容，并按order排序
-    const filteredChapters = chapters.filter(item => {
-      if (!item.matchCode) return false; // 没有匹配码的不显示
-      return sameMatchCode(item.matchCode, matchCode);
-    }).sort((a, b) => {
-      // 相同匹配码的内容按order排序
-      if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
-      return 0;
-    });
-    
-    // 过滤图文：只显示匹配码相同的内容，并按order排序
-    const filteredGraphics = graphics.filter(item => {
-      if (!item.matchCode) return false; // 没有匹配码的不显示
-      return sameMatchCode(item.matchCode, matchCode);
-    }).sort((a, b) => {
-      // 相同匹配码的内容按order排序
-      if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
-      return 0;
-    });
-    
+    const matchCode = this._currentMatchCode();
+
+    // 挂了这个组合的内容都要显示，并按「这个组合自己的次序」排
+    const pickByCode = (list) => list
+      .filter((item) => hasMatchCode(item, matchCode))
+      .sort((a, b) => readOrderFor(a, matchCode) - readOrderFor(b, matchCode));
+
+    const filteredChapters = pickByCode(chapters);
+    const filteredGraphics = pickByCode(graphics);
+
     this.setData({
-      filteredChapters: filteredChapters.map((item) => ({ ...item })),
-      filteredGraphics: filteredGraphics.map((item) => ({ ...item })),
+      filteredChapters: filteredChapters.map((item) => this._decorateMatchCode(item)),
+      filteredGraphics: filteredGraphics.map((item) => this._decorateMatchCode(item)),
+      chapterInlineMountIndex: -1,
       ...this._chapterInlinePlayingArrays(filteredChapters.length)
     });
     _azjcLog('过滤·结果', {
@@ -1436,20 +1941,12 @@ Page({
       视频条数: filteredChapters.length,
       图文章数: filteredGraphics.length
     });
+    this._updateCurrentComboLabel();
   },
 
-  // 模式切换
-  switchMode: function(e) {
-    const newMode = e.currentTarget.dataset.mode;
-
-    // 🔴 分享码用户：记录切换到视频或图文模式
-    const sectionKey = newMode === 'v' ? 'mode-video' : 'mode-graphic';
-    this._trackSectionClick(sectionKey);
-    this._switchToSection(sectionKey);
-
-    this.setData({ mode: newMode }, () => {
-      this.filterContent();
-    });
+  // 模式切换已下线（仅保留分段视频）
+  switchMode: function() {
+    if (this.data.mode !== 'v') this.setData({ mode: 'v' });
   },
 
   // 切换显示全部模式
@@ -1458,6 +1955,123 @@ Page({
     this.setData({ showAll }, () => {
       this.filterContent();
     });
+  },
+
+  runDuplicateVideoCheck: function() {
+    if (!this.data.isAdmin) return;
+    const chapters = Array.isArray(this.data.chapters) ? this.data.chapters : [];
+    if (!chapters.length) {
+      this._showCustomToast('暂无视频可查重', 'none');
+      return;
+    }
+    const exactGroups = {};
+    chapters.forEach((item) => {
+      const key = normalizeDuplicateVideoKey(item.fileID || item.url);
+      if (!key) return;
+      if (!exactGroups[key]) exactGroups[key] = [];
+      exactGroups[key].push(item);
+    });
+    const exactRows = [];
+    const exactMatchedIds = {};
+    Object.keys(exactGroups).forEach((key) => {
+      const list = exactGroups[key];
+      if (!list || list.length < 2) return;
+      const items = list.map((item) => {
+        exactMatchedIds[item._id] = true;
+        const decorated = this._decorateMatchCode(item);
+        return {
+          _id: item._id,
+          title: item.title || '未命名视频',
+          matchCodeText: decorated.matchCodeText || '未设置'
+        };
+      });
+      exactRows.push({
+        kind: 'exact',
+        kindLabel: '精确重复',
+        ruleText: '同一文件地址 / 文件 ID',
+        key,
+        count: items.length,
+        title: items[0] && items[0].title ? items[0].title : '未命名视频',
+        items
+      });
+    });
+
+    const suspectGroups = {};
+    chapters.forEach((item) => {
+      if (exactMatchedIds[item._id]) return;
+      const titleKey = normalizeSuspectedVideoTitle(item.title);
+      if (!titleKey || titleKey.length < 2) return;
+      if (!suspectGroups[titleKey]) suspectGroups[titleKey] = [];
+      suspectGroups[titleKey].push(item);
+    });
+    const suspectRows = [];
+    Object.keys(suspectGroups).forEach((key) => {
+      const list = suspectGroups[key];
+      if (!list || list.length < 2) return;
+      const uniqueExactKeys = {};
+      list.forEach((item) => {
+        uniqueExactKeys[normalizeDuplicateVideoKey(item.fileID || item.url) || item._id] = true;
+      });
+      if (Object.keys(uniqueExactKeys).length < 2) return;
+      const items = list.map((item) => {
+        const decorated = this._decorateMatchCode(item);
+        return {
+          _id: item._id,
+          title: item.title || '未命名视频',
+          matchCodeText: decorated.matchCodeText || '未设置'
+        };
+      });
+      suspectRows.push({
+        kind: 'suspect',
+        kindLabel: '疑似重复',
+        ruleText: '标题归一化后相同',
+        key,
+        count: items.length,
+        title: items[0] && items[0].title ? items[0].title : '未命名视频',
+        items
+      });
+    });
+
+    const duplicateVideoRows = exactRows
+      .concat(suspectRows)
+      .sort((a, b) => {
+        const rankA = a.kind === 'exact' ? 0 : 1;
+        const rankB = b.kind === 'exact' ? 0 : 1;
+        return rankA - rankB || b.count - a.count || String(a.title).localeCompare(String(b.title));
+      });
+    if (!duplicateVideoRows.length) {
+      this._showCustomToast('没有查到重复视频', 'success');
+      return;
+    }
+    const duplicateVideoItemCount = duplicateVideoRows.reduce((sum, row) => sum + row.count, 0);
+    this.setData({
+      showDuplicateCheckModal: true,
+      duplicateCheckClosing: false,
+      duplicateVideoRows,
+      duplicateVideoGroupCount: duplicateVideoRows.length,
+      duplicateVideoItemCount,
+      duplicateVideoExactGroupCount: exactRows.length,
+      duplicateVideoSuspectGroupCount: suspectRows.length
+    });
+  },
+
+  refreshAzjcData: function() {
+    if (!this.data.isAdmin) return;
+    this.showMyLoading('同步最新数据...');
+    this.loadDataFromCloud((ok) => {
+      this.hideMyLoading();
+      this._showCustomToast(ok ? '已同步最新数据' : '刷新失败', ok ? 'success' : 'none');
+    });
+  },
+
+  hideDuplicateCheckModal: function() {
+    this.setData({ duplicateCheckClosing: true });
+    setTimeout(() => {
+      this.setData({
+        showDuplicateCheckModal: false,
+        duplicateCheckClosing: false
+      });
+    }, 420);
   },
 
   toggleShareCodeStats: function() {
@@ -1470,10 +2084,19 @@ Page({
         this.setData({
           statsSearchKeyword: '',
           statsScrollTop: 0,
+          statsExpandedMap: {},
           shareCodeStatsDisplayRows: this.data.shareCodeStatsRows || []
         });
       }
     });
+  },
+
+  toggleStatsCardExpand: function(e) {
+    const key = String((e.currentTarget.dataset && e.currentTarget.dataset.key) || '');
+    if (!key) return;
+    const map = { ...(this.data.statsExpandedMap || {}) };
+    map[key] = !map[key];
+    this.setData({ statsExpandedMap: map });
   },
 
   onStatsSearchInput: function(e) {
@@ -1494,15 +2117,16 @@ Page({
       return;
     }
     const matchRows = [];
-    const otherRows = [];
     rows.forEach((item) => {
       const raw = String((item && item.shareCodeRaw) || '').toUpperCase();
       const disp = String((item && item.shareCode) || '').toUpperCase();
-      if (raw.indexOf(keyword) !== -1 || disp.indexOf(keyword) !== -1) matchRows.push(item);
-      else otherRows.push(item);
+      const nick = String((item && item.viewerNickname) || '').toUpperCase();
+      if (raw.indexOf(keyword) !== -1 || disp.indexOf(keyword) !== -1 || nick.indexOf(keyword) !== -1) {
+        matchRows.push(item);
+      }
     });
     this.setData({
-      shareCodeStatsDisplayRows: matchRows.concat(otherRows),
+      shareCodeStatsDisplayRows: matchRows,
       statsScrollTop: 0
     });
   },
@@ -1687,13 +2311,18 @@ Page({
   },
 
   uploadMedia: function(e) {
-    const mediaType = e.currentTarget.dataset.type; // 'video' 或 'image'
+    const mediaType = e.currentTarget.dataset.type; // 仅支持 'video'
+    if (mediaType !== 'video') {
+      this._showCustomToast('安装教程仅支持视频', 'none');
+      return;
+    }
     wx.chooseMedia({
       count: 1,
       mediaType: [mediaType],
       sourceType: ['album', 'camera'],
       success: async (res) => {
         const rawPath = res.tempFiles[0].tempFilePath;
+        const thumbPath = (res.tempFiles[0] && res.tempFiles[0].thumbTempFilePath) || '';
         const knownSize = res.tempFiles[0] && typeof res.tempFiles[0].size === 'number' ? res.tempFiles[0].size : undefined;
         let tempPath = rawPath;
         if (mediaType === 'image') {
@@ -1714,19 +2343,29 @@ Page({
             if (resModal.confirm) {
               const title = resModal.content || '未命名步骤';
               
-              this.showMyLoading('上传中...');
+              this.showMyLoading(mediaType === 'video' ? '压缩视频...' : '上传中...');
               const folder = `azjc/${mediaType}`;
               let copiedPath = '';
-              this._ensureLocalUploadPath(tempPath)
-                .then((localPath) => {
-                  copiedPath = localPath;
-                  const uploadPromise =
-                    mediaType === 'video'
-                      ? cosUpload.uploadVideoToCos(localPath, folder, { knownSize })
-                      : cosUpload.uploadImageToCos(localPath, folder, { knownSize });
-                  return uploadPromise;
+              const ready =
+                mediaType === 'video'
+                  ? this._prepareAzjcVideoForUpload(res.tempFiles[0])
+                  : Promise.resolve({ path: tempPath, size: knownSize });
+              ready
+                .then((prepared) => {
+                  this.showMyLoading('上传中...');
+                  return this._ensureLocalUploadPath(prepared.path || tempPath).then((localPath) => {
+                    copiedPath = localPath;
+                    const size = prepared.size != null ? prepared.size : knownSize;
+                    return mediaType === 'video'
+                      ? cosUpload.uploadVideoToCos(localPath, folder, { knownSize: size })
+                      : cosUpload.uploadImageToCos(localPath, folder, { knownSize: size });
+                  });
                 })
-                .then(fileID => {
+                .then(async (fileID) => {
+                  let coverUrl = '';
+                  if (mediaType === 'video' && thumbPath) {
+                    coverUrl = await this._uploadAzjcCover(thumbPath);
+                  }
                   const data = {
                     type: mediaType,
                     title: title,
@@ -1734,6 +2373,7 @@ Page({
                   };
                   if (mediaType === 'video') {
                     data.url = fileID;
+                    if (coverUrl) data.coverUrl = coverUrl;
                   } else {
                     data.img = fileID;
                     data.desc = '';
@@ -1862,74 +2502,119 @@ Page({
 
   // 显示匹配码选择弹窗（presetMatchCode 如 "1+2"，与当前筛选一致时上传不必重选）
   showMatchCodeModal: function(mediaType, fileID, title, data, presetMatchCode) {
-    const { products, types } = this.data;
+    const { products, types } = this._getMatchCodeSourceLists();
     
-    // 显示所有从云端读取的产品和车型（有_id的，说明是已创建并保存到云端的）
-    // 如果没有从云端读取到数据，则使用当前data中的数据（可能是默认数据或刚创建的）
-    const availableProducts = products.filter(p => p._id).length > 0 
-      ? products.filter(p => p._id)  // 优先使用从云端读取的
-      : products;  // 如果没有云端数据，使用当前数据（包括默认数据）
-    
-    const availableTypes = types.filter(t => t._id).length > 0
-      ? types.filter(t => t._id)  // 优先使用从云端读取的
-      : types;  // 如果没有云端数据，使用当前数据（包括默认数据）
-    
-    console.log('可用产品:', availableProducts);
-    console.log('可用车型:', availableTypes);
+    console.log('可用产品:', products);
+    console.log('可用车型:', types);
     
     // 如果确实没有任何数据，才提示
-    if (availableProducts.length === 0 || availableTypes.length === 0) {
+    if (products.length === 0 || types.length === 0) {
       this._showCustomToast('请先创建产品和车型', 'none', 2000);
       this.hideMyLoading();
       return;
     }
     
-    const firstProduct = availableProducts[0];
-    const firstType = availableTypes[0];
+    // 预选：presetMatchCode 可以是 '1+2'，也可以是多码数组 ['1+2','2+3']（编辑已有内容时）
+    const presetCodes = this._parsePresetMatchCodes(presetMatchCode);
+    const presetProductNums = presetCodes.map((c) => Number(c.split('+')[0]));
+    const presetTypeNums = presetCodes.map((c) => Number(c.split('+')[1]));
 
-    const findNumIndex = (arr, targetNum) => {
-      const t = Number(targetNum);
-      if (!Number.isFinite(t)) return 0;
-      const idx = (arr || []).findIndex((row, i) => {
-        const n = row.number != null && row.number !== '' ? Number(row.number) : i + 1;
-        return Number(n) === t;
-      });
-      return idx >= 0 ? idx : 0;
-    };
+    const productOptions = this._buildMatchCodeOptions(products, presetProductNums);
+    const typeOptions = this._buildMatchCodeOptions(types, presetTypeNums);
 
-    let matchCodeProductNum = firstProduct ? (firstProduct.number || 1) : 1;
-    let matchCodeTypeNum = firstType ? (firstType.number || 1) : 1;
-    let matchCodeProductIndex = 0;
-    let matchCodeTypeIndex = 0;
-
-    const preset = presetMatchCode != null && presetMatchCode !== '' ? String(presetMatchCode) : '';
-    if (preset && preset.indexOf('+') !== -1) {
-      const ps = preset.split('+');
-      const pn = parseInt(ps[0], 10);
-      const tn = parseInt(ps[1], 10);
-      if (Number.isFinite(pn)) matchCodeProductNum = pn;
-      if (Number.isFinite(tn)) matchCodeTypeNum = tn;
-      matchCodeProductIndex = findNumIndex(availableProducts, matchCodeProductNum);
-      matchCodeTypeIndex = findNumIndex(availableTypes, matchCodeTypeNum);
-      const rp = availableProducts[matchCodeProductIndex];
-      const rt = availableTypes[matchCodeTypeIndex];
-      matchCodeProductNum = rp ? (rp.number != null && rp.number !== '' ? Number(rp.number) : matchCodeProductIndex + 1) : matchCodeProductNum;
-      matchCodeTypeNum = rt ? (rt.number != null && rt.number !== '' ? Number(rt.number) : matchCodeTypeIndex + 1) : matchCodeTypeNum;
-    }
-    
-    // 保存临时数据
     this.setData({
       showMatchCodePicker: true,
       tempUploadData: { mediaType, fileID, title, data },
-      availableProducts: availableProducts, // 显示所有可用的产品
-      availableTypes: availableTypes, // 显示所有可用的车型
-      matchCodeProductNum,
-      matchCodeTypeNum,
-      matchCodeProductIndex,
-      matchCodeTypeIndex,
-      currentProductName: (availableProducts[matchCodeProductIndex] && availableProducts[matchCodeProductIndex].name) || (firstProduct ? firstProduct.name : '请选择'),
-      currentTypeName: (availableTypes[matchCodeTypeIndex] && availableTypes[matchCodeTypeIndex].name) || (firstType ? firstType.name : '请选择')
+      availableProducts: productOptions,
+      availableTypes: typeOptions,
+      ...this._buildMatchCodePreview(productOptions, typeOptions)
     });
+  },
+
+  /** 优先用已入库（有 _id）的产品/车型；都没有时回退到当前页面列表（含默认项） */
+  _getMatchCodeSourceLists: function() {
+    const products = this.data.products || [];
+    const types = this.data.types || [];
+    const cloudProducts = products.filter((p) => p && p._id);
+    const cloudTypes = types.filter((t) => t && t._id);
+    return {
+      products: cloudProducts.length > 0 ? cloudProducts : products,
+      types: cloudTypes.length > 0 ? cloudTypes : types
+    };
+  },
+
+  /** presetMatchCode 支持 '1+2' 或 ['1+2','2+3'] 两种写法 */
+  _parsePresetMatchCodes: function(preset) {
+    const raw = Array.isArray(preset) ? preset : [preset];
+    const out = [];
+    raw.forEach((c) => {
+      const code = normalizeMatchCode(c);
+      if (code && out.indexOf(code) < 0) out.push(code);
+    });
+    return out;
+  },
+
+  /**
+   * 把产品/车型列表加工成可勾选项。number 缺失时沿用「下标+1」的老规则，
+   * 保证生成的码和 _currentMatchCode 对得上。
+   */
+  _buildMatchCodeOptions: function(rows, presetNums) {
+    const wanted = (presetNums || []).filter((n) => Number.isFinite(n));
+    const options = (rows || []).map((row, i) => {
+      const num = row.number != null && row.number !== '' ? Number(row.number) : i + 1;
+      return {
+        ...row,
+        num,
+        key: `${num}-${row._id || i}`,
+        checked: wanted.indexOf(num) >= 0
+      };
+    });
+    // 一个都没勾中（新上传、或预设的号码已被删）就默认勾第一个，避免出现空匹配码
+    if (options.length && !options.some((o) => o.checked)) options[0].checked = true;
+    return options;
+  },
+
+  /** 勾选的产品 × 勾选的车型 = 全部组合（预览用名称，入库仍用数字码） */
+  _buildMatchCodePreview: function(productOptions, typeOptions) {
+    const pChecked = (productOptions || []).filter((o) => o.checked);
+    const tChecked = (typeOptions || []).filter((o) => o.checked);
+    const codes = [];
+    const labels = [];
+    pChecked.forEach((p) => {
+      tChecked.forEach((t) => {
+        const code = normalizeMatchCode(`${p.num}+${t.num}`);
+        if (!code || codes.indexOf(code) >= 0) return;
+        codes.push(code);
+        labels.push(`${p.name || ('产品' + p.num)}+${t.name || ('车型' + t.num)}`);
+      });
+    });
+    return {
+      matchCodePreviewCodes: codes,
+      matchCodePreviewText: labels.length ? labels.join('、') : '请至少各选一个',
+      matchCodeSelectedCount: codes.length
+    };
+  },
+
+  _toggleMatchCodeOption: function(listKey, num) {
+    const target = Number(num);
+    if (!Number.isFinite(target)) return;
+    const list = (this.data[listKey] || []).map((o) => (
+      o.num === target ? { ...o, checked: !o.checked } : o
+    ));
+    const productOptions = listKey === 'availableProducts' ? list : this.data.availableProducts;
+    const typeOptions = listKey === 'availableTypes' ? list : this.data.availableTypes;
+    this.setData({
+      [listKey]: list,
+      ...this._buildMatchCodePreview(productOptions, typeOptions)
+    });
+  },
+
+  toggleMatchCodeProduct: function(e) {
+    this._toggleMatchCodeOption('availableProducts', e.currentTarget.dataset.num);
+  },
+
+  toggleMatchCodeType: function(e) {
+    this._toggleMatchCodeOption('availableTypes', e.currentTarget.dataset.num);
   },
 
   // 关闭匹配码选择弹窗
@@ -1945,89 +2630,89 @@ Page({
     }, 420);
   },
 
-  // 选择产品号码
-  onProductNumChange: function(e) {
-    const selectedIndex = parseInt(e.detail.value);
-    const availableProducts = this.data.availableProducts || [];
-    const selectedProduct = availableProducts[selectedIndex];
-    
-    if (!selectedProduct) return;
-    
-    const productNum = selectedProduct.number || (selectedIndex + 1);
-    this.setData({
-      matchCodeProductNum: productNum,
-      matchCodeProductIndex: selectedIndex,
-      currentProductName: selectedProduct.name || '请选择'
+  /** 某个组合下已有内容的最大次序，用来把新内容排到该组合的末尾 */
+  _maxOrderInCode: function(list, code) {
+    let max = -1;
+    (list || []).forEach((item) => {
+      if (!hasMatchCode(item, code)) return;
+      const n = readOrderFor(item, code);
+      if (n > max) max = n;
     });
-  },
-
-  // 选择车型号码
-  onTypeNumChange: function(e) {
-    const selectedIndex = parseInt(e.detail.value);
-    const availableTypes = this.data.availableTypes || [];
-    const selectedType = availableTypes[selectedIndex];
-    
-    if (!selectedType) return;
-    
-    const typeNum = selectedType.number || (selectedIndex + 1);
-    this.setData({
-      matchCodeTypeNum: typeNum,
-      matchCodeTypeIndex: selectedIndex,
-      currentTypeName: selectedType.name || '请选择'
-    });
+    return max;
   },
 
   // 确认匹配码选择
   confirmMatchCode: function() {
-    const { tempUploadData, matchCodeProductNum, matchCodeTypeNum, products, types, chapters, graphics } = this.data;
+    const { tempUploadData, matchCodePreviewCodes, chapters, graphics } = this.data;
     
     if (!tempUploadData) {
       this._showCustomToast('上传数据丢失，请重新上传', 'none');
       this.hideMatchCodePicker();
       return;
     }
+
+    const codes = (matchCodePreviewCodes || []).slice();
+    if (!codes.length) {
+      this._showCustomToast('产品和车型都要至少选一个', 'none');
+      return;
+    }
     
     const { mediaType, fileID, title, data, isEdit } = tempUploadData;
-    const matchCode = `${matchCodeProductNum}+${matchCodeTypeNum}`;
+    const matchCode = codes[0];
+    const siblings = mediaType === 'video' ? chapters : graphics;
     
     // 如果是编辑模式，更新现有记录
     if (isEdit && data._id) {
-      db.collection('azjc').doc(data._id).update({
-        data: { matchCode: matchCode },
-        success: () => {
-          // 更新本地数据
-          const allList = mediaType === 'video' ? this.data.chapters : this.data.graphics;
-          const item = allList.find(i => i._id === data._id);
-          if (item) {
-            item.matchCode = matchCode;
+      const allList = mediaType === 'video' ? this.data.chapters : this.data.graphics;
+      const current = allList.find(i => i._id === data._id);
+      // 保留还在的组合的原有次序，新加的组合排到那个组合的末尾
+      const keptOrders = readOrderMap(current || {});
+      const orders = codes.map((code) => {
+        if (Object.prototype.hasOwnProperty.call(keptOrders, code)) {
+          return { code, order: keptOrders[code] };
+        }
+        if (current && hasMatchCode(current, code)) {
+          return { code, order: legacyOrderOf(current) };
+        }
+        return { code, order: this._maxOrderInCode(siblings.filter(i => i._id !== data._id), code) + 1 };
+      });
+      const payload = {
+        matchCode,
+        matchCodes: codes,
+        orders,
+        order: orders[0].order
+      };
+      this._adminAzjcUpdate(data._id, payload)
+        .then(() => {
+          if (current) {
+            Object.assign(current, payload);
             this.setData({
               [mediaType === 'video' ? 'chapters' : 'graphics']: allList
             });
             this.filterContent();
           }
-          
           this.hideMatchCodePicker();
           this._showCustomToast('匹配码已更新', 'success');
-        },
-        fail: (err) => {
+        })
+        .catch((err) => {
           console.error('更新匹配码失败:', err);
-          this._showCustomToast('更新失败', 'none');
-        }
-      });
+          this._showCustomToast((err && err.message) || '更新失败', 'none');
+        });
       return;
     }
     
-    // 计算当前匹配码的最大order值
-    const sameMatchCodeItems = mediaType === 'video' 
-      ? chapters.filter(item => item.matchCode === matchCode)
-      : graphics.filter(item => item.matchCode === matchCode);
-    const maxOrder = sameMatchCodeItems.length > 0 
-      ? Math.max(...sameMatchCodeItems.map(item => item.order || 0))
-      : -1;
+    // 每个组合各自排到自己那一组的末尾
+    const orders = codes.map((code) => ({
+      code,
+      order: this._maxOrderInCode(siblings, code) + 1
+    }));
     
     // 保存到云数据库
     data.matchCode = matchCode;
-    data.order = maxOrder + 1; // 新上传的排在最后
+    data.matchCodes = codes;
+    data.orders = orders;
+    data.order = orders[0].order; // 兼容老字段：初始加载还在用 orderBy('order')
+    if (mediaType === 'video') data.important = false;
     
     console.log('保存到数据库，数据:', data);
     this.showMyLoading('保存中...');
@@ -2037,8 +2722,10 @@ Page({
       success: (addRes) => {
         const previewLocal = (data && data._previewLocal) || '';
         const sortByOrder = (a, b) => {
-          if (a.matchCode !== b.matchCode) return 0;
-          return (a.order || 0) - (b.order || 0);
+          const ca = readMatchCodes(a)[0] || '';
+          const cb = readMatchCodes(b)[0] || '';
+          if (ca !== cb) return 0;
+          return readOrderFor(a, ca) - readOrderFor(b, cb);
         };
         const finishUpload = (patchLists, extraSetData) => {
           this._clearPendingUploadTemp();
@@ -2065,9 +2752,12 @@ Page({
               title,
               url: this._mediaCacheBust(remoteUrl),
               fileID: remoteUrl,
-              coverUrl: '',
+              coverUrl: data.coverUrl || this._azjcVideoSnapshotUrl(remoteUrl) || '',
               matchCode,
+              matchCodes: codes,
+              orders,
               order: data.order,
+              important: false,
               _id: addRes._id
             });
             list.sort(sortByOrder);
@@ -2082,6 +2772,8 @@ Page({
             previewLocal,
             fileID: remoteUrl,
             matchCode,
+            matchCodes: codes,
+            orders,
             order: data.order,
             desc: '',
             _id: addRes._id
@@ -2126,28 +2818,24 @@ Page({
         if (res.confirm) {
           const number = parseInt(res.content) || currentNumber;
           
-          // 更新云数据库
+          // 更新云数据库（管理员云函数，可改他人创建的文档）
           if (item._id) {
-            db.collection('azjc').doc(item._id).update({
-              data: {
-                number: number,
-                order: number
-              },
-              success: () => {
-                // 更新本地数据
+            this._adminAzjcUpdate(item._id, {
+              number: number,
+              order: number
+            })
+              .then(() => {
                 let list = [...this.data[type]];
                 list[index].number = number;
-                // 重新排序
                 list.sort((a, b) => (a.number || 0) - (b.number || 0));
                 this.setData({ [type]: list });
-                this.filterContent(); // 重新过滤内容
+                this.filterContent();
                 this._showCustomToast('设置成功', 'success');
-              },
-              fail: (err) => {
+              })
+              .catch((err) => {
                 console.error('更新失败:', err);
-                this._showCustomToast('更新失败', 'none');
-              }
-            });
+                this._showCustomToast((err && err.message) || '更新失败', 'none');
+              });
           } else {
             // 如果没有_id，只更新本地
             let list = [...this.data[type]];
@@ -2162,6 +2850,32 @@ Page({
     });
   },
 
+  /**
+   * 交换两条内容在「当前组合」下的次序，别的组合不动。
+   * 返回 Promise，写库失败时 reject。
+   */
+  _swapOrderInCurrentCode: function(type, itemA, itemB) {
+    const code = this._currentMatchCode();
+    if (!code) return Promise.reject(new Error('未选定产品或车型，无法排序'));
+
+    const allList = type === 'chapters' ? this.data.chapters : this.data.graphics;
+    const a = allList.find(i => i._id === itemA._id);
+    const b = allList.find(i => i._id === itemB._id);
+    if (!a || !b) return Promise.reject(new Error('找不到对应内容'));
+
+    const orderA = readOrderFor(a, code);
+    const orderB = readOrderFor(b, code);
+    a.orders = buildOrdersWith(a, code, orderB);
+    b.orders = buildOrdersWith(b, code, orderA);
+
+    const writes = [a, b]
+      .filter(row => row._id)
+      .map(row => this._adminAzjcUpdate(row._id, { orders: row.orders }));
+
+    this.setData({ [type === 'chapters' ? 'chapters' : 'graphics']: allList });
+    return Promise.all(writes);
+  },
+
   // 上移视频/图文
   moveItemUp: function(e) {
     const { type, index } = e.currentTarget.dataset;
@@ -2173,38 +2887,7 @@ Page({
     const prevItem = list[index - 1];
     
     // 交换order
-    const tempOrder = item.order || 0;
-    const newOrder = prevItem.order || 0;
-    
-    // 更新云数据库
-    const updatePromises = [];
-    if (item._id) {
-      updatePromises.push(
-        db.collection('azjc').doc(item._id).update({
-          data: { order: newOrder }
-        })
-      );
-    }
-    if (prevItem._id) {
-      updatePromises.push(
-        db.collection('azjc').doc(prevItem._id).update({
-          data: { order: tempOrder }
-        })
-      );
-    }
-    
-    Promise.all(updatePromises).then(() => {
-      // 更新本地数据
-      const allList = type === 'chapters' ? this.data.chapters : this.data.graphics;
-      const allItem = allList.find(i => i._id === item._id);
-      const allPrevItem = allList.find(i => i._id === prevItem._id);
-      
-      if (allItem) allItem.order = newOrder;
-      if (allPrevItem) allPrevItem.order = tempOrder;
-      
-      this.setData({
-        [type === 'chapters' ? 'chapters' : 'graphics']: allList
-      });
+    this._swapOrderInCurrentCode(type, item, prevItem).then(() => {
       this.filterContent();
       this._showCustomToast('已上移', 'success');
     }).catch(err => {
@@ -2220,42 +2903,7 @@ Page({
     
     if (index >= list.length - 1) return; // 已经在最下面
     
-    const item = list[index];
-    const nextItem = list[index + 1];
-    
-    // 交换order
-    const tempOrder = item.order || 0;
-    const newOrder = nextItem.order || 0;
-    
-    // 更新云数据库
-    const updatePromises = [];
-    if (item._id) {
-      updatePromises.push(
-        db.collection('azjc').doc(item._id).update({
-          data: { order: newOrder }
-        })
-      );
-    }
-    if (nextItem._id) {
-      updatePromises.push(
-        db.collection('azjc').doc(nextItem._id).update({
-          data: { order: tempOrder }
-        })
-      );
-    }
-    
-    Promise.all(updatePromises).then(() => {
-      // 更新本地数据
-      const allList = type === 'chapters' ? this.data.chapters : this.data.graphics;
-      const allItem = allList.find(i => i._id === item._id);
-      const allNextItem = allList.find(i => i._id === nextItem._id);
-      
-      if (allItem) allItem.order = newOrder;
-      if (allNextItem) allNextItem.order = tempOrder;
-      
-      this.setData({
-        [type === 'chapters' ? 'chapters' : 'graphics']: allList
-      });
+    this._swapOrderInCurrentCode(type, list[index], list[index + 1]).then(() => {
       this.filterContent();
       this._showCustomToast('已下移', 'success');
     }).catch(err => {
@@ -2265,62 +2913,100 @@ Page({
   },
 
   // 原地删除数据
+  // chapters：列表是 filteredChapters；products/types：直接用本表下标
+  // 删除走管理员云函数，任意管理员可删他人上传的内容
   deleteItem: function(e) {
     const { type, index } = e.currentTarget.dataset;
+    let item = null;
+    let masterKey = '';
+    if (type === 'products' || type === 'types') {
+      masterKey = type;
+      item = (this.data[type] || [])[index];
+    } else if (type === 'chapters') {
+      masterKey = 'chapters';
+      item = (this.data.filteredChapters || [])[index];
+    } else if (type === 'graphics') {
+      masterKey = 'graphics';
+      item = (this.data.filteredGraphics || [])[index];
+    } else {
+      return;
+    }
+
     this._showCustomModal({
       title: '确认删除',
       content: '删除后无法撤销',
       success: (res) => {
-        if (res.confirm) {
-          const list = this.data[type];
-          const item = list[index];
-          
-          if (!item._id) {
-            // 如果没有 _id，说明是本地数据，直接删除
-            list.splice(index, 1);
-            this.setData({ [type]: list });
+        if (!res.confirm) return;
+        if (!item) {
+          this._showCustomToast('未找到该条目', 'none');
+          return;
+        }
+
+        const dropFromMaster = (list, target) => {
+          const rows = list || [];
+          if (target._id) return rows.filter((row) => row._id !== target._id);
+          const hit = rows.findIndex((row, i) => {
+            if (type === 'products' || type === 'types') {
+              return !row._id && i === index;
+            }
+            return (
+              !row._id &&
+              row.url === target.url &&
+              row.img === target.img &&
+              row.title === target.title
+            );
+          });
+          if (hit < 0) return rows;
+          const next = rows.slice();
+          next.splice(hit, 1);
+          return next;
+        };
+
+        const applyLocalDelete = () => {
+          const patch = { [masterKey]: dropFromMaster(this.data[masterKey], item) };
+          this.setData(patch, () => {
+            if (type === 'chapters' || type === 'graphics' || type === 'products' || type === 'types') {
+              this.filterContent();
+            }
+            this.hideMyLoading();
             this._showCustomToast('已删除', 'success');
+          });
+        };
+
+        const purgeMedia = (target) => {
+          if (type !== 'chapters' && type !== 'graphics') return;
+          const fileRef = target.fileID || (type === 'chapters' ? target.url : target.img);
+          if (!fileRef || typeof fileRef !== 'string') return;
+          if (fileRef.indexOf('cloud://') === 0) {
+            wx.cloud.deleteFile({
+              fileList: [fileRef],
+              fail: (err) => console.error('云存储文件删除失败:', err)
+            });
             return;
           }
-          
-          // 显示删除进度
-          this.showMyLoading('删除中...');
-          
-          // 删除云数据库记录
-          db.collection('azjc').doc(item._id).remove({
-            success: () => {
-              // 删除云存储文件（使用保存的fileID）
-              const fileID = item.fileID || (type === 'chapters' ? item.url : item.img);
-              // 判断是否是云存储fileID（以cloud://开头）
-              if (fileID && fileID.startsWith('cloud://')) {
-                wx.cloud.deleteFile({
-                  fileList: [fileID],
-                  success: () => {
-                    console.log('云存储文件删除成功');
-                  },
-                  fail: (err) => {
-                    console.error('云存储文件删除失败:', err);
-                    // 即使文件删除失败，也继续删除本地数据
-                  }
-                });
-              }
-              
-              // 更新本地数据
-              list.splice(index, 1);
-              this.setData({ [type]: list });
-              // 重新过滤以刷新显示
-              this.filterContent();
-              
-              this.hideMyLoading();
-              this._showCustomToast('已删除', 'success');
-            },
-            fail: (err) => {
-              console.error('删除数据库记录失败:', err);
-              this.hideMyLoading();
-              this._showCustomToast('删除失败', 'none');
-            }
-          });
+          if (/^https?:\/\//i.test(fileRef)) {
+            cosUpload.deleteCosObjectsByUrls([fileRef]).catch((err) => {
+              console.error('COS 文件删除失败:', err);
+            });
+          }
+        };
+
+        if (!item._id) {
+          applyLocalDelete();
+          return;
         }
+
+        this.showMyLoading('删除中...');
+        this._adminAzjcRemove(item._id)
+          .then(() => {
+            purgeMedia(item);
+            applyLocalDelete();
+          })
+          .catch((err) => {
+            console.error('删除数据库记录失败:', err);
+            this.hideMyLoading();
+            this._showCustomToast((err && err.message) || '删除失败', 'none');
+          });
       }
     });
   },
@@ -2376,11 +3062,8 @@ Page({
         if (res.confirm && res.content) {
           const newTitle = res.content;
           
-          // 更新云数据库
-          db.collection('azjc').doc(editItemData._id).update({
-            data: { title: newTitle },
-            success: () => {
-              // 更新本地数据
+          this._adminAzjcUpdate(editItemData._id, { title: newTitle })
+            .then(() => {
               const allList = editItemType === 'chapters' ? this.data.chapters : this.data.graphics;
               const item = allList.find(i => i._id === editItemData._id);
               if (item) {
@@ -2390,15 +3073,14 @@ Page({
                 });
                 this.filterContent();
               }
-              
+
               this.hideEditModal();
               this._showCustomToast('编辑成功', 'success');
-            },
-            fail: (err) => {
+            })
+            .catch((err) => {
               console.error('更新失败:', err);
-              this._showCustomToast('更新失败', 'none');
-            }
-          });
+              this._showCustomToast((err && err.message) || '更新失败', 'none');
+            });
         }
       }
     });
@@ -2409,41 +3091,24 @@ Page({
     const { editItemData } = this.data;
     
     if (!editItemData) return;
-    
-    // 显示匹配码选择弹窗
-    const availableProducts = this.data.products.filter(p => p._id);
-    const availableTypes = this.data.types.filter(t => t._id);
 
-    const findNumIndex = (arr, targetNum) => {
-      const t = Number(targetNum);
-      if (!Number.isFinite(t)) return 0;
-      const idx = (arr || []).findIndex((row, i) => {
-        const n = row.number != null && row.number !== '' ? Number(row.number) : i + 1;
-        return Number(n) === t;
-      });
-      return idx >= 0 ? idx : 0;
-    };
-    
-    let productNum = 1;
-    let typeNum = 1;
-    let productIndex = 0;
-    let typeIndex = 0;
-    
-    // 如果有现有匹配码，解析并设置
-    if (editItemData.matchCode) {
-      const matchParts = editItemData.matchCode.split('+');
-      if (matchParts.length === 2) {
-        productNum = parseInt(matchParts[0], 10);
-        typeNum = parseInt(matchParts[1], 10);
-        productIndex = findNumIndex(availableProducts, productNum);
-        typeIndex = findNumIndex(availableTypes, typeNum);
-        const rp = availableProducts[productIndex];
-        const rt = availableTypes[typeIndex];
-        productNum = rp ? (rp.number != null && rp.number !== '' ? Number(rp.number) : productIndex + 1) : productNum;
-        typeNum = rt ? (rt.number != null && rt.number !== '' ? Number(rt.number) : typeIndex + 1) : typeNum;
-      }
+    const { products, types } = this._getMatchCodeSourceLists();
+    if (products.length === 0 || types.length === 0) {
+      this._showCustomToast('请先创建产品和车型', 'none', 2000);
+      return;
     }
-    
+
+    // 该条内容已挂的全部组合都要回勾上，否则编辑一次就把别的组合弄丢了
+    const presetCodes = readMatchCodes(editItemData);
+    const productOptions = this._buildMatchCodeOptions(
+      products,
+      presetCodes.map((c) => Number(c.split('+')[0]))
+    );
+    const typeOptions = this._buildMatchCodeOptions(
+      types,
+      presetCodes.map((c) => Number(c.split('+')[1]))
+    );
+
     this.setData({
       showMatchCodePicker: true,
       tempUploadData: {
@@ -2453,14 +3118,9 @@ Page({
         data: { _id: editItemData._id },
         isEdit: true // 标记为编辑模式
       },
-      availableProducts: availableProducts,
-      availableTypes: availableTypes,
-      matchCodeProductNum: productNum,
-      matchCodeTypeNum: typeNum,
-      matchCodeProductIndex: productIndex,
-      matchCodeTypeIndex: typeIndex,
-      currentProductName: availableProducts[productIndex] ? availableProducts[productIndex].name : '',
-      currentTypeName: availableTypes[typeIndex] ? availableTypes[typeIndex].name : ''
+      availableProducts: productOptions,
+      availableTypes: typeOptions,
+      ...this._buildMatchCodePreview(productOptions, typeOptions)
     });
     
     this.hideEditModal();
@@ -2481,35 +3141,27 @@ Page({
           })
           .then((imageUrl) => {
             const previewLocal = copiedPath || tempPath;
-            db.collection('azjc').doc(editItemData._id).update({
-              data: { img: imageUrl },
-              success: () => {
-                const gList = [...this.data.graphics];
-                const hit = gList.find(i => i._id === editItemData._id);
-                if (hit) {
-                  hit.img = imageUrl;
-                  hit.fileID = imageUrl;
-                  hit.previewLocal = previewLocal;
-                }
-                this.setData({
-                  graphics: gList,
-                  editItemData: {
-                    ...this.data.editItemData,
-                    img: imageUrl,
-                    fileID: imageUrl,
-                    previewLocal
-                  }
-                });
-                this.filterContent();
-                this.hideMyLoading();
-                this._cleanupTempUploadPath(copiedPath, tempPath);
-                this._showCustomToast('配图已更新', 'success');
-              },
-              fail: () => {
-                this.hideMyLoading();
-                this._cleanupTempUploadPath(copiedPath, tempPath);
-                this._showCustomToast('更新失败', 'none');
+            return this._adminAzjcUpdate(editItemData._id, { img: imageUrl }).then(() => {
+              const gList = [...this.data.graphics];
+              const hit = gList.find(i => i._id === editItemData._id);
+              if (hit) {
+                hit.img = imageUrl;
+                hit.fileID = imageUrl;
+                hit.previewLocal = previewLocal;
               }
+              this.setData({
+                graphics: gList,
+                editItemData: {
+                  ...this.data.editItemData,
+                  img: imageUrl,
+                  fileID: imageUrl,
+                  previewLocal
+                }
+              });
+              this.filterContent();
+              this.hideMyLoading();
+              this._cleanupTempUploadPath(copiedPath, tempPath);
+              this._showCustomToast('配图已更新', 'success');
             });
           })
           .catch((err) => {
@@ -2528,6 +3180,15 @@ Page({
   // 长按开始拖拽
   onDragStart: function(e) {
     if (!this.data.isAdmin) return;
+    // 「显示全部」是把各个组合混在一起列的，排序没有明确归属，先退出该模式再拖
+    if (this.data.showAll) {
+      this._showCustomToast('排序请先关掉「显示全部」，进到具体车型下拖', 'none', 2000);
+      return;
+    }
+    if (!this._currentMatchCode()) {
+      this._showCustomToast('请先选好产品和车型再排序', 'none', 2000);
+      return;
+    }
     
     const index = parseInt(e.currentTarget.dataset.index);
     const type = e.currentTarget.dataset.type;
@@ -2598,34 +3259,23 @@ Page({
       newList[this.data.dragIndex] = newList[targetIndex];
       newList[targetIndex] = temp;
       
-      // 更新order值
+      // 只改当前组合下的次序，这条内容挂的其他组合不受影响
       const allList = this.data.dragType === 'chapters' ? this.data.chapters : this.data.graphics;
+      const dragCode = this._currentMatchCode();
       const allItem1 = allList.find(i => i._id === list[this.data.dragIndex]._id);
       const allItem2 = allList.find(i => i._id === list[targetIndex]._id);
       
-      if (allItem1 && allItem2) {
-        const tempOrder = allItem1.order || 0;
-        allItem1.order = allItem2.order || 0;
-        allItem2.order = tempOrder;
+      if (dragCode && allItem1 && allItem2) {
+        const order1 = readOrderFor(allItem1, dragCode);
+        const order2 = readOrderFor(allItem2, dragCode);
+        allItem1.orders = buildOrdersWith(allItem1, dragCode, order2);
+        allItem2.orders = buildOrdersWith(allItem2, dragCode, order1);
         
-        // 同步到云数据库
-        const updatePromises = [];
-        if (allItem1._id) {
-          updatePromises.push(
-            db.collection('azjc').doc(allItem1._id).update({
-              data: { order: allItem1.order }
-            })
-          );
-        }
-        if (allItem2._id) {
-          updatePromises.push(
-            db.collection('azjc').doc(allItem2._id).update({
-              data: { order: allItem2.order }
-            })
-          );
-        }
-        
-        Promise.all(updatePromises).catch(err => {
+        // 同步到云数据库（管理员云函数，可改他人创建的文档）
+        Promise.all([allItem1, allItem2]
+          .filter(row => row._id)
+          .map(row => this._adminAzjcUpdate(row._id, { orders: row.orders }))
+        ).catch(err => {
           console.error('更新排序失败:', err);
         });
       }
@@ -2642,6 +3292,7 @@ Page({
       };
       if (this.data.dragType === 'chapters') {
         Object.assign(patch, this._chapterInlinePlayingArrays(newList.length));
+        patch.chapterInlineMountIndex = -1;
       }
       this.setData(patch);
       
@@ -2667,21 +3318,20 @@ Page({
     const list = dragType === 'chapters' ? this.data.filteredChapters : this.data.filteredGraphics;
     const allList = dragType === 'chapters' ? this.data.chapters : this.data.graphics;
     
-    // 重新计算所有项目的order值（根据当前显示顺序）
+    // 按当前显示顺序重排「当前组合」的次序；这条内容在别的组合里的位置原样保留
+    const endCode = this._currentMatchCode();
     const updatePromises = [];
     list.forEach((item, index) => {
       const allItem = allList.find(i => i._id === item._id);
-      if (allItem && allItem.order !== index) {
-        allItem.order = index;
-        if (allItem._id) {
-          updatePromises.push(
-            db.collection('azjc').doc(allItem._id).update({
-              data: { order: index }
-            }).catch(err => {
-              console.error('更新order失败:', err);
-            })
-          );
-        }
+      if (!allItem || !endCode) return;
+      if (readOrderFor(allItem, endCode) === index) return;
+      allItem.orders = buildOrdersWith(allItem, endCode, index);
+      if (allItem._id) {
+        updatePromises.push(
+          this._adminAzjcUpdate(allItem._id, { orders: allItem.orders }).catch(err => {
+            console.error('更新order失败:', err);
+          })
+        );
       }
     });
     
@@ -2935,6 +3585,35 @@ Page({
       this._chapterInlineExitAnimTimers[idx] = null;
     }
   },
+  _pauseMountedChapterInline() {
+    const mounted = Number(this.data.chapterInlineMountIndex);
+    if (!(mounted >= 0)) return;
+    try {
+      wx.createVideoContext(`azjc-inline-${mounted}`, this).pause();
+    } catch (err) {}
+  },
+
+  /** 点封面才挂载原生 video；列表同时只允许一个解码器 */
+  onChapterCoverTap(e) {
+    const idx = this._listVideoIndexFromEvent(e);
+    if (idx < 0) return;
+    const item = (this.data.filteredChapters || [])[idx];
+    if (!item || !item.url) {
+      this._showCustomToast('视频加载中，请稍候', 'none');
+      return;
+    }
+    const prev = Number(this.data.chapterInlineMountIndex);
+    if (prev === idx) return;
+    if (prev >= 0) this._pauseMountedChapterInline();
+    this.setData({ chapterInlineMountIndex: idx }, () => {
+      wx.nextTick(() => {
+        try {
+          wx.createVideoContext(`azjc-inline-${idx}`, this).play();
+        } catch (err) {}
+      });
+    });
+  },
+
   /** 列表内嵌视频（原生 controls）：记时长、同步进度给全屏页；同时只播一条 */
   onChapterInlineLoadedMeta(e) {
     const idx = this._listVideoIndexFromEvent(e);
@@ -2960,11 +3639,14 @@ Page({
     this._videoPausedMap = this._videoPausedMap || {};
     const n = (this.data.filteredChapters || []).length;
     const patch = {};
+    const mounted = Number(this.data.chapterInlineMountIndex);
     for (let i = 0; i < n; i++) {
       if (i === idx) continue;
-      try {
-        wx.createVideoContext(`azjc-inline-${i}`, this).pause();
-      } catch (err) {}
+      if (i === mounted) {
+        try {
+          wx.createVideoContext(`azjc-inline-${i}`, this).pause();
+        } catch (err) {}
+      }
       this._inlinePlayingMap[i] = false;
       patch[`chapterInlinePlaying[${i}]`] = false;
       patch[`chapterInlinePauseExitAnim[${i}]`] = false;
@@ -3517,6 +4199,18 @@ Page({
     this.openFullScreenVideo(e);
   },
 
+  _cleanupReplacedChapterAssets(oldRow, newVideoUrl, newCoverUrl) {
+    const oldVideo = String((oldRow && (oldRow.fileID || oldRow.url)) || '').trim();
+    const oldCover = String((oldRow && oldRow.coverUrl) || '').trim();
+    const removeList = [];
+    if (oldVideo && oldVideo !== String(newVideoUrl || '').trim()) removeList.push(oldVideo);
+    if (oldCover && newCoverUrl && oldCover !== String(newCoverUrl || '').trim()) removeList.push(oldCover);
+    if (!removeList.length) return Promise.resolve();
+    return cosUpload.deleteCosObjectsByUrls(removeList).catch((err) => {
+      console.warn('[azjc] cleanup replaced chapter assets failed', err);
+    });
+  },
+
   /** 管理员：替换本条章节视频（COS），写入 azjc 文档 url */
   uploadChapterVideo(e) {
     const idx = this._listVideoIndexFromEvent(e);
@@ -3534,33 +4228,46 @@ Page({
         const f = res.tempFiles && res.tempFiles[0];
         if (!f || !f.tempFilePath) return;
         const tempPath = f.tempFilePath;
+        const thumbPath = f.thumbTempFilePath || '';
         const knownSize = typeof f.size === 'number' ? f.size : undefined;
-        this.showMyLoading('上传视频...');
+        const oldRow = { ...row };
+        this.showMyLoading('压缩视频...');
         let copiedPath = '';
-        this._ensureLocalUploadPath(tempPath)
-          .then((localPath) => {
-            copiedPath = localPath;
-            return cosUpload.uploadVideoToCos(localPath, 'azjc/video', { knownSize });
+        this._prepareAzjcVideoForUpload(f)
+          .then((prepared) => {
+            this.showMyLoading('上传视频...');
+            return this._ensureLocalUploadPath(prepared.path || tempPath).then((localPath) => {
+              copiedPath = localPath;
+              const size = prepared.size != null ? prepared.size : knownSize;
+              return cosUpload.uploadVideoToCos(localPath, 'azjc/video', { knownSize: size });
+            });
           })
-          .then((videoUrl) =>
-            new Promise((resolve, reject) => {
-              db.collection('azjc').doc(row._id).update({
-                data: { url: videoUrl },
-                success: () => resolve(videoUrl),
-                fail: reject
-              });
-            })
-          )
           .then((videoUrl) => {
+            const coverP = thumbPath ? this._uploadAzjcCover(thumbPath) : Promise.resolve('');
+            return coverP.then((coverUrl) => {
+              const patch = { url: videoUrl };
+              if (coverUrl) patch.coverUrl = coverUrl;
+              return this._adminAzjcUpdate(row._id, patch).then(() => ({ videoUrl, coverUrl }));
+            });
+          })
+          .then(({ videoUrl, coverUrl }) => {
             const displayUrl = this._mediaCacheBust(videoUrl);
             const chapters = (this.data.chapters || []).map((c) =>
-              c._id === row._id ? { ...c, url: displayUrl, fileID: videoUrl } : c
+              c._id === row._id
+                ? {
+                    ...c,
+                    url: displayUrl,
+                    fileID: videoUrl,
+                    coverUrl: coverUrl || this._azjcVideoSnapshotUrl(displayUrl) || ''
+                  }
+                : c
             );
             this.setData({ chapters }, () => {
               this.filterContent();
               this.hideMyLoading();
               this._cleanupTempUploadPath(copiedPath, tempPath);
-              this._showCustomToast('视频已更新', 'success');
+              this._cleanupReplacedChapterAssets(oldRow, videoUrl, coverUrl);
+              this._showCustomToast('视频已替换', 'success');
             });
           })
           .catch((err) => {
@@ -3592,13 +4299,12 @@ Page({
       return;
     }
 
-    try {
-      wx.createVideoContext(`azjc-inline-${index}`, this).pause();
-    } catch (err) {}
+    this._pauseMountedChapterInline();
     this._inlinePlayingMap = this._inlinePlayingMap || {};
     this._inlinePlayingMap[index] = false;
     this._clearChapterInlineExitAnimTimer(index);
     this.setData({
+      chapterInlineMountIndex: -1,
       [`chapterInlinePlaying[${index}]`]: false,
       [`chapterInlinePauseExitAnim[${index}]`]: false
     });
@@ -3893,7 +4599,8 @@ Page({
         fullScreenVideoProgressPercent: 0,
         fullScreenVideoInitialStyle: '',
         fullScreenVideoMaskClosing: false,
-        fullScreenCloseCoverStyle: ''
+        fullScreenCloseCoverStyle: '',
+        chapterInlineMountIndex: videoIndex >= 0 ? videoIndex : -1
       }, () => {
         wx.nextTick(() => {
           wx.setPageStyle({
@@ -3963,12 +4670,16 @@ Page({
     const percent = duration > 0 ? Math.min(100, Math.max(0, (current / duration) * 100)) : 0;
     const inLandscapeGate = this.data.isVideoFullScreen && !this.data.fullScreenLandscapeOk;
     if (!inLandscapeGate) {
-      this.setData({
-        fullScreenVideoCurrentTime: current,
-        fullScreenVideoProgress: progress,
-        fullScreenVideoProgressPercent: percent,
-        fullScreenVideoCurrentText: this._formatVideoTime(current)
-      });
+      const tick = Date.now();
+      if (!this._azjcFsSetDataAt || tick - this._azjcFsSetDataAt >= 250) {
+        this._azjcFsSetDataAt = tick;
+        this.setData({
+          fullScreenVideoCurrentTime: current,
+          fullScreenVideoProgress: progress,
+          fullScreenVideoProgressPercent: percent,
+          fullScreenVideoCurrentText: this._formatVideoTime(current)
+        });
+      }
     }
     const now = Date.now();
     if (!this._azjcFsTuLogAt || now - this._azjcFsTuLogAt > 2000) {
@@ -4247,6 +4958,7 @@ Page({
     const trackShare = this.data.isShareCodeUser;
     const trackDirect = this.data.shouldRecordTutorialInstall && !!this.data.tutorialDirectPoolId;
     if (!trackShare && !trackDirect) return;
+    if (this._uploadSessionStatsBusy) return;
 
     const app = getApp();
     if (!app || !app.recordShareCodeSession) {
@@ -4274,17 +4986,33 @@ Page({
     };
 
     const isUpdate = trackShare ? this.data.shareCodeRecordCreated : this.data.installSessionRecordCreated;
+    this._uploadSessionStatsBusy = true;
 
     try {
-      if (trackShare) {
-        await app.recordShareCodeSession(stats, isUpdate);
-        if (!isUpdate) this.setData({ shareCodeRecordCreated: true });
-      } else {
-        await app.recordShareCodeSession(stats, isUpdate, this.data.tutorialDirectPoolId);
-        if (!isUpdate) this.setData({ installSessionRecordCreated: true });
+      const result = trackShare
+        ? await app.recordShareCodeSession(stats, isUpdate)
+        : await app.recordShareCodeSession(stats, isUpdate, this.data.tutorialDirectPoolId);
+
+      if (result && result.success) {
+        this._shareStatsFailCount = 0;
+        if (!isUpdate) {
+          this.setData(trackShare
+            ? { shareCodeRecordCreated: true }
+            : { installSessionRecordCreated: true });
+        }
+      } else if (!(result && result.skipped)) {
+        this._shareStatsFailCount = (this._shareStatsFailCount || 0) + 1;
+        if (this._shareStatsFailCount >= 3) {
+          console.warn('[azjc] 统计写入连续失败，已停止自动保存');
+          this._stopAutoSave();
+        }
       }
     } catch (err) {
       console.error('[azjc] ❌ 统计数据上传失败:', err);
+      this._shareStatsFailCount = (this._shareStatsFailCount || 0) + 1;
+      if (this._shareStatsFailCount >= 3) this._stopAutoSave();
+    } finally {
+      this._uploadSessionStatsBusy = false;
     }
   },
 

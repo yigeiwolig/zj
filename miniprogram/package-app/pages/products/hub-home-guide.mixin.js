@@ -95,35 +95,57 @@ const homeGuideMethods = {
   homeGuideNoop() {},
 
   _markHomeGuideDoneForever() {
-    if (this.data.isAuthorized && !debugUserFlow.shouldForceUserGuides()) return;
+    // 只要弹过/跳过就必须落盘；管理员只是不自动开教学，不能因此写不进「已完成」
     markGuidePermSkip(HOME_GUIDE_INTRO_KEYS);
   },
 
+  /** 等管理员身份就绪后再决定是否自动弹，避免 isAuthorized 尚未回来时误弹 */
   _maybeShowHomeGuide(forceReplay) {
     if (this.data.hubTabIndex !== 0) return;
-    // 管理员不自动弹；调试全流程可强制
-    if (this.data.isAuthorized && !forceReplay && !debugUserFlow.shouldForceUserGuides()) return;
-    if (this.data.showHomeGuide || this.data.showHomeGuideIntro) {
-      if (forceReplay) {
-        this.closeHomeGuide(false);
-      } else {
+    const run = () => {
+      if (this.data.hubTabIndex !== 0) return;
+      // 管理员不自动弹；调试全流程可强制
+      if (this.data.isAuthorized && !forceReplay && !debugUserFlow.shouldForceUserGuides()) {
+        // 若身份晚到时教学已误开，立刻关掉并记完成，避免卡在第 2/7 步
+        if (this.data.showHomeGuide || this.data.showHomeGuideIntro) {
+          this._markHomeGuideDoneForever();
+          this.closeHomeGuide(false);
+        }
         return;
       }
-    }
-    if (this._homeGuideStartTimer) {
-      clearTimeout(this._homeGuideStartTimer);
-      this._homeGuideStartTimer = null;
-    }
+      if (this.data.showHomeGuide || this.data.showHomeGuideIntro) {
+        if (forceReplay) {
+          this.closeHomeGuide(false);
+        } else {
+          return;
+        }
+      }
+      if (this._homeGuideStartTimer) {
+        clearTimeout(this._homeGuideStartTimer);
+        this._homeGuideStartTimer = null;
+      }
+      if (forceReplay) {
+        this._startHomeGuideSteps({ force: true });
+        return;
+      }
+      const entry = resolveGuideAutoEntry(HOME_GUIDE_INTRO_KEYS);
+      // 仅真正的「首次」走分步教程；曾看过 intro / 已跳过 都不再弹
+      if (entry !== 'steps') return;
+      // 一开始就记永久完成，避免中途退出后又自动弹第二次
+      this._markHomeGuideDoneForever();
+      this._startHomeGuideSteps({ force: false });
+    };
+
     if (forceReplay) {
-      this._startHomeGuideSteps({ force: true });
+      run();
       return;
     }
-    const entry = resolveGuideAutoEntry(HOME_GUIDE_INTRO_KEYS);
-    // 仅真正的「首次」走分步教程；曾看过 intro / 已跳过 都不再弹
-    if (entry !== 'steps') return;
-    // 一开始就记永久完成，避免中途退出后又自动弹第二次
-    this._markHomeGuideDoneForever();
-    this._startHomeGuideSteps({ force: false });
+    const p = this._adminPrivilegePromise;
+    if (p && typeof p.then === 'function') {
+      p.then(run).catch(run);
+      return;
+    }
+    run();
   },
 
   _startHomeGuideSteps(opts) {
@@ -132,7 +154,11 @@ const homeGuideMethods = {
     this._homeGuideStartTimer = setTimeout(() => {
       this._homeGuideStartTimer = null;
       if (this.data.hubTabIndex !== 0) return;
-      if (this.data.isAuthorized && !force && !debugUserFlow.shouldForceUserGuides()) return;
+      if (this.data.isAuthorized && !force && !debugUserFlow.shouldForceUserGuides()) {
+        this._markHomeGuideDoneForever();
+        this.closeHomeGuide(false);
+        return;
+      }
       this._showHomeGuideStep(1, 0);
     }, force ? 80 : 360);
   },

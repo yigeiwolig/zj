@@ -610,8 +610,28 @@ exports.main = async (event, context) => {
     }
 
     if (action === 'approve') {
-      // === A. 使用管理员设定的日期 ===
-      const finalDate = customDate ? new Date(customDate) : new Date(applyData.buyDate)
+      // === A. 质保起算日：管理员手填 > 用户曾连过蓝牙的首次连接日 > 申请单购买日
+      let finalDate = customDate ? new Date(customDate) : null
+      if (!finalDate || isNaN(finalDate.getTime())) {
+        try {
+          const snKey = String(applyData.sn || '').trim()
+          if (snKey) {
+            const snLookup = await db.collection('sn').where({ sn: snKey }).limit(1).get()
+            const snDoc = snLookup.data && snLookup.data[0]
+            const bleAt = snDoc && snDoc.firstBleConnectAt
+              ? new Date(snDoc.firstBleConnectAt)
+              : null
+            if (bleAt && !isNaN(bleAt.getTime())) {
+              finalDate = bleAt
+            }
+          }
+        } catch (e) {
+          console.warn('[adminAuditDevice] lookup firstBleConnectAt failed', e)
+        }
+      }
+      if (!finalDate || isNaN(finalDate.getTime())) {
+        finalDate = applyData.buyDate ? new Date(applyData.buyDate) : new Date()
+      }
       // 管理员可修正用户申报的型号（蓝牙申报不一定准）
       const finalProductModel =
         normalizeAuditProductModel(productModelFromClient) ||

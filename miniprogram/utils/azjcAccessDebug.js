@@ -1,4 +1,4 @@
-/** 调试用：true 时安装教程入口不按管理员身份放行，走普通用户校验。调试完改回 false */
+/** 调试用：true 时安装教程对管理员强制闲鱼截图验证。正式环境保持 false */
 module.exports = {
-  IGNORE_ADMIN_FOR_ACCESS: true
+  IGNORE_ADMIN_FOR_ACCESS: false
 };

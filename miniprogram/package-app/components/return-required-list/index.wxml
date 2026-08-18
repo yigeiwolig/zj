@@ -127,7 +127,7 @@
               <text class="rr-kv-v rr-replace-none-text">暂无单号</text>
             </view>
             <view class="rr-kv-row" wx:if="{{item.returnTrackingId}}">
-              <text class="rr-kv-k">寄回运单</text>
+              <text class="rr-kv-k">用户寄出运单</text>
               <view class="rr-kv-v-wrap">
                 <text class="rr-kv-v rr-kv-v--mono">{{item.returnTrackingId}}</text>
                 <view
@@ -211,7 +211,7 @@
               data-tail-required="2427">
               查寄出物流
             </view>
-            <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" catchtap="onViewLogistics" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查寄回物流</view>
+            <view class="rr-btn logistics" wx:if="{{item.returnTrackingId}}" catchtap="onViewLogistics" data-sn="{{item.returnTrackingId}}" data-phone="{{item.contact.phone}}" data-tail-required="2427">查寄出物流</view>
             <view class="rr-btn wecom-resend" wx:if="{{item.returnTrackingId || item.trackingId}}" catchtap="onResendWecomNotify" data-id="{{item._id}}">重新推送通知</view>
             <view class="rr-btn complete" wx:if="{{item.returnStatus !== 'PENDING_RETURN'}}" catchtap="onCompleteReturn" data-id="{{item._id}}">完结此单</view>
           </block>
