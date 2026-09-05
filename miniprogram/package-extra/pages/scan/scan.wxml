@@ -418,15 +418,16 @@
   <!-- ======================= -->
   <!-- 列表区域 -->
   <!-- ======================= -->
-  <view class="gallery-container {{showDetail && detailEnterAnim ? 'fade-out' : ''}}"
+  <view class="gallery-container {{showDetail && detailEnterAnim ? 'fade-out' : ''}} {{isDraggingModel ? 'is-dragging' : ''}}"
         bindtouchstart="onTouchStartMain"
         bindtouchmove="onTouchMoveMain"
-        bindtouchend="onTouchEnd">
+        bindtouchend="onTouchEnd"
+        bindtouchcancel="onTouchEnd">
     <block wx:for="{{models}}" wx:key="id">
       <view class="card {{item.status}}"
             data-index="{{index}}"
             bindtap="onTapCard"
-            style="transform: translateX({{item.status === 'active' ? (modelDragOffset + 'px') : (item.status === 'next' ? (nextCardOffsetPercent + '%') : (item.status === 'prev' ? (prevCardOffsetPercent + '%') : '0'))}}) scale({{item.status === 'active' ? modelActiveScale : (item.status === 'next' ? nextModelScale : (item.status === 'prev' ? prevModelScale : modelSideScale))}}); opacity: {{item.status === 'active' ? activeCardOpacity : (item.status === 'next' ? nextCardOpacity : (item.status === 'prev' ? prevCardOpacity : 0))}}; transition: {{isDraggingModel ? 'none' : 'transform 0.26s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.2s ease'}}; will-change: transform, opacity;">
+            style="transform: translate3d({{item.status === 'active' ? (modelDragOffset + 'px') : (item.status === 'next' ? (nextCardOffsetPercent + '%') : (item.status === 'prev' ? (prevCardOffsetPercent + '%') : '0'))}}, 0, 0) scale({{item.status === 'active' ? modelActiveScale : (item.status === 'next' ? nextModelScale : (item.status === 'prev' ? prevModelScale : modelSideScale))}}); opacity: {{item.status === 'active' ? activeCardOpacity : (item.status === 'next' ? nextCardOpacity : (item.status === 'prev' ? prevCardOpacity : 0))}}; transition: {{isDraggingModel ? 'none' : 'transform 0.26s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.2s ease'}};">
         <view class="card-header">
           <view class="card-header-top">
             <view class="series-tag">{{item.tag}}</view>
@@ -517,8 +518,7 @@
           class="main-control-scroll {{mainControlScrolling ? 'is-scrolling' : ''}}"
           enhanced
           show-scrollbar="{{false}}"
-          scroll-top="{{mainControlScrollTop}}"
-          scroll-with-animation="{{mainControlScrollAnim}}"
+          bounces="{{true}}"
           binddragstart="onMainControlScrollStart"
           binddragging="onMainControlScrollDragging"
           binddragend="onMainControlScrollEnd"
@@ -652,8 +652,8 @@
               </view>
             </view>
 
-            <!-- F1/F2 Ultra、F3 MAX：当前状态 -->
-            <block wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
+            <!-- F1 MAX / F2 PRO / F2 MAX 最新固件 + F1/F2 Ultra、F3 MAX：当前状态 -->
+            <block wx:if="{{filters.usesFlapGaugeUi(currentModel.name, currentModel.type, f1MaxLatestBle, f2ProLatestBle, f2MaxLatestBle)}}">
               <view class="status-card status-card--{{flapPanelState}}">
                 <view class="status-text-area">
                   <text class="status-label">当前状态</text>
@@ -702,7 +702,7 @@
             </view>
 
             <!-- F3 MAX TOF：翻板高度条 -->
-            <view class="f3-height-strip" wx:if="{{f3SensorUi !== 'imu' && f3HeightMonitorVisible}}">
+            <view class="f3-height-strip" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type) && f3SensorUi !== 'imu' && f3HeightMonitorVisible}}">
               <view class="f3-height-chip {{f3HeightLive ? 'live' : 'wait'}}">
                 <view class="f3-height-chip-dot"></view>
                 <text class="f3-height-chip-label">翻板高度</text>
@@ -713,7 +713,7 @@
             </view>
 
             <!-- F3 MAX IMU：车身姿态 3D 方块 -->
-            <view class="f3-att-strip {{f3BumpActive ? 'bump' : ''}}" wx:if="{{f3SensorUi === 'imu' && f3AttitudeVisible}}">
+            <view class="f3-att-strip {{f3BumpActive ? 'bump' : ''}}" wx:if="{{filters.isF3Max(currentModel.name, currentModel.type) && f3SensorUi === 'imu' && f3AttitudeVisible}}">
               <view class="f3-att-left">
                 <view class="f3-att-dot {{f3BumpActive ? 'bump' : (f3MpuOk ? (f3ImuState === 3 ? 'vibe' : 'ok') : 'wait')}}"></view>
                 <view class="f3-att-texts">
@@ -800,6 +800,51 @@
                </view>
             </view>
 
+            <view class="single-btn-wrapper" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
+              <view class="single-btn geo-fold-entry-btn" bindtap="openGeoFoldModal">
+                <text class="btn-text">定点折叠{{geoFoldTracking ? ' · 跟踪中' : ''}}</text>
+              </view>
+            </view>
+
+            <!-- F1 MAX 最新固件：隐蔽模式蓝牙直控 -->
+            <view class="split-btn-group" wx:if="{{filters.isF1Max(currentModel.name, currentModel.type) && f1MaxLatestBle}}">
+              <view class="split-item" id="stealthEnterGuideAnchor" bindtap="handleF2RemoteControl" data-cmd="开启隐蔽">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
+                <text class="btn-text">开启隐蔽模式</text>
+              </view>
+              <view class="btn-divider"></view>
+              <view class="split-item" id="stealthExitGuideAnchor" bindtap="handleF2RemoteControl" data-cmd="退出隐蔽">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
+                <text class="btn-text">退出隐蔽模式</text>
+              </view>
+            </view>
+
+            <!-- F2 PRO 最新固件：隐蔽模式蓝牙直控 -->
+            <view class="split-btn-group" wx:if="{{filters.isF2Pro(currentModel.name, currentModel.type) && f2ProLatestBle}}">
+              <view class="split-item" id="stealthEnterGuideAnchor" bindtap="handleF2RemoteControl" data-cmd="开启隐蔽">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
+                <text class="btn-text">开启隐蔽模式</text>
+              </view>
+              <view class="btn-divider"></view>
+              <view class="split-item" id="stealthExitGuideAnchor" bindtap="handleF2RemoteControl" data-cmd="退出隐蔽">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
+                <text class="btn-text">退出隐蔽模式</text>
+              </view>
+            </view>
+
+            <!-- F2 MAX 最新固件：隐蔽模式蓝牙直控 -->
+            <view class="split-btn-group" wx:if="{{filters.isF2Max(currentModel.name, currentModel.type) && f2MaxLatestBle}}">
+              <view class="split-item" id="stealthEnterGuideAnchor" bindtap="handleF2RemoteControl" data-cmd="开启隐蔽">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
+                <text class="btn-text">开启隐蔽模式</text>
+              </view>
+              <view class="btn-divider"></view>
+              <view class="split-item" id="stealthExitGuideAnchor" bindtap="handleF2RemoteControl" data-cmd="退出隐蔽">
+                <view class="btn-icon-circle"><image class="svg-icon ghost-icon-close" src="{{icons.ghostClose}}"></image></view>
+                <text class="btn-text">退出隐蔽模式</text>
+              </view>
+            </view>
+
             <!-- F1/F2 Ultra、F3 MAX：隐蔽模式蓝牙直控 -->
             <view class="split-btn-group" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
               <view class="split-item" id="stealthEnterGuideAnchor" bindtap="handleF2RemoteControl" data-cmd="开启隐蔽">
@@ -813,8 +858,8 @@
               </view>
             </view>
 
-            <!-- 其他 Max / Long / Ultra：隐蔽模式教学入口（同款卡片型号除外，使用蓝牙直控） -->
-            <view class="split-btn-group" wx:if="{{(currentModel.type === 'Max' || currentModel.type === 'Long' || currentModel.type === 'Ultra') && !filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
+            <!-- 其他 Max / Long / Ultra：隐蔽模式教学入口（同款卡片 / F1 MAX 最新固件除外） -->
+            <view class="split-btn-group" wx:if="{{(currentModel.type === 'Max' || currentModel.type === 'Long' || currentModel.type === 'Ultra') && !filters.isMtUltraCard(currentModel.name, currentModel.type) && !(filters.isF1Max(currentModel.name, currentModel.type) && f1MaxLatestBle) && !(filters.isF2Pro(currentModel.name, currentModel.type) && f2ProLatestBle) && !(filters.isF2Max(currentModel.name, currentModel.type) && f2MaxLatestBle)}}">
               <view class="split-item" id="stealthEnterGuideAnchor" bindtap="openStealthTutorial">
                 <view class="btn-icon-circle"><image class="svg-icon ghost-icon-open" src="{{icons.ghostOpen}}"></image></view>
                 <text class="btn-text">开启隐蔽模式</text>
@@ -829,13 +874,6 @@
             <view class="single-btn-wrapper" wx:if="{{filters.isMtUltraCard(currentModel.name, currentModel.type)}}">
               <view class="single-btn demo-mode-entry-btn" bindtap="openF2DemoModal">
                 <text class="btn-text">演示模式</text>
-              </view>
-            </view>
-
-            <!-- F1 / F2 Ultra：定点折叠（测试版） -->
-            <view class="single-btn-wrapper" wx:if="{{filters.isF2UltraFirmware(currentModel.name, currentModel.type)}}">
-              <view class="single-btn demo-mode-entry-btn" bindtap="openGeoFoldModal">
-                <text class="btn-text">定点折叠（测试）{{geoFoldTracking ? ' · 跟踪中' : ''}}</text>
               </view>
             </view>
 
@@ -1215,6 +1253,19 @@
             <view class="click-pad left" catchtap="handleMagClick" data-key="multiRetry" data-val="left"></view>
             <view class="click-pad right" catchtap="handleMagClick" data-key="multiRetry" data-val="right"></view>
             <view class="track-labels"><text class="t-txt l">执行</text><text class="t-txt r">待命</text></view>
+            <view class="mag-thumb"></view>
+          </view>
+        </view>
+
+        <view class="setting-row" wx:if="{{isAdmin && filters.isF3Max(currentModel.name, currentModel.type)}}">
+          <view class="row-info row-info-wide">
+            <text class="label-main">传感器界面</text>
+            <text class="label-sub">仅管理员可见 · 切换 TOF 测高 / 陀螺仪控制台</text>
+          </view>
+          <view class="mag-track" data-state="{{f3SensorUi === 'imu' ? 'right' : 'left'}}">
+            <view class="click-pad left" catchtap="onF3AdminSensorUiTap" data-mode="tof"></view>
+            <view class="click-pad right" catchtap="onF3AdminSensorUiTap" data-mode="imu"></view>
+            <view class="track-labels"><text class="t-txt l">TOF测高</text><text class="t-txt r">陀螺仪</text></view>
             <view class="mag-thumb"></view>
           </view>
         </view>
@@ -1690,154 +1741,457 @@
     </view>
   </view>
 
-  <!-- ======================= -->
-  <!-- F2 ULTRA 定点折叠（测试版） -->
-  <view class="password-modal-mask" wx:if="{{showGeoFoldModal}}" catchtouchmove="noop" catchtap="noop">
-    <view class="password-box geo-fold-box" catchtap="noop">
-      <view class="modal-close-x" bindtap="closeGeoFoldModal">✕</view>
-      <view class="pass-title">定点折叠（测试）</view>
+  <!-- F1 Ultra / F2 Ultra / F3 MAX 定点折叠：全屏大码表 -->
+  <view class="gf-screen-mask" wx:if="{{showGeoFoldModal}}" catchtouchmove="noop">
+    <view class="gf-screen">
+      <view class="gf-screen-nav" style="padding-top: {{statusBarHeight}}px;">
+        <view class="gf-screen-back" bindtap="closeGeoFoldModal">‹</view>
+        <view class="gf-screen-brand">
+          <view class="gf-mt-badge">
+            <text class="gf-mt-badge-text">MT</text>
+          </view>
+          <text class="gf-screen-title">定点折叠</text>
+        </view>
+        <view class="gf-screen-dot {{geoFoldTracking ? 'on' : ''}}"></view>
+      </view>
 
-      <scroll-view scroll-y class="geo-fold-scroll" enhanced show-scrollbar="{{false}}">
-        <view class="geo-fold-panel">
-          <view class="geo-fold-panel-title">实时状态</view>
-          <view class="gf-grid">
-            <view class="gf-cell"><text class="gf-k">状态</text><text class="gf-v {{geoFoldTracking ? 'live' : ''}}">{{geoFoldStatusText}}</text></view>
-            <view class="gf-cell"><text class="gf-k">当前距离</text><text class="gf-v">{{geoFoldDistanceText}}</text></view>
-            <view class="gf-cell"><text class="gf-k">目标圈</text><text class="gf-v">{{geoFoldRadiusText}}</text></view>
-            <view class="gf-cell"><text class="gf-k">预计进圈</text><text class="gf-v">{{geoFoldEtaText}}</text></view>
-            <view class="gf-cell"><text class="gf-k">速度</text><text class="gf-v">{{geoFoldSpeedText}}</text></view>
-            <view class="gf-cell"><text class="gf-k">定位精度</text><text class="gf-v">{{geoFoldAccuracyText}}</text></view>
-            <view class="gf-cell"><text class="gf-k">距离趋势</text><text class="gf-v">{{geoFoldTrendText}}</text></view>
-            <view class="gf-cell"><text class="gf-k">连续命中</text><text class="gf-v">{{geoFoldHitText}}</text></view>
-            <view class="gf-cell"><text class="gf-k">采样</text><text class="gf-v">{{geoFoldSampleCount}} 次 · {{geoFoldLastAt}}</text></view>
+      <scroll-view scroll-y class="gf-screen-scroll" enhanced show-scrollbar="{{false}}">
+        <view class="gf-dial">
+          <view class="gf-dial-bowl">
+            <view class="gf-dial-ring"></view>
+            <view class="gf-tick" wx:for="{{geoFoldTicks}}" wx:key="*this" style="transform: rotate({{item}}deg);">
+              <view class="gf-tick-mark {{item % 60 === 0 ? 'major' : ''}}"></view>
+            </view>
+            <view class="gf-dial-needle" style="transform: rotate({{geoFoldGaugeDeg}}deg);">
+              <view class="gf-needle-blade"></view>
+              <view class="gf-needle-tip"></view>
+            </view>
+            <view class="gf-dial-hub">
+              <text class="gf-dial-hub-mt">MT</text>
+            </view>
+            <view class="gf-dial-read">
+              <text class="gf-dial-label">速度</text>
+              <view class="gf-dial-speed">
+                <text class="gf-dial-speed-num">{{geoFoldSpeedKmh}}</text>
+                <text class="gf-dial-speed-unit">km/h</text>
+              </view>
+              <view class="gf-dial-rule"></view>
+              <view class="gf-dial-main">
+                <text class="gf-dial-num">{{geoFoldDistanceText === '--' ? '--' : geoFoldDistanceM}}</text>
+                <text class="gf-dial-unit">m</text>
+              </view>
+            </view>
+          </view>
+          <view class="gf-dial-ends">
+            <text>0</text>
+            <text class="gf-dial-hint">{{geoFoldNearestName !== '--' ? geoFoldNearestName : geoFoldStatusText}}</text>
+            <text>120</text>
           </view>
         </view>
 
-        <view class="geo-fold-panel">
-          <view class="geo-fold-panel-title">目标点位</view>
-          <view class="gf-point">{{geoFoldPointText}}</view>
-          <view class="gf-btn-row">
-            <view class="gf-mini-btn {{geoFoldCapturingPoint ? 'ghost' : ''}}" catchtap="useCurrentAsGeoFoldPoint">
-              {{geoFoldCapturingPoint ? '校准中…' : '用当前位置'}}
-            </view>
-            <view class="gf-mini-btn" catchtap="chooseGeoFoldPoint">地图选点</view>
-            <view class="gf-mini-btn ghost" catchtap="clearGeoFoldPoint">清除</view>
+        <view class="gf-strip">
+          <view class="gf-strip-item">
+            <text class="gf-strip-v">{{geoFoldAccuracyText}}</text>
+            <text class="gf-strip-k">精度</text>
           </view>
-          <text class="gf-row-hint">「用当前位置」会连采多次，精度合格且位置聚拢后才写入，减少飘点设偏</text>
+          <view class="gf-strip-item">
+            <text class="gf-strip-v">{{geoFoldCfg.pollMs >= 1000 ? (geoFoldCfg.pollMs / 1000 + 's') : (geoFoldCfg.pollMs + 'ms')}}</text>
+            <text class="gf-strip-k">频率</text>
+          </view>
+          <view class="gf-strip-item">
+            <text class="gf-strip-v">{{geoFoldRadiusText}}</text>
+            <text class="gf-strip-k">目标圈</text>
+          </view>
+          <view class="gf-strip-item">
+            <text class="gf-strip-v">{{flapPanelStateText}}</text>
+            <text class="gf-strip-k">牌照架</text>
+          </view>
         </view>
 
-        <view class="geo-fold-panel">
-          <view class="geo-fold-panel-title">触发参数</view>
 
-          <view class="gf-row">
-            <text class="gf-row-label">目标圈半径</text>
-            <view class="gf-gears">
-              <view wx:for="{{geoFoldOptions.baseRadius}}" wx:key="value"
-                class="gf-gear {{geoFoldCfg.baseRadius === item.value ? 'on' : ''}}"
-                data-key="baseRadius" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
-            </view>
-            <text class="gf-row-hint">以设点为圆心画圆；碰到圆周任意一边（东/南/西/北都行）即算到达</text>
+        <view class="gf-map-card">
+          <view class="gf-map-card-head">
+            <text class="gf-map-card-title">常走链路</text>
+            <text class="gf-map-card-count">{{geoFoldPointsCountText}}</text>
+            <text class="gf-map-card-sub" wx:if="{{geoFoldOfficialCountText}}">白圆+彩圈+下箭头=电子眼 · 黑标=你的点</text>
           </view>
-
-          <view class="gf-row">
-            <text class="gf-row-label">提前发令</text>
-            <view class="gf-gears">
-              <view wx:for="{{geoFoldOptions.leadSec}}" wx:key="value"
-                class="gf-gear {{geoFoldCfg.leadSec === item.value ? 'on' : ''}}"
-                data-key="leadSec" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
-            </view>
-            <text class="gf-row-hint">连续靠近稳定后，预计还要 N 秒碰到圆边时提前发令</text>
-          </view>
-
-          <view class="gf-row">
-            <text class="gf-row-label">判定间隔</text>
-            <view class="gf-gears">
-              <view wx:for="{{geoFoldOptions.pollMs}}" wx:key="value"
-                class="gf-gear {{geoFoldCfg.pollMs === item.value ? 'on' : ''}}"
-                data-key="pollMs" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
-            </view>
-          </view>
-
-          <view class="gf-row">
-            <text class="gf-row-label">连续命中</text>
-            <view class="gf-gears">
-              <view wx:for="{{geoFoldOptions.confirmHits}}" wx:key="value"
-                class="gf-gear {{geoFoldCfg.confirmHits === item.value ? 'on' : ''}}"
-                data-key="confirmHits" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
-            </view>
-            <text class="gf-row-hint">连续几次可信命中才动作；默认 3 次，抗 GPS 单次乱跳</text>
-          </view>
-
-          <view class="gf-row">
-            <text class="gf-row-label">车速上限</text>
-            <view class="gf-gears">
-              <view wx:for="{{geoFoldOptions.maxSpeedKmh}}" wx:key="value"
-                class="gf-gear {{geoFoldCfg.maxSpeedKmh === item.value ? 'on' : ''}}"
-                data-key="maxSpeedKmh" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
-            </view>
-            <text class="gf-row-hint">单位 km/h，超过就不折，避免高速路过误触发</text>
-          </view>
-
-          <view class="gf-row">
-            <text class="gf-row-label">精度门槛</text>
-            <view class="gf-gears">
-              <view wx:for="{{geoFoldOptions.accuracyLimit}}" wx:key="value"
-                class="gf-gear {{geoFoldCfg.accuracyLimit === item.value ? 'on' : ''}}"
-                data-key="accuracyLimit" data-value="{{item.value}}" catchtap="onGeoFoldOptionTap">{{item.label}}</view>
-            </view>
-            <text class="gf-row-hint">定位精度差于该值的样本直接作废；默认 30m，城区建议不要放太宽</text>
-          </view>
-
-          <view class="gf-row">
-            <text class="gf-row-label">到点动作</text>
-            <view class="gf-gears">
-              <view class="gf-gear {{geoFoldCfg.triggerCmd === '关闭' ? 'on' : ''}}" data-cmd="关闭" catchtap="onGeoFoldCmdTap">收起</view>
-              <view class="gf-gear {{geoFoldCfg.triggerCmd === '打开' ? 'on' : ''}}" data-cmd="打开" catchtap="onGeoFoldCmdTap">翻开</view>
-            </view>
-          </view>
-
-          <view class="gf-row">
-            <text class="gf-row-label">仅靠近时触发</text>
-            <view class="gf-gears">
-              <view class="gf-gear {{geoFoldCfg.requireApproaching ? 'on' : ''}}" data-key="requireApproaching" data-val="1" catchtap="onGeoFoldSwitchTap">开</view>
-              <view class="gf-gear {{!geoFoldCfg.requireApproaching ? 'on' : ''}}" data-key="requireApproaching" data-val="0" catchtap="onGeoFoldSwitchTap">关</view>
-            </view>
-            <text class="gf-row-hint">距离持续变小（或已在圈内）才算命中，过滤 GPS 抖动与路过</text>
-          </view>
-
-          <view class="gf-row">
-            <text class="gf-row-label">触发后停止</text>
-            <view class="gf-gears">
-              <view class="gf-gear {{geoFoldCfg.autoStopAfterFire ? 'on' : ''}}" data-key="autoStopAfterFire" data-val="1" catchtap="onGeoFoldSwitchTap">开</view>
-              <view class="gf-gear {{!geoFoldCfg.autoStopAfterFire ? 'on' : ''}}" data-key="autoStopAfterFire" data-val="0" catchtap="onGeoFoldSwitchTap">关</view>
-            </view>
-            <text class="gf-row-hint">关掉可以在同一点位反复测试</text>
-          </view>
-
-          <view class="gf-row">
-            <text class="gf-row-label">触发震动</text>
-            <view class="gf-gears">
-              <view class="gf-gear {{geoFoldCfg.vibrateOnFire ? 'on' : ''}}" data-key="vibrateOnFire" data-val="1" catchtap="onGeoFoldSwitchTap">开</view>
-              <view class="gf-gear {{!geoFoldCfg.vibrateOnFire ? 'on' : ''}}" data-key="vibrateOnFire" data-val="0" catchtap="onGeoFoldSwitchTap">关</view>
+          <view class="gf-map-wrap" catchtap="openGeoFoldEmbedMap">
+            <map
+              class="gf-embed-map"
+              latitude="{{geoFoldEmbedLat}}"
+              longitude="{{geoFoldEmbedLng}}"
+              scale="{{geoFoldEmbedScale}}"
+              markers="{{geoFoldEmbedMarkers}}"
+              circles="{{geoFoldEmbedCircles}}"
+              polygons="{{geoFoldEmbedPolygons}}"
+              show-location
+              enable-zoom="{{false}}"
+              enable-scroll="{{false}}"
+              enable-rotate="{{false}}"
+              enable-overlooking="{{false}}"
+            ></map>
+            <view class="gf-map-cover">
+              <view class="gf-map-cover-btn">{{geoFoldPoints.length ? '点击编辑地图' : '点击添加点位'}}</view>
             </view>
           </view>
         </view>
 
-        <view class="geo-fold-panel">
-          <view class="geo-fold-panel-title">日志</view>
-          <view class="gf-log-empty" wx:if="{{geoFoldLogs.length === 0}}">暂无记录</view>
-          <view class="gf-log" wx:for="{{geoFoldLogs}}" wx:key="id">
-            <text class="gf-log-ts">{{item.ts}}</text>
-            <text class="gf-log-text">{{item.text}}</text>
-          </view>
-        </view>
       </scroll-view>
 
-      <view class="pass-btns geo-fold-actions">
-        <view class="p-btn cancel" catchtap="simulateGeoFoldTrigger">模拟触发</view>
-        <view class="p-btn confirm" catchtap="toggleGeoFoldTracking">{{geoFoldTracking ? '停止跟踪' : '开始跟踪'}}</view>
+      <view class="gf-screen-foot">
+        <view class="gf-screen-btn ghost" catchtap="simulateGeoFoldTrigger">模拟触发</view>
+        <view class="gf-screen-btn {{geoFoldTracking ? 'stop' : ''}}" catchtap="toggleGeoFoldTracking">{{geoFoldTracking ? '停止跟踪' : '开始跟踪'}}</view>
       </view>
-      <view class="gf-foot-note">只在本页前台生效：熄屏或切走会自动停止跟踪</view>
+    </view>
+  </view>
+
+  <!-- 定点折叠：接近目标倒计时弹窗 -->
+  <view
+    class="gf-approach-mask {{geoFoldApproachEntered && !geoFoldApproachClosing ? 'is-in' : ''}} {{geoFoldApproachClosing ? 'is-out' : ''}}"
+    wx:if="{{showGeoFoldApproachModal}}"
+    catchtouchmove="noop"
+  >
+    <view class="gf-approach-card">
+      <view class="gf-approach-badge">
+        <text class="gf-approach-badge-text">MT</text>
+      </view>
+      <text class="gf-approach-title">准备翻转</text>
+      <text class="gf-approach-k">{{geoFoldApproachPointName}} · {{geoFoldApproachDistM}}m</text>
+      <view class="gf-approach-num-row">
+        <text class="gf-approach-num">{{geoFoldApproachEtaSec}}</text>
+        <text class="gf-approach-unit">秒</text>
+      </view>
+      <text class="gf-approach-tip">倒计时结束自动翻板</text>
+    </view>
+  </view>
+
+  <!-- 罚单区域：左右红条警示 -->
+  <view class="gf-ticket-edges" wx:if="{{geoFoldTicketEdgeWarn}}" catchtouchmove="noop">
+    <view class="gf-ticket-edge left"></view>
+    <view class="gf-ticket-edge right"></view>
+  </view>
+
+  <view
+    class="gf-ticket-mask {{geoFoldTicketEntered && !geoFoldTicketClosing ? 'is-in' : ''}} {{geoFoldTicketClosing ? 'is-out' : ''}}"
+    wx:if="{{showGeoFoldTicketAlert}}"
+    catchtouchmove="noop"
+    catchtap="dismissGeoFoldTicketAlert"
+  >
+    <view class="gf-ticket-card" catchtap="dismissGeoFoldTicketAlert">
+      <view class="gf-ticket-icon-wrap">
+        <view class="gf-ticket-icon-ring"></view>
+        <image class="gf-ticket-icon" src="/images/gf-cam/gf-cam-ticket.png" mode="aspectFit" />
+      </view>
+      <text class="gf-ticket-warn">注意</text>
+      <text class="gf-ticket-title">前方有现场罚单</text>
+      <text class="gf-ticket-sub">约 {{geoFoldTicketAlertDist}}m</text>
+    </view>
+  </view>
+
+  <!-- 跟踪中蓝牙断开：全屏红警示 -->
+  <view
+    class="gf-ble-lost-mask {{geoFoldBleLostEntered && !geoFoldBleLostClosing ? 'is-in' : ''}} {{geoFoldBleLostClosing ? 'is-out' : ''}}"
+    wx:if="{{showGeoFoldBleLost}}"
+    catchtouchmove="noop"
+    catchtap="dismissGeoFoldBleLostPreview"
+  >
+    <view class="gf-ble-lost-card" catchtap="noop">
+      <text class="gf-ble-lost-tag">蓝牙</text>
+      <text class="gf-ble-lost-title">未连接蓝牙</text>
+      <text class="gf-ble-lost-sub">定点折叠需要稳定连接，当前无法下发翻板指令</text>
+      <text class="gf-ble-lost-tip" wx:if="{{geoFoldBleLostPreviewing}}">点空白处关闭预览</text>
+      <text class="gf-ble-lost-tip" wx:else>请回到控制页重新连接设备</text>
+    </view>
+  </view>
+
+  <!-- 定点折叠：全屏地图选点 / 查看触发圈（独立全屏，不嵌在 scroll-view 里才能拖） -->
+  <view
+    class="gf-map-picker {{geoFoldMapPickerEntered && !geoFoldMapPickerClosing ? 'is-in' : ''}} {{geoFoldMapPickerClosing ? 'is-out' : ''}}"
+    wx:if="{{showGeoFoldMapPicker}}"
+  >
+    <map
+      id="geoFoldPickerMap"
+      class="gf-map-picker-map"
+      latitude="{{geoFoldPickerLat}}"
+      longitude="{{geoFoldPickerLng}}"
+      scale="{{geoFoldPickerScale}}"
+      rotate="{{geoFoldPickerRotate}}"
+      markers="{{geoFoldPickerMarkers}}"
+      circles="{{geoFoldPickerCircles}}"
+      polygons="{{geoFoldPickerPolygons}}"
+      polyline="{{geoFoldPickerPolylines}}"
+      show-location
+      enable-zoom="{{true}}"
+      enable-scroll="{{true}}"
+      enable-rotate="{{false}}"
+      enable-overlooking="{{false}}"
+      bindregionchange="onGeoFoldPickerRegionChange"
+      bindmarkertap="onGeoFoldPickerMarkerTap"
+      bindcallouttap="onGeoFoldPickerMarkerTap"
+    ></map>
+    <view class="gf-map-picker-cross" wx:if="{{geoFoldMapPickerMode === 'pick' && !geoFoldTracking && !(showGeoFoldPickerEdit && !geoFoldPickerEditClosing)}}"></view>
+    <view class="gf-map-picker-top" catchtouchmove="noop" catchtap="resumeGeoFoldPickerFollow">
+      <view class="gf-map-picker-top-main">
+        <view class="gf-mt-badge">
+          <text class="gf-mt-badge-text">MT</text>
+        </view>
+        <text class="gf-map-picker-title">{{geoFoldMapPickerMode === 'pick' ? '连续选点' : '触发圈'}}</text>
+        <view class="gf-map-picker-count" wx:if="{{geoFoldMapPickerMode === 'pick'}}">
+          <text class="gf-map-picker-count-num">{{geoFoldPoints.length}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view
+      class="gf-map-picker-hud-dock"
+      wx:if="{{geoFoldTracking && !(showGeoFoldPickerEdit && !geoFoldPickerEditClosing) && !showGeoFoldAvoidPanel}}"
+      catchtouchmove="noop"
+    >
+      <view
+        class="gf-map-picker-hud {{geoFoldPickerHudExpanded ? 'is-open' : 'is-mini'}} is-live"
+        catchtap="toggleGeoFoldPickerHud"
+      >
+        <view class="gf-map-picker-hud-mini">
+          <view class="gf-map-picker-hud-mini-main">
+            <text class="gf-map-picker-hud-mini-speed">{{geoFoldSpeedKmh}}</text>
+            <text class="gf-map-picker-hud-mini-unit">km/h</text>
+            <text class="gf-map-picker-hud-mini-dot">·</text>
+            <text class="gf-map-picker-hud-mini-dist">{{geoFoldDistanceText === '--' ? '--' : geoFoldDistanceM}} m</text>
+          </view>
+          <text class="gf-map-picker-hud-toggle">{{geoFoldPickerHudExpanded ? '收起' : '展开'}}</text>
+        </view>
+        <view class="gf-map-picker-hud-body" wx:if="{{geoFoldPickerHudExpanded}}">
+          <view class="gf-map-picker-hud-dial">
+            <view class="gf-dial">
+              <view class="gf-dial-bowl">
+                <view class="gf-dial-ring"></view>
+                <view class="gf-tick" wx:for="{{geoFoldTicks}}" wx:key="*this" style="transform: rotate({{item}}deg);">
+                  <view class="gf-tick-mark {{item % 60 === 0 ? 'major' : ''}}"></view>
+                </view>
+                <view class="gf-dial-needle" style="transform: rotate({{geoFoldGaugeDeg}}deg);">
+                  <view class="gf-needle-blade"></view>
+                  <view class="gf-needle-tip"></view>
+                </view>
+                <view class="gf-dial-hub">
+                  <text class="gf-dial-hub-mt">MT</text>
+                </view>
+                <view class="gf-dial-read">
+                  <text class="gf-dial-label">速度</text>
+                  <view class="gf-dial-speed">
+                    <text class="gf-dial-speed-num">{{geoFoldSpeedKmh}}</text>
+                    <text class="gf-dial-speed-unit">km/h</text>
+                  </view>
+                  <view class="gf-dial-rule"></view>
+                  <view class="gf-dial-main">
+                    <text class="gf-dial-num">{{geoFoldDistanceText === '--' ? '--' : geoFoldDistanceM}}</text>
+                    <text class="gf-dial-unit">m</text>
+                  </view>
+                </view>
+              </view>
+              <view class="gf-dial-ends">
+                <text>0</text>
+                <text class="gf-dial-hint">{{geoFoldNearestName !== '--' ? geoFoldNearestName : geoFoldStatusText}}</text>
+                <text>120</text>
+              </view>
+            </view>
+          </view>
+          <view class="gf-strip gf-map-picker-hud-strip">
+            <view class="gf-strip-item">
+              <text class="gf-strip-v">{{geoFoldAccuracyText}}</text>
+              <text class="gf-strip-k">精度</text>
+            </view>
+            <view class="gf-strip-item">
+              <text class="gf-strip-v">{{geoFoldCfg.leadSec}}s</text>
+              <text class="gf-strip-k">提前</text>
+            </view>
+            <view class="gf-strip-item">
+              <text class="gf-strip-v">{{geoFoldRadiusText}}</text>
+              <text class="gf-strip-k">目标圈</text>
+            </view>
+            <view class="gf-strip-item">
+              <text class="gf-strip-v">{{flapPanelStateText}}</text>
+              <text class="gf-strip-k">牌照架</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view
+      class="gf-map-picker-edit {{geoFoldPickerEditClosing ? 'is-out' : 'is-in'}}"
+      wx:if="{{showGeoFoldPickerEdit}}"
+      catchtouchmove="noop"
+    >
+      <view class="gf-map-picker-edit-head">
+        <view class="gf-map-picker-edit-brand">
+          <view class="gf-mt-badge gf-mt-badge--lg">
+            <text class="gf-mt-badge-text">MT</text>
+          </view>
+          <view class="gf-map-picker-edit-titles">
+            <text class="gf-map-picker-edit-title">编辑此点</text>
+            <text class="gf-map-picker-edit-desc">摩改社 · 定点折叠</text>
+          </view>
+        </view>
+        <text class="gf-map-picker-edit-close" catchtap="closeGeoFoldPickerPointEditor">✕</text>
+      </view>
+      <input
+        class="gf-map-picker-edit-input"
+        value="{{geoFoldPickerEditName}}"
+        focus="{{geoFoldPickerEditFocus}}"
+        maxlength="20"
+        placeholder="输入名称，例如：家门口"
+        confirm-type="done"
+        bindinput="onGeoFoldPickerEditNameInput"
+        bindconfirm="saveGeoFoldPickerPointEditor"
+      />
+
+      <view class="gf-row gf-map-picker-radius">
+        <text class="gf-row-label">触发圈半径 · {{geoFoldPickerEditRadius}}m</text>
+        <slider
+          class="gf-map-picker-radius-slider"
+          min="15"
+          max="150"
+          step="5"
+          value="{{geoFoldPickerEditRadius}}"
+          activeColor="#007AFF"
+          backgroundColor="#E5E5EA"
+          block-size="28"
+          show-value="{{false}}"
+          bindchanging="onGeoFoldPickerEditRadiusSlide"
+          bindchange="onGeoFoldPickerEditRadiusSlideEnd"
+        />
+      </view>
+
+      <view class="gf-flap-card">
+        <view class="gf-flap-card-top">
+          <text class="gf-flap-card-k">到达此点</text>
+          <text class="gf-flap-card-v">{{geoFoldPickerEditEnter === '打开' ? '翻开' : '收起'}}</text>
+        </view>
+        <view class="gf-seg">
+          <view class="gf-seg-thumb {{geoFoldPickerEditEnter === '打开' ? 'right' : 'left'}} {{geoFoldPickerEditEnter === '打开' ? 'open' : 'close'}}"></view>
+          <view
+            class="gf-seg-item {{geoFoldPickerEditEnter === '关闭' ? 'on' : ''}}"
+            data-direction="enter" data-cmd="关闭" catchtap="onGeoFoldPickerEditCmdTap"
+          >收起</view>
+          <view
+            class="gf-seg-item {{geoFoldPickerEditEnter === '打开' ? 'on open' : ''}}"
+            data-direction="enter" data-cmd="打开" catchtap="onGeoFoldPickerEditCmdTap"
+          >翻开</view>
+        </view>
+      </view>
+
+      <view class="gf-flap-card">
+        <view class="gf-flap-card-top">
+          <text class="gf-flap-card-k">离开此点</text>
+          <text class="gf-flap-card-v">{{geoFoldPickerEditExit === '打开' ? '翻开' : '收起'}}</text>
+        </view>
+        <view class="gf-seg">
+          <view class="gf-seg-thumb {{geoFoldPickerEditExit === '打开' ? 'right' : 'left'}} {{geoFoldPickerEditExit === '打开' ? 'open' : 'close'}}"></view>
+          <view
+            class="gf-seg-item {{geoFoldPickerEditExit === '关闭' ? 'on' : ''}}"
+            data-direction="exit" data-cmd="关闭" catchtap="onGeoFoldPickerEditCmdTap"
+          >收起</view>
+          <view
+            class="gf-seg-item {{geoFoldPickerEditExit === '打开' ? 'on open' : ''}}"
+            data-direction="exit" data-cmd="打开" catchtap="onGeoFoldPickerEditCmdTap"
+          >翻开</view>
+        </view>
+      </view>
+
+      <view class="gf-map-picker-edit-save" catchtap="saveGeoFoldPickerPointEditor">保存</view>
+    </view>
+
+    <view
+      class="gf-map-picker-bottom {{(showGeoFoldPickerEdit && !geoFoldPickerEditClosing) || showGeoFoldAvoidPanel ? 'is-down' : 'is-up'}}"
+      catchtouchmove="noop"
+    >
+      <block wx:if="{{!geoFoldTracking}}">
+        <view class="gf-lead-panel">
+          <view class="gf-lead-panel-head">
+            <text class="gf-lead-panel-title">提前进圈提醒</text>
+            <text class="gf-lead-panel-sub">越大越早弹出准备翻转</text>
+          </view>
+          <view class="gf-lead-chips">
+            <view
+              class="gf-lead-chip {{geoFoldCfg.leadSec === item.value ? 'on' : ''}}"
+              wx:for="{{geoFoldOptions.leadSec}}"
+              wx:key="value"
+              data-key="leadSec"
+              data-value="{{item.value}}"
+              catchtap="onGeoFoldOptionTap"
+            >{{item.label}}</view>
+          </view>
+        </view>
+        <view class="gf-avoid-entry" catchtap="openGeoFoldAvoidPanel">
+          <view class="gf-avoid-entry-main">
+            <text class="gf-avoid-entry-title">避开摄像头</text>
+            <text class="gf-avoid-entry-sub">{{geoFoldAvoidTypeCountText}} · 近距自动加大圈</text>
+          </view>
+          <text class="gf-avoid-entry-count" wx:if="{{geoFoldOfficialCountText}}">{{geoFoldOfficialCountText}}</text>
+          <text class="gf-avoid-entry-chev">选择</text>
+        </view>
+        <view class="gf-map-picker-btns">
+          <view class="gf-map-picker-btn ghost" catchtap="closeGeoFoldMapPicker">{{geoFoldMapPickerMode === 'pick' ? '完成' : '关闭'}}</view>
+          <view class="gf-map-picker-btn" wx:if="{{geoFoldMapPickerMode === 'pick'}}" catchtap="confirmGeoFoldMapPick">添加此点</view>
+        </view>
+      </block>
+      <view class="gf-map-picker-preview-ble" catchtap="previewGeoFoldBleLost">预览蓝牙断开</view>
+      <view
+        class="gf-map-picker-btn gf-map-picker-track {{geoFoldTracking ? 'stop' : ''}}"
+        catchtap="toggleGeoFoldPickerTracking"
+      >
+        <view class="gf-map-picker-track-flow" wx:if="{{geoFoldTracking}}"></view>
+        <text class="gf-map-picker-track-text">{{geoFoldTracking ? '停止跟踪' : '开始跟踪'}}</text>
+      </view>
+    </view>
+
+    <view
+      class="gf-avoid-panel {{geoFoldAvoidPanelEntered ? 'is-in' : ''}}"
+      wx:if="{{showGeoFoldAvoidPanel}}"
+      catchtouchmove="noop"
+    >
+      <view class="gf-avoid-panel-head">
+        <view class="gf-avoid-panel-titles">
+          <text class="gf-avoid-panel-title">避开哪些摄像头</text>
+          <text class="gf-avoid-panel-desc">勾选的类型会画避让圈并参与定点折叠</text>
+        </view>
+        <text class="gf-avoid-panel-close" catchtap="closeGeoFoldAvoidPanel">完成</text>
+      </view>
+      <view class="gf-avoid-quick">
+        <view class="gf-avoid-quick-btn" catchtap="onGeoFoldAvoidSelectFocus">重点全选</view>
+        <view class="gf-avoid-quick-btn ghost" catchtap="onGeoFoldAvoidSelectNone">全不选</view>
+      </view>
+      <view class="gf-avoid-chips">
+        <view
+          class="gf-avoid-chip {{item.on ? 'on' : ''}}"
+          wx:for="{{geoFoldAvoidChips}}"
+          wx:key="id"
+          data-id="{{item.id}}"
+          catchtap="onGeoFoldAvoidTypeTap"
+        >
+          <image class="gf-avoid-chip-icon" src="{{item.icon}}" mode="aspectFit" />
+          <text class="gf-avoid-chip-text">{{item.short}}</text>
+        </view>
+      </view>
+      <view class="gf-avoid-radius">
+        <view class="gf-avoid-radius-row">
+          <text class="gf-avoid-radius-label">避让半径 · {{geoFoldAvoidBaseRadius}}m</text>
+          <text class="gf-avoid-radius-hint">近距会自动加大</text>
+        </view>
+        <slider
+          class="gf-avoid-radius-slider"
+          min="25"
+          max="80"
+          step="5"
+          value="{{geoFoldAvoidBaseRadius}}"
+          activeColor="#FF3B30"
+          backgroundColor="#E5E5EA"
+          block-size="28"
+          show-value="{{false}}"
+          bindchanging="onGeoFoldAvoidRadiusSlide"
+          bindchange="onGeoFoldAvoidRadiusSlideEnd"
+        />
+      </view>
     </view>
   </view>
 
@@ -2006,6 +2360,26 @@ var isF3Max = function(name, type) {
   return name === 'F3' && type === 'Max';
 }
 
+var isF1Max = function(name, type) {
+  return name === 'F1' && type === 'Max';
+}
+
+var isF2Pro = function(name, type) {
+  return name === 'F2' && type === 'Pro';
+}
+
+var isF2Max = function(name, type) {
+  return name === 'F2' && (type === 'Max' || type === 'Long' || type === 'Max Long');
+}
+
+var usesFlapGaugeUi = function(name, type, f1MaxLatestBle, f2ProLatestBle, f2MaxLatestBle) {
+  if (isMtUltraCard(name, type)) return true;
+  if (isF1Max(name, type) && f1MaxLatestBle) return true;
+  if (isF2Pro(name, type) && f2ProLatestBle) return true;
+  if (isF2Max(name, type) && f2MaxLatestBle) return true;
+  return false;
+};
+
 /** F2 除 PRO 外 + F1 Ultra + F3 MAX（停车姿态标定）显示自动校准 */
 var supportsAutoCalibrate = function(name, type) {
   if (name === 'F3' && type === 'Max') return true;
@@ -2074,6 +2448,10 @@ module.exports = {
   isF2UltraFirmware: isF2UltraFirmware,
   isMtUltraCard: isMtUltraCard,
   isF3Max: isF3Max,
+  isF1Max: isF1Max,
+  isF2Pro: isF2Pro,
+  isF2Max: isF2Max,
+  usesFlapGaugeUi: usesFlapGaugeUi,
   supportsAutoCalibrate: supportsAutoCalibrate,
   isLegacyOpenAnglePresets: isLegacyOpenAnglePresets,
   openAngleDisplayDeg: openAngleDisplayDeg,

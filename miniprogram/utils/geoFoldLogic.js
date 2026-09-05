@@ -6,6 +6,12 @@
  */
 
 const GEO_FOLD_MIN_APPROACH_MPS = 0.8;
+/** 提前发令最低接近速度：约 8km/h。慢速掉头只认真实圆边，避免圈边发糊 */
+const GEO_FOLD_LEAD_MIN_MPS = 2.2;
+const GEO_FOLD_LEAD_REACT_SEC = 2.2;
+const GEO_FOLD_LEAD_DIST_MAX = 80;
+/** 出圈后需离开圆边这么远，才允许再次按车速提前发令 */
+const GEO_FOLD_LEAD_REARM_M = 22;
 const GEO_FOLD_TREND_EPS_M = 3;
 const GEO_FOLD_DIST_EMA_ALPHA = 0.32;
 const GEO_FOLD_APPROACH_STREAK_NEED = 2;
@@ -60,6 +66,110 @@ function geoOffsetMeters(lat, lng, distanceM, bearingDeg) {
   return { lat: (lat2 * 180) / Math.PI, lng: (lng2 * 180) / Math.PI };
 }
 
+// ─── 简化卡尔曼滤波（2D 位置 + 速度） ────────────────────────────────────────
+// 状态向量：[lat, lng, vLat, vLng]（速度单位：度/秒）
+// 只做位置预测和测量更新，不追求完整矩阵乘法，够用且性能好。
+
+/**
+ * 创建卡尔曼状态
+ * @param {number} lat  初始纬度
+ * @param {number} lng  初始经度
+ * @param {number} [accuracy]  初始精度（米），影响初始协方差
+ */
+function createKalmanState(lat, lng, accuracy) {
+  const initVar = Math.pow(Math.max(accuracy || 30, 5), 2);
+  return {
+    lat,
+    lng,
+    vLat: 0,      // 度/秒
+    vLng: 0,
+    // 协方差（对角线简化）
+    pLat: initVar,
+    pLng: initVar,
+    pVLat: 1e-4,
+    pVLng: 1e-4,
+    lastT: null
+  };
+}
+
+/**
+ * 卡尔曼预测步骤（在两次 GPS 之间用速度外推当前位置）
+ * @param {object} k  卡尔曼状态（就地更新）
+ * @param {number} now  当前时间戳（ms）
+ * @param {number} [processNoise]  过程噪声（越大越信 GPS，越小越信惯性）
+ */
+function kalmanPredict(k, now, processNoise) {
+  if (k.lastT == null) { k.lastT = now; return; }
+  const dt = Math.min((now - k.lastT) / 1000, 2); // 最多预测 2 秒
+  if (dt <= 0) return;
+  const q = processNoise != null ? processNoise : 1.0; // m²/s³ 转度²/s³ 约 8e-12，但我们量级用米不精确，直接给经验值
+
+  // 位置 = 上次位置 + 速度 × dt
+  k.lat += k.vLat * dt;
+  k.lng += k.vLng * dt;
+
+  // 协方差增长
+  const dt2 = dt * dt;
+  const dt3 = dt2 * dt;
+  k.pLat += k.pVLat * dt2 + q * dt3 / 3;
+  k.pLng += k.pVLng * dt2 + q * dt3 / 3;
+  k.pVLat += q * dt;
+  k.pVLng += q * dt;
+
+  k.lastT = now;
+}
+
+/**
+ * 卡尔曼更新步骤（收到新 GPS 坐标时融合）
+ * @param {object} k  卡尔曼状态（就地更新）
+ * @param {number} lat  GPS 纬度
+ * @param {number} lng  GPS 经度
+ * @param {number} accuracy  GPS 精度（米），越大越不信
+ * @param {number} now  时间戳（ms）
+ * @param {number|null} gpsSpeedMps  GPS 速度（m/s），null 表示无效
+ * @param {number|null} gpsBearing  GPS 方位角（度），null 表示无效
+ */
+function kalmanUpdate(k, lat, lng, accuracy, now, gpsSpeedMps, gpsBearing) {
+  // 精度转换为度²方差（1米 ≈ 9e-12 度²，简化：1m ≈ 1e-5度，1m²≈1e-10度²）
+  const R_POS = Math.pow(accuracy * 8.98e-6, 2); // accuracy 米 → 度方差
+
+  // 先预测到当前时刻
+  if (k.lastT != null) {
+    kalmanPredict(k, now, 0.5);
+  } else {
+    k.lastT = now;
+  }
+
+  // 卡尔曼增益（位置）
+  const KLat = k.pLat / (k.pLat + R_POS);
+  const KLng = k.pLng / (k.pLng + R_POS);
+
+  // 更新位置
+  k.lat = k.lat + KLat * (lat - k.lat);
+  k.lng = k.lng + KLng * (lng - k.lng);
+
+  // 更新协方差
+  k.pLat = (1 - KLat) * k.pLat;
+  k.pLng = (1 - KLng) * k.pLng;
+
+  // 速度：GPS 有效速度 + 方位角 → 分解到 lat/lng 方向
+  if (gpsSpeedMps != null && gpsSpeedMps >= 0 && gpsBearing != null) {
+    const br = (gpsBearing * Math.PI) / 180;
+    // speed m/s → 度/秒（纬度方向 1m ≈ 8.98e-6 度）
+    const degPerMeter = 8.98e-6;
+    const vLat = gpsSpeedMps * Math.cos(br) * degPerMeter;
+    const vLng = gpsSpeedMps * Math.sin(br) * degPerMeter / Math.max(Math.cos(lat * Math.PI / 180), 0.01);
+    // EMA 融合 GPS 速度（精度够时权重大）
+    const alpha = Math.max(0.3, Math.min(0.9, 1 - accuracy / 80));
+    k.vLat = alpha * vLat + (1 - alpha) * k.vLat;
+    k.vLng = alpha * vLng + (1 - alpha) * k.vLng;
+  }
+
+  k.lastT = now;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 /**
  * 单步判定。state 会被就地更新。
  * @returns {{ action: string, hit: boolean, inZone: boolean, distance: number, rawDistance: number, fired?: boolean, log?: string }}
@@ -74,17 +184,9 @@ function geoFoldJudgeStep(state, sample, cfg, point) {
 
   const rawDistance = geoDistanceMeters(lat, lng, point.lat, point.lng);
   const accuracy = Math.max(0, Number(sample.accuracy) || 0);
-  const accuracyOk = cfg.accuracyLimit <= 0 || accuracy <= cfg.accuracyLimit;
-  if (!accuracyOk) {
-    return {
-      action: 'accuracy_reject',
-      hit: false,
-      inZone: false,
-      distance: state.smoothDist != null ? state.smoothDist : rawDistance,
-      rawDistance,
-      log: `accuracy ${accuracy}`
-    };
-  }
+
+  // 精度超限时不再直接丢弃，而是降权融入卡尔曼，只标记 accuracyWeak
+  const accuracyWeak = cfg.accuracyLimit > 0 && accuracy > cfg.accuracyLimit;
 
   if (geoFoldIsTeleport(state.prevSample, lat, lng, now, accuracy)) {
     state.hits = 0;
@@ -99,19 +201,31 @@ function geoFoldJudgeStep(state, sample, cfg, point) {
     };
   }
 
-  if (state.smoothDist == null || !Number.isFinite(state.smoothDist)) {
-    state.smoothDist = rawDistance;
-  } else {
-    state.smoothDist =
-      GEO_FOLD_DIST_EMA_ALPHA * rawDistance +
-      (1 - GEO_FOLD_DIST_EMA_ALPHA) * state.smoothDist;
-  }
-  const smoothDist = state.smoothDist;
+  // 卡尔曼更新
+  const gpsSpeed = geoFoldGpsSpeedMps(sample);
+  const gpsBearing = (sample.direction != null && Number.isFinite(Number(sample.direction)))
+    ? Number(sample.direction)
+    : null;
 
-  // 圆：半径 = baseRadius。碰到圆周任意一边即算进圈（与方位无关）。
-  // 平滑距离只用于圈外 ETA，避免毛刺把提前量打乱。
-  const radius = Number(cfg.baseRadius) || 50;
-  const inZone = rawDistance <= radius + GEO_FOLD_EDGE_EPS_M;
+  if (!state.kalman) {
+    state.kalman = createKalmanState(lat, lng, accuracy);
+    state.kalman.lastT = now;
+  } else {
+    // 精度差时增大测量噪声（减小增益），让滤波器更信惯性预测
+    const effectiveAcc = accuracyWeak ? accuracy * 2.5 : accuracy;
+    kalmanUpdate(state.kalman, lat, lng, effectiveAcc, now, gpsSpeed, gpsBearing);
+  }
+
+  const filtLat = state.kalman.lat;
+  const filtLng = state.kalman.lng;
+  const filtDist = geoDistanceMeters(filtLat, filtLng, point.lat, point.lng);
+
+  // 平滑距离用于 ETA（卡尔曼已是平滑距离，兼容旧逻辑）
+  state.smoothDist = filtDist;
+  const smoothDist = filtDist;
+
+  const radius = Number(point && point.radius) || Number(cfg.baseRadius) || 50;
+  const inZone = filtDist <= radius + GEO_FOLD_EDGE_EPS_M;
 
   const prevSample = state.prevSample;
   const prevDist = state.prevDistance;
@@ -126,13 +240,11 @@ function geoFoldJudgeStep(state, sample, cfg, point) {
     }
   }
 
-  const gpsSpeed = geoFoldGpsSpeedMps(sample);
   const speedMps = gpsSpeed != null ? gpsSpeed : (derivedMps != null ? derivedMps : 0);
   const speedKmh = speedMps * 3.6;
 
   let approaching = false;
   if (inZone) {
-    // 已在圆内（含刚好踩到边上）：任意方向进入都算，不再卡「必须继续靠近圆心」
     approaching = true;
   } else if (prevDist == null) {
     approaching = false;
@@ -153,15 +265,27 @@ function geoFoldJudgeStep(state, sample, cfg, point) {
     etaSec = remainToCircle / approachSpeed;
   }
 
-  const leadOk =
-    !inZone &&
-    cfg.leadSec > 0 &&
-    approachStable &&
-    etaSec != null &&
-    etaSec <= cfg.leadSec;
+  // 提前发令：只在明确朝圆心收近、且车速够时按 v×反应时间外扩。
+  // leadSec 可由用户配置（秒）；再加一个最小提前距离，避免贴边才弹提醒。
+  const inbound = closingMps >= GEO_FOLD_MIN_APPROACH_MPS;
+  const reactSec = Math.max(
+    1.5,
+    Math.min(20, Number(cfg && cfg.leadSec) || GEO_FOLD_LEAD_REACT_SEC)
+  );
+  const minLeadM = Math.max(12, Math.min(60, Number(cfg && cfg.leadMinM) || 28));
+  let leadDist = 0;
+  if (approachSpeed >= GEO_FOLD_LEAD_MIN_MPS && approachStable && inbound) {
+    leadDist = Math.min(
+      GEO_FOLD_LEAD_DIST_MAX,
+      Math.max(minLeadM, approachSpeed * reactSec)
+    );
+  } else if (!inZone && approachStable && inbound && approachSpeed >= GEO_FOLD_MIN_APPROACH_MPS) {
+    // 慢速也至少给一点提醒窗口（只用于 leadOk；出圈仍不预判）
+    leadDist = Math.min(GEO_FOLD_LEAD_DIST_MAX, minLeadM);
+  }
+  const leadOk = !inZone && leadDist > 0 && remainToCircle <= leadDist;
 
   const speedOk = cfg.maxSpeedKmh <= 0 || speedKmh <= cfg.maxSpeedKmh;
-  // 进圈：碰到边就算，不受「仅靠近」限制；圈外提前量仍要靠近
   const trendOk = inZone || !cfg.requireApproaching || approaching;
   const inRange = inZone || leadOk;
   const hit = speedOk && trendOk && inRange;
@@ -178,11 +302,16 @@ function geoFoldJudgeStep(state, sample, cfg, point) {
     leadOk,
     distance: smoothDist,
     rawDistance,
+    filtLat,
+    filtLng,
     radius,
+    remainToCircle,
+    leadDist,
     etaSec,
     hits: state.hits,
     fired,
-    speedKmh
+    speedKmh,
+    accuracyWeak
   };
 }
 
@@ -192,12 +321,17 @@ function createGeoFoldState() {
     prevDistance: null,
     prevSample: null,
     smoothDist: null,
-    approachStreak: 0
+    approachStreak: 0,
+    kalman: null
   };
 }
 
 module.exports = {
   GEO_FOLD_MIN_APPROACH_MPS,
+  GEO_FOLD_LEAD_MIN_MPS,
+  GEO_FOLD_LEAD_REACT_SEC,
+  GEO_FOLD_LEAD_DIST_MAX,
+  GEO_FOLD_LEAD_REARM_M,
   GEO_FOLD_TREND_EPS_M,
   GEO_FOLD_DIST_EMA_ALPHA,
   GEO_FOLD_APPROACH_STREAK_NEED,
@@ -209,5 +343,8 @@ module.exports = {
   geoFoldIsTeleport,
   geoOffsetMeters,
   geoFoldJudgeStep,
-  createGeoFoldState
+  createGeoFoldState,
+  createKalmanState,
+  kalmanPredict,
+  kalmanUpdate
 };

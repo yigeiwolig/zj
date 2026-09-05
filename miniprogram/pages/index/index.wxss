@@ -2520,6 +2520,20 @@ input, textarea { text-align: left; }
   color: #bbb;
 }
 
+.channels-links-input {
+  width: 100%;
+  min-height: 160rpx;
+  background: #fff;
+  border: none;
+  border-radius: 12rpx;
+  padding: 24rpx 28rpx;
+  font-size: 26rpx;
+  color: #000;
+  box-sizing: border-box;
+  margin-bottom: 16rpx;
+  line-height: 1.5;
+}
+
 .nickname-option {
   display: flex;
   align-items: center;

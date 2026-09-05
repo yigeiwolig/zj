@@ -666,6 +666,16 @@ function isF1MaxModel(model) {
   return !!(model && model.name === 'F1' && model.type === 'Max');
 }
 
+function isF2ProModel(model) {
+  return !!(model && model.name === 'F2' && model.type === 'Pro');
+}
+
+/** ≤2000 行固件：状态包仅上报隐蔽 ITM=3，不上报打开/关闭 */
+function isCompactFlapItmModel(model) {
+  if (!model || isMtUltraCardModel(model)) return false;
+  return isF1MaxModel(model) || isF2ProModel(model) || isF2MaxModel(model);
+}
+
 /** F3 固件解析前会剥掉尾部 #；F2 Ultra / F1 Ultra 固件必须精确匹配「打开」「关闭」 */
 function flapBleUsesHashSuffix(model) {
   return isF3MaxModel(model);
@@ -686,6 +696,18 @@ function flapBleSendTimes(model, cmd) {
 
 function flapBleSendInterval(model) {
   return isF3MaxModel(model) ? FLAP_BLE_SEND_GAP_MS : 500;
+}
+
+function isStealthBleCmd(cmd) {
+  const s = String(cmd || '').replace(/#$/, '');
+  return s === '开启隐蔽' || s === '退出隐蔽';
+}
+
+/** F1 MAX / F2 PRO / F2 MAX：隐蔽进出只发 1 次，避免叠包 */
+function stealthBleSendTimes(model, cmd) {
+  if (!isStealthBleCmd(cmd)) return 2;
+  if (isF1MaxModel(model) || isF2ProModel(model) || isF2MaxModel(model)) return 1;
+  return 2;
 }
 
 function isF2UltraFirmwareModel(model) {
@@ -840,7 +862,11 @@ function openAngleMaxDeg(model, fallbackMax) {
 }
 
 function openAngleBleStepGapMs(model) {
-  return isF3MaxModel(model) ? F3_OPEN_ANGLE_BLE_STEP_GAP_MS : BLE_ANGLE_STEP_GAP_MS;
+  if (isF3MaxModel(model)) return F3_OPEN_ANGLE_BLE_STEP_GAP_MS;
+  if (isF2MaxModel(model)) return F2_MAX_OPEN_ANGLE_BLE_STEP_GAP_MS;
+  if (isF1MaxModel(model)) return F1_MAX_OPEN_ANGLE_BLE_STEP_GAP_MS;
+  if (isF2ProModel(model)) return F2_PRO_OPEN_ANGLE_BLE_STEP_GAP_MS;
+  return BLE_ANGLE_STEP_GAP_MS;
 }
 
 function openAngleSlideBleCommands(model) {
@@ -876,8 +902,40 @@ function isF2MaxDelayPowerModel(model) {
 }
 
 function isF2MaxStatusBleModel(model) {
-  // 状态包监听：F2 MAX 系 + F1/F2 Ultra / F3 MAX（F1 Ultra 与 F2 Ultra 同款）
-  return isF2MaxSeriesModel(model) || isMtUltraCardModel(model);
+  // 状态包监听：F2 MAX 系 + F1/F2 Ultra / F3 MAX + F1 MAX（MTF1:1）+ F2 PRO（MTF2:1）
+  return isF2MaxSeriesModel(model) || isMtUltraCardModel(model) || isF1MaxModel(model) || isF2ProModel(model);
+}
+
+function isF1MaxLatestBleModel(model, f1MaxLatestBle) {
+  return isF1MaxModel(model) && !!f1MaxLatestBle;
+}
+
+function isF2ProLatestBleModel(model, f2ProLatestBle) {
+  return isF2ProModel(model) && !!f2ProLatestBle;
+}
+
+function isF2MaxLatestBleModel(model, f2MaxLatestBle) {
+  return isF2MaxModel(model) && !!f2MaxLatestBle;
+}
+
+/** 连接后先打开隐蔽直控入口；状态包 MTF 回读会再确认 */
+function compactLatestBleFlagsForModel(model) {
+  if (!model || isMtUltraCardModel(model)) return {};
+  const patch = {};
+  if (isF1MaxModel(model)) patch.f1MaxLatestBle = true;
+  if (isF2ProModel(model)) patch.f2ProLatestBle = true;
+  if (isF2MaxModel(model)) patch.f2MaxLatestBle = true;
+  return patch;
+}
+
+/** F1/F2 Ultra、F3 MAX，以及已识别最新固件的 F1 MAX / F2 PRO / F2 MAX：同款状态仪 */
+function modelUsesFlapGaugeUi(model, ctx) {
+  if (!model) return false;
+  if (isMtUltraCardModel(model)) return true;
+  const c = ctx && typeof ctx === 'object' ? ctx : {};
+  return isF1MaxLatestBleModel(model, c.f1MaxLatestBle)
+    || isF2ProLatestBleModel(model, c.f2ProLatestBle)
+    || isF2MaxLatestBleModel(model, c.f2MaxLatestBle);
 }
 
 /** 高级设置滑块是否支持状态包回读校验（仅 Ultra / F3 MAX；F2 MAX / Long 无回读） */
@@ -969,8 +1027,12 @@ function modelHasStealthGuideButtons(model) {
   return model.type === 'Max' || model.type === 'Long' || model.type === 'Ultra';
 }
 
-function modelUsesDirectStealthControl(model) {
-  return isMtUltraCardModel(model);
+function modelUsesDirectStealthControl(model, ctx) {
+  const c = ctx && typeof ctx === 'object' ? ctx : { f1MaxLatestBle: ctx };
+  return isMtUltraCardModel(model)
+    || isF1MaxLatestBleModel(model, c.f1MaxLatestBle)
+    || isF2ProLatestBleModel(model, c.f2ProLatestBle)
+    || isF2MaxLatestBleModel(model, c.f2MaxLatestBle);
 }
 
 function buildOnboardingGuideSteps(model) {
@@ -1420,6 +1482,9 @@ const BLE_SEND_GAP_MS = 320;
 /** 翻板打开/关闭：更短间隔、优先出队，提高点击响应 */
 const FLAP_BLE_SEND_GAP_MS = 200;
 const BLE_ANGLE_STEP_GAP_MS = 380;
+const F2_MAX_OPEN_ANGLE_BLE_STEP_GAP_MS = 260;
+const F1_MAX_OPEN_ANGLE_BLE_STEP_GAP_MS = 260;
+const F2_PRO_OPEN_ANGLE_BLE_STEP_GAP_MS = 260;
 /** 演示模式：到位后切换下一步前的等待 */
 const F2_DEMO_STEP_GAP_MS = 2000;
 /** 演示模式：未到位时补发间隔（缩短至2秒，提高远距离成功率） */
@@ -1545,8 +1610,21 @@ const f2VoiceBridge = require('../../../utils/f2VoiceBridge.js');
 const {
   geoDistanceMeters,
   geoFoldJudgeStep,
-  createGeoFoldState
+  createGeoFoldState,
+  createKalmanState,
+  kalmanPredict,
+  kalmanUpdate,
+  geoOffsetMeters,
+  GEO_FOLD_LEAD_REARM_M,
+  GEO_FOLD_EDGE_EPS_M
 } = require('../../../utils/geoFoldLogic.js');
+const officialCameras = require('../../../utils/officialCameras.js');
+try {
+  // COS 未就绪时用分包本地全量兜底（约 360KB）
+  officialCameras.seedLocalPayload(require('../../data/official-cameras-v1.json'));
+} catch (e) {
+  /* no local file */
+}
 const { startGuideBtnCountdown, clearGuideBtnCountdown, GUIDE_BTN_LOCK_SEC } = require('../../../utils/guideBtnCountdown.js');
 
 function enrichBindTarget(target) {
@@ -1610,19 +1688,28 @@ const LEGACY_SCAN_PAGE_URL = '/package-legacy/pages/scan/scan';
 const CARD_SWIPE_MS = 260;
 
 /* ==========================================================
- * 定点折叠（测试版）：以设点为圆心、baseRadius 为半径的圆
+ * 定点折叠：以设点为圆心、baseRadius 为半径的圆
  * 碰到圆周任意一边（距离 ≤ 半径）即算进圈，与方位无关
- * 目前仅 F2 ULTRA 开放；抗漂移：设点校准 / 瞬移过滤 / 距离平滑
+ * F1 Ultra / F2 Ultra / F3 MAX；抗漂移：设点校准 / 瞬移过滤 / 距离平滑
  * ========================================================== */
-const GEO_FOLD_CFG_KEY = 'mt_geo_fold_cfg_v2';
-const GEO_FOLD_LOG_MAX = 12;
+const GEO_FOLD_CFG_KEY = 'mt_geo_fold_cfg_v5';
+const GEO_FOLD_CFG_KEY_V4 = 'mt_geo_fold_cfg_v4';
+const GEO_FOLD_CFG_KEY_V3 = 'mt_geo_fold_cfg_v3';
+const GEO_FOLD_AVOID_KEY = 'mt_geo_fold_avoid_v1';
+const GEO_FOLD_LOG_MAX = 20;
+const GEO_FOLD_DUMP_MAX = 1200;
 const GEO_FOLD_REFIRE_COOLDOWN_MS = 15000;
+const GEO_FOLD_POINTS_MAX = 8;
+/** 现场罚单警示：在该点触发圈半径基础上再外扩这么远 */
+const GEO_FOLD_TICKET_WARN_PAD_M = 200;
 /** 设点：至少几条合格样本、最大尝试次数、精度/聚簇阈值 */
 const GEO_FOLD_SET_NEED = 3;
 const GEO_FOLD_SET_MAX_TRIES = 6;
 const GEO_FOLD_SET_GAP_MS = 700;
 const GEO_FOLD_SET_MAX_ACC_M = 30;
 const GEO_FOLD_SET_CLUSTER_M = 25;
+
+const GEO_FOLD_UI_REFRESH_MS = 250;
 
 /** 每项档位：value 为实际参与计算的数值，label 为按钮文字 */
 const GEO_FOLD_OPTIONS = {
@@ -1634,20 +1721,20 @@ const GEO_FOLD_OPTIONS = {
     { value: 80, label: '80m' },
     { value: 100, label: '100m' }
   ],
-  // 提前发令（秒）：预计还要 leadSec 秒进入目标圈时提前触发
+  // 提前进圈提醒（秒）：按车速换算成提前距离，越大越早弹「准备翻转」
   leadSec: [
-    { value: 0, label: '关' },
-    { value: 1, label: '1s' },
-    { value: 2, label: '2s' },
-    { value: 3, label: '3s' },
-    { value: 5, label: '5s' }
+    { value: 3, label: '3秒' },
+    { value: 5, label: '5秒' },
+    { value: 8, label: '8秒' },
+    { value: 10, label: '10秒' },
+    { value: 12, label: '12秒' }
   ],
-  // 判定节流间隔（毫秒）；连续定位也按此间隔判一次
+  // 触发判定间隔（毫秒）；界面刷新另有独立定时器
   pollMs: [
-    { value: 1000, label: '1s' },
+    { value: 3000, label: '3s（推荐）' },
+    { value: 5000, label: '5s' },
     { value: 2000, label: '2s' },
-    { value: 3000, label: '3s' },
-    { value: 5000, label: '5s' }
+    { value: 1000, label: '1s（易漂移）' }
   ],
   // 连续命中几次才触发
   confirmHits: [
@@ -1662,30 +1749,20 @@ const GEO_FOLD_OPTIONS = {
     { value: 20, label: '20' },
     { value: 30, label: '30' },
     { value: 60, label: '60' }
-  ],
-  // 定位精度门槛（米），超过视为无效样本；0 = 不限
-  accuracyLimit: [
-    { value: 0, label: '不限' },
-    { value: 30, label: '30m' },
-    { value: 50, label: '50m' },
-    { value: 80, label: '80m' }
   ]
 };
 
 const GEO_FOLD_DEFAULT_CFG = {
   baseRadius: 50,
-  leadSec: 2,
-  pollMs: 2000,
+  leadSec: 8,
+  pollMs: 3000,
   confirmHits: 3,
   maxSpeedKmh: 0,
-  accuracyLimit: 30,
-  // 到点执行的指令：关闭 = 收起，打开 = 翻开
-  triggerCmd: '关闭',
-  // 只在靠近（或已在圈内）时才算命中，过滤路过/远离
+  accuracyLimit: 30, // 固定 30m
+  enterCmd: '关闭',
+  exitCmd: '打开',
   requireApproaching: true,
-  // 触发一次后自动停止跟踪，避免回程再折
-  autoStopAfterFire: true,
-  // 触发瞬间震动提示
+  autoStopAfterFire: false,
   vibrateOnFire: true
 };
 
@@ -1702,26 +1779,86 @@ function normalizeGeoFoldCfg(raw) {
     pollMs: pick('pollMs'),
     confirmHits: pick('confirmHits'),
     maxSpeedKmh: pick('maxSpeedKmh'),
-    accuracyLimit: pick('accuracyLimit'),
-    triggerCmd: src.triggerCmd === '打开' ? '打开' : '关闭',
+    accuracyLimit: 30,
+    enterCmd: src.enterCmd === '打开' ? '打开' : (src.triggerCmd === '打开' ? '打开' : '关闭'),
+    exitCmd: src.exitCmd === '关闭' ? '关闭' : (src.triggerCmd === '关闭' ? '打开' : '打开'),
     requireApproaching: src.requireApproaching !== false,
-    autoStopAfterFire: src.autoStopAfterFire !== false,
+    autoStopAfterFire: src.autoStopAfterFire === true,
     vibrateOnFire: src.vibrateOnFire !== false
   };
 }
 
-function normalizeGeoFoldPoint(raw) {
+function normalizeGeoFoldPoint(raw, defaults) {
   if (!raw || typeof raw !== 'object') return null;
   const lat = Number(raw.lat);
   const lng = Number(raw.lng);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-  return { lat, lng, name: String(raw.name || '').slice(0, 40) };
+  const defEnter = (defaults && defaults.enterCmd) || GEO_FOLD_DEFAULT_CFG.enterCmd;
+  const defExit = (defaults && defaults.exitCmd) || GEO_FOLD_DEFAULT_CFG.exitCmd;
+  const rawRadius = Number(raw.radius);
+  const defRadius = Number(defaults && defaults.baseRadius) || GEO_FOLD_DEFAULT_CFG.baseRadius;
+  // 允许 15–150m 连续半径（编辑面板档位 / 滑条），档位按钮写预设值
+  const radius = Number.isFinite(rawRadius)
+    ? Math.max(15, Math.min(150, Math.round(rawRadius)))
+    : defRadius;
+  return {
+    id: String(raw.id || `p_${Date.now()}_${Math.floor(Math.random() * 10000)}`),
+    lat,
+    lng,
+    name: String(raw.name || '').slice(0, 40),
+    radius,
+    enterCmd: raw.enterCmd === '打开' ? '打开' : (raw.enterCmd === '关闭' ? '关闭' : defEnter),
+    exitCmd: raw.exitCmd === '关闭' ? '关闭' : (raw.exitCmd === '打开' ? '打开' : defExit)
+  };
+}
+
+function normalizeGeoFoldPoints(rawList, legacyPoint, defaults) {
+  const list = Array.isArray(rawList) ? rawList : [];
+  const out = [];
+  for (let i = 0; i < list.length && out.length < GEO_FOLD_POINTS_MAX; i++) {
+    const p = normalizeGeoFoldPoint(list[i], defaults);
+    if (p) out.push(p);
+  }
+  if (!out.length && legacyPoint) {
+    const p = normalizeGeoFoldPoint(legacyPoint, defaults);
+    if (p) out.push(p);
+  }
+  return out;
+}
+
+function geoFoldPointLabel(point, index) {
+  if (!point) return '未设点';
+  const name = point.name || `点${(index || 0) + 1}`;
+  const coord = `${Number(point.lat).toFixed(5)}, ${Number(point.lng).toFixed(5)}`;
+  return `${name}（${coord}）`;
+}
+
+function geoFoldCmdLabel(cmd) {
+  return cmd === '打开' ? '翻开' : '收起';
 }
 
 function geoFoldClockText(ts) {
   const d = new Date(ts || Date.now());
   const pad = (n) => (n < 10 ? `0${n}` : String(n));
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function geoFoldGaugeDegFromSpeed(speedKmh) {
+  const maxKmh = 120;
+  const v = Math.max(0, Number(speedKmh) || 0);
+  const progress = Math.min(1, v / maxKmh);
+  return Math.round(-120 + progress * 240);
+}
+
+function geoFoldSinceLastLabel(lastT, now) {
+  if (!lastT) return '尚未收到';
+  const ms = Math.max(0, (now || Date.now()) - lastT);
+  if (ms < 1000) return `${ms} ms`;
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)} s`;
+  const m = Math.floor(s / 60);
+  const rem = Math.round(s - m * 60);
+  return `${m} min ${rem} s`;
 }
 
 Page({
@@ -2023,25 +2160,88 @@ Page({
     f2DemoRunning: false,
     f2DemoStatusText: '',
 
-    // === 定点折叠（测试版，仅 F2 ULTRA） ===
+    // === 定点折叠（F1 Ultra / F2 Ultra / F3 MAX） ===
     showGeoFoldModal: false,
     geoFoldOptions: GEO_FOLD_OPTIONS,
     geoFoldCfg: { ...GEO_FOLD_DEFAULT_CFG },
+    geoFoldPoints: [],
     geoFoldPoint: null,
     geoFoldPointText: '未设点',
+    geoFoldNearestName: '--',
+    geoFoldPointsCountText: '0 个点',
+    geoFoldOfficialNearby: [],
+    geoFoldOfficialCountText: '',
+    geoFoldAvoidTypeIds: officialCameras.defaultAvoidTypeIds(),
+    geoFoldAvoidBaseRadius: officialCameras.AVOID_BASE_RADIUS_DEFAULT,
+    geoFoldAvoidTypeCountText: `${officialCameras.DEFAULT_AVOID_TYPE_IDS.length} 类`,
+    geoFoldAvoidChips: [],
+    showGeoFoldAvoidPanel: false,
+    geoFoldAvoidPanelEntered: false,
+    geoFoldEditPointId: '',
+    showGeoFoldMapPicker: false,
+    geoFoldPickerHudExpanded: true,
+    geoFoldMapPickerClosing: false,
+    geoFoldMapPickerEntered: false,
+    geoFoldMapPickerMode: 'pick', // pick | view
+    geoFoldPickerLat: 39.9,
+    geoFoldPickerLng: 116.4,
+    geoFoldPickerScale: 16,
+    geoFoldPickerRotate: 0,
+    geoFoldPickerMarkers: [],
+    geoFoldPickerCircles: [],
+    geoFoldPickerPolygons: [],
+    geoFoldPickerPolylines: [],
+    geoFoldEmbedLat: 39.9,
+    geoFoldEmbedLng: 116.4,
+    geoFoldEmbedScale: 14,
+    geoFoldEmbedMarkers: [],
+    geoFoldEmbedCircles: [],
+    geoFoldEmbedPolygons: [],
+    showGeoFoldPickerEdit: false,
+    geoFoldPickerEditClosing: false,
+    geoFoldPickerEditId: '',
+    geoFoldPickerEditName: '',
+    geoFoldPickerEditEnter: '关闭',
+    geoFoldPickerEditExit: '打开',
+    geoFoldPickerEditRadius: 50,
+    geoFoldPickerEditFocus: false,
     geoFoldTracking: false,
     geoFoldStatusText: '未开始',
     geoFoldDistanceText: '--',
+    geoFoldDistanceM: 0,
+    geoFoldGaugeDeg: -120,
+    geoFoldTicks: [-120, -90, -60, -30, 0, 30, 60, 90, 120],
     geoFoldRadiusText: '--',
     geoFoldEtaText: '--',
     geoFoldSpeedText: '--',
+    geoFoldSpeedKmh: '--',
     geoFoldAccuracyText: '--',
     geoFoldTrendText: '--',
     geoFoldHitText: '0 / 3',
     geoFoldSampleCount: 0,
+    showGeoFoldApproachModal: false,
+    geoFoldApproachEntered: false,
+    geoFoldApproachClosing: false,
+    geoFoldApproachDistM: 0,
+    geoFoldApproachEtaSec: 0,
+    geoFoldApproachPointName: '',
+    showGeoFoldTicketAlert: false,
+    geoFoldTicketEntered: false,
+    geoFoldTicketClosing: false,
+    geoFoldTicketAlertName: '',
+    geoFoldTicketAlertDist: 0,
+    geoFoldTicketEdgeWarn: false,
+    showGeoFoldBleLost: false,
+    geoFoldBleLostEntered: false,
+    geoFoldBleLostClosing: false,
+    geoFoldBleLostPreviewing: false,
     geoFoldLastAt: '--',
     geoFoldLogs: [],
-    geoFoldCapturingPoint: false, 
+    geoFoldCapturingPoint: false,
+    geoFoldDumpCount: 0,
+    geoFoldDumpUrl: '',
+    geoFoldDumpCopying: false,
+    geoFoldSinceLastText: '--', 
     // 滑块状态（连接后由设备状态包覆盖）
     settingState: {
       faultDetect: 'left',
@@ -2190,6 +2390,9 @@ Page({
     powerOffLockGuideStep: 0, // 0=隐藏 1=开车前需解锁 2=开机狂闪说明
 
     // === 隐蔽模式相关 ===
+    f1MaxLatestBle: false,
+    f2ProLatestBle: false,
+    f2MaxLatestBle: false,
     showStealthTutorial: false, // 是否显示隐蔽模式教学
     stealthTutorialMode: 'enter', // 教学模式：'enter'=进入, 'exit'=退出
     
@@ -2449,7 +2652,7 @@ Page({
       const finalName = numMatch ? `MT-ID:${numMatch}` : rawName;
 
       // 系统 BLE 已连通：先更新 UI，再挂 notify 回调（须 isConnected/GATT 就绪）
-      this._applyBleLinkUi({
+      this._applyBleLinkUi(Object.assign({
         isConnected: true,
         isScanning: false,
         isConnecting: false,
@@ -2457,7 +2660,7 @@ Page({
         bleReconnectAttempt: 0,
         connectedDeviceName: finalName,
         currentConnectedRawSn: normalizedSn || ''
-      }, () => {
+      }, compactLatestBleFlagsForModel(this._bleSessionModel || this.data.currentModel)), () => {
         this._ensureF2StatusBleListener(true);
         this._scheduleRemoteStatePush();
         this._bleConnectGraceUntil = Date.now() + 8000;
@@ -2693,6 +2896,10 @@ Page({
   onShow() {
     // 🔴 修复：从 OTA 页面返回后，按需关闭不应该显示的弹窗并恢复页面状态
     // 只重置当前为 true 的状态，减少首帧 setData 负载
+    if (this._geoFoldPageHidden && this.data.geoFoldTracking) {
+      this._geoFoldPageHidden = false;
+      this._geoFoldLog('已回前台，定点折叠继续跟踪');
+    }
     const resetPatch = {};
     const closeFlags = [
       'showPasswordModal',
@@ -2934,8 +3141,11 @@ Page({
   onHide() {
     this._stopRemoteAssistPollers();
     this._stopF2DemoMode(false);
-    // 小程序后台拿不到稳定定位，切后台一律停跟踪并告知原因
-    this._stopGeoFoldTracking('页面切到后台');
+    // 定点折叠跟踪中：切后台不停，改走后台定位；页面真正卸载时再停
+    if (this.data.geoFoldTracking) {
+      this._geoFoldPageHidden = true;
+      this._geoFoldLog('已切后台：继续收定位。翻板靠蓝牙，后台不保证能发出（安卓偶发可以，iOS 常被挂起）');
+    }
     this._clearOpenAngleBleWatchTimer();
     this._stopFlapGaugeSpinImmediate();
     this._clearF3CalTimer();
@@ -2964,10 +3174,15 @@ Page({
   },
 
   onUnload() {
+    this._stopGeoFoldPickerHudPreview();
+    this._teardownGeoFoldLocationStream();
     this._stopFlapGaugeSpinLoop();
     this._clearFlapGaugeEaseTimer();
     this._clearF3CalTimer();
     this._clearSettingSendingWatch();
+    this._cancelGalleryDragRaf();
+    this._pendingGalleryDragPatch = null;
+    this._clearCardSwipeTimer();
     clearGuideBtnCountdown(this, '_modelPickTipBtnTimer');
     // 🔴 停止定时检查
     const app = getApp();
@@ -3264,11 +3479,21 @@ Page({
       if (callback) callback();
       return;
     }
-    if (!this._remoteStatePatchChanged(patch)) {
+    let next = patch;
+    // 高级配置打开时不要用用户端旧滑块状态覆盖技师刚点的选项
+    if (this._isRemoteAssistAdminRelay() && this.data.showSettingsModal && next.settingState) {
+      next = { ...next };
+      delete next.settingState;
+      if (!Object.keys(next).length) {
+        if (callback) callback();
+        return;
+      }
+    }
+    if (!this._remoteStatePatchChanged(next)) {
       if (callback) callback();
       return;
     }
-    this.setData(patch, callback);
+    this.setData(next, callback);
   },
 
   _saveRemoteAssistLocal() {
@@ -3564,8 +3789,14 @@ Page({
       const gap = Math.max(interval > 0 ? interval : 300, BLE_SEND_GAP_MS);
       this._dispatchRemoteAssistBleCmd(cmd, times, gap);
       const flapBase = String(cmd || '').replace(/#$/, '');
-      if ((flapBase === '打开' || flapBase === '关闭') && isMtUltraCardModel(this.data.currentModel)) {
+      if ((flapBase === '打开' || flapBase === '关闭') && modelUsesFlapGaugeUi(this.data.currentModel, this.data)) {
         this._setFlapPanelStateOptimistic(flapBase);
+      }
+      const settingPatch = this._settingStatePatchFromSendText(cmd);
+      if (settingPatch) {
+        this.setData({
+          settingState: { ...this.data.settingState, ...settingPatch }
+        });
       }
       this._waitBleSendQueueIdle(12000).then((ok) => {
         if (ok) {
@@ -4521,7 +4752,7 @@ Page({
         { text: '正在打开自动收回', data: '打开收回', sendTimes: 2, interval: 500, delayNext: 2000 },
         { text: '正在开启自检', data: '开启自检', sendTimes: 2, interval: 500, delayNext: 2000 },
         { text: '正在打开开机牌上翻', data: '开机上翻', sendTimes: 2, interval: 500, delayNext: 2000 },
-        { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 2, interval: 500, delayNext: 0, isLeveling: true, isFinal: true }
+        { text: '正在自动调平，请用手进行阻挡', data: '自动调平', sendTimes: 1, interval: 800, delayNext: 0, isLeveling: true, isFinal: true }
       ];
     } else if (isF1Max) {
       steps = F1_MAX_FACTORY_RESET_STEPS.slice();
@@ -4844,8 +5075,13 @@ Page({
     const kind = step.kind;
 
     if (data && kind !== 'textAutoSend') {
-      console.log(`📤 [出厂设置] 步骤 ${stepIndex + 1}: ${data}（连续${sendTimes}次，间隔${interval}ms）`);
-      this.sendDataMultiple(data, sendTimes, interval);
+      if (step.isLeveling && data === '自动调平') {
+        console.log(`📤 [出厂设置] 步骤 ${stepIndex + 1}: ${data}（单次发送，间隔800ms）`);
+        this.sendData(data, 800);
+      } else {
+        console.log(`📤 [出厂设置] 步骤 ${stepIndex + 1}: ${data}（连续${sendTimes}次，间隔${interval}ms）`);
+        this.sendDataMultiple(data, sendTimes, interval);
+      }
     } else if (!data && !kind) {
       console.log(`ℹ️ [出厂设置] 步骤 ${stepIndex + 1}: 仅提示，无需发送数据`);
     }
@@ -5546,19 +5782,40 @@ Page({
   _ensureBleLocationPermission() {
     if (!isAndroidBleScanPlatform()) return Promise.resolve();
     return new Promise((resolve, reject) => {
+      const ok = () => resolve();
+      const deny = () => reject({ type: 'location_deny', _bleKind: 'location' });
+      const tryGetLocation = () => {
+        wx.getLocation({
+          type: 'gcj02',
+          isHighAccuracy: false,
+          success: ok,
+          fail: (err) => {
+            const msg = String((err && (err.errMsg || err.message)) || '').toLowerCase();
+            const denied =
+              msg.includes('auth deny') ||
+              msg.includes('authorize') ||
+              msg.includes('permission') ||
+              msg.includes('隐私') ||
+              (err && (err.errno === 103 || err.errno === 104));
+            if (denied) deny();
+            else ok(); // 超时等非授权问题，不挡蓝牙扫描
+          }
+        });
+      };
       wx.getSetting({
         success: (res) => {
           if (res.authSetting && res.authSetting['scope.userLocation'] === true) {
-            resolve();
+            ok();
             return;
           }
-          wx.authorize({
-            scope: 'scope.userLocation',
-            success: () => resolve(),
-            fail: () => reject({ type: 'location_deny', _bleKind: 'location' })
-          });
+          if (res.authSetting && res.authSetting['scope.userLocation'] === false) {
+            deny();
+            return;
+          }
+          // 未记录时以 getLocation 为准，authorize 失败不再直接判死
+          tryGetLocation();
         },
-        fail: () => resolve()
+        fail: () => tryGetLocation()
       });
     });
   },
@@ -6389,44 +6646,33 @@ Page({
   // ===============================================
   // 页面交互
   // ===============================================
-  onTouchStartMain(e) {
-    if (this._isRemoteAssistUserLocked()) return;
-    // 连续滑动：打断上一张切换动画，先落到目标卡再跟手
-    if (this._isSwipeAnimating) {
-      this._finishPendingCardSwipe(true);
-    }
-    if (e.changedTouches.length > 0) {
-      if (this._scanPerfDebug) {
-        this._scanPerf.moveEvents = 0;
-        this._scanPerf.moveSetDataCostTotal = 0;
-        this._scanPerf.moveSetDataCostMax = 0;
-        this._scanPerf.moveLastLogAt = Date.now();
-        console.log('[scan-perf] touchStart', {
-          x: e.changedTouches[0].clientX,
-          currentIndex: this.data.currentIndex
-        });
-      }
-      this.setData({
-        touchStartX: e.changedTouches[0].clientX,
-        isDraggingModel: true,
-        modelDragOffset: 0
-      });
-    }
+  _cancelGalleryDragRaf() {
+    if (this._galleryDragRafId == null) return;
+    const cancel = typeof cancelAnimationFrame === 'function'
+      ? cancelAnimationFrame
+      : clearTimeout;
+    cancel(this._galleryDragRafId);
+    this._galleryDragRafId = null;
   },
 
-  onTouchMoveMain(e) {
-    if (this._isRemoteAssistUserLocked()) return;
-    if (this._isSwipeAnimating) return;
-    if (!this.data.isDraggingModel) return;
-    if (!e.touches || !e.touches.length) return;
+  _scheduleGalleryDragFrame(apply) {
+    if (this._galleryDragRafId != null) return;
+    const raf = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame
+      : (cb) => setTimeout(cb, 16);
+    this._galleryDragRafId = raf(() => {
+      this._galleryDragRafId = null;
+      if (typeof apply === 'function') apply();
+    });
+  },
 
-    const touchCurrentX = e.touches[0].clientX;
-    const startX = this.data.touchStartX;
-    let diff = touchCurrentX - startX;
-
+  _buildGalleryDragPatch(diffRaw) {
+    let diff = diffRaw;
     const maxDrag = 250;
     if (diff > maxDrag) diff = maxDrag;
     if (diff < -maxDrag) diff = -maxDrag;
+    // 像素取整，避免亚像素差异反复触发 setData
+    diff = Math.round(diff);
 
     const dragRatio = Math.min(1, Math.abs(diff) / maxDrag);
     let nextCardOffset = 85;
@@ -6455,19 +6701,43 @@ Page({
       nextCardOpacity = 0;
     }
 
-    const setDataStart = Date.now();
-    this.setData({
+    return {
       modelDragOffset: diff,
-      nextCardOffsetPercent: nextCardOffset,
-      prevCardOffsetPercent: prevCardOffset,
-      modelActiveScale: activeScale,
+      nextCardOffsetPercent: Math.round(nextCardOffset * 10) / 10,
+      prevCardOffsetPercent: Math.round(prevCardOffset * 10) / 10,
+      modelActiveScale: Math.round(activeScale * 1000) / 1000,
       modelSideScale: 0.86,
-      nextModelScale,
-      prevModelScale,
-      activeCardOpacity,
-      nextCardOpacity,
-      prevCardOpacity
-    }, () => {
+      nextModelScale: Math.round(nextModelScale * 1000) / 1000,
+      prevModelScale: Math.round(prevModelScale * 1000) / 1000,
+      activeCardOpacity: Math.round(activeCardOpacity * 100) / 100,
+      nextCardOpacity: Math.round(nextCardOpacity * 100) / 100,
+      prevCardOpacity: Math.round(prevCardOpacity * 100) / 100
+    };
+  },
+
+  _galleryDragPatchChanged(patch) {
+    const d = this.data;
+    return (
+      d.modelDragOffset !== patch.modelDragOffset ||
+      d.nextCardOffsetPercent !== patch.nextCardOffsetPercent ||
+      d.prevCardOffsetPercent !== patch.prevCardOffsetPercent ||
+      d.modelActiveScale !== patch.modelActiveScale ||
+      d.nextModelScale !== patch.nextModelScale ||
+      d.prevModelScale !== patch.prevModelScale ||
+      d.activeCardOpacity !== patch.activeCardOpacity ||
+      d.nextCardOpacity !== patch.nextCardOpacity ||
+      d.prevCardOpacity !== patch.prevCardOpacity
+    );
+  },
+
+  _flushGalleryDragSetData() {
+    const pending = this._pendingGalleryDragPatch;
+    if (!pending) return;
+    this._pendingGalleryDragPatch = null;
+    if (!this._galleryDragPatchChanged(pending)) return;
+
+    const setDataStart = Date.now();
+    this.setData(pending, () => {
       if (!this._scanPerfDebug) return;
       const cost = Date.now() - setDataStart;
       const perf = this._scanPerf;
@@ -6482,9 +6752,9 @@ Page({
           events: perf.moveEvents,
           avgSetDataCostMs: Number(avg),
           maxSetDataCostMs: perf.moveSetDataCostMax,
-          dragOffset: diff,
-          nextCardOffset: Number(nextCardOffset.toFixed(2)),
-          prevCardOffset: Number(prevCardOffset.toFixed(2))
+          dragOffset: pending.modelDragOffset,
+          nextCardOffset: pending.nextCardOffsetPercent,
+          prevCardOffset: pending.prevCardOffsetPercent
         });
         perf.moveEvents = 0;
         perf.moveSetDataCostTotal = 0;
@@ -6494,12 +6764,63 @@ Page({
     });
   },
 
+  onTouchStartMain(e) {
+    if (this._isRemoteAssistUserLocked()) return;
+    // 连续滑动：打断上一张切换动画，先落到目标卡再跟手
+    if (this._isSwipeAnimating) {
+      this._finishPendingCardSwipe(true);
+    }
+    if (e.changedTouches.length > 0) {
+      if (this._scanPerfDebug) {
+        this._scanPerf.moveEvents = 0;
+        this._scanPerf.moveSetDataCostTotal = 0;
+        this._scanPerf.moveSetDataCostMax = 0;
+        this._scanPerf.moveLastLogAt = Date.now();
+        console.log('[scan-perf] touchStart', {
+          x: e.changedTouches[0].clientX,
+          currentIndex: this.data.currentIndex
+        });
+      }
+      this._cancelGalleryDragRaf();
+      this._pendingGalleryDragPatch = null;
+      // startX 放实例上，避免跟手过程读 data / 多余 setData
+      this._galleryTouchStartX = e.changedTouches[0].clientX;
+      this.setData({
+        touchStartX: this._galleryTouchStartX,
+        isDraggingModel: true,
+        modelDragOffset: 0
+      });
+    }
+  },
+
+  onTouchMoveMain(e) {
+    if (this._isRemoteAssistUserLocked()) return;
+    if (this._isSwipeAnimating) return;
+    if (!this.data.isDraggingModel) return;
+    if (!e.touches || !e.touches.length) return;
+
+    const startX = this._galleryTouchStartX != null
+      ? this._galleryTouchStartX
+      : this.data.touchStartX;
+    const patch = this._buildGalleryDragPatch(e.touches[0].clientX - startX);
+    this._pendingGalleryDragPatch = patch;
+    this._scheduleGalleryDragFrame(() => this._flushGalleryDragSetData());
+  },
+
   onTouchEnd(e) {
     if (this._isRemoteAssistUserLocked()) return;
     if (this._isSwipeAnimating) return;
     if (!this.data.isDraggingModel && Math.abs(this.data.modelDragOffset || 0) < 1) return;
+
+    // 松手前先落地上一帧待写入的位移，避免阈值抖动
+    this._cancelGalleryDragRaf();
+    this._flushGalleryDragSetData();
+
+    const startX = this._galleryTouchStartX != null
+      ? this._galleryTouchStartX
+      : this.data.touchStartX;
     const touchEndX = e.changedTouches[0].clientX;
-    const diff = touchEndX - this.data.touchStartX;
+    const diff = touchEndX - startX;
     const threshold = 56;
 
     const needSwipe = Math.abs(diff) >= threshold;
@@ -6509,10 +6830,11 @@ Page({
       ? this.data.currentIndex < total - 1
       : this.data.currentIndex > 0;
 
-    this.setData({ isDraggingModel: false });
+    this._galleryTouchStartX = null;
 
     if (!needSwipe || !canSwipe) {
       this.setData({
+        isDraggingModel: false,
         modelDragOffset: 0,
         nextCardOffsetPercent: 85,
         prevCardOffsetPercent: -85,
@@ -6530,6 +6852,7 @@ Page({
       return;
     }
 
+    this.setData({ isDraggingModel: false });
     this._animateSwipeOutAndSwitch(direction);
     if (this._scanPerfDebug) {
       console.log('[scan-perf] touchEnd(swipe)', { diff, direction });
@@ -6675,36 +6998,35 @@ Page({
     if (!this.data.showDetail || this.data.detailMode !== 'main') return;
     if (!e.touches || !e.touches.length) return;
     const t = e.touches[0];
-    this.setData({
-      detailSwipeStartX: t.clientX,
-      detailSwipeStartY: t.clientY,
-      detailSwipeTracking: true
-    });
+    // 用实例字段，避免每次触摸 setData 打断主控制区纵向滚动
+    this._detailSwipeStartX = t.clientX;
+    this._detailSwipeStartY = t.clientY;
+    this._detailSwipeTracking = true;
   },
 
   onDetailSwipeMove(e) {
-    if (!this.data.detailSwipeTracking) return;
+    if (!this._detailSwipeTracking) return;
     if (!this.data.showDetail || this.data.detailMode !== 'main') return;
     if (!e.touches || !e.touches.length) return;
     const t = e.touches[0];
-    const dx = t.clientX - this.data.detailSwipeStartX;
-    const dy = t.clientY - this.data.detailSwipeStartY;
+    const dx = t.clientX - (this._detailSwipeStartX || 0);
+    const dy = t.clientY - (this._detailSwipeStartY || 0);
     // 垂直滑动明显时，取消本次返回手势，避免与页面内部交互冲突
     if (Math.abs(dy) > 40 && Math.abs(dy) > Math.abs(dx)) {
-      this.setData({ detailSwipeTracking: false });
+      this._detailSwipeTracking = false;
     }
   },
 
   onDetailSwipeEnd(e) {
     if (this._isRemoteAssistUserLocked()) return;
-    if (!this.data.detailSwipeTracking) return;
-    this.setData({ detailSwipeTracking: false });
+    if (!this._detailSwipeTracking) return;
+    this._detailSwipeTracking = false;
     if (!this.data.showDetail || this.data.detailMode !== 'main') return;
     if (!e.changedTouches || !e.changedTouches.length) return;
     const t = e.changedTouches[0];
-    const startX = this.data.detailSwipeStartX;
-    const dx = t.clientX - this.data.detailSwipeStartX;
-    const dy = t.clientY - this.data.detailSwipeStartY;
+    const startX = this._detailSwipeStartX || 0;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - (this._detailSwipeStartY || 0);
     // 左边缘优先：从屏幕最左侧轻扫时，降低触发阈值，更贴近系统返回手势
     const isEdgeSwipe = startX <= 28;
     const threshold = isEdgeSwipe ? 40 : 70;
@@ -6732,6 +7054,9 @@ Page({
     if (this._detailEnterTimer) clearTimeout(this._detailEnterTimer);
     if (this._detailCloseTimer) clearTimeout(this._detailCloseTimer);
     if (this._detailBlockTimer) clearTimeout(this._detailBlockTimer);
+    if (patch.currentModel && isF3MaxModel(patch.currentModel)) {
+      this._f3AdminSensorUiLock = false;
+    }
     this.setData({
       detailEnterAnim: false,
       showDetail: true,
@@ -6753,7 +7078,10 @@ Page({
                   f3HeightMonitorVisible: !(this.data.f3DeviceVariant === 'imu' || this.data.f3SensorUi === 'imu'),
                   f3SensorUiSwitching: false
                 }
-              : {}),
+              : {
+                  f3AttitudeVisible: false,
+                  f3HeightMonitorVisible: false
+                }),
             ...(this.data.isConnected
               ? this._resetF2HwMonitorState(true, patch.currentModel)
               : {
@@ -6788,6 +7116,7 @@ Page({
   _closeDetailAnimated(extraPatch = {}) {
     if (this._detailClosing) return;
     this._detailClosing = true;
+    this._f3AdminSensorUiLock = false;
     const guardMs = 360;
     this._controlTapLockUntil = Date.now() + guardMs;
     if (this._detailEnterTimer) clearTimeout(this._detailEnterTimer);
@@ -7243,7 +7572,7 @@ Page({
     const model = this.data.currentModel;
     const foldMin = foldServoAngleMinForModel(model);
 
-    if (parsed.itm === 0 || parsed.itm === 2) {
+    if (parsed.itm === 0 || parsed.itm === 2 || (isCompactFlapItmModel(model) && this.data.editType === 'fold')) {
       this._lastBleFoldServoAngle = Math.max(
         foldMin,
         Math.min(FOLD_SERVO_ANGLE_MAX, ang)
@@ -8175,7 +8504,8 @@ Page({
     this._stopAutoCalGuideAnim();
     if (this._canSendBleCommand()) {
       console.log('📤 [蓝牙] 发送"自动调平"');
-      this.sendDataMultiple('自动调平', 2, 500);
+      // 自动调平在固件内阻塞 1–2 分钟，连发会重入导致 168 栈溢出
+      this.sendData('自动调平', 800);
     } else {
       console.log('ℹ️ [自动校准] 当前未连蓝牙，仅展示流程');
     }
@@ -8260,7 +8590,7 @@ Page({
             : null;
           this._commitBleCommandAfterUi({
             sendText: flapBleWireText(model, cmd) || cmd,
-            times: (cmd === '打开' || cmd === '关闭') ? flapBleSendTimes(model, cmd) : 2,
+            times: (cmd === '打开' || cmd === '关闭') ? flapBleSendTimes(model, cmd) : stealthBleSendTimes(model, cmd),
             interval: (cmd === '打开' || cmd === '关闭') ? flapBleSendInterval(model) : 500,
             verify,
             label: '语音控制'
@@ -8545,7 +8875,7 @@ Page({
   },
 
   _armFlapGaugeSpin(dir) {
-    if (!isMtUltraCardModel(this.data.currentModel)) return;
+    if (!modelUsesFlapGaugeUi(this.data.currentModel, this.data)) return;
     const spinDir = dir === 'close' ? 'close' : 'open';
     this._clearFlapGaugeEaseTimer();
     const sameDir = this._flapGaugeSpinActive && this._flapGaugeSpinDir === spinDir;
@@ -8619,7 +8949,7 @@ Page({
    * 绝不停在半途。
    */
   _requestFlapGaugeSpinStop(targetState) {
-    if (!isMtUltraCardModel(this.data.currentModel)) return;
+    if (!modelUsesFlapGaugeUi(this.data.currentModel, this.data)) return;
     if (!targetState) return;
 
     // 已在朝同一止位刹停：不要反复重置行程，否则会“中途掐断”
@@ -8772,7 +9102,7 @@ Page({
    */
   _patchFlapGaugeSpin(updates) {
     if (!updates || updates.flapPanelState === undefined) return updates;
-    if (!isMtUltraCardModel(this.data.currentModel)) return updates;
+    if (!modelUsesFlapGaugeUi(this.data.currentModel, this.data)) return updates;
     const prev = this.data.flapPanelState;
     const next = updates.flapPanelState;
 
@@ -8858,11 +9188,15 @@ Page({
   },
 
   _setFlapPanelStateOptimistic(cmd, afterUiReady) {
-    if (!isMtUltraCardModel(this.data.currentModel)) {
-      if (typeof afterUiReady === 'function') afterUiReady();
+    const done = typeof afterUiReady === 'function' ? afterUiReady : null;
+    if (isCompactFlapItmModel(this.data.currentModel)) {
+      if (done) done();
       return;
     }
-    const done = typeof afterUiReady === 'function' ? afterUiReady : null;
+    if (!modelUsesFlapGaugeUi(this.data.currentModel, this.data)) {
+      if (done) done();
+      return;
+    }
     if (cmd === '打开') {
       this._setFlapPanelData({ flapPanelState: 'moving', flapPanelStateText: '打开中', flapMotionDir: 'open', flapGaugeSpinning: true, flapGaugeSpinDir: 'open' }, () => {
         this._publishFlapToVoiceBridge('moving', '打开中');
@@ -9125,11 +9459,20 @@ Page({
     if (!cmd) return;
 
     const model = this.data.currentModel;
-    if (!isMtUltraCardModel(model)) {
+    if (!isMtUltraCardModel(model)
+        && !isF1MaxLatestBleModel(model, this.data.f1MaxLatestBle)
+        && !isF2ProLatestBleModel(model, this.data.f2ProLatestBle)
+        && !isF2MaxLatestBleModel(model, this.data.f2MaxLatestBle)) {
       return;
     }
     if (!this._ensureBleControlReady()) {
       return;
+    }
+    // 手动翻板时：若定点跟踪正在运行，立即停止（按钮优先，避免自动和手动互相打架）
+    if (isFlapCmd && this.data.geoFoldTracking && !this._geoFoldInternalFire) {
+      this._stopGeoFoldTracking('手动按钮操作，停止定点跟踪');
+      this._showCustomToast('已手动操作，定点跟踪已停止', 'none', 2200);
+      // 停止跟踪后仍继续执行发令，不提前 return
     }
     if ((cmd === '打开' || cmd === '关闭') && this.data.flapPanelState === 'stealth') {
       this._showCustomToast('隐蔽模式中，请先退出', 'none', 2000);
@@ -9176,10 +9519,26 @@ Page({
           const flapInterval = flapBleSendInterval(model);
           this.sendDataMultiple(flapBleWireText(model, cmd), flapTimes, flapInterval);
         }
-      } else {
+      } else if (isStealthBleCmd(cmd)) {
+        if (isCompactFlapItmModel(model)) {
+          if (cmd === '开启隐蔽') {
+            this._setFlapPanelData({
+              flapPanelState: 'stealth',
+              flapPanelStateText: '最长 3 小时',
+              flapMotionDir: ''
+            });
+          } else {
+            this._stealthExitGraceUntil = Date.now() + 4000;
+            this._setFlapPanelData({
+              flapPanelState: 'unknown',
+              flapPanelStateText: '正在退出…',
+              flapMotionDir: ''
+            });
+          }
+        }
         this._commitBleCommandAfterUi({
           sendText: cmd,
-          times: 2,
+          times: stealthBleSendTimes(model, cmd),
           interval: 500,
           label: '远程控制'
         });
@@ -9256,10 +9615,10 @@ Page({
   },
 
   // ===============================================
-  // 定点折叠（测试版，F1 / F2 Ultra）
+  // 定点折叠（F1 Ultra / F2 Ultra / F3 MAX）
   // ===============================================
   _geoFoldSupported() {
-    return isF2UltraFirmwareModel(this.data.currentModel);
+    return isMtUltraCardModel(this.data.currentModel);
   },
 
   _loadGeoFoldConfig() {
@@ -9268,35 +9627,1140 @@ Page({
     let stored = null;
     try {
       stored = wx.getStorageSync(GEO_FOLD_CFG_KEY);
-      // 兼容旧版 v1 本地配置（点位可沿用；触发算法已换）
-      if (!stored) stored = wx.getStorageSync('mt_geo_fold_cfg_v1');
+      if (!stored) {
+        const oldV4 = wx.getStorageSync(GEO_FOLD_CFG_KEY_V4);
+        const oldV3 = wx.getStorageSync(GEO_FOLD_CFG_KEY_V3);
+        const old = oldV4 || oldV3 || wx.getStorageSync('mt_geo_fold_cfg_v2') || wx.getStorageSync('mt_geo_fold_cfg_v1');
+        if (old) {
+          stored = {
+            cfg: old.cfg,
+            points: old.points,
+            point: old.point
+          };
+        }
+      }
     } catch (e) {
       stored = null;
     }
     const cfg = normalizeGeoFoldCfg(stored && stored.cfg);
-    const point = normalizeGeoFoldPoint(stored && stored.point);
+    const points = normalizeGeoFoldPoints(stored && stored.points, stored && stored.point, cfg);
+    const point = points[0] || null;
+    const avoid = this._loadGeoFoldAvoidPrefs();
     this.setData({
       geoFoldCfg: cfg,
+      geoFoldPoints: points,
       geoFoldPoint: point,
-      geoFoldPointText: this._geoFoldPointText(point),
+      geoFoldPointText: point ? geoFoldPointLabel(point, 0) : '未设点',
+      geoFoldPointsCountText: `${points.length} 个点`,
+      geoFoldNearestName: '--',
       geoFoldHitText: `0 / ${cfg.confirmHits}`,
-      geoFoldRadiusText: `${cfg.baseRadius} m`
-    });
+      geoFoldRadiusText: `${cfg.baseRadius} m`,
+      geoFoldAvoidTypeIds: avoid.typeIds,
+      geoFoldAvoidBaseRadius: avoid.baseRadius,
+      geoFoldAvoidTypeCountText: `${avoid.typeIds.length} 类`,
+      geoFoldAvoidChips: this._buildGeoFoldAvoidChips(avoid.typeIds)
+    }, () => this._refreshGeoFoldEmbedMap());
   },
 
-  _persistGeoFoldConfig() {
+  _loadGeoFoldAvoidPrefs() {
+    let raw = null;
     try {
+      raw = wx.getStorageSync(GEO_FOLD_AVOID_KEY);
+    } catch (e) {
+      raw = null;
+    }
+    const typeIds = officialCameras.normalizeAvoidTypeIds(
+      raw && Array.isArray(raw.typeIds) ? raw.typeIds : officialCameras.defaultAvoidTypeIds()
+    );
+    const baseRadius = officialCameras.clampAvoidBaseRadius(
+      raw && raw.baseRadius != null ? raw.baseRadius : officialCameras.AVOID_BASE_RADIUS_DEFAULT
+    );
+    return { typeIds, baseRadius };
+  },
+
+  _persistGeoFoldAvoidPrefs(override) {
+    const typeIds = officialCameras.normalizeAvoidTypeIds(
+      (override && override.typeIds) || this.data.geoFoldAvoidTypeIds
+    );
+    const baseRadius = officialCameras.clampAvoidBaseRadius(
+      override && override.baseRadius != null ? override.baseRadius : this.data.geoFoldAvoidBaseRadius
+    );
+    try {
+      wx.setStorageSync(GEO_FOLD_AVOID_KEY, { typeIds, baseRadius });
+    } catch (e) { /* ignore */ }
+    return { typeIds, baseRadius };
+  },
+
+  _buildGeoFoldAvoidChips(typeIds) {
+    const selected = {};
+    const ids = officialCameras.normalizeAvoidTypeIds(typeIds);
+    for (let i = 0; i < ids.length; i++) selected[ids[i]] = true;
+    const opts = officialCameras.AVOID_TYPE_OPTIONS || [];
+    return opts.map((t) => ({
+      id: t.id,
+      short: t.short,
+      icon: t.icon,
+      on: !!selected[t.id]
+    }));
+  },
+
+  _geoFoldAvoidCfgPatch() {
+    return {
+      avoidTypeIds: this.data.geoFoldAvoidTypeIds,
+      avoidBaseRadius: this.data.geoFoldAvoidBaseRadius,
+      enterCmd: (this.data.geoFoldCfg && this.data.geoFoldCfg.enterCmd) || '关闭',
+      exitCmd: (this.data.geoFoldCfg && this.data.geoFoldCfg.exitCmd) || '打开',
+      baseRadius: this.data.geoFoldAvoidBaseRadius
+    };
+  },
+
+  _hexWithAlpha(hex, alphaHex) {
+    const h = String(hex || '#FF3B30').replace('#', '');
+    const base = h.length >= 6 ? h.slice(0, 6) : 'FF3B30';
+    return `#${base}${alphaHex || '66'}`;
+  },
+
+  _rebuildGeoFoldMapOverlayOnly() {
+    const nearby = this.data.geoFoldOfficialNearby || [];
+    const avoidN = officialCameras.filterByAvoidTypes(nearby, this.data.geoFoldAvoidTypeIds).length;
+    const countText = nearby.length
+      ? (avoidN ? `避让 ${avoidN}` : '未选避让类型')
+      : this.data.geoFoldOfficialCountText;
+    if (!this.data.showGeoFoldMapPicker) {
+      this.setData({ geoFoldOfficialCountText: countText }, () => this._refreshGeoFoldEmbedMap());
+      return;
+    }
+    const lat = Number(this.data.geoFoldPickerLat);
+    const lng = Number(this.data.geoFoldPickerLng);
+    const overlay = this._buildGeoFoldPickerOverlay(
+      lat,
+      lng,
+      this.data.geoFoldMapPickerMode,
+      nearby
+    );
+    this.setData({
+      geoFoldOfficialCountText: countText,
+      geoFoldPickerMarkers: overlay.markers,
+      geoFoldPickerCircles: overlay.circles,
+      geoFoldPickerPolygons: overlay.polygons || []
+    });
+    this._refreshGeoFoldEmbedMap();
+  },
+
+  _persistGeoFoldConfig(override) {
+    try {
+      const cfg = (override && override.cfg) || this.data.geoFoldCfg || GEO_FOLD_DEFAULT_CFG;
+      const points = Array.isArray(override && override.points)
+        ? override.points
+        : (Array.isArray(this.data.geoFoldPoints) ? this.data.geoFoldPoints : []);
       wx.setStorageSync(GEO_FOLD_CFG_KEY, {
-        cfg: this.data.geoFoldCfg,
-        point: this.data.geoFoldPoint
+        cfg,
+        points,
+        point: points[0] || null
       });
     } catch (e) { /* ignore */ }
   },
 
-  _geoFoldPointText(point) {
-    if (!point) return '未设点';
-    const coord = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
-    return point.name ? `${point.name}（${coord}）` : coord;
+  _geoFoldPointText(point, index) {
+    return geoFoldPointLabel(point, index);
+  },
+
+  _syncGeoFoldPointsUi(extra) {
+    const points = Array.isArray(this.data.geoFoldPoints) ? this.data.geoFoldPoints : [];
+    const point = points[0] || null;
+    const patch = Object.assign({
+      geoFoldPoints: points,
+      geoFoldPoint: point,
+      geoFoldPointText: point ? geoFoldPointLabel(point, 0) : '未设点',
+      geoFoldPointsCountText: `${points.length} 个点`
+    }, extra && typeof extra === 'object' ? extra : {});
+    const mapPoints = Array.isArray(patch.geoFoldPoints) ? patch.geoFoldPoints : points;
+    this._persistGeoFoldConfig({
+      cfg: this.data.geoFoldCfg,
+      points: mapPoints
+    });
+    this.setData(patch, () => this._refreshGeoFoldEmbedMap());
+  },
+
+  _refreshGeoFoldEmbedMap(opt) {
+    const forceLocate = !!(opt && opt.forceLocate);
+    const points = this.data.geoFoldPoints || [];
+    const overlay = this._buildGeoFoldPickerOverlay(null, null, 'view');
+    // 预览图去掉常显气泡，避免小地图太挤
+    const markers = (overlay.markers || []).map((m) => {
+      const next = Object.assign({}, m);
+      delete next.callout;
+      delete next.label;
+      return next;
+    });
+    const circles = overlay.circles || [];
+    const polygons = overlay.polygons || [];
+    const applyCenter = (lat, lng, scale) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      this.setData({
+        geoFoldEmbedLat: lat,
+        geoFoldEmbedLng: lng,
+        geoFoldEmbedScale: scale != null ? scale : (points.length > 1 ? 13 : 15),
+        geoFoldEmbedMarkers: markers,
+        geoFoldEmbedCircles: circles,
+        geoFoldEmbedPolygons: polygons
+      });
+    };
+
+    // 有点位：以点位中心为准
+    if (points.length) {
+      let latSum = 0;
+      let lngSum = 0;
+      let n = 0;
+      for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        const lat = Number(p && p.lat);
+        const lng = Number(p && p.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        latSum += lat;
+        lngSum += lng;
+        n += 1;
+      }
+      if (n > 0) {
+        applyCenter(latSum / n, lngSum / n, n > 1 ? 13 : 15);
+        return;
+      }
+    }
+
+    // 跟踪中刚收到的 GPS
+    const last = this._geoFoldLastGpsRes;
+    if (last && Number.isFinite(Number(last.latitude)) && Number.isFinite(Number(last.longitude))) {
+      applyCenter(Number(last.latitude), Number(last.longitude), 15);
+      if (!forceLocate) return;
+    }
+
+    // 先写入已有非默认中心（避免闪北京），再异步拉真实定位
+    const curLat = Number(this.data.geoFoldEmbedLat);
+    const curLng = Number(this.data.geoFoldEmbedLng);
+    const isBeijingDefault =
+      Math.abs(curLat - 39.9) < 0.0001 && Math.abs(curLng - 116.4) < 0.0001;
+    if (Number.isFinite(curLat) && Number.isFinite(curLng) && !isBeijingDefault) {
+      applyCenter(curLat, curLng, 15);
+    } else {
+      // 仍写 markers，中心稍后用定位覆盖
+      this.setData({
+        geoFoldEmbedMarkers: markers,
+        geoFoldEmbedCircles: circles,
+        geoFoldEmbedPolygons: polygons
+      });
+    }
+
+    this._ensureGeoFoldLocationAuth()
+      .then(() => this._getGeoFoldLocationOnce())
+      .then((loc) => {
+        if (!loc) return;
+        const lat = Number(loc.latitude);
+        const lng = Number(loc.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        this._geoFoldLastGpsRes = Object.assign({}, loc, { _t: Date.now() });
+        // 期间若已加点，别把预览拽回“当前位置”
+        if ((this.data.geoFoldPoints || []).length) return;
+        applyCenter(lat, lng, 15);
+      })
+      .catch(() => {});
+  },
+
+  openGeoFoldEmbedMap() {
+    if (!this._geoFoldSupported()) return;
+    this._openGeoFoldMapPicker('pick');
+  },
+
+  /** 全屏地图：用户点(黑标+红圈) + 已选官方电子眼(图标+避让圈) */
+  _buildGeoFoldPickerOverlay(centerLat, centerLng, mode, officialOverride) {
+    const points = this.data.geoFoldPoints || [];
+    const officialRaw = Array.isArray(officialOverride)
+      ? officialOverride
+      : (this.data.geoFoldOfficialNearby || []);
+    const cfg = this.data.geoFoldCfg || GEO_FOLD_DEFAULT_CFG;
+    const defRadius = Math.max(10, Number(cfg.baseRadius) || 50);
+    const avoidTypeIds = officialCameras.normalizeAvoidTypeIds(this.data.geoFoldAvoidTypeIds);
+    const avoidBase = officialCameras.clampAvoidBaseRadius(this.data.geoFoldAvoidBaseRadius);
+    const official = officialCameras.filterByAvoidTypes(officialRaw, avoidTypeIds);
+    const avoidRadii = officialCameras.computeAvoidRadii(official, avoidBase);
+    const markers = [];
+    const circles = [];
+    const polygons = [];
+    const includePoints = [];
+    this._geoFoldPickerMarkerMap = {};
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      if (!p) continue;
+      const lat = Number(p.lat);
+      const lng = Number(p.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const radius = Math.max(15, Math.min(150, Number(p.radius) || defRadius));
+      markers.push({
+        id: i + 1,
+        latitude: lat,
+        longitude: lng,
+        iconPath: '/images/gf-mt-marker.png',
+        width: 44,
+        height: 40,
+        anchor: { x: 0.5, y: 1 },
+        callout: {
+          content: `${i + 1}. ${p.name || ('点' + (i + 1))} · ${radius}m`,
+          display: 'ALWAYS',
+          padding: 8,
+          borderRadius: 8,
+          fontSize: 13,
+          color: '#1C1C1E',
+          bgColor: '#FFFFFF',
+          borderWidth: 1,
+          borderColor: '#1C1C1E'
+        }
+      });
+      this._geoFoldPickerMarkerMap[i + 1] = { kind: 'user', id: p.id };
+      circles.push({
+        latitude: lat,
+        longitude: lng,
+        radius,
+        color: '#FF3B30CC',
+        fillColor: '#FF3B3044',
+        strokeWidth: 3
+      });
+      includePoints.push({ latitude: lat, longitude: lng });
+      const n = geoOffsetMeters(lat, lng, radius, 0);
+      const e = geoOffsetMeters(lat, lng, radius, 90);
+      const s = geoOffsetMeters(lat, lng, radius, 180);
+      const w = geoOffsetMeters(lat, lng, radius, 270);
+      includePoints.push(
+        { latitude: n.lat, longitude: n.lng },
+        { latitude: e.lat, longitude: e.lng },
+        { latitude: s.lat, longitude: s.lng },
+        { latitude: w.lat, longitude: w.lng }
+      );
+    }
+    // 官方避让区：重叠圆并成外轮廓 polygon，去掉内部交叉线
+    const circleCap = officialCameras.AVOID_CIRCLE_CAP || 40;
+    const hardMax = officialCameras.AVOID_RADIUS_HARD_MAX || 90;
+    const avoidDisks = [];
+    for (let i = 0; i < official.length && i < circleCap; i++) {
+      const c = official[i];
+      if (!c) continue;
+      const lat = Number(c.lat);
+      const lng = Number(c.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      const r = Math.max(25, Math.min(hardMax, Number(avoidRadii[i]) || avoidBase));
+      avoidDisks.push({ lat, lng, radius: r });
+      includePoints.push({ latitude: lat, longitude: lng });
+      const nPt = geoOffsetMeters(lat, lng, r, 0);
+      const ePt = geoOffsetMeters(lat, lng, r, 90);
+      const sPt = geoOffsetMeters(lat, lng, r, 180);
+      const wPt = geoOffsetMeters(lat, lng, r, 270);
+      includePoints.push(
+        { latitude: nPt.lat, longitude: nPt.lng },
+        { latitude: ePt.lat, longitude: ePt.lng },
+        { latitude: sPt.lat, longitude: sPt.lng },
+        { latitude: wPt.lat, longitude: wPt.lng }
+      );
+    }
+    const unionPolys = officialCameras.buildAvoidUnionPolygons(avoidDisks, {
+      strokeColor: '#FFCC00CC',
+      fillColor: '#FF3B3028',
+      strokeWidth: 2
+    });
+    for (let i = 0; i < unionPolys.length; i++) {
+      polygons.push(unionPolys[i]);
+    }
+    const tierRank = { red: 0, yellow: 1, light: 2 };
+    const sortedOff = official.slice().sort((a, b) => {
+      const ra = tierRank[a && a.typeTier] != null ? tierRank[a.typeTier] : 3;
+      const rb = tierRank[b && b.typeTier] != null ? tierRank[b.typeTier] : 3;
+      if (ra !== rb) return ra - rb;
+      return (Number(a && a.dist) || 0) - (Number(b && b.dist) || 0);
+    });
+    const shown = [];
+    // 点多时加大去重间距，少画图标
+    const minGapM = avoidDisks.length > 16 ? 55 : (avoidDisks.length > 10 ? 45 : 38);
+    const radiusById = {};
+    for (let i = 0; i < official.length; i++) {
+      const c = official[i];
+      if (c && c.id != null) {
+        radiusById[String(c.id)] = Math.max(25, Math.min(hardMax, Number(avoidRadii[i]) || avoidBase));
+      }
+    }
+    for (let i = 0; i < sortedOff.length; i++) {
+      const c = sortedOff[i];
+      if (!c) continue;
+      const lat = Number(c.lat);
+      const lng = Number(c.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      let tooClose = false;
+      for (let j = 0; j < shown.length; j++) {
+        if (geoDistanceMeters(lat, lng, shown[j].lat, shown[j].lng) < minGapM) {
+          tooClose = true;
+          break;
+        }
+      }
+      if (tooClose) continue;
+      shown.push({ lat, lng });
+      const mid = 1000 + shown.length;
+      const label = c.typeShort || c.typeName || '电子眼';
+      const isLite = c.typeTier === 'light';
+      const r = radiusById[String(c.id)] || avoidBase;
+      markers.push({
+        id: mid,
+        latitude: lat,
+        longitude: lng,
+        iconPath: c.typeIcon || '/images/gf-cam/gf-cam-red.png',
+        width: isLite ? 28 : 32,
+        height: isLite ? 33 : 37,
+        anchor: { x: 0.5, y: 1 },
+        callout: {
+          content: `${c.typeName || label} · ${r}m${c.remark ? ' · ' + String(c.remark).slice(0, 20) : ''}`,
+          display: 'BYCLICK',
+          padding: 8,
+          borderRadius: 8,
+          fontSize: 12,
+          color: '#FFFFFF',
+          bgColor: c.typeBg || '#FF3B30',
+          borderWidth: 0
+        }
+      });
+      this._geoFoldPickerMarkerMap[mid] = {
+        kind: 'official',
+        id: 'cam_' + c.id,
+        camId: c.id,
+        typeName: c.typeName,
+        remark: c.remark || ''
+      };
+    }
+    if (mode === 'pick' && Number.isFinite(centerLat) && Number.isFinite(centerLng)) {
+      includePoints.push({ latitude: centerLat, longitude: centerLng });
+      const n = geoOffsetMeters(centerLat, centerLng, defRadius, 0);
+      const e = geoOffsetMeters(centerLat, centerLng, defRadius, 90);
+      const s = geoOffsetMeters(centerLat, centerLng, defRadius, 180);
+      const w = geoOffsetMeters(centerLat, centerLng, defRadius, 270);
+      includePoints.push(
+        { latitude: n.lat, longitude: n.lng },
+        { latitude: e.lat, longitude: e.lng },
+        { latitude: s.lat, longitude: s.lng },
+        { latitude: w.lat, longitude: w.lng }
+      );
+    }
+    return { markers, circles, polygons, includePoints, radius: defRadius, offRadius: avoidBase };
+  },
+
+  /** 按当前位置拉附近官方电子眼（区分类型） */
+  _refreshOfficialCamerasNearby(lat, lng, opt) {
+    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+      return Promise.resolve([]);
+    }
+    const soft = !!(opt && opt.soft);
+    const mapSync = !!(opt && opt.mapSync);
+    const latN = Number(lat);
+    const lngN = Number(lng);
+    // 拖图太密时略过（同一片区域）
+    if (mapSync && this._geoFoldOfficialQueryAt) {
+      const prev = this._geoFoldOfficialQueryAt;
+      const dt = Date.now() - (prev.t || 0);
+      const moved = geoDistanceMeters(prev.lat, prev.lng, latN, lngN);
+      // 拖图更狠地节流：短时间 / 没怎么挪就不重算圈
+      if (dt < 1800 && moved < 450) {
+        return Promise.resolve(this.data.geoFoldOfficialNearby || []);
+      }
+    }
+    return officialCameras
+      .queryNearbyOfficialCameras(latN, lngN, {
+        radiusM: (opt && opt.radiusM) || (mapSync ? 2200 : 3500),
+        max: (opt && opt.max) || (mapSync
+          ? (officialCameras.AVOID_MAP_NEARBY_MAX || 24)
+          : 48)
+      })
+      .then((list) => {
+        const nearby = list || [];
+        this._geoFoldOfficialQueryAt = { lat: latN, lng: lngN, t: Date.now() };
+        const userN = (this.data.geoFoldPoints || []).length;
+        const avoidN = officialCameras.filterByAvoidTypes(
+          nearby,
+          this.data.geoFoldAvoidTypeIds
+        ).length;
+        const patch = {
+          geoFoldOfficialNearby: nearby,
+          geoFoldOfficialCountText: nearby.length
+            ? (avoidN ? `避让 ${avoidN}` : '未选避让类型')
+            : '',
+          geoFoldPointsCountText: nearby.length
+            ? `${userN} 个点 · 电子眼 ${nearby.length}`
+            : `${userN} 个点`
+        };
+        if (!this.data.showGeoFoldMapPicker || soft) {
+          this.setData(patch);
+          return nearby;
+        }
+        this._geoFoldPickerCenter = { lat: latN, lng: lngN };
+        const overlay = this._buildGeoFoldPickerOverlay(
+          latN,
+          lngN,
+          this.data.geoFoldMapPickerMode,
+          nearby
+        );
+        if (mapSync) {
+          // 一次写完：真实中心 + 标记，避免分两次 setData 把地图拽回旧坐标
+          this.setData(Object.assign(patch, {
+            geoFoldPickerLat: latN,
+            geoFoldPickerLng: lngN,
+            geoFoldPickerMarkers: overlay.markers,
+            geoFoldPickerCircles: overlay.circles,
+            geoFoldPickerPolygons: overlay.polygons || []
+          }));
+        } else {
+          this.setData(Object.assign(patch, {
+            geoFoldPickerMarkers: overlay.markers,
+            geoFoldPickerCircles: overlay.circles,
+            geoFoldPickerPolygons: overlay.polygons || []
+          }));
+        }
+        if (this.data.showGeoFoldModal) this._refreshGeoFoldEmbedMap();
+        return nearby;
+      })
+      .catch((err) => {
+        console.warn('[geoFold] official cameras', err);
+        return [];
+      });
+  },
+
+  _getGeoFoldEvalPoints() {
+    const user = this.data.geoFoldPoints || [];
+    const cfg = this.data.geoFoldCfg || GEO_FOLD_DEFAULT_CFG;
+    const avoidCfg = Object.assign({}, cfg, this._geoFoldAvoidCfgPatch());
+    const official = officialCameras.toGeoFoldPoints(this.data.geoFoldOfficialNearby || [], avoidCfg);
+    return user.concat(official);
+  },
+
+  _openGeoFoldMapPicker(mode) {
+    if (this._geoFoldMapPickerBusy) return;
+    const wantPick = mode === 'pick';
+    this._geoFoldMapPickerBusy = true;
+    const openWithLoc = (loc) => {
+      const points = this.data.geoFoldPoints || [];
+      let lat = 39.9;
+      let lng = 116.4;
+      if (loc && Number.isFinite(Number(loc.latitude))) {
+        lat = Number(loc.latitude);
+        lng = Number(loc.longitude);
+      } else if (points[0]) {
+        lat = Number(points[0].lat);
+        lng = Number(points[0].lng);
+      }
+      this._geoFoldPickerCenter = { lat, lng };
+      const overlay = this._buildGeoFoldPickerOverlay(lat, lng, wantPick ? 'pick' : 'view');
+      if (this._geoFoldMapPickerCloseTimer) {
+        clearTimeout(this._geoFoldMapPickerCloseTimer);
+        this._geoFoldMapPickerCloseTimer = null;
+      }
+      this.setData({
+        showGeoFoldMapPicker: true,
+        geoFoldMapPickerClosing: false,
+        geoFoldMapPickerEntered: false,
+        geoFoldMapPickerMode: wantPick ? 'pick' : 'view',
+        geoFoldPickerLat: lat,
+        geoFoldPickerLng: lng,
+        geoFoldPickerScale: wantPick ? 16 : 15,
+        geoFoldPickerMarkers: overlay.markers,
+        geoFoldPickerCircles: overlay.circles,
+        geoFoldPickerPolygons: overlay.polygons || [],
+        geoFoldPickerPolylines: this.data.geoFoldTracking ? this._buildGeoFoldTrackPolylines() : (this.data.geoFoldPickerPolylines || []),
+        showGeoFoldAvoidPanel: false,
+        geoFoldAvoidPanelEntered: false,
+        geoFoldAvoidChips: this._buildGeoFoldAvoidChips(this.data.geoFoldAvoidTypeIds),
+        showGeoFoldPickerEdit: false,
+        geoFoldPickerEditClosing: false,
+        geoFoldPickerEditId: '',
+        geoFoldPickerEditFocus: false
+      }, () => {
+        // 先挂层再开入场，避免首帧跳过 transition
+        setTimeout(() => {
+          this.setData({ geoFoldMapPickerEntered: true });
+          this._geoFoldMapPickerBusy = false;
+        }, 30);
+        // 有已选点时先框进全部，方便对照其它位置再继续加点
+        if (overlay.includePoints.length > 1) {
+          setTimeout(() => {
+            try {
+              const ctx = wx.createMapContext('geoFoldPickerMap', this);
+              ctx.includePoints({
+                points: overlay.includePoints,
+                padding: [220, 70, 180, 70]
+              });
+            } catch (e) { /* ignore */ }
+          }, 280);
+        }
+        this._refreshOfficialCamerasNearby(lat, lng, { mapSync: true });
+        if (this.data.geoFoldTracking) {
+          this._geoFoldPickerFollow = true;
+          this._stopGeoFoldPickerHudPreview();
+        } else {
+          this._startGeoFoldPickerHudPreview();
+        }
+      });
+    };
+    // 打开地图不因 authorize 误报卡住：定位失败也能进地图
+    this._getGeoFoldLocationOnce()
+      .then((loc) => openWithLoc(loc))
+      .catch(() => openWithLoc(null));
+  },
+
+  openGeoFoldAvoidPanel() {
+    const chips = this._buildGeoFoldAvoidChips(this.data.geoFoldAvoidTypeIds);
+    this.setData({
+      showGeoFoldAvoidPanel: true,
+      geoFoldAvoidChips: chips,
+      geoFoldAvoidTypeCountText: `${(this.data.geoFoldAvoidTypeIds || []).length} 类`,
+      geoFoldAvoidPanelEntered: false
+    }, () => {
+      setTimeout(() => {
+        if (this.data.showGeoFoldAvoidPanel) {
+          this.setData({ geoFoldAvoidPanelEntered: true });
+        }
+      }, 20);
+    });
+  },
+
+  closeGeoFoldAvoidPanel() {
+    if (!this.data.showGeoFoldAvoidPanel) return;
+    this.setData({ geoFoldAvoidPanelEntered: false });
+    setTimeout(() => {
+      this.setData({ showGeoFoldAvoidPanel: false });
+    }, 220);
+  },
+
+  onGeoFoldAvoidTypeTap(e) {
+    const id = Number(e.currentTarget.dataset.id);
+    if (!Number.isFinite(id)) return;
+    const cur = officialCameras.normalizeAvoidTypeIds(this.data.geoFoldAvoidTypeIds);
+    const idx = cur.indexOf(id);
+    if (idx >= 0) cur.splice(idx, 1);
+    else cur.push(id);
+    const typeIds = officialCameras.normalizeAvoidTypeIds(cur);
+    this._persistGeoFoldAvoidPrefs({ typeIds });
+    this.setData({
+      geoFoldAvoidTypeIds: typeIds,
+      geoFoldAvoidTypeCountText: `${typeIds.length} 类`,
+      geoFoldAvoidChips: this._buildGeoFoldAvoidChips(typeIds)
+    }, () => this._rebuildGeoFoldMapOverlayOnly());
+  },
+
+  onGeoFoldAvoidSelectFocus() {
+    const typeIds = officialCameras.defaultAvoidTypeIds();
+    this._persistGeoFoldAvoidPrefs({ typeIds });
+    this.setData({
+      geoFoldAvoidTypeIds: typeIds,
+      geoFoldAvoidTypeCountText: `${typeIds.length} 类`,
+      geoFoldAvoidChips: this._buildGeoFoldAvoidChips(typeIds)
+    }, () => this._rebuildGeoFoldMapOverlayOnly());
+  },
+
+  onGeoFoldAvoidSelectNone() {
+    const typeIds = [];
+    this._persistGeoFoldAvoidPrefs({ typeIds });
+    this.setData({
+      geoFoldAvoidTypeIds: typeIds,
+      geoFoldAvoidTypeCountText: '0 类',
+      geoFoldAvoidChips: this._buildGeoFoldAvoidChips(typeIds)
+    }, () => this._rebuildGeoFoldMapOverlayOnly());
+  },
+
+  onGeoFoldAvoidRadiusSlide(e) {
+    const baseRadius = officialCameras.clampAvoidBaseRadius(e.detail && e.detail.value);
+    this.setData({ geoFoldAvoidBaseRadius: baseRadius });
+  },
+
+  onGeoFoldAvoidRadiusSlideEnd(e) {
+    const baseRadius = officialCameras.clampAvoidBaseRadius(e.detail && e.detail.value);
+    this._persistGeoFoldAvoidPrefs({ baseRadius });
+    this.setData({ geoFoldAvoidBaseRadius: baseRadius }, () => this._rebuildGeoFoldMapOverlayOnly());
+  },
+
+  closeGeoFoldMapPicker() {
+    if (this._geoFoldMapPickerBusy) return;
+    if (!this.data.showGeoFoldMapPicker) return;
+    if (this.data.geoFoldMapPickerClosing) return;
+
+    const added = (this.data.geoFoldPoints || []).length;
+    const editId = this.data.geoFoldEditPointId;
+    this._geoFoldMapPickerBusy = true;
+
+    const finishClose = () => {
+      this.setData({
+        showGeoFoldMapPicker: false,
+        geoFoldMapPickerClosing: false,
+        geoFoldMapPickerEntered: false,
+        showGeoFoldAvoidPanel: false,
+        geoFoldAvoidPanelEntered: false,
+        showGeoFoldPickerEdit: false,
+        geoFoldPickerEditClosing: false,
+        geoFoldPickerEditId: '',
+        geoFoldPickerEditFocus: false
+      });
+      this._stopGeoFoldPickerHudPreview();
+      this._geoFoldPickerCenter = null;
+      this._geoFoldPickerMarkerMap = null;
+      this._geoFoldMapPickerBusy = false;
+      if (this._geoFoldPickerEditCloseTimer) {
+        clearTimeout(this._geoFoldPickerEditCloseTimer);
+        this._geoFoldPickerEditCloseTimer = null;
+      }
+      if (this._geoFoldPickerRegionTimer) {
+        clearTimeout(this._geoFoldPickerRegionTimer);
+        this._geoFoldPickerRegionTimer = null;
+      }
+      if (this._geoFoldMapPickerCloseTimer) {
+        this._geoFoldMapPickerCloseTimer = null;
+      }
+      if (added > 0) this._refreshGeoFoldDistancePreview();
+      if (editId && this.data.showGeoFoldModal) {
+        this._showCustomToast('可改点名，并设置进圈翻开或收起', 'none', 2200);
+      }
+    };
+
+    // 先收编辑面板，再播地图退场
+    if (this.data.showGeoFoldPickerEdit && !this.data.geoFoldPickerEditClosing) {
+      this.closeGeoFoldPickerPointEditor();
+    }
+
+    this.setData({
+      geoFoldMapPickerClosing: true,
+      geoFoldMapPickerEntered: false
+    });
+    if (this._geoFoldMapPickerCloseTimer) {
+      clearTimeout(this._geoFoldMapPickerCloseTimer);
+    }
+    this._geoFoldMapPickerCloseTimer = setTimeout(finishClose, 320);
+  },
+
+  /** 点击地图上的红标 / 气泡 → 用户点可改；官方点只展示类型用途 */
+  onGeoFoldPickerMarkerTap(e) {
+    const markerId = Number(
+      (e && e.markerId) != null
+        ? e.markerId
+        : (e && e.detail && e.detail.markerId)
+    );
+    if (!Number.isFinite(markerId)) return;
+    const mapped = this._geoFoldPickerMarkerMap && this._geoFoldPickerMarkerMap[markerId];
+    if (mapped && mapped.kind === 'official') {
+      const title = mapped.typeName || '电子眼';
+      const rm = mapped.remark ? String(mapped.remark).slice(0, 40) : '';
+      this._showCustomToast(rm ? `${title}：${rm}` : title, 'none', 2600);
+      return;
+    }
+    const pointId = (mapped && mapped.id)
+      || ((this.data.geoFoldPoints || [])[markerId - 1] && (this.data.geoFoldPoints || [])[markerId - 1].id);
+    if (!pointId) return;
+    this._openGeoFoldPickerPointEditor(pointId);
+  },
+
+  _clampGeoFoldRadius(meters) {
+    const n = Math.round(Number(meters));
+    if (!Number.isFinite(n)) return 50;
+    return Math.max(15, Math.min(150, n));
+  },
+
+  _applyGeoFoldPickerRadiusValue(pointId, radiusRaw, opts) {
+    const radius = this._clampGeoFoldRadius(radiusRaw);
+    const points = (this.data.geoFoldPoints || []).map((p) => {
+      if (!p || p.id !== pointId) return p;
+      if (Number(p.radius) === radius) return p;
+      return { ...p, radius };
+    });
+    const patch = { geoFoldPoints: points };
+    if (this.data.geoFoldPickerEditId === pointId) {
+      patch.geoFoldPickerEditRadius = radius;
+    }
+    const preview = !!(opts && opts.preview);
+    if (preview) {
+      // 拖滑条预览：只改 data + 红圈，不落盘、不碰 lat/lng/markers
+      this.setData(patch);
+      this._patchGeoFoldPickerOverlay({ circlesOnly: true });
+      return;
+    }
+    this._syncGeoFoldPointsUi(patch);
+    this._patchGeoFoldPickerOverlay();
+    if (!(opts && opts.silent)) {
+      wx.vibrateShort({ type: 'light' });
+    }
+    // 半径变大后重新框进视野（含自动缩小）
+    if (this.data.showGeoFoldPickerEdit && !this.data.geoFoldPickerEditClosing) {
+      const focused = (this.data.geoFoldPoints || []).find((p) => p && p.id === pointId);
+      if (focused) {
+        setTimeout(() => this._focusGeoFoldPickerPointForEdit(focused), 30);
+      }
+    }
+  },
+
+  /** 刷新圈/标记；默认不碰经纬度，避免地图被拽走 */
+  _patchGeoFoldPickerOverlay(opts) {
+    if (!this.data.showGeoFoldMapPicker) return;
+    const c = this._geoFoldPickerCenter || {
+      lat: this.data.geoFoldPickerLat,
+      lng: this.data.geoFoldPickerLng
+    };
+    const overlay = this._buildGeoFoldPickerOverlay(
+      c.lat,
+      c.lng,
+      this.data.geoFoldMapPickerMode
+    );
+    if (opts && opts.circlesOnly) {
+      this.setData({
+        geoFoldPickerCircles: overlay.circles,
+        geoFoldPickerPolygons: overlay.polygons || []
+      });
+      return;
+    }
+    this.setData({
+      geoFoldPickerMarkers: overlay.markers,
+      geoFoldPickerCircles: overlay.circles,
+      geoFoldPickerPolygons: overlay.polygons || []
+    });
+  },
+
+  _openGeoFoldPickerPointEditor(pointId) {
+    const points = this.data.geoFoldPoints || [];
+    const point = points.find((p) => p && p.id === pointId);
+    if (!point) return;
+    if (this._geoFoldPickerEditCloseTimer) {
+      clearTimeout(this._geoFoldPickerEditCloseTimer);
+      this._geoFoldPickerEditCloseTimer = null;
+    }
+    this.setData({
+      showGeoFoldPickerEdit: true,
+      geoFoldPickerEditClosing: false,
+      geoFoldPickerEditId: point.id,
+      geoFoldPickerEditName: point.name || '',
+      geoFoldPickerEditEnter: point.enterCmd === '打开' ? '打开' : '关闭',
+      geoFoldPickerEditExit: point.exitCmd === '关闭' ? '关闭' : '打开',
+      geoFoldPickerEditRadius: Number(point.radius) || (this.data.geoFoldCfg && this.data.geoFoldCfg.baseRadius) || 50,
+      geoFoldPickerEditFocus: false,
+      geoFoldEditPointId: point.id
+    }, () => {
+      // 面板升起后把点挪到上半屏，避免被底部编辑层挡住
+      setTimeout(() => this._focusGeoFoldPickerPointForEdit(point), 60);
+      setTimeout(() => {
+        if (this.data.showGeoFoldPickerEdit && !this.data.geoFoldPickerEditClosing) {
+          this.setData({ geoFoldPickerEditFocus: true });
+        }
+      }, 80);
+    });
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  /** 按触发圈半径估算合适的地图缩放（越大越缩小） */
+  _geoFoldScaleForRadius(radiusM) {
+    const r = Math.max(15, Math.min(150, Number(radiusM) || 50));
+    if (r <= 25) return 17;
+    if (r <= 40) return 16;
+    if (r <= 55) return 15;
+    if (r <= 80) return 14;
+    if (r <= 110) return 13;
+    return 12;
+  },
+
+  /** 编辑时把目标点（含触发圈）框进上半屏；圈大则自动缩小 */
+  _focusGeoFoldPickerPointForEdit(point) {
+    if (!point || !this.data.showGeoFoldMapPicker) return;
+    if (!this.data.showGeoFoldPickerEdit || this.data.geoFoldPickerEditClosing) return;
+    const lat = Number(point.lat);
+    const lng = Number(point.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const radius = Math.max(15, Math.min(150, Number(point.radius) || 50));
+    const padM = Math.max(25, Math.round(radius * 0.35));
+    const fitR = radius + padM;
+    const n = geoOffsetMeters(lat, lng, fitR, 0);
+    const e = geoOffsetMeters(lat, lng, fitR, 90);
+    const s = geoOffsetMeters(lat, lng, fitR, 180);
+    const w = geoOffsetMeters(lat, lng, fitR, 270);
+    // 圆心略偏南，让标记落在编辑面板上方的可见区
+    const center = geoOffsetMeters(lat, lng, Math.max(radius * 0.5, 28), 180);
+    const scale = this._geoFoldScaleForRadius(radius);
+    let bottomPad = 380;
+    try {
+      const win = (wx.getWindowInfo && wx.getWindowInfo()) || wx.getSystemInfoSync();
+      const h = Number(win.windowHeight) || 0;
+      if (h > 0) bottomPad = Math.round(Math.min(540, Math.max(320, h * 0.48)));
+    } catch (err) { /* ignore */ }
+
+    this._geoFoldPickerCenter = { lat: center.lat, lng: center.lng };
+    // 先按半径落到对应 scale，再 includePoints 把整圈框进上半屏
+    this.setData({
+      geoFoldPickerLat: center.lat,
+      geoFoldPickerLng: center.lng,
+      geoFoldPickerScale: scale
+    }, () => {
+      setTimeout(() => {
+        if (!this.data.showGeoFoldPickerEdit || this.data.geoFoldPickerEditClosing) return;
+        try {
+          const ctx = wx.createMapContext('geoFoldPickerMap', this);
+          ctx.includePoints({
+            points: [
+              { latitude: lat, longitude: lng },
+              { latitude: n.lat, longitude: n.lng },
+              { latitude: e.lat, longitude: e.lng },
+              { latitude: s.lat, longitude: s.lng },
+              { latitude: w.lat, longitude: w.lng }
+            ],
+            padding: [90, 36, bottomPad, 36]
+          });
+          setTimeout(() => {
+            try {
+              ctx.getCenterLocation({
+                success: (res) => {
+                  const clat = Number(res.latitude);
+                  const clng = Number(res.longitude);
+                  if (!Number.isFinite(clat) || !Number.isFinite(clng)) return;
+                  this._geoFoldPickerCenter = { lat: clat, lng: clng };
+                }
+              });
+              if (typeof ctx.getScale === 'function') {
+                ctx.getScale({
+                  success: (res) => {
+                    const sc = Number(res && res.scale);
+                    if (Number.isFinite(sc) && sc > 0) {
+                      this.setData({ geoFoldPickerScale: sc });
+                    }
+                  }
+                });
+              }
+            } catch (e2) { /* ignore */ }
+          }, 280);
+        } catch (err) { /* ignore */ }
+      }, 40);
+    });
+  },
+
+  onGeoFoldPickerEditNameInput(e) {
+    this.setData({
+      geoFoldPickerEditName: String((e.detail && e.detail.value) || '')
+    });
+  },
+
+  onGeoFoldPickerEditCmdTap(e) {
+    const ds = (e.currentTarget && e.currentTarget.dataset) || {};
+    const direction = ds.direction;
+    const cmd = ds.cmd;
+    if (cmd !== '打开' && cmd !== '关闭') return;
+    if (direction === 'enter') {
+      if (this.data.geoFoldPickerEditEnter === cmd) return;
+      this.setData({ geoFoldPickerEditEnter: cmd });
+    } else if (direction === 'exit') {
+      if (this.data.geoFoldPickerEditExit === cmd) return;
+      this.setData({ geoFoldPickerEditExit: cmd });
+    } else {
+      return;
+    }
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  closeGeoFoldPickerPointEditor() {
+    if (!this.data.showGeoFoldPickerEdit || this.data.geoFoldPickerEditClosing) return;
+    this.setData({
+      geoFoldPickerEditClosing: true,
+      geoFoldPickerEditFocus: false
+    });
+    if (this._geoFoldPickerEditCloseTimer) clearTimeout(this._geoFoldPickerEditCloseTimer);
+    this._geoFoldPickerEditCloseTimer = setTimeout(() => {
+      this._geoFoldPickerEditCloseTimer = null;
+      this.setData({
+        showGeoFoldPickerEdit: false,
+        geoFoldPickerEditClosing: false,
+        geoFoldPickerEditId: ''
+      });
+    }, 280);
+  },
+
+  onGeoFoldPickerEditRadiusSlide(e) {
+    const value = this._clampGeoFoldRadius(e.detail && e.detail.value);
+    const id = this.data.geoFoldPickerEditId;
+    if (Number(this.data.geoFoldPickerEditRadius) !== value) {
+      this.setData({ geoFoldPickerEditRadius: value });
+    }
+    if (!id) return;
+    if (this._geoFoldRadiusSlideTimer) clearTimeout(this._geoFoldRadiusSlideTimer);
+    this._geoFoldRadiusSlideTimer = setTimeout(() => {
+      this._geoFoldRadiusSlideTimer = null;
+      this._applyGeoFoldPickerRadiusValue(id, value, { preview: true });
+    }, 40);
+  },
+
+  onGeoFoldPickerEditRadiusSlideEnd(e) {
+    const value = this._clampGeoFoldRadius(e.detail && e.detail.value);
+    const id = this.data.geoFoldPickerEditId;
+    if (this._geoFoldRadiusSlideTimer) {
+      clearTimeout(this._geoFoldRadiusSlideTimer);
+      this._geoFoldRadiusSlideTimer = null;
+    }
+    if (!id) {
+      this.setData({ geoFoldPickerEditRadius: value });
+      return;
+    }
+    // silent：松手落盘+框视野（圈大则缩小）；拖动过程仍只改红圈不挪地图
+    this._applyGeoFoldPickerRadiusValue(id, value, { silent: true });
+  },
+
+  saveGeoFoldPickerPointEditor() {
+    const id = this.data.geoFoldPickerEditId;
+    if (!id) {
+      this.closeGeoFoldPickerPointEditor();
+      return;
+    }
+    const points = (this.data.geoFoldPoints || []).slice();
+    const idx = points.findIndex((p) => p && p.id === id);
+    if (idx < 0) {
+      this.closeGeoFoldPickerPointEditor();
+      return;
+    }
+    const name = String(this.data.geoFoldPickerEditName || '').trim().slice(0, 20) || `点${idx + 1}`;
+    const enterCmd = this.data.geoFoldPickerEditEnter === '打开' ? '打开' : '关闭';
+    const exitCmd = this.data.geoFoldPickerEditExit === '关闭' ? '关闭' : '打开';
+    const radius = this._clampGeoFoldRadius(this.data.geoFoldPickerEditRadius);
+    points[idx] = {
+      ...points[idx],
+      name,
+      radius,
+      enterCmd,
+      exitCmd
+    };
+    this._syncGeoFoldPointsUi({ geoFoldPoints: points });
+    this._patchGeoFoldPickerOverlay();
+    this._geoFoldLog(`地图改点：${name} · ${radius}m · 到${geoFoldCmdLabel(enterCmd)}/离${geoFoldCmdLabel(exitCmd)}`);
+    this.closeGeoFoldPickerPointEditor();
+    this._showCustomToast('已保存', 'success', 1200);
+  },
+
+  onGeoFoldPointRadiusTap(e) {
+    const ds = (e.currentTarget && e.currentTarget.dataset) || {};
+    const id = String(ds.id || '');
+    const value = Number(ds.value);
+    if (!id) return;
+    const list = GEO_FOLD_OPTIONS.baseRadius || [];
+    if (!list.some((opt) => Number(opt.value) === value)) return;
+    const points = (this.data.geoFoldPoints || []).map((p) => {
+      if (!p || p.id !== id) return p;
+      if (Number(p.radius) === value) return p;
+      return { ...p, radius: value };
+    });
+    this._syncGeoFoldPointsUi({ geoFoldPoints: points });
+    if (this.data.showGeoFoldMapPicker) this._patchGeoFoldPickerOverlay();
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  _refreshGeoFoldPickerOverlay() {
+    if (!this.data.showGeoFoldMapPicker) return;
+    const c = this._geoFoldPickerCenter || {
+      lat: this.data.geoFoldPickerLat,
+      lng: this.data.geoFoldPickerLng
+    };
+    const overlay = this._buildGeoFoldPickerOverlay(
+      c.lat,
+      c.lng,
+      this.data.geoFoldMapPickerMode
+    );
+    // 必须同步 lat/lng：只改 circles 时微信会用旧经纬度重绘，地图被拽回去，表现为「只能拖一次」
+    this.setData({
+      geoFoldPickerLat: c.lat,
+      geoFoldPickerLng: c.lng,
+      geoFoldPickerMarkers: overlay.markers,
+      geoFoldPickerCircles: overlay.circles,
+      geoFoldPickerPolygons: overlay.polygons || []
+    });
+  },
+
+  onGeoFoldPickerRegionChange(e) {
+    if (!this.data.showGeoFoldMapPicker) return;
+    const detail = (e && e.detail) || {};
+    const t = (e && e.type) || detail.type || '';
+    const caused = String(detail.causedBy || '');
+    if ((t === 'end' || !t) && (caused === 'gesture' || caused === 'drag')) {
+      this._geoFoldPickerFollow = false;
+    }
+    if (t && t !== 'end') return;
+    // 拖动结束：取真实中心 → 拉附近电子眼 → 同步 lat/lng+markers（避免回弹）
+    if (this._geoFoldPickerRegionTimer) {
+      clearTimeout(this._geoFoldPickerRegionTimer);
+    }
+    this._geoFoldPickerRegionTimer = setTimeout(() => {
+      this._geoFoldPickerRegionTimer = null;
+      if (!this.data.showGeoFoldMapPicker) return;
+      try {
+        const ctx = wx.createMapContext('geoFoldPickerMap', this);
+        ctx.getCenterLocation({
+          success: (res) => {
+            const lat = Number(res.latitude);
+            const lng = Number(res.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+            this._geoFoldPickerCenter = { lat, lng };
+            this._refreshOfficialCamerasNearby(lat, lng, { mapSync: true });
+          }
+        });
+      } catch (err) { /* ignore */ }
+    }, 420);
+  },
+
+  confirmGeoFoldMapPick() {
+    if (this.data.geoFoldTracking) {
+      this._showCustomToast('跟踪中不能加点，请先停止', 'none', 1800);
+      return;
+    }
+    if (this.data.geoFoldMapPickerMode !== 'pick') return;
+    if ((this.data.geoFoldPoints || []).length >= GEO_FOLD_POINTS_MAX) {
+      this._showCustomToast(`最多 ${GEO_FOLD_POINTS_MAX} 个点，点「完成」退出`, 'none', 2200);
+      return;
+    }
+    const finishAdd = (lat, lng) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        this._showCustomToast('请先拖动地图对准位置', 'none', 1800);
+        return;
+      }
+      this._geoFoldPickerCenter = { lat, lng };
+      const points = this.data.geoFoldPoints || [];
+      for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        if (!p) continue;
+        const d = geoDistanceMeters(lat, lng, p.lat, p.lng);
+        if (d < 5) {
+          this._showCustomToast('与已有点几乎重合，请挪一下再加', 'none', 2000);
+          return;
+        }
+      }
+      const point = this._appendGeoFoldPoint({ lat, lng });
+      if (!point) {
+        this._showCustomToast('加点失败', 'none', 2000);
+        return;
+      }
+      // 加点后刷新红圈；同步 lat/lng，避免后续重绘跳回旧位置
+      this._refreshGeoFoldPickerOverlay();
+      this._geoFoldLog(`地图连续选点：${point.name || '未命名'}`);
+      // 立刻弹出改名/动作面板，可点图标再次打开
+      this._openGeoFoldPickerPointEditor(point.id);
+      wx.vibrateShort({ type: 'light' });
+    };
+
+    // 以地图真实中心为准（比缓存更准）
+    try {
+      const ctx = wx.createMapContext('geoFoldPickerMap', this);
+      ctx.getCenterLocation({
+        success: (res) => finishAdd(Number(res.latitude), Number(res.longitude)),
+        fail: () => {
+          const c = this._geoFoldPickerCenter;
+          finishAdd(c && c.lat, c && c.lng);
+        }
+      });
+    } catch (err) {
+      const c = this._geoFoldPickerCenter;
+      finishAdd(c && c.lat, c && c.lng);
+    }
+  },
+
+  openGeoFoldMapViewer() {
+    if (!(this.data.geoFoldPoints || []).length) {
+      this._showCustomToast('请先添加点位', 'none', 1800);
+      return;
+    }
+    this._openGeoFoldMapPicker('view');
   },
 
   _geoFoldLog(text) {
@@ -9305,17 +10769,156 @@ Page({
       { id: this._geoFoldLogSeq, ts: geoFoldClockText(), text: String(text || '') },
       ...(this.data.geoFoldLogs || [])
     ].slice(0, GEO_FOLD_LOG_MAX);
-    this.setData({ geoFoldLogs: logs });
+    this.setData({ geoFoldLogs: logs, geoFoldDumpCount: (this._geoFoldDumpEvents || []).length });
+    this._geoFoldDump('ui', { text: String(text || '') });
+  },
+
+  _geoFoldDump(type, extra) {
+    if (!this._geoFoldDumpEvents) this._geoFoldDumpEvents = [];
+    const ev = Object.assign({
+      t: Date.now(),
+      ts: geoFoldClockText(),
+      type: String(type || 'event')
+    }, extra && typeof extra === 'object' ? extra : {});
+    this._geoFoldDumpEvents.push(ev);
+    if (this._geoFoldDumpEvents.length > GEO_FOLD_DUMP_MAX) {
+      this._geoFoldDumpEvents.splice(0, this._geoFoldDumpEvents.length - GEO_FOLD_DUMP_MAX);
+    }
+  },
+
+  _geoFoldDumpSnapshot() {
+    let sys = {};
+    try { sys = wx.getSystemInfoSync() || {}; } catch (e) { sys = {}; }
+    const k = this._geoFoldDisplayKalman;
+    const last = this._geoFoldLastGpsRes;
+    const point = this.data.geoFoldPoint;
+    const points = this.data.geoFoldPoints || [];
+    return {
+      sessionId: this._geoFoldDumpSessionId || '',
+      dumpedAt: new Date().toISOString(),
+      model: (this.data.currentModel && (this.data.currentModel.name || this.data.currentModel.type)) || '',
+      bleLinked: !!this._canSendBleCommand(),
+      tracking: !!this.data.geoFoldTracking,
+      streamActive: !!this._geoFoldStreamActive,
+      pollMs: this.data.geoFoldCfg && this.data.geoFoldCfg.pollMs,
+      cfg: this.data.geoFoldCfg,
+      points,
+      point: point ? {
+        lat: point.lat,
+        lng: point.lng,
+        name: point.name || ''
+      } : null,
+      lastFix: last ? {
+        lat: last.latitude,
+        lng: last.longitude,
+        accuracy: last.accuracy,
+        speed: last.speed,
+        direction: last.direction,
+        t: last._t,
+        sinceLastMs: last._t ? (Date.now() - last._t) : null,
+        sinceLastText: geoFoldSinceLastLabel(last._t, Date.now())
+      } : null,
+      kalman: k ? {
+        lat: k.lat,
+        lng: k.lng,
+        vLat: k.vLat,
+        vLng: k.vLng,
+        lastT: k.lastT
+      } : null,
+      displayDist: this._geoFoldDisplayDist,
+      wasInZone: this._geoFoldWasInZone,
+      sampleCount: this.data.geoFoldSampleCount,
+      system: {
+        brand: sys.brand,
+        model: sys.model,
+        system: sys.system,
+        platform: sys.platform,
+        SDKVersion: sys.SDKVersion,
+        locationEnabled: sys.locationEnabled,
+        locationAuthorized: sys.locationAuthorized,
+        wifiEnabled: sys.wifiEnabled
+      },
+      events: this._geoFoldDumpEvents || []
+    };
+  },
+
+  copyGeoFoldDump() {
+    if (this.data.geoFoldDumpCopying) return;
+    const events = this._geoFoldDumpEvents || [];
+    if (!events.length) {
+      this._showCustomToast('还没有可复制的日志', 'none', 1800);
+      return;
+    }
+    this.setData({ geoFoldDumpCopying: true });
+    const payload = this._geoFoldDumpSnapshot();
+    const sid = this._geoFoldDumpSessionId || (`gf_${Date.now()}`);
+    this._geoFoldDumpSessionId = sid;
+    let localPath = '';
+    try {
+      const fs = wx.getFileSystemManager();
+      const root = (wx.env && wx.env.USER_DATA_PATH) || '';
+      localPath = `${root}/geo_fold_${sid}.json`;
+      fs.writeFileSync(localPath, JSON.stringify(payload, null, 2), 'utf8');
+    } catch (e) {
+      this.setData({ geoFoldDumpCopying: false });
+      this._showCustomToast('写本地日志失败', 'none', 2000);
+      return;
+    }
+    const cosUpload = require('../../../utils/cosUpload.js');
+    cosUpload.uploadLocalFileToCos(localPath, {
+      folder: `geo-fold-logs/${sid}`,
+      ext: '.json',
+      contentType: 'application/json'
+    }).then((raw) => {
+      const url = typeof raw === 'string' ? raw : (raw && (raw.publicUrl || raw.url)) || '';
+      if (!url) throw new Error('未返回 COS 链接');
+      this.setData({ geoFoldDumpUrl: url, geoFoldDumpCopying: false });
+      wx.setClipboardData({
+        data: url,
+        success: () => this._showCustomToast('已复制 COS 链接', 'success', 2000),
+        fail: () => this._showCustomToast('上传成功但复制失败', 'none', 2000)
+      });
+      this._geoFoldLog(`日志已上传 ${events.length} 条`);
+    }).catch((err) => {
+      this.setData({ geoFoldDumpCopying: false });
+      const msg = String((err && (err.message || err.errMsg)) || err || '上传失败');
+      this._showCustomToast(msg.slice(0, 40), 'none', 2600);
+      this._geoFoldLog('COS 上传失败: ' + msg.slice(0, 80));
+    });
   },
 
   openGeoFoldModal() {
     if (!this._geoFoldSupported()) return;
     this._loadGeoFoldConfig();
-    this.setData({ showGeoFoldModal: true });
+    this.setData({ showGeoFoldModal: true }, () => {
+      this._refreshGeoFoldEmbedMap({ forceLocate: true });
+      if ((this.data.geoFoldPoints || []).length && !this.data.geoFoldTracking) {
+        this._refreshGeoFoldDistancePreview();
+      }
+      this._ensureGeoFoldLocationAuth()
+        .then(() => this._getGeoFoldLocationOnce().catch(() => null))
+        .then((loc) => {
+          if (!loc) return;
+          this._refreshOfficialCamerasNearby(loc.latitude, loc.longitude);
+        })
+        .catch(() => {});
+    });
   },
 
   closeGeoFoldModal() {
-    this.setData({ showGeoFoldModal: false });
+    if (this._geoFoldMapPickerCloseTimer) {
+      clearTimeout(this._geoFoldMapPickerCloseTimer);
+      this._geoFoldMapPickerCloseTimer = null;
+    }
+    this._geoFoldMapPickerBusy = false;
+    this._stopGeoFoldPickerHudPreview();
+    this.setData({
+      showGeoFoldModal: false,
+      showGeoFoldMapPicker: false,
+      geoFoldMapPickerClosing: false,
+      geoFoldMapPickerEntered: false
+    });
+    this._geoFoldPickerCenter = null;
   },
 
   /** 档位切换：data-key 参数名，data-value 档位值 */
@@ -9338,10 +10941,27 @@ Page({
     }
     this.setData(patch, () => {
       this._persistGeoFoldConfig();
-      // 判定节流改了：连续定位下下次回调自然生效；轮询模式要立刻重排
-      if (key === 'pollMs' && this.data.geoFoldTracking && this._geoFoldUsePoll) {
-        this._clearGeoFoldTimer();
-        this._scheduleGeoFoldTick(0);
+      // 选点全屏开着时，半径改完同步蓝圈
+      if (key === 'baseRadius' && this.data.showGeoFoldMapPicker) {
+        const c = this._geoFoldPickerCenter || {
+          lat: this.data.geoFoldPickerLat,
+          lng: this.data.geoFoldPickerLng
+        };
+        const overlay = this._buildGeoFoldPickerOverlay(
+          c.lat,
+          c.lng,
+          this.data.geoFoldMapPickerMode
+        );
+        this.setData({
+          geoFoldPickerMarkers: overlay.markers,
+          geoFoldPickerCircles: overlay.circles,
+          geoFoldPickerPolygons: overlay.polygons || []
+        });
+      }
+      // 判定节流改了：重排轮询判定
+      if (key === 'pollMs' && this.data.geoFoldTracking && this._geoFoldUseJudgePoll) {
+        this._clearGeoFoldJudgeTimer();
+        this._scheduleGeoFoldJudgeTick(0);
       }
     });
     wx.vibrateShort({ type: 'light' });
@@ -9359,37 +10979,256 @@ Page({
     wx.vibrateShort({ type: 'light' });
   },
 
-  /** 到点执行的指令：收起 / 翻开 */
+  /** 全局默认进圈/出圈指令（新加点时沿用）；也可改已选中编辑点 */
   onGeoFoldCmdTap(e) {
-    const cmd = (e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.cmd) || '';
+    const ds = (e.currentTarget && e.currentTarget.dataset) || {};
+    const direction = ds.direction; // 'enter' 或 'exit'
+    const cmd = ds.cmd;
     if (cmd !== '打开' && cmd !== '关闭') return;
-    if (this.data.geoFoldCfg.triggerCmd === cmd) return;
-    const cfg = { ...this.data.geoFoldCfg, triggerCmd: cmd };
+    if (direction !== 'enter' && direction !== 'exit') return;
+    const key = direction === 'enter' ? 'enterCmd' : 'exitCmd';
+    if (this.data.geoFoldCfg[key] === cmd) return;
+    const cfg = { ...this.data.geoFoldCfg, [key]: cmd };
     this.setData({ geoFoldCfg: cfg }, () => this._persistGeoFoldConfig());
     wx.vibrateShort({ type: 'light' });
   },
 
+  onGeoFoldPointCmdTap(e) {
+    const ds = (e.currentTarget && e.currentTarget.dataset) || {};
+    const id = String(ds.id || '');
+    const direction = ds.direction;
+    const cmd = ds.cmd;
+    if (!id) return;
+    if (cmd !== '打开' && cmd !== '关闭') return;
+    if (direction !== 'enter' && direction !== 'exit') return;
+    const key = direction === 'enter' ? 'enterCmd' : 'exitCmd';
+    const points = (this.data.geoFoldPoints || []).map((p) => {
+      if (!p || p.id !== id) return p;
+      if (p[key] === cmd) return p;
+      return { ...p, [key]: cmd };
+    });
+    this._syncGeoFoldPointsUi({ geoFoldPoints: points });
+    wx.vibrateShort({ type: 'light' });
+  },
+
+  /** 快捷改名：弹窗输入（加点后也可随时改） */
+  editGeoFoldPointName(e) {
+    const id = String((e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.id) || '');
+    if (!id) return;
+    const points = this.data.geoFoldPoints || [];
+    const point = points.find((p) => p && p.id === id);
+    if (!point) return;
+    this.setData({ geoFoldEditPointId: id });
+    wx.showModal({
+      title: '修改点名称',
+      editable: true,
+      placeholderText: '例如：家门口',
+      content: point.name || '',
+      success: (res) => {
+        if (!res.confirm) return;
+        const name = String(res.content != null ? res.content : '').trim().slice(0, 20);
+        this._renameGeoFoldPoint(id, name);
+      }
+    });
+  },
+
+  onGeoFoldPointNameBlur(e) {
+    const id = String((e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.id) || '');
+    if (!id) return;
+    const name = String((e.detail && e.detail.value) || '').trim().slice(0, 20);
+    this._renameGeoFoldPoint(id, name);
+  },
+
+  _renameGeoFoldPoint(id, nameInput) {
+    const points = (this.data.geoFoldPoints || []).slice();
+    const idx = points.findIndex((p) => p && p.id === id);
+    if (idx < 0) return;
+    const fallback = `点${idx + 1}`;
+    const name = nameInput ? nameInput : fallback;
+    if (points[idx].name === name) return;
+    points[idx] = { ...points[idx], name };
+    this._syncGeoFoldPointsUi({ geoFoldPoints: points });
+    if (this.data.showGeoFoldMapPicker) this._refreshGeoFoldPickerOverlay();
+    this._geoFoldLog(`已改名：${name}`);
+  },
+
+  selectGeoFoldPoint(e) {
+    const id = String((e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.id) || '');
+    if (!id) return;
+    this.setData({
+      geoFoldEditPointId: this.data.geoFoldEditPointId === id ? '' : id
+    });
+  },
+
+  moveGeoFoldPoint(e) {
+    if (this.data.geoFoldTracking) {
+      this._showCustomToast('请先停止跟踪', 'none', 1800);
+      return;
+    }
+    const ds = (e.currentTarget && e.currentTarget.dataset) || {};
+    const id = String(ds.id || '');
+    const dir = ds.dir === 'up' ? -1 : 1;
+    const points = (this.data.geoFoldPoints || []).slice();
+    const idx = points.findIndex((p) => p && p.id === id);
+    if (idx < 0) return;
+    const next = idx + dir;
+    if (next < 0 || next >= points.length) return;
+    const tmp = points[idx];
+    points[idx] = points[next];
+    points[next] = tmp;
+    this._syncGeoFoldPointsUi({ geoFoldPoints: points });
+  },
+
+  removeGeoFoldPoint(e) {
+    if (this.data.geoFoldTracking) {
+      this._showCustomToast('请先停止跟踪', 'none', 1800);
+      return;
+    }
+    const id = String((e.currentTarget && e.currentTarget.dataset && e.currentTarget.dataset.id) || '');
+    if (!id) return;
+    const points = (this.data.geoFoldPoints || []).filter((p) => p && p.id !== id);
+    const patch = { geoFoldPoints: points };
+    if (this.data.geoFoldEditPointId === id) patch.geoFoldEditPointId = '';
+    this._syncGeoFoldPointsUi(patch);
+    this._geoFoldLog('已删除一个点位');
+  },
+
+  _appendGeoFoldPoint(raw) {
+    const cfg = this.data.geoFoldCfg || GEO_FOLD_DEFAULT_CFG;
+    const points = (this.data.geoFoldPoints || []).slice();
+    if (points.length >= GEO_FOLD_POINTS_MAX) {
+      this._showCustomToast(`最多 ${GEO_FOLD_POINTS_MAX} 个点`, 'none', 2000);
+      return null;
+    }
+    let nextIdx = points.length + 1;
+    const usedNames = {};
+    for (let i = 0; i < points.length; i++) {
+      const n = points[i] && points[i].name;
+      if (n) usedNames[n] = true;
+    }
+    while (usedNames[`点${nextIdx}`]) nextIdx += 1;
+    const point = normalizeGeoFoldPoint({
+      ...raw,
+      id: `p_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+      name: raw && raw.name ? raw.name : `点${nextIdx}`,
+      radius: (raw && raw.radius) || cfg.baseRadius,
+      enterCmd: (raw && raw.enterCmd) || cfg.enterCmd,
+      exitCmd: (raw && raw.exitCmd) || cfg.exitCmd
+    }, cfg);
+    if (!point) return null;
+    points.push(point);
+    this._syncGeoFoldPointsUi({
+      geoFoldPoints: points,
+      geoFoldEditPointId: point.id,
+      geoFoldStatusText: '未开始'
+    });
+    return point;
+  },
+
   _ensureGeoFoldLocationAuth() {
     return new Promise((resolve, reject) => {
+      const finishBg = (bg) => {
+        this._geoFoldBgLocAuthorized = !!bg;
+        resolve({ bg: !!bg });
+      };
+      const probeBg = () => {
+        wx.getSetting({
+          success: (r2) => {
+            const a2 = (r2 && r2.authSetting) || {};
+            if (a2['scope.userLocationBackground'] === true) {
+              finishBg(true);
+              return;
+            }
+            if (a2['scope.userLocationBackground'] === false) {
+              finishBg(false);
+              return;
+            }
+            if (typeof wx.authorize !== 'function') {
+              finishBg(false);
+              return;
+            }
+            wx.authorize({
+              scope: 'scope.userLocationBackground',
+              success: () => finishBg(true),
+              fail: () => finishBg(false)
+            });
+          },
+          fail: () => finishBg(false)
+        });
+      };
+      // 以 getLocation 能否拿到坐标为准，不要只信 authorize（常误报「没开定位」）
+      const probeFg = () => {
+        wx.getLocation({
+          type: 'gcj02',
+          isHighAccuracy: false,
+          success: () => probeBg(),
+          fail: (err) => {
+            const msg = String((err && (err.errMsg || err.message)) || '').toLowerCase();
+            const denied =
+              msg.includes('auth deny') ||
+              msg.includes('authorize') ||
+              msg.includes('permission') ||
+              msg.includes('隐私') ||
+              msg.includes('auth denied') ||
+              (err && (err.errno === 103 || err.errno === 104 || err.errCode === 103 || err.errCode === 104));
+            if (denied) {
+              reject({ type: 'denied', err });
+              return;
+            }
+            // 系统定位抖动/超时等：不挡功能，按已授权前台处理
+            probeBg();
+          }
+        });
+      };
       wx.getSetting({
         success: (res) => {
-          const auth = res.authSetting || {};
-          if (auth['scope.userLocation'] === true) {
-            resolve();
-            return;
-          }
+          const auth = (res && res.authSetting) || {};
           if (auth['scope.userLocation'] === false) {
             reject({ type: 'denied' });
             return;
           }
-          wx.authorize({
-            scope: 'scope.userLocation',
-            success: () => resolve(),
-            fail: () => reject({ type: 'denied' })
+          if (auth['scope.userLocation'] === true) {
+            probeBg();
+            return;
+          }
+          // 未记录授权状态：先试拿位置；失败再走 authorize
+          wx.getLocation({
+            type: 'gcj02',
+            isHighAccuracy: false,
+            success: () => probeBg(),
+            fail: () => {
+              if (typeof wx.authorize !== 'function') {
+                probeFg();
+                return;
+              }
+              wx.authorize({
+                scope: 'scope.userLocation',
+                success: () => probeFg(),
+                fail: () => {
+                  // authorize 失败仍再试一次 getLocation，避免误报
+                  probeFg();
+                }
+              });
+            }
           });
         },
-        fail: () => resolve()
+        fail: () => probeFg()
       });
+    });
+  },
+
+  _promptGeoFoldBackgroundLocIfNeeded() {
+    if (this._geoFoldBgLocAuthorized) return;
+    if (this._geoFoldBgLocPrompted) return;
+    this._geoFoldBgLocPrompted = true;
+    wx.showModal({
+      title: '开启后台定位',
+      content: '切到后台后仍要收位置，请在设置里把位置选为「使用小程序期间和离开后」。注意：后台翻板靠蓝牙，系统常会限制，不保证每次都能翻。',
+      confirmText: '去设置',
+      cancelText: '先前台用',
+      success: (res) => {
+        if (res.confirm) wx.openSetting({});
+      }
     });
   },
 
@@ -9495,6 +11334,10 @@ Page({
       this._showCustomToast('请先停止跟踪再设点', 'none', 1800);
       return;
     }
+    if ((this.data.geoFoldPoints || []).length >= GEO_FOLD_POINTS_MAX) {
+      this._showCustomToast(`最多 ${GEO_FOLD_POINTS_MAX} 个点`, 'none', 2000);
+      return;
+    }
     if (this._geoFoldCapturingPoint) return;
     this._geoFoldCapturingPoint = true;
     this.setData({ geoFoldCapturingPoint: true });
@@ -9502,24 +11345,19 @@ Page({
     this._ensureGeoFoldLocationAuth()
       .then(() => this._captureStableGeoFoldPoint())
       .then((fixed) => {
-        const point = normalizeGeoFoldPoint({
+        const point = this._appendGeoFoldPoint({
           lat: fixed.lat,
-          lng: fixed.lng,
-          name: '当前位置'
+          lng: fixed.lng
         });
         if (!point) {
           this._showCustomToast('定位结果异常', 'none', 2000);
           return;
         }
-        this.setData({
-          geoFoldPoint: point,
-          geoFoldPointText: this._geoFoldPointText(point),
-          geoFoldStatusText: '未开始'
-        }, () => this._persistGeoFoldConfig());
+        this._refreshGeoFoldDistancePreview();
         this._geoFoldLog(
-          `已设点×${fixed.samples}（精度约 ±${Math.round(fixed.accuracy)}m）`
+          `已添加点位×${fixed.samples}（精度约 ±${Math.round(fixed.accuracy)}m）`
         );
-        this._showCustomToast('已用稳定定位设点', 'success', 1800);
+        this._showCustomToast('已添加稳定定位点', 'success', 1800);
       })
       .catch((err) => {
         if (err && err.type === 'denied') {
@@ -9553,33 +11391,11 @@ Page({
       this._showCustomToast('请先停止跟踪再设点', 'none', 1800);
       return;
     }
-    this._ensureGeoFoldLocationAuth()
-      .then(() => {
-        wx.chooseLocation({
-          success: (res) => {
-            const point = normalizeGeoFoldPoint({
-              lat: res.latitude,
-              lng: res.longitude,
-              name: res.name || res.address || '地图选点'
-            });
-            if (!point) {
-              this._showCustomToast('选点结果异常', 'none', 2000);
-              return;
-            }
-            this.setData({
-              geoFoldPoint: point,
-              geoFoldPointText: this._geoFoldPointText(point)
-            }, () => this._persistGeoFoldConfig());
-            this._geoFoldLog(`地图选点：${point.name || '未命名'}`);
-          },
-          fail: (err) => {
-            const msg = String((err && err.errMsg) || '');
-            if (msg.indexOf('cancel') !== -1) return;
-            this._showCustomToast('打开地图失败', 'none', 2000);
-          }
-        });
-      })
-      .catch(() => this._handleGeoFoldAuthFail());
+    if ((this.data.geoFoldPoints || []).length >= GEO_FOLD_POINTS_MAX) {
+      this._showCustomToast(`最多 ${GEO_FOLD_POINTS_MAX} 个点`, 'none', 2000);
+      return;
+    }
+    this._openGeoFoldMapPicker('pick');
   },
 
   clearGeoFoldPoint() {
@@ -9587,11 +11403,12 @@ Page({
       this._showCustomToast('请先停止跟踪', 'none', 1800);
       return;
     }
-    this.setData({
-      geoFoldPoint: null,
-      geoFoldPointText: '未设点'
-    }, () => this._persistGeoFoldConfig());
-    this._geoFoldLog('已清除设点');
+    this._syncGeoFoldPointsUi({
+      geoFoldPoints: [],
+      geoFoldEditPointId: '',
+      geoFoldNearestName: '--'
+    });
+    this._geoFoldLog('已清空全部点位');
   },
 
   toggleGeoFoldTracking() {
@@ -9602,10 +11419,425 @@ Page({
     this._startGeoFoldTracking();
   },
 
+  toggleGeoFoldPickerHud() {
+    this.setData({ geoFoldPickerHudExpanded: !this.data.geoFoldPickerHudExpanded });
+  },
+
+  resumeGeoFoldPickerFollow() {
+    if (!this.data.geoFoldTracking || !this.data.showGeoFoldMapPicker) return;
+    this._geoFoldPickerFollow = true;
+    const last = this._geoFoldLastGpsRes;
+    if (last) {
+      const br = (last.direction != null && Number.isFinite(Number(last.direction)))
+        ? Number(last.direction)
+        : null;
+      this._syncGeoFoldPickerFollow(Number(last.latitude), Number(last.longitude), br);
+    }
+    this._showCustomToast('已恢复朝前跟随', 'none', 1200);
+  },
+
+  toggleGeoFoldPickerTracking() {
+    if (this.data.geoFoldTracking) {
+      this._stopGeoFoldTracking('手动停止');
+      return;
+    }
+    this._geoFoldPickerFollow = true;
+    this.setData({ geoFoldPickerHudExpanded: true });
+    this._startGeoFoldTracking();
+  },
+
+  _syncGeoFoldPickerFollow(lat, lng, bearing) {
+    if (!this.data.showGeoFoldMapPicker || !this.data.geoFoldTracking || !this._geoFoldPickerFollow) return;
+    if (this.data.showGeoFoldPickerEdit || this.data.showGeoFoldAvoidPanel) return;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const now = Date.now();
+    if (this._geoFoldPickerFollowAt && now - this._geoFoldPickerFollowAt < 180) return;
+    const prev = this._geoFoldPickerCenter;
+    let moved = 999;
+    if (prev && typeof geoDistanceMeters === 'function') {
+      moved = geoDistanceMeters(prev.lat, prev.lng, lat, lng);
+    }
+    const br = Number.isFinite(Number(bearing)) ? Number(bearing) : null;
+    const prevRot = Number(this.data.geoFoldPickerRotate) || 0;
+    let needRotate = false;
+    if (br != null) {
+      let d = Math.abs(br - prevRot) % 360;
+      if (d > 180) d = 360 - d;
+      needRotate = d >= 4;
+    }
+    if ((!Number.isFinite(moved) || moved < 1.2) && !needRotate) {
+      if (this._geoFoldTrackPolyDirty && (!this._geoFoldTrackPolyAt || now - this._geoFoldTrackPolyAt >= 220)) {
+        this._geoFoldTrackPolyDirty = false;
+        this._geoFoldTrackPolyAt = now;
+        this.setData({ geoFoldPickerPolylines: this._buildGeoFoldTrackPolylines() });
+      }
+      return;
+    }
+    this._geoFoldPickerFollowAt = now;
+    this._geoFoldPickerCenter = { lat, lng };
+    // 用 moveToLocation 跟车更顺，避免反复 setData 经纬度造成一卡一卡
+    try {
+      const ctx = wx.createMapContext('geoFoldPickerMap', this);
+      if (ctx && typeof ctx.moveToLocation === 'function') {
+        ctx.moveToLocation({ latitude: lat, longitude: lng });
+      }
+    } catch (e) { /* ignore */ }
+    const patch = {};
+    if (needRotate) patch.geoFoldPickerRotate = br;
+    // 轨迹刷新尽量跟跟车同一拍，减少整图重绘次数
+    if (this._geoFoldTrackPolyDirty) {
+      this._geoFoldTrackPolyDirty = false;
+      this._geoFoldTrackPolyAt = now;
+      patch.geoFoldPickerPolylines = this._buildGeoFoldTrackPolylines();
+    }
+    if (Object.keys(patch).length) this.setData(patch);
+  },
+
+  _buildGeoFoldTrackPolylines() {
+    const pts = this._geoFoldTrackPath || [];
+    if (pts.length < 2) return [];
+    return [{
+      points: pts,
+      color: '#007AFF',
+      width: 6,
+      dottedLine: false,
+      arrowLine: true
+    }];
+  },
+
+  _appendGeoFoldTrackPoint(lat, lng) {
+    if (!this.data.geoFoldTracking) return;
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    if (!this._geoFoldTrackPath) this._geoFoldTrackPath = [];
+    const last = this._geoFoldTrackPath[this._geoFoldTrackPath.length - 1];
+    if (last) {
+      const moved = geoDistanceMeters(last.latitude, last.longitude, lat, lng);
+      if (Number.isFinite(moved) && moved < 2) return;
+    }
+    this._geoFoldTrackPath.push({ latitude: lat, longitude: lng });
+    if (this._geoFoldTrackPath.length > 500) {
+      this._geoFoldTrackPath = this._geoFoldTrackPath.slice(-400);
+    }
+    if (!this.data.showGeoFoldMapPicker) return;
+    this._geoFoldTrackPolyDirty = true;
+    const now = Date.now();
+    if (this._geoFoldTrackPolyAt && now - this._geoFoldTrackPolyAt < 220) return;
+    // 若不在跟车窗口内，单独刷轨迹
+    if (!this._geoFoldPickerFollow) {
+      this._geoFoldTrackPolyAt = now;
+      this._geoFoldTrackPolyDirty = false;
+      this.setData({ geoFoldPickerPolylines: this._buildGeoFoldTrackPolylines() });
+    }
+  },
+
+  _isGeoFoldTicketPoint(point) {
+    if (!point) return false;
+    const tid = Number(point.typeId);
+    if (tid === 12) return true;
+    const text = `${point.typeName || ''} ${point.typeShort || ''} ${point.name || ''}`;
+    return /罚单/.test(text);
+  },
+
+  _clearGeoFoldTicketAlertTimer() {
+    if (this._geoFoldTicketAlertTimer) {
+      clearTimeout(this._geoFoldTicketAlertTimer);
+      this._geoFoldTicketAlertTimer = null;
+    }
+  },
+
+  _clearGeoFoldApproachCloseTimer() {
+    if (this._geoFoldApproachCloseTimer) {
+      clearTimeout(this._geoFoldApproachCloseTimer);
+      this._geoFoldApproachCloseTimer = null;
+    }
+  },
+
+  _clearGeoFoldTicketCloseTimer() {
+    if (this._geoFoldTicketCloseTimer) {
+      clearTimeout(this._geoFoldTicketCloseTimer);
+      this._geoFoldTicketCloseTimer = null;
+    }
+  },
+
+  _showGeoFoldApproachModal(patch) {
+    this._clearGeoFoldApproachCloseTimer();
+    const already = this.data.showGeoFoldApproachModal && !this.data.geoFoldApproachClosing;
+    const next = Object.assign({
+      showGeoFoldApproachModal: true,
+      geoFoldApproachClosing: false
+    }, patch || {});
+    if (already && this.data.geoFoldApproachEntered) {
+      this.setData(next);
+      return;
+    }
+    next.geoFoldApproachEntered = false;
+    this.setData(next, () => {
+      setTimeout(() => {
+        if (this.data.showGeoFoldApproachModal && !this.data.geoFoldApproachClosing) {
+          this.setData({ geoFoldApproachEntered: true });
+        }
+      }, 20);
+    });
+  },
+
+  _hideGeoFoldApproachModal() {
+    if (!this.data.showGeoFoldApproachModal || this.data.geoFoldApproachClosing) return;
+    this._clearGeoFoldApproachCloseTimer();
+    this.setData({
+      geoFoldApproachClosing: true,
+      geoFoldApproachEntered: false
+    });
+    this._geoFoldApproachCloseTimer = setTimeout(() => {
+      this._geoFoldApproachCloseTimer = null;
+      this.setData({
+        showGeoFoldApproachModal: false,
+        geoFoldApproachClosing: false,
+        geoFoldApproachEntered: false
+      });
+    }, 300);
+  },
+
+  _showGeoFoldTicketAlert(patch) {
+    this._clearGeoFoldTicketCloseTimer();
+    const already = this.data.showGeoFoldTicketAlert && !this.data.geoFoldTicketClosing;
+    const next = Object.assign({
+      showGeoFoldTicketAlert: true,
+      geoFoldTicketClosing: false
+    }, patch || {});
+    if (already && this.data.geoFoldTicketEntered) {
+      this.setData(next);
+      return;
+    }
+    next.geoFoldTicketEntered = false;
+    this.setData(next, () => {
+      setTimeout(() => {
+        if (this.data.showGeoFoldTicketAlert && !this.data.geoFoldTicketClosing) {
+          this.setData({ geoFoldTicketEntered: true });
+        }
+      }, 20);
+    });
+  },
+
+  _hideGeoFoldTicketAlert() {
+    if (!this.data.showGeoFoldTicketAlert || this.data.geoFoldTicketClosing) return;
+    this._clearGeoFoldTicketCloseTimer();
+    this.setData({
+      geoFoldTicketClosing: true,
+      geoFoldTicketEntered: false
+    });
+    this._geoFoldTicketCloseTimer = setTimeout(() => {
+      this._geoFoldTicketCloseTimer = null;
+      this.setData({
+        showGeoFoldTicketAlert: false,
+        geoFoldTicketClosing: false,
+        geoFoldTicketEntered: false
+      });
+    }, 300);
+  },
+
+  dismissGeoFoldTicketAlert() {
+    this._clearGeoFoldTicketAlertTimer();
+    this._hideGeoFoldTicketAlert();
+  },
+
+  _clearGeoFoldBleLostCloseTimer() {
+    if (this._geoFoldBleLostCloseTimer) {
+      clearTimeout(this._geoFoldBleLostCloseTimer);
+      this._geoFoldBleLostCloseTimer = null;
+    }
+  },
+
+  _startGeoFoldBleWatch() {
+    this._stopGeoFoldBleWatch();
+    this._tickGeoFoldBleWatch();
+    this._geoFoldBleWatchTimer = setInterval(() => {
+      this._tickGeoFoldBleWatch();
+    }, 700);
+  },
+
+  _stopGeoFoldBleWatch() {
+    if (this._geoFoldBleWatchTimer) {
+      clearInterval(this._geoFoldBleWatchTimer);
+      this._geoFoldBleWatchTimer = null;
+    }
+  },
+
+  _tickGeoFoldBleWatch() {
+    if (this.data.geoFoldBleLostPreviewing) return;
+    if (!this.data.geoFoldTracking) {
+      this._hideGeoFoldBleLost(true);
+      return;
+    }
+    const linked = !!this._canSendBleCommand();
+    if (linked) {
+      this._hideGeoFoldBleLost();
+      return;
+    }
+    this._showGeoFoldBleLost();
+  },
+
+  _showGeoFoldBleLost() {
+    this._clearGeoFoldBleLostCloseTimer();
+    if (this.data.showGeoFoldBleLost && !this.data.geoFoldBleLostClosing) {
+      if (!this.data.geoFoldBleLostEntered) {
+        this.setData({ geoFoldBleLostEntered: true });
+      }
+      return;
+    }
+    this.setData({
+      showGeoFoldBleLost: true,
+      geoFoldBleLostClosing: false,
+      geoFoldBleLostEntered: false
+    }, () => {
+      setTimeout(() => {
+        if (this.data.showGeoFoldBleLost && !this.data.geoFoldBleLostClosing) {
+          this.setData({ geoFoldBleLostEntered: true });
+        }
+      }, 20);
+    });
+    try { wx.vibrateLong(); } catch (e) { /* ignore */ }
+  },
+
+  _hideGeoFoldBleLost(force) {
+    if (this.data.geoFoldBleLostPreviewing && !force) return;
+    if (!this.data.showGeoFoldBleLost) return;
+    if (force) {
+      this._clearGeoFoldBleLostCloseTimer();
+      this.setData({
+        showGeoFoldBleLost: false,
+        geoFoldBleLostClosing: false,
+        geoFoldBleLostEntered: false,
+        geoFoldBleLostPreviewing: false
+      });
+      return;
+    }
+    if (this.data.geoFoldBleLostClosing) return;
+    this._clearGeoFoldBleLostCloseTimer();
+    this.setData({
+      geoFoldBleLostClosing: true,
+      geoFoldBleLostEntered: false
+    });
+    this._geoFoldBleLostCloseTimer = setTimeout(() => {
+      this._geoFoldBleLostCloseTimer = null;
+      this.setData({
+        showGeoFoldBleLost: false,
+        geoFoldBleLostClosing: false,
+        geoFoldBleLostEntered: false,
+        geoFoldBleLostPreviewing: false
+      });
+    }, 280);
+  },
+
+  previewGeoFoldBleLost() {
+    this.setData({ geoFoldBleLostPreviewing: true });
+    this._showGeoFoldBleLost();
+  },
+
+  dismissGeoFoldBleLostPreview() {
+    if (!this.data.geoFoldBleLostPreviewing && this.data.geoFoldTracking && !this._canSendBleCommand()) {
+      return;
+    }
+    this.setData({ geoFoldBleLostPreviewing: false });
+    this._hideGeoFoldBleLost(true);
+  },
+
+  _armGeoFoldTicketAlertTimer() {
+    this._clearGeoFoldTicketAlertTimer();
+    this._geoFoldTicketAlertTimer = setTimeout(() => {
+      this._geoFoldTicketAlertTimer = null;
+      this._hideGeoFoldTicketAlert();
+    }, 2000);
+  },
+
+  _setGeoFoldTicketEdgeWarn(on) {
+    const next = !!on;
+    if (!!this.data.geoFoldTicketEdgeWarn === next) return;
+    this.setData({ geoFoldTicketEdgeWarn: next });
+  },
+
+  _geoFoldTicketWarnMeters(point) {
+    const cfg = this.data.geoFoldCfg || GEO_FOLD_DEFAULT_CFG;
+    const r = Math.max(
+      15,
+      Number(point && point.radius) || Number(cfg.baseRadius) || 50
+    );
+    return r + GEO_FOLD_TICKET_WARN_PAD_M;
+  },
+
+  _updateGeoFoldTicketAlert(points, lat, lng) {
+    if (!this.data.geoFoldTracking || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+      this._setGeoFoldTicketEdgeWarn(false);
+      this._hideGeoFoldTicketAlert();
+      return;
+    }
+    let best = null;
+    let bestD = Infinity;
+    let bestWarn = 0;
+    const list = points || [];
+    if (!this._geoFoldTicketAlerted) this._geoFoldTicketAlerted = {};
+    for (let i = 0; i < list.length; i++) {
+      const p = list[i];
+      if (!p || !p.official || !this._isGeoFoldTicketPoint(p)) continue;
+      const d = geoDistanceMeters(lat, lng, p.lat, p.lng);
+      if (!Number.isFinite(d)) continue;
+      const warnM = this._geoFoldTicketWarnMeters(p);
+      // 出警示圈立刻清该点「已提示」标记，方便下次再靠近再弹
+      if (d > warnM) {
+        delete this._geoFoldTicketAlerted[p.id];
+        continue;
+      }
+      if (d >= bestD) continue;
+      bestD = d;
+      best = p;
+      bestWarn = warnM;
+    }
+    if (!best || bestD > bestWarn) {
+      this._setGeoFoldTicketEdgeWarn(false);
+      this._hideGeoFoldTicketAlert();
+      return;
+    }
+    // 在「该点圈半径 + 200」内：左右红条一直闪
+    this._setGeoFoldTicketEdgeWarn(true);
+    if (this._geoFoldTicketAlerted[best.id]) return;
+    this._geoFoldTicketAlerted[best.id] = true;
+    this._showGeoFoldTicketAlert({
+      geoFoldTicketAlertName: best.typeName || best.name || '现场罚单',
+      geoFoldTicketAlertDist: Math.round(bestD)
+    });
+    try { wx.vibrateLong(); } catch (e) { /* ignore */ }
+    this._armGeoFoldTicketAlertTimer();
+  },
+
   _resetGeoFoldRuntime() {
-    this._geoFoldState = createGeoFoldState();
+    this._geoFoldState = createGeoFoldState(); // 兼容旧引用
+    this._geoFoldPointRuntime = {};
+    const points = this.data.geoFoldPoints || [];
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      if (!p || !p.id) continue;
+      this._geoFoldPointRuntime[p.id] = {
+        state: createGeoFoldState(),
+        wasInZone: null,
+        leadFired: false,
+        leadHoldoff: false,
+        cooldownUntil: 0,
+        userOverride: false
+      };
+    }
     this._geoFoldCooldownUntil = 0;
     this._geoFoldLastJudgeAt = 0;
+    this._geoFoldLastUiAt = 0;
+    this._geoFoldDisplayKalman = null;
+    this._geoFoldLastGpsRes = null;
+    this._geoFoldDisplayDist = null;
+    this._geoFoldWasInZone = null;
+    this._geoFoldStreamGotFirst = false;
+    this._geoFoldLastDumpT = 0;
+    this._geoFoldSinceDumpBucket = 0;
+    if (this._geoFoldInterpTimer) {
+      clearInterval(this._geoFoldInterpTimer);
+      this._geoFoldInterpTimer = null;
+    }
   },
 
   _startGeoFoldTracking() {
@@ -9614,19 +11846,23 @@ Page({
       this._showCustomToast('正在校准设点，请稍候', 'none', 1800);
       return;
     }
-    if (!this.data.geoFoldPoint) {
-      this._showCustomToast('请先设置一个点位', 'none', 2000);
+    const userN = (this.data.geoFoldPoints || []).length;
+    const offN = (this.data.geoFoldOfficialNearby || []).length;
+    if (!userN && !offN) {
+      this._showCustomToast('请先添加点位，或等附近电子眼加载', 'none', 2200);
       return;
     }
-    // 弹窗盖住了页面里的「去连蓝牙」提示条，这里直接用 toast 说明
-    if (!this._canSendBleCommand()) {
-      this._showCustomToast('请先连接蓝牙再开始跟踪', 'none', 2200);
-      return;
-    }
-
     this._ensureGeoFoldLocationAuth()
-      .then(() => {
+      .then((authInfo) => {
+        this._geoFoldDumpEvents = [];
+        this._geoFoldDumpSessionId = `gf_${Date.now()}`;
         this._resetGeoFoldRuntime();
+        this._geoFoldPageHidden = false;
+        this._geoFoldTrackPath = [];
+        this._geoFoldTicketAlerted = {};
+        this._clearGeoFoldTicketAlertTimer();
+        this._clearGeoFoldApproachCloseTimer();
+        this._clearGeoFoldTicketCloseTimer();
         this.setData({
           geoFoldTracking: true,
           geoFoldStatusText: '跟踪中',
@@ -9634,20 +11870,65 @@ Page({
           geoFoldHitText: `0 / ${this.data.geoFoldCfg.confirmHits}`,
           geoFoldEtaText: '--',
           geoFoldRadiusText: `${this.data.geoFoldCfg.baseRadius} m`,
-          geoFoldTrendText: '--'
+          geoFoldTrendText: '--',
+          geoFoldNearestName: '--',
+          geoFoldPointsCountText: `${(this.data.geoFoldPoints || []).length} 个点`,
+          geoFoldDumpCount: 0,
+          geoFoldDumpUrl: '',
+          geoFoldSinceLastText: '尚未收到',
+          geoFoldPickerPolylines: [],
+          showGeoFoldAvoidPanel: false,
+          geoFoldAvoidPanelEntered: false,
+          showGeoFoldPickerEdit: false,
+          showGeoFoldTicketAlert: false,
+          geoFoldTicketEntered: false,
+          geoFoldTicketClosing: false,
+          geoFoldTicketEdgeWarn: false,
+          showGeoFoldApproachModal: false,
+          geoFoldApproachEntered: false,
+          geoFoldApproachClosing: false,
+          showGeoFoldBleLost: false,
+          geoFoldBleLostEntered: false,
+          geoFoldBleLostClosing: false,
+          geoFoldBleLostPreviewing: false,
+          geoFoldPickerRotate: 0
         });
-        this._geoFoldLog('开始跟踪');
+        this._geoFoldLog(`开始跟踪 · ${(this.data.geoFoldPoints || []).length} 个点`);
+        this._startGeoFoldBleWatch();
+        if (this.data.showGeoFoldMapPicker) {
+          this._geoFoldPickerFollow = true;
+          this._stopGeoFoldPickerHudPreview();
+        }
+        if (!(authInfo && authInfo.bg)) {
+          this._promptGeoFoldBackgroundLocIfNeeded();
+          this._geoFoldLog('未授权后台定位：锁屏/切走后可能停更，建议去设置开启');
+        } else {
+          this._geoFoldLog('已授权后台定位：切后台仍会尝试收位置');
+        }
+        this._geoFoldDump('start', {
+          cfg: this.data.geoFoldCfg,
+          points: this.data.geoFoldPoints,
+          bleLinked: !!this._canSendBleCommand(),
+          bgLoc: !!(authInfo && authInfo.bg),
+          model: (this.data.currentModel && (this.data.currentModel.name || this.data.currentModel.type)) || ''
+        });
         return this._startGeoFoldLocationStream();
       })
       .then((mode) => {
         if (!this.data.geoFoldTracking) return;
-        if (mode === 'stream') {
-          this._geoFoldUsePoll = false;
-          this._geoFoldLog('连续定位已开启');
+        this._geoFoldUseJudgePoll = false;
+        this._geoFoldUseDisplayPoll = false;
+        if (mode === 'stream' || mode === 'stream-bg') {
+          this._geoFoldLog(mode === 'stream-bg'
+            ? '后台连续定位已开启（切后台也可收点；翻板仍看蓝牙是否被系统放行）'
+            : '前台连续定位已开启。原地位置不变时系统可能几秒才推一次，走动后会更密');
+          this._startGeoFoldInterpTimer();
+          this._startGeoFoldSinceTimer();
         } else {
-          this._geoFoldUsePoll = true;
-          this._geoFoldLog('改用轮询定位');
-          this._scheduleGeoFoldTick(0);
+          this._geoFoldStreamActive = false;
+          this._geoFoldLog('连续定位不可用，改用轮询（轮询在后台通常不可用）');
+          this._startGeoFoldPollFallback();
+          this._startGeoFoldSinceTimer();
         }
       })
       .catch((err) => {
@@ -9660,229 +11941,702 @@ Page({
       });
   },
 
-  /** 优先连续定位；不支持时回落轮询 getLocation */
+  /** 优先后台连续定位；无权限或不支持时回落前台，再不行用轮询 */
   _startGeoFoldLocationStream() {
     return new Promise((resolve) => {
-      if (typeof wx.startLocationUpdate !== 'function' || typeof wx.onLocationChange !== 'function') {
+      if (typeof wx.onLocationChange !== 'function') {
         resolve('poll');
         return;
       }
-      this._stopGeoFoldLocationStream(false);
-      this._geoFoldLocHandler = (res) => {
-        this._onGeoFoldLocationChange(res);
-      };
-      try {
-        wx.onLocationChange(this._geoFoldLocHandler);
-      } catch (e) {
-        this._geoFoldLocHandler = null;
+      const canFg = typeof wx.startLocationUpdate === 'function';
+      const canBg = typeof wx.startLocationUpdateBackground === 'function';
+      if (!canFg && !canBg) {
         resolve('poll');
         return;
       }
-      wx.startLocationUpdate({
-        success: () => resolve('stream'),
-        fail: () => {
-          this._stopGeoFoldLocationStream(false);
+
+      const doRegisterAndStart = () => {
+        // 先监听，再 start。getLocation 绝不能和这套同时跑，否则 onLocationChange 会被掐掉
+        this._unbindGeoFoldLocationListeners();
+        this._geoFoldLocHandler = (res) => {
+          this._onGeoFoldLocationChange(res);
+        };
+        this._geoFoldLocErrorHandler = (err) => {
+          this._geoFoldLog('连续定位错误: ' + ((err && (err.errMsg || err.message)) || JSON.stringify(err || {})));
+        };
+        try {
+          wx.onLocationChange(this._geoFoldLocHandler);
+          if (typeof wx.onLocationChangeError === 'function') {
+            wx.onLocationChangeError(this._geoFoldLocErrorHandler);
+          }
+        } catch (e) {
+          this._geoFoldLocHandler = null;
+          this._geoFoldLocErrorHandler = null;
           resolve('poll');
+          return;
         }
-      });
+
+        const startFg = () => {
+          if (!canFg) {
+            this._geoFoldStreamActive = false;
+            this._geoFoldUsingBgLoc = false;
+            this._unbindGeoFoldLocationListeners();
+            resolve('poll');
+            return;
+          }
+          this._geoFoldStreamActive = true;
+          this._geoFoldUsingBgLoc = false;
+          wx.startLocationUpdate({
+            type: 'gcj02',
+            success: () => resolve('stream'),
+            fail: (err) => {
+              this._geoFoldLog('前台连续定位启动失败: ' + (err && err.errMsg || ''));
+              this._geoFoldStreamActive = false;
+              this._unbindGeoFoldLocationListeners();
+              resolve('poll');
+            }
+          });
+        };
+
+        const startBg = () => {
+          this._geoFoldStreamActive = true;
+          this._geoFoldUsingBgLoc = true;
+          wx.startLocationUpdateBackground({
+            type: 'gcj02',
+            success: () => resolve('stream-bg'),
+            fail: (err) => {
+              this._geoFoldLog('后台连续定位启动失败，改前台: ' + (err && err.errMsg || ''));
+              startFg();
+            }
+          });
+        };
+
+        if (this._geoFoldBgLocAuthorized && canBg) {
+          startBg();
+        } else {
+          startFg();
+        }
+      };
+
+      // 先确保上一次的 stopLocationUpdate 完成，再重新 start
+      // 否则微信底层 session 未重置，startLocationUpdate success 但不推回调
+      if (typeof wx.stopLocationUpdate === 'function') {
+        wx.stopLocationUpdate({
+          complete: () => doRegisterAndStart(),
+          fail: () => doRegisterAndStart()
+        });
+      } else {
+        doRegisterAndStart();
+      }
     });
   },
 
-  _stopGeoFoldLocationStream(silent) {
+  _unbindGeoFoldLocationListeners() {
     if (this._geoFoldLocHandler && typeof wx.offLocationChange === 'function') {
-      try {
-        wx.offLocationChange(this._geoFoldLocHandler);
-      } catch (e) { /* ignore */ }
+      try { wx.offLocationChange(this._geoFoldLocHandler); } catch (e) { /* ignore */ }
+    }
+    if (this._geoFoldLocErrorHandler && typeof wx.offLocationChangeError === 'function') {
+      try { wx.offLocationChangeError(this._geoFoldLocErrorHandler); } catch (e) { /* ignore */ }
     }
     this._geoFoldLocHandler = null;
+    this._geoFoldLocErrorHandler = null;
+  },
+
+  _stopGeoFoldLocationStream(silent) {
+    this._geoFoldStreamActive = false;
+    this._unbindGeoFoldLocationListeners();
     if (typeof wx.stopLocationUpdate === 'function') {
-      try {
-        wx.stopLocationUpdate({
-          complete: () => {},
-          fail: () => {}
-        });
-      } catch (e) { /* ignore */ }
-    }
-    if (!silent) {
-      // no-op；停止时日志由上层写
+      try { wx.stopLocationUpdate({ complete: () => {}, fail: () => {} }); } catch (e) { /* ignore */ }
     }
   },
 
-  _onGeoFoldLocationChange(res) {
-    if (!this.data.geoFoldTracking || this._geoFoldUsePoll) return;
-    const now = Date.now();
-    const minInterval = this.data.geoFoldCfg.pollMs || 2000;
-    if (now - (this._geoFoldLastJudgeAt || 0) < minInterval) return;
-    this._geoFoldLastJudgeAt = now;
-    this._handleGeoFoldSample(res);
-  },
-
-  /** keepStatus：触发后停止时保留「已触发」文案，别被「已停止」盖掉 */
-  _stopGeoFoldTracking(reason, keepStatus) {
-    this._clearGeoFoldTimer();
+  _teardownGeoFoldLocationStream() {
     this._stopGeoFoldLocationStream(true);
-    this._geoFoldUsePoll = false;
-    this._geoFoldState = createGeoFoldState();
-    if (!this.data.geoFoldTracking) return;
-    const patch = { geoFoldTracking: false };
-    if (!keepStatus) {
-      patch.geoFoldStatusText = reason ? `已停止（${reason}）` : '已停止';
+  },
+
+  _startGeoFoldPickerHudPreview() {
+    this._stopGeoFoldPickerHudPreview();
+    this._refreshGeoFoldDistancePreview();
+    this._geoFoldPickerHudTimer = setInterval(() => {
+      if (!this.data.showGeoFoldMapPicker || this.data.geoFoldTracking) return;
+      this._refreshGeoFoldDistancePreview();
+    }, 3000);
+  },
+
+  _stopGeoFoldPickerHudPreview() {
+    if (this._geoFoldPickerHudTimer) {
+      clearInterval(this._geoFoldPickerHudTimer);
+      this._geoFoldPickerHudTimer = null;
     }
-    this.setData(patch);
-    if (reason) this._geoFoldLog(`停止跟踪：${reason}`);
   },
 
-  _clearGeoFoldTimer() {
-    if (this._geoFoldTimer) {
-      clearTimeout(this._geoFoldTimer);
-      this._geoFoldTimer = null;
-    }
-  },
-
-  /** 用 setTimeout 串行调度，避免定位慢时多次采样叠在一起 */
-  _scheduleGeoFoldTick(delay) {
-    this._clearGeoFoldTimer();
-    if (!this.data.geoFoldTracking || !this._geoFoldUsePoll) return;
-    const wait = delay != null ? delay : (this.data.geoFoldCfg.pollMs || 2000);
-    this._geoFoldTimer = setTimeout(() => {
-      this._geoFoldTimer = null;
-      this._geoFoldSampleOnce();
-    }, wait);
-  },
-
-  _geoFoldSampleOnce() {
-    if (!this.data.geoFoldTracking || !this._geoFoldUsePoll) return;
-    this._getGeoFoldLocationOnce()
+  _refreshGeoFoldDistancePreview() {
+    this._ensureGeoFoldLocationAuth()
+      .then(() => this._getGeoFoldLocationOnce())
       .then((res) => {
-        this._handleGeoFoldSample(res);
-        this._scheduleGeoFoldTick();
+        if (this.data.geoFoldTracking) return;
+        const lat = Number(res.latitude);
+        const lng = Number(res.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        const acc = Math.max(0, Number(res.accuracy) || 0);
+        const speedMps = Number(res.speed);
+        const speedKmh = Number.isFinite(speedMps) && speedMps >= 0 ? speedMps * 3.6 : 0;
+        const points = this.data.geoFoldPoints || [];
+        const patch = {
+          geoFoldGaugeDeg: geoFoldGaugeDegFromSpeed(speedKmh),
+          geoFoldSpeedText: `${speedKmh.toFixed(1)} km/h`,
+          geoFoldSpeedKmh: speedKmh.toFixed(1),
+          geoFoldAccuracyText: acc > 0 ? `±${Math.round(acc)} m` : '--',
+          geoFoldLastAt: geoFoldClockText()
+        };
+        let best = null;
+        let bestD = Infinity;
+        let bestIdx = 0;
+        for (let i = 0; i < points.length; i++) {
+          const p = points[i];
+          if (!p) continue;
+          const d = geoDistanceMeters(lat, lng, p.lat, p.lng);
+          if (d < bestD) {
+            bestD = d;
+            best = p;
+            bestIdx = i;
+          }
+        }
+        if (best) {
+          patch.geoFoldDistanceText = `${Math.round(bestD)} m`;
+          patch.geoFoldDistanceM = Math.round(bestD);
+          patch.geoFoldNearestName = best.name || `点${bestIdx + 1}`;
+          patch.geoFoldPointsCountText = `${points.length} 个点`;
+        }
+        this.setData(patch);
       })
-      .catch(() => {
-        this._geoFoldLog('定位失败，稍后重试');
-        this._scheduleGeoFoldTick();
-      });
+      .catch(() => {});
   },
 
-  _handleGeoFoldSample(res) {
+  _getGeoFoldPointRuntime(pointId) {
+    if (!this._geoFoldPointRuntime) this._geoFoldPointRuntime = {};
+    if (!this._geoFoldPointRuntime[pointId]) {
+      this._geoFoldPointRuntime[pointId] = {
+        state: createGeoFoldState(),
+        wasInZone: null,
+        leadFired: false,
+        leadHoldoff: false,
+        cooldownUntil: 0,
+        userOverride: false
+      };
+    }
+    return this._geoFoldPointRuntime[pointId];
+  },
+
+  _handleGeoFoldSample(res, source) {
+    try { this._handleGeoFoldSampleInner(res, source); } catch (e) { console.error('[geoFold] sample error', e); }
+  },
+
+  _handleGeoFoldSampleInner(res, source) {
     if (!this.data.geoFoldTracking) return;
-    const point = this.data.geoFoldPoint;
-    if (!point) {
+    const points = this._getGeoFoldEvalPoints();
+    if (!points.length) {
       this._stopGeoFoldTracking('设点丢失');
       return;
     }
-    if (!this._geoFoldState) this._geoFoldState = createGeoFoldState();
+    // 跟踪中偶尔刷新附近官方点（约每 20 秒）
+    const nowCam = Date.now();
+    if (!this._geoFoldOfficialRefreshAt || nowCam - this._geoFoldOfficialRefreshAt > 20000) {
+      this._geoFoldOfficialRefreshAt = nowCam;
+      this._refreshOfficialCamerasNearby(res.latitude, res.longitude, { soft: true });
+    }
     const cfg = this.data.geoFoldCfg;
     const now = Date.now();
-    const judge = geoFoldJudgeStep(
-      this._geoFoldState,
-      {
-        latitude: res.latitude,
-        longitude: res.longitude,
-        accuracy: res.accuracy,
-        speed: res.speed,
-        t: now
-      },
-      cfg,
-      point
-    );
-
+    const sample = {
+      latitude: res.latitude,
+      longitude: res.longitude,
+      accuracy: res.accuracy,
+      speed: res.speed,
+      t: now
+    };
     const sampleCount = (this.data.geoFoldSampleCount || 0) + 1;
     const accuracy = Math.max(0, Number(res.accuracy) || 0);
+    const dtMs = this._geoFoldLastDumpT ? (now - this._geoFoldLastDumpT) : null;
+    this._geoFoldLastDumpT = now;
+    const sinceLastText = dtMs == null ? '首包' : geoFoldSinceLastLabel(now - dtMs, now);
 
-    if (judge.action === 'bad_coord') {
+    let nearestJudge = null;
+    let nearestPoint = null;
+    let nearestIdx = 0;
+    let nearestRuntime = null;
+    const pointResults = [];
+
+    for (let i = 0; i < points.length; i++) {
+      const point = points[i];
+      if (!point || !point.id) continue;
+      const rt = this._getGeoFoldPointRuntime(point.id);
+      const judge = geoFoldJudgeStep(rt.state, sample, cfg, point);
+      pointResults.push({ point, index: i, judge, runtime: rt });
+      if (!nearestJudge || judge.distance < nearestJudge.distance) {
+        nearestJudge = judge;
+        nearestPoint = point;
+        nearestIdx = i;
+        nearestRuntime = rt;
+      }
+    }
+
+    if (!nearestJudge || !nearestPoint) {
       this._geoFoldLog('定位坐标异常，样本作废');
       return;
     }
-    if (judge.action === 'accuracy_reject') {
-      this.setData({
-        geoFoldAccuracyText: `±${Math.round(accuracy)} m（超限）`,
-        geoFoldSampleCount: sampleCount,
-        geoFoldLastAt: geoFoldClockText()
-      });
-      this._geoFoldLog(`精度 ±${Math.round(accuracy)}m 超限，样本作废`);
+
+    // 兼容旧单点显示卡尔曼引用
+    this._geoFoldState = nearestRuntime.state;
+    this._geoFoldWasInZone = nearestRuntime.wasInZone;
+
+    this._geoFoldDump('sample', {
+      source: source || '',
+      dtMs,
+      sinceLastMs: dtMs,
+      sinceLastText,
+      sampleCount,
+      rawLat: Number(res.latitude),
+      rawLng: Number(res.longitude),
+      accuracy,
+      speedMps: Number(res.speed),
+      direction: res.direction,
+      nearestId: nearestPoint.id,
+      nearestName: nearestPoint.name || `点${nearestIdx + 1}`,
+      rawDist: nearestJudge.rawDistance,
+      filtDist: nearestJudge.distance,
+      displayDist: this._geoFoldDisplayDist,
+      radius: nearestJudge.radius || cfg.baseRadius,
+      inZone: !!nearestJudge.inZone,
+      leadOk: !!nearestJudge.leadOk,
+      hit: !!nearestJudge.hit,
+      hits: nearestJudge.hits || 0,
+      confirmHits: cfg.confirmHits,
+      fired: !!nearestJudge.fired,
+      action: nearestJudge.action,
+      etaSec: nearestJudge.etaSec,
+      speedKmh: nearestJudge.speedKmh,
+      accuracyWeak: !!nearestJudge.accuracyWeak,
+      streamActive: !!this._geoFoldStreamActive,
+      bleLinked: !!this._canSendBleCommand(),
+      points: pointResults.map((pr) => ({
+        id: pr.point.id,
+        name: pr.point.name || `点${pr.index + 1}`,
+        dist: pr.judge.distance,
+        inZone: !!pr.judge.inZone,
+        hits: pr.judge.hits || 0,
+        fired: !!pr.judge.fired,
+        wasInZone: pr.runtime.wasInZone
+      }))
+    });
+
+    if (nearestJudge.action === 'bad_coord') {
+      this._geoFoldLog('定位坐标异常，样本作废');
       return;
     }
-    if (judge.action === 'teleport_reject') {
+    if (nearestJudge.action === 'teleport_reject') {
       this.setData({
         geoFoldAccuracyText: `±${Math.round(accuracy)} m`,
         geoFoldTrendText: '定位跳变',
         geoFoldHitText: `0 / ${cfg.confirmHits}`,
         geoFoldSampleCount: sampleCount,
         geoFoldLastAt: geoFoldClockText(),
-        geoFoldDistanceText: `${Math.round(judge.distance)} m`
+        geoFoldDistanceText: `${Math.round(nearestJudge.distance)} m`,
+        geoFoldNearestName: nearestPoint.name || `点${nearestIdx + 1}`,
+        geoFoldDumpCount: (this._geoFoldDumpEvents || []).length
       });
-      this._geoFoldLog(`丢弃瞬移点（原始距点 ${Math.round(judge.rawDistance)}m）`);
+      this._geoFoldLog(`丢弃瞬移点（原始距最近点 ${Math.round(nearestJudge.rawDistance)}m）`);
       return;
     }
 
-    const radius = judge.radius || cfg.baseRadius;
+    const radius = nearestJudge.radius || cfg.baseRadius;
     let trendText = '跟踪中';
-    if (judge.inZone) trendText = '已碰圆边/在圈内';
-    else if (judge.leadOk) trendText = '提前接近中';
-    else if (judge.hit) trendText = '靠近中';
+    if (nearestJudge.inZone) trendText = '已碰圆边/在圈内';
+    else if (nearestJudge.leadOk) trendText = '提前接近中';
+    else if (nearestJudge.hit) trendText = '靠近中';
 
-    const etaText = judge.inZone
+    const etaText = nearestJudge.inZone
       ? '已到达'
-      : (judge.etaSec != null ? `${judge.etaSec.toFixed(1)} s` : '--');
-    const distDrift = Math.abs(judge.rawDistance - judge.distance);
-    const distText = distDrift >= 8
-      ? `${Math.round(judge.distance)} m（原始 ${Math.round(judge.rawDistance)}）`
-      : `${Math.round(judge.rawDistance)} m`;
-    const radiusText = judge.leadOk
-      ? `圆 ${radius} m · 提前命中`
-      : `圆 ${radius} m（碰边即算）`;
+      : (nearestJudge.etaSec != null ? `${nearestJudge.etaSec.toFixed(1)} s` : '--');
+    if (this._geoFoldDisplayDist == null) {
+      this._geoFoldDisplayDist = nearestJudge.distance;
+    } else {
+      this._geoFoldDisplayDist = 0.25 * nearestJudge.distance + 0.75 * this._geoFoldDisplayDist;
+    }
+    const distText = `${Math.round(this._geoFoldDisplayDist)} m`;
+    const radiusText = `${radius} m`;
+    const nearestName = nearestPoint.name || `点${nearestIdx + 1}`;
 
     this.setData({
       geoFoldDistanceText: distText,
+      geoFoldDistanceM: Math.round(this._geoFoldDisplayDist),
+      geoFoldGaugeDeg: geoFoldGaugeDegFromSpeed(nearestJudge.speedKmh || 0),
       geoFoldRadiusText: radiusText,
       geoFoldEtaText: etaText,
-      geoFoldSpeedText: `${(judge.speedKmh || 0).toFixed(1)} km/h`,
-      geoFoldAccuracyText: `±${Math.round(accuracy)} m`,
+      geoFoldSpeedText: `${(nearestJudge.speedKmh || 0).toFixed(1)} km/h`,
+      geoFoldSpeedKmh: (nearestJudge.speedKmh || 0).toFixed(1),
+      geoFoldAccuracyText: nearestJudge.accuracyWeak
+        ? `±${Math.round(accuracy)} m（弱）`
+        : `±${Math.round(accuracy)} m`,
       geoFoldTrendText: trendText,
-      geoFoldHitText: `${judge.hits || 0} / ${cfg.confirmHits}`,
+      geoFoldHitText: `${nearestJudge.hits || 0} / ${cfg.confirmHits}`,
       geoFoldSampleCount: sampleCount,
-      geoFoldLastAt: geoFoldClockText()
+      geoFoldLastAt: geoFoldClockText(),
+      geoFoldNearestName: nearestName,
+      geoFoldPointsCountText: `${points.length} 个点`,
+      geoFoldDumpCount: (this._geoFoldDumpEvents || []).length
     });
 
-    if ((judge.inZone || judge.leadOk) && !judge.hit && cfg.maxSpeedKmh > 0 && (judge.speedKmh || 0) > cfg.maxSpeedKmh) {
-      this._geoFoldLog(`满足距离但车速 ${judge.speedKmh.toFixed(0)}km/h 超限`);
-      return;
+    this._geoFoldLog(
+      `[${source === 'stream' ? '推送' : '轮询'}] 距上次 ${sinceLastText} 近:${nearestName} dist=${Math.round(nearestJudge.distance)}m hits=${nearestJudge.hits}/${cfg.confirmHits}`
+    );
+
+    const flapBusy = this._isGeoFoldFlapBusy();
+    const flapState = this.data.flapPanelState;
+
+    for (let i = 0; i < pointResults.length; i++) {
+      const { point, index, judge, runtime } = pointResults[i];
+      const label = point.name || `点${index + 1}`;
+      if (judge.action === 'bad_coord' || judge.action === 'teleport_reject') continue;
+      if ((judge.inZone || judge.leadOk) && !judge.hit && cfg.maxSpeedKmh > 0 && (judge.speedKmh || 0) > cfg.maxSpeedKmh) {
+        if (point.id === nearestPoint.id) {
+          this._geoFoldLog(`${label} 满足距离但车速 ${judge.speedKmh.toFixed(0)}km/h 超限`);
+        }
+        continue;
+      }
+      const pointRadius = Number(judge.radius) || Number(point.radius) || Number(cfg.baseRadius) || 50;
+      if (judge.leadOk && judge.hits === 1) {
+        this._geoFoldLog(`${label} 提前命中：距圆边约 ${Math.round(Math.max(0, judge.remainToCircle != null ? judge.remainToCircle : (judge.distance - pointRadius)))}m（按车速）`);
+      } else if (judge.inZone && judge.hits === 1) {
+        this._geoFoldLog(`${label} 碰到圆边：距点 ${Math.round(judge.rawDistance)}m / 半径 ${pointRadius}m`);
+      }
+
+      const nowInZone = !!judge.inZone;
+      const prevInZone = runtime.wasInZone;
+      runtime.lastInZone = nowInZone;
+      // 出圈只认真实 GPS 距离：滤波/提前距离都不能提前出圈发令
+      const rawDist = Number(judge.rawDistance);
+      const reallyInZone = Number.isFinite(rawDist)
+        ? rawDist <= pointRadius + GEO_FOLD_EDGE_EPS_M
+        : nowInZone;
+
+      // 滤波已出、但原始坐标还在圈内：当作仍在圈，绝不预判出圈
+      if (prevInZone === true && reallyInZone) {
+        runtime.wasInZone = true;
+        if (nowInZone && !runtime.userOverride && !flapBusy && Date.now() >= (runtime.cooldownUntil || 0)) {
+          const expectCmd = point.enterCmd || cfg.enterCmd;
+          const expectState = expectCmd === '打开' ? 'open' : (expectCmd === '关闭' ? 'closed' : '');
+          if (expectState && (flapState === 'open' || flapState === 'closed') && flapState !== expectState) {
+            this._geoFoldLog(`${label} 圈内状态不符（现${flapState}/要${expectState}），补发进圈指令`);
+            this._fireGeoFold(false, 'enter', point);
+          }
+        }
+        continue;
+      }
+
+      // 出圈：必须真实离开圆边后才发；不按车速/ETA 提前
+      if (prevInZone === true && !reallyInZone) {
+        if (flapBusy) {
+          if (point.id === nearestPoint.id) this._geoFoldLog(`${label} 出圈但翻板转动中，暂缓出圈指令`);
+          continue;
+        }
+        if (runtime.userOverride) {
+          this._geoFoldLog(`${label} 出圈：本圈曾手动操作，跳过出圈自动指令`);
+          runtime.wasInZone = false;
+          runtime.leadFired = false;
+          runtime.userOverride = false;
+          runtime.leadHoldoff = true;
+          continue;
+        }
+        runtime.wasInZone = false;
+        runtime.leadFired = false;
+        runtime.userOverride = false;
+        runtime.leadHoldoff = true;
+        this._fireGeoFold(false, 'exit', point);
+        continue;
+      }
+
+      if (runtime.leadHoldoff && !nowInZone) {
+        const remain = judge.remainToCircle != null
+          ? judge.remainToCircle
+          : Math.max(0, (judge.distance || 0) - pointRadius);
+        if (remain >= GEO_FOLD_LEAD_REARM_M) runtime.leadHoldoff = false;
+      }
+
+      if (runtime.leadFired && !nowInZone && !judge.leadOk) {
+        runtime.leadFired = false;
+      }
+
+      // 已在圈内：转动中不二次发令；停稳后若状态≠进圈预期则补发；
+      // 本圈按过手动按钮则不再补控
+      if (nowInZone && prevInZone === true) {
+        if (runtime.userOverride) continue;
+        if (flapBusy) continue;
+        if (Date.now() < (runtime.cooldownUntil || 0)) continue;
+        const expectCmd = point.enterCmd || cfg.enterCmd;
+        const expectState = expectCmd === '打开' ? 'open' : (expectCmd === '关闭' ? 'closed' : '');
+        if (expectState && (flapState === 'open' || flapState === 'closed') && flapState !== expectState) {
+          this._geoFoldLog(`${label} 圈内状态不符（现${flapState}/要${expectState}），补发进圈指令`);
+          this._fireGeoFold(false, 'enter', point);
+        }
+        continue;
+      }
+
+      if (!judge.fired) {
+        if (prevInZone === null) {
+          runtime.wasInZone = false;
+          runtime.leadFired = false;
+        }
+        continue;
+      }
+      if (Date.now() < (runtime.cooldownUntil || 0)) {
+        if (nowInZone && prevInZone !== true) {
+          runtime.wasInZone = true;
+          runtime.leadFired = false;
+        }
+        if (point.id === nearestPoint.id) {
+          this._geoFoldLog(`${label} 已到达但处于冷却，暂不重复发令`);
+        }
+        continue;
+      }
+
+      if (runtime.userOverride) {
+        if (nowInZone && prevInZone !== true) {
+          runtime.wasInZone = true;
+          runtime.leadFired = false;
+        }
+        continue;
+      }
+
+      // 首次进圈/提前发令：转动中先等停稳，避免叠指令
+      if (flapBusy) {
+        if (point.id === nearestPoint.id) {
+          this._geoFoldLog(`${label} 翻板转动中，等待停稳后再发进圈指令`);
+        }
+        continue;
+      }
+
+      if (prevInZone === null) {
+        if (nowInZone || (judge.leadOk && !runtime.leadHoldoff)) {
+          runtime.wasInZone = nowInZone;
+          runtime.leadFired = !nowInZone && !!judge.leadOk;
+          this._geoFoldLog(nowInZone
+            ? `${label} 首次确认已在圈内，发进圈指令`
+            : `${label} 首次确认按车速提前命中，发进圈指令`);
+          this._fireGeoFold(false, 'enter', point);
+        } else {
+          runtime.wasInZone = false;
+          runtime.leadFired = false;
+        }
+        continue;
+      }
+      if (nowInZone && !prevInZone) {
+        runtime.wasInZone = true;
+        runtime.leadHoldoff = false;
+        if (!runtime.leadFired) {
+          this._fireGeoFold(false, 'enter', point);
+        } else {
+          this._geoFoldLog(`${label} 提前发令后真正进圈，不再重复进圈指令`);
+        }
+        runtime.leadFired = false;
+      } else if (!nowInZone && !prevInZone && judge.leadOk && !runtime.leadFired) {
+        if (runtime.leadHoldoff) {
+          if (point.id === nearestPoint.id) {
+            this._geoFoldLog(`${label} 刚出圈，未驶离足够远，忽略提前进圈`);
+          }
+        } else {
+          runtime.leadFired = true;
+          this._fireGeoFold(false, 'enter', point);
+        }
+      }
     }
-    if (judge.leadOk && judge.hits === 1) {
-      this._geoFoldLog(`提前命中：距圆边约 ${Math.round(Math.max(0, judge.distance - radius))}m`);
-    } else if (judge.inZone && judge.hits === 1) {
-      this._geoFoldLog(`碰到圆边：距点 ${Math.round(judge.rawDistance)}m / 半径 ${radius}m`);
-    }
-    if (judge.fired) {
-      if (Date.now() < (this._geoFoldCooldownUntil || 0)) return;
-      this._fireGeoFold(false);
+
+    // 提前窗口才弹大数字；刚出圈的滞后带不弹
+    this._updateGeoFoldApproachModal(nearestPoint, nearestJudge, nearestName);
+    this._updateGeoFoldTicketAlert(points, Number(res.latitude), Number(res.longitude));
+  },
+
+  _isGeoFoldFlapBusy() {
+    return this.data.flapPanelState === 'moving';
+  },
+
+  /** 圈内手动翻板：本圈跳过自动发令，出圈后清掉 */
+  _geoFoldMarkManualOverrideInZone() {
+    const map = this._geoFoldPointRuntime || {};
+    let hit = false;
+    Object.keys(map).forEach((id) => {
+      const rt = map[id];
+      if (!rt) return;
+      if (rt.wasInZone === true || rt.lastInZone || rt.leadFired) {
+        rt.userOverride = true;
+        hit = true;
+      }
+    });
+    if (hit) {
+      this._geoFoldLog('检测到圈内手动翻板，本圈以按钮为准，不再强发');
+      this._showCustomToast('本圈已改手动，自动翻板跳过', 'none', 2000);
     }
   },
 
-  _fireGeoFold(isSimulate) {
+  _updateGeoFoldApproachModal(nearestPoint, nearestJudge, nearestName) {
+    if (!this.data.geoFoldTracking || !nearestJudge || !nearestPoint) {
+      this._hideGeoFoldApproachModal();
+      return;
+    }
+    const nearestRt = nearestPoint.id ? this._getGeoFoldPointRuntime(nearestPoint.id) : null;
+    const cfgLeadSec = Math.max(1.5, Number(this.data.geoFoldCfg && this.data.geoFoldCfg.leadSec) || 8);
+    let etaSec = Number(nearestJudge.etaSec);
+    if (!Number.isFinite(etaSec) || etaSec < 0) {
+      const remain = Math.max(0, Number(nearestJudge.remainToCircle) || 0);
+      const speedKmh = Number(nearestJudge.speedKmh) || 0;
+      const mps = speedKmh / 3.6;
+      etaSec = mps >= 0.8 ? (remain / mps) : null;
+    }
+    // 提前命中窗口 / 用户设定的提前秒数内弹出；刚出圈滞后带不弹
+    const inLeadWindow = !!nearestJudge.leadOk ||
+      (etaSec != null && Number.isFinite(etaSec) && etaSec <= cfgLeadSec);
+    const show = !nearestJudge.inZone &&
+      inLeadWindow &&
+      !(nearestRt && nearestRt.leadHoldoff);
+    if (!show) {
+      this._hideGeoFoldApproachModal();
+      return;
+    }
+    if (etaSec == null || !Number.isFinite(etaSec)) {
+      this._hideGeoFoldApproachModal();
+      return;
+    }
+    const sec = Math.max(0, Math.ceil(etaSec));
+    const dist = Math.max(0, Math.round(Number(nearestJudge.distance) || 0));
+    const name = nearestName || nearestPoint.name || '目标点';
+    if (
+      this.data.showGeoFoldApproachModal &&
+      !this.data.geoFoldApproachClosing &&
+      this.data.geoFoldApproachEtaSec === sec &&
+      this.data.geoFoldApproachPointName === name
+    ) {
+      return;
+    }
+    this._showGeoFoldApproachModal({
+      geoFoldApproachEtaSec: sec,
+      geoFoldApproachDistM: dist,
+      geoFoldApproachPointName: name
+    });
+  },
+
+  _fireGeoFold(isSimulate, direction, pointOpt) {
     const cfg = this.data.geoFoldCfg;
-    const cmd = cfg.triggerCmd;
-    const cmdLabel = cmd === '打开' ? '翻开' : '收起';
+    const points = this.data.geoFoldPoints || [];
+    const point = pointOpt || points[0] || this.data.geoFoldPoint;
+    const enterCmd = (point && point.enterCmd) || cfg.enterCmd;
+    const exitCmd = (point && point.exitCmd) || cfg.exitCmd;
+    const cmd = direction === 'exit' ? exitCmd : enterCmd;
+    const cmdLabel = geoFoldCmdLabel(cmd);
+    const pointLabel = point
+      ? (point.name || '点位')
+      : '模拟';
+    const dirLabel = direction === 'exit' ? '出圈' : (direction === 'enter' ? '进圈' : '模拟');
+    // 出圈冷却短一些，避免刚离开又靠近时进圈被 15s 挡住
+    const cooldownMs = direction === 'exit'
+      ? Math.min(4000, GEO_FOLD_REFIRE_COOLDOWN_MS)
+      : GEO_FOLD_REFIRE_COOLDOWN_MS;
+
+    if (!isSimulate && this._isGeoFoldFlapBusy()) {
+      // 首次发令由上层在转动中会等待；这里兜底避免排队补发叠在转动中
+      this._geoFoldLog(`${pointLabel}${dirLabel}：翻板转动中，跳过发令`);
+      return;
+    }
 
     if (!this._canSendBleCommand()) {
-      this._geoFoldLog(`触发失败：蓝牙未连接（${cmdLabel}）`);
+      this._geoFoldDump('fire_fail', {
+        reason: 'ble',
+        cmd,
+        cmdLabel,
+        pointId: point && point.id,
+        pointLabel,
+        pageHidden: !!this._geoFoldPageHidden
+      });
+      if (this._geoFoldPageHidden) {
+        // 后台常见：连接其实还在，但小程序被挂起导致写不出去——不停跟踪，回前台可模拟补发
+        this._geoFoldLog(`后台触发失败：蓝牙当时不可用（${pointLabel}/${cmdLabel}），跟踪继续`);
+        try { wx.vibrateLong(); } catch (e) { /* ignore */ }
+        if (point && point.id) {
+          const rt = this._getGeoFoldPointRuntime(point.id);
+          rt.cooldownUntil = Date.now() + cooldownMs;
+        }
+        return;
+      }
+      this._geoFoldLog(`触发失败：蓝牙未连接（${pointLabel}/${cmdLabel}）`);
       this._showCustomToast('蓝牙未连接，未能执行', 'none', 2400);
       this._stopGeoFoldTracking('蓝牙断开');
       return;
+    }
+
+    if (this._geoFoldPageHidden) {
+      this._geoFoldLog(`${pointLabel}${dirLabel}：后台尝试下发翻板（${cmdLabel}），不保证成功`);
     }
 
     if (cfg.vibrateOnFire) {
       wx.vibrateLong();
     }
     this.setData({
-      geoFoldStatusText: isSimulate ? `已模拟触发（${cmdLabel}）` : `已触发（${cmdLabel}）`
+      geoFoldStatusText: isSimulate
+        ? `已模拟触发（${cmdLabel}）`
+        : `${pointLabel}${dirLabel}（${cmdLabel}）`
     });
-    this._geoFoldLog(isSimulate ? `模拟触发：${cmdLabel}` : `到达触发：${cmdLabel}`);
-    if (this._geoFoldState) this._geoFoldState.hits = 0;
-    // 不自动停止时留个冷却，别让舵机连着挨打
-    this._geoFoldCooldownUntil = Date.now() + GEO_FOLD_REFIRE_COOLDOWN_MS;
+    this._geoFoldLog(
+      isSimulate
+        ? `模拟触发：${cmdLabel}`
+        : `${pointLabel}${dirLabel}触发：${cmdLabel}`
+    );
+    this._hideGeoFoldApproachModal();
+    this._geoFoldDump('fire', {
+      simulate: !!isSimulate,
+      direction: direction || 'enter',
+      cmd,
+      cmdLabel,
+      pointId: point && point.id,
+      pointLabel,
+      bleLinked: !!this._canSendBleCommand()
+    });
+    if (point && point.id) {
+      const rt = this._getGeoFoldPointRuntime(point.id);
+      if (rt.state) rt.state.hits = 0;
+      rt.cooldownUntil = Date.now() + cooldownMs;
+    } else if (this._geoFoldState) {
+      this._geoFoldState.hits = 0;
+    }
+    this._geoFoldDataUntil = Date.now() + cooldownMs;
 
-    this.handleF2RemoteControl({ currentTarget: { dataset: { cmd } } });
+    // 多点同帧/短间隔连发时错开 BLE，避免第二条把第一条顶掉
+    const FIRE_GAP_MS = 1500;
+    const now = Date.now();
+    const wait = isSimulate
+      ? 0
+      : Math.max(0, (this._geoFoldLastBleFireAt || 0) + FIRE_GAP_MS - now);
+    this._geoFoldLastBleFireAt = now + wait;
+    const sendBle = () => {
+      if (!isSimulate && !this.data.geoFoldTracking && !cfg.autoStopAfterFire) return;
+      if (!this._canSendBleCommand()) {
+        this._geoFoldLog(`延后发令失败：蓝牙已断开（${pointLabel}/${cmdLabel}）`);
+        return;
+      }
+      if (!isSimulate && this._isGeoFoldFlapBusy()) {
+        this._geoFoldLog(`延后发令跳过：翻板仍在转动（${pointLabel}/${cmdLabel}）`);
+        return;
+      }
+      this._geoFoldInternalFire = true;
+      try {
+        this.handleF2RemoteControl({ currentTarget: { dataset: { cmd } } });
+      } finally {
+        this._geoFoldInternalFire = false;
+      }
+    };
+    if (wait > 0) {
+      this._geoFoldLog(`${pointLabel} 多点连发排队 ${(wait / 1000).toFixed(1)}s 后下发`);
+      setTimeout(sendBle, wait);
+    } else {
+      sendBle();
+    }
 
     if (cfg.autoStopAfterFire) {
       this._stopGeoFoldTracking(isSimulate ? '模拟后自动停止' : '触发后自动停止', true);
@@ -9892,7 +12646,302 @@ Page({
   /** 不看位置，直接走一遍触发链路，用来单独验证蓝牙下发 */
   simulateGeoFoldTrigger() {
     if (!this._geoFoldSupported()) return;
-    this._fireGeoFold(true);
+    const points = this.data.geoFoldPoints || [];
+    const editId = this.data.geoFoldEditPointId;
+    const point = (editId && points.find((p) => p && p.id === editId)) || points[0] || null;
+    this._fireGeoFold(true, 'enter', point);
+  },
+
+  _patchGeoFoldLiveDisplay(res, extra) {
+    const point = this.data.geoFoldPoint;
+    if (!point || !this.data.geoFoldTracking) return;
+    const lat = Number(res.latitude);
+    const lng = Number(res.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const rawDistance = geoDistanceMeters(lat, lng, point.lat, point.lng);
+    const accuracy = Math.max(0, Number(res.accuracy) || 0);
+    const speed = Number(res.speed);
+    const patch = {
+      geoFoldDistanceText: `${Math.round(rawDistance)} m`,
+      geoFoldDistanceM: Math.round(rawDistance),
+      geoFoldAccuracyText: accuracy > 0 ? `±${Math.round(accuracy)} m` : '--',
+      geoFoldLastAt: geoFoldClockText()
+    };
+    if (Number.isFinite(speed) && speed >= 0) {
+      const speedKmh = speed * 3.6;
+      patch.geoFoldSpeedText = `${speedKmh.toFixed(1)} km/h`;
+      patch.geoFoldSpeedKmh = speedKmh.toFixed(1);
+      patch.geoFoldGaugeDeg = geoFoldGaugeDegFromSpeed(speedKmh);
+    } else {
+      patch.geoFoldGaugeDeg = geoFoldGaugeDegFromSpeed(0);
+    }
+    if (extra && typeof extra === 'object') {
+      Object.assign(patch, extra);
+    }
+    this.setData(patch);
+  },
+
+  _armGeoFoldStreamWatchdog() {
+    if (this._geoFoldStreamWatchdog) {
+      clearTimeout(this._geoFoldStreamWatchdog);
+      this._geoFoldStreamWatchdog = null;
+    }
+  },
+
+  _ingestGeoFoldFix(res, source) {
+    if (!this.data.geoFoldTracking) return;
+    const lat = Number(res && res.latitude);
+    const lng = Number(res && res.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const accuracy = Math.max(0, Number(res.accuracy) || 30);
+    const now = Date.now();
+    const gpsSpeed = Number(res.speed);
+    const gpsSpeedOk = Number.isFinite(gpsSpeed) && gpsSpeed >= 0 ? gpsSpeed : null;
+    const bearing = (res.direction != null && Number.isFinite(Number(res.direction))) ? Number(res.direction) : null;
+    if (!this._geoFoldDisplayKalman) {
+      this._geoFoldDisplayKalman = createKalmanState(lat, lng, accuracy);
+      this._geoFoldDisplayKalman.lastT = now;
+    } else {
+      kalmanUpdate(this._geoFoldDisplayKalman, lat, lng, accuracy, now, gpsSpeedOk, bearing);
+    }
+    this._geoFoldLastGpsRes = { latitude: lat, longitude: lng, accuracy, speed: res.speed, direction: res.direction, _t: now };
+    this._geoFoldSinceDumpBucket = 0;
+    this._tickGeoFoldSinceLast(now);
+    this._patchGeoFoldLiveDisplayKalman(now);
+    this._handleGeoFoldSample(res, source);
+    this._appendGeoFoldTrackPoint(lat, lng);
+    this._syncGeoFoldPickerFollow(lat, lng, bearing);
+    if (source === 'stream') {
+      if (!this._geoFoldStreamGotFirst) {
+        this._geoFoldStreamGotFirst = true;
+        this._geoFoldLog(`收到连续定位推送 acc=±${Math.round(accuracy)}m`);
+      }
+      if (this._geoFoldStreamWatchdog) {
+        clearTimeout(this._geoFoldStreamWatchdog);
+        this._geoFoldStreamWatchdog = null;
+      }
+    }
+  },
+
+  // 显示定时器和判定定时器已合并到 onLocationChange 回调中
+  // 保留空实现供旧调用点兼容
+  _scheduleGeoFoldDisplayTick() {},
+  _clearGeoFoldDisplayTimer() {
+    if (this._geoFoldDisplayTimer) {
+      clearTimeout(this._geoFoldDisplayTimer);
+      this._geoFoldDisplayTimer = null;
+    }
+    this._geoFoldDisplayBusy = false;
+  },
+
+  _scheduleGeoFoldJudgeTick() {},
+  _geoFoldJudgeSampleOnce() {},
+  _clearGeoFoldJudgeTimer() {
+    if (this._geoFoldJudgeTimer) {
+      clearTimeout(this._geoFoldJudgeTimer);
+      this._geoFoldJudgeTimer = null;
+    }
+  },
+
+  _onGeoFoldLocationChange(res) {
+    if (!this.data.geoFoldTracking || !this._geoFoldStreamActive) return;
+    try {
+      this._ingestGeoFoldFix(res, 'stream');
+    } catch (e) {
+      console.error('[geoFold] onLocationChange error', e);
+    }
+  },
+
+  /** 用补帧卡尔曼当前预测坐标刷新界面（可在 GPS 回调之间调用） */
+  _patchGeoFoldLiveDisplayKalman(now) {
+    const points = this.data.geoFoldPoints || [];
+    if (!points.length || !this.data.geoFoldTracking || !this._geoFoldDisplayKalman) return;
+    const k = this._geoFoldDisplayKalman;
+    const t = now || Date.now();
+    const predLat = k.lat + k.vLat * Math.min((t - (k.lastT || t)) / 1000, 1);
+    const predLng = k.lng + k.vLng * Math.min((t - (k.lastT || t)) / 1000, 1);
+    let filtDist = Infinity;
+    let nearestName = '--';
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      if (!p) continue;
+      const d = geoDistanceMeters(predLat, predLng, p.lat, p.lng);
+      if (d < filtDist) {
+        filtDist = d;
+        nearestName = p.name || `点${i + 1}`;
+      }
+    }
+    if (!Number.isFinite(filtDist)) return;
+    // EMA 平滑显示距离，减少数字跳动（alpha 越小越平滑，0.25 约 4 包收敛）
+    if (this._geoFoldDisplayDist == null) {
+      this._geoFoldDisplayDist = filtDist;
+    } else {
+      this._geoFoldDisplayDist = 0.25 * filtDist + 0.75 * this._geoFoldDisplayDist;
+    }
+    const res = this._geoFoldLastGpsRes;
+    const accuracy = res ? Math.max(0, Number(res.accuracy) || 0) : 0;
+    const patch = {
+      geoFoldDistanceText: `${Math.round(this._geoFoldDisplayDist)} m`,
+      geoFoldDistanceM: Math.round(this._geoFoldDisplayDist),
+      geoFoldAccuracyText: accuracy > 0 ? `±${Math.round(accuracy)} m` : '--',
+      geoFoldLastAt: geoFoldClockText(),
+      geoFoldNearestName: nearestName,
+      geoFoldPointsCountText: `${points.length} 个点`
+    };
+    if (res) {
+      const speed = Number(res.speed);
+      if (Number.isFinite(speed) && speed >= 0) {
+        const speedKmh = speed * 3.6;
+        patch.geoFoldSpeedText = `${speedKmh.toFixed(1)} km/h`;
+        patch.geoFoldSpeedKmh = speedKmh.toFixed(1);
+        patch.geoFoldGaugeDeg = geoFoldGaugeDegFromSpeed(speedKmh);
+      } else {
+        patch.geoFoldGaugeDeg = geoFoldGaugeDegFromSpeed(0);
+      }
+    } else {
+      patch.geoFoldGaugeDeg = geoFoldGaugeDegFromSpeed(0);
+    }
+    this.setData(patch);
+  },
+
+  _tickGeoFoldSinceLast(now) {
+    const t = now || Date.now();
+    const lastT = this._geoFoldLastGpsRes && this._geoFoldLastGpsRes._t;
+    const text = this.data.geoFoldTracking
+      ? geoFoldSinceLastLabel(lastT, t)
+      : (this.data.geoFoldSinceLastText || '--');
+    if (text !== this.data.geoFoldSinceLastText) {
+      this.setData({ geoFoldSinceLastText: text });
+    }
+    if (!this.data.geoFoldTracking || !lastT) return;
+    const ms = Math.max(0, t - lastT);
+    const bucket = Math.floor(ms / 1000);
+    if (bucket >= 1 && bucket !== this._geoFoldSinceDumpBucket) {
+      this._geoFoldSinceDumpBucket = bucket;
+      this._geoFoldDump('since', {
+        sinceLastMs: ms,
+        sinceLastText: geoFoldSinceLastLabel(lastT, t),
+        sampleCount: this.data.geoFoldSampleCount || 0,
+        streamActive: !!this._geoFoldStreamActive
+      });
+    }
+  },
+
+  _startGeoFoldSinceTimer() {
+    if (this._geoFoldSinceTimer) return;
+    this._tickGeoFoldSinceLast(Date.now());
+    this._geoFoldSinceTimer = setInterval(() => {
+      if (!this.data.geoFoldTracking) return;
+      this._tickGeoFoldSinceLast(Date.now());
+    }, 250);
+  },
+
+  _clearGeoFoldSinceTimer() {
+    if (this._geoFoldSinceTimer) {
+      clearInterval(this._geoFoldSinceTimer);
+      this._geoFoldSinceTimer = null;
+    }
+  },
+
+  /** 启动 200ms 补帧定时器，在 GPS 回调之间用速度积分补充显示 */
+  _startGeoFoldInterpTimer() {
+    if (this._geoFoldInterpTimer) return;
+    this._geoFoldInterpTimer = setInterval(() => {
+      try {
+        if (!this.data.geoFoldTracking || !this._geoFoldDisplayKalman) return;
+        // 只在两次 GPS 回调之间补帧，收到 GPS 后 200ms 内不重复刷
+        const elapsed = Date.now() - (this._geoFoldLastGpsRes && this._geoFoldLastGpsRes._t || 0);
+        if (elapsed < 180) return;
+        this._patchGeoFoldLiveDisplayKalman(Date.now());
+      } catch (e) { /* ignore */ }
+    }, 200);
+  },
+
+  /** keepStatus：触发后停止时保留「已触发」文案，别被「已停止」盖掉 */
+  _stopGeoFoldTracking(reason, keepStatus) {
+    if (this._geoFoldStreamWatchdog) { clearTimeout(this._geoFoldStreamWatchdog); this._geoFoldStreamWatchdog = null; }
+    this._clearGeoFoldDisplayTimer();
+    this._clearGeoFoldJudgeTimer();
+    if (this._geoFoldPollTimer) { clearTimeout(this._geoFoldPollTimer); this._geoFoldPollTimer = null; }
+    this._geoFoldPollBusy = false;
+    if (this._geoFoldInterpTimer) { clearInterval(this._geoFoldInterpTimer); this._geoFoldInterpTimer = null; }
+    this._clearGeoFoldSinceTimer();
+    const lastT = this._geoFoldLastGpsRes && this._geoFoldLastGpsRes._t;
+    const sinceText = geoFoldSinceLastLabel(lastT, Date.now());
+    const sinceLastMs = lastT ? (Date.now() - lastT) : null;
+    this._geoFoldDisplayKalman = null;
+    this._geoFoldLastGpsRes = null;
+    this._geoFoldUseDisplayPoll = false;
+    this._geoFoldUseJudgePoll = false;
+    this._geoFoldStreamActive = false;
+    this._geoFoldUsingBgLoc = false;
+    this._geoFoldPageHidden = false;
+    this._clearGeoFoldTimer();
+    this._stopGeoFoldLocationStream(true);
+    this._geoFoldState = createGeoFoldState();
+    if (!this.data.geoFoldTracking) return;
+    this._clearGeoFoldTicketAlertTimer();
+    this._geoFoldTrackPath = [];
+    this._geoFoldTicketAlerted = {};
+    this._stopGeoFoldBleWatch();
+    this._hideGeoFoldApproachModal();
+    this._hideGeoFoldTicketAlert();
+    this._hideGeoFoldBleLost(true);
+    const patch = {
+      geoFoldTracking: false,
+      geoFoldSinceLastText: sinceText || '--',
+      geoFoldPickerPolylines: [],
+      geoFoldTicketEdgeWarn: false,
+      geoFoldPickerRotate: 0
+    };
+    if (!keepStatus) {
+      patch.geoFoldStatusText = reason ? `已停止（${reason}）` : '已停止';
+    }
+    this.setData(patch);
+    this._geoFoldDump('stop', {
+      reason: reason || '',
+      keepStatus: !!keepStatus,
+      sinceLastText: sinceText || '--',
+      sinceLastMs
+    });
+    if (reason) this._geoFoldLog(`停止跟踪：${reason}`);
+    this._geoFoldPickerFollow = false;
+    if (this.data.showGeoFoldMapPicker) this._startGeoFoldPickerHudPreview();
+  },
+
+  _clearGeoFoldTimer() {
+    this._clearGeoFoldDisplayTimer();
+    this._clearGeoFoldJudgeTimer();
+  },
+
+  _startGeoFoldPollFallback() {
+    if (!this.data.geoFoldTracking) return;
+    if (this._geoFoldPollTimer) return; // 已在跑，不重复启动
+    const interval = this.data.geoFoldCfg.pollMs || 1000;
+    const tick = () => {
+      if (!this.data.geoFoldTracking || this._geoFoldStreamActive) return;
+      if (this._geoFoldPollBusy) {
+        this._geoFoldPollTimer = setTimeout(tick, interval);
+        return;
+      }
+      this._geoFoldPollBusy = true;
+      wx.getLocation({
+        type: 'gcj02',
+        isHighAccuracy: true,
+        highAccuracyExpireTime: Math.max(interval - 200, 2000),
+        success: (res) => {
+          this._ingestGeoFoldFix(res, 'poll');
+        },
+        fail: () => { this._geoFoldLog('轮询定位失败'); },
+        complete: () => {
+          this._geoFoldPollBusy = false;
+          if (this.data.geoFoldTracking && !this._geoFoldStreamActive) {
+            this._geoFoldPollTimer = setTimeout(tick, interval);
+          }
+        }
+      });
+    };
+    this._geoFoldPollTimer = setTimeout(tick, 0);
   },
 
   _sendF2DemoCommand(cmd) {
@@ -11412,6 +14461,14 @@ Page({
   /** 进 F3 控制台：默认先出 TOF 皮；本会话已判明 IMU 则保持 */
   _f3ResetSensorUiForEntry() {
     if (!isF3MaxModel(this.data.currentModel)) return;
+    if (this._f3AdminSensorUiLock && this.data.isAdmin) {
+      const ui = this.data.f3SensorUi || 'tof';
+      this.setData({
+        f3AttitudeVisible: ui === 'imu',
+        f3HeightMonitorVisible: ui !== 'imu'
+      });
+      return;
+    }
     if (this.data.f3DeviceVariant === 'imu' || this.data.f3SensorUi === 'imu') {
       this.setData({
         f3SensorUi: 'imu',
@@ -11428,14 +14485,42 @@ Page({
     });
   },
 
-  /** BLE 状态包判明代次后切皮肤（TOF→IMU 带加载过渡） */
-  _f3ApplySensorUiFromBle(variant) {
+  /** 切换 F3 控制台 TOF / IMU 皮肤（可选是否同步 f3DeviceVariant） */
+  _f3SetSensorUiSkin(ui, opts) {
+    const o = opts || {};
     if (!isF3MaxModel(this.data.currentModel)) return;
-    const next = variant === 'imu' ? 'imu' : (variant === 'tof' ? 'tof' : '');
+    const next = ui === 'imu' ? 'imu' : (ui === 'tof' ? 'tof' : '');
     if (!next) return;
     const cur = this.data.f3SensorUi || 'tof';
+    const updateVariant = o.updateVariant !== false;
+    const animate = o.animate !== false;
+    const switchHint = o.switchHint || (
+      next === 'imu' && cur === 'tof'
+        ? '已检测到陀螺仪，正在切换界面…'
+        : '正在切换界面…'
+    );
+
+    const apply = () => {
+      const patch = {
+        f3SensorUi: next,
+        f3AttitudeVisible: next === 'imu',
+        f3HeightMonitorVisible: next === 'tof',
+        f3SensorUiSwitching: false,
+        f3SensorUiSwitchHint: ''
+      };
+      if (updateVariant) patch.f3DeviceVariant = next;
+      this.setData(patch, () => {
+        this._f3SensorUiSwitching = false;
+        if (next === 'imu') {
+          try {
+            this._f3SyncBumpGearToDevice({ quiet: true });
+            this._f3SyncStallGearToDevice({ quiet: true });
+          } catch (e) { /* ignore */ }
+        }
+      });
+    };
+
     if (next === cur) {
-      // 同步显隐，防止被其它逻辑盖掉
       if (next === 'imu') {
         if (!this.data.f3AttitudeVisible || this.data.f3HeightMonitorVisible) {
           this.setData({ f3AttitudeVisible: true, f3HeightMonitorVisible: false });
@@ -11445,37 +14530,39 @@ Page({
       }
       return;
     }
-    if (next === 'imu' && cur === 'tof') {
+    if (next === 'imu' && cur === 'tof' && animate) {
       if (this._f3SensorUiSwitching) return;
       this._f3SensorUiSwitching = true;
       this.setData({
         f3SensorUiSwitching: true,
-        f3SensorUiSwitchHint: '已检测到陀螺仪，正在切换界面…'
+        f3SensorUiSwitchHint: switchHint
       });
-      setTimeout(() => {
-        this.setData({
-          f3SensorUi: 'imu',
-          f3DeviceVariant: 'imu',
-          f3AttitudeVisible: true,
-          f3HeightMonitorVisible: false,
-          f3SensorUiSwitching: false,
-          f3SensorUiSwitchHint: ''
-        }, () => {
-          this._f3SensorUiSwitching = false;
-          try {
-            this._f3SyncBumpGearToDevice({ quiet: true });
-            this._f3SyncStallGearToDevice({ quiet: true });
-          } catch (e) { /* ignore */ }
-        });
-      }, 700);
+      setTimeout(apply, 700);
       return;
     }
-    // IMU→TOF 极少见：静默切回
-    this.setData({
-      f3SensorUi: 'tof',
-      f3DeviceVariant: 'tof',
-      f3AttitudeVisible: false,
-      f3HeightMonitorVisible: true
+    apply();
+  },
+
+  /** BLE 状态包判明代次后切皮肤（TOF→IMU 带加载过渡） */
+  _f3ApplySensorUiFromBle(variant) {
+    if (this._f3AdminSensorUiLock && this.data.isAdmin) return;
+    this._f3SetSensorUiSkin(variant, { updateVariant: true, animate: true });
+  },
+
+  /** 管理员：手动切换 F3 MAX 控制台 TOF / 陀螺仪界面（仅管理员可见） */
+  onF3AdminSensorUiTap(e) {
+    if (!this.data.isAdmin) return;
+    if (!isF3MaxModel(this.data.currentModel)) return;
+    const mode = e && e.currentTarget && e.currentTarget.dataset
+      ? e.currentTarget.dataset.mode
+      : '';
+    if (mode !== 'tof' && mode !== 'imu') return;
+    if ((this.data.f3SensorUi || 'tof') === mode) return;
+    this._f3AdminSensorUiLock = true;
+    this._f3SetSensorUiSkin(mode, {
+      updateVariant: false,
+      animate: true,
+      switchHint: mode === 'imu' ? '正在切换陀螺仪界面…' : '正在切换测高界面…'
     });
   },
 
@@ -12364,10 +15451,36 @@ Page({
       if (!modelNeedsOnboardingGuide(cur)) return;
       this._onboardingGuideSteps = buildOnboardingGuideSteps(cur);
       // 重置滚动，避免进入控制台后手动滑动导致折叠/打开角度教学错位
-      this.setData({ mainControlScrollTop: 0, mainControlScrollAnim: false }, () => {
+      // 勿用 scroll-top 数据绑定：蓝牙刷新 setData 会反复把滚动拽回顶部
+      this._scrollMainControlTo(0, false, () => {
         wx.nextTick(() => this._showCalGuideStep(1));
       });
     }, 80);
+  },
+
+  _scrollMainControlTo(top, animated, done) {
+    const target = Math.max(0, Number(top) || 0);
+    const finish = () => {
+      if (typeof done === 'function') done();
+    };
+    try {
+      this.createSelectorQuery()
+        .select('#mainControlGuideScroll')
+        .node()
+        .exec((res) => {
+          const node = res && res[0] && res[0].node;
+          if (node && typeof node.scrollTo === 'function') {
+            try {
+              node.scrollTo({ top: target, animated: !!animated });
+            } catch (e) { /* ignore */ }
+            setTimeout(finish, animated ? 280 : 40);
+            return;
+          }
+          finish();
+        });
+    } catch (e) {
+      finish();
+    }
   },
 
   onMainControlScrollStart() {
@@ -12506,29 +15619,11 @@ Page({
       if (nextScrollTop < 0) nextScrollTop = 0;
       if (nextScrollTop > maxScroll) nextScrollTop = maxScroll;
 
-      const prevTop = this.data.mainControlScrollTop || 0;
-      const finish = () => {
-        setTimeout(() => {
-          if (typeof done === 'function') done();
-        }, Math.abs(nextScrollTop - prevTop) < 1 ? 60 : 280);
-      };
-      if (Math.abs(nextScrollTop - prevTop) < 1) {
-        finish();
+      if (Math.abs(nextScrollTop - currentScrollTop) < 1) {
+        if (typeof done === 'function') done();
         return;
       }
-      const kickTop = prevTop === nextScrollTop ? Math.max(0, nextScrollTop - 1) : prevTop;
-      this.setData({ mainControlScrollTop: kickTop, mainControlScrollAnim: true }, () => {
-        wx.nextTick(() => {
-          this.setData({ mainControlScrollTop: nextScrollTop }, () => {
-            setTimeout(() => {
-              if (this.data.mainControlScrollAnim) {
-                this.setData({ mainControlScrollAnim: false });
-              }
-            }, 320);
-            finish();
-          });
-        });
-      });
+      this._scrollMainControlTo(nextScrollTop, true, done);
     });
   },
 
@@ -13280,6 +16375,24 @@ Page({
     }, 500);
   },
 
+  _settingStatePatchFromSendText(sendText) {
+    const model = this.data.currentModel;
+    const text = String(sendText || '').replace(/#$/, '');
+    if (!text || !model) return null;
+    const keys = Object.keys(NEUTRAL_SETTING_STATE);
+    const vals = ['left', 'right'];
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+      for (let j = 0; j < vals.length; j++) {
+        const val = vals[j];
+        if (this._resolveMagSettingSendText(key, val, model) === text) {
+          return { [key]: val };
+        }
+      }
+    }
+    return null;
+  },
+
   _resolveMagSettingSendText(key, targetVal, model) {
     if (!model || !key || !targetVal) return '';
     const isMtUltra = isMtUltraCardModel(model);
@@ -13608,6 +16721,9 @@ Page({
     }
     return {
       f2HwMonitorVisible: connected && isHwPinMonitorModel(m),
+      f1MaxLatestBle: false,
+      f2ProLatestBle: false,
+      f2MaxLatestBle: false,
       f2KeyOn: null,
       f2BtnPressed: null,
       f2KeyStatusText: '—',
@@ -13843,6 +16959,9 @@ Page({
     }
     if (!isF2MaxStatusBleModel(model)) return;
     const isUltra = isMtUltraCardModel(model);
+    const isF1MaxLatest = isF1MaxLatestBleModel(model, this.data.f1MaxLatestBle || parsed.mtf1 === 1);
+    const isF2ProLatest = isF2ProLatestBleModel(model, this.data.f2ProLatestBle || parsed.mtf2 === 1);
+    const isF2MaxLatest = isF2MaxLatestBleModel(model, this.data.f2MaxLatestBle || parsed.mtf2 === 2);
     const forceFull = !!this._f2ForceStatusSyncPending;
     const forceAdv = forceFull || !!this._f2AdvSyncPending;
     const updates = buildF2AdvUiUpdates(parsed, {
@@ -13880,12 +16999,30 @@ Page({
       delete updates.settingState;
     }
 
-    if (isUltra) {
-      Object.assign(updates, buildF2FlapPanelUpdates(parsed, {
+    if (isUltra || isF1MaxLatest || isF2ProLatest || isF2MaxLatest) {
+      let flapParsed = parsed;
+      if (this._stealthExitGraceUntil && Date.now() < this._stealthExitGraceUntil && parsed.itm === 3) {
+        flapParsed = Object.assign({}, parsed, { itm: null });
+      } else if (this._stealthExitGraceUntil && Date.now() >= this._stealthExitGraceUntil) {
+        this._stealthExitGraceUntil = 0;
+      }
+      Object.assign(updates, buildF2FlapPanelUpdates(flapParsed, {
         flapPanelState: this.data.flapPanelState,
         flapPanelStateText: this.data.flapPanelStateText,
         flapMotionDir: this.data.flapMotionDir
-      }, { force: forceFull }));
+      }, { force: forceFull, stealthItmOnly: isCompactFlapItmModel(model) }));
+
+      if (this._stealthExitGraceUntil && Date.now() < this._stealthExitGraceUntil &&
+          updates.flapPanelState === 'stealth') {
+        delete updates.flapPanelState;
+        delete updates.flapPanelStateText;
+        delete updates.flapMotionDir;
+      } else if (!this._stealthExitGraceUntil &&
+          this.data.flapPanelStateText === '正在退出…' &&
+          parsed.itm !== 3 &&
+          updates.flapPanelStateText === undefined) {
+        updates.flapPanelStateText = '状态未知';
+      }
 
       if (updates.flapPanelState === 'moving') {
         this._f2MotionGraceUntil = Date.now() + 8000;
@@ -14154,10 +17291,14 @@ Page({
       if (hasImuTokens) {
         if (this.data.f3DeviceVariant !== 'imu') updates.f3DeviceVariant = 'imu';
         // 切皮肤放 setData 后副作用：这里只记代次，下面统一 apply
-        this._f3PendingSensorUi = 'imu';
+        if (!this._f3AdminSensorUiLock || !this.data.isAdmin) {
+          this._f3PendingSensorUi = 'imu';
+        }
       } else if (hasTofTokens && this.data.f3DeviceVariant !== 'tof') {
         updates.f3DeviceVariant = 'tof';
-        this._f3PendingSensorUi = 'tof';
+        if (!this._f3AdminSensorUiLock || !this.data.isAdmin) {
+          this._f3PendingSensorUi = 'tof';
+        }
       }
       const itm = parsed.itm;
       if (itm === 0 || itm === 1 || itm === 2) {
@@ -14229,8 +17370,8 @@ Page({
       delete updates.f3HeightMm;
       delete updates.f3HeightText;
       delete updates.f3HeightLive;
-      delete updates.f3HeightMonitorVisible;
-      delete updates.f3AttitudeVisible;
+      updates.f3HeightMonitorVisible = false;
+      updates.f3AttitudeVisible = false;
       delete updates.f3AttitudeRollDeg;
       delete updates.f3AttitudeHint;
       delete updates.f3DangerMm;
@@ -14255,6 +17396,16 @@ Page({
     }
     const f3CalDismissToast = updates._f3CalDismissToast;
     if (f3CalDismissToast) delete updates._f3CalDismissToast;
+
+    if (parsed.mtf1 === 1 && isF1MaxModel(model) && !this.data.f1MaxLatestBle) {
+      updates.f1MaxLatestBle = true;
+    }
+    if (parsed.mtf2 === 1 && isF2ProModel(model) && !this.data.f2ProLatestBle) {
+      updates.f2ProLatestBle = true;
+    }
+    if (parsed.mtf2 === 2 && isF2MaxModel(model) && !this.data.f2MaxLatestBle) {
+      updates.f2MaxLatestBle = true;
+    }
 
     if (Object.keys(updates).length) {
       this._stripConflictingBleReadback(updates);
